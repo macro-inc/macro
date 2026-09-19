@@ -26,6 +26,7 @@ describe('extractChannelMentionsFromMarkdown', () => {
       ['chat', 'chat'],
       ['email', 'thread'],
       ['call', 'call'],
+      ['calendar', 'calendar_event'],
       ['automation', 'automation'],
       ['company', 'crm_company'],
       ['contact', 'crm_contact'],

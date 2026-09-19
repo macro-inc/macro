@@ -14,7 +14,7 @@ function isClaimActive(claimed: string | undefined | null): boolean {
   return Date.now() - Date.parse(claimed) < MAX_CLAIMED_MS;
 }
 
-function scheduleToEntity(
+export function scheduleToEntity(
   schedule: ScheduledAction
 ): AutomationEntity | undefined {
   if (!schedule.id) return undefined;

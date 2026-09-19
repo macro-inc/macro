@@ -68,6 +68,7 @@ export function TopBar(props: {
 
   const tools: BlockTool[] = [
     {
+      group: 'sharing',
       label: 'Share',
       icon: IconShared,
       action: () => shareCtx.open(),

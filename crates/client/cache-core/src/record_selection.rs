@@ -1,20 +1,19 @@
 //! Fragment-rooted selection over normalized cache records.
 //!
 //! A selection is a named GraphQL fragment whose type condition resolves
-//! only to normalized entity objects. Records are returned in stable entity
-//! key order and projected with the ordinary denormalizer.
+//! only to normalized entity objects. Explicit entity keys are projected with
+//! the ordinary denormalizer without scanning normalized storage.
 
 use crate::document::{ArgValue, Document, DocumentError, FieldNode, Selection};
 use crate::meta::{self, FieldKind, TypeKind};
 use crate::value::EntityKey;
-use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
+use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
-use std::borrow::Cow;
 use std::collections::BTreeSet;
 use thiserror::Error;
 
-/// Largest record-selection page accepted by the engine.
-pub const MAX_RECORD_SELECTION_PAGE_SIZE: usize = 500;
+/// Largest explicit entity-key set accepted by one projection call.
+pub const MAX_RECORD_SELECTION_KEYS: usize = 500;
 
 /// A validated named fragment that can be applied to normalized records.
 #[derive(Debug, Clone)]
@@ -61,48 +60,14 @@ impl RecordSelection {
     }
 }
 
-/// Opaque exclusive cursor into entity-key record ordering.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RecordCursor(EntityKey<'static>);
-
-impl RecordCursor {
-    pub(crate) fn new(entity_key: EntityKey<'static>) -> Self {
-        Self(entity_key)
-    }
-
-    pub(crate) fn entity_key(&self) -> &EntityKey<'static> {
-        &self.0
-    }
-}
-
-impl Serialize for RecordCursor {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(&encode_cursor(&self.0))
-    }
-}
-
-impl<'de> Deserialize<'de> for RecordCursor {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = String::deserialize(deserializer)?;
-        decode_cursor(&value).map(Self).map_err(D::Error::custom)
-    }
-}
-
-/// One page of projected normalized records.
+/// One normalized record projected by an explicit entity key.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SelectedRecordPage {
-    /// Complete fragment projections in deterministic entity-key order.
-    pub records: Vec<Json>,
-    /// Exclusive cursor for the next page, present only when another complete
-    /// matching record exists.
-    pub next_cursor: Option<RecordCursor>,
+pub struct SelectedRecord {
+    /// Canonical normalized-cache entity key.
+    pub record_key: EntityKey<'static>,
+    /// Complete fragment projection for that entity.
+    pub record: Json,
 }
 
 /// Invalid fragment selection, cursor, or page request.
@@ -132,20 +97,12 @@ pub enum RecordSelectionError {
     /// A leaf field has sub-selections or a composite field has none.
     #[error("field `{type_name}.{field}` has an invalid selection shape")]
     InvalidFieldShape { type_name: String, field: String },
-    /// Page limits must be nonzero and no larger than the safety bound.
-    #[error("record-selection limit must be between 1 and {max}, got {limit}")]
-    InvalidLimit { limit: usize, max: usize },
-}
-
-/// Validates a requested page size.
-pub fn validate_limit(limit: usize) -> Result<(), RecordSelectionError> {
-    if !(1..=MAX_RECORD_SELECTION_PAGE_SIZE).contains(&limit) {
-        return Err(RecordSelectionError::InvalidLimit {
-            limit,
-            max: MAX_RECORD_SELECTION_PAGE_SIZE,
-        });
-    }
-    Ok(())
+    /// Explicit key sets are bounded at the engine boundary.
+    #[error("record selection accepts at most {max} keys, got {count}")]
+    TooManyKeys { count: usize, max: usize },
+    /// An explicit key was not a bounded canonical entity key.
+    #[error("invalid normalized record key")]
+    InvalidKey,
 }
 
 fn concrete_type_names(type_name: &str) -> Result<Vec<String>, RecordSelectionError> {
@@ -246,37 +203,6 @@ fn referenced_variable(value: &ArgValue) -> Option<&str> {
             .find_map(|(_, value)| referenced_variable(value)),
         ArgValue::Const(_) => None,
     }
-}
-
-fn encode_cursor(entity_key: &EntityKey<'_>) -> String {
-    let encoded: String = entity_key
-        .0
-        .as_bytes()
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect();
-    format!("r1.{encoded}")
-}
-
-fn decode_cursor(value: &str) -> Result<EntityKey<'static>, &'static str> {
-    let encoded = value
-        .strip_prefix("r1.")
-        .ok_or("invalid record-selection cursor")?;
-    if encoded.is_empty() || !encoded.len().is_multiple_of(2) {
-        return Err("invalid record-selection cursor");
-    }
-    let bytes = encoded
-        .as_bytes()
-        .chunks_exact(2)
-        .map(|pair| {
-            let pair = std::str::from_utf8(pair).map_err(|_| "invalid record-selection cursor")?;
-            u8::from_str_radix(pair, 16).map_err(|_| "invalid record-selection cursor")
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    String::from_utf8(bytes)
-        .map(Cow::Owned)
-        .map(EntityKey)
-        .map_err(|_| "invalid record-selection cursor")
 }
 
 #[cfg(test)]

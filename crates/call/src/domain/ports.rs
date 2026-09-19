@@ -18,12 +18,12 @@ use crate::domain::models::{
 };
 
 use super::models::{
-    AddParticipantError, ArchivedCall, Call, CallActiveResponse, CallError, CallParticipant,
-    CallRecord, CallRecordPreview, CallRecordTranscriptSegment, CallTokenResponse,
-    CallTranscriptCustomSpeakerResult, CallWebhookEvent, EgressS3Config, EnrichedCallTranscript,
-    GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse, GetCallRecordsRequest,
-    LeaveCallResponse, RingStatusResponse, TranscriptSegmentRequest, VerifiedRingToken,
-    VoipPushPayloadRequest,
+    ActiveCallSummary, ActiveCallsResponse, AddParticipantError, ArchivedCall, Call,
+    CallActiveResponse, CallError, CallParticipant, CallRecord, CallRecordPreview,
+    CallRecordTranscriptSegment, CallTokenResponse, CallTranscriptCustomSpeakerResult,
+    CallWebhookEvent, EgressS3Config, EnrichedCallTranscript, GetBatchCallRecordPreviewRequest,
+    GetBatchCallRecordPreviewResponse, GetCallRecordsRequest, LeaveCallResponse,
+    RingStatusResponse, TranscriptSegmentRequest, VerifiedRingToken, VoipPushPayloadRequest,
 };
 
 /// Repository port for persisting call state to the database.
@@ -53,6 +53,13 @@ pub trait CallRepository: Send + Sync + 'static {
         &self,
         channel_id: &Uuid,
     ) -> impl Future<Output = Result<Option<Call>, Self::Err>> + Send;
+
+    /// List all active calls in channels where the user is an active member,
+    /// newest first. Calls with no active participants are excluded.
+    fn get_active_calls_for_user<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<Vec<ActiveCallSummary>, Self::Err>> + Send;
 
     /// Get an active call by its RTC room name.
     fn get_call_by_room_name(
@@ -532,6 +539,13 @@ pub trait CallService: Send + Sync + 'static {
         &self,
         channel_id: &Uuid,
     ) -> impl Future<Output = Result<Option<CallActiveResponse>, CallError>> + Send;
+
+    /// List all active calls in channels the user is an active member of,
+    /// newest first. Calls with no active participants are excluded.
+    fn get_active_calls(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<ActiveCallsResponse, CallError>> + Send;
 
     /// Get or create a call in a channel. If a call already exists, joins it;
     /// otherwise creates a new one. Always returns a join token.

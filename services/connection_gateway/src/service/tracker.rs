@@ -150,14 +150,14 @@ pub struct UserTrackingChange {
 pub async fn notify_tracking_change(ctx: ConnectionContext<'_>, entity: &Entity<'_>) -> Result<()> {
     let users = get_users_for_entity(ctx, entity, Some(DEFAULT_TIMEOUT_THRESHOLD)).await?;
 
-    let message: Message = Message {
-        message_type: "user_tracking_change".to_string(),
-        data: serde_json::to_string(&UserTrackingChange {
+    let message = Message::new(
+        "user_tracking_change".to_string(),
+        serde_json::to_string(&UserTrackingChange {
             entity_type: entity.entity_type,
             entity_id: entity.entity_id.to_string(),
             user_ids: users,
         })?,
-    };
+    );
 
     let redis_connection = ctx.api_context.redis_connection.clone();
     send_message_to_entity(ctx, entity, message, redis_connection).await?;

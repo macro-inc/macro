@@ -8,8 +8,8 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum OnboardingError {
     /// Database failure.
-    #[error(transparent)]
-    Db(#[from] sqlx::Error),
+    #[error("database error: {0}")]
+    Db(rootcause::Report),
     /// A failure in the import pipeline this flow drives.
     #[error(transparent)]
     Import(#[from] import::domain::ports::ImportError),

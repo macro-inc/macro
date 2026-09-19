@@ -5,6 +5,7 @@ use crate::domain::{
     ports::{EmailService, GmailTokenProvider},
 };
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -95,6 +96,10 @@ pub struct ListLabels {
     /// Omit to use the primary inbox. Ignored when `thread_id` is set.
     #[serde(default)]
     pub inbox: Option<String>,
+}
+
+impl ToolAnnotated for ListLabels {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("List Gmail labels");
 }
 
 #[async_trait]

@@ -9,6 +9,7 @@ use filter_ast::Expr;
 use item_filters::ast::properties::{
     EntityRefId, PropertiesLiteral, PropertyEntityType, PropertyMatchValue,
 };
+use serde::{Deserialize, Serialize};
 
 use crate::{IntoFilterExpr, filter_expr_input, parse_id};
 
@@ -69,7 +70,8 @@ impl GraphqlPropertyMatchValue {
 }
 
 /// An entity type supported by the properties domain.
-#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+#[derive(Enum, Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum GraphqlPropertyEntityType {
     /// Calendar event entity.
     CalendarEvent,

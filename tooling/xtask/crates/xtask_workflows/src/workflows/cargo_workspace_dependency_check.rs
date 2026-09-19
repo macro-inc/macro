@@ -32,12 +32,18 @@ pub fn cargo_workspace_dependency_check() -> Workflow {
                 .add_path(xtask_paths::repo_glob!("Cargo.lock"))
                 .add_path(xtask_paths::repo_glob!(".config/hakari.toml"))
                 .add_path(xtask_paths::repo_glob!("crates/workspace-hack/**"))
-                .add_path(xtask_paths::repo_glob!("tooling/xtask/**"))
+                // Source of `cargo x deps` only — not every xtask crate. A
+                // nextest-filter or workflow-generator edit cannot drift the
+                // hack crate or closure map.
+                .add_path(xtask_paths::repo_glob!("tooling/xtask/src/**"))
                 .add_path(xtask_paths::repo_glob!(
-                    ".github/workspace-dep-closures.json"
+                    "tooling/xtask/crates/xtask_deps/**"
                 ))
                 .add_path(xtask_paths::repo_glob!(
-                    ".github/workflows/cargo_workspace_dependency_check.yml"
+                    "tooling/xtask/crates/xtask_graph/**"
+                ))
+                .add_path(xtask_paths::repo_glob!(
+                    ".github/workspace-dep-closures.json"
                 )),
         ))
         .concurrency(

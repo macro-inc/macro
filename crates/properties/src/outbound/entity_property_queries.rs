@@ -15,6 +15,7 @@ pub(super) struct EntityPropertyMutationRow {
     pub(super) entity_type: EntityType,
     pub(super) property_definition_id: Uuid,
     pub(super) value: Option<serde_json::Value>,
+    pub(super) previous: Option<serde_json::Value>,
     pub(super) created_at: chrono::DateTime<chrono::Utc>,
     pub(super) updated_at: chrono::DateTime<chrono::Utc>,
 }
@@ -25,6 +26,12 @@ impl EntityPropertyMutationRow {
             Some(value) if !value.is_null() => Some(serde_json::from_value(value)?),
             Some(_) | None => None,
         };
+        // The pre-write value is display metadata; a row whose stored shape
+        // no longer decodes must not fail the mutation that fixes it.
+        let previous_value = self
+            .previous
+            .filter(|value| !value.is_null())
+            .and_then(|value| serde_json::from_value(value).ok());
 
         Ok(EntityPropertyMutationSnapshot {
             property: EntityProperty {
@@ -36,20 +43,23 @@ impl EntityPropertyMutationRow {
                 updated_at: self.updated_at,
             },
             value,
+            previous_value,
         })
     }
 }
 
 /// Upsert an entity property value (insert or update).
 /// If the property doesn't exist, it will be created and attached to the entity.
-/// If it exists, the value will be updated.
+/// If it exists, the value will be updated. The returned snapshot carries the
+/// pre-write value (snapshotted by the CTE in the same statement) for
+/// activity's "changed X from A to B" transitions.
 pub async fn upsert_entity_property(
     pool: &Pool<Postgres>,
     entity_id: &str,
     entity_type: EntityType,
     property_definition_id: Uuid,
     value: Option<PropertyValue>,
-) -> anyhow::Result<EntityProperty> {
+) -> anyhow::Result<EntityPropertyMutationSnapshot> {
     let id = macro_uuid::generate_uuid_v7();
 
     // Serialize PropertyValue to JSONB (or NULL if None)
@@ -61,10 +71,15 @@ pub async fn upsert_entity_property(
     tracing::debug!(value_json = ?value_json, "upserting entity property");
 
     // Single UPSERT operation - handles both INSERT and UPDATE cases.
-    // RETURNING yields the canonical assignment for both branches without a second query.
-    let property = sqlx::query_as!(
-        EntityProperty,
+    // RETURNING yields the canonical assignment for both branches without a
+    // second query; the CTE snapshots the pre-statement value.
+    let row = sqlx::query_as!(
+        EntityPropertyMutationRow,
         r#"
+        WITH previous AS (
+            SELECT values FROM entity_properties
+            WHERE entity_id = $2 AND entity_type = $3 AND property_definition_id = $4
+        )
         INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
         VALUES ($1, $2, $3, $4, $5)
         ON CONFLICT (entity_id, entity_type, property_definition_id)
@@ -76,6 +91,8 @@ pub async fn upsert_entity_property(
             entity_id,
             entity_type as "entity_type: EntityType",
             property_definition_id,
+            values as "value: serde_json::Value",
+            (SELECT values FROM previous) as "previous: serde_json::Value",
             created_at,
             updated_at
         "#,
@@ -90,7 +107,7 @@ pub async fn upsert_entity_property(
 
     tracing::debug!("successfully upserted entity property");
 
-    Ok(property)
+    row.into_snapshot()
 }
 
 /// Atomically add one option to a multi-select entity property value, creating
@@ -111,6 +128,10 @@ pub async fn add_entity_property_option(
     let row = sqlx::query_as!(
         EntityPropertyMutationRow,
         r#"
+        WITH previous AS (
+            SELECT values FROM entity_properties
+            WHERE entity_id = $2 AND entity_type = $3 AND property_definition_id = $4
+        )
         INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
         VALUES (
             $1, $2, $3, $4,
@@ -137,6 +158,7 @@ pub async fn add_entity_property_option(
             entity_type as "entity_type: EntityType",
             property_definition_id,
             values as "value: serde_json::Value",
+            (SELECT values FROM previous) as "previous: serde_json::Value",
             created_at,
             updated_at
         "#,
@@ -166,6 +188,10 @@ pub async fn remove_entity_property_option(
     let row = sqlx::query_as!(
         EntityPropertyMutationRow,
         r#"
+        WITH previous AS (
+            SELECT values FROM entity_properties
+            WHERE entity_id = $1 AND entity_type = $2 AND property_definition_id = $3
+        )
         UPDATE entity_properties
         SET values = jsonb_set(
                 values,
@@ -191,6 +217,7 @@ pub async fn remove_entity_property_option(
             entity_type as "entity_type: EntityType",
             property_definition_id,
             values as "value: serde_json::Value",
+            (SELECT values FROM previous) as "previous: serde_json::Value",
             created_at,
             updated_at
         "#,
@@ -272,12 +299,14 @@ pub async fn bulk_update_entity_property_options(
         .await?;
 
         let row_exists = existing.is_some();
-        let current_ids = match existing.flatten() {
-            Some(value) => match serde_json::from_value::<PropertyValue>(value) {
-                Ok(PropertyValue::SelectOption(ids)) => ids,
-                _ => Vec::new(),
-            },
-            None => Vec::new(),
+        // The locked pre-write value doubles as the activity transition's
+        // "from" side.
+        let previous_value: Option<PropertyValue> = existing
+            .flatten()
+            .and_then(|value| serde_json::from_value(value).ok());
+        let current_ids = match &previous_value {
+            Some(PropertyValue::SelectOption(ids)) => ids.clone(),
+            _ => Vec::new(),
         };
 
         let final_ids = apply_option_delta(
@@ -304,6 +333,7 @@ pub async fn bulk_update_entity_property_options(
                     entity_type as "entity_type: EntityType",
                     property_definition_id,
                     values as "value: serde_json::Value",
+                    NULL as "previous: serde_json::Value",
                     created_at,
                     updated_at
                 "#,
@@ -314,7 +344,11 @@ pub async fn bulk_update_entity_property_options(
             )
             .fetch_one(&mut *tx)
             .await?;
-            Some(row.into_snapshot()?)
+            // The FOR UPDATE read above is the authoritative pre-write value;
+            // the query returns a NULL placeholder for it.
+            let mut snapshot = row.into_snapshot()?;
+            snapshot.previous_value = previous_value;
+            Some(snapshot)
         } else {
             None
         };

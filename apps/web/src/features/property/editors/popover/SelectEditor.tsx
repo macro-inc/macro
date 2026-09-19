@@ -3,6 +3,7 @@ import {
   useAddPropertyOptionMutation,
   usePropertyOptionsQuery,
 } from '@queries/properties/options';
+import { usablePropertyOptions } from '@queries/properties/options-data';
 import { onMount, Show } from 'solid-js';
 import { useProperty } from '../../core/context';
 import type { PropertyApiValues, SelectProperty } from '../../types';
@@ -34,10 +35,7 @@ function SelectEditorBody() {
   );
   const addOptionMutation = useAddPropertyOptionMutation({});
 
-  const options = () =>
-    optionsQuery.isLoading || optionsQuery.isError || !optionsQuery.data
-      ? []
-      : optionsQuery.data;
+  const options = () => usablePropertyOptions(optionsQuery);
 
   const isLoading = () => optionsQuery.isLoading || addOptionMutation.isPending;
 
@@ -49,7 +47,6 @@ function SelectEditorBody() {
 
   onMount(() => {
     editor.initializeSelectedOptions();
-    optionsQuery.refetch();
   });
 
   const closeAndSave = async () => {

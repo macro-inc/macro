@@ -1,15 +1,15 @@
 ---
 title: GetThread
-description: "Generated from the Macro Rust tool registry."
+description: "Retrieve an email thread and its messages. Returns the thread metadata, the labels applied to the thread (e.g. INBOX, UNREAD, STARRED, and any custom labels), and message contents including sender, recipients, subject, body text, and the labels on each individual message. Use this to read the contents of a specific email conversation or to see which labels a thread or message has."
 ---
 
 # GetThread
 
-Generated from the Macro Rust tool registry.
+Retrieve an email thread and its messages. Returns the thread metadata, the labels applied to the thread (e.g. INBOX, UNREAD, STARRED, and any custom labels), and message contents including sender, recipients, subject, body text, and the labels on each individual message. Use this to read the contents of a specific email conversation or to see which labels a thread or message has.
 
 ## Parameters
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
-| `limit` | integer | Yes | Maximum number of messages to return (default 10). |
 | `threadId` | string | Yes | The ID of the email thread to retrieve. |
+| `limit` | integer | No | Maximum number of messages to return (default 10). |

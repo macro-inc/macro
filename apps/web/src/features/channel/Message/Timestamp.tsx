@@ -16,10 +16,16 @@ export function Timestamp(props: TimestampProps) {
   return (
     <span
       class={cn(
-        'text-xs text-ink-placeholder',
+        'text-xs text-ink-extra-muted tabular-nums',
         props.compact && 'leading-none',
         props.class
       )}
+      // The time-only format reveals the full date on hover.
+      title={
+        props.format === 'time'
+          ? formatDate(message().created_at, { showTime: true })
+          : undefined
+      }
     >
       <Switch>
         <Match when={props.format === 'time'}>

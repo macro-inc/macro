@@ -1,6 +1,5 @@
 use crate::pubsub::scheduled::context::ScheduledContext;
 use crate::pubsub::util::publish_email_event;
-use crate::util::gmail::auth::fetch_gmail_access_token_from_link;
 use crate::util::gmail::send::{
     cleanup_draft_attachments, fetch_and_attach_draft_attachments,
     fetch_and_attach_forwarded_attachments, generate_email_threading_headers,
@@ -8,11 +7,17 @@ use crate::util::gmail::send::{
 use anyhow::Context;
 use chrono::Utc;
 use email::domain::events::{EmailEventOrigin, EmailMacroEvent, MessageSentMetadata};
+use email_api_client::domain::models::{SendRequest, SentIds};
 use email_db_client::messages::scheduled::get::get_and_start_processing_scheduled_message;
+use macro_user_id::cowlike::CowLike as _;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service::message::MessageToSend;
 use models_email::service::pubsub::ScheduledPubsubMessage;
 use sqlx_core::any::AnyConnectionBackend;
 use sqs_worker::cleanup_message;
+
+#[cfg(test)]
+mod test;
 
 #[tracing::instrument(skip(ctx, message), err)]
 pub async fn process_message(
@@ -67,10 +72,6 @@ async fn process_scheduled_message_inner(
         tracing::debug!(link_id=%data.link_id, "Link not found - skipping");
         return Ok(());
     };
-
-    let gmail_access_token =
-        fetch_gmail_access_token_from_link(&link, &ctx.redis_client, &ctx.auth_service_client)
-            .await?;
 
     // Get scheduled message from database
     let scheduled_message =
@@ -143,29 +144,28 @@ async fn process_scheduled_message_inner(
     .await?;
 
     // Include forwarded attachments (fetched from Gmail at send time)
-    fetch_and_attach_forwarded_attachments(
-        &ctx.db,
-        &ctx.gmail_client,
-        &gmail_access_token,
-        &link,
-        &mut message_to_send,
-    )
-    .await?;
+    fetch_and_attach_forwarded_attachments(&ctx.db, &ctx.email_api, &link, &mut message_to_send)
+        .await?;
 
-    // send message to gmail api
-    ctx.gmail_client
+    let send_request = SendRequest {
+        message: message_to_send.clone(),
+        from: sender_contact,
+        parent_message_id,
+        references,
+    };
+    let sent_ids = ctx
+        .email_api
         .send_message(
-            gmail_access_token.as_str(),
-            &mut message_to_send,
-            &sender_contact,
-            parent_message_id,
-            references,
+            link.id,
+            &send_request,
+            message_to_send.provider_thread_id.as_deref(),
         )
         .await
         .context(format!(
             "Failed to send message to gmail api for message_id {}",
             data.message_id
         ))?;
+    apply_sent_ids(&mut message_to_send, sent_ids);
 
     let mut tx = ctx
         .db
@@ -184,9 +184,14 @@ async fn process_scheduled_message_inner(
 
             // Gmail accepted the send and the DB updates are committed:
             // publish the message_sent event resolving the earlier
-            // message_send_queued. Provider ids were set on
-            // `message_to_send` by the Gmail send call above.
-            // Actor is not tracked on scheduled sends; owner is on `link`.
+            // message_send_queued. The actor was persisted on the scheduled
+            // row at enqueue time; rows from before actor tracking decode to
+            // `None` (no attribution).
+            let actor = scheduled_message
+                .actor_id
+                .as_deref()
+                .and_then(|raw| MacroUserIdStr::parse_from_str(raw).ok())
+                .map(|actor| actor.into_owned());
             if let (Some(message_db_id), Some(thread_db_id)) =
                 (message_to_send.db_id, message_to_send.thread_db_id)
             {
@@ -195,7 +200,7 @@ async fn process_scheduled_message_inner(
                     &EmailMacroEvent::message_sent(MessageSentMetadata {
                         link_id: link.id,
                         owner: link.macro_id.clone(),
-                        actor: None,
+                        actor,
                         message_id: message_db_id,
                         thread_id: thread_db_id,
                         provider_message_id: message_to_send
@@ -258,6 +263,11 @@ async fn process_scheduled_message_inner(
     }
 
     Ok(())
+}
+
+fn apply_sent_ids(message: &mut MessageToSend, sent_ids: SentIds) {
+    message.provider_id = Some(sent_ids.provider_message_id);
+    message.provider_thread_id = Some(sent_ids.provider_thread_id);
 }
 
 #[tracing::instrument(skip(message))]

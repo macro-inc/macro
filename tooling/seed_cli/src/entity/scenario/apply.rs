@@ -26,7 +26,7 @@ use models_email::email::service::label::{
 use models_email::email::service::link::{Link, UserProvider};
 use models_email::email::service::message::Message;
 use models_email::email::service::thread::Thread;
-use models_permissions::share_permission::SharePermissionV2;
+use models_permissions::share_permission::{LinkShare, SharePermissionV2};
 use models_properties::service::property_value::PropertyValue;
 use uuid::Uuid;
 
@@ -36,6 +36,16 @@ use super::spec::{
 };
 use super::{sql_string, values_sql};
 use crate::config::SeedCliContext;
+
+#[cfg(test)]
+mod test;
+
+fn scenario_body_html_sanitized(body_html: Option<&str>, body_text: &str) -> String {
+    let raw = body_html
+        .map(str::to_string)
+        .unwrap_or_else(|| format!("<p>{body_text}</p>"));
+    email_utils::sanitize_email_html(&raw)
+}
 
 /// Canonical blank-markdown loro snapshot, matching the one production uses
 /// to initialize empty documents.
@@ -465,11 +475,13 @@ async fn seed_projects(ctx: &SeedCliContext, spec: &ScenarioSpec) -> anyhow::Res
         }
         apply_access_rows(ctx, &project_id, EntityType::Project, &rows).await?;
 
-        if let Some(level) = project.public {
+        if let (Some(link_share), Some(access_level)) =
+            (project.link_share, project.link_share_access_level)
+        {
             ctx.db
-                .create_project_public_permission(
+                .create_project_link_share_permission(
                     &project_id,
-                    &share_permission(spec, &project.owner, level),
+                    &share_permission(spec, &project.owner, link_share, access_level),
                 )
                 .await?;
         }
@@ -487,22 +499,29 @@ async fn seed_projects(ctx: &SeedCliContext, spec: &ScenarioSpec) -> anyhow::Res
     Ok(())
 }
 
-fn share_permission(spec: &ScenarioSpec, owner_key: &str, level: ShareLevel) -> SharePermissionV2 {
+fn permission_access_level(
+    level: ShareLevel,
+) -> models_permissions::share_permission::access_level::AccessLevel {
+    match level {
+        ShareLevel::View => models_permissions::share_permission::access_level::AccessLevel::View,
+        ShareLevel::Comment => {
+            models_permissions::share_permission::access_level::AccessLevel::Comment
+        }
+        ShareLevel::Edit => models_permissions::share_permission::access_level::AccessLevel::Edit,
+    }
+}
+
+fn share_permission(
+    spec: &ScenarioSpec,
+    owner_key: &str,
+    link_share: LinkShare,
+    access_level: ShareLevel,
+) -> SharePermissionV2 {
     SharePermissionV2 {
         id: String::new(),
+        link_share: Some(link_share),
+        link_share_access_level: Some(permission_access_level(access_level)),
         owner: spec.user_id(owner_key),
-        is_public: true,
-        public_access_level: Some(match level {
-            ShareLevel::View => {
-                models_permissions::share_permission::access_level::AccessLevel::View
-            }
-            ShareLevel::Comment => {
-                models_permissions::share_permission::access_level::AccessLevel::Comment
-            }
-            ShareLevel::Edit => {
-                models_permissions::share_permission::access_level::AccessLevel::Edit
-            }
-        }),
         channel_share_permissions: None,
     }
 }
@@ -583,7 +602,6 @@ async fn seed_documents(
             (None, None) => None,
         };
 
-        let is_public = document.public.is_some();
         let project_id = document.project.as_deref().map(|p| spec.project_id(p));
         let project_name = document.project.as_deref().map(|p| {
             spec.projects[p]
@@ -603,19 +621,11 @@ async fn seed_documents(
                 project_name: project_name.as_deref(),
                 share_permission: &SharePermissionV2 {
                     id: String::new(),
+                    link_share: document.link_share,
+                    link_share_access_level: document
+                        .link_share_access_level
+                        .map(permission_access_level),
                     owner: owner_id.clone(),
-                    is_public,
-                    public_access_level: document.public.map(|level| match level {
-                        ShareLevel::View => {
-                            models_permissions::share_permission::access_level::AccessLevel::View
-                        }
-                        ShareLevel::Comment => {
-                            models_permissions::share_permission::access_level::AccessLevel::Comment
-                        }
-                        ShareLevel::Edit => {
-                            models_permissions::share_permission::access_level::AccessLevel::Edit
-                        }
-                    }),
                     channel_share_permissions: None,
                 },
                 skip_history: true,
@@ -713,9 +723,9 @@ async fn seed_tasks(ctx: &SeedCliContext, spec: &ScenarioSpec) -> anyhow::Result
                 project_name: project_name.as_deref(),
                 share_permission: &SharePermissionV2 {
                     id: String::new(),
+                    link_share: None,
+                    link_share_access_level: None,
                     owner: owner_id.clone(),
-                    is_public: false,
-                    public_access_level: None,
                     channel_share_permissions: None,
                 },
                 skip_history: true,
@@ -819,11 +829,13 @@ async fn seed_chats(ctx: &SeedCliContext, spec: &ScenarioSpec) -> anyhow::Result
         rows.extend(chat.share.iter().map(|s| share_to_row(spec, s)));
         apply_access_rows(ctx, &chat_id, EntityType::Chat, &rows).await?;
 
-        if let Some(level) = chat.public {
+        if let (Some(link_share), Some(access_level)) =
+            (chat.link_share, chat.link_share_access_level)
+        {
             ctx.db
-                .create_chat_public_permission(
+                .create_chat_link_share_permission(
                     &chat_id,
-                    &share_permission(spec, &chat.owner, level),
+                    &share_permission(spec, &chat.owner, link_share, access_level),
                 )
                 .await?;
         }
@@ -1077,7 +1089,10 @@ fn build_thread(
         bcc: vec![],
         labels,
         body_text: Some(body_text.clone()),
-        body_html_sanitized: Some(format!("<p>{body_text}</p>")),
+        body_html_sanitized: Some(scenario_body_html_sanitized(
+            thread_spec.body_html.as_deref(),
+            &body_text,
+        )),
         body_macro: None,
         attachments: vec![],
         attachments_draft: vec![],

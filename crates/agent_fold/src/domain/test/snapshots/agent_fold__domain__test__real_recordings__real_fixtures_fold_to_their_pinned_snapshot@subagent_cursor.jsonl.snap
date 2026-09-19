@@ -1,0 +1,147 @@
+---
+source: crates/agent_fold/src/domain/test/real_recordings.rs
+expression: messages
+input_file: crates/agent_fold/fixtures/real/subagent_cursor.jsonl
+---
+[
+    FoldedMessage {
+        id: TurnId(
+            0,
+        ),
+        author: User {
+            user_id: Some(
+                macro|eric@example.com,
+            ),
+        },
+        request_id: None,
+        parts: NonEmpty {
+            inner: [
+                Text {
+                    text: "<m-agent-context>{\"version\":1,\"text\":\"Prior message 1:\\nSender: macro|julia@example.com\\nContent: Hey \\u003cm-user-mention>{\\\"userId\\\":\\\"macro|wolf@example.com\\\",\\\"email\\\":\\\"wolf@example.com\\\"}\\u003c/m-user-mention>,\\n\\nWelcome to Macro, we're excited for you to try it out.\\n\\nThis is your own personal support Channel, with \\u003cm-user-mention>{\\\"userId\\\":\\\"macro|jacob@example.com\\\",\\\"email\\\":\\\"jacob@example.com\\\"}\\u003c/m-user-mention> (ceo) and \\u003cm-user-mention>{\\\"userId\\\":\\\"macro|teo@example.com\\\",\\\"email\\\":\\\"teo@example.com\\\"}\\u003c/m-user-mention> (cto) and me (julia).\\n\\nIf you have any feedback or find any bugs let us know here.\"}</m-agent-context>\n\n<m-user-mention>{\"userId\":\"bot|00000000-0000-0000-0000-00000000c5c5\",\"email\":\"Cursor\",\"displayName\":\"Cursor\"}</m-user-mention> spawn a subagent to use python to take the  integral of x^2 dx between 1 and 5",
+                },
+            ],
+        },
+        stop: None,
+    },
+    FoldedMessage {
+        id: TurnId(
+            0,
+        ),
+        author: Agent,
+        request_id: None,
+        parts: NonEmpty {
+            inner: [
+                Thought {
+                    text: "**Implementing subagent use**\n\nI need to use the subagent because the user specifically asked for it. I'm considering whether to choose the general purpose or a simpler option, but that's alright. First, I should update the commentary. It looks like there might not be any repo work required, and perhaps no testing is necessary since it seems simple to handle. I'll proceed with the subagent using Python and return the result.",
+                },
+                Text {
+                    text: "I’m spawning a subagent to compute the definite integral in Python and return the result directly.",
+                },
+                ToolUse {
+                    id: ToolUseId(
+                        "call_WDdIO2oFNumfaB7SNHinSgRM fc_084f7006b4bfb13e016a9997c35c8087d2b209ca20dbbd2613",
+                    ),
+                    name: Native {
+                        name: "task",
+                    },
+                    status: Completed,
+                    detail: Subagent {
+                        title: "Compute integral in Python",
+                        agent_type: None,
+                        description: Some(
+                            "Compute integral in Python",
+                        ),
+                        prompt: Some(
+                            "Use Python to compute the definite integral of x^2 dx from 1 to 5. Return the exact value and a brief note of the method used.",
+                        ),
+                        background: false,
+                        children: [
+                            Thought {
+                                text: "**Executing terminal command**\n\nI see that I need an answer via a terminal command. I could compute this mentally, but since the request is labeled as simple, using a terminal command seems more appropriate. I should make sure to provide a commentary update first. So, I'll opt to use the Python shell to get this done. I just need to make sure that I'm following the correct steps to get the answer efficiently!",
+                            },
+                            Text {
+                                text: "I’m computing the definite integral in Python and will return the exact result with a short note on the method.",
+                            },
+                            ToolUse {
+                                id: ToolUseId(
+                                    "call_njT7kCrh8vMAKfDvXg3DmkAJ fc_04cef57509d465f7016a9997c9d3f887d28128fd586814459d",
+                                ),
+                                name: Native {
+                                    name: "shell",
+                                },
+                                status: Failed,
+                                detail: Terminal {
+                                    command: Some(
+                                        "python3 - <<'PY'\nimport sympy as sp\nx = sp.symbols('x')\nexpr = sp.integrate(x**2, (x, 1, 5))\nprint(expr)\nPY",
+                                    ),
+                                    output: Some(
+                                        AnsiText(
+                                            "Traceback (most recent call last):\n  File \"<stdin>\", line 1, in <module>\nModuleNotFoundError: No module named 'sympy'\n",
+                                        ),
+                                    ),
+                                    exit_code: Some(
+                                        1,
+                                    ),
+                                },
+                            },
+                            Thought {
+                                text: "**Considering fallback options**\n\nI'm thinking about maybe using a plain Python formula as a fallback. It seems like a simple way to handle things if my first approach isn't working out. I wonder if I'll need to adjust any parameters or structure it differently. Let's see if this gives me the results I want. It's always good to have these alternatives ready, just in case!",
+                            },
+                            Text {
+                                text: "SymPy isn’t installed here, so I’m using a short Python evaluation of the antiderivative directly to keep the result exact.",
+                            },
+                            ToolUse {
+                                id: ToolUseId(
+                                    "call_a6FRCO5T7CJ0kFmetndLRJhj fc_04cef57509d465f7016a9997cd322087d28a06be214c6849d1",
+                                ),
+                                name: Native {
+                                    name: "shell",
+                                },
+                                status: Completed,
+                                detail: Terminal {
+                                    command: Some(
+                                        "python3 - <<'PY'\nfrom fractions import Fraction\nresult = Fraction(5**3 - 1**3, 3)\nprint(result)\nPY",
+                                    ),
+                                    output: Some(
+                                        AnsiText(
+                                            "124/3\n",
+                                        ),
+                                    ),
+                                    exit_code: Some(
+                                        0,
+                                    ),
+                                },
+                            },
+                        ],
+                        result: Some(
+                            SubagentResult {
+                                text: Some(
+                                    "The exact value is **124/3**.\n\nMethod: I used Python to evaluate the antiderivative of \\(x^2\\), which is \\(x^3/3\\), and then applied the bounds:\n\\[\n\\int_1^5 x^2\\,dx = \\left[\\frac{x^3}{3}\\right]_1^5 = \\frac{125 - 1}{3} = \\frac{124}{3}.\n\\]",
+                                ),
+                                error: None,
+                                agent_id: Some(
+                                    "bc-b723d011-d87a-5f5e-a0b0-bf3ffddc2693",
+                                ),
+                                model: None,
+                                duration_ms: Some(
+                                    12978,
+                                ),
+                                tokens: None,
+                                tool_uses: Some(
+                                    2,
+                                ),
+                                stats: None,
+                            },
+                        ),
+                    },
+                },
+                Text {
+                    text: "I spawned a subagent and it computed the integral as **124/3**.\n\n\\[\n\\int_1^5 x^2 \\, dx = \\left[\\frac{x^3}{3}\\right]_1^5 = \\frac{125 - 1}{3} = \\frac{124}{3}\n\\]\n\nThat’s approximately **41.3333**.",
+                },
+            ],
+        },
+        stop: Some(
+            EndTurn,
+        ),
+    },
+]

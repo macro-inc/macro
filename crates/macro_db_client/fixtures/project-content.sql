@@ -54,14 +54,14 @@ INSERT INTO public."Chat" ("id","name","userId", "createdAt", "updatedAt", "proj
 (SELECT 'chat-one', 'test-chat', 'macro|user@user.com', '2019-10-16 01:01:00', '2019-10-16 01:01:00', 'p10');
 
 
-INSERT INTO public."SharePermission" ("id", "isPublic", "publicAccessLevel", "createdAt", "updatedAt")
-(SELECT 'sp-1', true, 'view', '2019-10-16 00:00:00', '2019-10-16 00:00:00');
+INSERT INTO public."SharePermission" ("id", "linkShare", "linkShareAccessLevel", "createdAt", "updatedAt")
+(SELECT 'sp-1', 'PUBLIC', 'view', '2019-10-16 00:00:00', '2019-10-16 00:00:00');
 
 INSERT INTO public."DocumentPermission" ("documentId", "sharePermissionId")
 (SELECT 'document-one', 'sp-1');
 
-INSERT INTO public."SharePermission" ("id", "isPublic", "createdAt", "updatedAt")
-(SELECT 'sp-2', false, '2019-10-16 00:00:00', '2019-10-16 00:00:00');
+INSERT INTO public."SharePermission" ("id", "linkShare", "linkShareAccessLevel", "createdAt", "updatedAt")
+(SELECT 'sp-2', NULL, NULL, '2019-10-16 00:00:00', '2019-10-16 00:00:00');
 
 INSERT INTO public."DocumentPermission" ("documentId", "sharePermissionId")
 (SELECT 'document-two', 'sp-2');

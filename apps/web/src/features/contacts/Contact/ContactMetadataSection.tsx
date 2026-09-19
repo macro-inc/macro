@@ -41,7 +41,7 @@ export function ContactMetadataSection(props: {
             <button
               type="button"
               onClick={() => openCompany(contact().companyId)}
-              class="text-left text-sm text-accent hover:underline"
+              class="text-left text-sm text-link hover:text-link-hover hover:underline"
             >
               {company()?.name ?? 'Open company'}
             </button>

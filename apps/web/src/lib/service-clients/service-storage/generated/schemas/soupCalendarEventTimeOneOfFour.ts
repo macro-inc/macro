@@ -11,8 +11,8 @@ import type { SoupCalendarEventTimeOneOfFourKind } from './soupCalendarEventTime
  */
 export type SoupCalendarEventTimeOneOfFour = {
   /** Exclusive end date. */
-  end_date: string;
+  endDate: string;
   kind: SoupCalendarEventTimeOneOfFourKind;
   /** Inclusive start date. */
-  start_date: string;
+  startDate: string;
 };

@@ -71,6 +71,36 @@ impl<T> NonEmpty<Vec<T>> {
     pub fn one(value: T) -> Self {
         Self { inner: vec![value] }
     }
+
+    /// Append an element.
+    ///
+    /// One of the few mutations that cannot break the invariant: a vector
+    /// that was non-empty stays non-empty, and an appended element only makes
+    /// it longer. There is deliberately no `pop`, `clear`, or `&mut Vec`
+    /// escape hatch, since each of those could empty the vector.
+    pub fn push(&mut self, value: T) {
+        self.inner.push(value);
+    }
+
+    /// A mutable reference to the element at `index`, or `None` when the
+    /// index is out of bounds.
+    ///
+    /// Cannot break the invariant - replacing an element leaves the length
+    /// alone.
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
+        self.inner.get_mut(index)
+    }
+
+    /// A mutable reference to the last element.
+    ///
+    /// Unlike [`slice::last_mut`] this returns the element rather than an
+    /// `Option`: a non-empty vector always has a last element. Cannot break
+    /// the invariant, for the same reason as [`Self::get_mut`].
+    pub fn last_mut(&mut self) -> &mut T {
+        self.inner
+            .last_mut()
+            .expect("a NonEmpty vector has a last element")
+    }
 }
 
 impl<T> NonEmpty<T>

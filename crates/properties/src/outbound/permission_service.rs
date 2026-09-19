@@ -95,18 +95,8 @@ fn caller_auth(user_id: Option<&MacroUserIdStr<'_>>) -> EntityAccessAuth {
 }
 
 fn storage_entity_type(entity_type: AccessEntityType) -> anyhow::Result<StorageEntityType> {
-    Ok(match entity_type {
-        AccessEntityType::CalendarEvent => StorageEntityType::CalendarEvent,
-        AccessEntityType::Document => StorageEntityType::Document,
-        AccessEntityType::Call => StorageEntityType::CallRecord,
-        AccessEntityType::Chat => StorageEntityType::Chat,
-        AccessEntityType::Project => StorageEntityType::Project,
-        AccessEntityType::EmailThread => StorageEntityType::Thread,
-        AccessEntityType::Channel => StorageEntityType::Channel,
-        AccessEntityType::CrmCompany => StorageEntityType::Company,
-        AccessEntityType::User => StorageEntityType::User,
-        _ => anyhow::bail!("Unsupported property target type"),
-    })
+    crate::domain::model::storage_entity_type(entity_type)
+        .ok_or_else(|| anyhow::anyhow!("Unsupported property target type"))
 }
 
 fn access_receipt<T: entity_access::domain::models::RequiredPermission>(

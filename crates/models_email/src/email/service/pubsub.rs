@@ -4,6 +4,14 @@ use strum::{Display, EnumString};
 use thiserror::Error;
 use uuid::Uuid;
 
+/// A worker failure with its queue-routing classification.
+///
+/// Style exception (CS-46): the email worker error plumbing stays on
+/// `anyhow::Error` rather than `rootcause`. Every queue operation, policy
+/// module, and DLQ path across email_service composes through this
+/// `source` field, so migrating is an all-or-nothing cross-crate change —
+/// recorded here as the accepted exception rather than mixing the two
+/// error stacks module by module.
 #[derive(Debug, Error)]
 #[error("{reason}: {source}")]
 pub struct DetailedError {

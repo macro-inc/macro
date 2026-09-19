@@ -106,6 +106,7 @@ function ResultToggle(props: ToolResultToggleProps) {
         variant="ghost"
         size="sm"
         noTouchResize
+        aria-expanded={props.expanded}
         class="shrink-0 whitespace-nowrap px-1 text-ink-extra-muted hover:text-ink-muted"
         onClick={(event) => {
           event.preventDefault();

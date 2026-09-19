@@ -9,6 +9,7 @@
 use super::util;
 use crate::stream::{StreamPart, ToolResponse};
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use rig_core::message::Message;
 use rig_core::test_utils::{MockCompletionModel, MockStreamEvent};
@@ -27,6 +28,10 @@ const GRACE: Duration = Duration::from_millis(500);
 #[derive(Deserialize, JsonSchema)]
 #[schemars(title = "never_tool", description = "Never returns.")]
 struct NeverTool {}
+
+impl ToolAnnotated for NeverTool {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Never");
+}
 
 #[async_trait]
 impl AsyncTool<()> for NeverTool {
@@ -92,6 +97,10 @@ struct Gate {
 #[derive(Deserialize, JsonSchema)]
 #[schemars(title = "gated_tool", description = "Returns only once released.")]
 struct GatedTool {}
+
+impl ToolAnnotated for GatedTool {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Gated");
+}
 
 #[async_trait]
 impl AsyncTool<Gate> for GatedTool {
@@ -176,6 +185,10 @@ async fn gated_tool_yields_call_first_then_response_once_released() {
 #[schemars(title = "echo_tool", description = "Returns immediately.")]
 struct EchoTool {
     value: String,
+}
+
+impl ToolAnnotated for EchoTool {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Echo");
 }
 
 #[async_trait]

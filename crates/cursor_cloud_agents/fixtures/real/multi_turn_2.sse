@@ -1,0 +1,97 @@
+event: status
+data: {"runId":"run-ae154a8c-9771-4baa-8005-2ddc5f6d8a3f","status":"CREATING"}
+
+event: status
+data: {"runId":"run-ae154a8c-9771-4baa-8005-2ddc5f6d8a3f","status":"RUNNING"}
+
+id: 1787331114471-0
+event: interaction_update
+data: {"type":"step-started","stepId":13}
+
+id: 1787331114494-0
+event: interaction_update
+data: {"type":"user-message-appended","userMessage":{"type":"user_message","session_id":"run-ae154a8c-9771-4baa-8005-2ddc5f6d8a3f","text":"Now say only the word 'second' and nothing else. Do not use any tools."}}
+
+id: 1787331116160-0
+event: thinking
+data: {"text":"The user wants me to"}
+
+id: 1787331116160-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"The user wants me to"}
+
+id: 1787331116164-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787331116168-0
+event: thinking
+data: {"text":" say only the word \"second\""}
+
+id: 1787331116168-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" say only the word \"second\""}
+
+id: 1787331116171-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787331116175-0
+event: thinking
+data: {"text":" and nothing else, without"}
+
+id: 1787331116175-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" and nothing else, without"}
+
+id: 1787331116178-0
+event: interaction_update
+data: {"type":"token-delta","tokens":7}
+
+id: 1787331116181-0
+event: thinking
+data: {"text":" using any tools."}
+
+id: 1787331116181-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" using any tools."}
+
+id: 1787331116185-0
+event: interaction_update
+data: {"type":"token-delta","tokens":4}
+
+id: 1787331116188-0
+event: interaction_update
+data: {"type":"thinking-completed","thinkingDurationMs":29}
+
+id: 1787331116192-0
+event: assistant
+data: {"text":"second"}
+
+id: 1787331116192-0
+event: interaction_update
+data: {"type":"text-delta","text":"second"}
+
+id: 1787331116195-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787331116322-0
+event: interaction_update
+data: {"type":"turn-ended"}
+
+id: 1787331116326-0
+event: interaction_update
+data: {"type":"step-completed","stepId":13,"stepDurationMs":1855}
+
+event: status
+data: {"runId":"run-ae154a8c-9771-4baa-8005-2ddc5f6d8a3f","status":"FINISHED"}
+
+id: 1787331117621-0
+event: result
+data: {"runId":"run-ae154a8c-9771-4baa-8005-2ddc5f6d8a3f","status":"FINISHED","text":"second","durationMs":3667,"git":{"branches":[{"repoUrl":"github.com/macro-inc/macro","branch":"cursor/single-word-output-70ef"}]}}
+
+id: 1787331117621-0
+event: done
+data: {}
+

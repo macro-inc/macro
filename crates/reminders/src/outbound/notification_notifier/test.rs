@@ -169,6 +169,12 @@ async fn carries_the_reminder_payload_under_the_reminder_tag() {
         notification["content"]["description"],
         "Follow up on the contract"
     );
+    // Which firing this is. Two occurrences of a recurring reminder are
+    // identical but for this, and the push collapse key is built from it.
+    assert_eq!(
+        notification["content"]["scheduledFor"],
+        "2026-07-01T12:00:00Z"
+    );
 }
 
 #[tokio::test]

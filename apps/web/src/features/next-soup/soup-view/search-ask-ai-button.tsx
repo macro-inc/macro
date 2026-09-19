@@ -48,7 +48,7 @@ export function SearchAskAiButton() {
       size="sm"
       depth={2}
       tooltip="Ask AI"
-      class="shrink-0 h-7 mobile:h-9 gap-1.5 rounded-lg px-2"
+      class="shrink-0 h-7 touch:h-9 gap-1.5 rounded-lg px-2"
       disabled={isAsking()}
       onClick={askAi}
     >

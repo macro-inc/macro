@@ -26,6 +26,7 @@ import { useGithubLinkStatusQuery } from '@queries/auth/github-link';
 import { isRealNamePart, useOwnUserName } from '@queries/auth/user-name-self';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { useMcpServersQuery } from '@queries/mcp-servers';
+import { usePipedreamConnectionsQuery } from '@queries/pipedream-connectors';
 import { useStarterDocsQuery } from '@queries/starter-docs';
 import {
   currentThemeId,
@@ -73,6 +74,10 @@ function GettingStartedContent() {
   // and if this window never blurs no focus refetch would ever flip the row
   // (see ConnectorsSection).
   const mcpServers = useMcpServersQuery({
+    refetchInterval: 4_000,
+    neverSuspend: true,
+  });
+  const pipedreamConnections = usePipedreamConnectionsQuery({
     refetchInterval: 4_000,
     neverSuspend: true,
   });
@@ -165,6 +170,7 @@ function GettingStartedContent() {
           isComplete: () =>
             (emailLinks.data?.links.length ?? 0) > 1 ||
             githubLink.data?.status === 'linked' ||
+            (pipedreamConnections.data ?? []).length > 0 ||
             (mcpServers.data ?? []).some((server) => server.authenticated),
         },
       ],

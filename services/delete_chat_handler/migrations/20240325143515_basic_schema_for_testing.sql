@@ -903,10 +903,11 @@ CREATE TABLE public."RolesOnUsers" (
 
 CREATE TABLE public."SharePermission" (
     id text DEFAULT gen_random_uuid() NOT NULL,
-    "isPublic" boolean NOT NULL,
-    "publicAccessLevel" text,
+    "linkShare" text,
+    "linkShareAccessLevel" text,
     "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    "updatedAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+    "updatedAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT "SharePermission_linkShare_check" CHECK ("linkShare" IN ('PUBLIC', 'TEAM'))
 );
 
 CREATE TABLE public."Thread" (

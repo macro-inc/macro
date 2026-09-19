@@ -13,6 +13,8 @@ pub mod identity_provider;
 pub mod jwt;
 /// Logout operations.
 pub mod logout;
+/// Microsoft identity provider and OAuth.
+pub mod microsoft;
 /// OAuth authorization code grant.
 pub mod oauth;
 /// Password-based login.
@@ -93,6 +95,8 @@ pub struct FusionAuthClient {
     google_client_id: String,
     /// The client secret for Google identity provider
     google_client_secret: String,
+    /// Optional Microsoft OAuth credentials.
+    microsoft_credentials: Option<microsoft::MicrosoftOAuthCredentials>,
 }
 
 impl FusionAuthClient {
@@ -120,6 +124,7 @@ impl FusionAuthClient {
             unauth_client,
             google_client_id,
             google_client_secret,
+            microsoft_credentials: None,
         }
     }
 

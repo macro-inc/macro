@@ -1,0 +1,54 @@
+[package]
+edition = "2024"
+name = "agent_egress"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+# `AgentSessionId` only. `default-features = false` drops the crate's CLI
+# binaries (clap, tokio), which the vocabulary does not need.
+agent_fold = { path = "../agent_fold", default-features = false }
+agent_runtime_protocol = { path = "../agent_runtime_protocol" }
+agent_session = { path = "../agent_session" }
+axum = { workspace = true }
+# `headers`' typed `Authorization`, which owns the Bearer/Basic parsing the
+# session-token extraction would otherwise hand-roll.
+axum-extra = { workspace = true, features = ["typed-header"] }
+base64 = { workspace = true }
+bytes = { workspace = true }
+chrono = { workspace = true }
+# The installation records that say whose installation an installation is, and
+# the team memberships that decide whether the session's owner is one of them.
+github = { path = "../github", default-features = false, features = [
+  "outbound",
+  "ports",
+  "sync",
+] }
+http = { workspace = true }
+http-body-util = { workspace = true }
+lru = { workspace = true }
+# Signing Macro API tokens, with the same shared vocabulary
+# `authentication_service` mints through.
+macro_auth = { path = "../macro_auth" }
+# The owner's `User` row, which carries the FusionAuth id the exchange needs.
+macro_db_client = { path = "../macro_db_client" }
+macro_user_id = { path = "../macro_user_id" }
+# The rows saying which apps an owner connected, and the client that turns one
+# into Pipedream's MCP endpoint plus the headers scoping a call to it.
+pipedream_mcp = { path = "../pipedream_mcp" }
+rand = { workspace = true }
+reqwest = { workspace = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }
+tower = { workspace = true }

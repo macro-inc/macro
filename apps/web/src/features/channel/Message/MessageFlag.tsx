@@ -2,51 +2,42 @@ import { cn } from '@ui';
 
 type MessageFlagProps = {
   text: string;
-  highlightAbove?: boolean;
-  highlightBelow?: boolean;
+  /** Accent treatment for the unread ("New") marker. */
+  highlight?: boolean;
   class?: string;
 };
 
+/**
+ * Horizontal list divider with a centered label — used for day boundaries
+ * and the unread marker.
+ */
 export function MessageFlag(props: MessageFlagProps) {
   return (
     <div
-      class={cn(
-        'flex flex-row items-stretch h-20 justify-start ml-(--left-of-connector)',
-        props.class
-      )}
+      class={cn('flex h-14 mobile:h-16 items-center gap-2.5 px-2', props.class)}
     >
-      <div class="flex flex-col items-center justify-center">
-        <div
-          class={cn(
-            'border-l-1 border-rail min-h-1/2',
-            props.highlightAbove && 'border-accent'
-          )}
-        />
-        <div
-          class={cn(
-            'border-l-1 border-rail min-h-1/2',
-            props.highlightBelow && 'border-accent'
-          )}
-        />
-      </div>
-      <div class="flex items-center flex-1 py-2">
-        <div
-          class={cn(
-            'border-b-1 border-rail w-5',
-            props.highlightBelow && 'border-accent'
-          )}
-        />
-        <span
-          class={cn(
-            'text-xs px-3 ring-1 py-1 rounded-sm',
-            props.highlightBelow
-              ? 'text-accent ring-accent'
-              : 'text-ink-extra-muted ring-rail'
-          )}
-        >
-          {props.text}
-        </span>
-      </div>
+      <span
+        aria-hidden="true"
+        class={cn(
+          'h-px grow',
+          props.highlight ? 'bg-accent/40' : 'bg-thread-rail'
+        )}
+      />
+      <span
+        class={cn(
+          'text-xs font-medium',
+          props.highlight ? 'text-accent' : 'text-ink-muted'
+        )}
+      >
+        {props.text}
+      </span>
+      <span
+        aria-hidden="true"
+        class={cn(
+          'h-px grow',
+          props.highlight ? 'bg-accent/40' : 'bg-thread-rail'
+        )}
+      />
     </div>
   );
 }

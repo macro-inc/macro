@@ -1,4 +1,5 @@
 use super::object::{SchemaRegistrar, ToolObject};
+use crate::annotations::ToolAnnotated;
 use crate::schema::{ValidatedSchema, ValidationError, generate_validated_input_schema};
 use crate::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
@@ -147,6 +148,7 @@ where
         ToolContext: FromRef<ToolSetContext> + Send + Sync + 'static,
         T: JsonSchema
             + AsyncTool<ToolContext, Output = O>
+            + ToolAnnotated
             + for<'de> Deserialize<'de>
             + 'static
             + Send
@@ -183,6 +185,7 @@ where
             name,
             input_schema: input_schema_json,
             description,
+            annotations: T::ANNOTATIONS,
             deserializer,
             schema_registrar,
         })
@@ -201,7 +204,9 @@ where
     /// # Example
     ///
     /// ```
-    /// use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolResult};
+    /// use ai_toolset::{
+    ///     AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolResult,
+    /// };
     /// use ai_toolset::tool_object::AsyncToolObject;
     /// use axum_macros::FromRef;
     /// use schemars::JsonSchema;
@@ -225,6 +230,10 @@ where
     /// #[derive(JsonSchema, Deserialize)]
     /// #[schemars(title = "MyTool", description = "Example tool")]
     /// struct MyTool { input: String }
+    ///
+    /// impl ToolAnnotated for MyTool {
+    ///     const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("My tool");
+    /// }
     ///
     /// #[async_trait::async_trait]
     /// impl AsyncTool<SubContext> for MyTool {
@@ -264,6 +273,7 @@ where
             name: self.name,
             input_schema: self.input_schema,
             description: self.description,
+            annotations: self.annotations,
             deserializer: new_deserializer,
             schema_registrar: self.schema_registrar,
         }

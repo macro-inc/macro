@@ -2,6 +2,7 @@
 
 use crate::domain::ports::{EmailService, GmailTokenProvider};
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -52,6 +53,10 @@ ListLabels. Most users have a single inbox, in which case email tools operate on
 and you do not need this tool. Do not guess inbox addresses — list them here first."
 )]
 pub struct ListInboxes {}
+
+impl ToolAnnotated for ListInboxes {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("List inboxes");
+}
 
 #[async_trait]
 impl<T, G, E> AsyncTool<EmailToolContext<T, G, E>> for ListInboxes

@@ -14,8 +14,8 @@ INSERT INTO public."Document" ("id","name","fileType", "owner", "createdAt", "up
 INSERT INTO public."DocumentInstance" ("revisionName", "documentId", "createdAt", "updatedAt", "sha")
 (SELECT 'test_document_name', 'document-one', '2019-10-16 00:00:00', '2019-10-16 00:00:00', 'sha');
 
-INSERT INTO public."SharePermission" ("id", "isPublic", "publicAccessLevel", "createdAt", "updatedAt")
-(SELECT 'sp-1', true, 'view', '2019-10-16 00:00:00', '2019-10-16 00:00:00');
+INSERT INTO public."SharePermission" ("id", "linkShare", "linkShareAccessLevel", "createdAt", "updatedAt")
+(SELECT 'sp-1', 'PUBLIC', 'view', '2019-10-16 00:00:00', '2019-10-16 00:00:00');
 
 INSERT INTO public."DocumentPermission" ("documentId", "sharePermissionId")
 (SELECT 'document-one', 'sp-1');
@@ -26,8 +26,8 @@ INSERT INTO public."Document" ("id","name","fileType", "owner", "createdAt", "up
 INSERT INTO public."DocumentInstance" ("revisionName", "documentId", "createdAt", "updatedAt", "sha")
 (SELECT 'test_document_name', 'document-two', '2019-10-16 00:00:00', '2019-10-16 00:00:00', 'sha');
 
-INSERT INTO public."SharePermission" ("id", "isPublic", "publicAccessLevel", "createdAt", "updatedAt")
-(SELECT 'sp-2', false, NULL, '2019-10-16 00:00:00', '2019-10-16 00:00:00');
+INSERT INTO public."SharePermission" ("id", "linkShare", "linkShareAccessLevel", "createdAt", "updatedAt")
+(SELECT 'sp-2', NULL, NULL, '2019-10-16 00:00:00', '2019-10-16 00:00:00');
 
 INSERT INTO public."DocumentPermission" ("documentId", "sharePermissionId")
 (SELECT 'document-two', 'sp-2');

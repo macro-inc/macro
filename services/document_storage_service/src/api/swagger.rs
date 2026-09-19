@@ -8,7 +8,7 @@ use crate::api::saved_views::{
 };
 use crate::{
     api::{
-        activity, annotations,
+        annotations,
         documents::{
             self,
             export_document::ExportDocumentResponse,
@@ -34,7 +34,6 @@ use crate::{
             pins::{AddPinRequest, PinRequest},
         },
         response::{
-            activity::{GetActivitiesResponse, UserActivitiesResponse},
             documents::{
                 create::{CreateBulkDocumentResponse, CreateBulkDocumentResponseData},
                 get::{
@@ -68,6 +67,10 @@ use channels::inbound::axum_router::{
     DeleteEntityMentionResponse, GetAttachmentReferencesResponse, GetMessageWithContextResponse,
     PostActivityRequest,
 };
+use collab_surface::domain::models::SurfaceState;
+use collab_surface::inbound::axum_router::{
+    CollabSurfaceResponse, CollabSurfaceTokenResponse, EnsureCollabSurfaceRequest,
+};
 use document_sub_type::DocumentSubType;
 use documents_hex::inbound::axum_router::{
     edit_document::EditDocumentResponse, get_branch_name::BranchNameResponse,
@@ -83,7 +86,6 @@ use model::document::response::{
     DocumentResponseMetadata,
 };
 use model::{
-    activity::Activity,
     annotations::AnnotationIncrementalUpdate,
     chat::Chat,
     document::{
@@ -133,6 +135,8 @@ use soup::inbound::axum_router::{
     PostGroupedSoupAstRequest, PostSoupAstRequest, PostSoupRequest, SoupApiItem, SoupApiSort,
     SoupPage,
 };
+use user_api_key::domain::models::{CreatedUserApiKey, UserApiKeyInfo};
+use user_api_key::inbound::axum_router::{CreateUserApiKeyRequest, UserApiKeysList};
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]
@@ -143,9 +147,8 @@ use utoipa::OpenApi;
     paths(
         health::health_handler,
         calendar_events::inbound::axum_router::list_occurrences,
-
-        // activity
-        activity::get_recent_activity::get_recent_activity_handler,
+        calendar_events::inbound::axum_router::mention_previews,
+        calendar_events::inbound::axum_router::list_team_out_of_office,
 
         // annotations
         annotations::get::get_document_comments_handler,
@@ -252,7 +255,22 @@ use utoipa::OpenApi;
         channels::inbound::axum_router::get_activity_handler,
         channels::inbound::axum_router::post_activity_handler,
 
+        // harnesses
+        harnesses::inbound::axum_router::create_pairing_handler,
+        harnesses::inbound::axum_router::get_pairing_handler,
+        harnesses::inbound::axum_router::approve_pairing_handler,
+        harnesses::inbound::axum_router::claim_pairing_handler,
+        harnesses::inbound::axum_router::list_harnesses_handler,
+        harnesses::inbound::axum_router::delete_harness_handler,
+        harnesses::inbound::axum_router::list_bound_agents_handler,
+        harnesses::inbound::axum_router::get_self_harness_handler,
+        harnesses::inbound::axum_router::delete_self_harness_handler,
+        harnesses::inbound::axum_router::list_harness_sessions_handler,
+
         // bots
+        bots::inbound::axum_router::create_agent_handler,
+        bots::inbound::axum_router::list_agents_handler,
+        bots::inbound::axum_router::update_agent_handler,
         bots::inbound::axum_router::get_self_bot_handler,
         bots::inbound::axum_router::list_bot_channels_handler,
         bots::inbound::axum_router::remove_bot_channel_handler,
@@ -262,6 +280,7 @@ use utoipa::OpenApi;
         // calls
         call::inbound::axum_router::get_or_create_call_handler,
         call::inbound::axum_router::check_active_call_handler,
+        call::inbound::axum_router::get_active_calls_handler,
         call::inbound::axum_router::leave_or_end_call_handler,
         call::inbound::axum_router::get_call_record_handler,
         call::inbound::axum_router::edit_call_record_handler,
@@ -276,6 +295,7 @@ use utoipa::OpenApi;
         webhook::inbound::axum_router::list_webhooks,
         webhook::inbound::axum_router::patch_webhook,
         webhook::inbound::axum_router::validate_webhook,
+        webhook::inbound::stream_router::stream_events,
         call::inbound::axum_router::ring_status_handler,
         call::inbound::axum_router::transcript_handler,
 
@@ -309,12 +329,22 @@ use utoipa::OpenApi;
         favorites::inbound::axum_router::remove_favorite_by_entity_handler,
         favorites::inbound::axum_router::reorder_favorites_handler,
 
+        // user api keys
+        user_api_key::inbound::axum_router::create_user_api_key_handler,
+        user_api_key::inbound::axum_router::list_user_api_keys_handler,
+        user_api_key::inbound::axum_router::delete_user_api_key_handler,
+
         // reminders
         reminders::inbound::axum_router::list_reminders_handler,
         reminders::inbound::axum_router::create_reminder_handler,
         reminders::inbound::axum_router::get_reminder_handler,
         reminders::inbound::axum_router::update_reminder_handler,
         reminders::inbound::axum_router::delete_reminder_handler,
+        // collab surfaces
+        collab_surface::inbound::axum_router::ensure_surface_handler,
+        collab_surface::inbound::axum_router::get_surface_handler,
+        collab_surface::inbound::axum_router::mint_token_handler,
+        collab_surface::inbound::axum_router::delete_surface_handler,
 
         // foreign_entity
         foreign_entity::inbound::axum_router::get_foreign_entity_handler,
@@ -344,6 +374,7 @@ use utoipa::OpenApi;
         crm::inbound::axum_router::set_contact_name::handler,
         crm::inbound::axum_router::list_company_contacts::handler,
         crm::inbound::axum_router::get_contact::handler,
+        crm::inbound::axum_router::get_contact_by_email::handler,
         crm::inbound::axum_router::get_company::handler,
         crm::inbound::axum_router::create_company::handler,
         crm::inbound::axum_router::create_contact::handler,
@@ -353,6 +384,8 @@ use utoipa::OpenApi;
         crm::inbound::axum_router::comments::delete_handler,
         crm::inbound::axum_router::team_settings::get_handler,
         crm::inbound::axum_router::team_settings::update_handler,
+        crm::inbound::axum_router::stages::replace_handler,
+        crm::inbound::axum_router::stages::reset_handler,
     ),
     components(
         schemas(
@@ -413,9 +446,6 @@ use utoipa::OpenApi;
             PreSaveDocumentRequest,
             PreSaveDocumentResponseData,
             PreSaveDocumentResponse, // pre save
-            GetActivitiesResponse,
-            UserActivitiesResponse,
-            Activity, // Get recent ativity
             PinnedItem,
             PinRequest, // Generic pins
             AddPinRequest, // Add pin
@@ -435,6 +465,14 @@ use utoipa::OpenApi;
             SyncServiceVersionID,
             calendar_events::inbound::axum_router::CalendarOccurrenceItem,
             calendar_events::inbound::axum_router::CalendarOccurrenceResponse,
+            calendar_events::inbound::axum_router::CalendarMentionPreviewRequest,
+            calendar_events::inbound::axum_router::CalendarMentionPreviewRequestItem,
+            calendar_events::inbound::axum_router::CalendarMentionPreviewResponse,
+            calendar_events::inbound::axum_router::CalendarMentionPreviewItem,
+            calendar_events::inbound::axum_router::CalendarMentionPreviewKind,
+            calendar_events::inbound::axum_router::TeamOutOfOfficeItem,
+            calendar_events::inbound::axum_router::TeamOutOfOfficeResponse,
+            calendar_events::domain::models::CalendarMentionEvent,
             calendar_events::domain::models::CalendarSyncStatus,
             SoupItemWithProperties,
             SoupApiItem,
@@ -446,6 +484,10 @@ use utoipa::OpenApi;
             ForeignEntity,
             Favorite,
             FavoritesList,
+            CreatedUserApiKey,
+            CreateUserApiKeyRequest,
+            UserApiKeyInfo,
+            UserApiKeysList,
             AddFavoriteRequest,
             FavoriteEntityRef,
             ReorderFavoritesRequest,
@@ -454,6 +496,10 @@ use utoipa::OpenApi;
             ReminderSchedule,
             CreateReminderRequest,
             UpdateReminderRequest,
+            CollabSurfaceResponse,
+            CollabSurfaceTokenResponse,
+            EnsureCollabSurfaceRequest,
+            SurfaceState,
             SoupApiSort,
             SoupPage,
             SoupEnrichedEmailThreadPreview<SoupPropertiesField>,
@@ -536,7 +582,27 @@ use utoipa::OpenApi;
             ApiActivity,
             PostActivityRequest,
 
+            // Harnesses
+            harnesses::domain::models::Harness,
+            harnesses::domain::models::HarnessOwner,
+            harnesses::domain::models::HarnessAgent,
+            harnesses::domain::models::HarnessSession,
+            harnesses::domain::models::RequestedHarnessScope,
+            harnesses::domain::models::CreatePairingRequest,
+            harnesses::domain::models::CreatedPairing,
+            harnesses::domain::models::PairingDetails,
+            harnesses::domain::models::ApprovePairingRequest,
+            harnesses::domain::models::ClaimPairingRequest,
+            harnesses::domain::models::ClaimedPairing,
+            harnesses::inbound::axum_router::PendingClaimResponse,
+
             // Bots
+            bots::domain::models::Agent,
+            bots::domain::models::AgentChannelScope,
+            bots::domain::models::AgentMcpServers,
+            bots::domain::models::AgentMcpServer,
+            bots::domain::models::CreateAgentRequest,
+            bots::domain::models::UpdateAgentRequest,
             bots::domain::models::Bot,
             bots::domain::models::BotKind,
             bots::domain::models::BotOwner,
@@ -545,12 +611,16 @@ use utoipa::OpenApi;
             bots::domain::models::BotChannelType,
             bots::domain::models::ChannelWebhookRequest,
             bots::domain::models::ChannelWebhookResponse,
+            bots::domain::models::CreateBotRequest,
+            bots::domain::models::PatchBotRequest,
             bots::domain::models::CreateChannelScopedBotRequest,
             bots::domain::models::CreateChannelScopedBotResponse,
 
             // Calls
             call::domain::models::CallTokenResponse,
             call::domain::models::CallActiveResponse,
+            call::domain::models::ActiveCallSummary,
+            call::domain::models::ActiveCallsResponse,
             call::domain::models::LeaveCallResponse,
             call::domain::models::TranscriptSegmentRequest,
             call::domain::models::CallRecord,
@@ -585,6 +655,7 @@ use utoipa::OpenApi;
 
 
             // Permissions V2
+            models_permissions::share_permission::LinkShare,
             models_permissions::share_permission::access_level::AccessLevel,
             models_permissions::share_permission::SharePermissionV2,
             models_permissions::share_permission::UpdateSharePermissionRequestV2, // Share permission
@@ -656,6 +727,10 @@ use utoipa::OpenApi;
             crm::inbound::axum_router::create_contact::CreateCrmContactRequest,
             crm::inbound::axum_router::comments::CreateCrmCommentRequest,
             crm::inbound::axum_router::comments::EditCrmCommentRequest,
+            crm::inbound::axum_router::stages::ReplaceCrmStagesRequest,
+            crm::inbound::axum_router::stages::CrmStageInput,
+            crm::inbound::axum_router::stages::CrmStagesResponse,
+            crm::inbound::axum_router::stages::CrmStageResponse,
             crm::domain::comment::CrmCommentEntityType,
             crm::domain::comment::CrmThread,
             crm::domain::comment::CrmComment,

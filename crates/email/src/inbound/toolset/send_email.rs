@@ -5,6 +5,7 @@ use crate::domain::{
     ports::{EmailService, GmailTokenProvider},
 };
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -45,10 +46,10 @@ impl From<EmailRecipient> for ContactInfo {
 pub struct SendEmail {
     /// The subject line of the email.
     pub subject: String,
-    /// The body of the email. Written as Markdown by the AI and rendered in
-    /// the draft composer. At send time the frontend replaces this with the
-    /// base64url-encoded HTML produced by the composer, which is what gets
-    /// sent to recipients.
+    /// The body of the email, written as Markdown. A host with a composer
+    /// (chat) replaces this with the base64url-encoded HTML the composer
+    /// exported before the tool runs; a host without one (an agent session)
+    /// leaves the Markdown, and this tool renders it the same way.
     pub body: String,
     /// The primary recipients (To field).
     pub to: Vec<EmailRecipient>,
@@ -86,6 +87,11 @@ pub enum SendEmailResponse {
     UserEdited,
 }
 
+impl ToolAnnotated for SendEmail {
+    const ANNOTATIONS: ToolAnnotations =
+        ToolAnnotations::destructive("Send email").with_open_world();
+}
+
 #[async_trait]
 impl<T, G, E> AsyncTool<EmailToolContext<T, G, E>> for SendEmail
 where
@@ -107,9 +113,10 @@ where
     ) -> ToolResult<Self::Output> {
         println!("CALL SEND EMAIL {:?}", request_context);
 
-        let link = service_context
-            .resolve_link(MacroUserIdStr((*request_context.user_id).clone()))
-            .await?;
+        let acting_user = MacroUserIdStr((*request_context.user_id).clone());
+        let link = service_context.resolve_link(acting_user.clone()).await?;
+
+        let body = service_context.render_body(&self.body).await?;
 
         let input = CreateDraftInput {
             db_id: None,
@@ -121,14 +128,15 @@ where
             to: self.to.iter().cloned().map(ContactInfo::from).collect(),
             cc: self.cc.iter().cloned().map(ContactInfo::from).collect(),
             bcc: self.bcc.iter().cloned().map(ContactInfo::from).collect(),
-            body_text: None,
-            body_html: Some(self.body.clone()),
+            body_text: body.text,
+            body_html: Some(body.html),
             body_macro: None,
             headers_json: None,
             send_time: None,
             // Composer override when present; otherwise None lets the backend
             // apply the default signature policy.
             include_signature: self.include_signature,
+            actor: Some(acting_user),
         };
 
         let sent = service_context

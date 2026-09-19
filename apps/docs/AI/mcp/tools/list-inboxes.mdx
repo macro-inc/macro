@@ -1,0 +1,10 @@
+---
+title: ListInboxes
+description: "List the email inboxes the user can read or act on. Returns the caller's primary inbox, any other inboxes they have connected, and any inboxes delegated to them by teammates. Each entry has an `emailAddress`, `isPrimary` (the default inbox used when no inbox is specified), and `isDelegated` (true when the inbox belongs to another user).  Use this when the user references a specific or non-default mailbox (e.g. \"my work inbox\", \"the shared inbox\", \"the inbox Alex shared with me\") so you can pass the exact `emailAddress` to the `inbox` parameter of ListEntities, ContentSearch, or NameSearch, or to ListLabels. Most users have a single inbox, in which case email tools operate on it by default and you do not need this tool. Do not guess inbox addresses — list them here first."
+---
+
+# ListInboxes
+
+List the email inboxes the user can read or act on. Returns the caller's primary inbox, any other inboxes they have connected, and any inboxes delegated to them by teammates. Each entry has an `emailAddress`, `isPrimary` (the default inbox used when no inbox is specified), and `isDelegated` (true when the inbox belongs to another user).
+
+Use this when the user references a specific or non-default mailbox (e.g. "my work inbox", "the shared inbox", "the inbox Alex shared with me") so you can pass the exact `emailAddress` to the `inbox` parameter of ListEntities, ContentSearch, or NameSearch, or to ListLabels. Most users have a single inbox, in which case email tools operate on it by default and you do not need this tool. Do not guess inbox addresses — list them here first.

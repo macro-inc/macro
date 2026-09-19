@@ -30,6 +30,13 @@ const CHARACTERS_TO_NORMALIZE = {
   '\u00BD': '1/2', // Vulgar fraction one half
   '\u00BE': '3/4', // Vulgar fraction three quarters
 };
+
+function isCharacterToNormalize(
+  value: string
+): value is keyof typeof CHARACTERS_TO_NORMALIZE {
+  return value in CHARACTERS_TO_NORMALIZE;
+}
+
 // These diacritics aren't considered as combining diacritics
 // when searching in a document:
 //   https://searchfox.org/mozilla-central/source/intl/unicharutil/util/is_combining_diacritic.py.
@@ -147,17 +154,20 @@ export function normalize(text: string) {
   normalized = normalized.replace(
     normalizationRegex,
     (
-      match: keyof typeof CHARACTERS_TO_NORMALIZE,
-      p1: any,
-      p2: any,
-      p3: any,
-      p4: any,
-      p5: any,
-      i: any
+      match: string,
+      p1: string | undefined,
+      p2: string | undefined,
+      p3: string | undefined,
+      p4: string | undefined,
+      p5: string | undefined,
+      i: number
     ) => {
       i -= shiftOrigin;
       if (p1) {
         // Maybe fractions or quotations mark...
+        if (!isCharacterToNormalize(match)) {
+          throw new Error(`Unexpected normalization character: ${match}`);
+        }
         const replacement = CHARACTERS_TO_NORMALIZE[match];
         const jj = replacement.length;
         for (let j = 1; j < jj; j++) {
@@ -235,7 +245,7 @@ export function normalize(text: string) {
         shift -= newCharLen;
         shiftOrigin += newCharLen;
       }
-      return p5;
+      return p5 ?? match;
     }
   );
 

@@ -51,7 +51,7 @@ function CodeFence(props: {
         </button>
       </Show>
       <pre
-        class="text-ink-muted bg-background-secondary overflow-x-auto rounded p-2 pr-8 font-mono text-xs whitespace-pre-wrap"
+        class="text-ink-muted bg-code-buffer overflow-x-auto rounded p-2 pr-8 font-mono text-xs whitespace-pre-wrap"
         classList={{
           'max-h-24 overflow-hidden':
             isCollapsible() && !expanded() && needsTruncation(),
@@ -80,7 +80,7 @@ function BashResult(props: { result: BashCodeExecutionResult }) {
   return (
     <div class="flex flex-col gap-1">
       <Show when={props.result.return_code !== 0}>
-        <span class="text-ink-error">Exit code {props.result.return_code}</span>
+        <span class="text-failure">Exit code {props.result.return_code}</span>
       </Show>
       <Show when={hasOutput()}>
         <CodeFence content={output()} collapsible={false} />
@@ -115,7 +115,7 @@ const handler = createToolRenderer({
                   return (
                     <Switch>
                       <Match when={isError}>
-                        <span class="text-ink-error">Execution failed</span>
+                        <span class="text-failure">Execution failed</span>
                       </Match>
                       <Match when={!isError}>
                         <BashResult

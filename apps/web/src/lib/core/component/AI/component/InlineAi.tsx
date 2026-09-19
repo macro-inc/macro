@@ -51,7 +51,7 @@ export function InlineInputReady(props: InlineInputReadyProps) {
   return (
     <div class="relative flex items-end justify-between p-2 border border-edge rounded-xs w-full bg-hover">
       <textarea
-        class="flex resize-none w-full p-1 text-sm h-max-[800px] overflow-hidden"
+        class="flex resize-none w-full p-1 text-sm max-h-[800px] overflow-hidden"
         ref={inputRef}
         rows={props?.options?.defaultLines ?? 1}
         onSubmit={(e) => e.preventDefault()}
@@ -109,7 +109,7 @@ export function InlineInputLoading(props: InlineInputLoadingProps) {
   return (
     <div class="relative flex items-end justify-between p-2 border border-edge rounded-xs w-full bg-hover">
       <textarea
-        class="flex resize-none rounded-md w-full p-1 text-sm h-max-[800px] overflow-hidden select-none"
+        class="flex resize-none rounded-md w-full p-1 text-sm max-h-[800px] overflow-hidden select-none"
         disabled
         rows={props?.options?.defaultLines ?? 1}
         placeholder={props?.options?.placeholderText ?? defaultPlaceholder}
@@ -128,7 +128,7 @@ export function InlineInputDisabled(props: InlineInputLoadingProps) {
   return (
     <div class="relative flex items-end justify-between p-2 border border-edge rounded-xs w-full bg-hover">
       <textarea
-        class="flex resize-none rounded-md w-full p-1 text-sm h-max-[800px] overflow-hidden select-none"
+        class="flex resize-none rounded-md w-full p-1 text-sm max-h-[800px] overflow-hidden select-none"
         disabled
         rows={props?.options?.defaultLines ?? 1}
         placeholder={props?.options?.placeholderText ?? defaultPlaceholder}

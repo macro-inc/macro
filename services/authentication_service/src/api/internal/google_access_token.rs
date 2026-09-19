@@ -47,6 +47,22 @@ async fn get_access_token(
         .get_identity_provider_id_by_name(identity_provider_name)
         .await
         .map_err(|e| {
+            // No Gmail identity provider configured (e.g. local / --no-doppler
+            // stacks, or a deployment without the Google integration). This is
+            // an expected "no grant" outcome, not a server fault: the email
+            // service treats a 404 as NoGmailGrant and skips inbox init, while
+            // a 500 would surface as a hard login failure.
+            if matches!(e, FusionAuthClientError::NoIdentityProviderFound) {
+                tracing::debug!(error=?e, "no {} identity provider configured", identity_provider_name);
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(ErrorResponse {
+                        message: format!("No {} link found for this user", identity_provider_name)
+                            .into(),
+                    }),
+                )
+                    .into_response();
+            }
             tracing::error!(error=?e, "unable to find idp id for {}", identity_provider_name);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,

@@ -1,9 +1,29 @@
-use super::channel_permission::create::create_channel_share_permissions;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::thread::EmailThreadPermission;
-use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
-use std::str::FromStr;
+use models_permissions::share_permission::{LinkShare, SharePermissionV2};
+
+use super::channel_permission::create::create_channel_share_permissions;
+
+pub(super) fn link_share_access_level_or_default(
+    link_share_access_level: Option<AccessLevel>,
+) -> AccessLevel {
+    if let Some(access_level) = link_share_access_level {
+        return access_level;
+    }
+
+    tracing::warn!(
+        "link_share was enabled but link share access level was not provided, setting to view"
+    );
+    AccessLevel::View
+}
+
+fn normalize_link_share_access_level(
+    link_share: Option<LinkShare>,
+    link_share_access_level: Option<AccessLevel>,
+) -> Option<AccessLevel> {
+    link_share.map(|_| link_share_access_level_or_default(link_share_access_level))
+}
 
 /// Creates a new share permission
 #[tracing::instrument(skip(transaction))]
@@ -11,32 +31,37 @@ pub async fn create_share_permission(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     share_permission: &SharePermissionV2,
 ) -> anyhow::Result<SharePermissionV2> {
-    let result = sqlx::query!(
+    let link_share = share_permission.link_share;
+    let link_share_access_level =
+        normalize_link_share_access_level(link_share, share_permission.link_share_access_level);
+    let link_share_value = link_share.map(|value| value.to_string());
+
+    let id = sqlx::query_scalar!(
         r#"
-            INSERT INTO "SharePermission" ("isPublic", "publicAccessLevel", "createdAt", "updatedAt")
+            INSERT INTO "SharePermission" (
+                "linkShare",
+                "linkShareAccessLevel",
+                "createdAt",
+                "updatedAt"
+            )
             VALUES ($1, $2, NOW(), NOW())
-            RETURNING id, "isPublic" as is_public, "publicAccessLevel" as public_access_level;
+            RETURNING id;
         "#,
-        share_permission.is_public,
-        share_permission.public_access_level.as_ref().map(|s| s.to_string()),
+        link_share_value,
+        link_share_access_level as _,
     )
     .fetch_one(transaction.as_mut())
     .await?;
 
     if let Some(channel_share_permissions) = share_permission.channel_share_permissions.as_ref() {
-        create_channel_share_permissions(transaction, &result.id, channel_share_permissions)
-            .await?;
+        create_channel_share_permissions(transaction, &id, channel_share_permissions).await?;
     }
 
-    let public_access_level: Option<AccessLevel> = result
-        .public_access_level
-        .map(|s| AccessLevel::from_str(&s).unwrap());
-
     Ok(SharePermissionV2 {
-        id: result.id,
-        is_public: result.is_public,
-        public_access_level,
-        owner: "".to_string(), // don't care about owner
+        id,
+        link_share,
+        link_share_access_level,
+        owner: String::new(), // Owner is not stored on the share permission row.
         channel_share_permissions: share_permission.channel_share_permissions.clone(),
     })
 }
@@ -118,33 +143,6 @@ pub async fn create_chat_permission(
     Ok(updated_share_permission)
 }
 
-/// Creates a new share permission and attaches it to the macro
-#[tracing::instrument(skip(transaction))]
-pub async fn create_macro_permission(
-    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    macro_id: &str,
-    share_permission: &SharePermissionV2,
-) -> anyhow::Result<SharePermissionV2> {
-    let updated_share_permission = create_share_permission(transaction, share_permission).await?;
-
-    sqlx::query!(
-        r#"
-            INSERT INTO "MacroPromptPermission" ("macro_prompt_id", "share_permission_id")
-            VALUES ($1, $2)
-        "#,
-        macro_id,
-        updated_share_permission.id,
-    )
-    .execute(transaction.as_mut())
-    .await
-    .map_err(|err| {
-        tracing::error!(error=?err, "unable to create macro permission");
-        err
-    })?;
-
-    Ok(updated_share_permission)
-}
-
 /// Creates a new share permission and attaches it to the document
 #[tracing::instrument(skip(transaction))]
 pub async fn create_thread_permission(
@@ -180,43 +178,4 @@ pub async fn create_thread_permission(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use models_permissions::share_permission::access_level::AccessLevel;
-    use models_permissions::share_permission::channel_share_permission::ChannelSharePermission;
-    use sqlx::{Pool, Postgres};
-
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
-    async fn test_create_share_permission(pool: Pool<Postgres>) -> anyhow::Result<()> {
-        let mut transaction = pool.begin().await?;
-
-        let share_permission = SharePermissionV2::new_project_share_permission();
-        let result = create_share_permission(&mut transaction, &share_permission).await?;
-
-        assert_ne!(result.id, "".to_string());
-        assert!(result.channel_share_permissions.is_none());
-
-        let share_permission = SharePermissionV2 {
-            id: "".to_string(),
-            owner: "".to_string(),
-            is_public: true,
-            public_access_level: Some(AccessLevel::Edit),
-            channel_share_permissions: Some(vec![
-                ChannelSharePermission {
-                    channel_id: "channel-one".to_string(),
-                    access_level: AccessLevel::View,
-                },
-                ChannelSharePermission {
-                    channel_id: "channel-two".to_string(),
-                    access_level: AccessLevel::Edit,
-                },
-            ]),
-        };
-        let result = create_share_permission(&mut transaction, &share_permission).await?;
-
-        assert_ne!(result.id, "".to_string());
-        assert!(result.channel_share_permissions.is_some());
-
-        Ok(())
-    }
-}
+mod test;

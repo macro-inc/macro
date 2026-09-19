@@ -1,14 +1,14 @@
 @keyframes mobile-touch-menu-show {
   from {
-    width: 10rem;
-    height: 5rem;
+    width: 160px;
+    height: 80px;
   }
   to {
     width: var(
       --mobile-touch-menu-width,
-      calc(100vw - 2 * var(--mobile-chrome-gutter, 0.75rem))
+      calc(100vw - 2 * var(--mobile-chrome-gutter, 12px))
     );
-    height: var(--mobile-touch-menu-height, 23.5rem);
+    height: var(--mobile-touch-menu-height, 376px);
   }
 }
 
@@ -16,14 +16,14 @@
   from {
     width: var(
       --mobile-touch-menu-width,
-      calc(100vw - 2 * var(--mobile-chrome-gutter, 0.75rem))
+      calc(100vw - 2 * var(--mobile-chrome-gutter, 12px))
     );
-    height: var(--mobile-touch-menu-height, 23.5rem);
+    height: var(--mobile-touch-menu-height, 376px);
     opacity: 1;
   }
   to {
-    width: 0rem;
-    height: 0rem;
+    width: 0px;
+    height: 0px;
     opacity: 0;
   }
 }

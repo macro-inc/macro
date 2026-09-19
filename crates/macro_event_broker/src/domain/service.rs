@@ -43,7 +43,6 @@ where
     /// Receives the next message from the underlying consumer.
     ///
     /// Call [`MessageWrapper::decode_payload`] to decode its declared event.
-    #[tracing::instrument(skip(self), err)]
     pub async fn recv<'a>(
         &'a self,
     ) -> Result<MessageWrapper<C::MessageType<'a>, M>, rootcause::Report> {
@@ -89,7 +88,6 @@ impl<P: EventPublisher, S: Spawner> MacroEventBrokerService<P, S> {
 }
 
 impl<P: EventPublisher, S: Spawner> MacroEventBroker for MacroEventBrokerService<P, S> {
-    #[tracing::instrument(err, skip(self, event), fields(topic = event.topic(), key = %event.key()))]
     fn send_event<E: MacroEvent + ?Sized>(
         &self,
         event: &E,

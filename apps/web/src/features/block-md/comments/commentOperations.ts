@@ -9,13 +9,16 @@ import {
   DISCARD_DRAFT_COMMENT_COMMAND,
   SET_COMMENT_THREAD_ID_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
+import { isMobile } from '@core/mobile/isMobile';
 import { blockElementSignal } from '@core/signal/blockElement';
 import type {
   CreateCommentRequest,
   EditCommentRequest,
 } from '@service-storage/generated/schemas';
 import type { CreateCommentResponse } from '@service-storage/generated/schemas/createCommentResponse';
+import { until } from '@solid-primitives/promise';
 import { createCallback } from '@solid-primitives/rootless';
+import { onCleanup } from 'solid-js';
 import {
   activeCommentThreadSignal,
   commentsStore,
@@ -165,6 +168,17 @@ export const useSetNodeCommentThreadId = () => {
 export function useScrollToCommentThread() {
   const blockElement = blockElementSignal.get;
   const documentId = useBlockId();
+  // Captured at setup: block stores resolve their block context at access
+  // time, which the returned callback no longer has.
+  const threads = threadStore.get;
+  const [marks] = markStore;
+  // At most one mobile wait-for-mark may be outstanding — a newer deep
+  // link supersedes an older still-pending one, so a slow-syncing thread
+  // can't later yank the scroll and the active thread away from the one
+  // the user navigated to last. Registered here at setup (under the
+  // component's owner) so an unresolved wait also dies with the block.
+  let disposePendingWait: (() => void) | undefined;
+  onCleanup(() => disposePendingWait?.());
 
   const scrollIntoView = (el: HTMLElement) => {
     el.scrollIntoView({
@@ -175,6 +189,31 @@ export function useScrollToCommentThread() {
   };
 
   return async (threadId: number) => {
+    // On phones the margin is display:none (the drawer is the only comment
+    // surface), so its measure containers can't be scrolled to. Scroll to
+    // the thread's mark in the editor itself. On a cold-load deep link the
+    // comment stores populate after this runs — `until` awaits exactly
+    // that: it re-evaluates the condition as the stores change and
+    // resolves once the thread's mark has a rendered element. Disposing
+    // the wait (a newer link superseding it, or the block unmounting via
+    // the onCleanup above) rejects it, which the catch turns into a no-op.
+    if (isMobile()) {
+      disposePendingWait?.();
+      const wait = until(() => {
+        const anchorId = threads[threadId]?.anchorId;
+        return anchorId != null
+          ? Object.values(marks[anchorId]?.markNodes ?? {})[0]
+          : undefined;
+      });
+      disposePendingWait = wait.dispose;
+      const markElement = await wait.catch(() => undefined);
+      // A cancelled wait resolves undefined — report it so the caller
+      // skips activating the superseded/unmounted link's thread.
+      if (!markElement) return false;
+      markElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return true;
+    }
+
     const measureContainerId = threadMeasureContainerId(documentId, threadId);
     let measureContainer = document.getElementById(measureContainerId);
     const blockEl = blockElement();

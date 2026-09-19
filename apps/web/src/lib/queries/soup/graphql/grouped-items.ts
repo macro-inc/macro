@@ -145,6 +145,7 @@ export function createGraphqlGroupedSoupAstItemsQuery(
     isLoading: () => query.isLoading,
     isFetching: () => query.isFetching,
     isFetchingNextPage: () => false,
+    isPlaceholderData: () => false,
     hasNextPage: () => false,
     fetchNextPage: async () => undefined,
     resetToInitialPage: () => undefined,

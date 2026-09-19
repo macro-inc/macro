@@ -1,0 +1,37 @@
+---
+title: UpdateReminder
+description: "Change one of the current user's reminders: reword it, move when it fires, or mark it done. Get the `reminderId` from ListReminders or CreateReminder.  Pass only the fields you are changing; anything omitted is left alone. At least one must be given.  - Snooze or reschedule: set `remindAt` - Mark done: `completed: true` — the user has dealt with it and it leaves their active list - Reopen: `completed: false` - Reword: set `description`  Marking done is the normal way to clear a reminder the user has handled, and it is reversible: the reminder drops out of the default ListReminders results but is still there, readable with `completed: true` and restorable with `completed: false`. Reach for DeleteReminder only when the user wants the reminder not to exist; that cannot be undone.  Two things this tool will not do. It cannot change what a reminder is attached to — create a new reminder and delete this one instead. And setting `remindAt` on a repeating reminder replaces the repetition with that single firing, so only do it if the user asked to stop it repeating.  ## Times are UTC — convert both ways  Timestamps are absolute instants, in and out, while the user asks in their own timezone. Getting this wrong silently sets the reminder to the wrong hour.  - **In:** resolve their wording against their local time, then convert. For America/New_York (UTC-4 in August), \"3pm tomorrow\" on 2026-08-12 is `\"2026-08-13T19:00:00Z\"`, not `\"2026-08-13T15:00:00Z\"`. - **Out:** report the response's UTC value back in their timezone — `\"2026-08-13T19:00:00Z\"` is \"3:00 PM tomorrow\".  Ask for their timezone rather than assuming UTC."
+---
+
+# UpdateReminder
+
+Change one of the current user's reminders: reword it, move when it fires, or mark it done. Get the `reminderId` from ListReminders or CreateReminder.
+
+Pass only the fields you are changing; anything omitted is left alone. At least one must be given.
+
+- Snooze or reschedule: set `remindAt`
+- Mark done: `completed: true` — the user has dealt with it and it leaves their active list
+- Reopen: `completed: false`
+- Reword: set `description`
+
+Marking done is the normal way to clear a reminder the user has handled, and it is reversible: the reminder drops out of the default ListReminders results but is still there, readable with `completed: true` and restorable with `completed: false`. Reach for DeleteReminder only when the user wants the reminder not to exist; that cannot be undone.
+
+Two things this tool will not do. It cannot change what a reminder is attached to — create a new reminder and delete this one instead. And setting `remindAt` on a repeating reminder replaces the repetition with that single firing, so only do it if the user asked to stop it repeating.
+
+## Times are UTC — convert both ways
+
+Timestamps are absolute instants, in and out, while the user asks in their own timezone. Getting this wrong silently sets the reminder to the wrong hour.
+
+- **In:** resolve their wording against their local time, then convert. For America/New_York (UTC-4 in August), "3pm tomorrow" on 2026-08-12 is `"2026-08-13T19:00:00Z"`, not `"2026-08-13T15:00:00Z"`.
+- **Out:** report the response's UTC value back in their timezone — `"2026-08-13T19:00:00Z"` is "3:00 PM tomorrow".
+
+Ask for their timezone rather than assuming UTC.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `reminderId` | string | Yes | The id of the reminder to change. |
+| `description` | string | No | Replacement reminder text. Max 2000 characters. |
+| `remindAt` | string | No | Reschedule to this RFC 3339 timestamp in UTC (e.g. "2026-08-08T14:00:00Z"). Must be in the future — to move a reminder that has already fired, give it a new future time. Convert from the user's local timezone before sending; see "Times are UTC" in the tool description. |
+| `completed` | boolean | No | Mark the reminder as dealt with (true) or put it back on the active list (false). |

@@ -8,6 +8,7 @@ import type { Store } from 'solid-js/store';
 import type { MentionBucketId } from '../component/menu/MentionsMenu/MentionsMenuController';
 import type { createLexicalWrapper } from '../context/LexicalWrapperContext';
 import type {
+  AgentCommandItem,
   AutoLinkMatchMode,
   createAccessoryStore,
   createDraggableBlockStore,
@@ -56,6 +57,11 @@ export interface TagsOptions {
   onCreate?: (tag: TagMentionLifecycle) => void;
   onRemove?: (tag: TagMentionLifecycle) => void;
   setTags?: (tags: ReadonlySet<TagMentionLifecycle>) => void;
+}
+
+export interface AgentCommandsOptions {
+  /** Reactive source of the slash commands the connected agent advertises. */
+  commands: () => AgentCommandItem[];
 }
 
 /** Intentional extension point — no options yet. */
@@ -149,6 +155,13 @@ export interface EditorConfig {
    * actions are disabled.
    */
   skills?: boolean;
+  /**
+   * Agent commands (`/` menu) list the slash commands a connected coding
+   * agent advertises over ACP — for agent composers. Shares the `/` trigger
+   * with the actions and skills menus, so this only takes effect when both
+   * are disabled.
+   */
+  agentCommands?: AgentCommandsOptions;
   emojis?: EmojisOptions;
   links?: LinksOptions;
   history?: HistoryOptions;
@@ -186,6 +199,7 @@ export interface EditorInternals {
   emojisMenuOps: ReturnType<typeof createMenuOperations> | undefined;
   snippetsMenuOps: ReturnType<typeof createMenuOperations> | undefined;
   skillsMenuOps: ReturnType<typeof createMenuOperations> | undefined;
+  agentCommandsMenuOps: ReturnType<typeof createMenuOperations> | undefined;
   accessoryStore: ReturnType<typeof createAccessoryStore>[0] | undefined;
   dragInsertStore: ReturnType<typeof createDragInsertStore>[0] | undefined;
   draggableBlockStore:

@@ -44,7 +44,7 @@ export function createChannelBroadcaster(
     );
     if (failures.length > 0) {
       failures.forEach((failure) => {
-        console.error('Failed to post Stripe payment to a Macro channel', {
+        console.error('Failed to post Stripe notification to a Macro channel', {
           error: failure.reason,
         });
       });
@@ -53,7 +53,7 @@ export function createChannelBroadcaster(
       );
     }
 
-    console.log('Posted Stripe payment notification', {
+    console.log('Posted Stripe notification', {
       channelCount: channels.length,
     });
   };

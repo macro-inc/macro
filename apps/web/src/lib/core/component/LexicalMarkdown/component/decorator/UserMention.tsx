@@ -1,10 +1,15 @@
 import { HoverCard } from '@core/component/HoverCard';
 import { UserTooltip } from '@core/component/UserTooltip';
-import { getDisplayName, macroIdToEmail, tryMacroId } from '@core/user';
+import { getDisplayNameParts, macroIdToEmail, tryMacroId } from '@core/user';
 import type { UserMentionDecoratorProps } from '@macro-inc/lexical-core';
 import { cn } from '@ui';
-import { createMemo, createSignal, useContext } from 'solid-js';
+import { createEffect, createMemo, createSignal, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
+import { UPDATE_USER_DISPLAY_NAME_COMMAND } from '../../plugins';
+
+function emailLocalPart(email: string): string {
+  return email.split('@')[0] || email;
+}
 
 export function UserMention(props: UserMentionDecoratorProps) {
   const lexicalWrapper = useContext(LexicalWrapperContext);
@@ -19,17 +24,50 @@ export function UserMention(props: UserMentionDecoratorProps) {
   // Convert String wrapper to primitive string
   const userId = () => String(props.userId);
   const propEmail = () => String(props.email);
+  const propDisplayName = () => props.displayName?.trim() ?? '';
 
   const macroId = createMemo(() =>
     props.userId ? tryMacroId(userId()) : undefined
   );
 
-  const displayName = () => getDisplayName(macroId());
-
   const email = createMemo(() => {
     const id = macroId();
     if (id) return macroIdToEmail(id);
     return propEmail();
+  });
+
+  const displayNameParts = createMemo(() => {
+    const id = macroId();
+    if (!id) return undefined;
+    return getDisplayNameParts(id, { emailFallback: 'local-part' });
+  });
+
+  const mentionDisplayName = createMemo(() => {
+    const parts = displayNameParts();
+    return (
+      parts?.firstName ||
+      propDisplayName() ||
+      parts?.fullName ||
+      emailLocalPart(propEmail())
+    );
+  });
+
+  const tooltipDisplayName = createMemo(
+    () => displayNameParts()?.fullName || mentionDisplayName()
+  );
+
+  createEffect(() => {
+    const nextDisplayName = mentionDisplayName().trim();
+    if (!nextDisplayName || nextDisplayName === propDisplayName()) return;
+
+    setTimeout(() => {
+      lexicalWrapper?.editor?.dispatchCommand(
+        UPDATE_USER_DISPLAY_NAME_COMMAND,
+        {
+          [userId()]: nextDisplayName,
+        }
+      );
+    });
   });
 
   const [open, setOpen] = createSignal(false);
@@ -50,15 +88,16 @@ export function UserMention(props: UserMentionDecoratorProps) {
           <span
             data-user-id={props.userId}
             data-email={props.email}
+            data-display-name={mentionDisplayName()}
             data-user-mention="true"
           >
-            @{propEmail().split('@')[0]}
+            @{mentionDisplayName()}
           </span>
         </span>
       }
       content={
         <UserTooltip
-          displayName={displayName() || email() || propEmail()}
+          displayName={tooltipDisplayName() || email() || propEmail()}
           email={email() || propEmail()}
           id={userId()}
           onClose={() => setOpen(false)}

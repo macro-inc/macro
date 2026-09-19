@@ -1,6 +1,6 @@
 import { blockAcceptedFileExtensionToMimeType } from "@core/constant/allBlocks";
 
-type OldSupportedExt = 'pdf' | 'docx';
+export type OldSupportedExt = 'pdf' | 'docx';
 
 const oldSupportedFiles = {
   pdf: "PDF",

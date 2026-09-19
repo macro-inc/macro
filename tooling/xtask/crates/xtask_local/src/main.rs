@@ -13,7 +13,16 @@ use anyhow::Result;
 
 /// The repo-automation verbs handled by the launcher. Shown alongside this
 /// crate's own clap usage when an unrecognized command reaches the parser.
-const LAUNCHER_USAGE: &str = "repo automation (from the repository root):\n  cargo x deps [--check]\n  cargo x nextest-filter <changed-files-path>\n  cargo x doppler-bins <changed-files-path>\n  cargo x graphql-soup-schema <output-path>\n  cargo x cache-wasm [--force]\n  cargo x kafka-topics [--check]\n  cargo x workflows [--check]";
+const LAUNCHER_USAGE: &str = indoc::indoc! {"
+    repo automation (from the repository root):
+      cargo x deps [--check]
+      cargo x nextest-filter <changed-files-path> <base-revision>
+      cargo x doppler-bins <changed-files-path>
+      cargo x graphql-soup-schema <output-path>
+      cargo x cache-wasm [--force]
+      cargo x kafka-topics [--check]
+      cargo x workflows [--check]
+"};
 
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();

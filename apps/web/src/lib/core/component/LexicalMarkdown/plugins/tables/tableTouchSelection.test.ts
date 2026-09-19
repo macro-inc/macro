@@ -74,6 +74,27 @@ function touchEvent(
     isPrimary: true,
     pointerId: 1,
     pointerType: 'touch',
+    // A finger in contact with the screen reports the primary button as
+    // pressed, which is how @lexical/table's window-level drag handler
+    // recognizes a move as part of a drag.
+    ...(type === 'pointermove' ? { buttons: 1 } : {}),
+  }) as unknown as PointerEvent;
+}
+
+function mouseEvent(
+  type: string,
+  init: { clientX?: number; clientY?: number } = {}
+): PointerEvent {
+  return new PolyfillPointerEvent(type, {
+    bubbles: true,
+    button: 0,
+    buttons: 1,
+    cancelable: true,
+    clientX: init.clientX ?? 0,
+    clientY: init.clientY ?? 0,
+    isPrimary: true,
+    pointerId: 1,
+    pointerType: 'mouse',
   }) as unknown as PointerEvent;
 }
 
@@ -168,17 +189,87 @@ describe('table touch selection', () => {
   it('does nothing when the finger drifts before the long press fires', async () => {
     const editor = createTestEditor();
     await buildTable(editor, coordGrid(2, 2));
+    const startCell = getCellElement(editor, 0, 0);
 
-    getCellElement(editor, 0, 0).dispatchEvent(
+    startCell.dispatchEvent(
       touchEvent('pointerdown', { clientX: 0, clientY: 0 })
     );
-    document.dispatchEvent(
+    // Touch pointermove keeps targeting the element the finger went down on,
+    // so the drift move comes from the pressed cell rather than the document.
+    elementsUnderPointer = [getCellElement(editor, 1, 0)];
+    startCell.dispatchEvent(
       touchEvent('pointermove', { clientX: 0, clientY: 30 })
     );
     vi.advanceTimersByTime(500);
     await flush();
 
     expect(readTableSelection(editor)).toBeNull();
+  });
+
+  it('scrolls instead of selecting when the drag starts before the long press', async () => {
+    const editor = createTestEditor();
+    await buildTable(editor, coordGrid(3, 3));
+    const startCell = getCellElement(editor, 0, 0);
+
+    startCell.dispatchEvent(
+      touchEvent('pointerdown', { clientX: 0, clientY: 0 })
+    );
+    // A finger that pans down the page crosses cell after cell; none of them
+    // may become a selection, because the press never stood still.
+    for (const [index, row] of [1, 2].entries()) {
+      elementsUnderPointer = [getCellElement(editor, row, 0)];
+      startCell.dispatchEvent(
+        touchEvent('pointermove', { clientX: 0, clientY: 30 * (index + 1) })
+      );
+      await flush();
+      expect(readTableSelection(editor)).toBeNull();
+    }
+
+    startCell.dispatchEvent(
+      touchEvent('pointerup', { clientX: 0, clientY: 60 })
+    );
+    await flush();
+
+    expect(readTableSelection(editor)).toBeNull();
+  });
+
+  it('leaves the caret alone when a table is only scrolled past', async () => {
+    // Editors that never register the touch-selection plugin (channel input,
+    // comments, AI chat) must not turn a scroll into a cell selection either.
+    const editor = createTableTestEditor();
+    await buildTable(editor, coordGrid(3, 3));
+    const startCell = getCellElement(editor, 0, 0);
+
+    startCell.dispatchEvent(
+      touchEvent('pointerdown', { clientX: 0, clientY: 0 })
+    );
+    elementsUnderPointer = [getCellElement(editor, 2, 0)];
+    startCell.dispatchEvent(
+      touchEvent('pointermove', { clientX: 0, clientY: 60 })
+    );
+    vi.advanceTimersByTime(500);
+    await flush();
+
+    expect(readTableSelection(editor)).toBeNull();
+  });
+
+  it('still lets a mouse drag select cells', async () => {
+    const editor = createTestEditor();
+    await buildTable(editor, coordGrid(3, 3));
+    const startCell = getCellElement(editor, 0, 0);
+
+    startCell.dispatchEvent(
+      mouseEvent('pointerdown', { clientX: 0, clientY: 0 })
+    );
+    elementsUnderPointer = [getCellElement(editor, 2, 1)];
+    startCell.dispatchEvent(
+      mouseEvent('pointermove', { clientX: 50, clientY: 80 })
+    );
+    await flush();
+
+    const selection = readTableSelection(editor);
+    expect(selection?.anchor.getKey()).toBe(getCellNode(editor, 0, 0).getKey());
+    expect(selection?.focus.getKey()).toBe(getCellNode(editor, 2, 1).getKey());
   });
 
   it('does nothing on a quick tap', async () => {

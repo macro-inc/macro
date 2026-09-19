@@ -256,10 +256,11 @@ CREATE TABLE "ChatMessage"
 CREATE TABLE "SharePermission"
 (
     "id"                TEXT PRIMARY KEY     DEFAULT uuid_generate_v4(),
-    "isPublic"          BOOLEAN     NOT NULL,
-    "publicAccessLevel" TEXT,
-    "createdAt"         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    "updatedAt"         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    "linkShare"            TEXT,
+    "linkShareAccessLevel" TEXT,
+    "createdAt"            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    "updatedAt"            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT "SharePermission_linkShare_check" CHECK ("linkShare" IN ('PUBLIC', 'TEAM'))
 );
 
 CREATE TABLE "DocumentPermission"

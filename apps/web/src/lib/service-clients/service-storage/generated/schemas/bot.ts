@@ -14,6 +14,8 @@ import type { BotOwnerProperty } from './botOwnerProperty';
 
 /**
  * Bot row.
+
+Clients deserialize this, so both derives are used.
  */
 export interface Bot {
   /** Optional avatar URL. */
@@ -28,6 +30,8 @@ export interface Bot {
   description?: BotDescription;
   /** Stable handle. */
   handle: string;
+  /** Whether mentioning this bot opens a sandboxed coding-agent session. */
+  has_agent: boolean;
   /** Bot id. */
   id: BotId;
   /** Bot kind. */

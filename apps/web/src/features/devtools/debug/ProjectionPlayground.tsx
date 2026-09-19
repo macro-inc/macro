@@ -102,7 +102,7 @@ export default function ProjectionPlayground() {
   };
 
   return (
-    <div class="flex h-full flex-col bg-bg text-ink">
+    <div class="flex h-full flex-col bg-surface text-ink">
       <header class="flex h-10 shrink-0 items-center border-edge-muted border-b px-4">
         <div class="text-sm font-medium">AI Projection Playground</div>
         <div class="ml-auto text-ink-muted text-xs">
@@ -227,7 +227,7 @@ export default function ProjectionPlayground() {
 
           <section class="flex gap-2">
             <Button
-              variant="base"
+              variant="outline"
               size="sm"
               disabled={projection.query.isFetching}
               onClick={() => projection.query.refetch()}
@@ -267,7 +267,7 @@ export default function ProjectionPlayground() {
           </section>
 
           <Show when={projection.error()}>
-            <section class="rounded-sm border border-edge-muted bg-surface p-3 text-danger text-sm">
+            <section class="rounded-sm border border-edge-muted bg-surface p-3 text-failure text-sm">
               {projection.error()}
             </section>
           </Show>

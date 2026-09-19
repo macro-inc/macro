@@ -1,0 +1,24 @@
+---
+title: ReadChannelMessages
+description: "Read a small structured window of top-level messages from a channel. Use this for latest messages, bounded time ranges, cursor continuation, or a window around a message. For full thread replies, use ReadChannelThread."
+---
+
+# ReadChannelMessages
+
+Read a small structured window of top-level messages from a channel. Use this for latest messages, bounded time ranges, cursor continuation, or a window around a message. For full thread replies, use ReadChannelThread.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `channelId` | string | Yes | Channel id to read. |
+| `windowType` | `"latest"` \| `"timeRange"` \| `"aroundMessage"` \| `"page"` \| `"messages"` | Yes | Type of channel timeline window to read. |
+| `from` | string | No | Inclusive lower bound for activity timestamps. Required when windowType is timeRange. |
+| `to` | string | No | Exclusive upper bound for activity timestamps. Required when windowType is timeRange. |
+| `messageId` | string | No | Anchor message id. Required when windowType is aroundMessage. |
+| `cursor` | string | No | Opaque cursor returned by this tool. Required when windowType is page. |
+| `direction` | `"older"` \| `"newer"` | No | Direction to read from the cursor. Required when windowType is page. |
+| `messageIds` | string[] | No | Top-level message ids to read. Required when windowType is messages. |
+| `limit` | integer | No | Maximum number of top-level messages to return. Defaults to 25, maximum 100. |
+| `includeThreadPreviews` | boolean | No | Whether to include thread preview replies on returned top-level messages. Defaults to true. |
+| `maxCharsPerMessage` | integer | No | Maximum characters to return per message/reply. Defaults to 4000, maximum 16000. |

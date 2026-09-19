@@ -193,3 +193,126 @@ fn suppresses_existing_immutable_non_drafts() {
     assert_eq!(select_message_sync_event(Some(false), false, false), None);
     assert_eq!(select_message_sync_event(Some(false), false, true), None);
 }
+
+#[test]
+fn staff_recipients_are_split_onto_the_apns_path() {
+    let (staff, customers) = partition_email_push_recipients(HashSet::from([
+        id("macro|teo@macro.com"),
+        id("macro|teo+notify@macro.com"),
+        id("macro|user@example.com"),
+    ]));
+
+    assert_eq!(
+        staff,
+        HashSet::from([id("macro|teo@macro.com"), id("macro|teo+notify@macro.com"),])
+    );
+    assert_eq!(customers, HashSet::from([id("macro|user@example.com")]));
+}
+
+#[test]
+fn customer_only_recipients_do_not_take_the_apns_path() {
+    let (staff, customers) =
+        partition_email_push_recipients(HashSet::from([id("macro|user@example.com")]));
+
+    assert!(staff.is_empty());
+    assert_eq!(customers, HashSet::from([id("macro|user@example.com")]));
+}
+
+fn email_notification_builder(
+    recipient: &str,
+) -> SendNotificationRequestBuilder<'static, NewEmailMetadata> {
+    SendNotificationRequestBuilder {
+        notification_entity: EntityType::EmailThread.with_entity_string(Uuid::nil().to_string()),
+        secondary_notification_entity: None,
+        notification: NewEmailMetadata {
+            sender: Some("Sender".to_string()),
+            to_email: "staff@macro.com".to_string(),
+            thread_id: Uuid::nil().to_string(),
+            subject: "Subject".to_string(),
+            snippet: "Snippet".to_string(),
+        },
+        sender_id: Some(id("macro|sender@example.com")),
+        recipient_ids: HashSet::from([id(recipient)]),
+    }
+}
+
+#[test]
+fn noise_requests_preserve_rows_without_realtime_delivery() {
+    // A staff inbox may also notify a non-staff delegate. Neither recipient
+    // partition should receive GraphQL/gateway events for the Noise tier.
+    for recipient in ["macro|staff@macro.com", "macro|delegate@example.com"] {
+        let builder = email_notification_builder(recipient);
+        let original = serde_json::to_value(&builder).unwrap();
+        let request = NewEmailTier::StaffInbox.notification_request(builder);
+        let request = serde_json::to_value(request).unwrap();
+
+        assert_eq!(request["send_conn_gateway"], false);
+        assert!(request["build_apns"].is_null());
+        assert!(request["build_email"].is_null());
+        assert!(request["uuid_to_write"].is_string());
+        for field in [
+            "notification_entity",
+            "secondary_notification_entity",
+            "sender_id",
+            "recipient_ids",
+        ] {
+            assert_eq!(request["req"][field], original[field]);
+        }
+        assert_eq!(request["req"]["notification"]["tag"], "new_email");
+        assert_eq!(
+            request["req"]["notification"]["content"],
+            original["notification"]
+        );
+    }
+}
+
+#[test]
+fn signal_requests_keep_realtime_delivery_for_both_recipient_partitions() {
+    for recipient in ["macro|staff@macro.com", "macro|customer@example.com"] {
+        let request =
+            NewEmailTier::Signal.notification_request(email_notification_builder(recipient));
+        let request = serde_json::to_value(request).unwrap();
+
+        assert_eq!(request["send_conn_gateway"], true);
+        // The staff branch adds APNS separately; customer requests stay realtime-only.
+        assert!(request["build_apns"].is_null());
+    }
+}
+
+#[test]
+fn signal_staff_requests_keep_apns_and_realtime_delivery() {
+    let request = NewEmailTier::Signal
+        .notification_request(email_notification_builder("macro|staff@macro.com"))
+        .with_apns();
+    let request = serde_json::to_value(request).unwrap();
+
+    assert_eq!(request["send_conn_gateway"], true);
+    assert!(request["build_apns"].is_object());
+}
+
+#[test]
+fn signal_filter_requires_importance_and_unshared() {
+    let thread_id = Uuid::nil();
+    match signal_filter(thread_id) {
+        Expr::And(thread, rest) => {
+            assert!(matches!(
+                *thread,
+                Expr::Literal(EmailLiteral::ThreadId(id)) if id == thread_id
+            ));
+            match *rest {
+                Expr::And(importance, shared) => {
+                    assert!(matches!(
+                        *importance,
+                        Expr::Literal(EmailLiteral::Importance(true))
+                    ));
+                    assert!(matches!(
+                        *shared,
+                        Expr::Literal(EmailLiteral::Shared(SharedEmailFilter::Exclude))
+                    ));
+                }
+                other => panic!("expected importance AND shared, got {other:?}"),
+            }
+        }
+        other => panic!("expected thread AND signal predicates, got {other:?}"),
+    }
+}

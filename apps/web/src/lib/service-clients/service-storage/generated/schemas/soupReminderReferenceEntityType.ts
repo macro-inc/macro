@@ -24,4 +24,5 @@ export type SoupReminderReferenceEntityType =
   | 'crm_company'
   | 'crm_contact'
   | 'reminder'
-  | 'skill';
+  | 'skill'
+  | 'agent_session';

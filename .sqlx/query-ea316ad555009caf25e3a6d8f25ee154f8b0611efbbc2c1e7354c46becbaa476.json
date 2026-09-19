@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE harness_pairing_requests\n            SET status = 'approved', harness_id = $2, approved_by = $3\n            WHERE code = $1 AND status = 'pending' AND expires_at > now()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ea316ad555009caf25e3a6d8f25ee154f8b0611efbbc2c1e7354c46becbaa476"
+}

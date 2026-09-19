@@ -1,5 +1,4 @@
-import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
-import { fetchAndCacheThread } from '@queries/email/thread';
+import { defineBlock, LoadErrors } from '@core/block';
 import { ok } from 'neverthrow';
 import EmailBlock from './component/Block';
 
@@ -11,41 +10,13 @@ export const definition = defineBlock({
   syncServiceEnabled: false,
   defaultFilename: '[No subject]',
 
+  // The thread itself is fetched by the block component (useThreadQuery),
+  // which owns loading, offline fallback, and error states — see Block.tsx.
   async load(source) {
     if (source.type === 'dss') {
-      let email = await fetchAndCacheThread(source.id);
-
-      if (!email) {
-        return LoadErrors.MISSING;
-      }
-
-      if (email.isErr()) {
-        if (email.error.some((error) => error.code === 'NOT_FOUND')) {
-          return LoadErrors.MISSING;
-        } else if (
-          email.isErr() &&
-          email.error.some((error) => error.code === 'UNAUTHORIZED')
-        ) {
-          return LoadErrors.UNAUTHORIZED;
-        } else if (
-          email.isErr() &&
-          email.error.some((error) => error.code === 'GONE')
-        ) {
-          return LoadErrors.GONE;
-        } else {
-          return LoadErrors.INVALID;
-        }
-      }
-
-      const emailData = email.value;
-
-      return ok({
-        ...emailData,
-      });
+      return ok({ id: source.id });
     }
     return LoadErrors.INVALID;
   },
   accepted: {},
 });
-
-export type EmailData = ExtractLoadType<(typeof definition)['load']>;

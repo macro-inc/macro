@@ -50,6 +50,7 @@ create_local_queues:
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name email-service-sfs-mapper-queue || true
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name static-file-s3-event-notification-queue || true
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name reminder-dispatch-queue || true
+  aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name calendar-reminder-dispatch-queue || true
   @echo "SQS queues created"
 
 # Fan out every reminder that is currently due, once.
@@ -73,6 +74,29 @@ tick_reminder_sweeps:
   echo "sweeping reminders every 60s; ctrl-c to stop"
   while true; do
     just poke_reminder_sweep
+    sleep 60
+  done
+
+# Fan out every calendar event reminder that is currently due, once.
+#
+# Same EventBridge stand-in as `poke_reminder_sweep`, for the calendar
+# reminder dispatch queue.
+poke_calendar_reminder_sweep:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  url=$(aws --endpoint-url=http://localhost:4566 sqs get-queue-url \
+    --queue-name calendar-reminder-dispatch-queue --query QueueUrl --output text)
+  aws --endpoint-url=http://localhost:4566 sqs send-message \
+    --queue-url "$url" --message-body '{"operation":"sweep"}' >/dev/null
+  echo "calendar reminder sweep enqueued"
+
+# Stand in for the EventBridge schedule: sweep once a minute until interrupted.
+tick_calendar_reminder_sweeps:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  echo "sweeping calendar reminders every 60s; ctrl-c to stop"
+  while true; do
+    just poke_calendar_reminder_sweep
     sleep 60
   done
 

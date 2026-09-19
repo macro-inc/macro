@@ -1,9 +1,9 @@
 #[cfg(feature = "account_merge_request")]
 pub mod account_merge_request;
-pub mod activity;
 pub mod advisory_lock;
 pub mod annotations;
 pub mod blocked_email;
+pub mod calendar_event;
 pub mod call_record;
 pub mod chat;
 pub mod chat_history;
@@ -26,7 +26,6 @@ pub mod job;
 pub mod macro_user;
 pub mod macro_user_email_verification;
 pub mod macro_user_links;
-pub mod macros;
 pub mod notification;
 pub mod organization;
 pub mod pins;
@@ -40,11 +39,3 @@ pub mod team;
 pub mod user;
 pub mod user_document_view_location;
 pub mod user_quota;
-
-#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
-pub enum Parameters {
-    BigNumber(i64),
-    SmallNumber(i32),
-    String(String),
-    Bool(bool),
-}

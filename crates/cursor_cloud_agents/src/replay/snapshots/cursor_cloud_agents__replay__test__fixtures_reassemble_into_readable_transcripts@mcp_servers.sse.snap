@@ -1,0 +1,40 @@
+---
+source: crates/cursor_acp/src/replay/test.rs
+assertion_line: 237
+expression: transcript
+input_file: crates/cursor_acp/fixtures/real/mcp_servers.sse
+---
+
+--- thinking ---
+I will identify every MCP server visible in the current environment and list each one's available tools. Then I will stop without modifying any files.
+
+I'll call GetMcpTools with no arguments to retrieve the full catalog of MCP servers and their tools. The system prompt also indicates three available servers: deepwiki, cursor-cloud, and cursor-subscriptions.
+--- assistant ---
+I'll list every MCP server visible in this environment and the tools each one exposes.
+--- thinking ---
+I will identify every visible MCP server and list its tools. Then I will stop.
+--- assistant ---
+**cursor-cloud** (ready)
+- `batch-fetch-details`
+- `environment-build-logs`
+- `environment-info`
+- `get-automation`
+- `get-events`
+- `get-message-queue`
+- `list-cloud-agents`
+- `list-environment-builds`
+- `request-environment-setup-actions`
+- `run-info`
+- `trigger-environment-build`
+
+**cursor-subscriptions** (ready)
+- `list_subscriptions`
+- `subscribe_github_ci`
+- `subscribe_github_pr`
+- `subscribe_timer`
+- `unsubscribe`
+
+**deepwiki** (ready)
+- `ask_question`
+- `read_wiki_contents`
+- `read_wiki_structure`

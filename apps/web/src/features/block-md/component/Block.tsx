@@ -306,7 +306,7 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
                   data-block-content
                 >
                   <Scroll class="relative" scrollRef={setScrollRef}>
-                    <div class="relative portal-scope mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)">
+                    <div class="relative portal-scope touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
                       <Suspense>
                         <Show
                           when={!isInstructionsMd()}

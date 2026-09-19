@@ -13,10 +13,10 @@ type ContentProps = {
 
 export function Content(props: ContentProps) {
   const message = useMessage();
-  const bigEmoji = createMemo(() => isEmojiOnly(message().content ?? ''));
+  const bigEmoji = createMemo(() => isEmojiOnly(message().content));
   const termsLookup = useSearchHighlightTermsLookup();
 
-  const content = createMemo(() => message().content ?? '');
+  const content = createMemo(() => message().content);
   const terms = createMemo(() => termsLookup?.(message().id));
 
   const [markdownRoot, setMarkdownRoot] = createSignal<HTMLDivElement>();
@@ -26,6 +26,7 @@ export function Content(props: ContentProps) {
   return (
     <Show when={message().content}>
       <div
+        data-message-content
         class={cn(
           'whitespace-pre-wrap wrap-break-word max-w-full',
           bigEmoji() ? 'text-4xl' : 'text-sm',

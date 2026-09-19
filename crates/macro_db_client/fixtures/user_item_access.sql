@@ -34,8 +34,8 @@ INSERT INTO public."Document" ("id", "name", "fileType", "owner", "createdAt", "
 INSERT INTO public."DocumentInstance" ("revisionName", "documentId", "createdAt", "updatedAt", "sha")
     (SELECT 'test_document_name', 'document-one', '2019-10-16 00:00:00', '2019-10-16 00:00:00', 'sha');
 
-INSERT INTO public."SharePermission" ("id", "isPublic", "publicAccessLevel")
-        (SELECT 'sp-document1', true, 'read');
+INSERT INTO public."SharePermission" ("id", "linkShare", "linkShareAccessLevel")
+        (SELECT 'sp-document1', 'PUBLIC', 'view');
 
 INSERT INTO public."Document" ("id", "name", "fileType", "owner", "createdAt", "updatedAt")
     (SELECT 'document-two',

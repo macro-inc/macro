@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT i.\"documentId\"\n        FROM \"DocumentInstance\" i\n        WHERE i.sha = $1\n          AND (\n              SELECT d.owner\n              FROM \"Document\" d\n              WHERE d.id = i.\"documentId\"\n          ) = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "documentId",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1a543ca6772d6aeb55973a1569dde96d386117e25e82f2b2497249eaa08e0515"
+}

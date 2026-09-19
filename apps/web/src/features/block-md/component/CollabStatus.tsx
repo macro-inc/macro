@@ -25,7 +25,7 @@ export function CollabStatus() {
           <Switch>
             <Match when={status() === SyncSourceStatus.Disconnected}>
               <Button
-                variant="base"
+                variant="outline"
                 size="icon-sm"
                 aria-label="Offline"
                 tooltip="You're offline. Changes will sync when you reconnect."

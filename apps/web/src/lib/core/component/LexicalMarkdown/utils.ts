@@ -1,6 +1,5 @@
 import { ENABLE_MARKDOWN_SEARCH_TEXT } from '@core/constant/featureFlags';
 import { $isCodeNode } from '@lexical/code';
-import { $generateNodesFromDOM } from '@lexical/html';
 import {
   $createListItemNode,
   $createListNode,
@@ -360,37 +359,7 @@ export function setEditorStateFromMarkdown(
   }
 }
 
-/**
- * Set the editor state from an HTML string.
- * Uses Lexical's DOM import utilities to parse and insert nodes.
- * Mirrors the behavior of setEditorStateFromMarkdown by updating inside
- * an editor.update unless inUpdate is true.
- */
-export function setEditorStateFromHtml(
-  editor: LexicalEditor,
-  html: string,
-  inUpdate = false
-) {
-  if (!inUpdate) {
-    editor.update(() => {
-      const parser = new DOMParser();
-      const dom = parser.parseFromString(html, 'text/html');
-      const nodes = $generateNodesFromDOM(editor, dom);
-      const root = $getRoot();
-      root.clear();
-      root.append(...nodes);
-    });
-    editor.read(() => {});
-    return editor.getEditorState();
-  } else {
-    const parser = new DOMParser();
-    const dom = parser.parseFromString(html, 'text/html');
-    const nodes = $generateNodesFromDOM(editor, dom);
-    const root = $getRoot();
-    root.clear();
-    root.append(...nodes);
-  }
-}
+export { setEditorStateFromHtml } from './utils/setEditorStateFromHtml';
 
 function $isEmpty() {
   const root = $getRoot();

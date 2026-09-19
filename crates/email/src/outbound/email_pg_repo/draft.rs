@@ -40,8 +40,14 @@ pub(crate) async fn insert_message(
     // Only touch scheduling if send_time is explicitly provided.
     // Scheduling is managed via the dedicated /drafts/scheduled endpoints.
     if input.send_time.is_some() {
-        message::process_scheduled_message(&mut tx, link_id, message_db_id, input.send_time)
-            .await?;
+        message::process_scheduled_message(
+            &mut tx,
+            link_id,
+            message_db_id,
+            input.send_time,
+            input.actor_id.as_deref(),
+        )
+        .await?;
     }
 
     message::upsert_recipients(&mut tx, message_db_id, contacts).await?;

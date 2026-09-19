@@ -1,6 +1,6 @@
 import { UserIcon } from '@core/component/UserIcon';
 import { useEmail, useUserId } from '@core/context/user';
-import { useAugmentUserWithDmActivity } from '@core/user';
+import { emailToId, useAugmentUserWithDmActivity } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import { useSelectedFirst } from '@core/util/useSelectedFirst';
@@ -16,6 +16,7 @@ import { useSearchInputFocus } from '@property/utils';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { debounce } from '@solid-primitives/scheduled';
+import * as EmailValidator from 'email-validator';
 import {
   createEffect,
   createMemo,
@@ -249,6 +250,25 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     return converted;
   });
 
+  const customEmail = createMemo(() => {
+    if (!props.config.allowCustomEmail) return undefined;
+    const raw = inputValue().trim();
+    if (!EmailValidator.validate(raw)) return undefined;
+    const lower = raw.toLowerCase();
+    const alreadyListed = entities().some(
+      (entity) =>
+        entity.kind === 'user' && entity.data.email.toLowerCase() === lower
+    );
+    if (alreadyListed) return undefined;
+    return raw;
+  });
+
+  const customEmailEntity = (): CombinedEntity | undefined => {
+    const email = customEmail();
+    if (!email) return undefined;
+    return userToEntity({ id: emailToId(email), email, name: email });
+  };
+
   const entitySearch = createFreshSearch<CombinedEntity>({
     config: createEntitySearchConfig(currentUserDomain, currentUserId),
     getName: getEntitySearchText,
@@ -369,7 +389,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     }
   };
 
-  const totalCount = () => pinnedCount() + sortedEntities().length;
+  const totalCount = () =>
+    pinnedCount() + sortedEntities().length + (customEmail() ? 1 : 0);
 
   // Reset selected index to top when search term or list changes
   createEffect(() => {
@@ -405,8 +426,11 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       const pCount = pinnedCount();
       if (idx < pCount) {
         togglePinnedOption(visiblePinnedOptions()[idx]);
-      } else {
+      } else if (idx < pCount + sortedEntities().length) {
         const entity = sortedEntities()[idx - pCount];
+        if (entity) toggleEntity(entity);
+      } else {
+        const entity = customEmailEntity();
         if (entity) toggleEntity(entity);
       }
     }
@@ -582,6 +606,44 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                 }}
               </For>
             </div>
+          </Show>
+          <Show when={customEmail()}>
+            {(email) => {
+              const rowIndex = () => pinnedCount() + sortedEntities().length;
+              const entity = () => customEmailEntity();
+              return (
+                <div
+                  class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default min-w-0"
+                  classList={{
+                    'bg-hover': rowIndex() === selectedIndex(),
+                  }}
+                  onClick={() => {
+                    const next = entity();
+                    if (next) toggleEntity(next);
+                  }}
+                  onMouseEnter={() => {
+                    if (!keyboardMode()) setSelectedIndex(rowIndex());
+                  }}
+                >
+                  <Show when={props.config.isMultiSelect}>
+                    <div class="shrink-0">
+                      <OptionCheckBox checked={false} multiselect />
+                    </div>
+                  </Show>
+                  <div class="flex items-center gap-2 flex-1 min-w-0">
+                    <div class="size-4 shrink-0 flex items-center">
+                      <UserIcon
+                        id={emailToId(email())}
+                        size="sm"
+                        isDeleted={false}
+                        suppressClick={true}
+                      />
+                    </div>
+                    <span class="truncate min-w-0">Add {email()}</span>
+                  </div>
+                </div>
+              );
+            }}
           </Show>
         </div>
       </Show>

@@ -176,7 +176,7 @@ mod tests {
             "document-name",
             MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap(),
             None,
-            &SharePermissionV2::new_document_share_permission(Some(FileType::Docx)),
+            &SharePermissionV2::new_document_share_permission(Some(FileType::Docx), None),
             vec![SaveBomPart {
                 sha: "sha".to_string(),
                 path: "path".to_string(),

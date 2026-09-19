@@ -10,19 +10,21 @@ pub async fn upsert_scheduled_message(
     sqlx::query!(
         r#"
         INSERT INTO email_scheduled_messages (
-            link_id, message_id, send_time, sent,
+            link_id, message_id, send_time, sent, actor_id,
             created_at, updated_at
         )
-        VALUES ($1, $2, $3, $4, NOW(), NOW())
+        VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
         ON CONFLICT (link_id, message_id) DO UPDATE SET
             send_time = EXCLUDED.send_time,
             sent = EXCLUDED.sent,
+            actor_id = EXCLUDED.actor_id,
             updated_at = NOW()
         "#,
         db_message.link_id,
         db_message.message_id,
         db_message.send_time,
         db_message.sent,
+        db_message.actor_id,
     )
     .execute(&mut *tx)
     .await?;

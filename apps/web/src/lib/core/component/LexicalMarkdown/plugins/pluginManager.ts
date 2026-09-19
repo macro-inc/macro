@@ -66,9 +66,17 @@ export function createPluginManager(editor: LexicalEditor, type: EditorType) {
     },
 
     markdownShortcuts() {
+      // Editor types register a subset of the nodes, and Lexical refuses a
+      // shortcut whose node is missing, so only offer the transformers this
+      // editor can actually produce.
+      const transformers = ALL_TRANSFORMERS.filter(
+        (transformer) =>
+          !('dependencies' in transformer) ||
+          editor.hasNodes(transformer.dependencies)
+      );
       cleanupFunctions.push(
         markdownShortcutsPlugin({
-          transformers: ALL_TRANSFORMERS,
+          transformers,
           triggerOnEnterTransformers: [HR, CODE],
         })(editor)
       );

@@ -9,8 +9,8 @@ VALUES ('macro|other@user.com', 'other@user.com','stripe_iddfkjdfkdf', 'a2222222
 INSERT INTO public."Document" ("id","name","fileType", "owner", "createdAt", "updatedAt")
 VALUES ('document-one', 'test_document_name','pdf', 'macro|user@user.com', '2019-10-16 00:00:00', '2019-10-16 00:00:00');
 
-INSERT INTO public."SharePermission" ("id", "isPublic", "publicAccessLevel", "createdAt", "updatedAt")
-VALUES ('share-permission-one', true, 'view', '2019-10-16 00:00:00', '2019-10-16 00:00:00');
+INSERT INTO public."SharePermission" ("id", "linkShare", "linkShareAccessLevel", "createdAt", "updatedAt")
+VALUES ('share-permission-one', 'PUBLIC', 'view', '2019-10-16 00:00:00', '2019-10-16 00:00:00');
 
 INSERT INTO public."DocumentPermission" ("documentId", "sharePermissionId")
 VALUES ('document-one', 'share-permission-one');
@@ -25,8 +25,8 @@ VALUES ('macro|user@user.com', 'document-one', 'document', 0, '2019-10-16 00:00:
 INSERT INTO public."Document" ("id","name","fileType", "owner", "createdAt", "updatedAt")
 VALUES ('document-two', 'test_document_name','pdf', 'macro|other@user.com', '2019-10-16 00:00:00', '2019-10-16 00:00:00');
 
-INSERT INTO public."SharePermission" ("id", "isPublic", "publicAccessLevel", "createdAt", "updatedAt")
-VALUES ('share-permission-two', false, NULL, '2019-10-16 00:00:00', '2019-10-16 00:00:00');
+INSERT INTO public."SharePermission" ("id", "linkShare", "linkShareAccessLevel", "createdAt", "updatedAt")
+VALUES ('share-permission-two', NULL, NULL, '2019-10-16 00:00:00', '2019-10-16 00:00:00');
 
 INSERT INTO public."DocumentPermission" ("documentId", "sharePermissionId")
 VALUES ('document-two', 'share-permission-two');

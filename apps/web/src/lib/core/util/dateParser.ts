@@ -2,6 +2,8 @@
  * Parse natural language date inputs like "today", "tomorrow", "next week", etc.
  */
 
+import { differenceInCalendarDays } from 'date-fns';
+
 export type ParsedDate = {
   date: Date;
   displayFormat: string;
@@ -310,6 +312,29 @@ export function formatDate(date: Date): string {
   }
 
   return date.toLocaleDateString('en-US', options);
+}
+
+/**
+ * Day-relative label for dates near now — "Today", "Yesterday", "2 days ago",
+ * "Tomorrow", "In 2 days" — falling back to `formatDate` beyond that window.
+ * (Moved from the DateMention decorator so lists can share it.)
+ */
+export function formatRelativeDay(date: Date): string {
+  const diff = differenceInCalendarDays(date, new Date());
+  switch (diff) {
+    case -2:
+      return '2 days ago';
+    case -1:
+      return 'Yesterday';
+    case 0:
+      return 'Today';
+    case 1:
+      return 'Tomorrow';
+    case 2:
+      return 'In 2 days';
+    default:
+      return formatDate(date);
+  }
 }
 
 function _getDateSuggestions(input: string): ParsedDate[] {

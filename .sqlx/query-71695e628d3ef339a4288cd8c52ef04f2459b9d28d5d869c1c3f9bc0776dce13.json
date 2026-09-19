@@ -1,0 +1,150 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            event.id AS \"id!\",\n            event.owner_id AS \"owner_id!\",\n            event.title AS \"title!\",\n            event.status AS \"status!\",\n            event.starts_at,\n            event.ends_at,\n            event.start_date,\n            event.end_date,\n            event.time_zone,\n            (cardinality(event.recurrence_lines) > 0) AS \"is_recurring!\",\n            event.conference_url,\n            event.organizer_email,\n            event.organizer_name,\n            event.description,\n            event.is_read_only AS \"is_read_only!\",\n            event.created_at AS \"created_at!\",\n            event.updated_at AS \"updated_at!\",\n            occurrence.occurrence_key AS \"occurrence_key?\",\n            occurrence.starts_at AS \"occurrence_starts_at?\",\n            occurrence.ends_at AS \"occurrence_ends_at?\",\n            occurrence.start_date AS \"occurrence_start_date?\",\n            occurrence.end_date AS \"occurrence_end_date?\"\n        FROM calendar_events event\n        LEFT JOIN LATERAL (\n            SELECT\n                instance.occurrence_key,\n                instance.starts_at,\n                instance.ends_at,\n                instance.start_date,\n                instance.end_date\n            FROM calendar_event_occurrences instance\n            CROSS JOIN LATERAL (\n                SELECT COALESCE(\n                    instance.starts_at,\n                    instance.start_date::timestamp AT TIME ZONE 'UTC'\n                ) AS at\n            ) instance_start\n            WHERE instance.event_id = event.id\n              AND NOT instance.is_cancelled\n            ORDER BY\n                (instance_start.at >= $3) DESC,\n                CASE WHEN instance_start.at >= $3 THEN instance_start.at END ASC,\n                instance_start.at DESC,\n                instance.occurrence_key\n            LIMIT 1\n        ) occurrence ON true\n        WHERE event.id = ANY($2)\n          AND (\n                event.owner_id = $1\n                OR EXISTS (\n                    SELECT 1\n                    FROM macro_user_links link\n                    WHERE link.link_id = event.source_link_id\n                      AND link.primary_macro_id = $1\n                )\n          )\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "owner_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "title!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "status!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "starts_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "ends_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "start_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 7,
+        "name": "end_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 8,
+        "name": "time_zone",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "is_recurring!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "conference_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "organizer_email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "organizer_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "is_read_only!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 15,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 16,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 17,
+        "name": "occurrence_key?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 18,
+        "name": "occurrence_starts_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 19,
+        "name": "occurrence_ends_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 20,
+        "name": "occurrence_start_date?",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 21,
+        "name": "occurrence_end_date?",
+        "type_info": "Date"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      null,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "71695e628d3ef339a4288cd8c52ef04f2459b9d28d5d869c1c3f9bc0776dce13"
+}

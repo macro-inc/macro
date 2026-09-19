@@ -16,6 +16,9 @@ use crate::workflows::{
     vars,
 };
 
+#[cfg(test)]
+mod test;
+
 /// Build the workflow.
 pub fn code_check_cloud_storage() -> Workflow {
     Workflow::new("cloud storage code check")
@@ -41,14 +44,20 @@ fn path_check() -> Job {
         .runs_on(runners::Runner::Small.to_string())
         .add_output("should_run", "${{ steps.filter.outputs.should_run }}")
         .add_output(
-            "nextest_filter",
-            "${{ steps.nextest-filter.outputs.nextest_filter }}",
+            "rust_packages",
+            "${{ steps.nextest-filter.outputs.rust_packages }}",
+        )
+        .add_output(
+            "skip_tests",
+            "${{ steps.nextest-filter.outputs.skip_tests }}",
         )
         .add_output(
             "doppler_config_bins",
             "${{ steps.doppler-bins.outputs.doppler_config_bins }}",
         )
-        .add_step(steps::checkout(true, false))
+        // PR merge commits need both parents for `git merge-base`; fetching
+        // the entire repo (every branch) is not required.
+        .add_step(steps::checkout(false, false).add_with(("fetch-depth", 2)))
         .add_step(steps::setup_rust_light())
         .add_step(paths_filter())
         .add_step(compute_changed_files())
@@ -78,13 +87,18 @@ fn check() -> Job {
         .add_step(steps::teardown_nix())
 }
 
-/// cargo nextest against postgres + redis service containers.
+/// cargo nextest against postgres + redis service containers. Skipped when
+/// the path filter selected no Rust packages (Nix-only / unmapped files) or
+/// when `skip_tests` is set (`.sqlx`-only diffs still clippy the snapshot).
 fn test() -> Job {
     steps::gated_job()
+        .cond(Expression::new(
+            "needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'",
+        ))
         .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
         .add_env((
-            "NEXTEST_FILTER",
-            "${{ needs.path-check.outputs.nextest_filter }}",
+            "RUST_PACKAGES",
+            "${{ needs.path-check.outputs.rust_packages }}",
         ))
         .add_env(("NEXTEST_TEST_THREADS", vars::NEXTEST_TEST_THREADS))
         .add_env(("RUSTFLAGS", "-Dwarnings -C link-arg=-fuse-ld=mold"))
@@ -145,15 +159,13 @@ fn paths_filter() -> Step<gh_workflow::Use> {
                   - 'services/**'
                   - 'tooling/xtask/**'
                   - 'static_assets/**'
+                  - 'nix/**'
                   - 'flake.nix'
                   - 'flake.lock'
                   - '.github/actions/setup-nix/**'
                   - '.github/actions/setup-nix-dev-shell/**'
                   - '.github/actions/teardown-nix/**'
                   - '.github/actions/setup-sccache/**'
-                  - '.github/services-config.json'
-                  - '.github/scripts/build-cloud-storage-lambdas.sh'
-                  - '.github/scripts/build-cloud-storage-lambdas-nix.sh'
                   - .github/workflows/code_check_cloud_storage.yml
             "#},
         ))
@@ -180,9 +192,10 @@ fn compute_doppler_bins() -> Step<Run> {
         .shell("bash")
 }
 
-/// Compute the cargo-nextest package filter from the changed files, via the
-/// `xtask nextest-filter` subcommand. Root cargo/toolchain/CI changes
-/// short-circuit to an empty filter (run the whole suite).
+/// Compute the cargo-nextest / clippy package set from the changed files, via
+/// the `xtask nextest-filter` subcommand. Root Cargo/toolchain changes
+/// short-circuit to the full suite; unmapped files (a top-level JSON, a Nix
+/// shell tweak) select no packages.
 fn compute_nextest_filter() -> Step<Run> {
     Step::new("compute nextest package filter")
         .run(include_str!("scripts/compute_nextest_filter.sh"))
@@ -212,18 +225,14 @@ fn cargo_fmt() -> Step<Run> {
     Step::new("fmt").run("cargo fmt --check")
 }
 
-/// `cargo clippy` (no AWS credentials; sccache uses Namespace's remote cache).
+/// `cargo clippy`, scoped to the same package set as nextest.
 fn cargo_clippy() -> Step<Run> {
-    Step::new("clippy").run(indoc::indoc! {r#"
-        cargo clippy --workspace --all-features \
-          --exclude sync_service
-        # sync-service has mutually exclusive storage features, so lint its
-        # supported default feature set separately. These two existing lints
-        # predate its inclusion in the root workspace.
-        cargo clippy -p sync_service -- \
-          -A clippy::unnecessary_map_or \
-          -A clippy::collapsible_if
-    "#})
+    Step::new("clippy")
+        .run(include_str!("scripts/cargo_clippy.sh"))
+        .add_env((
+            "RUST_PACKAGES",
+            "${{ needs.path-check.outputs.rust_packages }}",
+        ))
 }
 
 /// pgvector service container, tuned env preserved.

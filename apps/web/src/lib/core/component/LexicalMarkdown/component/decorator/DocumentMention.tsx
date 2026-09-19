@@ -1,3 +1,5 @@
+import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
+import { openCalendarEventSplit } from '@block-calendar/open-calendar-event';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import {
   type BlockAlias,
@@ -12,8 +14,8 @@ import {
 } from '@core/component/DocumentPreview';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { HoverCard } from '@core/component/HoverCard';
+import { InlineTaskProperties } from '@core/component/InlineTaskProperties';
 import { useItemPreviewData } from '@core/component/ItemPreview';
-import { UserIcon } from '@core/component/UserIcon';
 import {
   itemToBlockName,
   resolveBlockAlias,
@@ -33,14 +35,12 @@ import {
 } from '@macro-inc/lexical-core';
 import EyeSlashDuo from '@phosphor/eye-slash.svg';
 import TrashSimple from '@phosphor/trash-simple.svg';
-import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
-import { SYSTEM_PROPERTY_IDS } from '@property/constants';
-import { useEntityProperties } from '@property/hooks';
 import {
   type ItemEntity,
   isAccessiblePreviewItem,
+  isCalendarEventPreviewItem,
+  type PreviewCalendarEventAccess,
   type PreviewItemNoAccess,
-  useItemPreview,
 } from '@queries/preview';
 import { useSystemSkillsQuery } from '@queries/storage/system-skills';
 import { blockNameToItemType } from '@service-storage/client';
@@ -155,68 +155,19 @@ function SkillSlashText(props: {
   );
 }
 
-function InlineTaskProperties(props: { taskId: string }) {
-  const { properties, isLoading } = useEntityProperties(
-    props.taskId,
-    'TASK',
-    false
-  );
-
-  const statusOptionId = createMemo(() => {
-    const p = properties().find(
-      (p) => p.propertyDefinitionId === SYSTEM_PROPERTY_IDS.STATUS
-    );
-    return p?.valueType === 'SELECT_STRING' ? p.value?.[0] : undefined;
-  });
-
-  const priorityOptionId = createMemo(() => {
-    const p = properties().find(
-      (p) => p.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PRIORITY
-    );
-    return p?.valueType === 'SELECT_STRING' ? p.value?.[0] : undefined;
-  });
-
-  const firstAssigneeId = createMemo(() => {
-    const p = properties().find(
-      (p) => p.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES
-    );
-    return p?.valueType === 'ENTITY' ? p.value?.[0]?.entity_id : undefined;
-  });
-
-  const hasAny = createMemo(
-    () =>
-      !isLoading() &&
-      !!(statusOptionId() || priorityOptionId() || firstAssigneeId())
-  );
-
-  return (
-    <Show when={hasAny()}>
-      <span class="inline-flex items-center gap-1 mx-1 align-middle relative top-[-0.05em]">
-        <Show when={statusOptionId()}>
-          {(id) => <PropertyValueIcon optionId={id()} class="size-3" />}
-        </Show>
-        <Show when={priorityOptionId()}>
-          {(id) => <PropertyValueIcon optionId={id()} class="size-3" />}
-        </Show>
-        <Show when={firstAssigneeId()}>
-          {(id) => (
-            <span class="inline-flex ml-0.5 size-3.25">
-              <UserIcon
-                id={id()}
-                isDeleted={false}
-                size="fill"
-                suppressClick
-                showTooltip={false}
-              />
-            </span>
-          )}
-        </Show>
-      </span>
-    </Show>
-  );
+/** Compact start-time label appended to a calendar event mention pill. */
+export function calendarMentionTimeLabel(
+  event: PreviewCalendarEventAccess['event']
+): string | undefined {
+  if (event.time.kind === 'timed') {
+    return formatDate(event.time.startsAt, { showTime: true });
+  }
+  const startDate = parseLocalDate(event.time.startDate);
+  return startDate ? formatDate(startDate) : undefined;
 }
 
 function InlinePreview(props: {
+  previewData: ReturnType<typeof useItemPreviewData>;
   entity: ItemEntity;
   blockName: BlockName | BlockAlias;
   blockParams: Record<string, string>;
@@ -226,7 +177,7 @@ function InlinePreview(props: {
   createdAt?: number;
   isRecentMention: () => boolean;
 }) {
-  const { item, ItemEntityIcon } = useItemPreviewData(() => props.entity);
+  const { item, ItemEntityIcon, documentProperties } = props.previewData;
 
   const shouldShowFallback = createMemo(() => {
     return (
@@ -361,6 +312,19 @@ function InlinePreview(props: {
                         );
                       }}
                     </Show>
+                    <Show when={matches(item(), isCalendarEventPreviewItem)}>
+                      {(calendarItem) => (
+                        <Show
+                          when={calendarMentionTimeLabel(calendarItem().event)}
+                        >
+                          {(timeLabel) => (
+                            <span class="text-current/50 text-[0.8em]">
+                              {` ${timeLabel()}`}
+                            </span>
+                          )}
+                        </Show>
+                      )}
+                    </Show>
                     <span class="relative text-[0.8em] text-current/50 rounded-xs">
                       {(() => {
                         const accessories = mentionsAccessories(
@@ -379,7 +343,10 @@ function InlinePreview(props: {
                     </span>
                     <Show when={props.blockName === 'task'}>
                       <Suspense>
-                        <InlineTaskProperties taskId={accessibleItem().id} />
+                        <InlineTaskProperties
+                          taskId={accessibleItem().id}
+                          previewProperties={documentProperties()}
+                        />
                       </Suspense>
                     </Show>
                   </span>
@@ -411,6 +378,23 @@ export function DocumentMention(props: DocumentMentionDecoratorProps) {
   if (lexicalWrapper?.skipPreviewFetch) {
     return <DocumentMentionStatic {...props} />;
   }
+  // Only skill mentions need to distinguish built-ins from stored documents.
+  // Ordinary mentions must not wait for a once-per-session skills request.
+  return (
+    <Show
+      when={props.blockName === 'skill'}
+      fallback={
+        <Suspense>
+          <DocumentMentionInner {...props} />
+        </Suspense>
+      }
+    >
+      <SkillDocumentMention {...props} />
+    </Show>
+  );
+}
+
+function SkillDocumentMention(props: DocumentMentionDecoratorProps) {
   const systemSkills = useSystemSkillsQuery();
   return (
     <Switch>
@@ -530,7 +514,8 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
     return baseEntity;
   };
 
-  const [item] = useItemPreview(itemEntity);
+  const previewData = useItemPreviewData(itemEntity);
+  const { item } = previewData;
 
   const isSelectedAsNode = createMemo(() => {
     const sel = selection();
@@ -549,6 +534,27 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
   });
 
   const open = createCallback((e: MouseEvent | KeyboardEvent | null) => {
+    // The calendar is a singleton block: open it aimed at the viewer's own
+    // copy of the meeting, which the preview resolved through the shared
+    // iCalendar UID.
+    if (verifyBlockName(props.blockName) === 'calendar') {
+      const i = item();
+      const event = isCalendarEventPreviewItem(i) ? i.event : undefined;
+      const paramKey = props.blockParams?.occurrenceKey;
+      openCalendarEventSplit({
+        eventId: event?.viewerEventId ?? props.documentId,
+        occurrenceKey: paramKey ?? event?.occurrenceKey ?? undefined,
+        // The preview's time only locates the instance it previewed; a
+        // mention aimed at a different instance derives its range from the
+        // occurrence key instead.
+        time:
+          !paramKey || paramKey === event?.occurrenceKey
+            ? event?.time
+            : undefined,
+        openInNewSplit: openInNewSplitForMention(e?.shiftKey, e != null),
+      });
+      return;
+    }
     openDocument(
       resolvedBlockName(),
       props.documentId,
@@ -650,6 +656,7 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
             <Switch>
               <Match when={item()}>
                 <InlinePreview
+                  previewData={previewData}
                   entity={itemEntity()}
                   blockName={verifyBlockName(props.blockName)}
                   blockParams={props.blockParams || {}}

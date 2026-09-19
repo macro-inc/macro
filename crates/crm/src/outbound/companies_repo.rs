@@ -1,7 +1,7 @@
 //! Implementation of [`CompaniesRepository`] backed by MacroDB.
 
 #[cfg(test)]
-mod test;
+pub(crate) mod test;
 
 use crate::domain::{
     comment::{
@@ -13,11 +13,12 @@ use crate::domain::{
         CrmDomain, CrmDomainStatus, CrmError, CrmPermissionRole, CrmScopePrecheck, CrmTeamSettings,
         CrmTeamSettingsPatch, DepopulateContactOutcome, DomainMetadata,
     },
+    stages::TeamSettingsStore,
 };
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 use sqlx::PgPool;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use uuid::Uuid;
 
 /// PostgreSQL-backed [`CompaniesRepository`].
@@ -1724,6 +1725,57 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn get_contact_by_email_for_team(
+        &self,
+        team_id: &uuid::Uuid,
+        email: &str,
+        include_hidden: bool,
+    ) -> Result<Option<CrmContact>, CrmError> {
+        // Contacts are normalized to lowercase on every write path, so
+        // lowercasing the input preserves use of crm_contacts_email_idx. Team
+        // scope and hidden-row semantics mirror get_contact_for_team.
+        let row = sqlx::query!(
+            r#"
+            SELECT
+                ct.id,
+                ct.company_id,
+                ct.email,
+                ct.name,
+                ct.hidden,
+                ct.first_interaction,
+                ct.last_interaction,
+                ct.created_at,
+                ct.updated_at
+            FROM crm_contacts ct
+            JOIN crm_companies co ON co.id = ct.company_id
+            WHERE ct.email = LOWER($1)
+              AND co.team_id = $2
+              AND ($3 OR (ct.hidden = FALSE AND co.hidden = FALSE))
+            ORDER BY ct.id DESC
+            LIMIT 1
+            "#,
+            email,
+            team_id,
+            include_hidden,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        Ok(row.map(|row| CrmContact {
+            id: row.id,
+            company_id: row.company_id,
+            email: row.email,
+            name: row.name,
+            hidden: row.hidden,
+            first_interaction: row.first_interaction,
+            last_interaction: row.last_interaction,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        }))
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn get_company_for_team(
         &self,
         team_id: &uuid::Uuid,
@@ -2239,6 +2291,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                    move_closed_deals_role AS "move_closed_deals_role: CrmPermissionRole",
                    delete_records_role AS "delete_records_role: CrmPermissionRole",
                    closed_stage_ids,
+                   legacy_stage_ids AS "legacy_stage_ids: sqlx::types::Json<BTreeMap<Uuid, Uuid>>",
                    team_views,
                    default_team_view_id
             FROM team_crm_settings
@@ -2256,6 +2309,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 move_closed_deals_role: r.move_closed_deals_role,
                 delete_records_role: r.delete_records_role,
                 closed_stage_ids: r.closed_stage_ids,
+                legacy_stage_ids: r.legacy_stage_ids.0,
                 team_views: r.team_views,
                 default_team_view_id: r.default_team_view_id,
             })
@@ -2278,12 +2332,13 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         let closed_value: Option<Vec<Uuid>> = patch.closed_stage_ids.clone().flatten();
         let default_provided = patch.default_team_view_id.is_some();
         let default_value: Option<String> = patch.default_team_view_id.clone().flatten();
+        let legacy_value = patch.legacy_stage_ids.as_ref().map(sqlx::types::Json);
 
         let row = sqlx::query!(
             r#"
             INSERT INTO team_crm_settings (
                 team_id, edit_stages_role, move_closed_deals_role, delete_records_role,
-                closed_stage_ids, team_views, default_team_view_id
+                closed_stage_ids, team_views, default_team_view_id, legacy_stage_ids
             )
             VALUES (
                 $1,
@@ -2292,7 +2347,8 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 COALESCE($4::text::team_role, 'admin'),
                 CASE WHEN $5 THEN $6::uuid[] END,
                 COALESCE($7, '[]'::jsonb),
-                CASE WHEN $8 THEN $9 END
+                CASE WHEN $8 THEN $9 END,
+                COALESCE($10, '{}'::jsonb)
             )
             ON CONFLICT (team_id) DO UPDATE SET
                 edit_stages_role       = COALESCE($2::text::team_role, team_crm_settings.edit_stages_role),
@@ -2301,6 +2357,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 closed_stage_ids       = CASE WHEN $5 THEN $6::uuid[] ELSE team_crm_settings.closed_stage_ids END,
                 team_views             = COALESCE($7, team_crm_settings.team_views),
                 default_team_view_id   = CASE WHEN $8 THEN $9 ELSE team_crm_settings.default_team_view_id END,
+                legacy_stage_ids       = COALESCE($10, team_crm_settings.legacy_stage_ids),
                 updated_at             = now()
             RETURNING
                 edit_stages_role AS "edit_stages_role!: CrmPermissionRole",
@@ -2308,7 +2365,8 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 delete_records_role AS "delete_records_role!: CrmPermissionRole",
                 closed_stage_ids,
                 team_views AS "team_views!",
-                default_team_view_id
+                default_team_view_id,
+                legacy_stage_ids AS "legacy_stage_ids!: sqlx::types::Json<BTreeMap<Uuid, Uuid>>"
             "#,
             team_id,
             edit_stages as Option<&str>,
@@ -2319,6 +2377,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             patch.team_views.as_ref(),
             default_provided,
             default_value.as_deref(),
+            legacy_value as Option<sqlx::types::Json<&BTreeMap<Uuid, Uuid>>>,
         )
         .fetch_one(&self.pool)
         .await
@@ -2329,6 +2388,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             move_closed_deals_role: row.move_closed_deals_role,
             delete_records_role: row.delete_records_role,
             closed_stage_ids: row.closed_stage_ids,
+            legacy_stage_ids: row.legacy_stage_ids.0,
             team_views: row.team_views,
             default_team_view_id: row.default_team_view_id,
         })
@@ -2440,4 +2500,18 @@ async fn fetch_comments_for_threads(
             deleted_at: row.deleted_at,
         })
         .collect())
+}
+
+impl TeamSettingsStore for CompaniesRepositoryImpl {
+    async fn read_team_settings(&self, team_id: &Uuid) -> Result<CrmTeamSettings, CrmError> {
+        self.get_team_settings(team_id).await
+    }
+
+    async fn patch_team_settings(
+        &self,
+        team_id: &Uuid,
+        patch: &CrmTeamSettingsPatch,
+    ) -> Result<CrmTeamSettings, CrmError> {
+        self.update_team_settings(team_id, patch).await
+    }
 }

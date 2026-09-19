@@ -1,7 +1,14 @@
-import { type Context, context, SpanKind, trace } from "@opentelemetry/api";
+import {
+	type Context,
+	context,
+	ROOT_CONTEXT,
+	SpanKind,
+	trace,
+} from "@opentelemetry/api";
 import type { Resource } from "@opentelemetry/resources";
 import type { TelemetryInitConfig } from "./config";
 import { INSTRUMENTATION_SCOPE_NAME } from "./constants";
+import { suppressUserId } from "./privacy";
 import type { TelemetryTracingProvider } from "./provider";
 import { type Span, SpanImpl } from "./span";
 
@@ -18,6 +25,11 @@ export class Tracing {
 
 	span(name: string): Span {
 		return this.#startSpan(name, context.active());
+	}
+
+	/** Starts a detached root span tree with user enrichment suppressed. */
+	anonymousSpan(name: string): Span {
+		return this.#startSpan(name, suppressUserId(ROOT_CONTEXT));
 	}
 
 	clientSpan(name: string): Span {

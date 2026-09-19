@@ -297,7 +297,7 @@ export function ChatInput(props: ChatInputComponentProps) {
 
   return (
     <div class="relative">
-      <Surface class="rounded-xl" depth={2} solid>
+      <Surface class="rounded-xl bg-surface" depth={2} solid>
         <div
           onFocusOut={(e) => {
             const next = e.relatedTarget as Node | null;

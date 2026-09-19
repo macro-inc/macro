@@ -465,7 +465,7 @@ export const BulkMoveToProjectView = (props: {
             )}
           </For>
           <Show when={props.entities.length > 2}>
-            <div class="text-muted-foreground text-xs px-2 py-1">
+            <div class="text-ink-muted text-xs px-2 py-1">
               +{props.entities.length - 2} more
             </div>
           </Show>
@@ -615,7 +615,7 @@ export const BulkMoveToProjectView = (props: {
                 />
                 <Button
                   size="sm"
-                  variant="base"
+                  variant="outline"
                   class="rounded-xs shrink-0"
                   disabled={!newFolderName().trim() || isSavingFolder()}
                   onClick={submitNewFolder}
@@ -642,7 +642,7 @@ export const BulkMoveToProjectView = (props: {
           </Button>
           <Button
             type="button"
-            variant="base"
+            variant="outline"
             class="rounded-xs"
             onClick={finishEditing}
             disabled={!selectedProject()}

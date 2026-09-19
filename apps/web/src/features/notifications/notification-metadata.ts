@@ -1,3 +1,4 @@
+import { format } from 'date-fns';
 import { match, P } from 'ts-pattern';
 import { GITHUB_EVENT_TYPES } from './github-event-types';
 import type { UnifiedNotification } from './types';
@@ -33,6 +34,8 @@ export function getNotificationAction(n: UnifiedNotification): string {
       // Self-set, so there is no actor — the sentence reads "Reminder about X"
       // rather than "<someone> reminded you about X".
       .with('reminder', () => 'Reminder')
+      // Same shape: no actor, reads "Upcoming event · <event title>".
+      .with('calendar_event_reminder', () => 'Upcoming event')
       .with('github_pr_status_changed', () => 'updated a pull request')
       .with('github_pr_check_run', () => {
         const meta = n.notification_metadata;
@@ -86,6 +89,10 @@ export function getNotificationTargetName(
       // The reminder's entity name is resolved from the notification's entity,
       // not carried in the metadata.
       .with({ tag: 'reminder' }, () => undefined)
+      .with(
+        { tag: 'calendar_event_reminder' },
+        (m) => m.content.title || '(No title)'
+      )
       .with({ tag: 'inbox_reauth_required' }, () => undefined)
       .exhaustive()
   );
@@ -137,9 +144,30 @@ export function getNotificationContent(
       .with({ tag: 'invite_to_team' }, () => undefined)
       // The description the user wrote is the whole point of a reminder.
       .with({ tag: 'reminder' }, (m) => m.content.description)
+      .with({ tag: 'calendar_event_reminder' }, (m) =>
+        formatCalendarReminderTime(m.content)
+      )
       .with({ tag: 'inbox_reauth_required' }, (m) => m.content.emailAddress)
       .exhaustive()
   );
+}
+
+/**
+ * Renders the occurrence's time in the viewer's zone: "2:30 PM – 3:00 PM"
+ * for timed events, "All day" otherwise. Kept in the viewer's zone — a
+ * reminder is read where the user is, not where the event was created.
+ */
+export function formatCalendarReminderTime(content: {
+  startsAt?: string | null;
+  endsAt?: string | null;
+  startDate?: string | null;
+}): string | undefined {
+  if (!content.startsAt) {
+    return content.startDate ? 'All day' : undefined;
+  }
+  const start = format(new Date(content.startsAt), 'p');
+  if (!content.endsAt) return start;
+  return `${start} – ${format(new Date(content.endsAt), 'p')}`;
 }
 
 export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
@@ -172,6 +200,7 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       // Shown so "Reminder" reads as being about something; a standalone
       // reminder resolves to no target name and renders without one anyway.
       .with({ tag: 'reminder' }, () => true)
+      .with({ tag: 'calendar_event_reminder' }, () => true)
       .with({ tag: 'inbox_reauth_required' }, () => false)
       .exhaustive()
   );

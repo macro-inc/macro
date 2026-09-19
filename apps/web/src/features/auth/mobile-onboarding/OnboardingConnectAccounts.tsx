@@ -109,13 +109,13 @@ export function OnboardingConnectAccounts() {
       <div>
         <div class="flex flex-col gap-2">
           <Button
-            variant="contrast"
-            size="lg"
+            variant="strong"
+            size="xl"
             class="border border-edge-muted"
             disabled={!isAuthenticated()}
             onClick={() => void addInbox()}
           >
-            <IconGoogle />
+            <IconGoogle class="size-5" />
             Connect Another Gmail
           </Button>
           <p class="text-sm/relaxed text-ink-muted">
@@ -127,15 +127,15 @@ export function OnboardingConnectAccounts() {
 
         <div class="flex flex-col gap-2">
           <Button
-            variant="contrast"
-            size="lg"
+            variant="strong"
+            size="xl"
             class="border border-edge-muted"
             disabled={
               !isAuthenticated() || githubLinked() || initGithubLink.isPending
             }
             onClick={() => void connectGithub()}
           >
-            <GithubIcon />
+            <GithubIcon class="size-5" />
             {githubLinked() ? 'GitHub Connected' : 'Connect GitHub'}
           </Button>
           <p class="text-sm/relaxed text-ink-muted">

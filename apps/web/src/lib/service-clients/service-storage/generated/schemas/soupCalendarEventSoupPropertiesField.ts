@@ -4,9 +4,11 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { SoupCalendarEventSoupPropertiesFieldConferenceProvider } from './soupCalendarEventSoupPropertiesFieldConferenceProvider';
 import type { SoupCalendarEventSoupPropertiesFieldConferenceUrl } from './soupCalendarEventSoupPropertiesFieldConferenceUrl';
 import type { SoupCalendarEventSoupPropertiesFieldDescription } from './soupCalendarEventSoupPropertiesFieldDescription';
 import type { SoupCalendarEventSoupPropertiesFieldExtra } from './soupCalendarEventSoupPropertiesFieldExtra';
+import type { SoupCalendarEventSoupPropertiesFieldLastReminderFiredAt } from './soupCalendarEventSoupPropertiesFieldLastReminderFiredAt';
 import type { SoupCalendarEventSoupPropertiesFieldLocation } from './soupCalendarEventSoupPropertiesFieldLocation';
 import type { SoupCalendarEventSoupPropertiesFieldOrganizerEmail } from './soupCalendarEventSoupPropertiesFieldOrganizerEmail';
 import type { SoupCalendarEventSoupPropertiesFieldOrganizerName } from './soupCalendarEventSoupPropertiesFieldOrganizerName';
@@ -16,6 +18,8 @@ import type { SoupCalendarEventTime } from './soupCalendarEventTime';
  * A canonical calendar event entity in Soup.
  */
 export interface SoupCalendarEventSoupPropertiesField {
+  /** Which conferencing system backs `conference_url`. */
+  conferenceProvider?: SoupCalendarEventSoupPropertiesFieldConferenceProvider;
   /** Direct conference join URL. */
   conferenceUrl?: SoupCalendarEventSoupPropertiesFieldConferenceUrl;
   /** Entity creation timestamp. */
@@ -30,6 +34,8 @@ export interface SoupCalendarEventSoupPropertiesField {
   id: string;
   /** Whether the selected canonical source is read-only. */
   isReadOnly: boolean;
+  /** When this event's most recent reminder notification was delivered. */
+  lastReminderFiredAt?: SoupCalendarEventSoupPropertiesFieldLastReminderFiredAt;
   /** Optional location label. */
   location?: SoupCalendarEventSoupPropertiesFieldLocation;
   /** Organizer email. */

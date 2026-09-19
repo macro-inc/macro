@@ -8,7 +8,7 @@
  */
 
 import { $createCodeNode } from '@lexical/code';
-import { $createLinkNode, $isLinkNode } from '@lexical/link';
+import { $createLinkNode, $isLinkNode, type LinkNode } from '@lexical/link';
 import {
   $createListItemNode,
   $createListNode,
@@ -72,6 +72,7 @@ import * as blocks from '../ai-toolkit/blocks';
 import * as inline from '../ai-toolkit/inline';
 import * as lists from '../ai-toolkit/lists';
 import * as locate from '../ai-toolkit/locate';
+import { assertSubstringMatched } from './substring-miss';
 import * as modify from '../ai-toolkit/modify';
 import type { LexicalSession } from '../ai-toolkit/session';
 import * as tables from '../ai-toolkit/tables';
@@ -109,6 +110,19 @@ export class Doc implements DocReader, DocWriter {
   /** A ref IS the node's id (we stamp it on at insert), so resolution is identity. */
   public resolveRef(node: NodeRef): NodeRef {
     return node;
+  }
+
+  /** See DocReader.blockRef. Falls back to the input when nothing resolves, so a
+   *  planning read can never throw where the apply would report a clean error. */
+  public blockRef(node: NodeRef): NodeRef {
+    try {
+      return this.session.editor.getEditorState().read(() => {
+        const block = locate.$blockById(this.session, node as string);
+        return ($getId(block) as NodeRef | undefined) ?? node;
+      });
+    } catch {
+      return node;
+    }
   }
 
   public apply(op: DocumentOp): void {
@@ -285,8 +299,38 @@ export class Doc implements DocReader, DocWriter {
     this.tx(() => removeTextAt(this.block(node), at, len));
   }
 
+  /**
+   * Set text content.
+   *
+   * Given a BLOCK id this replaces the block's contents, which is what the name
+   * promises. Given an inline text-run id it sets THAT RUN and leaves its
+   * siblings alone — matching `appendText`, `replace`, `bold` and friends, all of
+   * which already act on the run they are handed.
+   *
+   * Widening a run id to its block was the single largest remaining source of
+   * coder retries. `$setText` keeps only the block's FIRST text child and deletes
+   * the rest, so a coder rewriting several runs in one paragraph destroyed its own
+   * remaining targets with the first call:
+   *
+   *   editor.setText('n9qP6lV-', '…')   -> ok
+   *   editor.setText('eNt8jsxy', 'him') -> error: No node with id "eNt8jsxy"
+   *   editor.setText('rYT9Q8LF', '. …') -> error: No node with id "rYT9Q8LF"
+   *   CHANGED — removed eNt8jsxy, rYT9Q8LF, IoUm7NTJ, …
+   *
+   * It could even remove the node it was given, when that run was not the first
+   * child. Addressing runs individually is both what the call reads as and the
+   * only way a multi-run rewrite can work.
+   */
   private setText(node: NodeRef, text: string): void {
-    this.tx(() => blocks.$setText(this.block(node), text));
+    this.tx(() => {
+      const target = locate.$byId(this.session, node as string);
+      if ($isTextNode(target)) {
+        if (text.length === 0) target.remove();
+        else target.setTextContent(text);
+        return;
+      }
+      blocks.$setText(this.block(node), text);
+    });
   }
 
   private appendText(node: NodeRef, text: string): void {
@@ -310,13 +354,35 @@ export class Doc implements DocReader, DocWriter {
     });
   }
 
+  /** A miss on any substring-targeted op used to apply nothing and report
+   *  success. Every one of these now raises instead — see ./substring-miss.ts. */
+  private assertMatched(
+    count: number,
+    block: ElementNode,
+    node: NodeRef,
+    operation: string,
+    needle: string
+  ): void {
+    assertSubstringMatched(
+      count,
+      block,
+      typeof node === 'string' ? node : block.getType(),
+      operation,
+      needle
+    );
+  }
+
   private replaceText(
     node: NodeRef,
     find: string,
     to: string,
     scope: Scope
   ): void {
-    this.tx(() => inline.$replaceString(this.block(node), find, to, scope));
+    this.tx(() => {
+      const block = this.block(node);
+      const count = inline.$replaceString(block, find, to, scope);
+      this.assertMatched(count, block, node, 'replace', find);
+    });
   }
 
   private formatText(
@@ -328,8 +394,10 @@ export class Doc implements DocReader, DocWriter {
   ): void {
     this.tx(() => {
       const block = this.block(node);
-      if (on) inline.$formatTextInBlock(block, match, format, scope);
-      else inline.$clearFormat(block, match, format, scope);
+      const count = on
+        ? inline.$formatTextInBlock(block, match, format, scope)
+        : inline.$clearFormat(block, match, format, scope);
+      this.assertMatched(count, block, node, `${format}`, match);
     });
   }
 
@@ -340,8 +408,12 @@ export class Doc implements DocReader, DocWriter {
   ): void {
     this.tx(() => {
       const block = this.block(node);
-      if (match === undefined) inline.$stripFormat(block);
-      else inline.$clearFormat(block, match, undefined, scope);
+      if (match === undefined) {
+        inline.$stripFormat(block);
+        return;
+      }
+      const count = inline.$clearFormat(block, match, undefined, scope);
+      this.assertMatched(count, block, node, 'clearFormat', match);
     });
   }
 
@@ -352,9 +424,11 @@ export class Doc implements DocReader, DocWriter {
     scope: Scope
   ): void {
     this.tx(() => {
-      if (on)
-        inline.$wrapInBlock(this.block(node), match, $createMarkNode, scope);
-      else inline.$unwrapFromBlock(this.block(node), match, $isMarkNode, scope);
+      const block = this.block(node);
+      const count = on
+        ? inline.$wrapInBlock(block, match, $createMarkNode, scope)
+        : inline.$unwrapFromBlock(block, match, $isMarkNode, scope);
+      this.assertMatched(count, block, node, 'mark', match);
     });
   }
 
@@ -365,14 +439,20 @@ export class Doc implements DocReader, DocWriter {
     scope: Scope
   ): void {
     this.tx(() => {
-      if (url !== null)
-        inline.$wrapInBlock(
-          this.block(node),
-          match,
-          () => $createLinkNode(url),
-          scope
-        );
-      else inline.$unwrapFromBlock(this.block(node), match, $isLinkNode, scope);
+      const block = this.block(node);
+      const count =
+        url !== null
+          ? inline.$wrapInBlock(
+              block,
+              match,
+              () => $createLinkNode(url),
+              scope,
+              // Retarget an anchor the text is already inside rather than
+              // nesting a second one within it.
+              { is: $isLinkNode, update: (n) => (n as LinkNode).setURL(url) }
+            )
+          : inline.$unwrapFromBlock(block, match, $isLinkNode, scope);
+      this.assertMatched(count, block, node, 'link', match);
     });
   }
 

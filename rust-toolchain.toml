@@ -9,4 +9,9 @@ targets = [
   "wasm32-unknown-unknown",
   "aarch64-unknown-linux-gnu",
   "x86_64-unknown-linux-gnu",
+  # The musl targets carry the statically linked `coding_agent_worker` release
+  # builds (see `build_agent_daemon_on_tag`): self-hosters run the daemon on
+  # whatever distro they have, so it must not link a host libc.
+  "aarch64-unknown-linux-musl",
+  "x86_64-unknown-linux-musl",
 ]

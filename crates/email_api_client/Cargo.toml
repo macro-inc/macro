@@ -1,0 +1,43 @@
+[package]
+edition = "2024"
+name = "email_api_client"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+ports = []
+outbound-gmail = [
+  "ports",
+  "dep:base64",
+  "dep:encoding_rs",
+  "dep:gmail_client",
+  "dep:html-escape",
+  "dep:http",
+  "dep:lol_html",
+  "dep:mailparse",
+  "dep:serde_json",
+]
+
+[dependencies]
+base64 = { workspace = true, optional = true }
+chrono = { workspace = true }
+email_utils = { path = "../email_utils" }
+encoding_rs = { workspace = true, optional = true }
+gmail_client = { path = "../gmail_client", optional = true }
+html-escape = { workspace = true, optional = true }
+http = { workspace = true, optional = true }
+lol_html = { workspace = true, optional = true }
+mail-builder = "0.4.3"
+mailparse = { version = "0.16.1", optional = true }
+models_email = { path = "../models_email" }
+serde = { workspace = true }
+serde_json = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tokio = { workspace = true }
+wiremock = { workspace = true }

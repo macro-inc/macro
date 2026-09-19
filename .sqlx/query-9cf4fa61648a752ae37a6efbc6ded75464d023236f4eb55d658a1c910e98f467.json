@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT source.id, source.calendar_id AS \"calendar_id!\"\n        FROM calendar_event_sources source\n        WHERE source.id = calendar_event_canonical_source_id($1)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "calendar_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "9cf4fa61648a752ae37a6efbc6ded75464d023236f4eb55d658a1c910e98f467"
+}

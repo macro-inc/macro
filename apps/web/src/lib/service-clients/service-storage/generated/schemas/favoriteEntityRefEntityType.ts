@@ -24,4 +24,5 @@ export type FavoriteEntityRefEntityType =
   | 'crm_company'
   | 'crm_contact'
   | 'reminder'
-  | 'skill';
+  | 'skill'
+  | 'agent_session';

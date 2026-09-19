@@ -26,6 +26,7 @@ import {
 } from '@core/component/AI/context';
 import { useEntityDropAttachment } from '@core/component/AI/hook/useEntityDropAttachment';
 import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
+import { createMentionAttachmentCallbacks } from '@core/component/AI/signal/mention-attachment-callbacks';
 import {
   getPendingSend,
   peekPendingSend,
@@ -155,12 +156,12 @@ function ChatInner(props: {
   );
 
   const { getAttachmentFromMention } = useGetChatAttachmentInfo();
+  const attachmentMentionCallbacks = createMentionAttachmentCallbacks(
+    input.attachments,
+    getAttachmentFromMention
+  );
   const editor = buildChatEditor().withMentions({
-    onCreate: (mention) => {
-      const attachment = getAttachmentFromMention(mention);
-      if (attachment) input.attachments.addAttachment(attachment);
-    },
-    onRemove: (mention) => input.attachments.removeAttachment(mention.itemId),
+    ...attachmentMentionCallbacks,
     block: 'chat',
     showOpenTabs: true,
   });
@@ -350,7 +351,7 @@ function ChatInner(props: {
           class="h-full min-h-0 overflow-auto scrollbar-hidden"
           ref={setScrollRef}
         >
-          <div class="mx-auto w-full max-w-3xl mobile:pt-[calc(var(--mobile-content-inset-top,0)+0.5rem)] mobile:pb-(--mobile-content-inset-bottom)">
+          <div class="mx-auto w-full max-w-3xl touch:pt-[calc(var(--mobile-content-inset-top,0)+0.5rem)] touch:pb-(--mobile-content-inset-bottom)">
             <ChatMessages
               editDisabled={disabled()}
               pendingLocationParams={pendingLocationParamsSignal.get}
@@ -361,7 +362,7 @@ function ChatInner(props: {
       </div>
       <Show when={!disabled()}>
         <FloatRegionOrInline region="accessory">
-          <div class="flex w-full justify-center pb-2 px-2 mobile:pb-0 mobile:px-(--mobile-chrome-gutter) mobile:pointer-events-auto">
+          <div class="flex w-full justify-center pb-2 px-2 touch:pb-0 touch:px-(--mobile-chrome-gutter) touch:pointer-events-auto">
             <div class="w-3xl">
               <ChatInput
                 editor={editor}

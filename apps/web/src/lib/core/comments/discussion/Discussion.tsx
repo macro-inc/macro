@@ -1,17 +1,27 @@
+import { buildChannelMessageListMeta } from '@channel/Channel/message-list-meta';
 import type { InputSnapshot } from '@channel/Input/types';
+import type { ChannelMessageListMeta } from '@channel/Message/list-meta';
 import { Message } from '@channel/Message/Message';
 import type { MessageActions } from '@channel/Message/types';
+import { buildThreadReplyListMeta } from '@channel/Thread/reply-list-meta';
 import { Thread } from '@channel/Thread/Thread';
-import { ThreadRail } from '@channel/Thread/ThreadRail';
 import { ThreadReplyInputConnector } from '@channel/Thread/ThreadReplyInputConnector';
-import { replyInputOffsetX } from '@channel/Thread/utils/thread-rail-geometry';
+import { ThreadReplyRail } from '@channel/Thread/ThreadReplyRail';
+import { channelReplyInputOffsetX } from '@channel/Thread/utils/thread-rail-geometry';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
 import { getDisplayName, tryMacroId } from '@core/user';
 import CaretDown from '@phosphor/caret-down.svg';
 import CaretRight from '@phosphor/caret-right.svg';
-import { Key } from '@solid-primitives/keyed';
-import { createEffect, createSignal, onCleanup, onMount, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js';
 import { useDiscussion } from './context';
 import { DiscussionInput } from './DiscussionInput';
 import {
@@ -93,6 +103,19 @@ export function Discussion() {
 
   let newThreadInputHandle: { clear: () => void } | undefined;
 
+  const rootMetaById = createMemo(() => {
+    const messages = source.threads().flatMap((thread) => {
+      const root = thread.comments[0];
+      if (!root) return [];
+      const message = discussionCommentToApiChannelMessage(root);
+      message.thread.reply_count = thread.comments.length - 1;
+      return [message];
+    });
+    const metaById = buildChannelMessageListMeta(messages, () => false, true);
+
+    return metaById;
+  });
+
   const handleCreateThread = async (snapshot: InputSnapshot) => {
     const text = snapshot.value.trim();
     if (!text) return;
@@ -123,19 +146,25 @@ export function Discussion() {
         <StaticMarkdownContext>
           <div class="py-2 text-xs">
             <div>
-              <Key each={source.threads()} by="id">
-                {(thread) => (
-                  <DiscussionThreadView
-                    thread={thread()}
-                    onCommentMount={registerMountedComment}
-                    onCommentCleanup={unregisterMountedComment}
-                  />
-                )}
-              </Key>
+              <For each={source.threads()}>
+                {(thread) => {
+                  const root = () => thread.comments[0];
+                  const listMeta = () =>
+                    root() ? rootMetaById()[root()!.id] : undefined;
+                  return (
+                    <DiscussionThreadView
+                      thread={thread}
+                      listMeta={listMeta()}
+                      onCommentMount={registerMountedComment}
+                      onCommentCleanup={unregisterMountedComment}
+                    />
+                  );
+                }}
+              </For>
             </div>
 
             <Show when={source.canEdit()}>
-              <div>
+              <div class="mt-4">
                 <DiscussionInput
                   input={{ mode: 'channel', placeholder: 'Leave a comment...' }}
                   onSend={handleCreateThread}
@@ -155,6 +184,7 @@ export function Discussion() {
 
 export function DiscussionThreadView(props: {
   thread: ViewThread;
+  listMeta?: ChannelMessageListMeta;
   onCommentMount?: (commentId: string, element: HTMLElement) => void;
   onCommentCleanup?: (commentId: string, element: HTMLElement) => void;
 }) {
@@ -170,6 +200,11 @@ export function DiscussionThreadView(props: {
   const root = () => comments()[0];
   const replies = () => comments().slice(1);
   const hasReplies = () => replies().length > 0;
+  const replyMetaById = createMemo(() =>
+    buildThreadReplyListMeta(
+      replies().map(discussionCommentToApiChannelMessage)
+    )
+  );
   const threadId = () => props.thread.id;
 
   const replyUserId = () => source.currentUserId() ?? root()?.authorId ?? '';
@@ -246,46 +281,60 @@ export function DiscussionThreadView(props: {
           discussionCommentToApiChannelMessage(rootComment());
         return (
           <div class="flex flex-col w-full gap-0">
-            <Thread.Row message={rootMessageData()}>
-              <DiscussionMessageView
-                comment={rootComment()}
-                actions={makeActions(rootComment(), true)}
-                editingId={editingId()}
-                onEditSave={(snapshot) => handleEdit(rootComment(), snapshot)}
-                onEditCancel={() => setEditingId(null)}
-                isHighlighted={source.targetCommentId() === rootComment().id}
-                onMount={props.onCommentMount}
-                onCleanup={props.onCommentCleanup}
-              />
+            <Thread.Row
+              message={rootMessageData()}
+              listMeta={props.listMeta}
+              showDividers={false}
+            >
+              <div class="relative">
+                <Thread.RootRail
+                  visible={hasReplies() || isReplying()}
+                  grouped={props.listMeta?.isGroupedWithPrevious}
+                />
+                <DiscussionMessageView
+                  comment={rootComment()}
+                  grouped={props.listMeta?.isGroupedWithPrevious}
+                  actions={makeActions(rootComment(), true)}
+                  editingId={editingId()}
+                  onEditSave={(snapshot) => handleEdit(rootComment(), snapshot)}
+                  onEditCancel={() => setEditingId(null)}
+                  isHighlighted={source.targetCommentId() === rootComment().id}
+                  onMount={props.onCommentMount}
+                  onCleanup={props.onCommentCleanup}
+                />
+              </div>
 
               <Show when={hasReplies() || isReplying()}>
                 <div class="relative w-full">
-                  <Thread.ReplyRailDecorations
-                    isReplying={isReplying}
-                    firstThreadReplyNewMessage={false}
-                  />
+                  <Thread.ReplyRailDecorations />
                   <Thread.RepliesContainer>
-                    <Key each={replies()} by="id">
-                      {(reply) => (
-                        <div class="relative">
-                          <ThreadRail />
-                          <DiscussionMessageView
-                            comment={reply()}
-                            actions={makeActions(reply(), false)}
-                            editingId={editingId()}
-                            onEditSave={(snapshot) =>
-                              handleEdit(reply(), snapshot)
-                            }
-                            onEditCancel={() => setEditingId(null)}
-                            isHighlighted={
-                              source.targetCommentId() === reply().id
-                            }
-                            onMount={props.onCommentMount}
-                            onCleanup={props.onCommentCleanup}
-                          />
-                        </div>
-                      )}
-                    </Key>
+                    <For each={replies()}>
+                      {(reply) => {
+                        const meta = () => replyMetaById()[reply.id];
+                        return (
+                          <div class="relative">
+                            <ThreadReplyRail
+                              grouped={meta()?.isGroupedWithPrevious}
+                            />
+                            <DiscussionMessageView
+                              comment={reply}
+                              grouped={meta()?.isGroupedWithPrevious}
+                              actions={makeActions(reply, false)}
+                              editingId={editingId()}
+                              onEditSave={(snapshot) =>
+                                handleEdit(reply, snapshot)
+                              }
+                              onEditCancel={() => setEditingId(null)}
+                              isHighlighted={
+                                source.targetCommentId() === reply.id
+                              }
+                              onMount={props.onCommentMount}
+                              onCleanup={props.onCommentCleanup}
+                            />
+                          </div>
+                        );
+                      }}
+                    </For>
 
                     <Show when={isReplying() && canEdit()}>
                       <div class="ph-no-capture">
@@ -298,9 +347,11 @@ export function DiscussionThreadView(props: {
                         <div
                           ref={replyInputContainerRef}
                           class="relative pt-2"
-                          style={{ 'margin-left': replyInputOffsetX }}
+                          style={{ 'margin-left': channelReplyInputOffsetX }}
                         >
-                          <ThreadReplyInputConnector />
+                          <Show when={hasReplies()}>
+                            <ThreadReplyInputConnector rail="thread" />
+                          </Show>
                           <DiscussionInput
                             input={{ mode: 'reply', placeholder: 'Reply...' }}
                             onSend={handleReply}
@@ -329,6 +380,9 @@ export function DiscussionThreadView(props: {
                       </Thread.ActionsFooter>
                     </Show>
                   </Thread.RepliesContainer>
+                  <Show when={!isReplying() && canEdit() && hasReplies()}>
+                    <Thread.TerminalRail />
+                  </Show>
                 </div>
               </Show>
             </Thread.Row>
@@ -346,6 +400,7 @@ function DiscussionMessageView(props: {
   onEditSave: (snapshot: InputSnapshot) => void;
   onEditCancel: () => void;
   isHighlighted?: boolean;
+  grouped?: boolean;
   onMount?: (commentId: string, element: HTMLElement) => void;
   onCleanup?: (commentId: string, element: HTMLElement) => void;
 }) {
@@ -365,51 +420,47 @@ function DiscussionMessageView(props: {
 
   return (
     <div ref={containerRef}>
-      <Show
-        when={!isEditing()}
-        fallback={
-          <DiscussionInput
-            input={{
-              mode: 'reply',
-              placeholder: 'Edit comment...',
-              value: props.comment.text,
-            }}
-            onSend={props.onEditSave}
-            onClose={() => {
-              props.onEditCancel();
-            }}
-          />
-        }
+      <Message.Root
+        message={messageData()}
+        actions={props.actions}
+        selected={props.isHighlighted}
       >
-        <Message.Root
-          message={messageData()}
-          actions={props.actions}
-          selected={props.isHighlighted}
+        <Message.Layout
+          class={props.grouped ? undefined : 'pt-(--regular-message-padding-t)'}
         >
-          <Message.Layout class="pt-(--regular-message-padding-t)">
-            <Message.Slot placement="icon">
-              <Message.SenderIcon />
-            </Message.Slot>
+          <Message.Slot placement="icon">
+            <Message.SenderIcon hidden={props.grouped} />
+          </Message.Slot>
+          <Show when={!props.grouped}>
             <Message.Slot
               placement="header"
-              class="flex items-center gap-1 min-w-0 w-full"
+              class="flex items-baseline gap-1 min-w-0"
             >
               <Message.SenderName />
-              <Message.EditedIndicator />
-              <div class="grow shrink-0 min-w-0 flex justify-end group-hover/message:absolute group-hover/message:right-1 group-hover/message:-top-9 group-hover/message:p-1">
-                <Message.Timestamp
-                  class="ml-auto shrink-0"
-                  format="dateAndTime"
-                />
-              </div>
+              <Message.Timestamp class="shrink-0" format="dateAndTime" />
+              <Message.EditedIndicator class="shrink-0" />
             </Message.Slot>
-            <Message.Slot placement="content" class="ph-no-capture">
-              <Message.Content />
-            </Message.Slot>
+          </Show>
+          <Message.Slot placement="content" class="ph-no-capture">
+            <Show when={isEditing()} fallback={<Message.Content />}>
+              <DiscussionInput
+                input={{
+                  mode: 'reply',
+                  placeholder: 'Edit comment...',
+                  value: props.comment.text,
+                }}
+                onSend={props.onEditSave}
+                onClose={() => {
+                  props.onEditCancel();
+                }}
+              />
+            </Show>
+          </Message.Slot>
+          <Show when={!isEditing()}>
             <Message.ActionMenu />
-          </Message.Layout>
-        </Message.Root>
-      </Show>
+          </Show>
+        </Message.Layout>
+      </Message.Root>
     </div>
   );
 }

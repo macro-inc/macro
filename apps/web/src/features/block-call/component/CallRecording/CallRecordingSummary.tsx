@@ -35,7 +35,7 @@ export function CallRecordingSummarySection(props: {
           fallback={
             <div class="flex items-center gap-2 animate-pulse">
               <div class="size-3.5 shrink-0 animate-spin rounded-full border-2 border-ink-extra-muted border-t-ink-muted" />
-              <span class="text-sm text-ink-faint">Generating summary…</span>
+              <span class="text-sm text-ink-subtle">Generating summary…</span>
             </div>
           }
         >

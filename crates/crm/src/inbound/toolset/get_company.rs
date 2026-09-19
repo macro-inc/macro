@@ -1,6 +1,7 @@
 //! GetCompany tool for reading a single CRM company's details.
 
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use entity_access::domain::{
@@ -133,6 +134,10 @@ pub struct GetCompany {
     /// The CRM company id to fetch.
     #[schemars(description = "The CRM company id (UUID), e.g. from ListCompanies.")]
     pub company_id: Uuid,
+}
+
+impl ToolAnnotated for GetCompany {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Read company");
 }
 
 #[async_trait]

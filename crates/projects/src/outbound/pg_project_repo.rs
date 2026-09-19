@@ -43,6 +43,14 @@ impl ProjectRepo for PgProjectRepo {
     type Err = sqlx::Error;
 
     #[tracing::instrument(err, skip(self))]
+    async fn get_team_default_link_share(
+        &self,
+        user_id: &str,
+    ) -> Result<Option<models_permissions::share_permission::TeamLinkShareDefault>, Self::Err> {
+        share_permission_db_utils::get_team_default_link_share(&self.pool, user_id).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn get_basic_project(&self, project_id: &str) -> Result<Option<BasicProject>, Self::Err> {
         sqlx::query!(
             r#"

@@ -1,6 +1,8 @@
 import type {
   CreateCrmCompanyRequest,
+  CrmStagesResponse,
   CrmTeamSettingsResponse,
+  ReplaceCrmStagesRequest,
   UpdateCrmTeamSettingsRequest,
 } from '../../../generated/storage/types.gen';
 import { unwrap } from '../../utils';
@@ -19,6 +21,16 @@ export class CrmNamespace {
   /** A handle to a CRM contact by id. */
   contactById(id: string): Contact {
     return Contact.byId(this.client, id);
+  }
+
+  /** Resolve a CRM contact by email in the caller's current team, if present. */
+  async contactByEmail(email: string): Promise<Contact | undefined> {
+    const { contact } = unwrap(
+      await this.client.storage.getContactByEmail({
+        query: { email },
+      }),
+    );
+    return contact ? Contact.from(this.client, contact) : undefined;
   }
 
   /** Create a CRM company for the caller's current team. */
@@ -41,6 +53,16 @@ export class CrmNamespace {
     return unwrap(
       await this.client.storage.putCrmTeamSettings({ body: settings }),
     );
+  }
+
+  /** Replace the caller's current team's deal stages, in pipeline order. */
+  async setStages(stages: ReplaceCrmStagesRequest): Promise<CrmStagesResponse> {
+    return unwrap(await this.client.storage.putCrmTeamStages({ body: stages }));
+  }
+
+  /** Reset the caller's current team's deal stages to the defaults. */
+  async resetStages(): Promise<void> {
+    unwrap(await this.client.storage.resetCrmTeamStages());
   }
 
   /** Search CRM companies by name/domain, most relevant first, auto-paginated. */

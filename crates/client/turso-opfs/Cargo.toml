@@ -1,0 +1,33 @@
+[package]
+edition = "2024"
+name = "turso-opfs"
+publish = false
+version = "0.1.0"
+
+# Production code is wasm32-only. The target-independent lifecycle machine is
+# compiled natively only for its unit tests.
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = { workspace = true }
+turso_core = { workspace = true, features = ["fs", "uuid"] }
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+web-sys = { workspace = true, features = [
+  "AbortController",
+  "AbortSignal",
+  "DedicatedWorkerGlobalScope",
+  "DomException",
+  "FileSystemDirectoryHandle",
+  "FileSystemFileHandle",
+  "FileSystemGetDirectoryOptions",
+  "FileSystemGetFileOptions",
+  "FileSystemReadWriteOptions",
+  "FileSystemRemoveOptions",
+  "FileSystemSyncAccessHandle",
+  "StorageManager",
+  "WorkerGlobalScope",
+  "WorkerNavigator",
+] }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = { workspace = true }

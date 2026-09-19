@@ -147,3 +147,102 @@ async fn blank_insert_creates_new_thread(pool: Pool<Postgres>) -> anyhow::Result
 
     Ok(())
 }
+
+/// The live inbox-sync path funnels through here, so it needs the same
+/// protection from unstorable provider values as the backfill path.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("links"))
+)]
+async fn oversized_provider_values_do_not_block_the_thread_insert(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use models_email::email::service::address::ContactInfo;
+    use models_email::email::service::message;
+
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
+    let thread_db_id = Uuid::now_v7();
+    let message_db_id = Uuid::now_v7();
+    let now = Utc::now();
+    let unsubscribe_address = format!(
+        "v3_{}@unsubscribe-06.emailinboundprocessing.com",
+        "t".repeat(460)
+    );
+
+    let thread = thread::Thread {
+        db_id: thread_db_id,
+        provider_id: Some("oversized-thread".to_string()),
+        link_id,
+        inbox_visible: true,
+        is_read: false,
+        latest_inbound_message_ts: Some(now),
+        latest_outbound_message_ts: None,
+        latest_non_spam_message_ts: Some(now),
+        created_at: now,
+        updated_at: now,
+        messages: vec![message::Message {
+            db_id: message_db_id,
+            provider_id: Some("oversized-thread-message".to_string()),
+            thread_db_id,
+            provider_thread_id: Some("oversized-thread".to_string()),
+            replying_to_id: None,
+            global_id: None,
+            link_id,
+            subject: Some("unsubscribe".to_string()),
+            snippet: None,
+            provider_history_id: None,
+            internal_date_ts: Some(now),
+            sent_at: Some(now),
+            size_estimate: Some(1),
+            is_read: false,
+            is_starred: false,
+            is_sent: true,
+            is_draft: false,
+            scheduled_send_time: None,
+            has_attachments: false,
+            from: Some(ContactInfo {
+                email: "user1@macro.com".to_string(),
+                name: Some("f".repeat(400)),
+                photo_url: None,
+            }),
+            to: vec![ContactInfo {
+                email: unsubscribe_address,
+                name: None,
+                photo_url: None,
+            }],
+            cc: vec![],
+            bcc: vec![],
+            labels: vec![],
+            body_text: Some("body".to_string()),
+            body_html_sanitized: None,
+            body_macro: None,
+            attachments: vec![],
+            attachments_draft: vec![],
+            attachments_forwarded: vec![],
+            headers_json: None,
+            created_at: now,
+            updated_at: now,
+        }],
+    };
+
+    let inserted_thread_id = insert_thread_and_messages(&pool, thread, link_id).await?;
+
+    assert_eq!(inserted_thread_id, thread_db_id);
+    let from_name = sqlx::query_scalar!(
+        r#"SELECT from_name FROM email_messages WHERE id = $1"#,
+        message_db_id
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(from_name.as_deref().map(|n| n.chars().count()), Some(255));
+
+    let recipient_count = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) FROM email_message_recipients WHERE message_id = $1"#,
+        message_db_id
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(recipient_count, Some(0));
+
+    Ok(())
+}

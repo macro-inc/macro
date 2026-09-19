@@ -43,6 +43,10 @@ enum ServiceCall {
     Delete(MacroUserIdStr<'static>, WebhookId),
 }
 
+#[allow(
+    clippy::large_enum_variant,
+    reason = "a test fake's canned answers; boxing would only obscure them"
+)]
 enum ServiceResponse {
     Webhook(Webhook),
     List(ListWebhooksResponse),
@@ -95,6 +99,30 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         Ok(UserContext {
             user_id: user_id().to_string(),
             ..UserContext::default()
+        })
+    }
+
+    async fn authorize_bot(
+        &self,
+        bot_token: &str,
+        bot_scope: macro_authorization::BotScope,
+        acting_user: Option<macro_authorization::BotActingUserClaims>,
+    ) -> Result<macro_authorization::BotAuthentication, Report<MacroAuthorizationError>> {
+        if bot_token != "mbot_feed_test" {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+        let acting_user = acting_user
+            .and_then(|claims| claims.user_id)
+            .map(|user_id| macro_authorization::MacroUserAuthentication {
+                macro_user_id: MacroUserIdStr::try_from(user_id).unwrap(),
+                user_context: UserContext::default(),
+            });
+        Ok(macro_authorization::BotAuthentication {
+            bot_id: bot_id::BotId::TEST_A,
+            token_id: uuid::Uuid::new_v4(),
+            bot_scope,
+            team_id: None,
+            acting_user,
         })
     }
 

@@ -480,8 +480,8 @@ export function FloatingMenu() {
     <div
       class={cn(
         'absolute flex flex-row top-4 z-5 cursor-auto',
-        // Full-frame mobile: clear the floating split chrome at the top.
-        'mobile:top-[calc(var(--mobile-content-inset-top,0)+0.5rem)]',
+        // Full-frame mobile/tablet: clear the floating split chrome at the top.
+        'touch:top-[calc(var(--mobile-content-inset-top,0)+0.5rem)]',
         !isMobileWidth() && 'right-4'
       )}
     >

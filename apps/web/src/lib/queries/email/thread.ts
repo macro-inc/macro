@@ -2,15 +2,12 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
 import {
-  ENABLE_GRAPHQL_SOUP_FLAG,
-  ENABLE_GRAPHQL_SOUP_OVERRIDE,
+  enableGraphqlSoup,
+  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
-import {
-  catchToResult,
-  ThrownResultError,
-  throwOnErr,
-} from '@core/util/result';
+import { catchToResult, throwOnErr } from '@core/util/result';
+import { Telemetry } from '@macro-inc/observability';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { emailClient } from '@service-email/client';
 import type {
@@ -24,7 +21,6 @@ import {
   useInfiniteQuery,
   useMutation,
 } from '@tanstack/solid-query';
-import type { CombinedError } from '@urql/core';
 import { err, ok } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
@@ -32,7 +28,11 @@ import { optimisticUpdateSoupEntity, refetchSoupEntity } from '../soup/cache';
 import { invalidateAllSoup } from '../soup/normalized-cache';
 import { type UndoHandle, useUndoableMutation } from '../undo';
 import { type MutationCallbacks, withCallbacks } from '../utils';
-import { createGraphqlEmailThreadQuery } from './graphql/thread';
+import {
+  createGraphqlEmailThreadQuery,
+  fetchGraphqlEmailThread,
+  mapGraphqlThreadError,
+} from './graphql/thread';
 import { emailKeys } from './keys';
 
 const THREAD_STALE_TIME = 5 * 60 * 1000;
@@ -79,30 +79,29 @@ function flattenThreadPages(
 }
 
 /**
- * Imperatively fetch a thread (for use outside of components).
- * Returns cached data if fresh, otherwise fetches from server.
- *
- * TODO: Most of the time we have the updated_at timestamp of an email before we fetch it.
- * Would be nice to accept that as a parameter and only fetch if it's stale.
+ * Imperatively fetch a thread through GraphQL and merge it into the normalized
+ * cache. Network failures fall back to a complete cached first page.
  */
 export async function fetchAndCacheThread(
   threadId: string
 ): ReturnType<typeof emailClient.getThread> {
-  let data: InfiniteData<Thread, number> | undefined;
+  if (!isFeatureEnabled(enableGraphqlSoup)) {
+    const result = await catchToResult(() =>
+      queryClient.fetchInfiniteQuery(threadQueryOptions(threadId))
+    );
+    if (result.isErr()) return err(result.error as any);
 
-  const result = await catchToResult(
-    async () =>
-      await queryClient.fetchInfiniteQuery(threadQueryOptions(threadId))
-  );
-
-  if (result.isErr()) {
-    return err(result.error as any);
+    const thread = flattenThreadPages(result.value);
+    if (!thread) {
+      return err([{ code: 'NOT_FOUND', message: 'Email thread not found' }]);
+    }
+    return ok({ thread });
   }
 
-  data = result.value;
+  const result = await catchToResult(() => fetchGraphqlEmailThread(threadId));
 
-  const thread = flattenThreadPages(data);
-  return ok({ thread: thread! });
+  if (result.isErr()) return err(result.error as any);
+  return ok({ thread: result.value });
 }
 
 /**
@@ -166,31 +165,6 @@ function selectThreadQueryData(
   };
 }
 
-function mapGraphqlThreadError(
-  error: CombinedError | null
-): ThrownResultError | null {
-  if (!error) return null;
-
-  const resultErrors = error.graphQLErrors.map((graphqlError) => ({
-    ...graphqlError.extensions,
-    code:
-      typeof graphqlError.extensions?.code === 'string'
-        ? graphqlError.extensions.code
-        : 'UNKNOWN',
-    message: graphqlError.message,
-  }));
-  return new ThrownResultError(
-    resultErrors.length > 0
-      ? resultErrors
-      : [
-          {
-            code: 'UNKNOWN',
-            message: error.networkError?.message ?? error.message,
-          },
-        ]
-  );
-}
-
 /**
  * Transport-neutral live query for a thread and its paginated messages.
  * GraphQL uses urql-solid while the rollout flag is enabled; REST remains the
@@ -210,9 +184,7 @@ export function useThreadQuery<TData = ThreadQueryData>(
   threadId: Accessor<string>,
   options?: Accessor<UseThreadQueryOptions<TData>>
 ): ThreadQueryResult<TData> {
-  const graphqlSoupFlag = useFeatureFlag(ENABLE_GRAPHQL_SOUP_FLAG, {
-    enabledOverride: ENABLE_GRAPHQL_SOUP_OVERRIDE,
-  });
+  const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
   const queryEnabled = () => options?.().enabled !== false;
   const usesGraphql = () => graphqlSoupFlag().enabled;
   const select = () =>
@@ -236,9 +208,10 @@ export function useThreadQuery<TData = ThreadQueryData>(
         : (restQuery.data as TData | undefined);
     },
     get error() {
-      return usesGraphql()
+      if (!usesGraphql()) return (restQuery.error as Error | null) ?? null;
+      return graphqlQuery.error
         ? mapGraphqlThreadError(graphqlQuery.error)
-        : ((restQuery.error as Error | null) ?? null);
+        : null;
     },
     get isLoading() {
       return usesGraphql() ? graphqlQuery.isLoading : restQuery.isLoading;
@@ -404,6 +377,13 @@ type ArchiveThreadParams = {
   archive: boolean;
   /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
   linkId?: string;
+  /** Suppress the success toast, e.g. for a send-triggered archive where the
+   *  "Email sent" toast (with its undo-send action) is already up and this
+   *  toast's own Undo would reverse only the archive, not the send. */
+  silent?: boolean;
+  /** Receives the undo handle once the archive is pushed onto the undo
+   *  stack, so callers (e.g. undo-send) can reverse it programmatically. */
+  onUndoHandle?: (handle: UndoHandle) => void;
 };
 type ArchiveThreadContext = {
   previousData: InfiniteData<Thread, number> | undefined;
@@ -582,21 +562,35 @@ export function useSendMessageMutation(
     ...withCallbacks<SendMessageResponse, Error, SendMessageParams>(
       {
         onSuccess: (data, vars) => {
-          analytics.track('email_message_sent');
-          const threadID = data.message.thread_db_id;
-          if (threadID) {
-            queryClient.invalidateQueries({
-              queryKey: emailKeys.threadMessages(threadID).queryKey,
-            });
-            // Refresh the thread's soup item so inbox views stop showing it
-            // as a draft once the message is sent.
-            if (!vars.skipSoupRefetch) {
-              refetchSoupEntity(threadID, 'emailThread');
-            }
+          try {
+            analytics.track('email_message_sent');
+          } catch (error) {
+            Telemetry.error(error);
           }
-          queryClient.invalidateQueries({
-            queryKey: emailKeys.previews._def,
-          });
+          try {
+            const threadID = data.message.thread_db_id;
+            if (threadID) {
+              void queryClient
+                .invalidateQueries({
+                  queryKey: emailKeys.threadMessages(threadID).queryKey,
+                })
+                .catch(Telemetry.error);
+              // Refresh the thread's soup item so inbox views stop showing it
+              // as a draft once the message is sent.
+              if (!vars.skipSoupRefetch) {
+                void refetchSoupEntity(threadID, 'emailThread').catch(
+                  Telemetry.error
+                );
+              }
+            }
+            void queryClient
+              .invalidateQueries({
+                queryKey: emailKeys.previews._def,
+              })
+              .catch(Telemetry.error);
+          } catch (error) {
+            Telemetry.error(error);
+          }
         },
       },
       callbacks
@@ -674,9 +668,15 @@ export function useUnscheduleMessageMutation(
     ...withCallbacks<void, Error, UnscheduleMessageParams>(
       {
         onSuccess: () => {
-          queryClient.invalidateQueries({
-            queryKey: emailKeys.previews._def,
-          });
+          try {
+            void queryClient
+              .invalidateQueries({
+                queryKey: emailKeys.previews._def,
+              })
+              .catch(Telemetry.error);
+          } catch (error) {
+            Telemetry.error(error);
+          }
         },
       },
       callbacks
@@ -730,14 +730,18 @@ export async function blockSenderWithToast(
 
 async function upsertSenderFilterWithToast(
   senderEmail: string,
-  isImportant: boolean
+  isImportant: boolean,
+  linkId?: string
 ) {
   const label = isImportant ? 'Signal' : 'Noise';
 
-  const result = await emailClient.upsertEmailFilter({
-    email_address: senderEmail,
-    is_important: isImportant,
-  });
+  const result = await emailClient.upsertEmailFilter(
+    {
+      email_address: senderEmail,
+      is_important: isImportant,
+    },
+    linkId
+  );
 
   if (result.isErr()) {
     toast.failure(`Failed to mark sender as ${label}`, {
@@ -756,9 +760,10 @@ async function upsertSenderFilterWithToast(
         label: 'Undo',
         icon: ArrowCounterClockwise,
         onClick: async () => {
-          const undoResult = await emailClient.deleteEmailFilter({
-            id: filterId,
-          });
+          const undoResult = await emailClient.deleteEmailFilter(
+            { id: filterId },
+            linkId
+          );
           if (undoResult.isErr()) {
             toast.failure('Failed to undo', { subtext: senderEmail });
           } else {
@@ -771,8 +776,20 @@ async function upsertSenderFilterWithToast(
   });
 }
 
-export const markSenderSignalWithToast = (senderEmail: string) =>
-  upsertSenderFilterWithToast(senderEmail, true);
+/**
+ * Marks a sender as Signal for one inbox. `linkId` scopes the filter to the
+ * inbox the thread belongs to — omit it only for the primary inbox.
+ */
+export const markSenderSignalWithToast = (
+  senderEmail: string,
+  linkId?: string
+) => upsertSenderFilterWithToast(senderEmail, true, linkId);
 
-export const markSenderNoiseWithToast = (senderEmail: string) =>
-  upsertSenderFilterWithToast(senderEmail, false);
+/**
+ * Marks a sender as Noise for one inbox. See {@link markSenderSignalWithToast}
+ * for how `linkId` is used.
+ */
+export const markSenderNoiseWithToast = (
+  senderEmail: string,
+  linkId?: string
+) => upsertSenderFilterWithToast(senderEmail, false, linkId);

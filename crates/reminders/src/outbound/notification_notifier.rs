@@ -52,6 +52,9 @@ impl<I: NotificationIngress> ReminderNotifier for NotificationReminderNotifier<I
             notification: ReminderMetadata {
                 reminder_id: due.reminder.id,
                 description: due.reminder.description.clone(),
+                // Which occurrence this is. A recurring reminder produces one
+                // notification per firing, identical but for this.
+                scheduled_for: Some(due.scheduled_for),
             },
             // Must stay None. A recipient who is also the sender is filtered
             // out of their own notification, and a reminder's only recipient is

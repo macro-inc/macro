@@ -1,0 +1,22 @@
+---
+title: ReadChannelThread
+description: "Read replies from a channel message thread. The messageId may be either the top-level parent message id or any reply id in the thread. Use this after ReadChannelMessages or ContentSearch finds a relevant threaded discussion."
+---
+
+# ReadChannelThread
+
+Read replies from a channel message thread. The messageId may be either the top-level parent message id or any reply id in the thread. Use this after ReadChannelMessages or ContentSearch finds a relevant threaded discussion.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `channelId` | string | Yes | Channel id containing the thread. |
+| `messageId` | string | Yes | Parent message id or any reply id in the thread. |
+| `windowType` | `"allIfSmall"` \| `"latest"` \| `"aroundReply"` | No | Thread window to read: latest, allIfSmall, or aroundReply. Defaults to latest. |
+| `replyId` | string | No | Reply id to center around. Required when windowType is aroundReply. |
+| `before` | integer | No | Number of replies before replyId for aroundReply windows. Defaults to 10, maximum 50. |
+| `after` | integer | No | Number of replies after replyId for aroundReply windows. Defaults to 10, maximum 50. |
+| `limit` | integer | No | Maximum number of replies to return for latest/all-if-small windows. Defaults to 25, maximum 100. |
+| `includeChannelContext` | boolean | No | Whether to include nearby top-level channel messages around the parent. Defaults to false. |
+| `maxCharsPerMessage` | integer | No | Maximum characters to return per message/reply. Defaults to 4000, maximum 16000. |

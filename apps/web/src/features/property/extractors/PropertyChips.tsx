@@ -1,4 +1,4 @@
-import { cn } from '@ui';
+import { Badge, cn } from '@ui';
 import { type Component, For, type JSX, Show } from 'solid-js';
 import type { Property } from '../types';
 import {
@@ -58,12 +58,12 @@ export const PropertyChips: Component<Props> = (props) => {
   const renderChip =
     props.renderChip ??
     ((chip: ChipInfo) => (
-      <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-sm bg-hover">
+      <Badge variant="ghost" size="sm" class="max-w-full">
         <Show when={isSelectProperty(props.property)}>
           <PropertyIcon property={props.property} class="size-3 shrink-0" />
         </Show>
         <span class="truncate">{chip.label}</span>
-      </span>
+      </Badge>
     ));
 
   return (

@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT status, event_type, reminders_use_default, reminder_overrides\n        FROM calendar_events\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "event_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "reminders_use_default",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "reminder_overrides",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "df102eca4b34620401aebc5c8d69fc85c2e9883678a2a1232d236ab5d2eaa378"
+}

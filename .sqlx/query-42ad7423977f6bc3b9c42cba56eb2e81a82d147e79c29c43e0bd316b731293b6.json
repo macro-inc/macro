@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT ac.harness_id\n            FROM agent_configs ac\n            JOIN harnesses h ON h.id = ac.harness_id\n            WHERE ac.bot_id = $1 AND h.deleted_at IS NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "harness_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "42ad7423977f6bc3b9c42cba56eb2e81a82d147e79c29c43e0bd316b731293b6"
+}

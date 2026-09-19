@@ -977,15 +977,9 @@ fn map_access_error(err: AccessError) -> ChannelsHandlerErr {
         AccessError::UnauthorizedWithMessage(msg) => ChannelsHandlerErr::Unauthorized(msg),
         AccessError::BadRequest(msg) => ChannelsHandlerErr::BadRequest(msg),
         AccessError::NotFound(msg) => ChannelsHandlerErr::NotFound(msg),
-        AccessError::DatabaseError(e) => {
-            tracing::error!(error=?e, "entity access database error");
-            ChannelsHandlerErr::Internal(ChannelMessagesErr::Repo(anyhow::Error::from(e)))
-        }
-        AccessError::Internal => {
-            tracing::error!("entity access internal error");
-            ChannelsHandlerErr::Internal(ChannelMessagesErr::Repo(anyhow::anyhow!(
-                "entity access internal error"
-            )))
+        AccessError::Unavailable(report) | AccessError::Internal(report) => {
+            tracing::error!(error=?report, "entity access error");
+            ChannelsHandlerErr::Internal(ChannelMessagesErr::Repo(anyhow::Error::from(report)))
         }
     }
 }

@@ -95,7 +95,7 @@ export const Billing = () => {
         <>
           For questions about billing,{' '}
           <a
-            class="text-ink inline-flex items-center hover:text-accent"
+            class="text-link hover:text-link-hover visited:text-link-visited inline-flex items-center"
             href="mailto:support@macro.com"
           >
             contact us
@@ -154,7 +154,7 @@ export const Billing = () => {
                   class="ml-auto rounded-full bg-active"
                   size="sm"
                   depth={2}
-                  variant="base"
+                  variant="outline"
                   onClick={handleManage}
                 >
                   Manage

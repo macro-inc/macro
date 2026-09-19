@@ -4,9 +4,9 @@ import { Property } from '@property';
 import { usePropertiesContext } from '@property/context/PropertiesContext';
 import type { Property as PropertyT } from '@property/types';
 import { getEntityValues, hasValue } from '@property/utils';
+import { cn, Layer } from '@ui';
 import { type Component, Match, Show, Switch } from 'solid-js';
 import './list-property-value.css';
-import { Layer } from '@ui';
 
 type ListPropertyValueProps = {
   property: PropertyT;
@@ -71,12 +71,20 @@ export const ListPropertyValue: Component<ListPropertyValueProps> = (props) => {
     >
       <Property.Tooltip property={props.property}>
         <Layer depth={2}>
-          <Property.EditTrigger class="list-property-cell w-full max-w-full min-w-0 overflow-hidden rounded-full hover:bg-surface/50 inline-flex items-center gap-1 px-2 py-1.5 leading-tight text-left @max-[840px]/u-list:px-1">
+          <Property.Pill
+            class={cn(
+              'list-property-cell w-full min-w-0 overflow-hidden',
+              '@max-[840px]/u-list:justify-center',
+              userCount() > 1
+                ? '@max-[840px]/u-list:px-1'
+                : '@max-[840px]/u-list:w-6 @max-[840px]/u-list:p-0'
+            )}
+          >
             <Show
               when={!isEmpty()}
               fallback={
                 <>
-                  <CircleDashedEmpty class="size-3 shrink-0 opacity-50 @max-[840px]/u-list:size-4" />
+                  <CircleDashedEmpty class="size-3 shrink-0 opacity-50" />
                   <span class="truncate flex-1 opacity-50 @max-[840px]/u-list:hidden">
                     {props.property.displayName}
                   </span>
@@ -87,7 +95,7 @@ export const ListPropertyValue: Component<ListPropertyValueProps> = (props) => {
                 fallback={
                   <Property.Icon
                     property={props.property}
-                    class="size-3 shrink-0 @max-[840px]/u-list:size-4"
+                    class="size-3 shrink-0"
                   />
                 }
               >
@@ -103,14 +111,14 @@ export const ListPropertyValue: Component<ListPropertyValueProps> = (props) => {
                     <Property.UserStack
                       property={props.property}
                       maxUsers={1}
-                      avatarClass="@max-[840px]/u-list:size-5"
+                      avatarClass="@max-[840px]/u-list:size-4"
                     />
                   </div>
                 </Match>
                 <Match when={isUserEntity()}>
                   <Property.Icon
                     property={props.property}
-                    class="@max-[840px]/u-list:size-5"
+                    class="@max-[840px]/u-list:size-4"
                   />
                 </Match>
               </Switch>
@@ -120,7 +128,7 @@ export const ListPropertyValue: Component<ListPropertyValueProps> = (props) => {
               />
             </Show>
             <Property.Caret class="@max-[840px]/u-list:hidden" />
-          </Property.EditTrigger>
+          </Property.Pill>
         </Layer>
       </Property.Tooltip>
       <Property.PopoverEditor

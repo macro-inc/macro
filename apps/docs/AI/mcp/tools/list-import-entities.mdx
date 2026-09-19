@@ -1,0 +1,15 @@
+---
+title: ListImportEntities
+description: "List the user's import ledger: staged candidates, in-flight imports, imported items (including ones teammates imported into the team), and declined items. Use this to check what already exists before proposing or creating imports."
+---
+
+# ListImportEntities
+
+List the user's import ledger: staged candidates, in-flight imports, imported items (including ones teammates imported into the team), and declined items. Use this to check what already exists before proposing or creating imports.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `source` | `"linear"` \| `"notion"` \| `"slack"` | No | Filter to one source system. |
+| `status` | `"staged"` \| `"importing"` \| `"imported"` \| `"discarded"` | No | Filter to one status: staged, importing, imported, or discarded. Omit for all. |

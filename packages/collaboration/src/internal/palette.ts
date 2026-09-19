@@ -1,15 +1,15 @@
 const palette = [
-  'accent-30',
-  'accent-60',
-  'accent-90',
-  'accent-120',
-  'accent-150',
-  'accent-180',
-  'accent-210',
-  'accent-240',
-  'accent-270',
-  'accent-300',
-  'accent-330',
+  'red',
+  'orange',
+  'yellow',
+  'lime',
+  'green',
+  'teal',
+  'cyan',
+  'blue',
+  'violet',
+  'purple',
+  'pink',
 ] as const;
 
 /** Pick a collaboration cursor color from Macro's shared accent palette. */

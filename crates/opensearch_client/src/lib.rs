@@ -5,6 +5,7 @@ pub mod search;
 pub mod unified;
 pub mod upsert;
 
+pub mod calendar_event;
 pub mod call_record;
 pub mod channel_message;
 pub mod chat;

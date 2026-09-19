@@ -22,8 +22,8 @@ use models_bulk_upload::{
     BulkUploadRequest, BulkUploadRequestDocuments, UploadExtractFolderRequest,
     UploadExtractFolderResponseData,
 };
-use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
+use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
 use s3_key::BulkUploadStagingKey;
 use uuid::Uuid;
 
@@ -82,6 +82,13 @@ pub trait ProjectRepo: Send + Sync + 'static {
         &self,
         project_ids: &[String],
     ) -> impl Future<Output = Result<Vec<ProjectPreviewV2>, Self::Err>> + Send;
+
+    /// Get the link-share preference of the user's team, or `None` when the
+    /// user is not on a team.
+    fn get_team_default_link_share(
+        &self,
+        user_id: &str,
+    ) -> impl Future<Output = Result<Option<TeamLinkShareDefault>, Self::Err>> + Send;
 
     /// Atomically create a project and its permission, history, and owner-access rows.
     fn create_project(

@@ -15,6 +15,7 @@ fn soup_response_schema_exposes_frontend_fields() {
         "threadId: ID!",
         "emailLabels: [GraphqlSoupEmailLabel!]!",
         "emailLinks: [GraphqlEmailLink!]!",
+        "favorites: [GraphqlFavorite!]!",
         "emailThread(input: EmailThreadInput!): GraphqlSoupEmailThread",
         "type GraphqlSoupEmailThread implements GraphqlSoupEntity {",
         "providerId: String",
@@ -69,12 +70,30 @@ fn soup_response_schema_exposes_frontend_fields() {
         "graphqlTypeName: String!",
         "entityId: ID!",
         "type SoupUpdated {",
-        "item: GraphqlSoupEntity",
+        "item: GraphqlSoupEntity!",
         "union SoupPatch = SoupUpdated | GraphqlCacheDeletion",
         "type GraphqlMutationSuccess {",
         "effects: [SoupPatch!]!",
+        "setEntityFavorite(entity: EntityRefInput!, favorite: Boolean!): GraphqlEntityMutationResult!",
+        "setFavorite(entity: EntityRefInput!, favorite: Boolean!): SetFavoritePayload!",
+        "type SetFavoritePayload {",
+        "result: GraphqlEntityMutationResult!",
+        "favorite: GraphqlFavorite",
+        "reorderFavorites(input: ReorderFavoritesInput!): [GraphqlFavorite!]!",
+        "input ReorderFavoritesInput {",
+        "favorites: [EntityRefInput!]!",
+        "type GraphqlFavorite {",
+        "entityType: GraphqlEntityType!",
+        "entityId: ID!",
+        "sortOrder: Float!",
         "recordChannelActivity(input: RecordChannelActivityInput!): GraphqlChannelActivity!",
-        "updateNotifications(input: UpdateNotificationsInput!): [GraphqlSoupNotification!]!",
+        "updateNotifications(input: UpdateNotificationsInput!): [GraphqlNotification!]!",
+        "updateNotificationsForEntity(input: UpdateNotificationsForEntityInput!): [GraphqlNotification!]!",
+        "input UpdateNotificationsForEntityInput {",
+        "entities: [NotificationEntityInput!]!",
+        "input NotificationEntityInput {",
+        "entityType: GraphqlEntityType!",
+        "entityId: ID!",
         "markEmailThreadSeen(input: MarkEmailThreadSeenInput!): GraphqlSoupEmailThread!",
         "updateEmailThreadLabel(input: UpdateEmailThreadLabelInput!): GraphqlSoupEmailThread!",
         "input MarkEmailThreadSeenInput {",
@@ -86,11 +105,31 @@ fn soup_response_schema_exposes_frontend_fields() {
         "MARK_SEEN",
         "MARK_DONE",
         "MARK_UNDONE",
-        "type SoupSubscriptionRoot {",
+        "type CompleteSubscriptionRoot {",
         "soupUpdates: [SoupPatch!]!",
+        "notificationUpdates: GraphqlNotificationPatch!",
+        "union GraphqlNotificationPatch = GraphqlNewNotification | GraphqlUpdatedNotification | GraphqlCacheDeletion",
+        "type GraphqlNewNotification {",
+        "notification: GraphqlNotification!",
+        "type GraphqlUpdatedNotification {",
+        "type GraphqlNotification {",
+        "metadata: GraphqlNotifEvent!",
     ] {
         assert_sdl_line(&sdl, expected);
     }
+    assert!(
+        sdl.contains("union GraphqlNotifEvent = GraphqlChannelMentionMetadata |"),
+        "notification metadata must be represented by the typed event union"
+    );
+    assert_eq!(
+        sdl.lines()
+            .filter(|line| line.trim() == "metadata: GraphqlNotifEvent!")
+            .count(),
+        1,
+        "stored and realtime notifications must share one typed metadata field"
+    );
+    assert!(!sdl.contains("GraphqlRealtimeNotification"));
+    assert!(!sdl.contains("GraphqlSoupNotification"));
     assert!(
         !sdl.lines()
             .any(|line| line.trim() == "type GraphqlEntityRef {"),
@@ -105,6 +144,36 @@ fn soup_response_schema_exposes_frontend_fields() {
         !sdl.to_ascii_lowercase().contains("fusionauth"),
         "internal FusionAuth identifiers must not enter the GraphQL contract"
     );
+}
+
+#[test]
+fn activity_overview_is_a_user_scoped_embedded_value() {
+    use apollo_compiler::schema::ExtendedType;
+
+    let schema =
+        apollo_compiler::Schema::parse_and_validate(crate::build_schema().sdl(), "schema.graphql")
+            .expect("generated SDL is valid");
+    let ExtendedType::Object(user) = schema.types.get("GraphqlUser").expect("user type exists")
+    else {
+        panic!("GraphqlUser must be an object");
+    };
+    assert!(user.fields.contains_key("activityOverview"));
+
+    for name in [
+        "GraphqlActivityOverview",
+        "GraphqlActivityDay",
+        "GraphqlActivityEntityRank",
+    ] {
+        let ExtendedType::Object(value) =
+            schema.types.get(name).expect("overview value type exists")
+        else {
+            panic!("{name} must be an object");
+        };
+        assert!(
+            !value.fields.contains_key("id"),
+            "{name} must remain embedded under GraphqlUser"
+        );
+    }
 }
 
 #[test]
@@ -132,12 +201,24 @@ fn soup_interface_exposes_the_complete_shared_entity_contract() {
         "isFavorited",
         "viewerPermission",
         "frecencyScore",
+        "cacheProjection",
+        "activity",
     ] {
         assert!(
             entity.fields.contains_key(shared_field),
             "Soup interface missing shared field {shared_field}"
         );
     }
+    let cache_projection = entity
+        .fields
+        .get("cacheProjection")
+        .expect("Soup interface cache projection field exists");
+    assert!(
+        cache_projection.arguments.is_empty(),
+        "cacheProjection must remain argument-free"
+    );
+    assert_eq!(cache_projection.ty.to_string(), "SoupCacheProjection");
+
     assert!(
         !schema.types.contains_key("GraphqlSoupItem"),
         "soup items are entities directly; no query-scoped wrapper type"
@@ -159,11 +240,54 @@ fn soup_interface_exposes_the_complete_shared_entity_contract() {
         "viewerPermission",
         "properties",
         "notifications",
+        "cacheProjection",
+        "activity",
     ] {
         assert!(
             document.fields.contains_key(shared_field),
             "Soup document missing shared field {shared_field}"
         );
+    }
+    assert!(
+        !document.fields.contains_key("isEmailAttachment"),
+        "relation-backed projection facts must not become document business fields"
+    );
+
+    for name in [
+        "GraphqlSoupCalendarEvent",
+        "GraphqlSoupDocument",
+        "GraphqlSoupChat",
+        "GraphqlSoupProject",
+        "GraphqlSoupEmailThread",
+        "GraphqlSoupChannel",
+        "GraphqlSoupChannelMessage",
+        "GraphqlSoupCall",
+        "GraphqlSoupCrmCompany",
+        "GraphqlSoupForeignEntity",
+        "GraphqlSoupReminder",
+    ] {
+        let ExtendedType::Object(object) = schema.types.get(name).expect("Soup object exists")
+        else {
+            panic!("{name} must be an object");
+        };
+        assert!(
+            object.fields.contains_key("cacheProjection"),
+            "{name} must implement the shared cacheProjection field"
+        );
+    }
+
+    for name in ["SoupPage", "SoupUpdated"] {
+        let ExtendedType::Object(object) = schema.types.get(name).expect("Soup wrapper exists")
+        else {
+            panic!("{name} must be an object");
+        };
+        assert!(
+            !object.fields.contains_key("cacheProjection"),
+            "{name} must not carry entity projection metadata"
+        );
+        if name == "SoupUpdated" {
+            assert_eq!(object.fields["item"].ty.to_string(), "GraphqlSoupEntity!");
+        }
     }
 }
 

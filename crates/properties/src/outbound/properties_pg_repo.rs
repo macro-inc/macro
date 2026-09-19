@@ -16,8 +16,8 @@ use super::{
 };
 use crate::domain::model::{
     EntityPropertiesKey, EntityPropertyInfo, EntityPropertyMutationSnapshot,
-    GetOrCreateTagDefinitionResult, PropertyDefinitionOwner, TagPromotionOutcome, TagRemapOutcome,
-    UpdatePropertyOptionOutcome,
+    GetOrCreateTagDefinitionResult, PropertyDefinitionOwner, PropertyOptionReplaceOutcome,
+    PropertyOptionReplacePlan, TagPromotionOutcome, TagRemapOutcome, UpdatePropertyOptionOutcome,
 };
 use crate::domain::ports::PropertiesRepo;
 use models_properties::DataType;
@@ -205,6 +205,16 @@ impl PropertiesRepo for PropertiesPgRepo {
         .await
     }
 
+    #[tracing::instrument(skip(self, plan), err)]
+    async fn replace_property_options(
+        &self,
+        property_definition_id: Uuid,
+        plan: &PropertyOptionReplacePlan,
+    ) -> Result<PropertyOptionReplaceOutcome, Self::Err> {
+        property_option_queries::replace_property_options(&self.pool, property_definition_id, plan)
+            .await
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn delete_property_option(
         &self,
@@ -290,7 +300,7 @@ impl PropertiesRepo for PropertiesPgRepo {
         entity_type: EntityType,
         property_definition_id: Uuid,
         value: Option<PropertyValue>,
-    ) -> Result<models_properties::service::entity_property::EntityProperty, Self::Err> {
+    ) -> Result<EntityPropertyMutationSnapshot, Self::Err> {
         entity_property_queries::upsert_entity_property(
             &self.pool,
             entity_id,

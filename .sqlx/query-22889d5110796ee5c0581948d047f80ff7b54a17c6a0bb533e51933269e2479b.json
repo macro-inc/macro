@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            permission.id,\n            permission.\"linkShare\" AS \"link_share?\",\n            permission.\"linkShareAccessLevel\" AS \"link_share_access_level?: AccessLevel\",\n            project.\"userId\" AS owner,\n            COALESCE(\n                json_agg(json_build_object(\n                    'channel_id', channel.\"channel_id\",\n                    'access_level', channel.\"access_level\"\n                )) FILTER (WHERE channel.\"channel_id\" IS NOT NULL),\n                '[]'\n            ) AS \"channel_share_permissions?\"\n        FROM \"ProjectPermission\" project_permission\n        JOIN \"SharePermission\" permission\n            ON project_permission.\"sharePermissionId\" = permission.id\n        JOIN \"Project\" project ON project_permission.\"projectId\" = project.id\n        LEFT JOIN \"ChannelSharePermission\" channel\n            ON channel.\"share_permission_id\" = permission.id\n        WHERE project_permission.\"projectId\" = $1\n        GROUP BY permission.id, project.\"userId\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_share?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "link_share_access_level?: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "owner",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "channel_share_permissions?",
+        "type_info": "Json"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      null
+    ]
+  },
+  "hash": "22889d5110796ee5c0581948d047f80ff7b54a17c6a0bb533e51933269e2479b"
+}

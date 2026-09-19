@@ -1,0 +1,745 @@
+/**
+ * Debug gallery for the block-agent ui library: every pure component with
+ * fixture data, plus a full `AgentMessage` rendered end-to-end. Mounted at
+ * `/component/agent-ui`.
+ */
+
+import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { MagicChipView } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/MagicChipView';
+import type { MagicChipPresentation } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/presentation';
+import type {
+  ElicitationSchema,
+  FoldedMessage,
+  ModelOption,
+  PendingElicitation,
+  ToolStatus,
+} from '@service-agent-fold/generated/types';
+import { createSignal, type JSX, onCleanup } from 'solid-js';
+import { createStore } from 'solid-js/store';
+import { Message } from '../component/AgentMessage';
+import { ReplyToSelection } from '../component/ReplyToSelection';
+import { initialValues, validate } from '../state/elicitation-form';
+import {
+  ActionLine,
+  AgentInput,
+  AgentModelSelector,
+  AnimatedNumber,
+  ComposerNotice,
+  CountSummary,
+  DiffChanges,
+  ElicitationForm,
+  PierreDiff,
+  QuestionAnswers,
+  type QuoteInsert,
+  TextShimmer,
+  Thought,
+  TodoList,
+  ToolCard,
+  ToolErrorCard,
+  ToolStatusTitle,
+} from '../ui';
+
+/** A Cursor-shaped catalog: long enough to scroll, with one grouped tail. */
+const FIXTURE_MODELS: ModelOption[] = [
+  { id: 'auto', name: 'Auto', description: null, group: null },
+  {
+    id: 'grok-4.6-high-fast',
+    name: 'Cursor Grok 4.6 High Fast',
+    description: null,
+    group: null,
+  },
+  { id: 'composer-2.5', name: 'Composer 2.5', description: null, group: null },
+  {
+    id: 'opus-5-high',
+    name: 'Claude Opus 5 High',
+    description: null,
+    group: null,
+  },
+  {
+    id: 'opus-5-high-fast',
+    name: 'Claude Opus 5 High Fast',
+    description: null,
+    group: null,
+  },
+  { id: 'sol-high', name: 'GPT-5.6 Sol High', description: null, group: null },
+  {
+    id: 'sol-high-fast',
+    name: 'GPT-5.6 Sol High Fast',
+    description: null,
+    group: null,
+  },
+  {
+    id: 'sol-xhigh',
+    name: 'GPT-5.6 Sol Extra High',
+    description: null,
+    group: null,
+  },
+  {
+    id: 'fable-5-high',
+    name: 'Claude Fable 5 High',
+    description: null,
+    group: null,
+  },
+  {
+    id: 'gemini-3.7-flash-high',
+    name: 'Gemini 3.7 Flash High',
+    description: null,
+    group: null,
+  },
+  {
+    id: 'sonnet-5-high',
+    name: 'Claude Sonnet 5 High',
+    description: null,
+    group: null,
+  },
+  {
+    id: 'luna-high',
+    name: 'GPT-5.6 Luna High',
+    description: null,
+    group: 'Legacy',
+  },
+];
+
+/** The composer as the block mounts it, with the model control wired. */
+function ModelSelectorDemo() {
+  const [model, setModel] = createSignal<string | null>('grok-4.6-high-fast');
+  return (
+    <AgentInput
+      onSend={(content) => console.info('[gallery] send', content)}
+      modelControl={
+        <AgentModelSelector
+          model={model()}
+          options={FIXTURE_MODELS}
+          onSelect={(id) => {
+            console.info('[gallery] model', id);
+            setModel(id);
+          }}
+        />
+      }
+    />
+  );
+}
+
+function Item(props: { label: string; children: JSX.Element }) {
+  return (
+    <section class="flex flex-col gap-2">
+      <h2 class="text-xs font-medium uppercase tracking-wide text-ink-extra-muted">
+        {props.label}
+      </h2>
+      <div class="flex flex-col gap-2">{props.children}</div>
+    </section>
+  );
+}
+
+/**
+ * Select text in the fixture message: a "Reply to this" chip should appear
+ * and insert a referenced paste into the composer below.
+ */
+function ReplyToSelectionDemo() {
+  const [container, setContainer] = createSignal<HTMLDivElement>();
+  let quoteInsert: QuoteInsert | undefined;
+
+  return (
+    <div class="flex flex-col gap-3">
+      <p class="text-xs text-ink-muted">
+        Select any of the message text, then click Reply to this.
+      </p>
+      <div ref={setContainer} class="relative">
+        <Message message={FIXTURE_MESSAGE} />
+        <ReplyToSelection
+          container={container()}
+          onReply={(text) => quoteInsert?.(text)}
+        />
+      </div>
+      <AgentInput
+        placeholder="Referenced text lands here"
+        onSend={(content) => console.info('[gallery] send', content)}
+        registerQuoteInsert={(insert) => {
+          quoteInsert = insert;
+        }}
+      />
+    </div>
+  );
+}
+
+/** Flips every few seconds so the running→done animations stay observable. */
+function usePulse(intervalMs = 2500) {
+  const [on, setOn] = createSignal(true);
+  const timer = setInterval(() => setOn((value) => !value), intervalMs);
+  onCleanup(() => clearInterval(timer));
+  return on;
+}
+
+function useCounter(intervalMs = 1200) {
+  const [count, setCount] = createSignal(3);
+  const timer = setInterval(
+    () => setCount((value) => (value + 1) % 12),
+    intervalMs
+  );
+  onCleanup(() => clearInterval(timer));
+  return count;
+}
+
+const FIXTURE_DIFF = {
+  path: 'crates/agent_fold/src/domain/fold.rs',
+  oldText:
+    'fn fold(log: &[Frame]) -> Vec<Message> {\n    let mut out = Vec::new();\n    for frame in log {\n        out.push(frame.into());\n    }\n    out\n}\n',
+  newText:
+    'fn fold(log: &[Frame]) -> Vec<Message> {\n    let mut machine = FoldMachine::default();\n    for frame in log {\n        machine.push(frame);\n    }\n    machine.finish()\n}\n',
+};
+
+const FIXTURE_MESSAGE: FoldedMessage = {
+  agentSessionId: 'demo',
+  requestId: null,
+  turn: 0,
+  author: { kind: 'agent' },
+  stop: { kind: 'end_turn' },
+  parts: [
+    {
+      kind: 'text',
+      text: "I'll look at the fold implementation and tighten it up.",
+    },
+    {
+      kind: 'thought',
+      text: 'The batch fold re-derives every message per frame; the incremental machine already handles this.',
+    },
+    {
+      kind: 'tool_use',
+      id: 'demo-read',
+      name: { kind: 'native', name: 'Read' },
+      status: 'completed',
+      detail: { kind: 'read', paths: ['crates/agent_fold/src/domain/fold.rs'] },
+    },
+    {
+      kind: 'tool_use',
+      id: 'demo-search',
+      name: { kind: 'native', name: 'Search' },
+      status: 'completed',
+      detail: {
+        kind: 'search',
+        paths: ['crates/agent_fold/src'],
+        output: 'fold.rs:12: fn fold(log: &[Frame]) -> Vec<Message>',
+      },
+    },
+    {
+      kind: 'tool_use',
+      id: 'demo-edit',
+      name: { kind: 'native', name: 'Edit' },
+      status: 'completed',
+      detail: { kind: 'edit', diffs: [FIXTURE_DIFF] },
+    },
+    {
+      kind: 'tool_use',
+      id: 'demo-terminal',
+      name: { kind: 'native', name: 'Bash' },
+      status: 'running',
+      detail: {
+        kind: 'terminal',
+        command: 'cargo test -p agent_fold',
+        output: 'running 14 tests\n[32mtest fold::turns ... ok[0m',
+        exitCode: null,
+      },
+    },
+    {
+      kind: 'permission',
+      toolCall: 'demo-terminal',
+      options: [
+        { id: 'allow', name: 'Allow', kind: 'allow_once' },
+        { id: 'deny', name: 'Deny', kind: 'reject_once' },
+      ],
+      outcome: { kind: 'selected', optionId: 'allow' },
+    },
+    {
+      kind: 'tool_use',
+      id: 'demo-subagent',
+      name: { kind: 'native', name: 'Agent' },
+      status: 'completed',
+      detail: {
+        kind: 'subagent',
+        title: 'Check the arithmetic',
+        agentType: 'general-purpose',
+        description: 'Check the arithmetic',
+        prompt: 'Run `python3 -c "print(5+5)"` and report the output.',
+        background: false,
+        children: [
+          {
+            kind: 'tool_use',
+            id: 'demo-subagent-bash',
+            name: { kind: 'native', name: 'Bash' },
+            status: 'completed',
+            detail: {
+              kind: 'terminal',
+              command: 'python3 -c "print(5+5)"',
+              output: '10',
+              exitCode: 0,
+            },
+          },
+        ],
+        result: {
+          text: 'Output: `10`',
+          error: null,
+          agentId: 'af2647314187b6bf1',
+          model: 'claude-opus-5[1m]',
+          durationMs: 3485,
+          tokens: 26077,
+          toolUses: 1,
+          stats: null,
+        },
+      },
+    },
+    {
+      kind: 'tool_use',
+      id: 'demo-macro',
+      name: { kind: 'mcp', server: 'macro', tool: 'BrandNewTool' },
+      status: 'completed',
+      detail: {
+        kind: 'macro',
+        input: { query: 'fold' },
+        output: { hits: 3 },
+        error: null,
+      },
+    },
+    {
+      kind: 'tool_use',
+      id: 'demo-email',
+      name: { kind: 'mcp', server: 'macro', tool: 'SendEmail' },
+      status: 'completed',
+      detail: {
+        kind: 'user_tool',
+        input: {
+          subject: 'Fold status',
+          body: 'Hi Alice,\n\nThe fold now knows which harness it is reading.',
+          to: [{ email: 'alice@example.com', name: 'Alice' }],
+        },
+        outcome: { kind: 'pending' },
+      },
+    },
+    {
+      kind: 'tool_use',
+      id: 'demo-email-sent',
+      name: { kind: 'mcp', server: 'macro', tool: 'SendEmail' },
+      status: 'completed',
+      detail: {
+        kind: 'user_tool',
+        input: {
+          subject: 'Re: fold status',
+          body: 'Thanks Alice - shipping it.',
+          to: [{ email: 'alice@example.com', name: 'Alice' }],
+          cc: [{ email: 'bob@example.com' }],
+        },
+        outcome: {
+          kind: 'sent',
+          messageId: '9c4d2c6e-2f3a-4d1e-8b0a-5e6f7a8b9c0d',
+          threadId: '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d',
+        },
+      },
+    },
+    {
+      kind: 'tool_use',
+      id: 'demo-event',
+      name: { kind: 'mcp', server: 'macro', tool: 'CreateCalendarEvent' },
+      status: 'completed',
+      detail: {
+        kind: 'user_tool',
+        input: {
+          title: 'Fold review',
+          time: {
+            kind: 'timed',
+            startsAt: '2026-09-04T16:00:00Z',
+            endsAt: '2026-09-04T16:30:00Z',
+            timeZone: 'America/New_York',
+          },
+          location: 'Room 4',
+          attendees: [
+            { email: 'alice@example.com' },
+            { email: 'bob@example.com', isOptional: true },
+          ],
+          description: 'Walk through the harness readers.',
+        },
+        outcome: { kind: 'rejected' },
+      },
+    },
+  ],
+};
+
+/**
+ * The Claude Code colour question after the fold collapsed its custom pair,
+ * plus one of every other field type, so the form's controls can be eyeballed.
+ */
+const FIXTURE_ELICITATION: ElicitationSchema = {
+  title: 'Deployment',
+  description: 'A few details before the agent continues.',
+  required: ['question_0', 'name'],
+  properties: [
+    {
+      name: 'question_0',
+      title: 'Best colour',
+      description: null,
+      schema: {
+        type: 'string',
+        minLength: null,
+        maxLength: null,
+        pattern: null,
+        format: null,
+        default: null,
+        options: [
+          { value: 'Red', title: 'Red', description: 'Warm' },
+          { value: 'Blue', title: 'Blue', description: 'Cool' },
+          { value: 'Green', title: 'Green', description: null },
+        ],
+        customField: 'question_0_custom',
+      },
+    },
+    {
+      name: 'name',
+      title: 'Service name',
+      description: 'Lowercase letters only',
+      schema: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 32,
+        pattern: '^[a-z]+$',
+        format: null,
+        default: 'api',
+        options: [],
+        customField: null,
+      },
+    },
+    {
+      name: 'port',
+      title: 'Port',
+      description: null,
+      schema: { type: 'integer', minimum: 1024, maximum: 65535, default: 3000 },
+    },
+    {
+      name: 'logging',
+      title: 'Enable logging',
+      description: null,
+      schema: { type: 'boolean', default: true },
+    },
+    {
+      name: 'regions',
+      title: 'Regions',
+      description: null,
+      schema: {
+        type: 'multi_select',
+        minItems: 1,
+        maxItems: 2,
+        options: [
+          { value: 'us', title: 'US', description: null },
+          { value: 'eu', title: 'EU', description: null },
+          { value: 'ap', title: 'APAC', description: null },
+        ],
+        default: ['us'],
+        customField: 'regions_custom',
+      },
+    },
+    {
+      name: 'weird',
+      title: 'Hologram',
+      description: null,
+      schema: { type: 'unrecognized', typeName: '_hologram', raw: {} },
+    },
+  ],
+};
+
+const GALLERY_CHIP_HEADER = {
+  agent: 'Cursor Agent',
+  model: 'Claude Opus 5 High',
+};
+
+/** The chip through a turn: booting, writing, and done. */
+function MagicChipStateDemo(props: { presentation: MagicChipPresentation }) {
+  return (
+    <MagicChipView
+      agentSessionId="gallery"
+      presentation={props.presentation}
+      header={GALLERY_CHIP_HEADER}
+      onOpen={() => console.log('[gallery] open session')}
+    />
+  );
+}
+
+/** The chip asking, one per request kind; answers land in the console. */
+function MagicChipAskingDemo(props: {
+  request: PendingElicitation['request'];
+}) {
+  const presentation: MagicChipPresentation = {
+    kind: 'asking',
+    markdown: 'Happy to. One quick question before I go on.',
+    asking: {
+      question: {
+        requestId: 0,
+        turn: 0,
+        toolCall: null,
+        message: 'Which colour, and where should it run?',
+        request: props.request,
+      },
+      canAnswer: true,
+      ownerName: 'You',
+    },
+  };
+  return (
+    <MagicChipView
+      agentSessionId="gallery"
+      presentation={presentation}
+      header={GALLERY_CHIP_HEADER}
+      answer={{
+        answering: false,
+        respond: async (answer) => {
+          console.log('[gallery] elicitation answer', answer);
+          return true;
+        },
+      }}
+      onOpen={() => console.log('[gallery] open session')}
+    />
+  );
+}
+
+function ElicitationFormDemo() {
+  const [values, setValues] = createStore(initialValues(FIXTURE_ELICITATION));
+  const errors = () => validate(FIXTURE_ELICITATION, values);
+  return (
+    <ToolCard title="Macro Coder is asking" status="running" defaultOpen>
+      <ElicitationForm
+        schema={FIXTURE_ELICITATION}
+        values={values}
+        errors={errors()}
+        onChange={(name, value) => setValues(name, value)}
+      />
+    </ToolCard>
+  );
+}
+
+export default function AgentUiGallery() {
+  const pulse = usePulse();
+  const status = (): ToolStatus => (pulse() ? 'running' : 'completed');
+  const count = useCounter();
+
+  return (
+    <StaticMarkdownContext>
+      <div class="size-full overflow-auto">
+        <div class="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-8">
+          <Item label="ElicitationForm (live validation)">
+            <ElicitationFormDemo />
+          </Item>
+
+          <Item label="MagicChip (booting, writing, done)">
+            <MagicChipStateDemo
+              presentation={{
+                kind: 'working',
+                activity: {
+                  label: 'Booting agent',
+                  detail: 'Preparing workspace',
+                  busy: true,
+                },
+              }}
+            />
+            <MagicChipStateDemo
+              presentation={{
+                kind: 'answering',
+                markdown:
+                  'The failing test is in `agent_fold`: the batch fold re-derives every message per frame, so the',
+                activity: {
+                  label: 'Running command',
+                  detail: 'cargo test -p agent_fold',
+                  busy: true,
+                },
+              }}
+            />
+            <MagicChipStateDemo
+              presentation={{
+                kind: 'settled',
+                markdown:
+                  '**Fixed.** The incremental machine now handles the replay; `cargo test -p agent_fold` passes.',
+              }}
+            />
+          </Item>
+
+          <Item label="MagicChip asking (form, url, tool draft)">
+            <MagicChipAskingDemo
+              request={{ kind: 'form', schema: FIXTURE_ELICITATION }}
+            />
+            <MagicChipAskingDemo
+              request={{
+                kind: 'url',
+                elicitationId: 'gh-1',
+                url: 'https://github.com/login/device?user_code=ABCD-1234',
+              }}
+            />
+            <MagicChipAskingDemo
+              request={{
+                kind: 'user_tool',
+                tool: 'CreateCalendarEvent',
+                draft: {
+                  title: 'Q3 sync',
+                  time: {
+                    kind: 'timed',
+                    startsAt: '2026-08-20T17:00:00Z',
+                    endsAt: '2026-08-20T17:30:00Z',
+                    timeZone: 'UTC',
+                  },
+                  attendees: [],
+                  recurrenceLines: [],
+                  addGoogleMeet: false,
+                  eventType: 'default',
+                },
+                schema: FIXTURE_ELICITATION,
+              }}
+            />
+          </Item>
+
+          <Item label="ComposerNotice">
+            <ComposerNotice text="Waking the agent's sandbox…" active />
+          </Item>
+
+          <Item label="ActionLine">
+            <ActionLine label="Setting model to claude-opus-5…" />
+            <ActionLine label="Model set to claude-opus-5" />
+            <ActionLine label="Context compacted" />
+            <ActionLine
+              label="Couldn't switch to openai/gpt-5"
+              failed
+              detail="no credentials configured for provider openai"
+            />
+            <ActionLine
+              label="The agent couldn't answer — Internal error: Bad Request: bad request: Authorization header is badly formatted"
+              detail="Internal error: Bad Request: bad request: Authorization header is badly formatted"
+              failed
+            />
+          </Item>
+
+          <Item label="ToolCard">
+            <ToolCard
+              title="Bash"
+              subtitle="cargo test -p agent_fold"
+              status={status()}
+            />
+            <ToolCard
+              title="Read"
+              subtitle="crates/agent_fold/src/domain/fold.rs"
+              args={{ limit: '200' }}
+              status="completed"
+            />
+            <ToolCard
+              title="Edit"
+              subtitle={FIXTURE_DIFF.path}
+              trailing={<DiffChanges additions={4} deletions={3} />}
+              status="completed"
+              defaultOpen
+            >
+              <PierreDiff diffs={[FIXTURE_DIFF]} />
+            </ToolCard>
+          </Item>
+
+          <Item label="Thought (active / settled)">
+            <Thought
+              text="The batch fold re-derives every message per frame; the incremental machine already handles this."
+              active={pulse()}
+            />
+            <Thought
+              text="The incremental machine is the right default."
+              defaultOpen
+            />
+          </Item>
+
+          <Item label="ToolStatusTitle / TextShimmer">
+            <ToolStatusTitle
+              active={pulse()}
+              activeText="Gathering context"
+              doneText="Gathered context"
+            />
+            <TextShimmer text="Thinking about the fold" active={pulse()} />
+          </Item>
+
+          <Item label="AnimatedNumber / CountSummary">
+            <div class="text-sm text-ink">
+              <AnimatedNumber value={count()} />
+            </div>
+            <CountSummary
+              items={[
+                {
+                  key: 'read',
+                  count: count(),
+                  one: 'file read',
+                  other: 'files read',
+                },
+                { key: 'search', count: 2, one: 'search', other: 'searches' },
+              ]}
+            />
+          </Item>
+
+          <Item label="TodoList">
+            <TodoList
+              todos={[
+                {
+                  content: 'Read the fold implementation',
+                  status: 'completed',
+                },
+                {
+                  content: 'Swap batch fold for the machine',
+                  status: 'in_progress',
+                },
+                { content: 'Run the crate tests', status: 'pending' },
+                {
+                  content: 'Benchmark against the recording',
+                  status: 'cancelled',
+                },
+              ]}
+            />
+          </Item>
+
+          <Item label="QuestionAnswers">
+            <QuestionAnswers
+              questions={[
+                {
+                  question: 'Which fold strategy should be the default?',
+                  answers: ['Incremental machine'],
+                },
+                { question: 'Keep the batch entry point?', answers: [] },
+              ]}
+            />
+          </Item>
+
+          <Item label="ToolErrorCard">
+            <ToolErrorCard
+              tool="Bash"
+              error="Bash: command timed out after 120s: cargo test -p agent_fold"
+            />
+          </Item>
+
+          <Item label="DiffChanges">
+            <div class="flex items-center gap-4 text-xs">
+              <DiffChanges additions={18} deletions={6} />
+              <DiffChanges additions={18} deletions={6} variant="bars" />
+              <DiffChanges additions={0} deletions={412} variant="bars" />
+            </div>
+          </Item>
+
+          <Item label="Reply to selection">
+            <ReplyToSelectionDemo />
+          </Item>
+
+          <Item label="AgentInput (idle / busy)">
+            <AgentInput
+              onSend={(content) => console.info('[gallery] send', content)}
+            />
+            <AgentInput
+              busy
+              onSend={() => {}}
+              onStop={() => console.info('[gallery] stop')}
+            />
+          </Item>
+
+          <Item label="AgentInput with model selector">
+            <ModelSelectorDemo />
+          </Item>
+
+          <Item label="AgentMessage (end-to-end)">
+            <Message message={FIXTURE_MESSAGE} />
+          </Item>
+        </div>
+      </div>
+    </StaticMarkdownContext>
+  );
+}

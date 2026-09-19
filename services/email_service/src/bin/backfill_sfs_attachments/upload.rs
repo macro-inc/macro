@@ -1,4 +1,9 @@
 use anyhow::Context;
+use email_api_client::GmailApiClientRepository;
+use email_api_client::domain::ports::AlwaysAllowRateLimiter;
+use email_api_client::domain::service::EmailApiClientServiceImpl;
+use email_service::outbound::email_api::StaticTokenSource;
+use models_email::email::service::link::Link;
 use models_email::service::attachment::{AttachmentSfs, AttachmentUploadMetadata};
 use sqlx::PgPool;
 use static_file_service_client::put_file::PutFileResponse;
@@ -10,38 +15,44 @@ use uuid::Uuid;
 pub struct AttachmentProcessor {
     db: PgPool,
     sfs_client: static_file_service_client::StaticFileServiceClient,
-    gmail_client: gmail_client::GmailClient,
-    gmail_access_token: String,
+    email_api: EmailApiClientServiceImpl<
+        GmailApiClientRepository,
+        StaticTokenSource,
+        AlwaysAllowRateLimiter,
+    >,
 }
 
 impl AttachmentProcessor {
     pub fn new(
         db: PgPool,
         sfs_client: static_file_service_client::StaticFileServiceClient,
-        gmail_client: gmail_client::GmailClient,
-        gmail_access_token: String,
+        email_api: EmailApiClientServiceImpl<
+            GmailApiClientRepository,
+            StaticTokenSource,
+            AlwaysAllowRateLimiter,
+        >,
     ) -> Self {
         Self {
             db,
             sfs_client,
-            gmail_client,
-            gmail_access_token,
+            email_api,
         }
     }
 
-    async fn download_attachment_bytes(
+    async fn fetch_attachment(
         &self,
+        link: &Link,
         attachment: &AttachmentUploadMetadata,
     ) -> anyhow::Result<bytes::Bytes> {
         let attachment_data = self
-            .gmail_client
-            .get_attachment_data(
-                &self.gmail_access_token,
+            .email_api
+            .get_attachment(
+                link.id,
                 &attachment.email_provider_id,
                 &attachment.provider_attachment_id,
             )
             .await
-            .context("Failed to get attachment data from Gmail")?;
+            .context("Failed to get attachment data from email provider")?;
 
         println!(
             "Successfully downloaded attachment data for {} ({} bytes)",
@@ -115,8 +126,12 @@ impl AttachmentProcessor {
 
     /// Orchestrates the full upload process for a single attachment.
     #[instrument(skip(self), fields(file_name = ?attachment.filename, mime_type = %attachment.mime_type))]
-    pub async fn upload(&self, attachment: &AttachmentUploadMetadata) -> anyhow::Result<()> {
-        let bytes = self.download_attachment_bytes(attachment).await?;
+    pub async fn upload(
+        &self,
+        link: &Link,
+        attachment: &AttachmentUploadMetadata,
+    ) -> anyhow::Result<()> {
+        let bytes = self.fetch_attachment(link, attachment).await?;
 
         let sfs_response = self
             .upload_to_sfs_with_retry(bytes, attachment.mime_type.clone())

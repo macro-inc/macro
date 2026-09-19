@@ -1,184 +1,140 @@
-use crate::GmailClient;
-use anyhow::Context;
+use crate::error::{decode_json_response, unsuccessful_response};
+use crate::{GmailApiHttpError, GmailClient};
 use models_email::gmail::contacts::{ConnectionsResponse, OtherContactsResponse, PersonResource};
 
-/// Get the user's own connection.
-/// Returns raw Gmail PersonResource - callers should map to service layer Contact.
+const PERSON_FIELDS: &str = "names,emailAddresses,photos";
+
+/// Gets the user's own connection as a raw People API resource.
 #[tracing::instrument(skip(client, access_token), err)]
 pub(crate) async fn get_self_connection(
     client: &GmailClient,
     access_token: &str,
-) -> anyhow::Result<PersonResource> {
-    let http_client = client.inner.clone();
-
-    let url = format!(
-        "{}/people/me?personFields=names,emailAddresses,photos",
-        client.contacts_url
-    );
-
-    let response = http_client
-        .get(&url)
+) -> Result<PersonResource, GmailApiHttpError> {
+    let response = client
+        .inner
+        .get(format!("{}/people/me", client.contacts_url))
         .bearer_auth(access_token)
+        .query(&[("personFields", PERSON_FIELDS)])
         .send()
         .await
-        .context("Failed to send request to People API (get self connection)")?;
+        .map_err(GmailApiHttpError::transport)?;
 
-    let response = response
-        .error_for_status()
-        .context("People API returned an error status (get self connection)")?;
+    if !response.status().is_success() {
+        return Err(unsuccessful_response(response).await);
+    }
 
-    let person_resource = response
-        .json::<PersonResource>()
-        .await
-        .context("Failed to parse JSON response from People API (get self connection)")?;
-
-    Ok(person_resource)
+    decode_json_response(response).await
 }
 
-/// Fetches contacts from the People API.
-/// If a sync_token is provided, it fetches only the changes since the last sync.
-/// Otherwise, it performs a full sync of all contacts.
-/// Returns raw Gmail PersonResource objects and the next sync token - callers should map to service layer Contacts.
+/// Fetches all pages of the user's contacts and returns raw People resources.
 #[tracing::instrument(skip(client, access_token, sync_token), err)]
 pub(crate) async fn list_connections(
     client: &GmailClient,
     access_token: &str,
     sync_token: Option<&str>,
-) -> anyhow::Result<(Vec<PersonResource>, String)> {
-    let mut all_persons: Vec<PersonResource> = Vec::new();
-    let mut next_page_token: Option<String> = None;
-    let mut final_sync_token: Option<String> = None;
-
-    let http_client = client.inner.clone();
-
-    // Determine the base URL based on whether this is a full or incremental sync.
-    let base_url = if let Some(token) = sync_token {
-        // Incremental sync: Use syncToken, omit pageSize
-        format!(
-            "{}/people/me/connections?personFields=names,emailAddresses,photos&requestSyncToken=true&syncToken={}",
-            client.contacts_url, token
-        )
-    } else {
-        // Full sync: Use pageSize
-        format!(
-            "{}/people/me/connections?personFields=names,emailAddresses,photos&pageSize=1000&requestSyncToken=true",
-            client.contacts_url
-        )
-    };
+) -> Result<(Vec<PersonResource>, String), GmailApiHttpError> {
+    let mut people = Vec::new();
+    let mut page_token: Option<String> = None;
+    let mut next_sync_token: Option<String> = None;
 
     loop {
-        let mut url = base_url.clone();
-        if let Some(token) = &next_page_token {
-            url.push_str(&format!("&pageToken={}", token));
-        }
-
-        let response = http_client
-            .get(&url)
+        let mut request = client
+            .inner
+            .get(format!("{}/people/me/connections", client.contacts_url))
             .bearer_auth(access_token)
-            .send()
-            .await
-            .context("Failed to send request to People API (list connections)")?;
-
-        let response = response
-            .error_for_status()
-            .context("People API returned an error status (list connections)")?;
-
-        let connection_response = response
-            .json::<ConnectionsResponse>()
-            .await
-            .context("Failed to parse JSON response from People API (list connections)")?;
-
-        all_persons.extend(connection_response.connections);
-
-        // Keep the latest sync token returned by the API.
-        if let Some(sync_token) = connection_response.next_sync_token {
-            final_sync_token = Some(sync_token);
+            .query(&[
+                ("personFields", PERSON_FIELDS),
+                ("requestSyncToken", "true"),
+            ]);
+        if let Some(token) = sync_token {
+            request = request.query(&[("syncToken", token)]);
+        } else {
+            request = request.query(&[("pageSize", "1000")]);
+        }
+        if let Some(token) = page_token.as_deref() {
+            request = request.query(&[("pageToken", token)]);
         }
 
-        // Handle pagination.
-        if let Some(page_token) = connection_response.next_page_token {
-            next_page_token = Some(page_token);
-        } else {
+        let response = request.send().await.map_err(GmailApiHttpError::transport)?;
+        if !response.status().is_success() {
+            return Err(unsuccessful_response(response).await);
+        }
+
+        let page: ConnectionsResponse = decode_json_response(response).await?;
+        people.extend(page.connections);
+        if page.next_sync_token.is_some() {
+            next_sync_token = page.next_sync_token;
+        }
+        page_token = page.next_page_token;
+
+        if page_token.is_none() {
             break;
         }
     }
 
-    let next_sync_token = final_sync_token.context("People API did not return a nextSyncToken")?;
-
-    Ok((all_persons, next_sync_token))
+    let next_sync_token = next_sync_token.ok_or_else(|| {
+        GmailApiHttpError::InvalidResponse(
+            "People API did not return a nextSyncToken for connections".to_string(),
+        )
+    })?;
+    Ok((people, next_sync_token))
 }
 
-/// Fetches "Other Contacts" from the People API.
-/// If a sync_token is provided, it fetches only the changes since the last sync.
-/// Otherwise, it performs a full sync of all "Other Contacts".
-/// Returns raw Gmail PersonResource objects and the next sync token - callers should map to service layer Contacts.
+/// Fetches all pages of "Other Contacts" and returns raw People resources.
 #[tracing::instrument(skip(client, access_token, sync_token), err)]
 pub(crate) async fn list_other_contacts(
     client: &GmailClient,
     access_token: &str,
     sync_token: Option<&str>,
-) -> anyhow::Result<(Vec<PersonResource>, String)> {
-    let mut all_persons: Vec<PersonResource> = Vec::new();
-    let mut next_page_token: Option<String> = None;
-    let mut final_sync_token: Option<String> = None;
-
-    let http_client = client.inner.clone();
-
-    // Determine the base URL based on whether this is a full or incremental sync.
-    // Request the PROFILE source alongside CONTACT: the default CONTACT-only source
-    // returns no photos for "other contacts", so profile photos require PROFILE.
-    let base_url = if let Some(token) = sync_token {
-        // Incremental sync: Use syncToken, omit pageSize
-        format!(
-            "{}/otherContacts?readMask=names,emailAddresses,photos&sources=READ_SOURCE_TYPE_CONTACT&sources=READ_SOURCE_TYPE_PROFILE&requestSyncToken=true&syncToken={}",
-            client.contacts_url, token
-        )
-    } else {
-        // Full sync: Use pageSize
-        format!(
-            "{}/otherContacts?readMask=names,emailAddresses,photos&sources=READ_SOURCE_TYPE_CONTACT&sources=READ_SOURCE_TYPE_PROFILE&pageSize=1000&requestSyncToken=true",
-            client.contacts_url
-        )
-    };
+) -> Result<(Vec<PersonResource>, String), GmailApiHttpError> {
+    let mut people = Vec::new();
+    let mut page_token: Option<String> = None;
+    let mut next_sync_token: Option<String> = None;
 
     loop {
-        let mut url = base_url.clone();
-        if let Some(token) = &next_page_token {
-            url.push_str(&format!("&pageToken={}", token));
-        }
-
-        let response = http_client
-            .get(&url)
+        let mut request = client
+            .inner
+            .get(format!("{}/otherContacts", client.contacts_url))
             .bearer_auth(access_token)
-            .send()
-            .await
-            .context("Failed to send request to People API (list other contacts)")?;
-
-        let response = response
-            .error_for_status()
-            .context("People API returned an error status (list other contacts)")?;
-
-        let other_contacts_response = response
-            .json::<OtherContactsResponse>()
-            .await
-            .context("Failed to parse JSON response from People API (list other contacts)")?;
-
-        all_persons.extend(other_contacts_response.other_contacts);
-
-        // Keep the latest sync token returned by the API.
-        if let Some(sync_token) = other_contacts_response.next_sync_token {
-            final_sync_token = Some(sync_token);
+            .query(&[
+                ("readMask", PERSON_FIELDS),
+                ("sources", "READ_SOURCE_TYPE_CONTACT"),
+                ("sources", "READ_SOURCE_TYPE_PROFILE"),
+                ("requestSyncToken", "true"),
+            ]);
+        if let Some(token) = sync_token {
+            request = request.query(&[("syncToken", token)]);
+        } else {
+            request = request.query(&[("pageSize", "1000")]);
+        }
+        if let Some(token) = page_token.as_deref() {
+            request = request.query(&[("pageToken", token)]);
         }
 
-        // Handle pagination.
-        if let Some(page_token) = other_contacts_response.next_page_token {
-            next_page_token = Some(page_token);
-        } else {
+        let response = request.send().await.map_err(GmailApiHttpError::transport)?;
+        if !response.status().is_success() {
+            return Err(unsuccessful_response(response).await);
+        }
+
+        let page: OtherContactsResponse = decode_json_response(response).await?;
+        people.extend(page.other_contacts);
+        if page.next_sync_token.is_some() {
+            next_sync_token = page.next_sync_token;
+        }
+        page_token = page.next_page_token;
+
+        if page_token.is_none() {
             break;
         }
     }
 
-    let next_sync_token = final_sync_token.context("People API did not return a nextSyncToken")?;
-
-    Ok((all_persons, next_sync_token))
+    let next_sync_token = next_sync_token.ok_or_else(|| {
+        GmailApiHttpError::InvalidResponse(
+            "People API did not return a nextSyncToken for other contacts".to_string(),
+        )
+    })?;
+    Ok((people, next_sync_token))
 }
+
+#[cfg(test)]
+mod test;

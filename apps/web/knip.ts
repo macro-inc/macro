@@ -17,6 +17,12 @@ const config: KnipConfig = {
     '**/generated/**',
     'scripts/**',
     '../../packages/loro-mirror/**',
+    '../../packages/sdk/**',
+    // Standalone browser harnesses are loaded from HTML and Playwright/Vite
+    // configs rather than imported by the application graph.
+    'src/lib/graphql-cache/worker/browser-test/**',
+    // Compile-only API assertions are checked by tsc, not imported at runtime.
+    '**/*.typecheck.ts',
     '**/vite.config.ts',
     '**/vite-ci.config.ts',
     '**/vite.base.ts',
@@ -51,9 +57,11 @@ const config: KnipConfig = {
     '@vitest/ui',
     '@datadog/datadog-ci',
     'libheif-js',
+    '@tailwindcss/vite',
+    'bebop',
   ],
 
-  ignoreWorkspaces: ['../../packages/loro-mirror'],
+  ignoreWorkspaces: ['../../packages/loro-mirror', '../../packages/sdk'],
 };
 
 export default config;

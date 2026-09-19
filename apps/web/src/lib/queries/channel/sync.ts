@@ -90,7 +90,7 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
 
         if (existingState) {
           replaceTargetMessageState(payload.channel_id, target, {
-            content: payload.content,
+            content: payload.content ?? '',
             editedAt: payload.edited_at,
             updatedAt: payload.updated_at,
             attachments: existingState.attachments,

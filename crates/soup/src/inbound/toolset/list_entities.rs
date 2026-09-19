@@ -7,6 +7,7 @@ use crate::domain::{
     ports::SoupService,
 };
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use email::domain::{models::PreviewView, ports::EmailService};
 use filter_ast::Expr;
@@ -126,6 +127,8 @@ pub enum EntityItem {
         location: Option<String>,
         /// Optional conference join URL.
         conference_url: Option<String>,
+        /// Which conferencing system backs the join URL.
+        conference_provider: Option<String>,
         /// Canonical timed or all-day span.
         time: serde_json::Value,
         /// Tags on the event visible to the user.
@@ -248,6 +251,7 @@ impl EntityItem {
                 status: event.status,
                 location: event.location,
                 conference_url: event.conference_url,
+                conference_provider: event.conference_provider,
                 time: serde_json::to_value(event.time).unwrap_or(serde_json::Value::Null),
                 tags: resolve_applied_tags(&event.extra.properties, tag_map),
             },
@@ -654,6 +658,10 @@ impl ListEntities {
             .clone()
             .or_else(|| self.email_preset.is_some().then_some(vec![ItemType::Email]))
     }
+}
+
+impl ToolAnnotated for ListEntities {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Browse workspace");
 }
 
 #[async_trait]

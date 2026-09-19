@@ -21,8 +21,8 @@ INSERT INTO comms_channel_participants (channel_id, user_id, role, joined_at) VA
   ('00000000-0000-0000-0000-000000000c01', 'macro|user-c@test.com', 'member', '2024-01-01 00:00:00+00');
 
 -- share permission for call1
-INSERT INTO "SharePermission" (id, "isPublic", "publicAccessLevel", "createdAt", "updatedAt") VALUES
-  ('00000000-0000-0000-0000-00000000sp01', false, NULL, '2024-01-01 00:00:00+00', '2024-01-01 00:00:00+00');
+INSERT INTO "SharePermission" (id, "linkShare", "linkShareAccessLevel", "createdAt", "updatedAt") VALUES
+  ('00000000-0000-0000-0000-00000000sp01', NULL, NULL, '2024-01-01 00:00:00+00', '2024-01-01 00:00:00+00');
 
 INSERT INTO "ChannelSharePermission" (share_permission_id, channel_id, access_level) VALUES
   ('00000000-0000-0000-0000-00000000sp01', '00000000-0000-0000-0000-000000000c01', 'view');
@@ -39,8 +39,8 @@ INSERT INTO call_participants (call_id, user_id, joined_at) VALUES
   ('00000000-0000-0000-0000-0000000ca110', 'macro|user-b@test.com', '2024-01-01 12:01:00+00');
 
 -- share permission for the archived call
-INSERT INTO "SharePermission" (id, "isPublic", "publicAccessLevel", "createdAt", "updatedAt") VALUES
-  ('00000000-0000-0000-0000-00000000sp02', false, NULL, '2024-01-01 00:00:00+00', '2024-01-01 00:00:00+00');
+INSERT INTO "SharePermission" (id, "linkShare", "linkShareAccessLevel", "createdAt", "updatedAt") VALUES
+  ('00000000-0000-0000-0000-00000000sp02', NULL, NULL, '2024-01-01 00:00:00+00', '2024-01-01 00:00:00+00');
 
 INSERT INTO "ChannelSharePermission" (share_permission_id, channel_id, access_level) VALUES
   ('00000000-0000-0000-0000-00000000sp02', '00000000-0000-0000-0000-000000000c01', 'view');

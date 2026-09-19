@@ -1,4 +1,5 @@
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -31,6 +32,11 @@ pub struct DisplayResults {
         description = "The dynamic-UI view to render: an object with an optional `title` and a `widgets` array, per the provided dynamic-UI schema."
     )]
     pub view: serde_json::Value,
+}
+
+impl ToolAnnotated for DisplayResults {
+    const ANNOTATIONS: ToolAnnotations =
+        ToolAnnotations::read_only("Show results").without_idempotent();
 }
 
 #[async_trait]

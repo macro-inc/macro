@@ -1,10 +1,9 @@
 //! Frontend dev-server orchestration: generate the instance env, wait for the
-//! backend to be reachable through the proxy, then launch `bun run dev` pointed
+//! backend to be reachable through the proxy, then launch Vite pointed
 //! at the proxy origin.
 
 use std::io::Read;
 use std::os::unix::process::CommandExt;
-use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
@@ -14,7 +13,7 @@ use anyhow::{Context, Result};
 use super::instance::{Instance, Port};
 use super::{Mode, proxy, repo_root, stage::Stage};
 
-/// The app dir where `bun run dev` runs.
+/// The app dir where the Vite dev server runs.
 fn app_dir() -> std::path::PathBuf {
     repo_root().join("apps/web")
 }
@@ -40,33 +39,30 @@ pub fn static_dir(instance: &Instance) -> std::path::PathBuf {
 }
 
 /// Build the app bundle for headless serving and stage it into the instance
-/// dir. `prebuilt` skips the build and stages an existing dist (CI hands the
-/// binaries-style artifact straight in). The build mirrors `just build-dev`
+/// dir. The build mirrors `just build-dev`
 /// (dev-mode bundle, production optimizations), except the backend origin is
 /// the `same-origin` sentinel — resolved from `location.origin` at runtime — so
-/// the one bundle works on localhost and through any tunnel/preview hostname.
-pub fn build_static(
-    stage: &Stage,
-    instance: &Instance,
-    mode: Mode,
-    prebuilt: Option<&Path>,
-) -> Result<()> {
-    let dist = match prebuilt {
-        Some(dir) => dir.to_owned(),
-        None => {
-            let mut cmd = Command::new("bun");
-            cmd.current_dir(app_dir())
-                .args(["run", "--bun", "build"])
-                .env("MODE", "development")
-                .env("NODE_ENV", "production")
-                .env("VITE_LOCAL_SERVERS", "ALL")
-                .env("VITE_LOCAL_BACKEND_ORIGIN", "same-origin");
-            if mode.spec().runs_local_infra {
-                cmd.env("VITE_AI_EDITING_WORKER_URL", "/ai-editing");
-            }
-            stage.run("Building frontend bundle", &mut cmd)?;
-            app_dir().join("dist")
+/// the one bundle works on localhost and through any tunneled hostname.
+///
+/// Setting `VITE_LOCAL_BACKEND_ORIGIN` also keeps `import.meta.env.DEV` true
+/// in the static bundle (see `keepImportMetaDev` in apps/web/scripts). `vite build`
+/// otherwise compiles DEV from `NODE_ENV=production`, which drops local-only
+/// paths such as passwordless auto-login (`just run_local` uses `vite serve`,
+/// where DEV is already true). Headless `stack up` sets the same origin env.
+pub fn build_static(stage: &Stage, instance: &Instance, mode: Mode) -> Result<()> {
+    let dist = {
+        let mut cmd = Command::new("bun");
+        cmd.current_dir(app_dir())
+            .args(["run", "--bun", "build"])
+            .env("MODE", "development")
+            .env("NODE_ENV", "production")
+            .env("VITE_LOCAL_SERVERS", "ALL")
+            .env("VITE_LOCAL_BACKEND_ORIGIN", "same-origin");
+        if mode.spec().runs_local_infra {
+            cmd.env("VITE_AI_EDITING_WORKER_URL", "/ai-editing");
         }
+        stage.run("Building frontend bundle", &mut cmd)?;
+        app_dir().join("dist")
     };
     if stage.is_dry_run() {
         return Ok(());
@@ -105,7 +101,12 @@ pub fn build_static(
 /// and exercises the real browser -> proxy -> collector path. Left unset
 /// otherwise. This overrides the bare-dev defaults in apps/web/.env.local
 /// (Vite lets process env win).
-fn dev_env(instance: &Instance, mode: Mode, traces_enabled: bool) -> Vec<(String, String)> {
+fn dev_env(
+    instance: &Instance,
+    mode: Mode,
+    traces_enabled: bool,
+    enable_onboarding: bool,
+) -> Vec<(String, String)> {
     let mut env = vec![
         (
             "PORT".to_string(),
@@ -140,6 +141,12 @@ fn dev_env(instance: &Instance, mode: Mode, traces_enabled: bool) -> Vec<(String
         "VITE_ENABLE_BROWSER_OTEL".to_string(),
         traces_enabled.to_string(),
     ));
+    // Existing override: always set so the app's DEV_MODE default (on) does
+    // not win. `just run_local --enable-onboarding` is the opt-in.
+    env.push((
+        "VITE_ENABLE_ONBOARDING_V4".to_string(),
+        enable_onboarding.to_string(),
+    ));
     env
 }
 
@@ -169,11 +176,13 @@ impl Frontend {
     /// moment the processes die. Then reap `bun` and join the drain threads (their
     /// pipes close, so they exit).
     pub fn shutdown(&mut self) {
-        let pgid = self.child.id() as i32;
-        // SAFETY: a plain `kill(2)`; an invalid/already-dead group is a harmless
-        // ESRCH. The negative pid targets the whole process group.
-        unsafe {
-            libc::kill(-pgid, libc::SIGKILL);
+        if matches!(self.child.try_wait(), Ok(None)) {
+            let pgid = self.child.id() as i32;
+            // SAFETY: a plain `kill(2)`; an invalid/already-dead group is a harmless
+            // ESRCH. The negative pid targets the whole process group.
+            unsafe {
+                libc::kill(-pgid, libc::SIGKILL);
+            }
         }
         let _ = self.child.wait();
         for h in self.drains.drain(..) {
@@ -192,6 +201,12 @@ impl Frontend {
     }
 }
 
+impl Drop for Frontend {
+    fn drop(&mut self) {
+        self.shutdown();
+    }
+}
+
 fn tail_str(s: &str, n: usize) -> String {
     let lines: Vec<&str> = s.lines().collect();
     let start = lines.len().saturating_sub(n);
@@ -207,6 +222,7 @@ pub fn start(
     instance: &Instance,
     mode: Mode,
     traces_enabled: bool,
+    enable_onboarding: bool,
 ) -> Result<Option<Frontend>> {
     if mode.spec().wait_backend_before_frontend {
         wait_backend_ready(stage, instance)?;
@@ -235,12 +251,19 @@ pub fn start(
              previous run. Free it (`lsof -ti tcp:{port} | xargs kill`) and retry."
         );
     }
+    let mut prepare = Command::new("bash");
+    prepare.current_dir(app_dir()).args([
+        "-lc",
+        "just ensure-cache-wasm && just ensure-agent-fold-wasm",
+    ]);
+    stage.run("Preparing frontend dependencies", &mut prepare)?;
+
     let mut cmd = Command::new("bun");
     cmd.current_dir(app_dir())
-        .args(["run", "--bun", "dev"])
-        // Run bun (and the Vite child it spawns) in its OWN process group, so
-        // `shutdown` can signal the whole group — killing just `bun` would orphan
-        // Vite and leave the port held. (0 = "new group led by the child".)
+        .arg(repo_root().join("node_modules/vite/bin/vite.js"))
+        .args(["-c", "vite.config.ts"])
+        // Run Vite directly in its OWN process group. Avoiding the `bun run`
+        // package-script wrapper keeps the listener in the process we own.
         .process_group(0)
         // Open-but-empty stdin (piped, held open, never written): vite sees a
         // non-TTY stdin so it won't bind its own keypress shortcuts (no fight
@@ -249,7 +272,7 @@ pub fn start(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    for (k, v) in dev_env(instance, mode, traces_enabled) {
+    for (k, v) in dev_env(instance, mode, traces_enabled, enable_onboarding) {
         cmd.env(k, v);
     }
     let mut child = cmd.spawn().context("launching `bun run dev`")?;
@@ -273,18 +296,17 @@ pub fn start(
     // output) if the child exits first. A bare port poll would mistake a stale
     // server already on the port for "ready" while our child has died.
     let addr: std::net::SocketAddr = ([127, 0, 0, 1], port).into();
-    let wait_buf = Arc::clone(&captured);
-    stage.run_step("Starting frontend", || {
-        for _ in 0..120 {
+    let startup = stage.run_step("Starting frontend", || {
+        // Cold starts may rebuild optimized Wasm packages before Vite launches.
+        for _ in 0..600 {
             // Settle first: a failed bind (e.g. port already in use) makes vite
             // exit near-instantly, so if the child is still alive after this it
             // genuinely bound the port — rather than us connecting to a stale
             // server squatting it.
             std::thread::sleep(std::time::Duration::from_millis(300));
             if let Some(status) = child.try_wait()? {
-                let out = tail_str(&String::from_utf8_lossy(&wait_buf.lock().unwrap()), 30);
                 anyhow::bail!(
-                    "frontend dev server exited during startup ({status})\n{out}\n\
+                    "frontend dev server exited during startup ({status})\n\
                      (if the port is in use, free it: `lsof -ti tcp:{port} | xargs kill`)"
                 );
             }
@@ -294,8 +316,23 @@ pub fn start(
                 return Ok(());
             }
         }
-        anyhow::bail!("frontend dev server did not become ready")
-    })?;
+        anyhow::bail!("frontend dev server did not become ready after 180 seconds")
+    });
+
+    if let Err(error) = startup {
+        let pgid = child.id() as i32;
+        // SAFETY: the child leads the process group created above. ESRCH is
+        // harmless when Bun already exited.
+        unsafe {
+            libc::kill(-pgid, libc::SIGKILL);
+        }
+        let _ = child.wait();
+        for handle in drains.drain(..) {
+            let _ = handle.join();
+        }
+        let out = tail_str(&String::from_utf8_lossy(&captured.lock().unwrap()), 30);
+        anyhow::bail!("{error}\nfrontend output (last lines):\n{out}");
+    }
 
     Ok(Some(Frontend {
         child,

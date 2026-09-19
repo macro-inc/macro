@@ -53,7 +53,69 @@ fn every_action_maps_to_stable_columns() {
         let (tag, payload) = action.to_columns();
         assert_eq!(tag, expected_tag, "tag for {action:?}");
         assert_eq!(payload, expected_payload, "payload for {action:?}");
+        // VIEW_ACTION_TAGS is the SQL-side mirror of is_view: every variant
+        // must agree so tag-filtering queries classify rows identically.
+        assert_eq!(
+            VIEW_ACTION_TAGS.contains(&tag),
+            action.is_view(),
+            "VIEW_ACTION_TAGS disagrees with is_view for {action:?}"
+        );
+
+        // The read codec is the exact inverse: every stored pair decodes
+        // back to the action that produced it.
+        let decoded = Action::from_columns(tag, payload.as_ref())
+            .unwrap_or_else(|e| panic!("decode {tag}: {e}"));
+        assert_eq!(decoded, action, "round-trip for {tag}");
     }
+}
+
+#[test]
+fn unknown_tags_decode_to_recorded_unknown_preserving_the_row() {
+    let payload = Some(json!({ "novel": true }));
+
+    let (recorded, error) = RecordedAction::from_columns("renamed".to_string(), payload.clone());
+
+    assert_eq!(
+        recorded,
+        RecordedAction::Unknown {
+            tag: "renamed".to_string(),
+            payload,
+        }
+    );
+    assert!(matches!(error, Some(ActionDecodeError::UnknownTag)));
+}
+
+#[test]
+fn undecodable_payload_on_a_known_tag_degrades_to_unknown() {
+    let garbage = Some(json!({ "property": 42 }));
+
+    let (recorded, error) =
+        RecordedAction::from_columns("property_changed".to_string(), garbage.clone());
+
+    assert_eq!(
+        recorded,
+        RecordedAction::Unknown {
+            tag: "property_changed".to_string(),
+            payload: garbage,
+        }
+    );
+    assert!(matches!(error, Some(ActionDecodeError::InvalidPayload(_))));
+}
+
+#[test]
+fn missing_payload_on_a_payload_tag_is_an_explicit_error() {
+    assert!(matches!(
+        Action::from_columns("call_started", None),
+        Err(ActionDecodeError::MissingPayload)
+    ));
+}
+
+#[test]
+fn extra_payload_on_a_payload_free_tag_is_ignored() {
+    // A newer writer may start attaching payloads to today's payload-free
+    // tags; old readers must keep decoding the tag they know.
+    let decoded = Action::from_columns("edited", Some(&json!({ "future": 1 }))).unwrap();
+    assert_eq!(decoded, Action::Edited);
 }
 
 #[test]
@@ -71,6 +133,49 @@ fn activity_ids_are_deterministic_per_event_and_ordinal() {
     assert_eq!(activity_id(event_id, 0), activity_id(event_id, 0));
     assert_ne!(activity_id(event_id, 0), activity_id(event_id, 1));
     assert_ne!(activity_id(event_id, 0), activity_id(Uuid::from_u128(8), 0));
+}
+
+#[test]
+fn attribution_direct_leaves_subject_on_the_actor() {
+    let actor = Actor::new_from_user(user("macro|teo@example.com"));
+    let attribution = Attribution::direct(actor.clone());
+
+    assert_eq!(attribution.actor(), actor);
+    assert_eq!(attribution.on_behalf_of(), None);
+
+    let activity = Activity::attributed(
+        Uuid::from_u128(4),
+        0,
+        attribution,
+        EntityType::Document,
+        "doc-1",
+        CommonAction::Created,
+        Utc::now(),
+    );
+    assert_eq!(activity.actor, actor);
+    assert_eq!(activity.subject_id, "macro|teo@example.com");
+}
+
+#[test]
+fn attribution_delegated_keeps_actor_and_scopes_the_subject() {
+    let actor = Actor::new_from_user(user("macro|agent@example.com"));
+    let subject = user("macro|teo@example.com");
+    let attribution = Attribution::delegated(actor.clone(), subject.clone());
+
+    assert_eq!(attribution.actor(), actor);
+    assert_eq!(attribution.on_behalf_of(), Some(subject));
+
+    let activity = Activity::attributed(
+        Uuid::from_u128(5),
+        0,
+        attribution,
+        EntityType::Document,
+        "doc-1",
+        CommonAction::Edited,
+        Utc::now(),
+    );
+    assert_eq!(activity.actor, actor);
+    assert_eq!(activity.subject_id, "macro|teo@example.com");
 }
 
 #[test]

@@ -1,7 +1,8 @@
 //! GitHub Actions runner labels.
 //!
-//! We run on Namespace (namespace.so) hosted runners, selected by the dashboard
-//! *profile* name — the same convention the deploy workflows already use. Each
+//! We run on Namespace (namespace.so) hosted runners, mostly selected by the
+//! dashboard *profile* name — the same convention the deploy workflows already
+//! use. Each
 //! profile's persisted cache volume is configured in the Namespace dashboard;
 //! that volume backs Cargo/Nix state while compiled objects use Namespace's
 //! official remote sccache (see
@@ -25,6 +26,9 @@ pub enum Runner {
     /// cache volume, isolated from the deploy profiles so deploy's churn can't
     /// evict the CI Cargo/Nix caches.
     RustCi,
+    /// Apple Silicon, for jobs that need a real Apple SDK. A machine label
+    /// rather than a dashboard profile, so it needs no setup outside this file.
+    MacOsArm,
 }
 
 impl fmt::Display for Runner {
@@ -34,6 +38,7 @@ impl fmt::Display for Runner {
             Runner::Small => "namespace-profile-linux-small",
             Runner::Mid => "namespace-profile-linux-mid",
             Runner::RustCi => "namespace-profile-linux-rust-ci",
+            Runner::MacOsArm => "nscloud-macos-sequoia-arm64-6x14",
         })
     }
 }

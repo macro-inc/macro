@@ -1,4 +1,7 @@
 use super::*;
+use notification::domain::models::apple::{
+    APNSPushNotification, Alert, AlertDictionary, PushNotificationData,
+};
 
 fn uid(value: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str(value).unwrap().into_owned()
@@ -742,6 +745,7 @@ fn reminder_body_is_bounded_for_the_push_payload() {
     let metadata = ReminderMetadata {
         reminder_id: Uuid::parse_str("22222222-2222-4222-8222-222222222222").unwrap(),
         description: "🎉".repeat(2_000),
+        scheduled_for: None,
     };
 
     let body = metadata.format_body(None).unwrap();
@@ -751,22 +755,226 @@ fn reminder_body_is_bounded_for_the_push_payload() {
     assert!(body.len() < 4_096, "must fit inside the APNS payload limit");
 }
 
+fn new_email_metadata() -> NewEmailMetadata {
+    NewEmailMetadata {
+        sender: Some("Ada Lovelace".to_string()),
+        to_email: "teo@macro.com".to_string(),
+        thread_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa".to_string(),
+        subject: "Quarterly plan".to_string(),
+        snippet: "Here is the draft".to_string(),
+    }
+}
+
+fn new_email_apns(metadata: &NewEmailMetadata) -> APNSPushNotification<PushNotificationData> {
+    let entity = EntityType::EmailThread.with_entity_str(&metadata.thread_id);
+    let notification_id = Uuid::parse_str("55555555-5555-4555-8555-555555555555").unwrap();
+    metadata
+        .as_apns(None, &entity, notification_id)
+        .expect("new_email should build an APNS alert")
+}
+
+fn new_email_alert(metadata: &NewEmailMetadata) -> AlertDictionary {
+    match new_email_apns(metadata).aps.alert {
+        Some(Alert::Dictionary(alert)) => alert,
+        other => panic!("expected dictionary alert, got {other:?}"),
+    }
+}
+
+#[test]
+fn new_email_title_prefers_sender() {
+    assert_eq!(
+        new_email_metadata().format_title(None).unwrap(),
+        "Ada Lovelace"
+    );
+}
+
+#[test]
+fn new_email_apns_matches_gmail_layout() {
+    let metadata = new_email_metadata();
+    let alert = new_email_alert(&metadata);
+    assert_eq!(alert.title.as_deref(), Some("Ada Lovelace"));
+    assert_eq!(alert.subtitle.as_deref(), Some("Quarterly plan"));
+    assert_eq!(alert.body.as_deref(), Some("Here is the draft"));
+
+    let apns = new_email_apns(&metadata);
+    assert_eq!(
+        apns.aps.thread_id.as_deref(),
+        Some(metadata.thread_id.as_str())
+    );
+    assert_eq!(
+        apns.push_notification_data.notification_id,
+        Uuid::parse_str("55555555-5555-4555-8555-555555555555").unwrap()
+    );
+
+    let json = serde_json::to_value(&apns).unwrap();
+    assert_eq!(json["aps"]["alert"]["title"], "Ada Lovelace");
+    assert_eq!(json["aps"]["alert"]["subtitle"], "Quarterly plan");
+    assert_eq!(json["aps"]["alert"]["body"], "Here is the draft");
+}
+
+#[test]
+fn new_email_apns_falls_back_to_subject_without_sender() {
+    let mut metadata = new_email_metadata();
+    metadata.sender = None;
+
+    let alert = new_email_alert(&metadata);
+    assert_eq!(alert.title.as_deref(), Some("Quarterly plan"));
+    assert_eq!(alert.subtitle, None);
+    assert_eq!(alert.body.as_deref(), Some("Here is the draft"));
+}
+
+#[test]
+fn new_email_apns_treats_blank_sender_as_missing() {
+    let mut metadata = new_email_metadata();
+    metadata.sender = Some("   ".to_string());
+
+    let alert = new_email_alert(&metadata);
+    assert_eq!(alert.title.as_deref(), Some("Quarterly plan"));
+    assert_eq!(alert.subtitle, None);
+}
+
+#[test]
+fn new_email_apns_omits_blank_subject_subtitle() {
+    let mut metadata = new_email_metadata();
+    metadata.subject = "  ".to_string();
+
+    let alert = new_email_alert(&metadata);
+    assert_eq!(alert.title.as_deref(), Some("Ada Lovelace"));
+    assert_eq!(alert.subtitle, None);
+}
+
+#[test]
+fn new_email_collapse_key_is_per_thread() {
+    let entity = EntityType::EmailThread.with_entity_str("ignored");
+    let first = new_email_metadata();
+    let mut second = first.clone();
+    second.thread_id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb".to_string();
+
+    assert_ne!(
+        first.collapse_key(&entity).into_hashed().into_inner(),
+        second.collapse_key(&entity).into_hashed().into_inner()
+    );
+    assert_eq!(
+        first.collapse_key(&entity).into_hashed().into_inner(),
+        first.collapse_key(&entity).into_hashed().into_inner()
+    );
+}
+
+/// A reminder metadata collapse key, hashed for comparison.
+fn reminder_key(id: &str, scheduled_for: Option<DateTime<Utc>>) -> String {
+    let entity = EntityType::Document.with_entity_str("doc-1");
+    ReminderMetadata {
+        reminder_id: Uuid::parse_str(id).unwrap(),
+        description: "x".to_string(),
+        scheduled_for,
+    }
+    .collapse_key(&entity)
+    .into_hashed()
+    .into_inner()
+}
+
+/// The 09:00 firing on the given August day, as a daily reminder would produce.
+fn firing(day: u32) -> Option<DateTime<Utc>> {
+    Some(utc_datetime(&format!("2026-08-{day:02}T09:00:00Z")))
+}
+
 #[test]
 fn reminder_collapse_key_is_per_reminder_not_per_entity() {
-    let entity = EntityType::Document.with_entity_str("doc-1");
-    let key = |id: &str| {
-        ReminderMetadata {
-            reminder_id: Uuid::parse_str(id).unwrap(),
-            description: "x".to_string(),
-        }
-        .collapse_key(&entity)
-        .into_hashed()
-        .into_inner()
-    };
-
     // Two reminders on the same document must not collapse into one alert.
     assert_ne!(
-        key("22222222-2222-4222-8222-222222222222"),
-        key("33333333-3333-4333-8333-333333333333")
+        reminder_key("22222222-2222-4222-8222-222222222222", None),
+        reminder_key("33333333-3333-4333-8333-333333333333", None)
     );
+}
+
+#[test]
+fn reminder_collapse_key_separates_two_firings_of_one_reminder() {
+    // A daily reminder's occurrences share an id and a description, so without
+    // the firing in the key Tuesday's alert would replace Monday's unread one.
+    const ID: &str = "22222222-2222-4222-8222-222222222222";
+
+    assert_ne!(reminder_key(ID, firing(3)), reminder_key(ID, firing(4)));
+}
+
+#[test]
+fn reminder_collapse_key_is_stable_for_a_redelivered_firing() {
+    // The behaviour the key existed for in the first place: sending the same
+    // firing twice must replace the alert rather than stack a duplicate.
+    const ID: &str = "22222222-2222-4222-8222-222222222222";
+
+    assert_eq!(reminder_key(ID, firing(3)), reminder_key(ID, firing(3)));
+}
+
+#[test]
+fn reminder_metadata_reads_back_without_a_firing() {
+    // Notifications written before recurring dispatch have no `scheduledFor`,
+    // and must still deserialize rather than breaking the inbox.
+    let stored = serde_json::json!({
+        "reminderId": "22222222-2222-4222-8222-222222222222",
+        "description": "follow up",
+    });
+
+    let metadata: ReminderMetadata =
+        serde_json::from_value(stored).expect("legacy metadata should deserialize");
+
+    assert!(metadata.scheduled_for.is_none());
+}
+
+#[test]
+fn notification_status_patch_decodes_notif_event_metadata() {
+    use std::borrow::Cow;
+
+    use notification::domain::models::{
+        PatchDelete, UserNotificationRow, websocket_notification_event::NotificationTopicEvent,
+    };
+
+    let user = uid("macro|recipient@example.com");
+    let assigned_by = uid("macro|assigner@example.com");
+    let row = UserNotificationRow {
+        owner_id: user.clone(),
+        notification_id: Uuid::nil(),
+        notification_event_type: "task_assigned".to_string(),
+        entity: EntityType::Document.with_entity_string("document-id".to_string()),
+        sent: true,
+        done: false,
+        created_at: Utc::now(),
+        viewed_at: None,
+        updated_at: Utc::now(),
+        deleted_at: None,
+        notification_metadata: serde_json::json!({
+            "taskId": "task-1",
+            "taskName": "Test task",
+            "assignedBy": assigned_by.as_ref(),
+        }),
+        sender_id: None,
+    };
+    let event = NotificationTopicEvent::NotificationStatusesUpdatedForUser {
+        user,
+        updates: vec![PatchDelete::Patch {
+            diff: Cow::Owned(row),
+        }],
+    };
+
+    let NotificationTopicEvent::NotificationStatusesUpdatedForUser { updates, .. } = event
+        .deserialize_metadata::<crate::NotifEvent>()
+        .expect("tagged status patch metadata decodes")
+    else {
+        panic!("expected user notification statuses event");
+    };
+    let PatchDelete::Patch { diff } = &updates[0] else {
+        panic!("expected status patch");
+    };
+    let crate::NotifEvent::TaskAssigned(TaskAssignedMetadata {
+        task_id,
+        task_name,
+        assigned_by: decoded_assigned_by,
+        ..
+    }) = &diff.notification_metadata
+    else {
+        panic!("expected task assigned metadata");
+    };
+
+    assert_eq!(task_id, "task-1");
+    assert_eq!(task_name.as_deref(), Some("Test task"));
+    assert_eq!(decoded_assigned_by, &assigned_by);
 }

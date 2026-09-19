@@ -26,6 +26,16 @@ use opensearch_client::search::documents::{DocumentSearchMode, PropertyFilterArg
 use opensearch_client::search::model::SearchHit;
 use opensearch_client::search::unified::UnifiedSearchArgs;
 
+/// Whether calendar events may appear in this search.
+///
+/// The flag overrides the request, never the reverse. The AI search tools
+/// default `entityTypes` to empty — which means every type — so an environment
+/// whose calendar index has not been created and backfilled cannot rely on
+/// callers opting out.
+fn calendar_events_searchable(requested: bool, flag_enabled: bool) -> bool {
+    requested && flag_enabled
+}
+
 /// Identifies the source of a search result for cursor regeneration
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SearchSource {
@@ -256,16 +266,22 @@ pub(in crate::api::search) async fn perform_unified_search(
     let doc_filters = search_filters.document_filters;
     let project_filters = search_filters.project_filters;
     let call_filters = search_filters.call_filters;
+    let calendar_event_filters = search_filters.calendar_event_filters;
 
     let should_include_documents = search_filters.should_include_documents;
     // A tag filter drops channels (and CRM, below) because they aren't
     // tag-indexed. Every tag-indexed source — documents, chats, projects,
-    // emails, call records — stays included and applies the filter itself.
+    // emails, call records, calendar events — stays included and applies the
+    // filter itself.
     let should_include_channels = search_filters.should_include_channels && !tags_active;
     let should_include_chats = search_filters.should_include_chats;
     let should_include_projects = search_filters.should_include_projects;
     let should_include_emails = search_filters.should_include_emails;
     let should_include_call_records = search_filters.should_include_call_records;
+    let should_include_calendar_events = calendar_events_searchable(
+        search_filters.should_include_calendar_events,
+        ctx.calendar_search_enabled,
+    );
     let email_terms = search_terms.clone();
 
     // Await all tasks in parallel
@@ -276,6 +292,7 @@ pub(in crate::api::search) async fn perform_unified_search(
         mut filter_email_response,
         mut filter_project_response,
         mut filter_call_record_response,
+        mut filter_calendar_event_response,
     ) = tokio::try_join!(
         doc_filters.filter_to_search_args(
             ctx,
@@ -312,6 +329,12 @@ pub(in crate::api::search) async fn perform_unified_search(
             user_id.as_ref(),
             user_organization_id,
             should_include_call_records,
+        ),
+        calendar_event_filters.filter_to_search_args(
+            ctx,
+            user_id.as_ref(),
+            user_organization_id,
+            should_include_calendar_events,
         )
     )
     .map_err(|e| SearchError::InternalError(anyhow::anyhow!("tokio error: {:?}", e)))?;
@@ -323,8 +346,8 @@ pub(in crate::api::search) async fn perform_unified_search(
     // channel messages are single-doc-per-message so each token must
     // appear in the same message via bool.must. Documents, chats, and
     // call records are join-shape, where each term becomes a separate
-    // has_child clause ANDed via bool.must. Projects are flat and match
-    // terms against their name only.
+    // has_child clause ANDed via bool.must. Projects and calendar events are
+    // flat and match terms against their name/title only.
     filter_document_response.terms = search_terms.clone();
     filter_document_response.property_filters = property_filter_args;
     filter_document_response.tag_option_ids = tag_option_ids.clone();
@@ -340,8 +363,11 @@ pub(in crate::api::search) async fn perform_unified_search(
     filter_call_record_response.tag_option_ids = tag_option_ids.clone();
     filter_call_record_response.match_all_tags = match_all_tags;
     filter_project_response.terms = search_terms.clone();
-    filter_project_response.tag_option_ids = tag_option_ids;
+    filter_project_response.tag_option_ids = tag_option_ids.clone();
     filter_project_response.match_all_tags = match_all_tags;
+    filter_calendar_event_response.terms = search_terms.clone();
+    filter_calendar_event_response.tag_option_ids = tag_option_ids;
+    filter_calendar_event_response.match_all_tags = match_all_tags;
 
     // Widen the email access filter to every inbox the caller can reach (their
     // own plus delegated). Connected secondary inboxes share the owner's
@@ -419,6 +445,14 @@ pub(in crate::api::search) async fn perform_unified_search(
             {
                 indices.insert(models_opensearch::OpenSearchEntityType::Projects);
             }
+            // An event set narrowed to nothing would be rejected by the query
+            // builder rather than matching everything, so drop the index.
+            if should_include_calendar_events
+                && !(filter_calendar_event_response.ids_only
+                    && filter_calendar_event_response.calendar_event_ids.is_empty())
+            {
+                indices.insert(models_opensearch::OpenSearchEntityType::CalendarEvents);
+            }
             indices
         },
         document_search_args: filter_document_response.clone(),
@@ -427,6 +461,7 @@ pub(in crate::api::search) async fn perform_unified_search(
         chat_search_args: filter_chat_response.clone(),
         call_record_search_args: filter_call_record_response.clone(),
         project_search_args: filter_project_response,
+        calendar_event_search_args: filter_calendar_event_response,
     };
 
     // Call search functions in parallel for included entity types
@@ -458,12 +493,14 @@ pub(in crate::api::search) async fn perform_unified_search(
             }
         },
         async {
-            // Documents, email subjects, project names, and call names are
-            // name-searched in OpenSearch. In Name mode keep only those
-            // indices: chats still name-search in Postgres above, and channels
-            // have no name concept. Documents match `document_name`, emails
-            // their subject, projects their `name`, calls their `name`.
-            // Projects have no content, so a content-only search drops them.
+            // Documents, email subjects, project names, call names, and
+            // calendar event titles are name-searched in OpenSearch. In Name
+            // mode keep only those indices: chats still name-search in
+            // Postgres above, and channels have no name concept. Documents
+            // match `document_name`, emails their subject, projects their
+            // `name`, calls their `name`, calendar events their `title`.
+            // Projects and calendar events have no content, so a content-only
+            // search drops them.
             let mut args = unified_search_args;
             match search_on {
                 SearchOn::Name => {
@@ -475,6 +512,7 @@ pub(in crate::api::search) async fn perform_unified_search(
                             || *i == models_opensearch::OpenSearchEntityType::Emails
                             || *i == models_opensearch::OpenSearchEntityType::Projects
                             || *i == models_opensearch::OpenSearchEntityType::CallRecords
+                            || *i == models_opensearch::OpenSearchEntityType::CalendarEvents
                     });
                 }
                 SearchOn::NameContent => {
@@ -485,6 +523,8 @@ pub(in crate::api::search) async fn perform_unified_search(
                     args.document_search_args.mode = DocumentSearchMode::Content;
                     args.search_indices
                         .remove(&models_opensearch::OpenSearchEntityType::Projects);
+                    args.search_indices
+                        .remove(&models_opensearch::OpenSearchEntityType::CalendarEvents);
                 }
             }
             if args.search_indices.is_empty() {

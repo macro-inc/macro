@@ -1,0 +1,18 @@
+---
+title: ListCompanies
+description: "List the CRM companies tracked by the authenticated user's team, sorted by most recent interaction. Each row includes the company id, name, domains, last interaction time, and its pipeline Stage / Owner / Revenue properties when set. Use the filters to narrow results: `search` for name/domain text, `stage` for pipeline stage, `owner_user_id` for companies owned by a user. Use GetCompany for one company's full details (contacts + all properties), and SetEntityProperty with entity_type=company to move stages or update owner/revenue/custom properties."
+---
+
+# ListCompanies
+
+List the CRM companies tracked by the authenticated user's team, sorted by most recent interaction. Each row includes the company id, name, domains, last interaction time, and its pipeline Stage / Owner / Revenue properties when set. Use the filters to narrow results: `search` for name/domain text, `stage` for pipeline stage, `owner_user_id` for companies owned by a user. Use GetCompany for one company's full details (contacts + all properties), and SetEntityProperty with entity_type=company to move stages or update owner/revenue/custom properties.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `search` | string | No | Case-insensitive substring matched against company names and domains (e.g. "acme" matches "Acme Corp" and "acme.com"). |
+| `stage` | string | No | Filter to companies in this pipeline stage. Accepts a stage label matched case-insensitively (e.g. "lead", "Customer" — teams may have custom stage names) or a stage option UUID. |
+| `owner_user_id` | string | No | Filter to companies whose Owner property is this Macro user id (e.g. "macro\|user@example.com"). Use ListTeamMembers to find user ids. |
+| `include_hidden` | boolean | No | Also include companies hidden from the CRM. Defaults to false. Requires team admin or owner role. |
+| `limit` | integer | No | Maximum number of companies to return. Defaults to 50; max 200. |

@@ -1,6 +1,7 @@
 //! ListCompanies tool for browsing the caller team's CRM companies.
 
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use entity_access::domain::{
@@ -106,6 +107,10 @@ pub struct ListCompanies {
     #[schemars(description = "Maximum number of companies to return. Defaults to 50; max 200.")]
     #[serde(default)]
     pub limit: Option<u16>,
+}
+
+impl ToolAnnotated for ListCompanies {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("List companies");
 }
 
 #[async_trait]

@@ -18,3 +18,6 @@ pub mod ports;
 #[cfg(feature = "ports")]
 /// Webhook service implementation.
 pub mod service;
+#[cfg(feature = "stream")]
+/// Live webhook event streaming service.
+pub mod stream;

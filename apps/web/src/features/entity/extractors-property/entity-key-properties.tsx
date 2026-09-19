@@ -57,6 +57,9 @@ function getEntityType(entity: EntityData): EntityType {
     .with({ type: 'reminder' }, () => {
       throw new Error('reminders do not support properties');
     })
+    .with({ type: 'calendar_event' }, () => {
+      throw new Error('calendar events do not support properties');
+    })
     .exhaustive();
 }
 

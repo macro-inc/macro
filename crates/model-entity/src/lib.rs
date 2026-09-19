@@ -65,6 +65,9 @@ pub enum EntityType {
     /// The entity is an AI skill: either a skill document or a built-in
     /// system skill (see the `system_skills` crate)
     Skill,
+    /// The entity is an AI coding agent session (see the `agent_session`
+    /// crate)
+    AgentSession,
 }
 
 impl EntityType {
@@ -98,6 +101,10 @@ impl EntityType {
             // Skill refs are access-checked against the underlying document
             // (system skills are visible to everyone).
             EntityType::Skill => false,
+            // Agent sessions hold `entity_access` rows - the owner with
+            // owner, the channel the bot was mentioned in as editor - but
+            // are not something you file into a project.
+            EntityType::AgentSession => false,
         }
     }
     /// provide an entity string slice to upgrade this type into an [Entity]

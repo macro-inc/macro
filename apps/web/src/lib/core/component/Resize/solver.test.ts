@@ -3,6 +3,59 @@ import { describe, expect, it } from 'vitest';
 import { createResizeSolver } from './solver';
 
 describe('createResizeSolver', () => {
+  describe('swap', () => {
+    it('reorders registered panels without changing their sizing intent', async () => {
+      const { solver, dispose } = createRoot((dispose) => ({
+        dispose,
+        solver: createResizeSolver({
+          direction: 'horizontal',
+          gutter: () => 0,
+          size: () => 1000,
+          panels: [],
+        }),
+      }));
+
+      solver.addPanel({ id: 'A', minSize: 0 });
+      solver.addPanel({ id: 'B', minSize: 0 });
+      await Promise.resolve();
+      solver.moveHandle(0, 200);
+      expect(solver.solve().sizes.get('A')).toBe(700);
+      expect(solver.solve().sizes.get('B')).toBe(300);
+
+      solver.swap('A', 'B');
+
+      expect(solver.order()).toEqual(['B', 'A']);
+      expect(solver.solve().sizes.get('A')).toBe(700);
+      expect(solver.solve().sizes.get('B')).toBe(300);
+
+      dispose();
+    });
+
+    it('moves all contiguous members of a share group together', async () => {
+      const { solver, dispose } = createRoot((dispose) => ({
+        dispose,
+        solver: createResizeSolver({
+          direction: 'horizontal',
+          gutter: () => 0,
+          size: () => 1000,
+          panels: [],
+        }),
+      }));
+
+      solver.addPanel({ id: 'A', minSize: 0 });
+      solver.addPanel({ id: 'B', minSize: 0, shareGroup: 'pair' });
+      solver.addPanel({ id: 'C', minSize: 0, shareGroup: 'pair' });
+      solver.addPanel({ id: 'D', minSize: 0 });
+      await Promise.resolve();
+
+      solver.swap('B', 'D');
+
+      expect(solver.order()).toEqual(['A', 'D', 'B', 'C']);
+
+      dispose();
+    });
+  });
+
   describe('addPanel', () => {
     it('should insert a panel at index 0 when index=0 is passed', () => {
       createRoot((dispose) => {
@@ -655,6 +708,34 @@ describe('createResizeSolver', () => {
       setSize(1000);
       expect(solver.solve().sizes.get('A')).toBe(600);
       expect(solver.solve().sizes.get('B')).toBe(400);
+
+      dispose();
+    });
+
+    it('holds a single split at full width when the zone measures zero', async () => {
+      const [size, setSize] = createSignal(1000);
+      const { solver, dispose } = createRoot((dispose) => ({
+        dispose,
+        solver: createResizeSolver({
+          direction: 'horizontal',
+          gutter: () => 0,
+          size,
+          panels: [],
+        }),
+      }));
+
+      await Promise.resolve();
+
+      solver.addPanel({ id: 'A', minSize: 400 });
+      expect(solver.solve().sizes.get('A')).toBe(1000);
+
+      // Zone momentarily reports 0 (unmeasured / hidden under a popover).
+      setSize(0);
+      expect(solver.solve().sizes.get('A')).toBe(1000);
+
+      // A real measurement still re-solves normally.
+      setSize(800);
+      expect(solver.solve().sizes.get('A')).toBe(800);
 
       dispose();
     });

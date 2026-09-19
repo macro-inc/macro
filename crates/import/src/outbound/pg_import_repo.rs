@@ -744,3 +744,12 @@ impl ImportRepo for PgImportRepo {
         Ok(result.rows_affected())
     }
 }
+
+// The domain error stays sqlx-free; this adapter owns the mapping so `?`
+// works on sqlx results throughout the crate's outbound code. The raw sqlx
+// error travels inside the report.
+impl From<sqlx::Error> for ImportError {
+    fn from(e: sqlx::Error) -> Self {
+        Self::Db(rootcause::report!(e).into_dynamic())
+    }
+}

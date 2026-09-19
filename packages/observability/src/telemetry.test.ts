@@ -13,6 +13,7 @@ import {
 } from "@opentelemetry/sdk-trace-base";
 import { beforeEach, describe, expect, test } from "vitest";
 import { Telemetry } from "./index";
+import { userIdSuppressed } from "./privacy";
 import { ZoneContextManager } from "./zone";
 
 context.setGlobalContextManager(new ZoneContextManager().enable());
@@ -20,7 +21,19 @@ context.setGlobalContextManager(new ZoneContextManager().enable());
 const spanExporter = new InMemorySpanExporter();
 trace.setGlobalTracerProvider(
 	new BasicTracerProvider({
-		spanProcessors: [new SimpleSpanProcessor(spanExporter)],
+		spanProcessors: [
+			{
+				onStart: (span, parentContext) => {
+					if (!userIdSuppressed(parentContext)) {
+						span.setAttribute("usr.id", "test-user");
+					}
+				},
+				onEnd: () => {},
+				forceFlush: () => Promise.resolve(),
+				shutdown: () => Promise.resolve(),
+			},
+			new SimpleSpanProcessor(spanExporter),
+		],
 	}),
 );
 
@@ -76,6 +89,25 @@ describe("Telemetry", () => {
 		expect(spanExporter.getFinishedSpans()[0]?.attributes).toMatchObject({
 			"document.id": "abc",
 		});
+	});
+
+	test("anonymous span trees are detached roots and suppress identity", () => {
+		const regular = Telemetry.span("regular");
+		const anonymous = regular.run(() =>
+			Telemetry.anonymousSpan("cache.request"),
+		);
+		const child = anonymous.span("cache.storage");
+		child.end();
+		anonymous.end();
+		regular.end();
+
+		const spans = new Map(
+			spanExporter.getFinishedSpans().map((span) => [span.name, span]),
+		);
+		expect(spans.get("regular")?.attributes["usr.id"]).toBe("test-user");
+		expect(spans.get("cache.request")?.attributes).not.toHaveProperty("usr.id");
+		expect(spans.get("cache.request")?.parentSpanContext).toBeUndefined();
+		expect(spans.get("cache.storage")?.attributes).not.toHaveProperty("usr.id");
 	});
 
 	test("ends a callback span after the async operation", async () => {

@@ -29,6 +29,9 @@ pub enum FusionAuthClientError {
     /// The refresh token was not found or has expired.
     #[error("refresh token was not found or has expired")]
     InvalidRefreshToken,
+    /// Microsoft OAuth credentials were not configured.
+    #[error("Microsoft OAuth not configured")]
+    MicrosoftOAuthNotConfigured,
     /// A generic error occurred.
     #[error("an unknown error occurred")]
     Generic(GenericErrorResponse),

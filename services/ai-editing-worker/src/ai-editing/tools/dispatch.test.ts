@@ -2,6 +2,7 @@ import type { LanguageModel, LanguageModelUsage } from 'ai';
 import { describe, expect, it } from 'vitest';
 import type { coder } from '../agents';
 import { createEditingSession, loadMarkdown } from '../ai-toolkit/session';
+import { serializeWithXml } from '../utils';
 import { mockAwarenessSource } from '../awareness/awareness-source';
 import { Doc } from '../doc/doc';
 import { TokenTracker } from '../token-tracker';
@@ -218,5 +219,119 @@ describe('dispatch -- onInputAvailable early launch', () => {
       { toolCallId: 't1', messages: [] }
     );
     expect(tasks.sort()).toEqual(['other edit', 'this edit']);
+  });
+});
+
+describe('conflicting parallel dispatches', () => {
+  /** Harness that records coder start/finish order and lets each run be
+   *  released on demand, so overlap is observable rather than timing-dependent. */
+  function setupOrdered() {
+    const session = createEditingSession();
+    loadMarkdown(session, '# Title\n\nalpha\n\nbravo\n');
+    const ids = [...indexXmlRanges(serializeWithXml(session)).byId.keys()];
+
+    const events: string[] = [];
+    const gates = new Map<string, () => void>();
+
+    const dispatch = createDispatchTool({
+      session,
+      makeChildModel: () => childModel,
+      tracker: new TokenTracker(),
+      runner: () => [],
+      makeWriter: async () => ({
+        doc: new Doc(session),
+        awarenessSource: mockAwarenessSource(),
+        release: () => {},
+      }),
+      runTask: async (_session, task) => {
+        events.push(`start:${task}`);
+        await new Promise<void>((resolve) => gates.set(task, resolve));
+        events.push(`end:${task}`);
+        return coderResult;
+      },
+    });
+    const release = async (task: string) => {
+      // Let the coder that owns this gate actually register first.
+      for (let i = 0; i < 50 && !gates.has(task); i++) await Promise.resolve();
+      gates.get(task)?.();
+      await new Promise((r) => setTimeout(r, 0));
+    };
+    return { dispatch, events, release, ids };
+  }
+
+  it('runs edits on different nodes concurrently', async () => {
+    const { dispatch, events, release, ids } = setupOrdered();
+    const a = `edit ${ids[0]}`;
+    const b = `edit ${ids[1]}`;
+
+    const runA = dispatch.tool.execute!({ editing_instruction: a }, {
+      toolCallId: 'a',
+      messages: [],
+    } as never);
+    const runB = dispatch.tool.execute!({ editing_instruction: b }, {
+      toolCallId: 'b',
+      messages: [],
+    } as never);
+
+    await new Promise((r) => setTimeout(r, 0));
+    // Both are in flight before either finishes.
+    expect(events.filter((e) => e.startsWith('start:'))).toHaveLength(2);
+
+    await release(a);
+    await release(b);
+    await Promise.all([runA, runB]);
+  });
+
+  it('serializes edits that target the same node', async () => {
+    const { dispatch, events, release, ids } = setupOrdered();
+    const shared = ids[0]!;
+    const a = `first touching ${shared}`;
+    const b = `second touching ${shared}`;
+
+    const runA = dispatch.tool.execute!({ editing_instruction: a }, {
+      toolCallId: 'a',
+      messages: [],
+    } as never);
+    const runB = dispatch.tool.execute!({ editing_instruction: b }, {
+      toolCallId: 'b',
+      messages: [],
+    } as never);
+
+    await new Promise((r) => setTimeout(r, 0));
+    // The second coder must not have started while the first holds the node.
+    expect(events).toEqual([`start:${a}`]);
+
+    await release(a);
+    await release(b);
+    await Promise.all([runA, runB]);
+
+    expect(events).toEqual([
+      `start:${a}`,
+      `end:${a}`,
+      `start:${b}`,
+      `end:${b}`,
+    ]);
+  });
+
+  it('does not serialize on prose that merely looks like an id', async () => {
+    const { dispatch, events, release } = setupOrdered();
+    const a = 'rewrite the Suggested constraint paragraph';
+    const b = 'rewrite the Suggested constraint heading';
+
+    const runA = dispatch.tool.execute!({ editing_instruction: a }, {
+      toolCallId: 'a',
+      messages: [],
+    } as never);
+    const runB = dispatch.tool.execute!({ editing_instruction: b }, {
+      toolCallId: 'b',
+      messages: [],
+    } as never);
+
+    await new Promise((r) => setTimeout(r, 0));
+    expect(events.filter((e) => e.startsWith('start:'))).toHaveLength(2);
+
+    await release(a);
+    await release(b);
+    await Promise.all([runA, runB]);
   });
 });

@@ -2,6 +2,7 @@ import { ItemPreview } from '@core/component/ItemPreview';
 import type { ItemType } from '@service-storage/client';
 import { cn } from '@ui';
 import { For, Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import type { EntityRef, WidgetOf } from '../schema';
 import { TEXT } from '../tokens';
 
@@ -9,16 +10,20 @@ export type TimelineProps = Omit<WidgetOf<'timeline'>, 'type'>;
 
 type TimelineEvent = TimelineProps['events'][number];
 
-/** Map a schema EntityType onto the ItemType string ItemPreview expects. */
-function toItemType(type: EntityRef['type']): string {
-  switch (type) {
-    case 'email_thread':
-      return 'email';
-    case 'foreign_entity':
-      return 'foreign';
-    default:
-      return type;
-  }
+function toItemType(type: EntityRef['type']): ItemType | undefined {
+  return match<EntityRef['type'], ItemType | undefined>(type)
+    .with('email_thread', () => 'email')
+    .with('foreign_entity', () => 'foreign')
+    .with(
+      'user',
+      'team',
+      'static_file',
+      'reminder',
+      'skill',
+      'agent_session',
+      () => undefined
+    )
+    .otherwise((itemType) => itemType);
 }
 
 /**
@@ -115,7 +120,7 @@ function TimeLineItem(props: {
             <div class="mt-0.5 w-fit max-w-full">
               <ItemPreview
                 id={entity().id}
-                type={toItemType(entity().type) as ItemType}
+                type={toItemType(entity().type)}
                 class="ring-0"
               />
             </div>

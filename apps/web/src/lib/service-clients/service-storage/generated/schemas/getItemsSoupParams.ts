@@ -18,8 +18,10 @@ export type GetItemsSoupParams = {
    */
   limit?: number;
   /**
-   * Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_at.
-   */
+ * Sort method. Options are viewed_at, created_at, updated_at,
+viewed_updated, frecency, touched_by_me, notified_at. Defaults to
+viewed_at.
+ */
   sort_method?: SoupApiSort;
   /**
  * Sort direction. Options are asc, desc. Defaults to desc.

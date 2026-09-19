@@ -3,6 +3,8 @@ use import::domain::models::ImportState;
 use import::domain::ports::Result as ImportResult;
 use import::domain::service::RunImportOutcome;
 use mcp_client::domain::models::{McpServerRecord, StoredCredentials};
+use mcp_client::domain::service::McpToolSet;
+use mcp_select::{ConnectorRef, ConnectorSelect, UserMcpTools};
 use std::sync::Mutex;
 use uuid::Uuid;
 
@@ -180,6 +182,38 @@ impl ImportService for MockImport {
     }
 }
 
+/// Selector mock mirroring the native-only rule: no Pipedream connectors in
+/// these tests, so connectivity is the native `credentials && url` match.
+struct MockSelect {
+    store: Arc<MockStore>,
+}
+
+impl ConnectorSelect for MockSelect {
+    async fn user_toolset(&self, _user: &MacroUserIdStr<'static>) -> UserMcpTools {
+        UserMcpTools::Native(McpToolSet::new(&[], self.store.clone()).await)
+    }
+
+    async fn connector_toolset(
+        &self,
+        _user: &MacroUserIdStr<'static>,
+        _connector: ConnectorRef<'_>,
+    ) -> anyhow::Result<Option<UserMcpTools>> {
+        Ok(None)
+    }
+
+    async fn connector_connected(
+        &self,
+        _user: &MacroUserIdStr<'static>,
+        connector: ConnectorRef<'_>,
+    ) -> anyhow::Result<bool> {
+        Ok(self
+            .store
+            .records
+            .iter()
+            .any(|r| r.credentials.is_some() && r.url == connector.native_server_url))
+    }
+}
+
 fn record(url: &str, authenticated: bool) -> McpServerRecord {
     McpServerRecord {
         user_id: user(),
@@ -195,15 +229,20 @@ fn service(
     status: OnboardingStatus,
     records: Vec<McpServerRecord>,
 ) -> (
-    OnboardingServiceImpl<MockRepo, MockStore, MockImport>,
+    OnboardingServiceImpl<MockRepo, MockStore, MockImport, MockSelect>,
     Arc<MockImport>,
 ) {
     let import = Arc::new(MockImport::default());
     (
         OnboardingServiceImpl::new(
             MockRepo::new(status),
-            Arc::new(MockStore { records }),
+            Arc::new(MockStore {
+                records: records.clone(),
+            }),
             import.clone(),
+            Arc::new(MockSelect {
+                store: Arc::new(MockStore { records }),
+            }),
         ),
         import,
     )
@@ -262,12 +301,16 @@ async fn reconcile_ignores_users_who_never_entered_the_flow() {
     // connecting a server outside onboarding must not get gathers (or an
     // onboarding row) out of it.
     let import = Arc::new(MockImport::default());
+    let records = vec![record("https://mcp.linear.app/mcp", true)];
     let service = OnboardingServiceImpl::new(
         MockRepo::missing(),
         Arc::new(MockStore {
-            records: vec![record("https://mcp.linear.app/mcp", true)],
+            records: records.clone(),
         }),
         import.clone(),
+        Arc::new(MockSelect {
+            store: Arc::new(MockStore { records }),
+        }),
     );
 
     service.reconcile(user()).await.expect("reconcile");
@@ -292,6 +335,9 @@ async fn get_state_carries_the_suggested_team_domain() {
         MockRepo::new(OnboardingStatus::Active),
         Arc::new(MockStore { records: vec![] }),
         Arc::new(MockImport::default()),
+        Arc::new(MockSelect {
+            store: Arc::new(MockStore { records: vec![] }),
+        }),
     );
 
     let state = service.get_state(user()).await.expect("get_state");

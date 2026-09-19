@@ -35,10 +35,6 @@ export default function BlockCode() {
     })
   );
 
-  createEffect(() => {
-    console.log('MDOE', mode());
-  });
-
   return (
     <DocumentBlockContainer usesCenterBar>
       <Show when={!isNestedBlock} fallback={<CodeMarkdown />}>

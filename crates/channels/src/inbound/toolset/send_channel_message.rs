@@ -1,4 +1,5 @@
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -34,6 +35,10 @@ pub struct SendChannelMessageResponse {
     pub message_id: String,
 }
 
+impl ToolAnnotated for SendChannelMessage {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::destructive("Send channel message");
+}
+
 #[async_trait]
 impl<Svc, AccessSvc> AsyncTool<ChannelToolContext<Svc, AccessSvc>> for SendChannelMessage
 where
@@ -52,9 +57,9 @@ where
             .require_channel_member(&request_context, self.channel_id)
             .await?;
 
-        // AI sends as the Macro agent bot; the triggering user is recorded
+        // AI sends as the tool actor bot; the triggering user is recorded
         // separately so the client can render a "from <user>" pill.
-        let actor = Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID);
+        let actor = Sender::new_from_bot(service_context.actor);
         let triggered_by = Some(request_context.user_id.as_ref().to_string());
 
         let req = PostMessageRequest {

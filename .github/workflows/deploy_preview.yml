@@ -14,8 +14,9 @@ env:
     - apps/web/**
     - packages/**
     - crates/client/cache-core/**
-    - crates/client/cache-idb/**
+    - crates/client/cache-turso/**
     - crates/client/cache-wasm/**
+    - crates/client/turso-opfs/**
     - static_assets/schema.graphql
     - Cargo.toml
     - Cargo.lock

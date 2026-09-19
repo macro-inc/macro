@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT firing.event_id, firing.occurrence_key, firing.minutes_before, firing.fire_at\n            FROM calendar_event_reminder_firings firing\n            WHERE firing.fire_at <= $1\n              AND firing.fire_at > $2\n              AND (\n                  $4::timestamptz IS NULL\n                  OR (firing.fire_at, firing.event_id, firing.minutes_before, firing.occurrence_key)\n                     > ($4, $5, $6, $7)\n              )\n              AND NOT EXISTS (\n                  SELECT 1\n                  FROM calendar_event_reminder_deliveries delivery\n                  WHERE delivery.event_id = firing.event_id\n                    AND delivery.occurrence_key = firing.occurrence_key\n                    AND delivery.minutes_before = firing.minutes_before\n                    AND delivery.fire_at = firing.fire_at\n                    AND delivery.sent_at IS NOT NULL\n              )\n            ORDER BY firing.fire_at, firing.event_id, firing.minutes_before, firing.occurrence_key\n            LIMIT $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "event_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "occurrence_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "minutes_before",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "fire_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Int8",
+        "Timestamptz",
+        "Uuid",
+        "Int4",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "c4c6e9847e4707cf10ce02f1492b8825de5ebe82b8496eca75615084cafe7dcb"
+}

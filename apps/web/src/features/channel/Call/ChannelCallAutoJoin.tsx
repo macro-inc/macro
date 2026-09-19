@@ -30,7 +30,7 @@ export function ChannelCallAutoJoin(props: {
     if (!props.pendingJoinCall()) return;
 
     untrack(() => {
-      if (!ENABLE_CALLS()) {
+      if (!ENABLE_CALLS) {
         props.onHandled();
         return;
       }

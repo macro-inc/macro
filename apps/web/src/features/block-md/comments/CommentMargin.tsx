@@ -14,6 +14,7 @@ import {
   Thread,
 } from '@core/comments/Thread';
 import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useCanComment, useIsDocumentOwner } from '@core/signal/permissions';
 import { autoUpdate, computePosition } from '@floating-ui/dom';
 import {
@@ -24,6 +25,7 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
+import { CommentThreadDrawer } from './CommentThreadDrawer';
 import {
   notebookHeight,
   threadHeightStore,
@@ -115,7 +117,11 @@ export const CommentMargin = () => {
 
   const commentsContext = useCommentsContext();
 
-  const isMinimized = createMemo(() => !wideEnoughForComments());
+  // Touch devices never expand floating thread cards; the active thread is
+  // presented in the CommentThreadDrawer instead.
+  const isMinimized = createMemo(
+    () => isTouchDevice() || !wideEnoughForComments()
+  );
 
   return (
     <CommentsContext.Provider value={commentsContext}>
@@ -137,6 +143,7 @@ export const CommentMargin = () => {
                               layout={layout()}
                               isActive={isActiveSelector(thread().threadId)}
                               maxHeight={maxHeight()}
+                              expandable={!isTouchDevice()}
                             />
                           }
                         >
@@ -156,6 +163,9 @@ export const CommentMargin = () => {
           )}
         </For>
       </div>
+      <Show when={isTouchDevice()}>
+        <CommentThreadDrawer />
+      </Show>
     </CommentsContext.Provider>
   );
 };

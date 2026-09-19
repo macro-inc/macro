@@ -3,13 +3,7 @@ import type { WithRequired } from '@core/util/withRequired';
 import type { RouteDefinition, RouteSectionProps } from '@solidjs/router';
 import { SplitLayoutContainer } from './SplitLayout';
 
-type LayoutPath = {
-  params: {
-    splits: string | undefined;
-  };
-};
-
-function LayoutRoute(props: RouteSectionProps & LayoutPath) {
+function LayoutRoute(props: RouteSectionProps) {
   return (
     <SplitLayoutContainer
       pairs={props.params.splits?.split('/') ?? []}

@@ -33,6 +33,13 @@ pub const CONNECTION_GATEWAY_TABLE: &str = "connection-gateway-table";
 /// The static-file metadata table.
 pub const STATIC_FILE_TABLE: &str = "static-file-metadata";
 
+/// Alias for the KMS key that encrypts users' Cursor API keys.
+///
+/// An alias rather than a key id: `CreateKey` mints a random id on every run,
+/// so a key id could not be baked into the compose env, while an alias is
+/// stable and KMS accepts one anywhere a key id goes.
+pub const CURSOR_API_KEY_KMS_ALIAS: &str = "alias/macro-local-cursor-api-key";
+
 /// The full LocalStack URL for `queue` (docker-network host — services run in
 /// containers and reach LocalStack by its compose alias).
 pub fn queue_url(queue: &str) -> String {
@@ -202,6 +209,16 @@ pub const QUEUES: &[Queue] = &[
         name: macro_queues::ReminderDispatchQueue::LOCAL,
         bindings: &[(
             macro_queues::ReminderDispatchQueue::OVERRIDE_ENV_VAR_NAME,
+            Url,
+        )],
+    },
+    Queue {
+        // Same EventBridge stand-in as the reminders queue above:
+        // `just poke_calendar_reminder_sweep` (or
+        // `just tick_calendar_reminder_sweeps`) supplies the minutely tick.
+        name: macro_queues::CalendarReminderDispatchQueue::LOCAL,
+        bindings: &[(
+            macro_queues::CalendarReminderDispatchQueue::OVERRIDE_ENV_VAR_NAME,
             Url,
         )],
     },

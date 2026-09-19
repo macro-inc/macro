@@ -28,8 +28,9 @@ use crate::BackfillServiceImpl;
 use crate::api::context::{ApiContext, AuthorizationService};
 use crate::domain::jobs::{BackfillJobs, JobId};
 use crate::domain::models::{
-    CallBackfillRequest, ChannelBackfillRequest, ChatBackfillRequest, DocumentBackfillRequest,
-    EmailBackfillRequest, ProjectBackfillRequest, PropertiesBackfillRequest,
+    CalendarEventBackfillRequest, CallBackfillRequest, ChannelBackfillRequest, ChatBackfillRequest,
+    DocumentBackfillRequest, EmailBackfillRequest, ProjectBackfillRequest,
+    PropertiesBackfillRequest,
 };
 use crate::domain::service::BackfillService;
 
@@ -42,6 +43,7 @@ pub fn router() -> Router<ApiContext> {
         .route("/emails", post(emails))
         .route("/properties", post(properties))
         .route("/projects", post(projects))
+        .route("/calendar-events", post(calendar_events))
         .route("/{job_id}", get(status))
 }
 
@@ -167,6 +169,24 @@ async fn projects(
         "projects",
         move |svc, progress, cancel| async move {
             svc.backfill_projects(req, progress, cancel).await
+        },
+    )
+    .await
+}
+
+#[tracing::instrument(skip(service, jobs, _internal_authorization, req))]
+async fn calendar_events(
+    State(service): State<Arc<BackfillServiceImpl>>,
+    State(jobs): State<BackfillJobs>,
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
+    extract::Json(req): extract::Json<CalendarEventBackfillRequest>,
+) -> Response {
+    spawn_backfill(
+        service,
+        jobs,
+        "calendar-events",
+        move |svc, progress, cancel| async move {
+            svc.backfill_calendar_events(req, progress, cancel).await
         },
     )
     .await

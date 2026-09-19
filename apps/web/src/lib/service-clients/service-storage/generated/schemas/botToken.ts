@@ -28,6 +28,6 @@ export interface BotToken {
   last_used_at?: BotTokenLastUsedAt;
   /** Revocation timestamp. */
   revoked_at?: BotTokenRevokedAt;
-  /** Raw bearer token. */
-  token: string;
+  /** Display prefix of the bearer token. The raw secret is never stored here. */
+  token_prefix: string;
 }

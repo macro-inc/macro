@@ -140,6 +140,39 @@ fn resolve_inbox_selector_matches_address_case_insensitively() {
 }
 
 #[test]
+fn test_set_sender_policy_schema_validation() {
+    let result = generate_validated_input_schema::<SetSenderPolicy>();
+    assert!(result.is_ok(), "{:?}", result);
+
+    let validated = result.unwrap();
+    assert_eq!(
+        validated.name, "SetSenderPolicy",
+        "Tool name should match the schemars title"
+    );
+    assert!(
+        validated.description.contains("block"),
+        "Description should contain expected text"
+    );
+}
+
+#[test]
+fn tool_sender_policy_deserializes_snake_case_values() {
+    assert_eq!(
+        serde_json::from_str::<ToolSenderPolicy>("\"signal\"").unwrap(),
+        ToolSenderPolicy::Signal
+    );
+    assert_eq!(
+        serde_json::from_str::<ToolSenderPolicy>("\"noise\"").unwrap(),
+        ToolSenderPolicy::Noise
+    );
+    assert_eq!(
+        serde_json::from_str::<ToolSenderPolicy>("\"block\"").unwrap(),
+        ToolSenderPolicy::Block
+    );
+    assert!(serde_json::from_str::<ToolSenderPolicy>("\"unknown\"").is_err());
+}
+
+#[test]
 fn resolve_inbox_selector_rejects_unknown_address() {
     let inboxes = vec![make_link("macro|gab@macro.com", "gab@macro.com", true)];
     // Avoid `unwrap_err` so the test does not require `Link: Debug`.
@@ -151,4 +184,51 @@ fn resolve_inbox_selector_rejects_unknown_address() {
         "{}",
         err.description
     );
+}
+
+/// The composer's export, as `prepareEmailBody` encodes it: base64url of the
+/// body element's outer HTML, unpadded.
+fn composer_body(html: &str) -> String {
+    URL_SAFE_NO_PAD.encode(html)
+}
+
+#[test]
+fn composer_html_is_recognized_and_left_alone() {
+    let encoded = composer_body("<body><p>hello</p></body>");
+
+    let decoded = decode_composer_html(&encoded).expect("composer body");
+
+    assert_eq!(decoded, "<body><p>hello</p></body>");
+}
+
+#[test]
+fn model_markdown_is_not_mistaken_for_composer_html() {
+    // Whitespace and punctuation put real prose outside the base64url
+    // alphabet, so the decode fails before the tag check matters.
+    for body in [
+        "Hello world",
+        "Hi Dana,\n\nFollowing up on the **Q3 migration**.",
+        "- one\n- two",
+        "# Heading",
+    ] {
+        assert!(
+            decode_composer_html(body).is_none(),
+            "markdown treated as composer html: {body}"
+        );
+    }
+}
+
+#[test]
+fn base64_that_decodes_to_prose_is_not_treated_as_html() {
+    // A single word can be valid base64url by accident; only markup counts.
+    let encoded = composer_body("just prose, no markup");
+
+    assert!(decode_composer_html(&encoded).is_none());
+}
+
+#[test]
+fn leading_whitespace_before_the_tag_still_counts_as_html() {
+    let encoded = composer_body("\n  <div>hi</div>");
+
+    assert!(decode_composer_html(&encoded).is_some());
 }

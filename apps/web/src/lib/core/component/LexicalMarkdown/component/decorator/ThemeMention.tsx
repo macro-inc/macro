@@ -2,9 +2,10 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import type { ThemeMentionDecoratorProps } from '@macro-inc/lexical-core';
 import { ThemeChips } from '@theme/components/ThemeChips';
 import { setUserThemes, themes, userThemes } from '@theme/signals/themeSignals';
-import type { ThemeV2 } from '@theme/types/themeTypes';
+import type { ThemeV3 } from '@theme/types/themeTypes';
+import { convertThemev2v3 } from '@theme/utils/themeMigrations';
 import { pinTheme } from '@theme/utils/themeUtils';
-import { isThemeV2 } from '@theme/utils/themeValidation';
+import { isThemeV2, isThemeV3 } from '@theme/utils/themeValidation';
 import { cn } from '@ui';
 import { Show, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
@@ -20,8 +21,9 @@ export function ThemeMention(props: ThemeMentionDecoratorProps) {
     return sel.type === 'node' && sel.nodeKeys.has(props.key);
   };
 
-  const theme = (): ThemeV2 | null => {
-    if (isThemeV2(props.data)) return props.data;
+  const theme = (): ThemeV3 | null => {
+    if (isThemeV3(props.data)) return props.data;
+    if (isThemeV2(props.data)) return convertThemev2v3(props.data);
     return null;
   };
 

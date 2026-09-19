@@ -4,6 +4,7 @@ import {
   browserFileFilter,
   FileFilter,
   filterFromExt,
+  type OldSupportedExt,
 } from './fileFilter';
 import { readFileFromHandle } from './read';
 
@@ -56,7 +57,7 @@ export async function openFromDisk({
   multiple = false,
   readonly = false,
 }: {
-  exts: Array<string>;
+  exts: Array<OldSupportedExt>;
   multiple: boolean;
   readonly?: boolean;
 }): Promise<Array<{ file: FileSystemFile }>> {

@@ -1,5 +1,10 @@
 import { getChannelParams } from '@channel/Channel/link';
 import { buildSimpleEntityUrl } from '@core/util/url';
+import {
+  buildReplyTargetMarkdown,
+  markdownToPlainText,
+  stripLeadingReplyTargetMarkdown,
+} from '@macro-inc/lexical-core';
 import type { MessageData } from '../../Message';
 
 export const DEFAULT_REACTION_EMOJI = '👍';
@@ -50,28 +55,43 @@ export function canReplyToMessage(
   return !message.deleted_at;
 }
 
-export function buildQuoteReplyValue(input: {
-  quotedContent: string;
+function oneLinePreview(text: string): string {
+  return text.trim().replace(/\s+/g, ' ');
+}
+
+function stripMagicChipMarkdown(markdown: string): string {
+  return markdown.replace(/<m-magic-chip>.*?<\/m-magic-chip>/gs, '');
+}
+
+export function buildReplyTargetValue(input: {
+  channelId: string;
+  message: Pick<MessageData, 'id' | 'content' | 'sender_id' | 'thread_id'>;
+  selectedText?: string;
+  renderedText?: string;
   existingValue?: string;
 }): string {
-  const normalizedQuotedContent = input.quotedContent
-    .trim()
-    .split('\n')
-    .map((line) => line.replace(/^\s*>+\s?/, ''))
-    .join('\n')
-    .trim();
+  if (!input.message.thread_id) return input.existingValue ?? '';
+
+  const messageText = markdownToPlainText(
+    stripMagicChipMarkdown(
+      stripLeadingReplyTargetMarkdown(input.message.content)
+    )
+  );
+  const displayText = oneLinePreview(
+    input.selectedText || input.renderedText || messageText
+  );
+  const replyTarget = buildReplyTargetMarkdown({
+    channelId: input.channelId,
+    targetMessageId: input.message.id,
+    targetThreadId: input.message.thread_id,
+    displayText,
+    senderId: input.message.sender_id,
+  });
   const existingValue = input.existingValue?.trimStart() ?? '';
 
-  if (!normalizedQuotedContent) return existingValue;
-
-  const quote = normalizedQuotedContent
-    .split('\n')
-    .map((line) => `> ${line}`)
-    .join('\n');
-
   return existingValue
-    ? `${quote}\n\n${existingValue}`
-    : `${quote}\n\n${EMPTY_REPLY_PARAGRAPH}`;
+    ? `${replyTarget}\n\n${existingValue}`
+    : `${replyTarget}\n\n${EMPTY_REPLY_PARAGRAPH}`;
 }
 
 export function hasReactionFromUser(

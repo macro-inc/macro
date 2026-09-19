@@ -9,6 +9,7 @@ xtask := "cargo run --quiet --manifest-path Cargo.toml -p xtask_local --features
 #   just run_local                      # default instance
 #   just run_local --instance agent-a   # isolated, concurrent instance
 #   just run_local --no-doppler --env-file ./local.env --no-frontend --no-build
+#   just run_local --enable-onboarding  # opt into the existing onboarding v4 flag
 run_local *ARGS:
   {{ xtask }} run-local "$@"
 
@@ -36,9 +37,9 @@ destroy_local *ARGS:
 stop_local *ARGS:
   {{ xtask }} stop-local "$@"
 
-# Headless stack orchestration for previews, agents, and CI.
+# Headless stack orchestration for agents and CI.
 #   just stack up                      # full stack; static frontend served by the proxy
-#   just stack update                  # rebuild + reload only what changed (the `r` hotkey)
+#   just stack update                  # adopt a new build; volumes stay
 #   just stack status --json           # machine-readable state
 #   just stack down                    # reclaim everything
 stack *ARGS:

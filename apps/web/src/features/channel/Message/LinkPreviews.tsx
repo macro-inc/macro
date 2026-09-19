@@ -147,7 +147,11 @@ type LinkPreviewsProps = {
 export function LinkPreviews(props: LinkPreviewsProps) {
   const message = useMessage();
   const userId = useUserId();
-  const removePreview = useRemoveLinkPreviewMutation();
+  const removePreview = useRemoveLinkPreviewMutation({
+    // Mutation-level callbacks run for every request, even when another
+    // removal replaces the observer's per-call callbacks.
+    onError: (_error, { messageID, url }) => unhideLinkPreview(messageID, url),
+  });
   // Extraction already drops `preview: false` links; the local hidden set is
   // the optimistic layer covering the gap until rewritten content arrives.
   const previewable = createMemo(() =>
@@ -166,10 +170,7 @@ export function LinkPreviews(props: LinkPreviewsProps) {
     const channelId = props.channelId;
     if (!channelId) return;
     hideLinkPreview(messageId, url);
-    removePreview.mutate(
-      { channelID: channelId, messageID: messageId, url },
-      { onError: () => unhideLinkPreview(messageId, url) }
-    );
+    removePreview.mutate({ channelID: channelId, messageID: messageId, url });
   };
   const canRemove = () =>
     props.channelId !== undefined && isOwnMessage(message(), userId());

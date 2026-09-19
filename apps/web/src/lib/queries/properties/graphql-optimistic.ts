@@ -90,6 +90,27 @@ export function apiValuesToGraphqlPropertyValue(
 }
 
 /**
+ * The property record as the server would return it, for an already-persisted
+ * assignment carrying `value`.
+ */
+function optimisticPropertyRecord(
+  property: Property,
+  value: GraphqlPropertyValue | null
+): SoupPropertyFieldsFragment {
+  return {
+    id: property.propertyId,
+    propertyDefinitionId: property.propertyDefinitionId,
+    displayName: property.displayName,
+    dataType: property.valueType,
+    isMultiSelect: property.isMultiSelect,
+    specificEntityType: property.specificEntityType ?? null,
+    isSystem: property.isSystemProperty ?? false,
+    isMetadata: property.isMetadata ?? false,
+    value,
+  };
+}
+
+/**
  * Complete optimistic mutation payload for an existing property
  * assignment, or `undefined` when none can be built safely:
  * uninstantiated definitions have no assignment id until the server
@@ -100,15 +121,30 @@ export function buildOptimisticSetEntityProperty(
   apiValues: PropertyApiValues
 ): SoupPropertyFieldsFragment | undefined {
   if (!isInstantiatedProperty(property)) return undefined;
-  return {
-    id: property.propertyId,
-    propertyDefinitionId: property.propertyDefinitionId,
-    displayName: property.displayName,
-    dataType: property.valueType,
-    isMultiSelect: property.isMultiSelect,
-    specificEntityType: property.specificEntityType ?? null,
-    isSystem: property.isSystemProperty ?? false,
-    isMetadata: property.isMetadata ?? false,
-    value: apiValuesToGraphqlPropertyValue(apiValues),
-  };
+  return optimisticPropertyRecord(
+    property,
+    apiValuesToGraphqlPropertyValue(apiValues)
+  );
+}
+
+/**
+ * Optimistic payload for a multi-select property reaching `optionIds`, or
+ * `undefined` when the entity has no assignment for the definition yet (the
+ * first tag from a set): that record's id is only known once the server
+ * responds, so the write waits for the commit instead of inventing one.
+ */
+export function buildOptimisticEntityPropertyOptions(
+  property: Property | PropertyDefinitionDomain,
+  optionIds: readonly string[]
+): SoupPropertyFieldsFragment | undefined {
+  if (!isInstantiatedProperty(property)) return undefined;
+  return optimisticPropertyRecord(
+    property,
+    optionIds.length > 0
+      ? {
+          __typename: 'GraphqlSelectOptionPropertyValue',
+          optionIds: [...optionIds],
+        }
+      : null
+  );
 }

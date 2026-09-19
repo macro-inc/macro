@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO pipedream_mcp_connections (user_id, app_slug, server_name, account_id, enabled)\n            VALUES ($1, $2, $3, $4, $5)\n            ON CONFLICT (user_id, app_slug) DO UPDATE SET\n                server_name = EXCLUDED.server_name,\n                account_id = EXCLUDED.account_id,\n                enabled = EXCLUDED.enabled,\n                updated_at = NOW()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9bb0c84cfdbb24adebbe1b353b2e7eca014bcee5d23b98848be98e730fda35dc"
+}

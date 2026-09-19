@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_session\n            SET model = $2,\n                modified_at = NOW()\n            WHERE id = $1\n              AND model IS DISTINCT FROM $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c094414920b4cf99108b21769e8a0804c640610be72cde31ba41b9b5ff58803b"
+}

@@ -1,24 +1,35 @@
+import { displaySubject } from '@app/features/email-compose/core/subject-text';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
+import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
+import {
+  EntityLoadGate,
+  toEntityLoadError,
+} from '@core/component/EntityLoadGate';
 import { buildEntityData } from '@entity';
 import { EmailDebouncedReadMarker } from '@notifications';
 import { useThreadQuery } from '@queries/email/thread';
 import { createMemo, Show, Suspense } from 'solid-js';
-import { blockDataSignal } from '../signal/emailBlockData';
-import { displaySubject } from '../util/subjectText';
-import { EmailView } from './Email';
+import { EmailBlockAdapter } from '../EmailBlockAdapter';
 
 export default function BlockEmail() {
-  const blockData = blockDataSignal.get;
+  const blockId = useBlockId();
+
+  const threadId = () => blockId;
+
+  const threadQuery = useThreadQuery(threadId, () => ({
+    enabled: !!threadId(),
+  }));
 
   // Email threads are absent from quick access, so the entity the block-level
-  // commands act on has to come from here. Built off the block's loaded data
-  // rather than `threadQuery` because command-menu conditions read it outside a
-  // Suspense boundary.
+  // commands act on has to come from here. Gated on isSuccess so the
+  // command-menu conditions, which read this outside a Suspense boundary,
+  // never touch pending query data.
   const commandEntity = createMemo(() => {
-    const thread = blockData()?.thread;
+    if (!threadQuery.isSuccess) return undefined;
+    const thread = threadQuery.data?.thread;
     if (!thread) return undefined;
     return buildEntityData({
       id: thread.db_id,
@@ -30,19 +41,30 @@ export default function BlockEmail() {
   });
 
   useBlockEntityCommands(commandEntity);
+
+  // The gate owns the load policy: structural errors are authoritative even
+  // over cached data, a transport failure over cached data still renders the
+  // thread, and an offline load with nothing cached gates as the retryable
+  // state. Loader-level errors (e.g. an invalid source) still reach
+  // DocumentBlockContainer through blockErrorSignal.
+  const threadData = createMemo(
+    (previous: typeof threadQuery.data | undefined) =>
+      threadQuery.isSuccess || threadQuery.isError ? threadQuery.data : previous
+  );
+  const threadLoadResult = {
+    data: threadData,
+    error: () =>
+      threadQuery.isError ? toEntityLoadError(threadQuery.error) : undefined,
+    isPending: () => threadQuery.isLoading,
+  };
+
   const notificationSource = useGlobalNotificationSource();
   // A Preview Pair Viewer shows the thread passively — wait longer before
   // marking it seen so scanning/previewing doesn't clear unread state.
   const isPreview = !!useSplitPanel()?.handle.isViewerSplit();
 
-  const threadId = createMemo(() => blockData()?.thread?.db_id ?? '');
-
-  const threadQuery = useThreadQuery(threadId, () => ({
-    enabled: !!threadId(),
-  }));
-
   const title = () => {
-    const data = threadQuery.data;
+    const data = threadData();
     if (!data || !data.thread || data.thread.messages.length === 0) return '';
     return displaySubject(data.thread.messages[0].subject);
   };
@@ -51,23 +73,27 @@ export default function BlockEmail() {
     <Suspense>
       <DocumentBlockContainer title={title() ?? 'Email'}>
         <div class="size-full" tabIndex={-1}>
-          <Show when={blockData()}>
+          <EntityLoadGate
+            result={threadLoadResult}
+            loadErrorTitle="Unable to load this email"
+            onRetry={() => void threadQuery.refetch()}
+          >
             <Show when={threadId()}>
               {(id) => (
                 <>
                   <EmailDebouncedReadMarker
                     notificationSource={notificationSource}
                     threadId={id()}
-                    linkId={threadQuery.data?.thread?.link_id}
+                    linkId={threadData()?.thread?.link_id}
                     debounceTime={isPreview ? 1_500 : 100}
                   />
                   <Suspense>
-                    <EmailView title={title()} threadId={id} />
+                    <EmailBlockAdapter title={title()} threadId={id} />
                   </Suspense>
                 </>
               )}
             </Show>
-          </Show>
+          </EntityLoadGate>
         </div>
       </DocumentBlockContainer>
     </Suspense>

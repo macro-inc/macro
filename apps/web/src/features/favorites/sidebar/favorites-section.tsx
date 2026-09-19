@@ -1,4 +1,5 @@
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
+import { makeMuteAction } from '@app/features/next-soup/actions';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import {
   favoriteIconType,
@@ -21,7 +22,12 @@ import {
   MenuSeparator,
 } from '@core/component/ContextMenu';
 import type { EntityIconSelector } from '@core/component/EntityIcon';
+import {
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import type { EntityData } from '@entity';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { Tooltip as KobalteTooltip } from '@kobalte/core/tooltip';
 import { isChannelNotification } from '@notifications/notification-helpers';
@@ -178,6 +184,8 @@ export const FavoritesSection = (props: {
   sidebarState: SidebarState;
   onContextMenuOpenChange?: (open: boolean) => void;
 }) => {
+  // TODO(dev-rb/notifications): Fetch favorite entities through Soup with
+  // their notification edges instead of hydrating them from the REST list.
   // Non-suspending accessor: a pending or failed favorites query must not
   // suspend or crash the sidebar; the section just stays hidden until loaded.
   const favoritesData = useFavoritesData();
@@ -185,6 +193,12 @@ export const FavoritesSection = (props: {
 
   const favorites = () => favoritesData()?.favorites ?? [];
   const unreadNotificationsByChannel = createMemo(() => {
+    // TODO(dev-rb/notifications): Restore favorite notification badges,
+    // previews, and actions from notifications attached to favorite Soup items.
+    if (isFeatureEnabled(enableGraphqlSoup)) {
+      return new Map<string, UnifiedNotification[]>();
+    }
+
     const notificationsByChannel = new Map<string, UnifiedNotification[]>();
     for (const notification of notificationSource.notifications()) {
       if (
@@ -328,7 +342,17 @@ const FavoriteRow = (props: {
 }) => {
   const layout = useSplitLayout();
   const notificationSource = useGlobalNotificationSource();
+  const muteAction = makeMuteAction({
+    notificationSource: () => notificationSource,
+  });
   const removeMutation = useRemoveFavoriteMutation();
+  // Favorites already store the canonical notification type (`email_thread`),
+  // which the mute mapping accepts as-is.
+  const favoriteAsEntity = () =>
+    ({
+      type: props.favorite.entityType,
+      id: props.favorite.entityId,
+    }) as EntityData;
   const [dndState] = useDragDropContext() ?? [];
 
   const displayName = useFavoriteDisplayName(props.favorite);
@@ -496,6 +520,19 @@ const FavoriteRow = (props: {
               <MenuGroup>
                 <MenuItem text="Mark all as read" onClick={markAllAsRead} />
                 <MenuItem text="Mark all as done" onClick={markAllAsDone} />
+              </MenuGroup>
+            </Show>
+            <Show when={muteAction.canExecute(favoriteAsEntity())}>
+              <MenuSeparator />
+              <MenuGroup>
+                <MenuItem
+                  text={
+                    muteAction.isMuted(favoriteAsEntity())
+                      ? 'Unmute notifications'
+                      : 'Mute notifications'
+                  }
+                  onClick={() => void muteAction.execute([favoriteAsEntity()])}
+                />
               </MenuGroup>
             </Show>
             <MenuSeparator />

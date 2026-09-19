@@ -27,7 +27,8 @@ const {
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
-  ENABLE_GRAPHQL_SOUP: graphqlSoupEnabledMock,
+  enableGraphqlSoup: { key: 'enable-graphql-soup' },
+  isFeatureEnabled: graphqlSoupEnabledMock,
 }));
 
 vi.mock('./client', () => ({
@@ -54,7 +55,7 @@ describe('channel activity and notification GraphQL cache separation', () => {
 
   it('marks the linked notification seen while VIEW activity leaves unread state unchanged', async () => {
     const notificationRecord = {
-      __typename: 'GraphqlSoupNotification' as const,
+      __typename: 'GraphqlNotification' as const,
       id: 'notification-1',
       eventType: 'channel_message_send',
       entityType: 'CHANNEL' as const,
@@ -132,7 +133,7 @@ describe('channel activity and notification GraphQL cache separation', () => {
       notificationIds: ['notification-1'],
       operation: 'MARK_SEEN',
     });
-    expect(updated[0].__typename).toBe('GraphqlSoupNotification');
+    expect(updated[0].__typename).toBe('GraphqlNotification');
     expect(updated[0].id).toBe('notification-1');
     expect(mutationMock).toHaveBeenLastCalledWith(
       UpdateNotificationsDocument,
@@ -144,10 +145,11 @@ describe('channel activity and notification GraphQL cache separation', () => {
       },
       {
         normalizedCacheOptimistic: {
+          uuid: expect.any(String),
           optimisticResponse: {
             updateNotifications: [
               {
-                __typename: 'GraphqlSoupNotification',
+                __typename: 'GraphqlNotification',
                 id: 'notification-1',
                 seen: true,
                 viewedAt: expect.any(String),

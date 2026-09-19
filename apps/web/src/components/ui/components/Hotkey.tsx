@@ -2,8 +2,8 @@ import type { Theme } from '@core/component/Themes';
 import { IS_MAC } from '@core/constant/isMac';
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { getPrettyHotkeyStringByToken } from '@core/hotkey/utils';
-import { cn } from '@ui';
 import { createMemo, For, type JSX, Show, splitProps } from 'solid-js';
+import { cn } from '../utils/classname';
 
 const modifierMap = {
   shift: IS_MAC ? '⇧' : 'Shift',
@@ -56,7 +56,7 @@ const hotkeyStyles: Record<Theme, { label: string; hotkey: string }> = {
   },
   reverse: {
     hotkey: 'bg-ink border border-surface text-surface',
-    label: 'bg-surface border border dialog text-ink',
+    label: 'bg-surface border border-dialog text-ink',
   },
 
   base: {

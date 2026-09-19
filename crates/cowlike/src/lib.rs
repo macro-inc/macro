@@ -2,9 +2,6 @@
 //! This crate exposes the [CowLike] trait
 //! And the ArcCowStr
 
-#[cfg(test)]
-mod test;
-
 use std::sync::Arc;
 
 use either::Either;

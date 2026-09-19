@@ -80,8 +80,8 @@ After:
 
 ## Text Content
 
-- `setText(id, text)`
-- `replace(id, find, to, scope?)`
+- `setText(id, text)` — replaces the block's whole contents with one plain run, deleting any bold/code spans, links, mentions and line breaks it contained. Use it to rewrite a block from scratch.
+- `replace(id, find, to, scope?)` — rewrites matching text in place, leaving the rest of the block intact. Use it to edit existing prose. `find` must sit within a single text run.
 - `appendText(id, text)` · `prependText(id, text)`
 - `setEquation(id, tex)`
 

@@ -1,3 +1,5 @@
+import { match, P } from 'ts-pattern';
+import { Sdk as AgentHarnessSdk } from '../../generated/agent-harness/sdk.gen';
 import { Sdk as AuthSdk } from '../../generated/auth/sdk.gen';
 import { Sdk as CognitionSdk } from '../../generated/cognition/sdk.gen';
 import { Sdk as ContactsSdk } from '../../generated/contacts/sdk.gen';
@@ -7,20 +9,91 @@ import { Sdk as PropertiesSdk } from '../../generated/properties/sdk.gen';
 import { Sdk as SearchSdk } from '../../generated/search/sdk.gen';
 import { createClient } from '../../generated/storage/client';
 import { Sdk as StorageSdk } from '../../generated/storage/sdk.gen';
+import type { Bot } from '../../generated/storage/types.gen';
 import {
   type Env,
   HOSTS,
   type MacroAuth,
   type MacroOpts,
   type ServiceName,
+  type TokenSource,
   WEB_APP_URLS,
 } from '../config';
 import { BotsNamespace } from '../entities/bots/namespace';
 import { User } from '../entities/users/user';
 import { MacroEvents } from '../events/receiver';
-import { resolveLocalPortmap } from '../local-portmap';
+import { type LocalPortmap, resolveLocalPortmap } from '../local-portmap';
+
+const USER_API_KEY_HEADER = 'x-macro-user-api-key';
+const USER_API_KEY_PREFIX = 'mak_';
+const BOT_TOKEN_PREFIX = 'mbot_';
+
+type CredentialHeader = readonly [name: string, value: string];
+
+function userCredentialHeader(secret: string): CredentialHeader {
+  return match(secret)
+    .with(P.string.startsWith(BOT_TOKEN_PREFIX), () => {
+      throw new Error(
+        "bot token passed as a user credential. Use auth: { type: 'bot', token } or MACRO_BOT_TOKEN.",
+      );
+    })
+    .with(
+      P.string.startsWith(USER_API_KEY_PREFIX),
+      (key): CredentialHeader => [USER_API_KEY_HEADER, key],
+    )
+    .otherwise(
+      (token): CredentialHeader => ['Authorization', `Bearer ${token}`],
+    );
+}
+
+async function resolveToken(source: TokenSource): Promise<string> {
+  return typeof source === 'function' ? await source() : source;
+}
+
+export async function requestAuthHeaders(
+  auth: MacroAuth,
+  requestedAs?: string,
+  existing?: { hasBotScope?: boolean },
+): Promise<ReadonlyArray<readonly [string, string]>> {
+  return match(auth)
+    .with({ type: 'bot' }, async (botAuth) => {
+      const tok = await resolveToken(botAuth.token);
+      if (!tok.startsWith(BOT_TOKEN_PREFIX)) {
+        throw new Error(
+          "user API key passed as a bot token. Use auth: { type: 'user', apiKey } or MACRO_API_KEY.",
+        );
+      }
+      const headers: Array<readonly [string, string]> = [
+        ['x-macro-bot-token', tok],
+      ];
+      if (!existing?.hasBotScope) {
+        headers.push([
+          'x-macro-bot-scope',
+          botAuth.scope ?? (requestedAs ? 'user' : 'team'),
+        ]);
+      }
+      if (requestedAs) {
+        headers.push(['x-macro-bot-for-macro-user-id', requestedAs]);
+      }
+      return headers;
+    })
+    .with({ type: 'user', apiKey: P.string }, ({ apiKey }) => {
+      if (apiKey.startsWith(BOT_TOKEN_PREFIX)) {
+        throw new Error(
+          "bot token passed as a user credential. Use auth: { type: 'bot', token } or MACRO_BOT_TOKEN.",
+        );
+      }
+      return [[USER_API_KEY_HEADER, apiKey] as const];
+    })
+    .with({ type: 'user' }, async ({ token }) => {
+      const pair = userCredentialHeader(await resolveToken(token));
+      return [pair];
+    })
+    .exhaustive();
+}
 
 export class MacroClient {
+  readonly agentHarness: AgentHarnessSdk;
   readonly auth: AuthSdk;
   readonly cognition: CognitionSdk;
   readonly contacts: ContactsSdk;
@@ -31,17 +104,24 @@ export class MacroClient {
   readonly storage: StorageSdk;
   readonly webAppUrl: string;
   readonly wsVerify?: string;
-  readonly events?: MacroEvents;
+  readonly events: MacroEvents;
   /** Resolved authentication config (distinct from `auth`, the auth-service SDK). */
   readonly authConfig: MacroAuth;
+  /** Resolved service base urls: env defaults, then the local-stack portmap,
+   * then `opts.hosts` overrides. */
+  readonly hosts: Record<ServiceName, string>;
+  /** The local stack's generated port map; only set when env is `local`. */
+  readonly localPortmap?: LocalPortmap;
   private readonly requestedAs?: string;
+  private selfBotRecord?: Promise<Bot>;
   private selfPrincipal?: Promise<string>;
 
   constructor(opts: MacroOpts) {
-    const env: Env = opts.env ?? 'dev';
-    const localPortmap =
-      env === 'local' ? resolveLocalPortmap() : undefined;
+    const env = resolveEnv(opts);
+    const localPortmap = env === 'local' ? resolveLocalPortmap() : undefined;
     const hosts = { ...HOSTS[env], ...localPortmap?.hosts, ...opts.hosts };
+    this.hosts = hosts;
+    this.localPortmap = localPortmap;
     const envWebUrl =
       typeof process !== 'undefined' ? process.env.MACRO_WEB_URL : undefined;
     this.webAppUrl =
@@ -58,6 +138,9 @@ export class MacroClient {
     }
     this.wsVerify = opts.wsVerify;
 
+    this.agentHarness = new AgentHarnessSdk({
+      client: this.makeClient(hosts['agent-harness']),
+    });
     this.auth = new AuthSdk({ client: this.makeClient(hosts.auth) });
     this.cognition = new CognitionSdk({
       client: this.makeClient(hosts.cognition),
@@ -80,14 +163,24 @@ export class MacroClient {
         ? process.env.MACRO_WEBHOOK_SECRET
         : undefined;
     const webhookSecret = opts.webhookSecret ?? envWebhookSecret;
-    if (webhookSecret) {
-      this.events = new MacroEvents(this, webhookSecret);
-    }
+    this.events = new MacroEvents(this, webhookSecret);
   }
 
   /** Whether requests have a user identity accepted by acting-user endpoints. */
   hasActingUser(): boolean {
     return this.authConfig.type === 'user' || this.requestedAs !== undefined;
+  }
+
+  /**
+   * The authenticated bot's own record, fetched once and cached. Bot auth
+   * only. Failed lookups are not cached, so a later call retries.
+   */
+  selfBot(): Promise<Bot> {
+    this.selfBotRecord ??= new BotsNamespace(this).me().catch((error) => {
+      this.selfBotRecord = undefined;
+      throw error;
+    });
+    return this.selfBotRecord;
   }
 
   /**
@@ -98,7 +191,7 @@ export class MacroClient {
   myPrincipalId(): Promise<string> {
     this.selfPrincipal ??= (
       this.authConfig.type === 'bot'
-        ? new BotsNamespace(this).me().then((bot) => `bot|${bot.id}`)
+        ? this.selfBot().then((bot) => `bot|${bot.id}`)
         : User.me(this).then((user) => user.id)
     ).catch((error) => {
       this.selfPrincipal = undefined;
@@ -110,34 +203,31 @@ export class MacroClient {
   private makeClient(baseUrl: string) {
     const c = createClient({ baseUrl });
     c.interceptors.request.use(async (request) => {
-      const source = this.authConfig.token;
-      const tok = typeof source === 'function' ? await source() : source;
-      if (this.authConfig.type === 'bot') {
-        request.headers.set('x-macro-bot-token', tok);
-        if (!request.headers.has('x-macro-bot-scope')) {
-          request.headers.set(
-            'x-macro-bot-scope',
-            this.authConfig.scope ?? (this.requestedAs ? 'user' : 'team'),
-          );
-        }
-        if (this.requestedAs) {
-          request.headers.set(
-            'x-macro-bot-for-macro-user-id',
-            this.requestedAs,
-          );
-        }
-      } else {
-        if (tok.startsWith('mbot_')) {
-          throw new Error(
-            "bot API key passed as a user token — use auth: { type: 'bot', token } (or MACRO_BOT_TOKEN)",
-          );
-        }
-        request.headers.set('Authorization', `Bearer ${tok}`);
+      const headers = await requestAuthHeaders(
+        this.authConfig,
+        this.requestedAs,
+        { hasBotScope: request.headers.has('x-macro-bot-scope') },
+      );
+      for (const [name, value] of headers) {
+        request.headers.set(name, value);
       }
       return request;
     });
     return c;
   }
+}
+
+function resolveEnv(opts: MacroOpts): Env {
+  if (opts.env) return opts.env;
+  const fromEnv =
+    typeof process !== 'undefined' ? process.env.MACRO_ENV : undefined;
+  if (!fromEnv) return 'dev';
+  if (!(fromEnv in HOSTS)) {
+    throw new Error(
+      `invalid MACRO_ENV "${fromEnv}" — expected local, dev, or prod`,
+    );
+  }
+  return fromEnv as Env;
 }
 
 function resolveAuth(opts: MacroOpts): MacroAuth {
@@ -159,7 +249,7 @@ function resolveAuth(opts: MacroOpts): MacroAuth {
       envApiKey ??
       (() => {
         throw new Error(
-          'no Macro API token — set MACRO_API_KEY / MACRO_BOT_TOKEN or pass token/auth to new Macro()',
+          'no Macro credential. Set MACRO_API_KEY (API key or bearer token) or MACRO_BOT_TOKEN, or pass token/auth to new Macro().',
         );
       }),
   };

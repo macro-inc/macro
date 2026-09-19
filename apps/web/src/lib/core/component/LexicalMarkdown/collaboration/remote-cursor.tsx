@@ -293,8 +293,8 @@ function RemoteCursorsOverlay(props: RemoteCursorsOverlayProps) {
 
           const startStyle = cursor.style[0];
 
-          const overlayColor = `var(--color-${startStyle.color})`;
-          const tagName = `var(--color-${startStyle.color})`;
+          const overlayColor = `var(--color-${startStyle.color}, var(--color-pink))`;
+          const tagName = `var(--color-${startStyle.color}, var(--color-pink))`;
           const textColor = `var(--color-surface)`;
 
           const userTagHeight = 20;

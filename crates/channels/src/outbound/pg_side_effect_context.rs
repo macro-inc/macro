@@ -144,6 +144,13 @@ impl ChannelSideEffectContext for PgChannelSideEffectContext {
 }
 
 async fn get_bot_sender_profile(db: &PgPool, bot_id: BotId) -> Option<BotSenderProfile> {
+    // First-party bots have no row; their profile comes from the registry.
+    if let Some(system) = bot_id::system_bot(bot_id) {
+        return Some(BotSenderProfile {
+            name: system.name.to_owned(),
+            avatar_url: None,
+        });
+    }
     sqlx::query!(
         r#"
         SELECT name, avatar_url

@@ -10,7 +10,7 @@ use channels::domain::models::{
 use channels::domain::ports::{
     ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesQueryResult, ChannelService,
 };
-use chrono::Utc;
+use chrono::{TimeZone as _, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, Query};
 use uuid::Uuid;
@@ -18,8 +18,22 @@ use uuid::Uuid;
 use super::*;
 use crate::domain::{
     models::{BotEvent, BotTrigger},
-    ports::AgentResponder,
+    ports::{AgentResponder, UserTimeZones},
 };
+
+/// Time zone fake with a fixed answer.
+struct FixedTimeZones(Option<&'static str>);
+
+#[async_trait]
+impl UserTimeZones for FixedTimeZones {
+    async fn primary_time_zone(&self, _user_id: &str) -> Option<String> {
+        self.0.map(str::to_string)
+    }
+}
+
+fn eastern_time_zones() -> Arc<FixedTimeZones> {
+    Arc::new(FixedTimeZones(Some("America/New_York")))
+}
 
 struct TestChannelService {
     around_args: Mutex<Option<(Uuid, Uuid, i64, i64)>>,
@@ -321,8 +335,26 @@ fn mention_event(
     sender_email: &str,
     content: &str,
 ) -> BotEvent {
+    bot_event(
+        BotTrigger::Mention,
+        channel_id,
+        trigger_id,
+        thread_id,
+        sender_email,
+        content,
+    )
+}
+
+fn bot_event(
+    trigger: BotTrigger,
+    channel_id: Uuid,
+    trigger_id: Uuid,
+    thread_id: Option<Uuid>,
+    sender_email: &str,
+    content: &str,
+) -> BotEvent {
     BotEvent {
-        trigger: BotTrigger::Mention,
+        trigger,
         channel_id,
         message: MutatedMessage {
             id: trigger_id,
@@ -345,7 +377,11 @@ fn mention_event(
 async fn handle_patches_thinking_message_with_reply() {
     let channel_id = Uuid::new_v4();
     let channels = Arc::new(MutationChannelService::new(false));
-    let handler = MacroAiHandler::new(channels.clone(), Arc::new(FixedResponder("the answer")));
+    let handler = MacroAiHandler::new(
+        channels.clone(),
+        Arc::new(FixedResponder("the answer")),
+        eastern_time_zones(),
+    );
 
     handler
         .handle(&mention_event(
@@ -376,7 +412,11 @@ async fn handle_patches_thinking_message_with_reply() {
 async fn handle_drops_reply_when_thinking_message_was_deleted() {
     let channel_id = Uuid::new_v4();
     let channels = Arc::new(MutationChannelService::new(true));
-    let handler = MacroAiHandler::new(channels.clone(), Arc::new(FixedResponder("the answer")));
+    let handler = MacroAiHandler::new(
+        channels.clone(),
+        Arc::new(FixedResponder("the answer")),
+        eastern_time_zones(),
+    );
 
     handler
         .handle(&mention_event(
@@ -412,7 +452,11 @@ async fn top_level_prompt_marks_trigger_inline_in_channel_context() {
         ],
         thread_replies: Vec::new(),
     });
-    let handler = MacroAiHandler::new(channels.clone(), Arc::new(TestResponder));
+    let handler = MacroAiHandler::new(
+        channels.clone(),
+        Arc::new(TestResponder),
+        eastern_time_zones(),
+    );
     let event = mention_event(
         channel_id,
         trigger_id,
@@ -482,7 +526,11 @@ async fn thread_prompt_puts_thread_first_and_demotes_channel_noise() {
             "@macro can you make a task out of this?",
         )],
     });
-    let handler = MacroAiHandler::new(channels.clone(), Arc::new(TestResponder));
+    let handler = MacroAiHandler::new(
+        channels.clone(),
+        Arc::new(TestResponder),
+        eastern_time_zones(),
+    );
     let event = mention_event(
         channel_id,
         trigger_id,
@@ -531,6 +579,49 @@ async fn thread_prompt_puts_thread_first_and_demotes_channel_noise() {
 }
 
 #[tokio::test]
+async fn inferred_thread_prompt_does_not_claim_a_mention() {
+    let channel_id = Uuid::new_v4();
+    let parent_id = Uuid::new_v4();
+    let trigger_id = Uuid::new_v4();
+    let macro_ai = bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string();
+
+    let channels = Arc::new(TestChannelService {
+        around_args: Mutex::new(None),
+        around_messages: vec![context_message(
+            channel_id,
+            parent_id,
+            "macro|alice@example.com",
+            "notifications are broken",
+        )],
+        thread_replies: vec![
+            thread_reply(Uuid::new_v4(), &macro_ai, "what is broken exactly?"),
+            thread_reply(trigger_id, "macro|alice@example.com", "it fires twice"),
+        ],
+    });
+    let handler = MacroAiHandler::new(
+        channels.clone(),
+        Arc::new(TestResponder),
+        eastern_time_zones(),
+    );
+    let event = bot_event(
+        BotTrigger::Inferred,
+        channel_id,
+        trigger_id,
+        Some(parent_id),
+        "alice@example.com",
+        "it fires twice",
+    );
+
+    let prompt = handler.build_prompt(&event).await;
+
+    assert!(prompt.contains("alice replied in a channel thread you are part of."));
+    assert!(!prompt.contains("mentioned you (@macro)"));
+    assert!(prompt.contains("alice [respond to this message]: it fires twice"));
+    assert!(!prompt.contains("[this message mentioned you]"));
+    assert!(prompt.ends_with("Reply to alice."));
+}
+
+#[tokio::test]
 async fn thread_prompt_includes_trigger_when_reply_fetch_fails_to_return_it() {
     let channel_id = Uuid::new_v4();
     let parent_id = Uuid::new_v4();
@@ -546,7 +637,11 @@ async fn thread_prompt_includes_trigger_when_reply_fetch_fails_to_return_it() {
         )],
         thread_replies: Vec::new(),
     });
-    let handler = MacroAiHandler::new(channels.clone(), Arc::new(TestResponder));
+    let handler = MacroAiHandler::new(
+        channels.clone(),
+        Arc::new(TestResponder),
+        eastern_time_zones(),
+    );
     let event = mention_event(
         channel_id,
         trigger_id,
@@ -559,4 +654,80 @@ async fn thread_prompt_includes_trigger_when_reply_fetch_fails_to_return_it() {
 
     assert!(prompt.contains("peter: parent message"));
     assert!(prompt.contains("austin [this message mentioned you]: @macro help with this"));
+}
+
+#[tokio::test]
+async fn prompt_carries_the_current_time_in_the_users_zone() {
+    let channels = Arc::new(TestChannelService {
+        around_args: Mutex::new(None),
+        around_messages: Vec::new(),
+        thread_replies: Vec::new(),
+    });
+    let handler = MacroAiHandler::new(channels, Arc::new(TestResponder), eastern_time_zones());
+    let event = mention_event(
+        Uuid::new_v4(),
+        Uuid::new_v4(),
+        None,
+        "teo@example.com",
+        "@macro help",
+    );
+
+    let prompt = handler.build_prompt(&event).await;
+
+    assert!(prompt.contains("<current_time>"));
+    assert!(prompt.contains("America/New_York, the time zone of the user's primary calendar"));
+    assert!(prompt.ends_with("Reply to teo."));
+}
+
+#[tokio::test]
+async fn prompt_says_the_time_zone_is_unknown_without_a_calendar() {
+    let channels = Arc::new(TestChannelService {
+        around_args: Mutex::new(None),
+        around_messages: Vec::new(),
+        thread_replies: Vec::new(),
+    });
+    let handler = MacroAiHandler::new(
+        channels,
+        Arc::new(TestResponder),
+        Arc::new(FixedTimeZones(None)),
+    );
+    let event = mention_event(
+        Uuid::new_v4(),
+        Uuid::new_v4(),
+        None,
+        "teo@example.com",
+        "@macro help",
+    );
+
+    let prompt = handler.build_prompt(&event).await;
+
+    assert!(prompt.contains("UTC; the user's own time zone is unknown"));
+}
+
+#[test]
+fn current_time_block_renders_the_users_zone() {
+    let now = Utc.with_ymd_and_hms(2026, 1, 6, 18, 23, 0).unwrap();
+    assert_eq!(
+        current_time_block(now, Some("America/New_York")),
+        "\n<current_time>\nTuesday, January 6, 2026, 1:23 PM — America/New_York, the time zone \
+         of the user's primary calendar\n</current_time>\n"
+    );
+}
+
+#[test]
+fn current_time_block_falls_back_to_utc_for_missing_or_bad_zones() {
+    let now = Utc.with_ymd_and_hms(2026, 1, 6, 18, 23, 0).unwrap();
+    assert_eq!(
+        current_time_block(now, None),
+        "\n<current_time>\nTuesday, January 6, 2026, 6:23 PM — UTC; the user's own \
+         time zone is unknown (no connected calendar)\n</current_time>\n"
+    );
+    // An unparseable zone still means a calendar is connected, so the line
+    // must not claim otherwise.
+    assert_eq!(
+        current_time_block(now, Some("Not/AZone")),
+        "\n<current_time>\nTuesday, January 6, 2026, 6:23 PM — UTC; the user's own \
+         time zone is unknown (their calendar's time zone could not be \
+         interpreted)\n</current_time>\n"
+    );
 }

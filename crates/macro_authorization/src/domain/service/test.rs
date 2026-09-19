@@ -16,7 +16,10 @@ use crate::domain::{
         InternalIdentityClaims, MacroAuthorizationError, MacroUserAuthentication,
         ValidatedIdentity,
     },
-    ports::{BotAuthorizer, JwtValidator, MacroAuthorizationService, NoBotAuthorizer},
+    ports::{
+        BotAuthorizer, JwtValidator, MacroAuthorizationService, NoBotAuthorizer,
+        NoUserApiKeyAuthorizer, UserApiKeyAuthorizer,
+    },
 };
 
 #[derive(Clone)]
@@ -53,6 +56,39 @@ impl FakeBotAuthorizer {
 
     fn calls(&self) -> Vec<BotAuthorizationCall> {
         self.calls.lock().expect("calls lock poisoned").clone()
+    }
+}
+
+#[derive(Clone)]
+struct FakeUserApiKeyAuthorizer {
+    calls: Arc<Mutex<Vec<String>>>,
+    result: Result<UserContext, MacroAuthorizationError>,
+}
+
+impl FakeUserApiKeyAuthorizer {
+    fn new(result: Result<UserContext, MacroAuthorizationError>) -> Self {
+        Self {
+            calls: Arc::new(Mutex::new(Vec::new())),
+            result,
+        }
+    }
+
+    fn calls(&self) -> Vec<String> {
+        self.calls.lock().expect("calls lock poisoned").clone()
+    }
+}
+
+impl UserApiKeyAuthorizer for FakeUserApiKeyAuthorizer {
+    async fn authorize_user_api_key(
+        &self,
+        api_key: &str,
+    ) -> Result<UserContext, Report<MacroAuthorizationError>> {
+        self.calls
+            .lock()
+            .expect("calls lock poisoned")
+            .push(api_key.to_string());
+
+        self.result.clone().map_err(Report::new)
     }
 }
 
@@ -114,6 +150,7 @@ fn service_with_internal_auth(
         },
         internal_auth_config(default_user_id),
         NoBotAuthorizer,
+        NoUserApiKeyAuthorizer,
     )
 }
 
@@ -220,6 +257,7 @@ async fn authorize_bot_delegates_token_and_exact_acting_user_claims() {
         },
         internal_auth_config(None),
         authorizer.clone(),
+        NoUserApiKeyAuthorizer,
     );
 
     let bot = service
@@ -252,6 +290,7 @@ async fn authorize_bot_passes_through_authorizer_errors() {
             },
             internal_auth_config(None),
             FakeBotAuthorizer::new(Err(expected)),
+            NoUserApiKeyAuthorizer,
         );
 
         let error = service
@@ -277,6 +316,7 @@ async fn authorize_constructs_user_context_from_validated_identity() {
         },
         internal_auth_config(None),
         NoBotAuthorizer,
+        NoUserApiKeyAuthorizer,
     );
 
     let context = service.authorize("valid-jwt").await.unwrap();
@@ -361,6 +401,7 @@ async fn authorize_propagates_expired_credentials() {
         },
         internal_auth_config(None),
         NoBotAuthorizer,
+        NoUserApiKeyAuthorizer,
     );
 
     let error = service.authorize("expired-jwt").await.unwrap_err();
@@ -379,6 +420,7 @@ async fn authorize_propagates_invalid_credentials() {
         },
         internal_auth_config(None),
         NoBotAuthorizer,
+        NoUserApiKeyAuthorizer,
     );
 
     let error = service.authorize("invalid-jwt").await.unwrap_err();
@@ -387,4 +429,97 @@ async fn authorize_propagates_invalid_credentials() {
         error.current_context(),
         &MacroAuthorizationError::InvalidCredentials
     );
+}
+
+#[tokio::test]
+async fn no_user_api_key_authorizer_rejects_user_api_keys() {
+    let error = NoUserApiKeyAuthorizer
+        .authorize_user_api_key("mak_secret")
+        .await
+        .unwrap_err();
+
+    assert_eq!(
+        error.current_context(),
+        &MacroAuthorizationError::InvalidCredentials
+    );
+}
+
+#[tokio::test]
+async fn authorization_service_trait_rejects_user_api_keys_by_default() {
+    let error = DefaultRejectingAuthorizationService
+        .authorize_user_api_key("mak_secret")
+        .await
+        .unwrap_err();
+
+    assert_eq!(
+        error.current_context(),
+        &MacroAuthorizationError::InvalidCredentials
+    );
+}
+
+#[tokio::test]
+async fn authorization_service_impl_rejects_user_api_keys_with_explicit_no_authorizer() {
+    let error = service_with_internal_auth(None)
+        .authorize_user_api_key("mak_secret")
+        .await
+        .unwrap_err();
+
+    assert_eq!(
+        error.current_context(),
+        &MacroAuthorizationError::InvalidCredentials
+    );
+}
+
+fn api_key_user_context() -> UserContext {
+    UserContext {
+        user_id: "macro|api-key@example.com".to_string(),
+        fusion_user_id: "fusion-api-key-user".to_string(),
+        permissions: None,
+        organization_id: Some(42),
+    }
+}
+
+#[tokio::test]
+async fn authorize_user_api_key_delegates_the_exact_key() {
+    let authorizer = FakeUserApiKeyAuthorizer::new(Ok(api_key_user_context()));
+    let service = MacroAuthorizationServiceImpl::new(
+        FakeJwtValidator {
+            result: Err(MacroAuthorizationError::InvalidCredentials),
+        },
+        internal_auth_config(None),
+        NoBotAuthorizer,
+        authorizer.clone(),
+    );
+
+    let context = service.authorize_user_api_key("mak_secret").await.unwrap();
+
+    assert_eq!(context.user_id, "macro|api-key@example.com");
+    assert_eq!(context.fusion_user_id, "fusion-api-key-user");
+    assert_eq!(context.organization_id, Some(42));
+    assert_eq!(context.permissions, None);
+    assert_eq!(authorizer.calls(), vec!["mak_secret".to_string()]);
+}
+
+#[tokio::test]
+async fn authorize_user_api_key_passes_through_authorizer_errors() {
+    for expected in [
+        MacroAuthorizationError::InvalidCredentials,
+        MacroAuthorizationError::Unavailable,
+    ] {
+        let service = MacroAuthorizationServiceImpl::new(
+            FakeJwtValidator {
+                result: Err(MacroAuthorizationError::InvalidCredentials),
+            },
+            internal_auth_config(None),
+            NoBotAuthorizer,
+            FakeUserApiKeyAuthorizer::new(Err(expected)),
+        );
+
+        let error = service
+            .authorize_user_api_key("mak_secret")
+            .await
+            .unwrap_err();
+
+        assert_eq!(error.current_context(), &expected);
+    }
 }

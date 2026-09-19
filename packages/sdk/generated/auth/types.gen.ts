@@ -107,6 +107,68 @@ export type CreateUserRequest = {
 };
 
 /**
+ * What settings needs to render the Cursor connection.
+ *
+ * Deliberately thin. `registered` drives the whole UI; `updatedAt` lets it say
+ * when the key was last replaced, which is the only thing a user can check
+ * against their own memory when a session starts failing.
+ *
+ * Deliberately *not* reporting anything about the deployment itself. That is
+ * operator information: a user who sees it cannot act on it, and a service
+ * that cannot reach KMS does not start.
+ */
+export type CursorApiKeyStatus = {
+    /**
+     * The Cursor model id this user's sessions start on, when they have
+     * chosen one. `None` means the deployment default is in effect — the
+     * settings dropdown shows that as its resting value.
+     */
+    defaultModelId?: string | null;
+    /**
+     * Whether this user has a key stored.
+     */
+    registered: boolean;
+    /**
+     * When the stored key was last replaced, if there is one.
+     */
+    updatedAt?: string | null;
+};
+
+/**
+ * One model the settings dropdown can offer.
+ *
+ * Id, name and family: the dropdown lists models, not the hundreds of
+ * parameter variants each carries. The chosen id's parameters are resolved to
+ * Cursor's default variant at session start. The family is the same heading
+ * the Cursor ACP agent groups its session model select under, so the settings
+ * picker and the in-session picker read the same way.
+ */
+export type CursorModelOption = {
+    /**
+     * The human-readable name, e.g. `Cursor Grok 4.6`.
+     */
+    displayName: string;
+    /**
+     * The family heading to list this model under, e.g. `Cursor Grok`.
+     */
+    group: string;
+    /**
+     * The id to store and send, e.g. `grok-4.6`.
+     */
+    id: string;
+};
+
+/**
+ * The models this account may choose from.
+ */
+export type CursorModelsResponse = {
+    /**
+     * The offered models, in the order Cursor returned them.
+     */
+    models: Array<CursorModelOption>;
+};
+
+/**
  * Empty response is required due to custom fetch forcing `response.json()`
  */
 export type EmptyResponse = {
@@ -472,6 +534,20 @@ export type InitGmailLinkResponse = {
 };
 
 /**
+ * Response returned when a Microsoft Outlook link is initiated.
+ */
+export type InitOutlookLinkResponse = {
+    /**
+     * The OAuth authorization URL to redirect the user to.
+     */
+    authorization_url: string;
+    /**
+     * The link ID for tracking the OAuth flow.
+     */
+    link_id: string;
+};
+
+/**
  * A single invite entry with email and tier
  */
 export type InviteEntry = {
@@ -490,6 +566,11 @@ export type InviteToTeamRequest = {
      */
     invites: Array<InviteEntry>;
 };
+
+/**
+ * Defines who can access an item through its share link.
+ */
+export type LinkShare = 'PUBLIC' | 'TEAM';
 
 export type MacroApiTokenResponse = {
     /**
@@ -576,6 +657,7 @@ export type PatchTeamCrmSettingsResponse = {
  * Request to update a team
  */
 export type PatchTeamRequest = {
+    default_link_share?: null | LinkShare;
     /**
      * The new name for the team
      */
@@ -660,6 +742,27 @@ export type ProfilePictures = {
     pictures: Array<UserProfilePicture>;
 };
 
+/**
+ * The key the user pasted.
+ */
+export type PutCursorApiKeyRequest = {
+    /**
+     * A `crsr_…` Cursor API key.
+     */
+    apiKey: string;
+};
+
+/**
+ * The model the user chose for their sessions.
+ */
+export type PutCursorDefaultModelRequest = {
+    /**
+     * A Cursor model id (e.g. `grok-4.6`), or `null` to clear the choice and
+     * fall back to the deployment default.
+     */
+    modelId?: string | null;
+};
+
 export type PutUserNameQueryParams = {
     /**
      * First Name of user
@@ -738,6 +841,7 @@ export type Team = {
      * `false` when no row exists).
      */
     crm_enabled: boolean;
+    default_link_share?: null | LinkShare;
     /**
      * Whether this team is on an enterprise license. Enterprise teams are
      * billed out-of-band; membership changes skip all Stripe subscription
@@ -924,6 +1028,110 @@ export type UserTokensResponse = {
      */
     refresh_token: string;
 };
+
+export type DeleteCursorApiKeyData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/cursor-api-key';
+};
+
+export type DeleteCursorApiKeyErrors = {
+    401: string;
+    403: ErrorResponse;
+};
+
+export type DeleteCursorApiKeyError = DeleteCursorApiKeyErrors[keyof DeleteCursorApiKeyErrors];
+
+export type DeleteCursorApiKeyResponses = {
+    200: CursorApiKeyStatus;
+};
+
+export type DeleteCursorApiKeyResponse = DeleteCursorApiKeyResponses[keyof DeleteCursorApiKeyResponses];
+
+export type GetCursorApiKeyData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/cursor-api-key';
+};
+
+export type GetCursorApiKeyErrors = {
+    401: string;
+    403: ErrorResponse;
+};
+
+export type GetCursorApiKeyError = GetCursorApiKeyErrors[keyof GetCursorApiKeyErrors];
+
+export type GetCursorApiKeyResponses = {
+    200: CursorApiKeyStatus;
+};
+
+export type GetCursorApiKeyResponse = GetCursorApiKeyResponses[keyof GetCursorApiKeyResponses];
+
+export type PutCursorApiKeyData = {
+    body: PutCursorApiKeyRequest;
+    path?: never;
+    query?: never;
+    url: '/cursor-api-key';
+};
+
+export type PutCursorApiKeyErrors = {
+    400: ErrorResponse;
+    401: string;
+    403: ErrorResponse;
+};
+
+export type PutCursorApiKeyError = PutCursorApiKeyErrors[keyof PutCursorApiKeyErrors];
+
+export type PutCursorApiKeyResponses = {
+    200: CursorApiKeyStatus;
+};
+
+export type PutCursorApiKeyResponse = PutCursorApiKeyResponses[keyof PutCursorApiKeyResponses];
+
+export type PutCursorDefaultModelData = {
+    body: PutCursorDefaultModelRequest;
+    path?: never;
+    query?: never;
+    url: '/cursor-api-key/default-model';
+};
+
+export type PutCursorDefaultModelErrors = {
+    401: string;
+    403: ErrorResponse;
+    409: ErrorResponse;
+};
+
+export type PutCursorDefaultModelError = PutCursorDefaultModelErrors[keyof PutCursorDefaultModelErrors];
+
+export type PutCursorDefaultModelResponses = {
+    200: CursorApiKeyStatus;
+};
+
+export type PutCursorDefaultModelResponse = PutCursorDefaultModelResponses[keyof PutCursorDefaultModelResponses];
+
+export type ListCursorModelsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/cursor-api-key/models';
+};
+
+export type ListCursorModelsErrors = {
+    401: string;
+    403: ErrorResponse;
+    409: ErrorResponse;
+    502: ErrorResponse;
+};
+
+export type ListCursorModelsError = ListCursorModelsErrors[keyof ListCursorModelsErrors];
+
+export type ListCursorModelsResponses = {
+    200: CursorModelsResponse;
+};
+
+export type ListCursorModelsResponse = ListCursorModelsResponses[keyof ListCursorModelsResponses];
 
 export type VerifyFusionauthUserEmailData = {
     body?: never;
@@ -1200,6 +1408,10 @@ export type InitGmailLinkData = {
          * **OPTIONAL**. The original url to redirect to.
          */
         original_url: string;
+        /**
+         * **OPTIONAL**. Which capabilities to request consent for: `gmail` (default), `gmail_and_calendar`, or `calendar`. The calendar variants are only honored when the deployment allows calendar scope requests.
+         */
+        scopes?: string;
     };
     url: '/link/gmail';
 };
@@ -1241,6 +1453,34 @@ export type CheckGmailLinkStatusResponses = {
 };
 
 export type CheckGmailLinkStatusResponse = CheckGmailLinkStatusResponses[keyof CheckGmailLinkStatusResponses];
+
+export type InitOutlookLinkData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * **OPTIONAL**. The original URL to redirect to.
+         */
+        original_url?: string;
+    };
+    url: '/link/outlook';
+};
+
+export type InitOutlookLinkErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    429: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type InitOutlookLinkError = InitOutlookLinkErrors[keyof InitOutlookLinkErrors];
+
+export type InitOutlookLinkResponses = {
+    200: InitOutlookLinkResponse;
+};
+
+export type InitOutlookLinkResponse2 = InitOutlookLinkResponses[keyof InitOutlookLinkResponses];
 
 export type AppleLoginData = {
     body: AppleLoginRequest;
@@ -1970,6 +2210,7 @@ export type CreateUserData = {
 
 export type CreateUserErrors = {
     400: ErrorResponse;
+    403: ErrorResponse;
     500: ErrorResponse;
 };
 

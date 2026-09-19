@@ -11,7 +11,7 @@ import {
 } from '../Message';
 import { createTargetReplyScroller } from './create-target-reply-scroller';
 import { buildThreadReplyListMeta } from './reply-list-meta';
-import { ThreadRail } from './ThreadRail';
+import { ThreadReplyRail } from './ThreadReplyRail';
 
 export type ThreadReplyListHandle = {
   scrollToIndex: (index: number, onSettled: () => void) => boolean;
@@ -33,7 +33,7 @@ export function ThreadReplyList(props: {
   ) => boolean;
   selectedReplyId?: Accessor<string | undefined>;
   /**
-   * Reply targeted by channel navigation or bound to the unified input's reply (quote-reply).
+   * Reply targeted by channel navigation or referenced by the unified input.
    */
   targetedReplyId?: Accessor<string | undefined>;
   isThreadFocused?: Accessor<boolean>;
@@ -75,8 +75,8 @@ export function ThreadReplyList(props: {
             }}
             class="relative"
           >
-            <ThreadRail
-              newMessage={listMetaByReplyId()[reply.id].isNewMessage}
+            <ThreadReplyRail
+              grouped={listMetaByReplyId()[reply.id].isGroupedWithPrevious}
             />
             <MarkMessageNotifications
               messageId={reply.id}

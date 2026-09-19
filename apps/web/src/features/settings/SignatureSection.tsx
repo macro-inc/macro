@@ -204,7 +204,7 @@ export function SignatureSection(props: { link: EmailLink }) {
         />
         <div class="flex items-center justify-end gap-2">
           <Button
-            variant="base"
+            variant="outline"
             size="sm"
             depth={3}
             disabled={!hasContent() || updateSettings.isPending}
@@ -214,7 +214,7 @@ export function SignatureSection(props: { link: EmailLink }) {
           </Button>
           <Show when={!isMobile()}>
             <Button
-              variant="active"
+              variant="accent"
               size="sm"
               depth={3}
               disabled={!isDirty() || updateSettings.isPending}

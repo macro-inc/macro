@@ -106,6 +106,7 @@ export function TopBar() {
       ),
     },
     {
+      group: 'sharing',
       label: 'Share',
       icon: IconShared,
       action: () => shareCtx.open(),
@@ -131,15 +132,13 @@ export function TopBar() {
       </SplitHeaderRight>
       <ResponsivePermissionsBadge />
       <SplitTitleFileMenu>
-        <Show when={ops().length > 0 || (isMobile() && !isSpecialProject)}>
-          <SplitFileMenu
-            id={id}
-            itemType="project"
-            name={name()}
-            ops={ops()}
-            tools={isMobile() ? [...toolbarTools(), ...createTools] : undefined}
-          />
-        </Show>
+        <SplitFileMenu
+          id={id}
+          itemType="project"
+          name={name()}
+          ops={ops()}
+          tools={isMobile() ? [...toolbarTools(), ...createTools] : undefined}
+        />
       </SplitTitleFileMenu>
       <Show when={!isMobile()}>
         <SplitToolbarLeft class="flex-0">

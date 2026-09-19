@@ -12,14 +12,16 @@ interface CustomScrollbarProps {
   enabled?: boolean;
   reverse?: boolean;
   horizontal?: boolean;
+  /** Called before a pointer-driven scroll, with the signed offset change. */
+  onScrollIntent?: (delta: number) => void;
   /**
    * Reveal the bar when the pointer moves within this many px of the
    * scrollbar edge, instead of only when hovering the gutter itself.
    */
   revealZone?: number;
   /**
-   * Re-measure when content mounts/unmounts inside the container. Needed
-   * when content loads in after mount without resizing the container.
+   * Re-measure when content mounts/unmounts or direct content wrappers resize.
+   * Includes virtual sizer growth without a viewport resize or scroll event.
    */
   watchContent?: boolean;
   /**
@@ -150,7 +152,14 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
 
     let mutationObserver: MutationObserver | undefined;
     if (props.watchContent) {
-      mutationObserver = new MutationObserver(updateScrollMetrics);
+      const observeContent = () => {
+        resizeObserver.disconnect();
+        resizeObserver.observe(container);
+        for (const child of container.children) resizeObserver.observe(child);
+        updateScrollMetrics();
+      };
+      observeContent();
+      mutationObserver = new MutationObserver(observeContent);
       mutationObserver.observe(container, { childList: true, subtree: true });
     }
 
@@ -180,6 +189,9 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
     const clamped = Math.max(0, Math.min(mt, localPos - THUMB_INSET));
     let newPos = (clamped / mt) * max;
     if (props.reverse && !horiz()) newPos = newPos - max;
+    const delta =
+      newPos - (horiz() ? container.scrollLeft : container.scrollTop);
+    if (delta !== 0) props.onScrollIntent?.(delta);
     if (horiz()) {
       container.scrollLeft = newPos;
     } else {

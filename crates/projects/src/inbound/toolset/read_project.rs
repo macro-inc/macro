@@ -1,6 +1,7 @@
 //! ReadProject tool for listing a project's (folder's) contents.
 
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::models::ViewAccessLevel;
 use entity_access::domain::ports::EntityAccessService;
@@ -97,6 +98,10 @@ pub struct ReadProject {
     /// The id of the project to read.
     #[schemars(description = "The id of the project to read.")]
     pub project_id: uuid::Uuid,
+}
+
+impl ToolAnnotated for ReadProject {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Read project contents");
 }
 
 #[async_trait]

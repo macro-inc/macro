@@ -31,6 +31,18 @@ export type DocumentEditorOptions = {
   refs: string[];
 };
 
+/** Describe a non-string id argument without dumping a whole object. */
+function describeBadId(value: unknown): string {
+  if (value === null) return 'null';
+  if (value === undefined) return 'undefined';
+  if (Array.isArray(value)) return `an array of ${value.length}`;
+  if (typeof value === 'object') {
+    const keys = Object.keys(value as object).slice(0, 4);
+    return `an object with keys [${keys.join(', ')}]`;
+  }
+  return `a ${typeof value} (${String(value)})`;
+}
+
 export class DocumentEditor {
   private ops: DocumentOp[] = [];
   private valid: Set<string>;
@@ -48,6 +60,17 @@ export class DocumentEditor {
   }
 
   private requireId(id: NodeId): void {
+    // A non-string argument used to be stringified into the message, producing
+    // `unknown id "[object Object]"` — which tells the writer nothing about what
+    // it actually passed. Naming the type and the likely cause does.
+    if (typeof id !== 'string') {
+      throw new EditError(
+        `expected a node id string but got ${describeBadId(id)}. ` +
+          'Insert helpers return the new node\'s id directly, so use that value ' +
+          'as-is rather than a property of it.'
+      );
+    }
+    if (id.length === 0) throw new EditError('node id is an empty string');
     if (!this.valid.has(id)) {
       throw new EditError(`unknown id "${id}"`);
     }
@@ -652,6 +675,77 @@ export class DocumentEditor {
     this.requireId(id);
     return this.push({ kind: 'setDate', node: id, date, displayFormat });
   }
+}
+
+function editorMethodNames(target: DocumentEditor): string[] {
+  const names = new Set<string>();
+  for (
+    let proto = target;
+    proto && proto !== Object.prototype;
+    proto = Object.getPrototypeOf(proto)
+  ) {
+    for (const key of Object.getOwnPropertyNames(proto)) {
+      if (key === 'constructor' || key.startsWith('_')) continue;
+      if (typeof target[key as keyof DocumentEditor] === 'function') {
+        names.add(key);
+      }
+    }
+  }
+  return [...names];
+}
+
+function suggestMethods(wanted: string, names: string[]): string[] {
+  const normalizedWanted = wanted.toLowerCase();
+  const scored = names.map((name) => {
+    const normalizedName = name.toLowerCase();
+    let score = 0;
+    if (normalizedName === normalizedWanted) score = 1000;
+    else if (
+      normalizedName.includes(normalizedWanted) ||
+      normalizedWanted.includes(normalizedName)
+    ) {
+      score = 100 + Math.min(normalizedName.length, normalizedWanted.length);
+    } else {
+      while (
+        score < normalizedName.length &&
+        score < normalizedWanted.length &&
+        normalizedName[score] === normalizedWanted[score]
+      ) {
+        score++;
+      }
+    }
+    return { name, score };
+  });
+  scored.sort((a, b) => b.score - a.score);
+  return scored
+    .filter(({ score }) => score >= 3)
+    .slice(0, 3)
+    .map(({ name }) => name);
+}
+
+/** Create the write-only editor exposed to generated sandbox snippets. */
+export function createDocumentEditor(
+  options: DocumentEditorOptions
+): DocumentEditor {
+  const target = new DocumentEditor(options);
+  return new Proxy(target, {
+    get(editor, property) {
+      const value = editor[property as keyof DocumentEditor];
+      if (value !== undefined || typeof property !== 'string') {
+        return typeof value === 'function' ? value.bind(editor) : value;
+      }
+      return () => {
+        const suggestions = suggestMethods(property, editorMethodNames(editor));
+        throw new Error(
+          `editor.${property} does not exist` +
+            (suggestions.length
+              ? `. Did you mean: ${suggestions.join(', ')}?`
+              : '.') +
+            ' The editor is write-only — to inspect the document use the readDocument tool, not a call inside the snippet.'
+        );
+      };
+    },
+  });
 }
 
 export type { MentionSpec };

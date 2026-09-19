@@ -22,6 +22,7 @@ describe('BotsNamespace', () => {
       created_at: '2026-07-31T12:00:00Z',
       updated_at: '2026-07-31T12:00:00Z',
       deleted_at: null,
+      has_agent: false,
     };
     let request: Request | undefined;
     globalThis.fetch = (async (input) => {

@@ -128,6 +128,16 @@ export function getAiToolsServiceRoleArns(): pulumi.Output<string>[] {
     'ai-tools-agent-schedule-service-stack',
     { name: `macro-inc/agent-schedule-service/${stack}` }
   );
+  const agentHarnessServiceRoleArns =
+    stack === 'dev'
+      ? [
+          new pulumi.StackReference('ai-tools-agent-harness-service-stack', {
+            name: `macro-inc/agent-harness-service/${stack}`,
+          })
+            .getOutput('agentHarnessServiceRoleArn')
+            .apply((v) => v as string),
+        ]
+      : [];
 
   return [
     mcpServerStack.getOutput('mcpServerRoleArn').apply((v) => v as string),
@@ -137,5 +147,6 @@ export function getAiToolsServiceRoleArns(): pulumi.Output<string>[] {
     agentScheduleServiceStack
       .getOutput('agentScheduleServiceRoleArn')
       .apply((v) => v as string),
+    ...agentHarnessServiceRoleArns,
   ];
 }

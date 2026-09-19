@@ -17,7 +17,6 @@ import {
   hasValue as propertyHasValue,
 } from '@property/utils';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { proxyResource } from '@service-unfurl/client';
 import {
   createSignal,
@@ -240,7 +239,7 @@ const EntityTooltipContent = (props: {
 const EntityValuePill = (props: { entity: EntityReference }) => {
   const { name, icon } = usePropertyEntityDisplay(
     () => props.entity.entity_id,
-    () => props.entity.entity_type as EntityType,
+    () => props.entity.entity_type,
     { fallbackIcon: null }
   );
 
@@ -255,7 +254,7 @@ const EntityValuePill = (props: { entity: EntityReference }) => {
 const UserEntityItem = (props: { entity: EntityReference }) => {
   const { name } = usePropertyEntityDisplay(
     () => props.entity.entity_id,
-    () => props.entity.entity_type as EntityType,
+    () => props.entity.entity_type,
     { fallbackIcon: null }
   );
 
@@ -308,7 +307,7 @@ const LinkValuePill = (props: { url: string }) => {
       href={props.url}
       target="_blank"
       rel="noopener noreferrer"
-      class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted h-fit w-fit rounded-sm"
+      class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-link hover:text-link-hover visited:text-link-visited h-fit w-fit rounded-sm"
       title={props.url}
     >
       <Show

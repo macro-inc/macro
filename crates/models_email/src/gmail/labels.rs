@@ -100,6 +100,7 @@ impl fmt::Display for SystemLabelID {
 
 /// Represents the color information for a Gmail label
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GmailLabelColor {
     pub text_color: Option<String>,
     pub background_color: Option<String>,
@@ -123,68 +124,4 @@ pub struct GmailLabel {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GmailLabelsResponse {
     pub labels: Vec<GmailLabel>,
-}
-
-impl GmailLabel {
-    /// Convert a GmailLabel to a service::Label
-    pub fn to_service_label(
-        &self,
-        link_id: uuid::Uuid,
-    ) -> Result<crate::email::service::label::Label, String> {
-        // Default values for optional fields
-        let message_list_visibility = match self.message_list_visibility.as_deref() {
-            Some(visibility) => {
-                crate::email::service::label::MessageListVisibility::from_str(visibility)?
-            }
-            None => crate::email::service::label::MessageListVisibility::Show, // Default to Show
-        };
-
-        let label_list_visibility = match self.label_list_visibility.as_deref() {
-            Some(visibility) => {
-                crate::email::service::label::LabelListVisibility::from_str(visibility)?
-            }
-            None => crate::email::service::label::LabelListVisibility::LabelShow, // Default to LabelShow
-        };
-
-        let type_ = match self.type_.as_deref() {
-            Some(type_str) => crate::email::service::label::LabelType::from_str(type_str)?,
-            None => crate::email::service::label::LabelType::User, // Default to User
-        };
-
-        Ok(crate::email::service::label::Label {
-            id: None, // Generated at insert
-            link_id,
-            provider_label_id: self.id.clone().unwrap_or_default(),
-            name: Some(self.name.clone()),
-            created_at: chrono::Utc::now(),
-            message_list_visibility: Some(message_list_visibility),
-            label_list_visibility: Some(label_list_visibility),
-            type_: Some(type_),
-        })
-    }
-}
-
-impl GmailLabelsResponse {
-    /// Convert all Gmail labels to service labels
-    pub fn to_service_labels(
-        &self,
-        link_id: uuid::Uuid,
-    ) -> Result<Vec<crate::email::service::label::Label>, String> {
-        let mut service_labels = Vec::with_capacity(self.labels.len());
-
-        for gmail_label in &self.labels {
-            match gmail_label.to_service_label(link_id) {
-                Ok(service_label) => service_labels.push(service_label),
-                Err(e) => {
-                    return Err(format!(
-                        "Error converting label {}: {}",
-                        gmail_label.id.clone().unwrap_or_default(),
-                        e
-                    ));
-                }
-            }
-        }
-
-        Ok(service_labels)
-    }
 }

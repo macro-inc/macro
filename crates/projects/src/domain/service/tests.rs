@@ -23,8 +23,8 @@ use models_bulk_upload::{
     BulkUploadRequest, BulkUploadRequestDocuments, ProjectDocumentStatus, UploadDocumentStatus,
     UploadExtractFolderRequest, UploadFolderStatus,
 };
-use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::access_level::AccessLevel;
+use models_permissions::share_permission::{LinkShare, UpdateSharePermissionRequestV2};
 use s3_key::BulkUploadStagingKey;
 use uuid::Uuid;
 
@@ -497,8 +497,8 @@ fn patch_request(
 
 fn share_update() -> UpdateSharePermissionRequestV2 {
     UpdateSharePermissionRequestV2 {
-        is_public: Some(true),
-        public_access_level: Some(AccessLevel::View),
+        link_share: Some(Some(LinkShare::Public)),
+        link_share_access_level: Some(Some(AccessLevel::View)),
         channel_share_permissions: None,
     }
 }
@@ -647,11 +647,14 @@ async fn create_uses_grapheme_limit_and_orchestrates_parent_side_effects() {
     let accepted_name = "👨‍👩‍👧‍👦".repeat(100);
     let expected_name = accepted_name.clone();
     let mut repo = MockProjectRepo::new();
+    repo.expect_get_team_default_link_share()
+        .returning(|_| Box::pin(async { Ok(None) }));
     repo.expect_create_project()
         .withf(move |args| {
             args.name == expected_name
                 && args.parent_id.as_deref() == Some(parent_id.to_string().as_str())
-                && !args.share_permission.is_public
+                && args.share_permission.link_share.is_none()
+                && args.share_permission.link_share_access_level.is_none()
         })
         .return_once(move |_| {
             Box::pin(async move {
@@ -704,6 +707,8 @@ async fn create_project_publishes_repository_metadata_after_success() {
     let created_at = chrono::Utc::now();
     let expected_created_at = serde_json::to_value(created_at).unwrap();
     let mut repo = MockProjectRepo::new();
+    repo.expect_get_team_default_link_share()
+        .returning(|_| Box::pin(async { Ok(None) }));
     repo.expect_create_project().return_once(move |_| {
         Box::pin(async move {
             let mut created = project(
@@ -754,6 +759,8 @@ async fn create_project_publishes_repository_metadata_after_success() {
 #[tokio::test]
 async fn create_project_failures_publish_no_event() {
     let mut repo = MockProjectRepo::new();
+    repo.expect_get_team_default_link_share()
+        .returning(|_| Box::pin(async { Ok(None) }));
     repo.expect_create_project()
         .return_once(|_| Box::pin(async { Err(anyhow::anyhow!("database unavailable")) }));
     let event_broker = TestEventBroker::default();
@@ -793,6 +800,8 @@ async fn create_project_failures_publish_no_event() {
 async fn create_project_succeeds_when_event_publication_fails() {
     let project_id = Uuid::new_v4();
     let mut repo = MockProjectRepo::new();
+    repo.expect_get_team_default_link_share()
+        .returning(|_| Box::pin(async { Ok(None) }));
     repo.expect_create_project().return_once(move |_| {
         Box::pin(async move {
             Ok(project(
@@ -821,6 +830,44 @@ async fn create_project_succeeds_when_event_publication_fails() {
         .unwrap();
 
     assert_eq!(result.id, project_id.to_string());
+}
+
+#[tokio::test]
+async fn create_project_resolves_share_permission_from_team_default() {
+    use models_permissions::share_permission::access_level::AccessLevel;
+    use models_permissions::share_permission::{LinkShare, TeamLinkShareDefault};
+
+    let project_id = Uuid::new_v4();
+    let mut repo = MockProjectRepo::new();
+    repo.expect_get_team_default_link_share()
+        .withf(|user_id| user_id == "macro|actor@example.com")
+        .returning(|_| Box::pin(async { Ok(Some(TeamLinkShareDefault(Some(LinkShare::Team)))) }));
+    repo.expect_create_project()
+        .withf(|args| {
+            args.share_permission.link_share == Some(LinkShare::Team)
+                && args.share_permission.link_share_access_level == Some(AccessLevel::View)
+        })
+        .return_once(move |_| {
+            Box::pin(async move {
+                Ok(project(
+                    &project_id.to_string(),
+                    "macro|actor@example.com",
+                    None,
+                ))
+            })
+        });
+    let service = mutation_service(repo, RecordingEam::default(), RecordingIndexer::default());
+
+    service
+        .create_project(
+            user_id("macro|actor@example.com"),
+            CreateProjectRequest {
+                name: "Project".to_string(),
+                project_parent_id: None,
+            },
+        )
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -1985,6 +2032,8 @@ async fn upload_folder_publishes_uploaded_event() {
     let project_ids = vec!["root-project".to_string(), "child-project".to_string()];
     let expected_project_ids = project_ids.clone();
     let mut repo = MockProjectRepo::new();
+    repo.expect_get_team_default_link_share()
+        .returning(|_| Box::pin(async { Ok(None) }));
     repo.expect_upload_folder()
         .withf(|args| {
             args.user_id.as_ref() == "macro|owner@example.com"
@@ -2064,6 +2113,8 @@ async fn upload_folder_publishes_uploaded_event() {
 #[tokio::test]
 async fn upload_folder_with_no_project_ids_publishes_no_event() {
     let mut repo = MockProjectRepo::new();
+    repo.expect_get_team_default_link_share()
+        .returning(|_| Box::pin(async { Ok(None) }));
     repo.expect_upload_folder().return_once(|_| {
         Box::pin(async {
             Ok(UploadFolderWithIdsResponse {
@@ -2100,6 +2151,8 @@ async fn upload_folder_with_no_project_ids_publishes_no_event() {
 #[tokio::test]
 async fn upload_folder_compensates_after_destination_failure() {
     let mut repo = MockProjectRepo::new();
+    repo.expect_get_team_default_link_share()
+        .returning(|_| Box::pin(async { Ok(None) }));
     repo.expect_upload_folder().return_once(|_| {
         Box::pin(async {
             Ok(UploadFolderWithIdsResponse {

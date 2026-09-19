@@ -10,6 +10,7 @@ import type { ApiThreadReply } from '@service-storage/generated/schemas/apiThrea
 import { type Accessor, onCleanup } from 'solid-js';
 import type { MessageSelection } from '../Channel/create-message-selection';
 import type { MessageActions, MessageData } from '../Message';
+import { getMessageReplyPreviewTexts } from '../Message/browser-selection';
 import { scrollMessageIntoView } from '../scroll-utils';
 import { isBotMessage } from './utils/message-actions';
 
@@ -173,10 +174,16 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
         isThreadFocused: options.isThreadFocused(),
         isEditing: options.isEditing(),
       }),
-    keyDownHandler: () => {
+    keyDownHandler: (event) => {
+      // Saving an inline edit returns focus to the thread before Enter is
+      // released. Consume browser key-repeat events without opening a reply.
+      if (event?.repeat) return true;
       const parentMsg = options.parentMessage();
       const actions = options.getMessageActions(parentMsg);
-      actions?.onReply?.({ message: parentMsg });
+      actions?.onReply?.({
+        message: parentMsg,
+        ...getMessageReplyPreviewTexts(parentMsg.id),
+      });
       return true;
     },
   }).withGroup(group);

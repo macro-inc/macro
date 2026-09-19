@@ -384,6 +384,24 @@ export const emailClient = {
     ).map((result) => result);
   },
 
+  /**
+   * Turns calendar off for one connected inbox: its calendar data is removed
+   * and the calendar scopes leave its Google grant, so the inbox comes back as
+   * needing calendar permission until the user grants it again. Gmail sync is
+   * unaffected.
+   */
+  async disableLinkCalendar(args: { linkId: string }) {
+    const { linkId } = args;
+    return (
+      await emailFetch<EmptyResponse>(
+        `/email/links/${encodeURIComponent(linkId)}/calendar`,
+        {
+          method: 'DELETE',
+        }
+      )
+    ).map((result) => result);
+  },
+
   async resyncLink(args: { linkId: string }) {
     const { linkId } = args;
     return (
@@ -540,24 +558,29 @@ export const emailClient = {
       headers: emailLinkHeaders(linkId),
     });
   },
-  async listEmailFilters() {
+  // Filters are stored per linked inbox, so every filter call is scoped to
+  // `linkId` via the X-Email-Link-Id header; omit for the primary inbox.
+  async listEmailFilters(linkId?: string) {
     return (
       await emailFetch<ListEmailFiltersResponse>('/email/filters', {
         method: 'GET',
+        headers: emailLinkHeaders(linkId),
       })
     ).map((result) => result);
   },
-  async upsertEmailFilter(args: UpsertEmailFilterRequest) {
+  async upsertEmailFilter(args: UpsertEmailFilterRequest, linkId?: string) {
     return (
       await emailFetch<UpsertEmailFilterResponse>('/email/filters', {
         method: 'PUT',
         body: JSON.stringify(args),
+        headers: emailLinkHeaders(linkId),
       })
     ).map((result) => result);
   },
-  async deleteEmailFilter(args: { id: string }) {
+  async deleteEmailFilter(args: { id: string }, linkId?: string) {
     return emailFetch(`/email/filters/${args.id}`, {
       method: 'DELETE',
+      headers: emailLinkHeaders(linkId),
     });
   },
   async listCalendars() {
@@ -590,7 +613,11 @@ export const emailClient = {
   },
   async deleteCalendarEvent(
     eventId: string,
-    options?: { scope?: CalendarDeletionScope; recurrenceId?: string }
+    options?: {
+      scope?: CalendarDeletionScope;
+      recurrenceId?: string;
+      calendarId?: string;
+    }
   ) {
     const params = new URLSearchParams();
     if (options?.scope && options.scope !== 'all') {
@@ -598,6 +625,9 @@ export const emailClient = {
     }
     if (options?.recurrenceId) {
       params.set('recurrenceId', options.recurrenceId);
+    }
+    if (options?.calendarId) {
+      params.set('calendarId', options.calendarId);
     }
     const query = params.toString();
     return fetchWithToken<EmptyResponse, CalendarMutationErrorCode>(

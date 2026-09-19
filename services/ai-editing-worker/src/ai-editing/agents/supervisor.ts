@@ -10,8 +10,9 @@ import { TokenTracker } from '../token-tracker';
 import { createDispatchTool, createImBlockedTool } from '../tools';
 import { numberLines, serializeWithXml } from '../utils';
 import { coder } from './coder';
+import { compactDocumentHistory } from './compact';
 import { interpreter } from './interpreter';
-import { EDIT_PROVIDER_OPTIONS } from './model-options';
+import { cachedPrompt, EDIT_PROVIDER_OPTIONS } from './model-options';
 import type { RunAgentOptions } from './types';
 
 export type { RunAgentOptions } from './types';
@@ -87,6 +88,7 @@ export async function supervisor(
       sleep: opts.sleep,
       signal: opts.signal,
       makeWriter: opts.borrowWriter,
+      maxCoderSteps: opts.maxCoderSteps,
       runTask: coder,
       serialize,
       runner: opts.runner,
@@ -116,11 +118,11 @@ export async function supervisor(
       model: models.supervisor,
       stopWhen: [stepCountIs(7), hasToolCall('reportBlocked')],
       system: MASTER_SYSTEM,
-      prompt,
+      messages: cachedPrompt(prompt),
       tools,
       providerOptions: EDIT_PROVIDER_OPTIONS,
       abortSignal: opts.signal,
-      prepareStep: ({ stepNumber }) => {
+      prepareStep: ({ stepNumber, messages }) => {
         // A step that throws mid-flight never reaches onStepFinish; close any
         // straggler so turns stay one-to-one with spans.
         endTurn();
@@ -128,7 +130,12 @@ export async function supervisor(
         turnSpan.setAttr('turn.index', stepNumber);
         turnSpan.setAttr('gen_ai.operation.name', 'chat');
         // require that the very first thing it does is a tool call
-        return stepNumber === 0 ? { toolChoice: 'required' } : undefined;
+        return {
+          ...(stepNumber === 0 ? { toolChoice: 'required' as const } : {}),
+          // Only the newest dispatch result describes the live document; older
+          // copies are stale and would be re-billed on every remaining step.
+          messages: compactDocumentHistory(messages),
+        };
       },
       onStepFinish: (step) => {
         const now = Date.now();

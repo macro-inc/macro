@@ -6,6 +6,7 @@ import { makePersisted } from '@solid-primitives/storage';
 import type {
   AudioCaptureOptions,
   ConnectionState,
+  LocalAudioTrack,
   LocalTrack,
   RemoteParticipant,
   Room,
@@ -200,9 +201,9 @@ function nativeAudioProcessingConstraints(
   };
 }
 
-function getLocalMicTrack(r: Room): LocalTrack | undefined {
+function getLocalMicTrack(r: Room): LocalAudioTrack | undefined {
   return r.localParticipant.getTrackPublication(LK_TRACK_SOURCE.Microphone)
-    ?.track as LocalTrack | undefined;
+    ?.track as LocalAudioTrack | undefined;
 }
 
 function isActiveCallConnectionState(state: ConnectionState): boolean {

@@ -26,7 +26,8 @@ type ResizeSolver = {
   moveHandle: (index: number, delta: number) => void;
   order: () => PanelId[];
   hasPanel: (id: PanelId) => boolean;
-  canFitPanel: (panel: PanelConfig) => boolean;
+  canFitPanel: (panel: Partial<PanelConfig>) => boolean;
+  swap: (firstId: PanelId, secondId: PanelId) => void;
   hide: (id: PanelId) => void;
   show: (id: PanelId) => void;
   isHidden: (id: PanelId) => boolean;
@@ -381,18 +382,25 @@ export function createResizeSolver(params: {
   // Preview Pair would keep its crushed proportions after space frees up).
   createEffect(() => {
     const ps = panelsInOrder();
+    const zoneSize = params.size();
+    const gutter = params.gutter();
+
+    // A zero (or negative) zone size means it's unmeasured or hidden. Solving
+    // against it collapses every panel to zero, and since the observer may not
+    // fire again that sticks. Keep the last good layout, and leave the pending
+    // solve kind untouched so it still applies on the next real solve.
+    if (zoneSize <= 0) return;
+
     const solveKind = nextSolveKind;
     nextSolveKind = 'automatic';
 
-    const usable = getUsable(ps.length, params.size(), params.gutter());
+    const usable = getUsable(ps.length, zoneSize, gutter);
     const solvePanels =
       solveKind === 'automatic'
         ? applyRedistributionPreferences(ps, usable)
         : ps;
 
-    setLayout(
-      computeFractionalShares(solvePanels, params.size(), params.gutter())
-    );
+    setLayout(computeFractionalShares(solvePanels, zoneSize, gutter));
   });
 
   function addPanel(panel: PanelConfig, ndx?: number) {
@@ -850,6 +858,50 @@ export function createResizeSolver(params: {
     setDirty('manual');
   }
 
+  function swap(firstId: PanelId, secondId: PanelId) {
+    if (firstId === secondId) return;
+
+    const ids = untrack(order);
+    const firstIndex = ids.indexOf(firstId);
+    const secondIndex = ids.indexOf(secondId);
+    if (firstIndex < 0 || secondIndex < 0) return;
+
+    const groupBounds = (index: number) => {
+      const group = panelData[ids[index]]?.shareGroup;
+      if (group === undefined) return [index, index] as const;
+
+      let start = index;
+      let end = index;
+      while (start > 0 && panelData[ids[start - 1]]?.shareGroup === group) {
+        start -= 1;
+      }
+      while (
+        end < ids.length - 1 &&
+        panelData[ids[end + 1]]?.shareGroup === group
+      ) {
+        end += 1;
+      }
+      return [start, end] as const;
+    };
+
+    const [firstStart, firstEnd] = groupBounds(firstIndex);
+    const [secondStart, secondEnd] = groupBounds(secondIndex);
+    if (firstStart === secondStart) return;
+
+    const [leftStart, leftEnd, rightStart, rightEnd] =
+      firstStart < secondStart
+        ? [firstStart, firstEnd, secondStart, secondEnd]
+        : [secondStart, secondEnd, firstStart, firstEnd];
+    const nextIds = [
+      ...ids.slice(0, leftStart),
+      ...ids.slice(rightStart, rightEnd + 1),
+      ...ids.slice(leftEnd + 1, rightStart),
+      ...ids.slice(leftStart, leftEnd + 1),
+      ...ids.slice(rightEnd + 1),
+    ];
+    setOrder(nextIds);
+  }
+
   return {
     direction: params.direction,
     addPanel,
@@ -880,10 +932,11 @@ export function createResizeSolver(params: {
     },
     order,
     moveHandle,
+    swap,
     hasPanel: (id: PanelId) => {
       return order().includes(id) && id in panelData;
     },
-    canFitPanel: (panel: PanelConfig) => {
+    canFitPanel: (panel: Partial<PanelConfig>) => {
       const currentPanels = panelsInOrder();
       const n = currentPanels.length;
       const usable = getUsable(n + 1, params.size(), params.gutter());

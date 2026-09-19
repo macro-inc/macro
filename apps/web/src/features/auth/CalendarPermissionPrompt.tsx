@@ -1,7 +1,7 @@
 import {
   useCalendarPromptAllowed,
   useCalendarUiFlag,
-} from '@app/features/calendar/use-calendar-ui-flag';
+} from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { useKeyedPersistentToasts } from '@core/component/Toast/useKeyedPersistentToasts';
 import { useAddInboxFlow } from '@core/email-link';
 import { useEmailLinksQuery } from '@queries/email/link';
@@ -13,12 +13,16 @@ import { useEmailLinksQuery } from '@queries/email/link';
  * re-shows Google consent for the linked account and applies the upgraded
  * grant to the existing link, which kicks off the calendar backfill.
  *
- * Inboxes that also need a full reconnect are skipped: the reconnect prompt
- * covers them, and reconnecting records the calendar grant anyway.
+ * Inboxes that also need a full reconnect are skipped so the two prompts don't
+ * stack. Reconnecting restores the mailbox without calendar access, which
+ * leaves `needs_calendar_permission` set and brings this prompt back. So are
+ * inboxes whose calendar the user turned off — that reads as missing calendar
+ * permission too, and nagging someone to re-enable what they just removed is
+ * the one thing this prompt must never do.
  *
- * Gated per form factor: `enable-calendar-prompt-web` on desktop/web and
- * `enable-calendar-prompt-mobile` on phones, where the toast layout can't
- * present it without stranding the user. See `useCalendarPromptAllowed`.
+ * Closing the prompt sticks across reloads. Nothing is broken while calendar
+ * is off, so re-asking every load is just nagging — Settings › Email keeps a
+ * per-inbox "Enable calendar" button for whenever the user wants it.
  */
 export function CalendarPermissionPrompt() {
   const calendarUiEnabled = useCalendarUiFlag();
@@ -30,10 +34,18 @@ export function CalendarPermissionPrompt() {
     items: () =>
       calendarUiEnabled() && promptAllowed()
         ? (linksQuery.data?.links ?? []).filter(
-            (link) => link.needs_calendar_permission && !link.needs_reauth
+            (link) =>
+              link.needs_calendar_permission &&
+              !link.needs_reauth &&
+              !link.calendar_disabled
           )
         : [],
     key: (link) => link.id,
+    persistKey: 'macro:calendar-prompt:dismissed',
+    // Until the flag resolves and the links land, the empty list above means
+    // "don't know yet", not "no inbox needs this" — stored dismissals must
+    // survive that window.
+    itemsLoaded: () => calendarUiEnabled() && linksQuery.isSuccess,
     toast: (link, dismiss) => ({
       title: 'Enable calendar',
       content(): string {
@@ -46,7 +58,7 @@ export function CalendarPermissionPrompt() {
             // Suppress re-prompting until the grant upgrades; on native the
             // page stays mounted while the OAuth flow runs.
             dismiss();
-            startAddInbox();
+            startAddInbox({ scopes: 'calendar' });
           },
         },
       ],

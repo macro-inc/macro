@@ -1,0 +1,82 @@
+---
+source: crates/agent_fold/src/domain/test/real_recordings.rs
+expression: messages
+input_file: crates/agent_fold/fixtures/real/subagent_macro_inmem.jsonl
+---
+[
+    FoldedMessage {
+        id: TurnId(
+            0,
+        ),
+        author: User {
+            user_id: Some(
+                macro|eric@example.com,
+            ),
+        },
+        request_id: None,
+        parts: NonEmpty {
+            inner: [
+                Text {
+                    text: "spawn a subagent to add 5+5 ini python, then reason that it's right, and then write a frog poem, and then give me the last line of the frog poem and the nunber",
+                },
+            ],
+        },
+        stop: None,
+    },
+    FoldedMessage {
+        id: TurnId(
+            0,
+        ),
+        author: Agent,
+        request_id: None,
+        parts: NonEmpty {
+            inner: [
+                Thought {
+                    text: "The user wants me to spawn a subagent for a simple task—adding 5+5 in Python—then follow up with reasoning, a frog poem, and a final answer. I'll go ahead and delegate that small task to the subagent as instructed, even though it's a trivial computation.",
+                },
+                ToolUse {
+                    id: ToolUseId(
+                        "QHiaeI_bhc1dMjpBo_Un0",
+                    ),
+                    name: Native {
+                        name: "Subagent",
+                    },
+                    status: Completed,
+                    detail: Subagent {
+                        title: "Compute 5 + 5 in Python by executing the code, and report the exact numeric result that Python outputs.",
+                        agent_type: None,
+                        description: None,
+                        prompt: Some(
+                            "Compute 5 + 5 in Python by executing the code, and report the exact numeric result that Python outputs.",
+                        ),
+                        background: false,
+                        children: [],
+                        result: Some(
+                            SubagentResult {
+                                text: Some(
+                                    "I'll execute the Python code to compute 5 + 5.\n\nBased on executing the Python code `5 + 5`, the exact numeric result that Python outputs is:\n\n**10**\n\nThe computation `5 + 5` in Python returns the integer value `10`.",
+                                ),
+                                error: None,
+                                agent_id: None,
+                                model: None,
+                                duration_ms: None,
+                                tokens: None,
+                                tool_uses: None,
+                                stats: None,
+                            },
+                        ),
+                    },
+                },
+                Thought {
+                    text: "I'm confirming the answer makes sense, then I'll craft a short frog-themed poem before finishing with the final line and the number.",
+                },
+                Text {
+                    text: "The subagent ran it and Python returned $$ 5 + 5 = 10 $$.\n\nThat checks out: adding two groups of five gives ten, same as $$ 2 \\times 5 = 10 $$, so the result is right.\n\nHere's the frog poem:\n\n*Ode to a Frog*\n\nA little frog sat on a log,\nhalf-hidden in the morning fog.\nHe blinked his eyes, he puffed his throat,\nthen sang a low and croaking note.\nHe leapt across the lily pads,\nignoring all the passing gnats,\nand dove into the cool green deep,\nwhere quiet frogs go off to sleep.\n\nLast line: **where quiet frogs go off to sleep.**\nNumber: **10**",
+                },
+            ],
+        },
+        stop: Some(
+            EndTurn,
+        ),
+    },
+]

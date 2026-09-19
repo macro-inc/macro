@@ -1,4 +1,5 @@
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -116,6 +117,10 @@ pub struct SelfKnowledge {}
 pub struct SelfKnowledgeResponse {
     /// An overview of Macro and a routing map into the docs at docs.macro.com.
     pub about: String,
+}
+
+impl ToolAnnotated for SelfKnowledge {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("About Macro");
 }
 
 #[async_trait]

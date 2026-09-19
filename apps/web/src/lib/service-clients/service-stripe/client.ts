@@ -25,9 +25,9 @@ function getGaClientId(): Promise<string | undefined> {
 
     const timeout = setTimeout(() => resolve(undefined), 500);
 
-    gtag('get', 'G-52HPEL3FTV', 'client_id', (clientId: string) => {
+    gtag('get', 'G-52HPEL3FTV', 'client_id', (clientId) => {
       clearTimeout(timeout);
-      resolve(clientId);
+      resolve(typeof clientId === 'string' ? clientId : undefined);
     });
   });
 }

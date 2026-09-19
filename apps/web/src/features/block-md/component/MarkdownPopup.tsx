@@ -1,5 +1,10 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { applyAiOps } from '@block-md/ai-edit/applyAiOps';
+import {
+  activeCommentThreadSignal,
+  highlightedCommentThreadsSignal,
+} from '@block-md/comments/commentStore';
+import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
@@ -26,6 +31,10 @@ import {
   isCheckboxToTaskPluginEnabled,
 } from '@core/component/LexicalMarkdown/plugins/checkbox-to-task';
 import {
+  $getMarkIdsAtCaret,
+  CREATE_DRAFT_COMMENT_COMMAND,
+} from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
+import {
   $getLocationUrl,
   $getSelectionLocation,
   type PersistentLocation,
@@ -39,13 +48,13 @@ import {
 } from '@core/component/LexicalMarkdown/plugins/popup/popupPlugin';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  INLINE_AI_EDITING_FLAG,
-  INLINE_AI_EDITING_OVERRIDE,
-} from '@core/constant/featureFlags';
+import { enableInlineAiEditing } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
-import { isMobile } from '@core/mobile/isMobile';
-import { blockElementSignal } from '@core/signal/blockElement';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import {
+  readNativePasteboardText,
+  setNativeEditMenuSuppressed,
+} from '@core/mobile/nativeEditMenu';
 import { useCanComment, useCanEdit } from '@core/signal/permissions';
 import { createMarkdownFile } from '@core/util/create';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
@@ -73,9 +82,17 @@ import { generateTitle } from '@service-cognition/client';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, Layer } from '@ui';
-import { $getRoot, COMMAND_PRIORITY_HIGH, type RangeSelection } from 'lexical';
+import {
+  $getRoot,
+  $getSelection,
+  $isRangeSelection,
+  $setSelection,
+  COMMAND_PRIORITY_HIGH,
+  type RangeSelection,
+} from 'lexical';
 import {
   createEffect,
+  createMemo,
   createSignal,
   on,
   onCleanup,
@@ -86,6 +103,7 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { FormatTools } from './FormatTools';
+import { TouchSelectionToolbar } from './TouchSelectionToolbar';
 
 const MENU_ID = 'markdown-popup';
 
@@ -125,6 +143,10 @@ export function MarkdownPopup(props: {
     createSignal<PersistentLocation | null>(null);
   const [aiEditRunning, setAiEditRunning] = createSignal(false);
   const [aiInputFocused, setAiInputFocused] = createSignal(false);
+  // On touch devices the AI-edit instruction is typed in a drawer instead of
+  // the popup's inline input; the drawer outlives the popup.
+  const [aiEditDrawerOpen, setAiEditDrawerOpen] = createSignal(false);
+  const [aiEditInput, setAiEditInput] = createSignal('');
 
   onMount(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -148,18 +170,40 @@ export function MarkdownPopup(props: {
     popupPlugin({
       setIsPopupVisible: setPopupVisible,
       setSelection: setSelectionAndHighlight,
+      // On touch, a caret touching a commented range shows the toolbar so
+      // its "Show comment" can open the thread — tapping a highlight no
+      // longer opens it directly.
+      $allowEmptySelection: (lexicalSelection) => {
+        if (!isTouchDevice()) return false;
+        return (
+          $getMarkIdsAtCaret(
+            lexicalSelection.anchor.getNode(),
+            lexicalSelection.anchor.offset
+          ) != null
+        );
+      },
     })
   );
 
   // The actual control value for showPopup lags.
   const showPopup = debouncedDependent(popupVisible, 100);
 
-  const canEdit = useCanEdit();
-  const inlineAiEditing = useFeatureFlag(INLINE_AI_EDITING_FLAG, {
-    enabledOverride: INLINE_AI_EDITING_OVERRIDE,
+  // Keep the native iOS selection menu from stacking on top of the popup;
+  // the popup carries copy/cut/paste itself while suppression is active.
+  createEffect(() => {
+    setNativeEditMenuSuppressed(popupVisible());
   });
+  onCleanup(() => {
+    setNativeEditMenuSuppressed(false);
+  });
+
+  const canEdit = useCanEdit();
+  const inlineAiEditing = useFeatureFlag(enableInlineAiEditing);
   const canComment = useCanComment();
   const currentUserId = useUserId();
+
+  const highlightedCommentThreads = highlightedCommentThreadsSignal.get;
+  const setActiveCommentThread = activeCommentThreadSignal.set;
 
   const [copied, setCopied] = createSignal(false);
   const [locationCopied, setLocationCopied] = createSignal(false);
@@ -171,20 +215,6 @@ export function MarkdownPopup(props: {
   >(null);
   const { replaceOrInsertSplit } = useSplitLayout();
   let markdownRootRef!: HTMLDivElement;
-
-  const blockElem = blockElementSignal.get;
-  const [blockRect, setBlockRect] = createSignal<DOMRect>();
-
-  createEffect(() => {
-    const block = blockElem();
-    if (!block) return;
-    setBlockRect(block.getBoundingClientRect());
-    const { observe } = makeResizeObserver(() => {
-      setBlockRect(block.getBoundingClientRect());
-      editor.dispatchCommand(RECOMPUTE_SELECTION_RECT, undefined);
-    });
-    observe(block);
-  });
 
   const _selectedText = () => selection()?.text ?? undefined;
   const _selectedNodesText = () => selection()?.nodeText ?? undefined;
@@ -212,24 +242,36 @@ export function MarkdownPopup(props: {
   // kind of abstraction to encapsulate this.
   const [scrollYOffset, setScrollYOffset] = createSignal(0);
   const [contentTopOffset, setContentTopOffset] = createSignal(0);
+  const [portalScopeRect, setPortalScopeRect] = createSignal<DOMRect>();
 
   autoRegister(
     editor.registerRootListener((root) => {
       if (root) {
         const blockContent = root.closest('[data-block-content]');
+        const portalScope = root.closest<HTMLElement>('.portal-scope');
+
+        const updateGeometry = () => {
+          setContentTopOffset(blockContent?.getBoundingClientRect().top ?? 0);
+          setPortalScopeRect(portalScope?.getBoundingClientRect());
+          editor.dispatchCommand(RECOMPUTE_SELECTION_RECT, undefined);
+        };
+
         if (blockContent) {
-          const { observe } = makeResizeObserver(() => {
-            const top = blockContent?.getBoundingClientRect().top ?? 0;
-            setContentTopOffset(top);
-          });
+          const { observe } = makeResizeObserver(updateGeometry);
           observe(blockContent);
         }
+        if (portalScope && portalScope !== blockContent) {
+          const { observe } = makeResizeObserver(updateGeometry);
+          observe(portalScope);
+        }
+        updateGeometry();
 
         const scrollParent = getScrollParentElement(root);
         if (scrollParent) {
           const updateScrollY = () => {
             setScrollYOffset(scrollParent.scrollTop);
           };
+          updateScrollY();
           scrollParent.addEventListener('scroll', updateScrollY, {
             passive: true,
           });
@@ -254,6 +296,207 @@ export function MarkdownPopup(props: {
       COMMAND_PRIORITY_HIGH
     )
   );
+
+  // Resolves the loro-mirror node ids of every top-level block touched by
+  // the selection, via the nodeIdPlugin's node state / key mapping.
+  const resolveSelectedNodeIds = (): string[] => {
+    const lexicalSelection = selection()?.lexicalSelection;
+    if (!lexicalSelection) return [];
+    return editor.read(() => {
+      const topNodes = new Set(
+        lexicalSelection
+          .getNodes()
+          .map((node) => node.getTopLevelElement() ?? node)
+      );
+      const ids = new Set<string>();
+      for (const node of topNodes) {
+        const id =
+          $getId(node) ??
+          props.lexicalMapping.nodeKeyToIdMap.get(node.getKey());
+        if (id) ids.add(id);
+      }
+      return [...ids];
+    });
+  };
+
+  // Shared by the desktop toolbar's inline AI row and the touch AI drawer:
+  // the autosizing prompt input and its submit-or-stop button.
+  const handleAiInput = (
+    e: InputEvent & { currentTarget: HTMLTextAreaElement }
+  ) => {
+    setAiEditInput(e.currentTarget.value);
+    e.currentTarget.style.height = 'auto';
+    e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
+  };
+
+  const AiEditSubmitButton = () => (
+    <Show
+      when={hasActiveAiEdit(blockId)}
+      fallback={
+        <Button
+          size="icon-sm"
+          class="rounded-md"
+          depth={3}
+          variant="ghost"
+          tooltip="Ask Macro"
+          disabled={!aiEditInput().trim()}
+          onClick={handleAiEditSubmit}
+        >
+          <CheckIcon class="size-4" />
+        </Button>
+      }
+    >
+      <Button
+        size="icon-sm"
+        class="rounded-md"
+        depth={3}
+        variant="ghost"
+        tooltip="Stop AI edit"
+        onClick={() => cancelAiEdit(blockId)}
+      >
+        <div class="size-2.5 rounded-xs bg-current" />
+      </Button>
+    </Show>
+  );
+
+  const handleAiEditSubmit = () => {
+    if (aiEditRunning()) return;
+    const instruction = aiEditInput().trim();
+    if (!instruction) return;
+    const nodeIds = resolveSelectedNodeIds();
+    if (nodeIds.length === 0) {
+      toast.failure('Could not resolve the selected nodes');
+      return;
+    }
+    // The highlight is already tracking the selection; flagging the run
+    // keeps it alive (as the loading indicator) after the popup closes.
+    setAiEditRunning(true);
+    // Apply ops locally so the edit lands in this client's undo stack.
+    requestAiEdit({
+      documentId: blockId,
+      prompt: `Request: ${instruction}\nUser is selecting nodes ${nodeIds.join(' ')}. Proceed with requested edit`,
+      onOps: (ops) => applyAiOps(editor, props.lexicalMapping, ops),
+    })
+      .then((result) => {
+        if (result === 'failed') toast.failure('AI edit failed');
+      })
+      .finally(() => {
+        setAiEditLocation(null);
+        setAiEditRunning(false);
+      });
+    setAiEditInput('');
+    setAiEditDrawerOpen(false);
+    setPopupVisible(false);
+  };
+
+  // Selection actions shared by the desktop and touch toolbars.
+  const shouldShowCheckboxToTaskButton = () => {
+    return Boolean(
+      isCheckboxToTaskPluginEnabled(editor) &&
+        hasCheckboxes() &&
+        canEdit() &&
+        currentUserId()
+    );
+  };
+
+  const shouldShowTableButton = () =>
+    Boolean(canEdit() && convertibleListKey());
+
+  const shouldShowEditWithAiButton = () =>
+    inlineAiEditing().enabled && canEdit();
+
+  const handleConvertToTasks = () => {
+    const currentSelection = selection();
+    const userId = currentUserId();
+    if (!currentSelection?.lexicalSelection || !userId) {
+      return;
+    }
+
+    setIsConverting(true);
+    editor.dispatchCommand(CONVERT_CHECKBOXES_TO_TASKS, {
+      selection: currentSelection.lexicalSelection as RangeSelection,
+      onComplete: (results) => {
+        setIsConverting(false);
+        const successCount = results.filter((r) => r.isOk()).length;
+        if (successCount > 0) {
+          toast.success(
+            `Created ${successCount} task${successCount > 1 ? 's' : ''}`
+          );
+        }
+        setPopupVisible(false);
+      },
+    });
+  };
+
+  const handleConvertListToTable = () => {
+    const listKey = convertibleListKey();
+    if (!listKey) return;
+    const converted = editor.dispatchCommand(LIST_TO_TABLE_COMMAND, listKey);
+    if (converted) setPopupVisible(false);
+  };
+
+  const handleShare = async () => {
+    const location = editor.read(() => $getLocationUrl('md', blockId));
+    if (!location) return;
+    await navigator.clipboard.writeText(location);
+    // Desktop gets the inline check-icon flip; on touch the toolbar is
+    // small and easily dismissed, so confirm with a toast as well.
+    if (isTouchDevice()) toast.success('Link copied to clipboard');
+    setLocationCopied(true);
+    setTimeout(() => setLocationCopied(false), 2000);
+  };
+
+  const handleInsertComment = () => {
+    const created = editor.dispatchCommand(
+      CREATE_DRAFT_COMMENT_COMMAND,
+      undefined
+    );
+    if (!created) {
+      toast.failure('Please highlight text to comment.');
+      return;
+    }
+    setPopupVisible(false);
+  };
+
+  const handlePaste = async () => {
+    // Reading the pasteboard is async, and the toolbar tap or the native call
+    // can move or drop the editor selection before it resolves. Snapshot the
+    // range now and restore it before inserting so the text lands where the
+    // user had selected.
+    const savedSelection = editor.read(() => {
+      const current = $getSelection();
+      return $isRangeSelection(current) ? current.clone() : null;
+    });
+    const text = await readNativePasteboardText();
+    if (!text) return;
+    editor.update(() => {
+      if (savedSelection) $setSelection(savedSelection);
+      const lexicalSelection = $getSelection();
+      if ($isRangeSelection(lexicalSelection)) {
+        lexicalSelection.insertRawText(text);
+      }
+    });
+    setPopupVisible(false);
+  };
+
+  const handleShowComment = () => {
+    // Viewing a thread doesn't take text input, and the caret kept the
+    // editor focused (the toolbar preserves the selection) — close the
+    // virtual keyboard. Blurring alone is not enough: a retained
+    // editor-state selection is re-applied to the DOM on the next lexical
+    // update, which refocuses the editor and brings the keyboard back, so
+    // clear the selection first.
+    editor.update(() => $setSelection(null));
+    editor.blur();
+    const [threadId] = highlightedCommentThreads();
+    if (threadId != null) setActiveCommentThread(threadId);
+    setPopupVisible(false);
+  };
+
+  const handleOpenAiEditDrawer = () => {
+    setAiEditDrawerOpen(true);
+    setPopupVisible(false);
+  };
 
   const MarkdownPopupToolbar = () => {
     const _isAuthenticated = useIsAuthenticated();
@@ -342,29 +585,6 @@ export function MarkdownPopup(props: {
       setIsLoading(false);
     });
 
-    const handleConvertToTasks = () => {
-      const currentSelection = selection();
-      const userId = currentUserId();
-      if (!currentSelection?.lexicalSelection || !userId) {
-        return;
-      }
-
-      setIsConverting(true);
-      editor.dispatchCommand(CONVERT_CHECKBOXES_TO_TASKS, {
-        selection: currentSelection.lexicalSelection as RangeSelection,
-        onComplete: (results) => {
-          setIsConverting(false);
-          const successCount = results.filter((r) => r.isOk()).length;
-          if (successCount > 0) {
-            toast.success(
-              `Created ${successCount} task${successCount > 1 ? 's' : ''}`
-            );
-          }
-          setPopupVisible(false);
-        },
-      });
-    };
-
     const _contentSize = () => {
       let charCount = 0;
       editor.getEditorState().read(() => {
@@ -377,63 +597,7 @@ export function MarkdownPopup(props: {
 
     const handleRewrite = (_instructions: string) => {};
 
-    const [aiEditInput, setAiEditInput] = createSignal('');
     let aiInputRef: HTMLTextAreaElement | undefined;
-
-    onCleanup(() => {
-      if (!aiEditRunning()) setAiEditLocation(null);
-    });
-
-    // Resolves the loro-mirror node ids of every top-level block touched by
-    // the selection, via the nodeIdPlugin's node state / key mapping.
-    const resolveSelectedNodeIds = (): string[] => {
-      const lexicalSelection = selection()?.lexicalSelection;
-      if (!lexicalSelection) return [];
-      return editor.read(() => {
-        const topNodes = new Set(
-          lexicalSelection
-            .getNodes()
-            .map((node) => node.getTopLevelElement() ?? node)
-        );
-        const ids = new Set<string>();
-        for (const node of topNodes) {
-          const id =
-            $getId(node) ??
-            props.lexicalMapping.nodeKeyToIdMap.get(node.getKey());
-          if (id) ids.add(id);
-        }
-        return [...ids];
-      });
-    };
-
-    const handleAiEditSubmit = () => {
-      if (aiEditRunning()) return;
-      const instruction = aiEditInput().trim();
-      if (!instruction) return;
-      const nodeIds = resolveSelectedNodeIds();
-      if (nodeIds.length === 0) {
-        toast.failure('Could not resolve the selected nodes');
-        return;
-      }
-      // The highlight is already tracking the selection; flagging the run
-      // keeps it alive (as the loading indicator) after the popup closes.
-      setAiEditRunning(true);
-      // Apply ops locally so the edit lands in this client's undo stack.
-      requestAiEdit({
-        documentId: blockId,
-        prompt: `Request: ${instruction}\nUser is selecting nodes ${nodeIds.join(' ')}. Proceed with requested edit`,
-        onOps: (ops) => applyAiOps(editor, props.lexicalMapping, ops),
-      })
-        .then((result) => {
-          if (result === 'failed') toast.failure('AI edit failed');
-        })
-        .finally(() => {
-          setAiEditLocation(null);
-          setAiEditRunning(false);
-        });
-      setAiEditInput('');
-      setPopupVisible(false);
-    };
 
     createEffect(
       on([completionType, rewriteInputRef], () => {
@@ -472,15 +636,6 @@ export function MarkdownPopup(props: {
       });
     });
 
-    const shouldShowCheckboxToTaskButton = () => {
-      return (
-        isCheckboxToTaskPluginEnabled(editor) &&
-        hasCheckboxes() &&
-        canEdit() &&
-        currentUserId()
-      );
-    };
-
     return (
       <>
         <div
@@ -510,7 +665,7 @@ export function MarkdownPopup(props: {
 							}}
 						/>
 					</Show>*/}
-          <Show when={!isMobile() && (canEdit() || canComment())}>
+          <Show when={canEdit() || canComment()}>
             <FormatTools withinPopup />
           </Show>
           <Show when={shouldShowCheckboxToTaskButton()}>
@@ -529,41 +684,25 @@ export function MarkdownPopup(props: {
               {isConverting() ? 'Converting...' : 'Tasks'}
             </Button>
           </Show>
-          <Show when={canEdit() && convertibleListKey()}>
-            {(listKey) => (
-              <Button
-                size="sm"
-                class="rounded-md"
-                depth={3}
-                variant="ghost"
-                tooltip="Convert list to table"
-                onClick={() => {
-                  const converted = editor.dispatchCommand(
-                    LIST_TO_TABLE_COMMAND,
-                    listKey()
-                  );
-                  if (converted) setPopupVisible(false);
-                }}
-              >
-                <GridIcon class="size-4" />
-                Table
-              </Button>
-            )}
+          <Show when={shouldShowTableButton()}>
+            <Button
+              size="sm"
+              class="rounded-md"
+              depth={3}
+              variant="ghost"
+              tooltip="Convert list to table"
+              onClick={handleConvertListToTable}
+            >
+              <GridIcon class="size-4" />
+              Table
+            </Button>
           </Show>
           <Button
             size="sm"
             class="px-2 text-xs rounded-md py-1.25"
             depth={3}
             variant="ghost"
-            onClick={async () => {
-              const location = editor.read(() =>
-                $getLocationUrl('md', blockId)
-              );
-              if (!location) return;
-              await navigator.clipboard.writeText(location);
-              setLocationCopied(true);
-              setTimeout(() => setLocationCopied(false), 2000);
-            }}
+            onClick={() => void handleShare()}
           >
             <Dynamic
               component={locationCopied() ? CheckIcon : LinkIcon}
@@ -573,7 +712,7 @@ export function MarkdownPopup(props: {
           </Button>
         </div>
 
-        <Show when={inlineAiEditing().enabled && canEdit()}>
+        <Show when={shouldShowEditWithAiButton()}>
           <div class="mt-1 flex w-full min-w-72 items-center gap-1 border-t border-edge p-1 pt-1.5 pr-2">
             <SparkleIcon class="size-4 shrink-0 text-ink-extra-muted" />
             <textarea
@@ -585,11 +724,7 @@ export function MarkdownPopup(props: {
               }}
               onFocus={() => setAiInputFocused(true)}
               onBlur={() => setAiInputFocused(false)}
-              onInput={(e) => {
-                setAiEditInput(e.currentTarget.value);
-                e.currentTarget.style.height = 'auto';
-                e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
-              }}
+              onInput={handleAiInput}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
@@ -602,33 +737,7 @@ export function MarkdownPopup(props: {
                 }
               }}
             />
-            <Show
-              when={hasActiveAiEdit(blockId)}
-              fallback={
-                <Button
-                  size="icon-sm"
-                  class="rounded-md"
-                  depth={3}
-                  variant="ghost"
-                  tooltip="Ask Macro"
-                  disabled={!aiEditInput().trim()}
-                  onClick={handleAiEditSubmit}
-                >
-                  <CheckIcon class="size-4" />
-                </Button>
-              }
-            >
-              <Button
-                size="icon-sm"
-                class="rounded-md"
-                depth={3}
-                variant="ghost"
-                tooltip="Stop AI edit"
-                onClick={() => cancelAiEdit(blockId)}
-              >
-                <div class="size-2.5 rounded-xs bg-current" />
-              </Button>
-            </Show>
+            <AiEditSubmitButton />
           </div>
         </Show>
 
@@ -639,7 +748,7 @@ export function MarkdownPopup(props: {
             </p>
             <div class="flex flex-row items-center space-x-2 w-full px-2">
               <textarea
-                class="resize-none rounded-xs w-full p-2 my-3 text-sm h-max-[800px] overflow-hidden border border-edge bg-hover"
+                class="resize-none rounded-xs w-full p-2 my-3 text-sm max-h-[800px] overflow-hidden border border-edge bg-hover"
                 ref={setRewriteInputRef}
                 rows={1}
                 onSubmit={(e) => e.preventDefault()}
@@ -790,11 +899,42 @@ export function MarkdownPopup(props: {
     );
   };
 
+  // Picks the toolbar for the device and owns the popup-lifetime cleanup
+  // shared by both: the AI-edit highlight survives the popup only while the
+  // drawer or a running edit has taken it over.
+  const PopupToolbar = () => {
+    onCleanup(() => {
+      if (!aiEditRunning() && !aiEditDrawerOpen()) setAiEditLocation(null);
+    });
+    return (
+      <Show when={isTouchDevice()} fallback={<MarkdownPopupToolbar />}>
+        <TouchSelectionToolbar
+          canEdit={canEdit()}
+          canComment={canComment()}
+          isConverting={isConverting()}
+          hasSelection={(selection()?.text ?? '') !== ''}
+          showTasksOption={shouldShowCheckboxToTaskButton()}
+          showTableOption={shouldShowTableButton()}
+          showEditWithAiOption={shouldShowEditWithAiButton()}
+          showOpenCommentOption={highlightedCommentThreads().length > 0}
+          locationCopied={locationCopied()}
+          setPopupVisible={setPopupVisible}
+          onConvertToTasks={handleConvertToTasks}
+          onConvertListToTable={handleConvertListToTable}
+          onOpenComment={handleShowComment}
+          onShare={() => void handleShare()}
+          onInsertComment={handleInsertComment}
+          onPaste={() => void handlePaste()}
+          onEditWithAi={handleOpenAiEditDrawer}
+        />
+      </Show>
+    );
+  };
+
   const anchorRefPosition = () => {
     const sel = selection();
-    if (!showPopup()) return { left: 0, top: 0, width: 0, height: 0 };
-    const currentBlockRect = blockRect();
-    if (!currentBlockRect) return { left: 0, top: 0, width: 0, height: 0 };
+    const currentPortalScopeRect = portalScopeRect();
+    if (!showPopup() || !currentPortalScopeRect) return undefined;
 
     // if their is a highlight location then we have a rewrite in progress
     // and should pin to that.
@@ -802,41 +942,47 @@ export function MarkdownPopup(props: {
     const hlRect = highlightRect();
     if (hlLocation && hlRect) {
       return {
-        left: hlRect.left - currentBlockRect.left,
+        left: hlRect.left - currentPortalScopeRect.left,
         top: hlRect.top - contentTopOffset() + untrack(scrollYOffset),
         width: hlRect.width,
         height: hlRect.height,
       };
     }
 
-    if (!sel) return { left: 0, top: 0, width: 0, height: 0 };
+    if (!sel) return undefined;
     return {
-      left: sel.rect.left - currentBlockRect.left,
+      left: sel.rect.left - currentPortalScopeRect.left,
       top: sel.rect.top - contentTopOffset() + untrack(scrollYOffset),
       width: sel.rect.width,
       height: sel.rect.height,
     };
   };
 
+  const anchorPosition = createMemo(anchorRefPosition);
+
   return (
     <>
-      <ScopedPortal scope="local">
-        <div
-          ref={setAnchorRef}
-          class="absolute pointer-events-none"
-          style={{
-            left: `${anchorRefPosition().left}px`,
-            top: `${anchorRefPosition().top}px`,
-            width: `${anchorRefPosition().width}px`,
-            height: `${anchorRefPosition().height}px`,
-          }}
-        />
-      </ScopedPortal>
+      <Show when={anchorPosition()}>
+        {(position) => (
+          <ScopedPortal scope="local">
+            <div
+              ref={setAnchorRef}
+              class="absolute pointer-events-none"
+              style={{
+                left: `${position().left}px`,
+                top: `${position().top}px`,
+                width: `${position().width}px`,
+                height: `${position().height}px`,
+              }}
+            />
+          </ScopedPortal>
+        )}
+      </Show>
       <Show when={showPopup() && anchorRef()}>
         <ScopedPortal scope="local">
           <Layer depth={2}>
             <GeneralizedPopup
-              PopupComponents={MarkdownPopupToolbar}
+              PopupComponents={PopupToolbar}
               anchor={{
                 ref: anchorRef()!,
                 blockId: `${blockId}`,
@@ -859,7 +1005,12 @@ export function MarkdownPopup(props: {
           captureBoundingDomRect={setHighlightRect}
         />
       </Show>
-      <Show when={(aiInputFocused() || aiEditRunning()) && aiEditLocation()}>
+      <Show
+        when={
+          (aiInputFocused() || aiEditRunning() || aiEditDrawerOpen()) &&
+          aiEditLocation()
+        }
+      >
         <style>{`
           .ai-edit-highlight {
             background: var(--color-accent);
@@ -886,6 +1037,47 @@ export function MarkdownPopup(props: {
               : 'ai-edit-highlight'
           }
         />
+      </Show>
+      <Show when={isTouchDevice()}>
+        <MobileDrawer
+          side="bottom"
+          open={aiEditDrawerOpen()}
+          onOpenChange={(open: boolean) => {
+            if (open) return;
+            setAiEditDrawerOpen(false);
+            if (!aiEditRunning()) setAiEditLocation(null);
+          }}
+          closeOnOutsidePointerStrategy="pointerdown"
+          preventScroll={false}
+          preventScrollbarShift={false}
+        >
+          <MobileDrawer.Portal>
+            <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
+            <MobileDrawer.Content aria-label="Edit with AI">
+              <MobileDrawer.Handle class="pb-1" />
+              <div class="flex items-center gap-2 px-4 pb-3">
+                <SparkleIcon class="size-4 shrink-0 text-ink-extra-muted" />
+                <textarea
+                  class="grow resize-none bg-transparent py-1.5 text-sm placeholder:text-ink-placeholder focus:outline-none"
+                  rows={1}
+                  placeholder="Ask Macro to edit this selection"
+                  value={aiEditInput()}
+                  ref={(el) => {
+                    requestAnimationFrame(() => el.focus());
+                  }}
+                  onInput={handleAiInput}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleAiEditSubmit();
+                    }
+                  }}
+                />
+                <AiEditSubmitButton />
+              </div>
+            </MobileDrawer.Content>
+          </MobileDrawer.Portal>
+        </MobileDrawer>
       </Show>
     </>
   );

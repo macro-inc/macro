@@ -44,6 +44,7 @@ ports = ["crm/ports", "dep:tokio", "frecency/ports", "reminders/ports"]
 
 
 [dependencies]
+activity = { path = "../activity", default-features = false }
 ai_toolset = { path = "../ai_toolset", optional = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true, optional = true }

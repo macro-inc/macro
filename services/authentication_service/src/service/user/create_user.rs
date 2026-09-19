@@ -1,6 +1,29 @@
 use macro_db_client::user::organization::{
     get_organization_roles_for_user, match_user_to_organization,
 };
+use macro_env_var::optional_read_env_var;
+
+#[cfg(test)]
+mod test;
+
+/// The stub `STRIPE_SECRET_KEY` set by `run_local --no-doppler` (see
+/// `tooling/xtask/crates/xtask_local/src/local/local_env.rs`). With this key a
+/// real Stripe call would fail, so local signups skip it and store a
+/// deterministic placeholder id instead.
+const LOCAL_STRIPE_SECRET_STUB: &str = "local-stripe-secret";
+
+fn is_local_stripe_stub() -> bool {
+    optional_read_env_var("STRIPE_SECRET_KEY")
+        .ok()
+        .flatten()
+        .is_some_and(|key| key == LOCAL_STRIPE_SECRET_STUB)
+}
+
+/// A unique placeholder Stripe customer id for local signups. `stripe_customer_id`
+/// has a UNIQUE constraint, so it must be unique per user.
+fn local_stripe_customer_id(email: &str) -> String {
+    format!("local-stripe-customer-{email}")
+}
 
 /// Creates a new user
 /// This is a fairly involved process and as such will be well documented and broken up into
@@ -16,12 +39,17 @@ pub async fn create_user(
     db: &sqlx::Pool<sqlx::Postgres>,
     stripe_client: &stripe::Client,
 ) -> anyhow::Result<(String, Option<i32>)> {
-    // NOTE: stripe adds in ~400ms of latency to this request. We may want to update our
-    // requirement that each customer exists in stripe and create stripe customers as needed.
-    let stripe_customer = create_stripe_user(email, stripe_client).await?;
-    tracing::trace!(stripe_customer_id=?stripe_customer.id.to_string(), "created stripe customer");
-
-    let stripe_customer_id = stripe_customer.id.to_string();
+    let stripe_customer_id = if is_local_stripe_stub() {
+        // Local mode uses a stub key; don't call Stripe (it would 401 and
+        // abort the transactional user.create webhook, blocking all signups).
+        local_stripe_customer_id(email)
+    } else {
+        // NOTE: stripe adds in ~400ms of latency to this request. We may want to update our
+        // requirement that each customer exists in stripe and create stripe customers as needed.
+        let stripe_customer = create_stripe_user(email, stripe_client).await?;
+        tracing::trace!(stripe_customer_id=?stripe_customer.id.to_string(), "created stripe customer");
+        stripe_customer.id.to_string()
+    };
 
     let organization_id = match_user_to_organization(db, email).await?;
     tracing::trace!(organization_id=?organization_id, "matched user to organization");

@@ -16,7 +16,7 @@ use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
-use models_permissions::share_permission::access_level::AccessLevel;
+use models_permissions::share_permission::{LinkShare, access_level::AccessLevel};
 
 use super::apply;
 use super::spec::{ScenarioSpec, ShareLevel};
@@ -62,7 +62,9 @@ fn user_sources(spec: &ScenarioSpec, user_key: &str) -> Vec<String> {
 fn levels_from_rows(
     spec: &ScenarioSpec,
     rows: &[apply::AccessRow],
-    public: Option<ShareLevel>,
+    owner_key: &str,
+    link_share: Option<LinkShare>,
+    link_share_access_level: Option<ShareLevel>,
 ) -> BTreeMap<String, AccessLevel> {
     let mut levels: BTreeMap<String, AccessLevel> = BTreeMap::new();
     for user_key in spec.users.keys() {
@@ -72,8 +74,16 @@ fn levels_from_rows(
                 apply::max_level(&mut levels, user_key, row.access_level);
             }
         }
-        if let Some(level) = public {
-            apply::max_level(&mut levels, user_key, share_level_to_access(level));
+
+        let link_share_applies = match link_share {
+            Some(LinkShare::Public) => true,
+            Some(LinkShare::Team) => spec
+                .team_of(owner_key)
+                .is_some_and(|owner_team| spec.team_of(user_key) == Some(owner_team)),
+            None => false,
+        };
+        if link_share_applies && let Some(access_level) = link_share_access_level {
+            apply::max_level(&mut levels, user_key, share_level_to_access(access_level));
         }
     }
     levels
@@ -133,7 +143,13 @@ pub fn expected_matrix(spec: &ScenarioSpec) -> Vec<ExpectedRow> {
             label: format!("project:{project_key}"),
             entity_id: spec.project_id(project_key),
             entity_type: EntityType::Project,
-            levels: levels_from_rows(spec, &access_rows, project.public),
+            levels: levels_from_rows(
+                spec,
+                &access_rows,
+                &project.owner,
+                project.link_share,
+                project.link_share_access_level,
+            ),
         });
     }
 
@@ -148,7 +164,13 @@ pub fn expected_matrix(spec: &ScenarioSpec) -> Vec<ExpectedRow> {
             label: format!("document:{document_key}"),
             entity_id: spec.document_id(document_key),
             entity_type: EntityType::Document,
-            levels: levels_from_rows(spec, &access_rows, document.public),
+            levels: levels_from_rows(
+                spec,
+                &access_rows,
+                &document.owner,
+                document.link_share,
+                document.link_share_access_level,
+            ),
         });
     }
 
@@ -172,7 +194,7 @@ pub fn expected_matrix(spec: &ScenarioSpec) -> Vec<ExpectedRow> {
             label: format!("task:{task_key}"),
             entity_id: spec.task_id(task_key),
             entity_type: EntityType::Document,
-            levels: levels_from_rows(spec, &access_rows, None),
+            levels: levels_from_rows(spec, &access_rows, &task.owner, None, None),
         });
     }
 
@@ -184,7 +206,13 @@ pub fn expected_matrix(spec: &ScenarioSpec) -> Vec<ExpectedRow> {
             label: format!("chat:{chat_key}"),
             entity_id: spec.chat_id(chat_key),
             entity_type: EntityType::Chat,
-            levels: levels_from_rows(spec, &access_rows, chat.public),
+            levels: levels_from_rows(
+                spec,
+                &access_rows,
+                &chat.owner,
+                chat.link_share,
+                chat.link_share_access_level,
+            ),
         });
     }
 
@@ -213,7 +241,7 @@ pub fn expected_matrix(spec: &ScenarioSpec) -> Vec<ExpectedRow> {
             label: format!("call:{call_key}"),
             entity_id: spec.call_id(call_key).to_string(),
             entity_type: EntityType::Call,
-            levels: levels_from_rows(spec, &access_rows, None),
+            levels: levels_from_rows(spec, &access_rows, &call.created_by, None, None),
         });
     }
 
@@ -229,7 +257,7 @@ pub fn expected_matrix(spec: &ScenarioSpec) -> Vec<ExpectedRow> {
                 .iter()
                 .map(|s| apply::share_to_row(spec, s))
                 .collect();
-            for (user, level) in levels_from_rows(spec, &share_rows, None) {
+            for (user, level) in levels_from_rows(spec, &share_rows, &account.owner, None, None) {
                 apply::max_level(&mut levels, &user, level);
             }
             rows.push(ExpectedRow {

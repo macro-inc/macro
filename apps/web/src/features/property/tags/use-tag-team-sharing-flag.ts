@@ -1,8 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import {
-  ENABLE_TAG_TEAM_SHARING_FLAG,
-  ENABLE_TAG_TEAM_SHARING_OVERRIDE,
-} from '@core/constant/featureFlags';
+import { enableTagTeamSharing } from '@core/constant/featureFlags';
 import type { Accessor } from 'solid-js';
 
 /**
@@ -11,8 +8,6 @@ import type { Accessor } from 'solid-js';
  * stays promoted when this is off.
  */
 export function useTagTeamSharingFlag(): Accessor<boolean> {
-  const flag = useFeatureFlag(ENABLE_TAG_TEAM_SHARING_FLAG, {
-    enabledOverride: ENABLE_TAG_TEAM_SHARING_OVERRIDE,
-  });
+  const flag = useFeatureFlag(enableTagTeamSharing);
   return () => flag().enabled;
 }

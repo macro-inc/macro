@@ -49,15 +49,28 @@ pub async fn get_highest_access_level_for_chats(
                 AND ea.entity_id = ANY(SELECT id::uuid FROM "Chat" WHERE id = ANY($1) AND "deletedAt" IS NULL)
                 AND ea.entity_type = 'chat'
             UNION ALL
-            -- Source 2: Direct chat public permissions
+            -- Source 2: Direct chat link permissions
             SELECT
                 c.id as chat_id,
-                sp."publicAccessLevel" as access_level
+                sp."linkShareAccessLevel"::text as access_level
             FROM "Chat" c
             JOIN "ChatPermission" cp ON cp."chatId" = c.id
             JOIN "SharePermission" sp ON sp.id = cp."sharePermissionId"
-                AND sp."isPublic" = true
-                AND sp."publicAccessLevel" IS NOT NULL
+                AND sp."linkShareAccessLevel" IS NOT NULL
+                AND (
+                    sp."linkShare" = 'PUBLIC'
+                    OR (
+                        sp."linkShare" = 'TEAM'
+                        AND EXISTS (
+                            SELECT 1
+                            FROM team_user owner_team
+                            WHERE owner_team.user_id = c."userId"
+                                AND owner_team.team_id::text = ANY(
+                                    SELECT source_id FROM user_source_ids
+                                )
+                        )
+                    )
+                )
             WHERE c.id = ANY($1) AND c."deletedAt" IS NULL
         ) as all_levels
         "#,

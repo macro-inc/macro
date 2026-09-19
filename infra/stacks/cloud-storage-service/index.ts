@@ -3,6 +3,7 @@ import * as pulumi from '@pulumi/pulumi';
 import { createBucket, Queue } from '../../packages/resources';
 import {
   config,
+  DOCUMENT_STORAGE_GATEWAY_URL,
   getMacroApiToken,
   getMacroNotify,
   getSearchEventQueue,
@@ -23,6 +24,7 @@ import {
   DocumentUploadFinalizerLambda,
   type DocumentUploadFinalizerLambdaEnvVars,
 } from './document-upload-finalizer-lambda';
+import { CalendarReminderDispatchQueue } from './calendar-reminder-dispatch-queue';
 import { ReminderDispatchQueue } from './reminder-dispatch-queue';
 
 const tags = {
@@ -228,6 +230,16 @@ const reminderDispatchQueue = new ReminderDispatchQueue(
 export const reminderDispatchQueueArn = reminderDispatchQueue.queue.arn;
 export const reminderDispatchQueueName = reminderDispatchQueue.queue.name;
 
+const calendarReminderDispatchQueue = new CalendarReminderDispatchQueue(
+  `calendar-reminder-dispatch-${stack}`,
+  { tags }
+);
+
+export const calendarReminderDispatchQueueArn =
+  calendarReminderDispatchQueue.queue.arn;
+export const calendarReminderDispatchQueueName =
+  calendarReminderDispatchQueue.queue.name;
+
 const MACRO_API_TOKENS = getMacroApiToken();
 
 const GITHUB_WEBHOOK_SECRET_KEY = config.require('github_webhook_secret_key');
@@ -277,6 +289,7 @@ const cloudStorageService = new CloudStorageService(
       gmailOpsQueueArn,
       // Both directions: the sweep publishes onto it and the workers read it.
       reminderDispatchQueue.queue.arn,
+      calendarReminderDispatchQueue.queue.arn,
     ],
     vpc: coparse_api_vpc,
     platform: {
@@ -311,15 +324,13 @@ const cloudStorageService = new CloudStorageService(
         value: stack,
       },
     ],
-    isPrivate: false,
     tags,
   }
 );
 
 export const cloudStorageServiceRoleArn = cloudStorageService.role.arn;
 export const cloudStorageServiceSgId = cloudStorageService.serviceSg.id;
-export const cloudStorageServiceAlbSgId = cloudStorageService.serviceAlbSg.id;
-export const cloudStorageServiceUrl = pulumi.interpolate`${cloudStorageService.domain}`;
+export const cloudStorageServiceUrl = DOCUMENT_STORAGE_GATEWAY_URL;
 
 const convertServiceStack = new pulumi.StackReference('convert-service-stack', {
   name: `macro-inc/convert-service/${stack}`,

@@ -114,3 +114,53 @@ fn suppresses_both_m_link_and_bare_occurrence() {
     // Neither occurrence should still render a preview.
     assert_eq!(out.matches("\"preview\":false").count(), 2, "out: {out}");
 }
+
+#[test]
+fn empty_url_is_a_no_op() {
+    let content = m_link_content(URL);
+    assert_eq!(remove_link_preview_from_content(&content, ""), content);
+    assert_eq!(wrap_plain_occurrences(&content, ""), content);
+}
+
+#[test]
+fn preserves_code_while_suppressing_prose() {
+    for code in [
+        format!("`curl {URL}`"),
+        format!("```sh\ncurl {URL}\n```"),
+        format!("```sh\ncurl {URL}"),
+        format!("`{}`", m_link_content(URL)),
+        format!("```\n{}\n```", m_link_content(URL)),
+    ] {
+        let content = format!("Read {URL}\n{code}");
+        assert_eq!(
+            remove_link_preview_from_content(&content, URL),
+            format!("Read {}\n{code}", m_link(URL, URL)),
+        );
+    }
+}
+
+#[test]
+fn preserves_sentence_punctuation_after_bare_urls() {
+    for punctuation in [
+        ".", ",", ";", ":", "!", "?", "'", "\"", "”", "’", ").", "))!?”",
+    ] {
+        let content = format!("Read {URL}{punctuation} Next");
+        assert_eq!(
+            remove_link_preview_from_content(&content, URL),
+            format!("Read {}{punctuation} Next", m_link(URL, URL)),
+        );
+    }
+}
+
+#[test]
+fn keeps_balanced_url_parentheses_and_punctuation_in_longer_urls() {
+    let url = "https://example.com/Foo_(bar)";
+    assert_eq!(
+        remove_link_preview_from_content(&format!("({url})."), url),
+        format!("({}).", m_link(url, url)),
+    );
+    for suffix in [".json", "?query=1", ",next", ")/nested"] {
+        let content = format!("Read {URL}{suffix}");
+        assert_eq!(remove_link_preview_from_content(&content, URL), content);
+    }
+}

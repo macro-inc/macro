@@ -1,0 +1,27 @@
+---
+source: crates/cursor_cloud_agents/src/inbound/acp/test.rs
+assertion_line: 582
+expression: response
+---
+{
+  "protocolVersion": 1,
+  "agentCapabilities": {
+    "loadSession": true,
+    "promptCapabilities": {
+      "image": false,
+      "audio": false,
+      "embeddedContext": true
+    },
+    "mcpCapabilities": {
+      "http": true,
+      "sse": true
+    },
+    "sessionCapabilities": {},
+    "auth": {}
+  },
+  "authMethods": [],
+  "agentInfo": {
+    "name": "cursor-acp",
+    "version": "[crate version]"
+  }
+}

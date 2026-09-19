@@ -41,7 +41,7 @@ export function ChannelBotRow(props: {
       </div>
       <Button
         class="relative z-1"
-        variant="base"
+        variant="outline"
         size="sm"
         label="Copy webhook URL"
         onClick={props.onCopyWebhook}

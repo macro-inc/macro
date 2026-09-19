@@ -1,7 +1,14 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { Queue } from '../../packages/resources';
-import { config, getMacroApiToken, stack } from '../../packages/shared';
+import {
+  config,
+  getKafkaClusterPolicy,
+  getMacroApiToken,
+  getServiceUrl,
+  ServiceUrl,
+  stack,
+} from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { PushNotificationEventHandler } from './push';
 import { NotificationService } from './service';
@@ -142,7 +149,7 @@ export const notificationApnsVoipPlatformArn = notificationApnsVoipPlatform.arn;
 
 const MACRO_API_TOKENS = getMacroApiToken();
 
-const notificationService = new NotificationService('notification-service', {
+new NotificationService('notification-service', {
   vpc: coparse_api_vpc,
   tags,
   ecsClusterArn: cloudStorageClusterArn,
@@ -159,8 +166,8 @@ const notificationService = new NotificationService('notification-service', {
     notificationIngressQueueArn,
   ],
   snsPlatformArns: notificationSnsPlatformArns,
+  extraManagedPolicyArns: [getKafkaClusterPolicy()],
   serviceContainerPort: 8080,
-  isPrivate: false,
   healthCheckPath: '/health',
   platform: { family: 'linux', architecture: 'amd64' },
   containerEnvVars: [
@@ -176,4 +183,6 @@ const notificationService = new NotificationService('notification-service', {
   ],
 });
 
-export const notificationServiceUrl = pulumi.interpolate`${notificationService.domain}`;
+export const notificationServiceUrl = getServiceUrl(
+  ServiceUrl.NOTIFICATION_SERVICE_URL
+);

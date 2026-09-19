@@ -27,6 +27,7 @@ import {
   createSignal,
   For,
   type JSX,
+  on,
   onCleanup,
   onMount,
   Show,
@@ -68,16 +69,30 @@ const MAX_LIST_HEIGHT = 192;
 const tagActionButtonClass =
   'size-5 shrink-0 p-0.5 text-ink-extra-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [&_:where(svg)]:size-3.5';
 
-type TagPickerProps = {
+export type TagPickerSourceProps =
+  | { docTags: DocTags; createDocTags?: never }
+  | { docTags?: never; createDocTags: () => DocTags };
+
+export type TagPickerProps = {
   replaceTag?: ResolvedTag;
   triggerClass?: string;
   triggerLabel: string;
   children: JSX.Element;
   onOpenChange?: (open: boolean) => void;
-} & (
-  | { docTags: DocTags; createDocTags?: never }
-  | { docTags?: never; createDocTags: () => DocTags }
-);
+  /**
+   * Fires when a picker session starts or ends, where a session covers both the
+   * popover and the tag editor dialog it can hand off to. Consumers that
+   * unmount the trigger once the picker is done (a chip that disappears with
+   * its last tag, say) should wait for this instead of `onOpenChange`, which
+   * reports closed while the editor dialog is still up.
+   */
+  onActiveChange?: (active: boolean) => void;
+  /**
+   * Prevent the click that dismisses the picker from activating the element
+   * behind it. This matches inline property editors rendered in soup rows.
+   */
+  withClickBlock?: boolean;
+} & TagPickerSourceProps;
 
 export function TagPicker(props: TagPickerProps) {
   const [open, setOpen] = createSignal(false);
@@ -94,6 +109,13 @@ export function TagPicker(props: TagPickerProps) {
       triggerRef?.isConnected && triggerRef.focus();
     }, 0);
   };
+
+  const pickerActive = () => open() || editorMode() !== null;
+  createEffect(
+    on(pickerActive, (active) => props.onActiveChange?.(active), {
+      defer: true,
+    })
+  );
 
   const setOpenState = (
     value: boolean,
@@ -159,6 +181,7 @@ export function TagPicker(props: TagPickerProps) {
             setCreateSuccessHandler(undefined);
             restoreFocusToTrigger();
           }}
+          withClickBlock={props.withClickBlock ?? false}
         />
       </Show>
     </Popover>
@@ -181,6 +204,7 @@ function TagPickerBodyOwner(props: {
   registerSave: (handler: (() => Promise<void>) | undefined) => void;
   createSuccessHandler: () => CreateTagSuccessHandler | undefined;
   onEditorClose: () => void;
+  withClickBlock: boolean;
 }) {
   // The factory is invoked under this conditionally-mounted component owner,
   // so row-level query/mutation hooks do not exist until the picker opens.
@@ -198,6 +222,7 @@ function TagPickerBodyOwner(props: {
           onOpenEditEditor={props.onOpenEditEditor}
           registerSave={props.registerSave}
           suppressInitialOutsideEvents={false}
+          withClickBlock={props.withClickBlock}
         />
       </Show>
       <Show when={props.editorMode()}>
@@ -303,6 +328,7 @@ function TagPickerBody(props: {
   ) => void;
   registerSave: (handler: (() => Promise<void>) | undefined) => void;
   suppressInitialOutsideEvents: boolean;
+  withClickBlock?: boolean;
 }) {
   const [search, setSearch] = createSignal('');
   const [saved, setSaved] = createSignal(false);
@@ -323,6 +349,30 @@ function TagPickerBody(props: {
     createSignal(true);
   const shouldIgnoreOutsideEvent = () =>
     props.suppressInitialOutsideEvents && initialOutsideEventGuard();
+
+  const blockDismissalClick = () => {
+    if (!props.withClickBlock) return;
+
+    // Kobalte closes popovers on an outside interaction but leaves the
+    // following click to bubble through to the row beneath it.
+    const swallow = (clickEvent: PointerEvent) => {
+      clickEvent.stopPropagation();
+      clickEvent.preventDefault();
+    };
+    window.addEventListener('click', swallow, {
+      capture: true,
+      once: true,
+    });
+    window.addEventListener(
+      'pointerdown',
+      () => {
+        window.removeEventListener('click', swallow, {
+          capture: true,
+        });
+      },
+      { capture: true, once: true }
+    );
+  };
 
   const initialAppliedTags = createMemo(() => props.docTags.appliedTags());
   const initialAppliedIds = createMemo(
@@ -656,13 +706,17 @@ function TagPickerBody(props: {
     <Popover.Portal>
       <Layer depth={3}>
         <Popover.Content
-          class="z-modal w-64 rounded-xl border border-edge-muted bg-surface text-sm shadow-menu menu-open-animation"
+          class="z-modal w-96 max-w-[min(24rem,calc(100vw-1.5rem))] rounded-xl border border-edge-muted bg-surface text-sm shadow-menu menu-open-animation"
           onCloseAutoFocus={(event) => event.preventDefault()}
           onFocusOutside={(event) => {
             if (shouldIgnoreOutsideEvent()) event.preventDefault();
           }}
           onInteractOutside={(event) => {
-            if (shouldIgnoreOutsideEvent()) event.preventDefault();
+            if (shouldIgnoreOutsideEvent()) {
+              event.preventDefault();
+              return;
+            }
+            blockDismissalClick();
           }}
         >
           <Show
@@ -901,7 +955,7 @@ function TagPickerRow(props: {
       >
         <OptionCheckBox checked={props.checked} multiselect />
         <TagDot color={props.item.option.color ?? undefined} />
-        <span class="min-w-0 truncate">{label()}</span>
+        <span class="min-w-0 flex-1 truncate">{label()}</span>
         <Show when={props.item.scope === 'team'}>
           <span class="max-w-20 shrink-0 truncate rounded-full border border-ink/5 px-1.5 py-0.5 text-[10px] leading-none text-ink-extra-muted">
             {props.teamName}

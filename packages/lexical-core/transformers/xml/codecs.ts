@@ -317,6 +317,7 @@ export function serializeNode(node: SerNode): FxpNode {
         nodeAttrs(n, {
           ...(n.userId && { userId: n.userId }),
           ...(n.email && { email: n.email }),
+          ...(n.displayName && { name: n.displayName }),
         })
       )
     )

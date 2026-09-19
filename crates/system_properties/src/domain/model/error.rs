@@ -7,7 +7,7 @@ use thiserror::Error;
 pub enum SystemPropertyError {
     /// Database error
     #[error("Database error: {0}")]
-    Database(#[from] sqlx::Error),
+    Database(rootcause::Report),
 
     /// Serialization error
     #[error("Serialization error: {0}")]

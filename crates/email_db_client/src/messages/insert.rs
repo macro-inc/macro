@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use crate::attachments::provider;
 use crate::messages::replying_to_id;
 use crate::parse::service_to_db::addresses_from_message;

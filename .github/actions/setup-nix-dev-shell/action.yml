@@ -1,15 +1,29 @@
 name: Setup Nix dev shell
-description: Enter the repository Nix dev shell without configuring a cache provider.
+description: Enter a repository Nix dev shell without configuring a cache provider.
+
+inputs:
+  shell:
+    description: Flake `devShells` attribute to enter (e.g. `default`, `agent-daemon`).
+    required: false
+    default: default
 
 runs:
   using: composite
   steps:
     - name: Enter Nix dev shell
       shell: bash
+      env:
+        DEV_SHELL: ${{ inputs.shell }}
       run: |
         set -euo pipefail
+        case "$DEV_SHELL" in
+          ''|*[!A-Za-z0-9_-]*)
+            echo "invalid devShell attribute: ${DEV_SHELL@Q}" >&2
+            exit 1
+            ;;
+        esac
         dev_env="$RUNNER_TEMP/nix-dev-env"
-        nix print-dev-env --accept-flake-config > "$dev_env"
+        nix print-dev-env --accept-flake-config ".#$DEV_SHELL" > "$dev_env"
         echo "BASH_ENV=$dev_env" >> "$GITHUB_ENV"
         source "$dev_env"
         printf '%s\n' "$PATH" | tr ':' '\n' >> "$GITHUB_PATH"

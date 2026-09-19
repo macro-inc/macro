@@ -16,6 +16,7 @@ import { $applyIdFromSerialized } from '../plugins/nodeIdPlugin';
 export type UserMentionInfo = {
   userId: string;
   email: string;
+  displayName?: string;
   mentionUuid?: string;
 };
 
@@ -24,18 +25,26 @@ export type SerializedUserMentionNode = Spread<
   SerializedLexicalNode
 >;
 
-export type UserMentionDecoratorProps = {
-  userId: String;
-  email: String;
+export type UserMentionDecoratorProps = UserMentionInfo & {
   key: NodeKey;
   theme: EditorThemeClasses;
 };
+
+type UserMentionConstructorOptions = {
+  displayName?: string;
+  mentionUuid?: string;
+};
+
+function getEmailLocalPart(email: string): string {
+  return email.split('@')[0] || email;
+}
 
 export class UserMentionNode extends DecoratorNode<
   DecoratorComponent<UserMentionDecoratorProps> | undefined
 > {
   __userId: string;
   __email: string;
+  __displayName: string;
   __mentionUuid: string | undefined;
 
   static getType() {
@@ -54,7 +63,10 @@ export class UserMentionNode extends DecoratorNode<
     return new UserMentionNode(
       node.__userId,
       node.__email,
-      node.__mentionUuid,
+      {
+        displayName: node.__displayName,
+        mentionUuid: node.__mentionUuid,
+      },
       node.__key
     );
   }
@@ -64,10 +76,32 @@ export class UserMentionNode extends DecoratorNode<
     email: string,
     mentionUuid?: string,
     key?: NodeKey
+  );
+  constructor(
+    userId: string,
+    email: string,
+    options?: UserMentionConstructorOptions,
+    key?: NodeKey
+  );
+  constructor(
+    userId: string,
+    email: string,
+    mentionUuidOrOptions?: string | UserMentionConstructorOptions,
+    key?: NodeKey
   ) {
     super(key);
+    const options =
+      typeof mentionUuidOrOptions === 'object'
+        ? mentionUuidOrOptions
+        : undefined;
+    const mentionUuid =
+      typeof mentionUuidOrOptions === 'string'
+        ? mentionUuidOrOptions
+        : options?.mentionUuid;
+
     this.__userId = userId;
     this.__email = email;
+    this.__displayName = options?.displayName || getEmailLocalPart(email);
     this.__mentionUuid = mentionUuid;
   }
 
@@ -75,6 +109,7 @@ export class UserMentionNode extends DecoratorNode<
     const node = $createUserMentionNode({
       userId: serializedNode.userId,
       email: serializedNode.email,
+      displayName: serializedNode.displayName,
       mentionUuid: serializedNode.mentionUuid,
     });
     $applyIdFromSerialized(node, serializedNode);
@@ -86,6 +121,7 @@ export class UserMentionNode extends DecoratorNode<
       ...super.exportJSON(),
       userId: this.__userId,
       email: this.__email,
+      displayName: this.__displayName,
       mentionUuid: this.__mentionUuid,
       type: UserMentionNode.getType(),
       version: 1,
@@ -96,6 +132,7 @@ export class UserMentionNode extends DecoratorNode<
     return {
       userId: this.__userId,
       email: this.__email,
+      displayName: this.__displayName,
       mentionUuid: this.__mentionUuid,
     };
   }
@@ -114,6 +151,7 @@ export class UserMentionNode extends DecoratorNode<
       'data-user-mention': true,
       'data-user-id': this.__userId,
       'data-email': this.__email,
+      'data-display-name': this.__displayName,
       'data-mention-uuid': this.__mentionUuid || '',
     };
   }
@@ -128,11 +166,14 @@ export class UserMentionNode extends DecoratorNode<
           conversion: (domNode: HTMLElement) => {
             const userId = domNode.getAttribute('data-user-id');
             const email = domNode.getAttribute('data-email');
+            const displayName =
+              domNode.getAttribute('data-display-name') ?? undefined;
 
             if (userId && email) {
               const node = $createUserMentionNode({
                 userId,
                 email,
+                displayName,
               });
               return { node };
             }
@@ -149,12 +190,12 @@ export class UserMentionNode extends DecoratorNode<
     for (const [k, v] of Object.entries(this.getDataAttrs())) {
       element.setAttribute(k, v.toString());
     }
-    element.textContent = this.__email;
+    element.textContent = this.__displayName;
     return { element };
   }
 
   getTextContent(): string {
-    return this.__email;
+    return this.__displayName;
   }
 
   getSearchText(): string {
@@ -177,6 +218,15 @@ export class UserMentionNode extends DecoratorNode<
   setEmail(email: string) {
     const writable = this.getWritable();
     writable.__email = email;
+  }
+
+  getDisplayName(): string {
+    return this.__displayName;
+  }
+
+  setDisplayName(displayName: string) {
+    const writable = this.getWritable();
+    writable.__displayName = displayName;
   }
 
   getMentionUuid(): string | undefined {
@@ -204,13 +254,13 @@ export class UserMentionNode extends DecoratorNode<
 export function $createUserMentionNode(params: {
   userId: string;
   email: string;
+  displayName?: string;
   mentionUuid?: string;
 }) {
-  const node = new UserMentionNode(
-    params.userId,
-    params.email,
-    params.mentionUuid
-  );
+  const node = new UserMentionNode(params.userId, params.email, {
+    displayName: params.displayName,
+    mentionUuid: params.mentionUuid,
+  });
   return $applyNodeReplacement(node);
 }
 

@@ -128,12 +128,12 @@ fn set_matrix() -> Step<Run> {
         .run(indoc::indoc! {r#"
             set -euo pipefail
             cfg=.github/services-config.json
-            # Full list drives deploy-services; the filtered lists keep each build
-            # matrix to only the services that actually produce that artifact, so
-            # no build job spins up Nix + a cache volume for nothing.
-            services=$(jq -c '.services | keys' "$cfg")
-            binaries=$(jq -c '[.services | to_entries[] | select((.value.deploy_binaries // []) | length > 0) | .key]' "$cfg")
-            lambdas=$(jq -c '[.services | to_entries[] | select((.value.deploy_lambdas // []) | length > 0) | .key]' "$cfg")
+            # Enabled services drive deploy-services; the filtered lists keep each
+            # build matrix to only enabled services that produce that artifact, so
+            # disabled services and empty artifact jobs consume no runners.
+            services=$(jq -c '[.services | to_entries[] | select(.value.deploy_enabled != false) | .key]' "$cfg")
+            binaries=$(jq -c '[.services | to_entries[] | select(.value.deploy_enabled != false) | select((.value.deploy_binaries // []) | length > 0) | .key]' "$cfg")
+            lambdas=$(jq -c '[.services | to_entries[] | select(.value.deploy_enabled != false) | select((.value.deploy_lambdas // []) | length > 0) | .key]' "$cfg")
             echo "matrix=${services}" >> "$GITHUB_OUTPUT"
             echo "binaries=${binaries}" >> "$GITHUB_OUTPUT"
             echo "lambdas=${lambdas}" >> "$GITHUB_OUTPUT"

@@ -1,8 +1,7 @@
 //! Thin bollard-backed helpers for the discrete Docker Engine operations the
-//! orchestrator needs outside of `docker compose` — checking whether the
-//! runtime image exists and idempotently ensuring the per-instance external
-//! networks/volumes. (Compose orchestration itself stays on the CLI; bollard
-//! has no compose support.)
+//! orchestrator needs outside of `docker compose` — idempotently ensuring the
+//! per-instance external networks/volumes. (Compose orchestration itself stays
+//! on the CLI; bollard has no compose support.)
 
 use anyhow::{Context, Result};
 use bollard::Docker;
@@ -30,15 +29,6 @@ fn connect() -> Result<Docker> {
         true => Docker::connect_with_podman_defaults().context("connecting to the Docker daemon"),
         false => Docker::connect_with_local_defaults().context("connecting to the Docker daemon"),
     }
-}
-
-/// Whether an image with `tag` exists locally.
-pub fn image_exists(tag: &str) -> bool {
-    block_on(async {
-        let docker = connect()?;
-        Ok::<_, anyhow::Error>(docker.inspect_image(tag).await.is_ok())
-    })
-    .unwrap_or(false)
 }
 
 /// Idempotently create a bridge network (no-op if it already exists).

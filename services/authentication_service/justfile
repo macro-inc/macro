@@ -1,5 +1,7 @@
 set dotenv-load := true
 
+import '../../tooling/just/database.just'
+
 mod ci '../../tooling/just/ci.just'
 
 deploy-dev:

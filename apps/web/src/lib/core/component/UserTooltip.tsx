@@ -1,15 +1,20 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
+import { enableCrm } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useIsConnectedSecondaryInbox } from '@core/user';
 import WideChat from '@icon/wide-chat.svg';
+import WideContact from '@icon/wide-contact.svg';
 import WideCopy from '@icon/wide-copy.svg';
 import WideTask from '@icon/wide-task.svg';
 import IconCheck from '@phosphor/check.svg';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
+import { useCrmContactByEmailQuery } from '@queries/crm/contacts';
+import { useCurrentTeamQuery } from '@queries/team/teams';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn, Surface } from '@ui';
-import { createSignal, type JSX, Show } from 'solid-js';
+import { createSignal, type JSX, Show, Suspense } from 'solid-js';
 import { UserIcon } from './UserIcon';
 
 type UserTooltipProps = {
@@ -21,25 +26,28 @@ type UserTooltipProps = {
   photoUrl?: string;
 };
 
-export function UserTooltip(props: UserTooltipProps) {
-  const [copied, setCopied] = createSignal(false);
-  const resetCopied = debounce(() => setCopied(false), 800);
-
-  function handleCopyEmail(e: MouseEvent) {
-    e.stopPropagation();
-    const email = props.email;
-    if (!email) return;
-    setCopied(true);
-    navigator.clipboard.writeText(email);
-    toast.success('Email copied');
-    resetCopied();
-    props.onClose?.();
+function copyableName(
+  displayName: string,
+  email: string | undefined
+): string | undefined {
+  const name = displayName.trim();
+  if (!name) return undefined;
+  if (name.toLowerCase() === 'me') return undefined;
+  if (email && name.toLowerCase() === email.toLowerCase()) return undefined;
+  const localPart = email?.split('@')[0];
+  if (localPart && name.toLowerCase() === localPart.toLowerCase()) {
+    return undefined;
   }
+  return name;
+}
+
+export function UserTooltip(props: UserTooltipProps) {
   const currentUserId = useUserId();
   const isConnectedSecondaryInbox = useIsConnectedSecondaryInbox();
   const canTreatAsUser = () =>
     !!props.id && !props.isDeleted && !isConnectedSecondaryInbox(props.id);
   const { openWithSplit, popoverSplit } = useSplitLayout();
+  const crmFlag = useFeatureFlag(enableCrm);
   const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation({
     onError: () => toast.failure('Failed to open direct message'),
   });
@@ -110,18 +118,35 @@ export function UserTooltip(props: UserTooltipProps) {
           </div>
         </div>
 
-        <Show when={props.email || props.id}>
+        <Show
+          when={
+            props.email ||
+            props.id ||
+            copyableName(props.displayName, props.email)
+          }
+        >
           <div class="border-t border-edge"></div>
           <div class="p-1.5 flex flex-col gap-0.5">
             <Show when={props.email}>
-              <ActionItem onClick={handleCopyEmail}>
-                {copied() ? (
-                  <IconCheck class="size-3.5" />
-                ) : (
-                  <WideCopy class="size-3.5" />
-                )}
-                Copy email
-              </ActionItem>
+              {(email) => (
+                <CopyActionItem value={email()} toastMessage="Email copied">
+                  Copy email
+                </CopyActionItem>
+              )}
+            </Show>
+            <Show when={copyableName(props.displayName, props.email)}>
+              {(name) => (
+                <CopyActionItem value={name()} toastMessage="Name copied">
+                  Copy name
+                </CopyActionItem>
+              )}
+            </Show>
+            <Show when={crmFlag().enabled ? props.email : undefined}>
+              {(email) => (
+                <Suspense fallback={null}>
+                  <OpenContactAction email={email()} onClose={props.onClose} />
+                </Suspense>
+              )}
             </Show>
             <Show when={canTreatAsUser() && props.id !== currentUserId()}>
               <ActionItem onClick={openDM}>
@@ -142,10 +167,76 @@ export function UserTooltip(props: UserTooltipProps) {
   );
 }
 
+/**
+ * Inner action: lives inside a local `<Suspense>` so the team and contact
+ * lookups suspend only this button, not the tooltip.
+ */
+function OpenContactAction(props: { email: string; onClose?: () => void }) {
+  const { openWithSplit } = useSplitLayout();
+  const currentTeamQuery = useCurrentTeamQuery();
+  const team = () => currentTeamQuery.data?.team;
+  const crmEnabled = () => team()?.crm_enabled === true;
+  const contactQuery = useCrmContactByEmailQuery(
+    () => team()?.id ?? '',
+    () => props.email,
+    crmEnabled
+  );
+
+  const openContact = (e: MouseEvent, contactId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openWithSplit(
+      { type: 'contact', id: contactId },
+      { preferNewSplit: e.shiftKey, reopen: 'latest' }
+    );
+    props.onClose?.();
+  };
+
+  return (
+    <Show when={crmEnabled() ? contactQuery.data : undefined}>
+      {(contact) => (
+        <ActionItem onClick={(e) => openContact(e, contact().id)}>
+          <WideContact class="size-3.5" />
+          Open contact
+        </ActionItem>
+      )}
+    </Show>
+  );
+}
+
+function CopyActionItem(props: {
+  value: string;
+  toastMessage: string;
+  children: JSX.Element;
+}) {
+  const [copied, setCopied] = createSignal(false);
+  const resetCopied = debounce(() => setCopied(false), 800);
+
+  function handleCopy(e: MouseEvent) {
+    e.stopPropagation();
+    setCopied(true);
+    navigator.clipboard.writeText(props.value);
+    toast.success(props.toastMessage);
+    resetCopied();
+  }
+
+  return (
+    <ActionItem onClick={handleCopy}>
+      {copied() ? (
+        <IconCheck class="size-3.5" />
+      ) : (
+        <WideCopy class="size-3.5" />
+      )}
+      {props.children}
+    </ActionItem>
+  );
+}
+
 function ActionItem(props: {
   children: JSX.Element;
   onClick: JSX.EventHandler<HTMLButtonElement, MouseEvent>;
   class?: string;
+  disabled?: boolean;
 }) {
   return (
     <button
@@ -155,6 +246,7 @@ function ActionItem(props: {
         props.class
       )}
       onClick={props.onClick}
+      disabled={props.disabled}
     >
       {props.children}
     </button>

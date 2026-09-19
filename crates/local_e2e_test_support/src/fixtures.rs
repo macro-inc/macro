@@ -98,8 +98,10 @@ pub struct SeedDocument {
     pub document_name: String,
     /// Source file name.
     pub file_name: String,
-    /// Whether the document is public.
-    pub is_public: bool,
+    /// Who can access the document through its share link.
+    pub link_share: Option<String>,
+    /// Access level granted through the share link.
+    pub link_share_access_level: Option<String>,
 }
 
 /// Channel row from `seed/channels.json`.
@@ -290,6 +292,18 @@ mod tests {
         assert_eq!(
             document.document_id,
             seed.manifest.documents.project_roadmap.id
+        );
+        assert_eq!(document.link_share, None);
+        assert_eq!(document.link_share_access_level, None);
+
+        let public_document = seed
+            .documents
+            .iter()
+            .find(|document| document.link_share.as_deref() == Some("PUBLIC"))
+            .expect("seed includes a public link-shared document");
+        assert_eq!(
+            public_document.link_share_access_level.as_deref(),
+            Some("view")
         );
 
         let channel = seed.general_channel().unwrap();

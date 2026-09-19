@@ -10,6 +10,7 @@ import { useEmailLinksQuery } from '@queries/email/link';
 import { useImportQuery } from '@queries/import';
 import { useMcpServersQuery } from '@queries/mcp-servers';
 import { useOnboardingQuery } from '@queries/onboarding';
+import { usePipedreamConnectionsQuery } from '@queries/pipedream-connectors';
 import { useNavigate } from '@solidjs/router';
 import { cn } from '@ui';
 import { Stepper } from '@ui/components/Stepper';
@@ -270,15 +271,26 @@ function FlowContent() {
   // suspend this boundary.
   const linksQuery = useEmailLinksQuery();
   const serversQuery = useMcpServersQuery({ neverSuspend: true });
+  const pipedreamQuery = usePipedreamConnectionsQuery({ neverSuspend: true });
   const analytics = useAnalytics();
 
   // Live connection state, derived from the flow's queries (no standing
   // bookkeeping): whether an MCP server authenticated, and which tools the
   // user connected. Drives the hero-module states and the build phrases.
-  const serverAuthed = (name: string) =>
-    (serversQuery.data ?? []).some(
+  // Mirrors the backend's stack-selection rule (`mcp_select`): a user with
+  // any Pipedream connectors is served those, so native rows stop counting.
+  const serverAuthed = (name: string) => {
+    const pipedream = pipedreamQuery.data ?? [];
+    if (pipedream.length > 0) {
+      return pipedream.some(
+        (connection) =>
+          connection.server_name.toLowerCase() === name.toLowerCase()
+      );
+    }
+    return (serversQuery.data ?? []).some(
       (server) => server.server_name === name && server.authenticated
     );
+  };
   const connectedTools = (): ConnectedTools => ({
     google: (linksQuery.data?.links.length ?? 0) > 0,
     linear: serverAuthed('Linear'),
@@ -412,9 +424,13 @@ function FlowContent() {
   const finish = createFlowFinish({
     completionRollup: () => ({
       emails_connected: linksQuery.data?.links.length ?? 0,
-      connectors_connected: (serversQuery.data ?? [])
-        .filter((server) => server.authenticated)
-        .map((server) => server.server_name.toLowerCase()),
+      connectors_connected: (pipedreamQuery.data ?? []).length
+        ? (pipedreamQuery.data ?? []).map((connection) =>
+            connection.server_name.toLowerCase()
+          )
+        : (serversQuery.data ?? [])
+            .filter((server) => server.authenticated)
+            .map((server) => server.server_name.toLowerCase()),
     }),
   });
   const controls: StepControls = {

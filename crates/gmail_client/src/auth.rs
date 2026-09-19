@@ -1,59 +1,59 @@
-use crate::GmailClient;
-use anyhow::Context;
+use std::collections::HashMap;
+
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
 use models_email::gmail::inbox_sync::{
     GoogleJwtClaims, GooglePublicKeys, JwksResponse, JwtVerificationError, KeyMap,
 };
-use std::collections::HashMap;
+
+use crate::error::{decode_json_response, unsuccessful_response};
+use crate::{GmailApiHttpError, GmailClient};
 
 pub(crate) async fn fetch_google_public_keys(
     client: &GmailClient,
-) -> anyhow::Result<GooglePublicKeys> {
+) -> Result<GooglePublicKeys, GmailApiHttpError> {
     let response = client
         .inner
         .get(&client.certs_url)
         .send()
         .await
-        .context("Failed to send request to Google certificates endpoint")?;
+        .map_err(GmailApiHttpError::transport)?;
 
-    let response = response
-        .error_for_status()
-        .context("Google certificates endpoint returned an error status")?;
-
-    // Extract the Cache-Control header and parse max-age
-    let max_age_seconds = response
-        .headers()
-        .get("Cache-Control")
-        .and_then(|value| value.to_str().ok())
-        .and_then(|cc| {
-            cc.split(',')
-                .map(|s| s.trim())
-                .find(|s| s.starts_with("max-age="))
-                .and_then(|max_age_str| {
-                    max_age_str
-                        .strip_prefix("max-age=")
-                        .and_then(|age| age.parse::<u64>().ok())
-                })
-        })
-        .unwrap_or(0); // Default to 0 if header is missing or invalid
-
-    let jwks_response = response
-        .json::<JwksResponse>()
-        .await
-        .context("Failed to parse JWKS response from Google certificates endpoint")?;
-
-    let mut keys_map = HashMap::new();
-    for key in jwks_response.keys {
-        keys_map.insert(key.kid.clone(), key);
+    if !response.status().is_success() {
+        return Err(unsuccessful_response(response).await);
     }
 
-    if keys_map.is_empty() {
-        anyhow::bail!("No valid RSA keys found in Google JWKS response");
+    let max_age_seconds = response
+        .headers()
+        .get(reqwest::header::CACHE_CONTROL)
+        .and_then(|value| value.to_str().ok())
+        .and_then(parse_cache_max_age)
+        .unwrap_or(0);
+    let jwks: JwksResponse = decode_json_response(response).await?;
+
+    let keys = jwks
+        .keys
+        .into_iter()
+        .map(|key| (key.kid.clone(), key))
+        .collect::<HashMap<_, _>>();
+    if keys.is_empty() {
+        return Err(GmailApiHttpError::InvalidResponse(
+            "Google JWKS response did not contain any RSA keys".to_string(),
+        ));
     }
 
     Ok(GooglePublicKeys {
         max_age_seconds,
-        keys: keys_map,
+        keys,
+    })
+}
+
+fn parse_cache_max_age(cache_control: &str) -> Option<u64> {
+    cache_control.split(',').find_map(|directive| {
+        let (name, value) = directive.trim().split_once('=')?;
+        if !name.trim().eq_ignore_ascii_case("max-age") {
+            return None;
+        }
+        value.trim().trim_matches('"').parse().ok()
     })
 }
 
@@ -62,13 +62,9 @@ pub(crate) fn verify_google_jwt(
     token: &str,
     public_keys: KeyMap,
 ) -> Result<GoogleJwtClaims, JwtVerificationError> {
-    // Extract the key ID from the JWT header
     let header = jsonwebtoken::decode_header(token)
-        .map_err(|e| JwtVerificationError::HeaderDecodeError(e.into()))?;
-
-    let kid = header.kid.ok_or_else(|| JwtVerificationError::MissingKid)?;
-
-    // Find the corresponding public key
+        .map_err(|error| JwtVerificationError::HeaderDecodeError(error.into()))?;
+    let kid = header.kid.ok_or(JwtVerificationError::MissingKid)?;
     let public_key = public_keys
         .get(&kid)
         .ok_or_else(|| JwtVerificationError::KeyNotFound(kid))?;
@@ -80,78 +76,24 @@ pub(crate) fn verify_google_jwt(
     }
 
     let decoding_key = DecodingKey::from_rsa_components(&public_key.n, &public_key.e)
-        .map_err(|e| JwtVerificationError::DecodingKeyCreationError(e.into()))?;
-
-    // Set up validation parameters
+        .map_err(|error| JwtVerificationError::DecodingKeyCreationError(error.into()))?;
     let mut validation = Validation::new(Algorithm::RS256);
     validation.set_audience(&[&client.audience]);
     validation.set_issuer(&["accounts.google.com", "https://accounts.google.com"]);
 
-    // Verify and decode the token
-    let token_data = match decode::<GoogleJwtClaims>(token, &decoding_key, &validation) {
-        Ok(data) => data,
-        Err(err) => {
-            // Provide more specific error information based on the JWT error
-            return Err(match &err.kind() {
-                jsonwebtoken::errors::ErrorKind::InvalidSignature => {
-                    JwtVerificationError::InvalidSignature
-                }
-                jsonwebtoken::errors::ErrorKind::InvalidAudience => {
-                    JwtVerificationError::InvalidAudience
-                }
-                jsonwebtoken::errors::ErrorKind::InvalidIssuer => {
-                    JwtVerificationError::InvalidIssuer
-                }
-                _ => JwtVerificationError::ValidationError(err.into()),
-            });
-        }
-    };
-
-    Ok(token_data.claims)
+    decode::<GoogleJwtClaims>(token, &decoding_key, &validation)
+        .map(|token_data| token_data.claims)
+        .map_err(|error| match error.kind() {
+            jsonwebtoken::errors::ErrorKind::InvalidSignature => {
+                JwtVerificationError::InvalidSignature
+            }
+            jsonwebtoken::errors::ErrorKind::InvalidAudience => {
+                JwtVerificationError::InvalidAudience
+            }
+            jsonwebtoken::errors::ErrorKind::InvalidIssuer => JwtVerificationError::InvalidIssuer,
+            _ => JwtVerificationError::ValidationError(error.into()),
+        })
 }
 
-#[cfg(feature = "gmail_test")]
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use anyhow::Context;
-
-    #[tokio::test]
-    #[ignore = "Jwt env var is not available in CI"]
-    async fn test_verify_real_google_jwt() -> anyhow::Result<()> {
-        let gmail_client = super::GmailClient::new("hello".to_string());
-
-        let public_keys = fetch_google_public_keys(&gmail_client).await?;
-
-        let jwt = std::env::var("GOOGLE_TEST_JWT")
-            .context("GOOGLE_TEST_JWT environment variable not set")?;
-
-        let claims = verify_google_jwt(&gmail_client, &jwt, public_keys.keys)?;
-
-        assert_eq!(
-            claims.iss, "https://accounts.google.com",
-            "Issuer should be accounts.google.com"
-        );
-        assert!(!claims.sub.is_empty(), "Subject should not be empty");
-        assert!(!claims.email.is_empty(), "Email should not be empty");
-        assert!(claims.email_verified, "Email should be verified");
-        assert!(
-            claims.exp > claims.iat,
-            "Expiration time should be after issued at time"
-        );
-
-        println!("✅ Successfully verified Google JWT");
-        println!("Email: {}", claims.email);
-        println!("Subject: {}", claims.sub);
-        println!(
-            "Issued at: {}",
-            chrono::DateTime::from_timestamp(claims.iat as i64, 0).unwrap()
-        );
-        println!(
-            "Expires at: {}",
-            chrono::DateTime::from_timestamp(claims.exp as i64, 0).unwrap()
-        );
-
-        Ok(())
-    }
-}
+mod test;

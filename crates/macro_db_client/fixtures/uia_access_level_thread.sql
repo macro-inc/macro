@@ -14,9 +14,9 @@ VALUES ('00000000-0000-0000-0000-000000aae002', 'Grandparent Project', 'user-1',
        ('00000000-0000-0000-0000-000000aae001', 'Parent Project', 'user-1', '00000000-0000-0000-0000-000000aae002');
 
 -- Create placeholder SharePermission records required for foreign key constraints in EmailThreadPermission.
-INSERT INTO public."SharePermission" ("id", "isPublic")
-VALUES ('sp-thread-nested', false),
-       ('sp-thread-standalone', false);
+INSERT INTO public."SharePermission" ("id", "linkShare", "linkShareAccessLevel")
+VALUES ('sp-thread-nested', NULL, NULL),
+       ('sp-thread-standalone', NULL, NULL);
 
 -- Create the EmailThreadPermission entries. This table links a thread to a user and optionally a project.
 INSERT INTO public."EmailThreadPermission" ("threadId", "sharePermissionId", "userId", "projectId")

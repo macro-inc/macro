@@ -6,6 +6,7 @@
  */
 import type { CreateChannelScopedBotRequestAvatarUrl } from './createChannelScopedBotRequestAvatarUrl';
 import type { CreateChannelScopedBotRequestDescription } from './createChannelScopedBotRequestDescription';
+import type { CreateChannelScopedBotRequestHasAgent } from './createChannelScopedBotRequestHasAgent';
 import type { CreateChannelScopedBotRequestTeamId } from './createChannelScopedBotRequestTeamId';
 import type { CreateChannelScopedBotRequestTokenExpiresAt } from './createChannelScopedBotRequestTokenExpiresAt';
 import type { CreateChannelScopedBotRequestTokenLabel } from './createChannelScopedBotRequestTokenLabel';
@@ -20,6 +21,8 @@ export interface CreateChannelScopedBotRequest {
   description?: CreateChannelScopedBotRequestDescription;
   /** Stable handle. */
   handle: string;
+  /** Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false. */
+  has_agent?: CreateChannelScopedBotRequestHasAgent;
   /** Display name. */
   name: string;
   /** Team owner. The caller must be a team administrator or owner. Omit for a user-owned bot. */

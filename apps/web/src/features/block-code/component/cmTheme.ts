@@ -32,25 +32,28 @@ const base = {
   selection: 'rgb(from var(--color-edge) r g b / 0.6)',
   menuSelected: 'var(--color-hover)',
 
+  searchMatch: 'rgb(from var(--color-accent) r g b / 0.2)',
+  searchMatchSelected: 'rgb(from var(--color-accent) r g b / 0.45)',
+
   alt: 'var(--color-ink-extra-muted)',
   edge: 'var(--color-edge)',
   edge50: 'color-mix(in oklch, var(--color-edge), var(--color-surface) 50%)',
   accent: 'var(--color-accent)',
   error: 'var(--color-failure)',
-  link: 'var(--color-accent)',
+  link: 'var(--color-link)',
 
-  c0: 'var(--color-accent)',
-  c1: 'var(--color-accent-30)',
-  c2: 'var(--color-accent-60)',
-  c3: 'var(--color-accent-90)',
-  c4: 'var(--color-accent-120)',
-  c5: 'var(--color-accent-150)',
-  c6: 'var(--color-accent-180)',
-  c7: 'var(--color-accent-210)',
-  c8: 'var(--color-accent-240)',
-  c9: 'var(--color-accent-270)',
-  c10: 'var(--color-accent-300)',
-  c11: 'var(--color-accent-330)',
+  c0: 'var(--color-red)',
+  c1: 'var(--color-orange)',
+  c2: 'var(--color-amber)',
+  c3: 'var(--color-yellow)',
+  c4: 'var(--color-lime)',
+  c5: 'var(--color-green)',
+  c6: 'var(--color-teal)',
+  c7: 'var(--color-cyan)',
+  c8: 'var(--color-blue)',
+  c9: 'var(--color-violet)',
+  c10: 'var(--color-purple)',
+  c11: 'var(--color-pink)',
 };
 
 const theme = EditorView.theme({
@@ -65,6 +68,9 @@ const theme = EditorView.theme({
     caretColor: base.accent,
     padding: '0.5rem 0',
     minHeight: '100%',
+    // The block shell sets `select-none` on the frame; code itself stays
+    // selectable, including for read-only viewers.
+    userSelect: 'text',
   },
   '.cm-line': {
     paddingLeft: '0.5rem',
@@ -110,6 +116,25 @@ const theme = EditorView.theme({
   },
   '.cm-selectionMatch': {
     backgroundColor: base.selection,
+  },
+  '.cm-searchMatch': {
+    backgroundColor: base.searchMatch,
+    borderRadius: '0.125rem',
+  },
+  '.cm-searchMatch-selected': {
+    backgroundColor: base.searchMatchSelected,
+  },
+  // The find bar brings its own chrome (see CodeSearchPanel), so drop the
+  // default panel background and separators CodeMirror paints around it.
+  '.cm-panels': {
+    backgroundColor: 'transparent',
+    color: base.fg,
+  },
+  '.cm-panels-top': {
+    borderBottom: 'none',
+  },
+  '.cm-panels-bottom': {
+    borderTop: 'none',
   },
   '.cm-tooltip': {
     backgroundColor: base.panel,

@@ -19,6 +19,8 @@ fn channel_index(updated_at_millis: Option<i64>) -> ChannelMessageIndex {
 
 fn hit_for(source: ChannelMessageIndex) -> Hit<ChannelMessageIndex> {
     Hit {
+        index: "channels_v2".to_string(),
+        matched_queries: vec!["channels".to_string()],
         score: Some(1.0),
         source,
         highlight: None,

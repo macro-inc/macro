@@ -37,7 +37,7 @@ pub async fn process_channel_message_update(
         Ok(parsed) => PlainTextFormatter::format_xml_text(parsed).0,
         Err(e) => {
             tracing::error!(error = ?e, %channel_id, %message_id, "failed to parse channel message content, indexing raw content");
-            raw_content.clone()
+            raw_content.to_string()
         }
     };
 

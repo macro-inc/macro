@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                s.id AS session_id,\n                s.bot_id,\n                b.name AS bot_name,\n                b.handle AS bot_handle,\n                s.name,\n                s.status,\n                s.model,\n                s.owner_id,\n                s.created_at,\n                s.modified_at\n            FROM agent_session s\n            JOIN agent_configs ac ON ac.bot_id = s.bot_id\n            JOIN bots b ON b.id = s.bot_id\n            WHERE ac.harness_id = $1\n            ORDER BY s.modified_at DESC\n            LIMIT 50\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "bot_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "bot_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "bot_handle",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "model",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "owner_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "modified_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "e96a236012ba6dd58242b1973f5f3a5b7f8d3ff33ddee6b3ba1ce00b690d28d1"
+}

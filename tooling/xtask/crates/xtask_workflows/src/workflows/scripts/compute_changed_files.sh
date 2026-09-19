@@ -1,5 +1,9 @@
 set -euo pipefail
 
+# Compare against the merge-base so a deleted file still appears. `--no-renames`
+# turns a rename into a delete+add pair so the old path is attributed to its
+# package (otherwise git reports only the new name).
+
 if [ -z "${GITHUB_BASE_REF:-}" ]; then
   compare_rev="$(git rev-parse HEAD~1)"
 else
@@ -11,4 +15,5 @@ else
   fi
 fi
 
-git diff --name-only "$compare_rev" "$GITHUB_SHA" > /tmp/changed-files
+printf '%s\n' "$compare_rev" > /tmp/base-revision
+git diff --name-only --no-renames "$compare_rev" "$GITHUB_SHA" > /tmp/changed-files

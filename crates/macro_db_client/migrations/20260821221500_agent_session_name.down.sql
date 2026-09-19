@@ -1,0 +1,2 @@
+ALTER TABLE agent_session
+DROP COLUMN IF EXISTS name;

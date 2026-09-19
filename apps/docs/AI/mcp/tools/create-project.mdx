@@ -1,0 +1,15 @@
+---
+title: CreateProject
+description: "Create a project — shown as a folder in the app UI. Documents, AI chats, email threads, and other projects can be placed inside it."
+---
+
+# CreateProject
+
+Create a project — shown as a folder in the app UI. Documents, AI chats, email threads, and other projects can be placed inside it.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `projectName` | string | Yes | The name of the project. |
+| `parentProjectId` | string | No | The id of an existing project to nest the new project inside. Requires edit access to that project. Omit to create the project at the top level. |

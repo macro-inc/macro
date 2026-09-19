@@ -19,10 +19,13 @@ import {
   $createParagraphNode,
   $createTextNode,
   $getRoot,
+  $isElementNode,
   createEditor,
 } from 'lexical';
 import { describe, expect, it } from 'vitest';
 import { SupportedNodeTypes } from '../node-list';
+import { $createImageNode, $isImageNode } from '../nodes/ImageNode';
+import { $createVideoNode, $isVideoNode } from '../nodes/VideoNode';
 import { EXTERNAL_TRANSFORMERS, INTERNAL_TRANSFORMERS } from '../transformers';
 
 function createTestEditor() {
@@ -141,6 +144,32 @@ describe('m-table internal transformer', () => {
       expect(mergedCell.getColSpan()).toBe(2);
       expect(mergedCell.getRowSpan()).toBe(2);
       expect(mergedCell.getTextContent()).toBe('Wolf');
+    });
+  });
+
+  it('serializes height only on rows that have one', async () => {
+    const editor = createTestEditor();
+
+    await buildEditorState(editor, () => {
+      const table = $createTableNode();
+      const autoRow = $createTableRowNode();
+      autoRow.append($createCell('a'));
+      const tallRow = $createTableRowNode();
+      tallRow.setHeight(48);
+      tallRow.append($createCell('b'));
+      table.append(autoRow, tallRow);
+      $getRoot().append(table);
+    });
+
+    expect(exportMarkdown(editor)).toBe(
+      '<m-table><m-table-row><m-table-cell>a</m-table-cell></m-table-row><m-table-row height="48"><m-table-cell>b</m-table-cell></m-table-row></m-table>'
+    );
+
+    await importMarkdown(editor, exportMarkdown(editor));
+    editor.getEditorState().read(() => {
+      const rows = $getFirstTable().getChildren().filter($isTableRowNode);
+      expect((rows[0] as TableRowNode).getHeight()).toBeUndefined();
+      expect((rows[1] as TableRowNode).getHeight()).toBe(48);
     });
   });
 
@@ -289,6 +318,192 @@ describe('lists inside table cells', () => {
     editor.getEditorState().read(() => {
       const items = $getFirstCellList().getChildren().filter($isListItemNode);
       expect(items).toHaveLength(2);
+    });
+  });
+});
+
+describe('images inside table cells', () => {
+  function $getFirstCellImage() {
+    const table = $getFirstTable();
+    const [row] = table.getChildren().filter($isTableRowNode);
+    const [cell] = (row as TableRowNode).getChildren().filter($isTableCellNode);
+    const image = cell
+      .getChildren()
+      .flatMap((child) =>
+        $isImageNode(child)
+          ? [child]
+          : $isElementNode(child)
+            ? child.getChildren().filter($isImageNode)
+            : []
+      )[0];
+    expect(image).toBeDefined();
+    return image!;
+  }
+
+  it('round-trips a markdown image in a cell through internal markdown', async () => {
+    const editor = createTestEditor();
+    await importMarkdown(
+      editor,
+      '<m-table><m-table-row><m-table-cell>![cat](https://example.com/cat.png)</m-table-cell></m-table-row></m-table>'
+    );
+
+    const markdown = exportMarkdown(editor);
+    expect(markdown).toBe(
+      '<m-table><m-table-row><m-table-cell>![cat](https://example.com/cat.png)</m-table-cell></m-table-row></m-table>'
+    );
+
+    await importMarkdown(editor, markdown);
+    editor.getEditorState().read(() => {
+      const image = $getFirstCellImage();
+      expect(image.getUrl()).toBe('https://example.com/cat.png');
+      expect(image.getAlt()).toBe('cat');
+    });
+  });
+
+  it('round-trips a constrained image in a cell', async () => {
+    const editor = createTestEditor();
+
+    await buildEditorState(editor, () => {
+      const table = $createTableNode();
+      const row = $createTableRowNode();
+      const cell = $createTableCellNode(TableCellHeaderStates.NO_STATUS);
+      cell.append(
+        $createImageNode({
+          srcType: 'url',
+          url: 'https://example.com/cat.png',
+          alt: 'cat',
+          width: 400,
+          height: 300,
+          constrainedWidth: 200,
+          constrainedHeight: 150,
+        })
+      );
+      row.append(cell);
+      table.append(row);
+      $getRoot().append(table);
+    });
+
+    const markdown = exportMarkdown(editor);
+    expect(markdown).toContain('<m-image>');
+    expect(markdown).toContain('"constrainedWidth":200');
+    expect(markdown).toContain('"constrainedHeight":150');
+
+    await importMarkdown(editor, markdown);
+    editor.getEditorState().read(() => {
+      const image = $getFirstCellImage();
+      expect(image.getUrl()).toBe('https://example.com/cat.png');
+      expect(image.getAlt()).toBe('cat');
+      expect(image.getConstrainedWidth()).toBe(200);
+      expect(image.getConstrainedHeight()).toBe(150);
+    });
+  });
+
+  it('round-trips a markdown image in a cell through external pipe-table markdown', async () => {
+    const editor = createTestEditor();
+    await importMarkdown(
+      editor,
+      '<m-table><m-table-row><m-table-cell>![cat](https://example.com/cat.png)</m-table-cell><m-table-cell>plain</m-table-cell></m-table-row></m-table>'
+    );
+
+    const markdown = exportMarkdown(editor, EXTERNAL_TRANSFORMERS);
+    expect(markdown).toBe('| ![cat](https://example.com/cat.png) | plain |');
+
+    await buildEditorState(editor, () => {
+      $getRoot().clear();
+      $convertFromMarkdownString(markdown, EXTERNAL_TRANSFORMERS);
+    });
+    editor.getEditorState().read(() => {
+      const image = $getFirstCellImage();
+      expect(image.getUrl()).toBe('https://example.com/cat.png');
+      expect(image.getAlt()).toBe('cat');
+    });
+  });
+});
+
+describe('videos inside table cells', () => {
+  function $getFirstCellVideo() {
+    const table = $getFirstTable();
+    const [row] = table.getChildren().filter($isTableRowNode);
+    const [cell] = (row as TableRowNode).getChildren().filter($isTableCellNode);
+    const video = cell
+      .getChildren()
+      .flatMap((child) =>
+        $isVideoNode(child)
+          ? [child]
+          : $isElementNode(child)
+            ? child.getChildren().filter($isVideoNode)
+            : []
+      )[0];
+    expect(video).toBeDefined();
+    return video!;
+  }
+
+  it('round-trips a video in a cell through internal markdown', async () => {
+    const editor = createTestEditor();
+
+    await buildEditorState(editor, () => {
+      const table = $createTableNode();
+      const row = $createTableRowNode();
+      const cell = $createTableCellNode(TableCellHeaderStates.NO_STATUS);
+      cell.append(
+        $createVideoNode({
+          srcType: 'url',
+          url: 'https://example.com/clip.mp4',
+          width: 400,
+          height: 300,
+          constrainedWidth: 200,
+          constrainedHeight: 150,
+        })
+      );
+      row.append(cell);
+      table.append(row);
+      $getRoot().append(table);
+    });
+
+    const markdown = exportMarkdown(editor);
+    expect(markdown).toContain('<m-video>');
+    expect(markdown).toContain('https://example.com/clip.mp4');
+    expect(markdown).toContain('"constrainedWidth":200');
+
+    await importMarkdown(editor, markdown);
+    editor.getEditorState().read(() => {
+      const video = $getFirstCellVideo();
+      expect(video.getUrl()).toBe('https://example.com/clip.mp4');
+      expect(video.getConstrainedWidth()).toBe(200);
+      expect(video.getConstrainedHeight()).toBe(150);
+    });
+  });
+
+  it('round-trips a video in a cell through external pipe-table markdown', async () => {
+    const editor = createTestEditor();
+
+    await buildEditorState(editor, () => {
+      const table = $createTableNode();
+      const row = $createTableRowNode();
+      const videoCell = $createTableCellNode(TableCellHeaderStates.NO_STATUS);
+      videoCell.append(
+        $createVideoNode({
+          srcType: 'url',
+          url: 'https://example.com/clip.mp4',
+        })
+      );
+      row.append(videoCell, $createCell('plain'));
+      table.append(row);
+      $getRoot().append(table);
+    });
+
+    const markdown = exportMarkdown(editor, EXTERNAL_TRANSFORMERS);
+    expect(markdown).toContain('<m-video>');
+    expect(markdown).toContain('|');
+    expect(markdown).toContain('plain');
+
+    await buildEditorState(editor, () => {
+      $getRoot().clear();
+      $convertFromMarkdownString(markdown, EXTERNAL_TRANSFORMERS);
+    });
+    editor.getEditorState().read(() => {
+      const video = $getFirstCellVideo();
+      expect(video.getUrl()).toBe('https://example.com/clip.mp4');
     });
   });
 });

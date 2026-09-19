@@ -67,6 +67,43 @@ type Success = { success: boolean };
 
 type IdMappingResponse = { target_id: string | null };
 
+// Hand-written mirrors of the DCS OpenAPI types for the Pipedream MCP
+// connector endpoints (`/pipedream/mcp/*`); replace with the orval-generated
+// schemas on the next client regeneration.
+export type PipedreamConnectionResponse = {
+  app_slug: string;
+  server_name: string;
+  enabled: boolean;
+};
+export type PipedreamUpdateRequest = {
+  app_slug: string;
+  server_name?: string;
+  enabled?: boolean;
+};
+export type PipedreamTokenResponse = {
+  token: string;
+  expires_at: string;
+  connect_link_url: string;
+};
+export type PipedreamCompleteRequest = {
+  account_id: string;
+  server_name?: string;
+};
+export type PipedreamCatalogEntryResponse = {
+  app_slug: string;
+  display_name: string;
+  description?: string | null;
+  icon_url?: string | null;
+  priority: boolean;
+};
+export type PipedreamCatalogResponse = {
+  servers: PipedreamCatalogEntryResponse[];
+  next_cursor?: string | null;
+};
+
+/** Error code for deployments where Pipedream MCP connect is not configured. */
+export const PIPEDREAM_DISABLED = 'PIPEDREAM_DISABLED' as const;
+
 export const cognitionApiServiceClient = {
   /** Creates a mapping from source_id to target_id */
   async createIdMapping(args: { source_id: string; target_id: string }) {
@@ -356,6 +393,99 @@ export const cognitionApiServiceClient = {
         method: 'POST',
         body: JSON.stringify(args),
       })
+    ).map((result) => result);
+  },
+
+  async listPipedreamConnections() {
+    return (
+      await dcsFetch<PipedreamConnectionResponse[]>(
+        `/pipedream/mcp/connections`,
+        {
+          method: 'GET',
+        }
+      )
+    ).map((result) => result);
+  },
+
+  async updatePipedreamConnection(args: PipedreamUpdateRequest) {
+    return (
+      await dcsFetch<PipedreamConnectionResponse>(
+        `/pipedream/mcp/connections`,
+        {
+          method: 'PUT',
+          body: JSON.stringify(args),
+        }
+      )
+    ).map((result) => result);
+  },
+
+  async deletePipedreamConnection(args: { app_slug: string }) {
+    return await dcsFetch(
+      `/pipedream/mcp/connections?app_slug=${encodeURIComponent(args.app_slug)}`,
+      { method: 'DELETE' }
+    );
+  },
+
+  /**
+   * Create a Pipedream Connect token for authorizing an MCP connector.
+   * Answers with the {@link PIPEDREAM_DISABLED} error code on deployments
+   * where Pipedream isn't configured (HTTP 501).
+   */
+  async createPipedreamToken() {
+    return (
+      await fetchWithToken<PipedreamTokenResponse, typeof PIPEDREAM_DISABLED>(
+        `${dcsHost}/pipedream/mcp/token`,
+        {
+          method: 'POST',
+          body: JSON.stringify({}),
+          errorResponseHandler: async (response) => {
+            if (response.status === 501) {
+              return {
+                code: PIPEDREAM_DISABLED,
+                message: 'Pipedream is not configured for this deployment',
+              };
+            }
+            return {
+              code: 'HTTP_ERROR',
+              message: `HTTP error! status: ${response.status}`,
+            };
+          },
+        }
+      )
+    ).map((result) => result);
+  },
+
+  /** Register a connected account reported by the Pipedream Connect UI. */
+  async completePipedreamConnection(args: PipedreamCompleteRequest) {
+    return (
+      await dcsFetch<PipedreamConnectionResponse>(`/pipedream/mcp/complete`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+      })
+    ).map((result) => result);
+  },
+
+  /**
+   * Browse or search the Pipedream app catalog. Curated priority connectors
+   * come first (flagged `priority`), followed by directory results.
+   */
+  async browsePipedreamCatalog(args: {
+    search?: string;
+    cursor?: string;
+    limit?: number;
+  }) {
+    const params = new URLSearchParams();
+    if (args.search) params.set('search', args.search);
+    if (args.cursor) params.set('cursor', args.cursor);
+    if (args.limit) params.set('limit', String(args.limit));
+    const query = params.size > 0 ? `?${params}` : '';
+    return (
+      await dcsFetch<PipedreamCatalogResponse>(
+        `/pipedream/mcp/catalog${query}`,
+        {
+          method: 'GET',
+        }
+      )
     ).map((result) => result);
   },
 

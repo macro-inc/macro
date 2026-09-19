@@ -99,7 +99,7 @@ impl EntityAccessService for TestAccessService {
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        Err(AccessError::Internal)
+        Err(AccessError::internal("test access failure"))
     }
 
     async fn get_access_level(
@@ -108,7 +108,7 @@ impl EntityAccessService for TestAccessService {
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<Option<AccessLevel>, AccessError> {
-        Err(AccessError::Internal)
+        Err(AccessError::internal("test access failure"))
     }
 
     async fn check_access(
@@ -118,7 +118,7 @@ impl EntityAccessService for TestAccessService {
         _entity_type: EntityType,
         _required_level: AccessLevel,
     ) -> Result<AccessLevel, AccessError> {
-        Err(AccessError::Internal)
+        Err(AccessError::internal("test access failure"))
     }
 
     async fn check_public_access(
@@ -127,7 +127,7 @@ impl EntityAccessService for TestAccessService {
         _entity_type: EntityType,
         _required_level: AccessLevel,
     ) -> Result<AccessLevel, AccessError> {
-        Err(AccessError::Internal)
+        Err(AccessError::internal("test access failure"))
     }
 
     async fn get_entity_permission(
@@ -137,7 +137,7 @@ impl EntityAccessService for TestAccessService {
         _entity_type: EntityType,
         _user_org_id: Option<i64>,
     ) -> Result<EntityPermission, AccessError> {
-        Err(AccessError::Internal)
+        Err(AccessError::internal("test access failure"))
     }
 
     async fn get_crm_entity_permission_with_team(
@@ -146,7 +146,7 @@ impl EntityAccessService for TestAccessService {
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<(EntityPermission, Uuid, TeamRole), AccessError> {
-        Err(AccessError::Internal)
+        Err(AccessError::internal("test access failure"))
     }
 
     async fn get_users_by_entity(
@@ -154,28 +154,28 @@ impl EntityAccessService for TestAccessService {
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
-        Err(AccessError::Internal)
+        Err(AccessError::internal("test access failure"))
     }
 
     async fn get_call_channel(
         &self,
         _call_id: &Uuid,
     ) -> Result<Option<CallChannelInfo>, AccessError> {
-        Err(AccessError::Internal)
+        Err(AccessError::internal("test access failure"))
     }
 
     async fn get_call_channel_by_channel_id(
         &self,
         _channel_id: &Uuid,
     ) -> Result<Option<CallChannelInfo>, AccessError> {
-        Err(AccessError::Internal)
+        Err(AccessError::internal("test access failure"))
     }
 
     async fn get_user_team(
         &self,
         _user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Option<UserTeamInfo>, AccessError> {
-        Err(AccessError::Internal)
+        Err(AccessError::internal("test access failure"))
     }
 }
 

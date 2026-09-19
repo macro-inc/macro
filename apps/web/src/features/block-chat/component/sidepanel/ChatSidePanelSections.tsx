@@ -1,3 +1,4 @@
+import { EntityActivitySectionConditional } from '@app/features/activity/views/entity-activity-section';
 import {
   EntityPropertiesSection,
   EntityTagsSection,
@@ -41,6 +42,11 @@ export function ChatSidePanelSections() {
           <ChatPropertiesContent chatId={chatId} canEdit={canEdit()} />
         </Suspense>
       </SidePanel.Section>
+      <EntityActivitySectionConditional
+        entityId={chatId}
+        entityType="CHAT"
+        order={40}
+      />
     </>
   );
 }

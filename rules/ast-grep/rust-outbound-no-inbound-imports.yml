@@ -1,0 +1,26 @@
+id: rust-outbound-no-inbound-imports
+language: rust
+severity: error
+message: Outbound adapters must not import from crate::inbound — adapters depend on the domain, not on each other.
+note: |-
+  Hexagonal architecture (cloud-storage-hexagonal-architecture skill): an
+  outbound adapter that needs a type defined in inbound is a sign the type
+  is transport-agnostic and belongs in the domain — move it there. Tests
+  are exempt.
+files:
+  - crates/**/src/outbound/**
+  - services/**/src/outbound/**
+ignores:
+  - '**/test.rs'
+  - '**/tests.rs'
+  - '**/test/**'
+  - '**/tests/**'
+rule:
+  any:
+    - kind: scoped_identifier
+      regex: ^crate::inbound\b
+      not:
+        inside:
+          kind: scoped_identifier
+    - kind: use_declaration
+      regex: ^use crate::inbound\b

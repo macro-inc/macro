@@ -3,9 +3,9 @@ use std::str::FromStr;
 use anyhow::Context;
 use chrono::Utc;
 use document_sub_type::DocumentSubType;
+use lexical_client::types::MarkdownParseResult;
 use model::document::{DocumentMetadata, FileType};
 use models_properties::EntityType;
-use models_search::document::MarkdownParseResult;
 use models_search::unified::is_searchable_association;
 use opensearch_client::{
     OpensearchClient, date_format::EpochMillis, upsert::document::UpsertDocumentArgs,

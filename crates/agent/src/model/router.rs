@@ -16,25 +16,26 @@
 //! sniffing the id. Unroutable ids fall back to the default model.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 
-use ai_toolset::{RequestContext, SearchableTool};
+use ai_toolset::RequestContext;
 use ai_usage::{UsageContext, UsageRecorder};
 use futures::StreamExt;
 use macro_env_var::env_var;
-use rig_core::agent::{Agent, AgentBuilder, MultiTurnStreamItem};
+use rig_agent::agent::{Agent, AgentBuilder, MultiTurnStreamItem};
+use rig_agent::streaming::StreamingPrompt;
+use rig_agent::tool::server::ToolServerHandle;
 use rig_core::completion::{CompletionModel, GetTokenUsage};
 use rig_core::message::Message;
 use rig_core::providers::{anthropic, openai};
-use rig_core::streaming::{StreamedAssistantContent, StreamingPrompt};
-use rig_core::tool::server::ToolServerHandle;
+use rig_core::streaming::StreamedAssistantContent;
 
 use super::PredefinedModel;
 use super::anthropic::AnthropicModel;
 use super::openai::{OpenAiChatCompletionsModel, OpenAiResponsesModel};
 use super::types::Model;
 use crate::error::AgentError;
-use crate::hook::{RegisterFn, StreamBridge, ToolRouter};
+use crate::hook::{BridgeInputs, StreamBridge};
 use crate::stream::{ChatCompletionStream, StreamPart};
 
 env_var! {
@@ -141,9 +142,7 @@ impl ProviderAgent {
         prompt: Message,
         history: Vec<Message>,
         max_turns: usize,
-        routing: ToolRouter,
-        loaded_buffer: Arc<Mutex<Vec<SearchableTool>>>,
-        register_loaded: RegisterFn,
+        inputs: BridgeInputs,
         recorder: Arc<dyn UsageRecorder>,
         usage_ctx: UsageContext,
         model: String,
@@ -156,9 +155,7 @@ impl ProviderAgent {
                     prompt,
                     history,
                     max_turns,
-                    routing,
-                    loaded_buffer,
-                    register_loaded,
+                    inputs,
                     recorder,
                     usage_ctx,
                     model,
@@ -172,9 +169,7 @@ impl ProviderAgent {
                     prompt,
                     history,
                     max_turns,
-                    routing,
-                    loaded_buffer,
-                    register_loaded,
+                    inputs,
                     recorder,
                     usage_ctx,
                     model,
@@ -188,9 +183,7 @@ impl ProviderAgent {
                     prompt,
                     history,
                     max_turns,
-                    routing,
-                    loaded_buffer,
-                    register_loaded,
+                    inputs,
                     recorder,
                     usage_ctx,
                     model,
@@ -205,9 +198,7 @@ impl ProviderAgent {
                         prompt,
                         history,
                         max_turns,
-                        routing,
-                        loaded_buffer,
-                        register_loaded,
+                        inputs,
                         recorder,
                         usage_ctx,
                         model,
@@ -402,9 +393,7 @@ async fn drive_stream<M>(
     prompt: Message,
     history: Vec<Message>,
     max_turns: usize,
-    routing: ToolRouter,
-    loaded_buffer: Arc<Mutex<Vec<SearchableTool>>>,
-    register_loaded: RegisterFn,
+    inputs: BridgeInputs,
     recorder: Arc<dyn UsageRecorder>,
     usage_ctx: UsageContext,
     model: String,
@@ -415,9 +404,7 @@ where
     M::StreamingResponse: GetTokenUsage + Send + Sync,
 {
     let (bridge, mut rx) = StreamBridge::channel(
-        routing,
-        loaded_buffer,
-        register_loaded,
+        inputs,
         request_context.searchable_tools.clone(),
         request_context.cancel.clone(),
     );
@@ -428,10 +415,10 @@ where
 
     let mut rig_stream = agent
         .stream_prompt(prompt)
-        .with_history(history)
-        .multi_turn(max_turns)
+        .history(history)
+        .max_turns(max_turns)
         .max_invalid_tool_call_retries(crate::hook::MAX_INVALID_TOOL_CALL_RETRIES)
-        .with_hook(bridge)
+        .add_hook(bridge)
         .await;
 
     // Drive the rig stream on its own task. The hook emits a tool call the
@@ -460,7 +447,7 @@ where
                     }
                     match other {
                         Ok(MultiTurnStreamItem::FinalResponse(final_resp)) => {
-                            let usage = final_resp.usage();
+                            let usage = final_resp.usage;
                             // Best-effort cost logging; never fails the stream.
                             recorder.record(usage_ctx.clone().into_event(
                                 model.clone(),
@@ -519,9 +506,7 @@ pub(crate) trait DynStreamAgent: Send + Sync {
         prompt: Message,
         history: Vec<Message>,
         max_turns: usize,
-        routing: ToolRouter,
-        loaded_buffer: Arc<Mutex<Vec<SearchableTool>>>,
-        register_loaded: RegisterFn,
+        inputs: BridgeInputs,
         recorder: Arc<dyn UsageRecorder>,
         usage_ctx: UsageContext,
         model: String,
@@ -542,9 +527,7 @@ where
         prompt: Message,
         history: Vec<Message>,
         max_turns: usize,
-        routing: ToolRouter,
-        loaded_buffer: Arc<Mutex<Vec<SearchableTool>>>,
-        register_loaded: RegisterFn,
+        inputs: BridgeInputs,
         recorder: Arc<dyn UsageRecorder>,
         usage_ctx: UsageContext,
         model: String,
@@ -557,9 +540,7 @@ where
             prompt,
             history,
             max_turns,
-            routing,
-            loaded_buffer,
-            register_loaded,
+            inputs,
             recorder,
             usage_ctx,
             model,

@@ -5,5 +5,6 @@ mod test_error;
 mod test_hook;
 mod test_model_types;
 mod test_predefined_model;
+mod test_rig_invariants;
 mod test_router;
 mod test_tool_adapter;

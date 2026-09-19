@@ -38,7 +38,7 @@ import {
 import { HoverCard } from './HoverCard';
 
 export function useItemPreviewData(entity: Accessor<ItemEntity>) {
-  const [item] = useItemPreview(entity);
+  const [item, { documentProperties }] = useItemPreview(entity);
   const bulkWakeupEnabled = useFeatureFlag(BULK_DOCUMENT_WAKEUP_FEATURE_FLAG);
 
   createEffect(() => {
@@ -109,6 +109,7 @@ export function useItemPreviewData(entity: Accessor<ItemEntity>) {
 
   return {
     item,
+    documentProperties,
     name,
     onPreviewClick,
     targetType,
@@ -117,7 +118,7 @@ export function useItemPreviewData(entity: Accessor<ItemEntity>) {
 }
 
 const DEFAULT_BUTTON_CLASS =
-  'text-ink-base text-sm border border-edge-muted rounded-xs hover:bg-surface-hover flex flex-row h-6 px-2 justify-center items-center';
+  'text-ink text-sm border border-edge-muted rounded-xs hover:bg-hover flex flex-row h-6 px-2 justify-center items-center';
 const DEFAULT_ICON_CLASS = 'flex justify-start items-center w-3.5 h-3.5 mr-2';
 const DEFAULT_TEXT_CLASS = 'flex-1 text-left leading-5 min-w-0 truncate';
 

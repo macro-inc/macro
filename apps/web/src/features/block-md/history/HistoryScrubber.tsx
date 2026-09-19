@@ -389,7 +389,7 @@ export function HistoryScrubber(props: { compact?: boolean }) {
                       timestampToContainerPosition(session.endMs);
                     return (
                       <div
-                        class="absolute inset-y-0 cursor-pointer rounded-full"
+                        class="absolute inset-y-0 rounded-full"
                         // Stop the rail's scrub/marquee drag from starting so a
                         // bar click cleanly opens that session's diff.
                         onPointerDown={(e) => e.stopPropagation()}

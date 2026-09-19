@@ -1,7 +1,7 @@
 import { createFreshSearch } from '@core/util/freshSort';
-import type { EntityItem } from './types';
+import type { EntityItem, QuickAccessItem } from './types';
 
-const entitySearch = createFreshSearch<EntityItem>({
+const quickAccessSearch = createFreshSearch<QuickAccessItem>({
   config: { useViewedAt: true },
   getName: (item) => item.searchText,
   isChannelItem: (item) => item.bucket === 'channel',
@@ -9,10 +9,18 @@ const entitySearch = createFreshSearch<EntityItem>({
 });
 
 /** Fuzzy-ranks entity candidates using the existing mentions semantics. */
+export function searchQuickAccessItems(
+  items: QuickAccessItem[],
+  query: string
+): QuickAccessItem[] {
+  if (!query.trim()) return items;
+  return quickAccessSearch(items, query).map(({ item }) => item);
+}
+
+/** Fuzzy-ranks entity candidates using the existing mentions semantics. */
 export function searchQuickAccessEntities(
   items: EntityItem[],
   query: string
 ): EntityItem[] {
-  if (!query.trim()) return items;
-  return entitySearch(items, query).map(({ item }) => item);
+  return searchQuickAccessItems(items, query) as EntityItem[];
 }

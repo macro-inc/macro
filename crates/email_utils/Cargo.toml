@@ -5,6 +5,7 @@ publish = false
 edition = "2024"
 
 [dependencies]
+ammonia = { workspace = true }
 ego-tree = { workspace = true }
 html2text = "0.16.5"
 lazy_static = { workspace = true }

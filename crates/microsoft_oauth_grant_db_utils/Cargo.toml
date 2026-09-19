@@ -1,0 +1,15 @@
+[package]
+edition = "2024"
+name = "microsoft_oauth_grant_db_utils"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true }
+sqlx = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

@@ -124,7 +124,7 @@ const ListEntitiesToolResponse = (props: {
           return (
             <button
               type="button"
-              class="block w-full text-left hover:bg-surface-hover"
+              class="block w-full text-left hover:bg-hover"
               onClick={clickHandler}
             >
               <Tool.ListItem icon={getItemIcon(item)}>

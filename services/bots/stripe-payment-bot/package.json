@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "check": "tsc --noEmit --project tsconfig.json",
+    "test": "bun test",
     "deploy": "wrangler deploy"
   },
   "dependencies": {

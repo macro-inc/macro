@@ -23,6 +23,49 @@ fn generates_a_route_for_every_prefixed_service() {
     }
 }
 
+/// Dev keeps a single origin: services that run in Dev hit local containers;
+/// Local-only prefixed services fan out to the shared-dev gateway (no strip).
+#[test]
+fn dev_fans_local_only_prefixes_to_the_gateway() {
+    let caddy = caddyfile(Mode::Dev, false);
+    for svc in inventory::RUST_SERVICES {
+        let Some(prefix) = svc.path_prefix else {
+            continue;
+        };
+        if svc.in_mode(Mode::Dev) {
+            assert!(
+                caddy.contains(&format!("reverse_proxy {}:8080", svc.compose_name)),
+                "Dev Caddyfile missing local route for {}",
+                svc.compose_name
+            );
+            continue;
+        }
+        if !svc.in_mode(Mode::Local) {
+            continue;
+        }
+        assert!(
+            !caddy.contains(&format!("reverse_proxy {}:8080", svc.compose_name)),
+            "Dev must not route {} to an absent local container",
+            svc.compose_name
+        );
+        assert!(
+            caddy.contains(&format!("handle {prefix}/* {{"))
+                || caddy.contains(&format!("path {prefix} {prefix}/*")),
+            "Dev Caddyfile missing gateway handle for {prefix}"
+        );
+        assert!(
+            caddy.contains(&format!("reverse_proxy {DEV_GATEWAY_ORIGIN}")),
+            "Dev Caddyfile missing gateway upstream for {}",
+            svc.compose_name
+        );
+    }
+    // Concrete regression for the scheduled-action / agent-harness pair.
+    assert!(caddy.contains("handle /scheduled-action/* {"));
+    assert!(caddy.contains("handle /agent-harness/* {"));
+    assert!(!caddy.contains("reverse_proxy scheduled_action_service:8080"));
+    assert!(!caddy.contains("reverse_proxy agent_harness_service:8080"));
+}
+
 /// WebSocket services use the bare-prefix `@matcher` + explicit strip; HTTP
 /// services use `handle_path`.
 #[test]

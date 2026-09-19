@@ -25,6 +25,7 @@ export function PropertyTooltip(props: Props) {
     <HoverCard
       content={<CorePropertyTooltip property={props.property} />}
       disabled={ctx?.editorOpen() ?? false}
+      contentClass="rounded-xl p-1.5 px-3 bg-menu shadow-menu"
     >
       {props.children}
     </HoverCard>

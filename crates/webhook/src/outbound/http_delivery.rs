@@ -23,8 +23,7 @@ use std::time::{Duration, Instant};
 
 const EVENT_HEADER: &str = "x-macro-event";
 const EVENT_ID_HEADER: &str = "x-macro-event-id";
-const TIMESTAMP_HEADER: &str = "x-macro-timestamp";
-const SIGNATURE_HEADER: &str = "x-macro-signature";
+use webhook_signature::{SIGNATURE_HEADER, TIMESTAMP_HEADER};
 const REDACTED_HEADER_VALUE: &str = "[REDACTED]";
 const RESPONSE_PREVIEW_MAX_BYTES: usize = 4096;
 

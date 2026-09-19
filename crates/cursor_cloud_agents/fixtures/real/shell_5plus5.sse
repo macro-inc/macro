@@ -1,0 +1,254 @@
+event: status
+data: {"runId":"run-593d5add-04c6-4e51-8cb1-783c9feded5a","status":"FINISHED"}
+
+event: interaction_update
+data: {"type":"step-started","stepId":0}
+
+event: interaction_update
+data: {"type":"user-message-appended","userMessage":{"type":"user_message","session_id":"run-593d5add-04c6-4e51-8cb1-783c9feded5a","text":"Compute 5 + 5 by running a shell command, then tell me the answer. Do not modify any files."}}
+
+event: thinking
+data: {"text":"Running a shell command"}
+
+event: interaction_update
+data: {"type":"thinking-delta","text":"Running a shell command"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+event: thinking
+data: {"text":" to compute 5 + 5."}
+
+event: interaction_update
+data: {"type":"thinking-delta","text":" to compute 5 + 5."}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+event: interaction_update
+data: {"type":"thinking-completed","thinkingDurationMs":186}
+
+event: assistant
+data: {"text":"I'll"}
+
+event: interaction_update
+data: {"type":"text-delta","text":"I'll"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+event: assistant
+data: {"text":" compute"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" compute"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+event: assistant
+data: {"text":" "}
+
+event: interaction_update
+data: {"type":"text-delta","text":" "}
+
+event: assistant
+data: {"text":"5"}
+
+event: interaction_update
+data: {"type":"text-delta","text":"5"}
+
+event: assistant
+data: {"text":" +"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" +"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+event: assistant
+data: {"text":" "}
+
+event: interaction_update
+data: {"type":"text-delta","text":" "}
+
+event: assistant
+data: {"text":"5"}
+
+event: interaction_update
+data: {"type":"text-delta","text":"5"}
+
+event: assistant
+data: {"text":" with"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" with"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+event: assistant
+data: {"text":" a"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" a"}
+
+event: assistant
+data: {"text":" shell"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" shell"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+event: assistant
+data: {"text":" command"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" command"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+event: assistant
+data: {"text":" and"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" and"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+event: assistant
+data: {"text":" report"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" report"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+event: assistant
+data: {"text":" the"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" the"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+event: assistant
+data: {"text":" result"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" result"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+event: assistant
+data: {"text":"."}
+
+event: interaction_update
+data: {"type":"text-delta","text":"."}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":19}
+
+event: tool_call
+data: {"callId":"call-087df268-2590-435f-8f7a-4b9733ac3ad6-0\nfc_3b27d5cd-bce7-9312-8e67-932aa683a26c_0","name":"run_terminal_cmd","status":"running","args":{"command":"echo $((5 + 5))","timeout":600000,"toolCallId":"call-087df268-2590-435f-8f7a-4b9733ac3ad6-0\nfc_3b27d5cd-bce7-9312-8e67-932aa683a26c_0","simpleCommands":["echo"],"parsingResult":{"executableCommands":[{"name":"echo","args":[{"type":"arithmetic_expansion","value":"$((5 + 5))"}],"fullText":"echo $((5 + 5))"}]},"fileOutputThresholdBytes":"40000","timeoutBehavior":"TIMEOUT_BEHAVIOR_BACKGROUND","hardTimeout":86400000,"description":"Compute 5 plus 5 in the shell","closeStdin":true,"conversationId":"bc-8c9eca20-9fbd-4615-a664-264773c7cfbc"}}
+
+event: interaction_update
+data: {"type":"tool-call-started","callId":"call-087df268-2590-435f-8f7a-4b9733ac3ad6-0\nfc_3b27d5cd-bce7-9312-8e67-932aa683a26c_0","toolCall":{"type":"shell","args":{"command":"echo $((5 + 5))","timeout":600000}},"modelCallId":"serverGenReqId_eab87dca-0d39-4d82-bbaa-d20fb745e35a-1-20tg"}
+
+event: tool_call
+data: {"callId":"call-087df268-2590-435f-8f7a-4b9733ac3ad6-0\nfc_3b27d5cd-bce7-9312-8e67-932aa683a26c_0","name":"run_terminal_cmd","status":"completed","args":{"command":"echo $((5 + 5))","timeout":600000,"toolCallId":"call-087df268-2590-435f-8f7a-4b9733ac3ad6-0\nfc_3b27d5cd-bce7-9312-8e67-932aa683a26c_0","simpleCommands":["echo"],"parsingResult":{"executableCommands":[{"name":"echo","args":[{"type":"arithmetic_expansion","value":"$((5 + 5))"}],"fullText":"echo $((5 + 5))"}]},"fileOutputThresholdBytes":"40000","timeoutBehavior":"TIMEOUT_BEHAVIOR_BACKGROUND","hardTimeout":86400000,"description":"Compute 5 plus 5 in the shell","closeStdin":true,"conversationId":"bc-8c9eca20-9fbd-4615-a664-264773c7cfbc"},"result":{"success":{"command":"echo $((5 + 5))","stdout":"10\n","executionTime":367,"interleavedOutput":"10\n","localExecutionTimeMs":58},"isBackground":false}}
+
+event: interaction_update
+data: {"type":"tool-call-completed","callId":"call-087df268-2590-435f-8f7a-4b9733ac3ad6-0\nfc_3b27d5cd-bce7-9312-8e67-932aa683a26c_0","toolCall":{"type":"shell","args":{"command":"echo $((5 + 5))","timeout":600000},"result":{"status":"success","value":{"exitCode":0,"signal":"","stdout":"10\n","stderr":"","executionTime":367}}},"modelCallId":"serverGenReqId_eab87dca-0d39-4d82-bbaa-d20fb745e35a-1-20tg"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":32}
+
+event: interaction_update
+data: {"type":"step-completed","stepId":0,"stepDurationMs":10843}
+
+event: interaction_update
+data: {"type":"step-started","stepId":39}
+
+event: thinking
+data: {"text":"5 + 5 equals 10."}
+
+event: interaction_update
+data: {"type":"thinking-delta","text":"5 + 5 equals 10."}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":4}
+
+event: interaction_update
+data: {"type":"thinking-completed","thinkingDurationMs":5}
+
+event: assistant
+data: {"text":"The"}
+
+event: interaction_update
+data: {"type":"text-delta","text":"The"}
+
+event: assistant
+data: {"text":" answer"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" answer"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+event: assistant
+data: {"text":" is"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" is"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+event: assistant
+data: {"text":" **"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" **"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+event: assistant
+data: {"text":"10"}
+
+event: interaction_update
+data: {"type":"text-delta","text":"10"}
+
+event: assistant
+data: {"text":"**."}
+
+event: interaction_update
+data: {"type":"text-delta","text":"**."}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+event: interaction_update
+data: {"type":"turn-ended"}
+
+event: interaction_update
+data: {"type":"step-completed","stepId":39,"stepDurationMs":1221}
+
+event: status
+data: {"runId":"run-593d5add-04c6-4e51-8cb1-783c9feded5a","status":"FINISHED"}
+
+event: result
+data: {"runId":"run-593d5add-04c6-4e51-8cb1-783c9feded5a","status":"FINISHED","text":"The answer is **10**.","durationMs":17179}
+
+event: done
+data: {}

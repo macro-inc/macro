@@ -11,7 +11,7 @@ export type TabItem = {
 export type TabsInsetDropdownProps = {
   placeholder?: string | JSX.Element;
   onChange?: (value: string) => void;
-  depth?: 0 | 1 | 2 | 3 | 4 | 5;
+  depth?: 0 | 1 | 2 | 3 | 4;
   defaultValue?: string;
   disabled?: boolean;
   list: TabItem[];

@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT access_level FROM (\n            -- Source 1: entity_access source_id match\n            SELECT\n                access_level::text FROM entity_access\n            WHERE entity_id = $1\n            AND entity_type = 'project'\n            AND source_id = ANY($2)\n\n            UNION ALL\n            -- Source 2: project link share permission\n            SELECT\n                sp.\"linkShareAccessLevel\"::text AS access_level\n            FROM \"SharePermission\" sp\n            WHERE sp.\"linkShareAccessLevel\" IS NOT NULL\n            AND sp.id IN (\n                SELECT \"sharePermissionId\" FROM \"ProjectPermission\" WHERE \"projectId\" = $3\n            )\n            AND (\n                sp.\"linkShare\" = 'PUBLIC'\n                OR (\n                    sp.\"linkShare\" = 'TEAM'\n                    AND EXISTS (\n                        SELECT 1\n                        FROM \"Project\" p\n                        JOIN team_user owner_team ON owner_team.user_id = p.\"userId\"\n                        WHERE p.id = $3\n                        AND owner_team.team_id::text = ANY($2)\n                    )\n                )\n            )\n        ) AS combined_access\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "1f8d142bdc2b0cb6c27bd33526becdf1a2f532bce63df0c858e5c317d1dc52ab"
+}

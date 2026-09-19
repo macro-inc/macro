@@ -1,6 +1,8 @@
 use axum::{Json, Router, extract::State, http::StatusCode, response::IntoResponse, routing::post};
 use axum_extra::extract::Cached;
-use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
+use macro_authorization::{
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
+};
 use model_error_response::ErrorResponse;
 use thiserror::Error;
 
@@ -88,16 +90,20 @@ impl From<EmailErr> for SendMessageError {
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(err, skip(state, link, accessible_inboxes, body))]
+#[tracing::instrument(err, skip(state, link, accessible_inboxes, authorization, body))]
 pub async fn send_message_handler<T: EmailService, Auth: MacroAuthorizationService>(
     State(state): State<EmailRouterState<T>>,
     Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<T, Auth>>,
     Cached(MultiEmailLinkExtractor(accessible_inboxes, _)): Cached<
         MultiEmailLinkExtractor<T, Auth>,
     >,
+    Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>>,
     Json(body): Json<SendMessageRequest>,
 ) -> Result<impl IntoResponse, SendMessageError> {
-    let input = body.into_domain();
+    let mut input = body.into_domain();
+    // Attribute the send to the authenticated caller, who is not necessarily
+    // the link owner (delegated inboxes).
+    input.actor = Some(authorization.authorization.user.macro_user_id.clone());
     let created = state
         .inner
         .send_message(&link, &accessible_inboxes, input)

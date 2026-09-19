@@ -2,8 +2,10 @@
 .git
 .jj
 .agents
+.cursor
 .claude/.local
 .pi/outputs
+/infra/local/generated
 
 # Legacy layout directories may still contain ignored local build artifacts.
 /agents

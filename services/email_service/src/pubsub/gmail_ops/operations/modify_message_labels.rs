@@ -1,12 +1,10 @@
-use crate::pubsub::gmail_ops::process::{check_gmail_rate_limit, fetch_gmail_token};
+use crate::pubsub::gmail_ops::email_api_error::is_permanent_mutation_error;
 use crate::pubsub::gmail_ops::worker::GmailOpsContext;
 use anyhow::Context;
-use models_email::gmail::error::GmailError;
+use email_api_client::domain::models::EmailApiError;
 use models_email::gmail::gmail_ops::ModifyMessageLabelsPayload;
-use models_email::gmail::operations::GmailApiOperation;
 use models_email::service;
 use models_email::service::link::Link;
-use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 
 /// Modifies labels for a single message in Gmail. Reverts DB changes on permanent failure.
 /// Transient errors (5xx, network) are retried; permanent errors (4xx) trigger revert.
@@ -15,61 +13,37 @@ pub async fn modify_message_labels(
     ctx: &GmailOpsContext,
     link: &Link,
     payload: &ModifyMessageLabelsPayload,
-) -> Result<(), ProcessingError> {
-    check_gmail_rate_limit(
-        ctx,
-        link.id,
-        GmailApiOperation::MessagesModify,
-        models_email::gmail::gmail_ops::GmailOpsOperation::ModifyMessageLabels(payload.clone()),
-    )
-    .await?;
-
-    let gmail_access_token = fetch_gmail_token(ctx, link).await?;
-
+) -> Result<(), EmailApiError> {
     let result = ctx
-        .gmail_client
+        .email_api
         .modify_message_labels(
-            &gmail_access_token,
+            link.id,
             &payload.provider_message_id,
             &payload.labels_to_add,
             &payload.labels_to_remove,
         )
         .await;
 
-    match result {
-        Ok(()) => Ok(()),
-        Err(
-            e @ (GmailError::ServerError(..)
-            | GmailError::HttpRequest(_)
-            | GmailError::RateLimitExceeded),
-        ) => {
-            tracing::warn!(
-                error = ?e,
-                db_message_id = %payload.db_message_id,
-                provider_message_id = %payload.provider_message_id,
-                "Transient Gmail error modifying labels, will retry"
-            );
-            Err(ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::GmailApiFailed,
-                source: anyhow::anyhow!("{}", e),
-            }))
-        }
-        Err(e) => {
+    if let Err(error) = &result {
+        if is_permanent_mutation_error(error) {
             tracing::error!(
-                error = ?e,
+                error = ?error,
                 db_message_id = %payload.db_message_id,
                 provider_message_id = %payload.provider_message_id,
                 "Permanent Gmail error modifying labels, reverting database changes"
             );
-
             revert_db_changes(ctx, link, payload).await;
-
-            Err(ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::GmailApiFailed,
-                source: anyhow::anyhow!("{}", e),
-            }))
+        } else {
+            tracing::warn!(
+                error = ?error,
+                db_message_id = %payload.db_message_id,
+                provider_message_id = %payload.provider_message_id,
+                "Retryable Gmail error modifying labels, preserving optimistic database changes"
+            );
         }
     }
+
+    result
 }
 
 /// Reverts the optimistic DB changes for a single message that failed in Gmail.

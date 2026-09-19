@@ -293,6 +293,7 @@ fn cache_only_read_observes_move_and_rollback_restores_it() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    uuid: "00000000-0000-4000-8000-000000000021",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
                     variables: &mutation_variables("completed"),
@@ -376,6 +377,7 @@ fn success_reapplies_recipe_and_returns_deduplicated_revalidation() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    uuid: "00000000-0000-4000-8000-000000000022",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
                     variables: &mutation_variables("completed"),
@@ -455,6 +457,7 @@ fn missing_destination_is_created_with_the_updated_item() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    uuid: "00000000-0000-4000-8000-000000000023",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
                     variables: &mutation_variables("completed"),
@@ -532,6 +535,7 @@ fn missing_destination_rejects_the_whole_patch_set_without_enqueueing() {
                 .begin_optimistic_write(
                     None,
                     BeginOptimisticWrite {
+                        uuid: "00000000-0000-4000-8000-000000000024",
                         query: MUTATION,
                         operation_name: Some("SetEntityProperty"),
                         variables: &mutation_variables("completed"),

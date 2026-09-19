@@ -45,7 +45,14 @@ export function MentionsMenuItem(props: {
   const icon = () => {
     switch (props.item.kind) {
       case 'user':
-        return <UserIcon id={props.item.id} size="sm" isDeleted={false} />;
+        return (
+          <UserIcon
+            id={props.item.id}
+            size="sm"
+            isDeleted={false}
+            photoUrl={props.item.data.photoUrl}
+          />
+        );
 
       case 'group':
         return <UsersIcon class="size-4 text-ink-muted" />;

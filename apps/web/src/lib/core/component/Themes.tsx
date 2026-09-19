@@ -65,7 +65,7 @@ export const themeStyles: Record<Theme, string> = {
 const _themeSelectedColors: Record<Theme, string> = {
   base: 'bg-hover!',
   accent: 'bg-accent/20!',
-  accentFill: 'bg-acent/80',
+  accentFill: 'bg-accent/80',
   accentOpaque:
     'bg-[oklch(from_var(--color-accent)_calc(l*1.4)_calc(c*0.15)_h)]!',
   contrast: 'bg-ink/20!',

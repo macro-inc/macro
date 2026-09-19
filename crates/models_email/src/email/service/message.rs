@@ -322,6 +322,9 @@ pub struct ScheduledMessage {
     pub sent: bool,
     /// whether the message is currently being processed by the background job.
     pub processing: bool,
+    /// The authenticated user who initiated the send, as a principal string
+    /// (`macro|…`). `None` for rows created before actor tracking existed.
+    pub actor_id: Option<String>,
 }
 
 impl From<db::message::ScheduledMessage> for ScheduledMessage {
@@ -332,6 +335,7 @@ impl From<db::message::ScheduledMessage> for ScheduledMessage {
             send_time: other.send_time,
             sent: other.sent,
             processing: other.processing,
+            actor_id: other.actor_id,
         }
     }
 }

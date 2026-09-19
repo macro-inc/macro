@@ -65,11 +65,13 @@ pub async fn insert_thread_share_permissions(
         anyhow::bail!("thread not found");
     };
 
-    // Create a new share permission
+    // Create a new share permission. Threads are synced email, not user-created
+    // items, so the team default link-share preference intentionally does not
+    // apply: link sharing is always off initially.
     let share_permission = SharePermissionV2 {
         id: macro_uuid::generate_uuid_v7().to_string(),
-        is_public: false,
-        public_access_level: None,
+        link_share: None,
+        link_share_access_level: None,
         owner: owner_id.to_string(),
         channel_share_permissions: None,
     };

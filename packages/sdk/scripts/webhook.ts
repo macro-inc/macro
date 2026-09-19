@@ -47,7 +47,8 @@ async function register(): Promise<void> {
   const name = required(values.name, '--name');
   const events = parseEvents(values.events ?? fail('--events is required'));
   const scope = values.scope ?? fail('--scope is required');
-  if (scope !== 'user' && scope !== 'team') fail('--scope must be user or team');
+  if (scope !== 'user' && scope !== 'team')
+    fail('--scope must be user or team');
   const userId =
     scope === 'user'
       ? required(values['user-id'], '--user-id')
@@ -63,7 +64,8 @@ async function register(): Promise<void> {
     filters: [{ events }],
     scope,
   });
-  const secret = webhook.signingSecret ?? fail('webhook signing secret missing');
+  const secret =
+    webhook.signingSecret ?? fail('webhook signing secret missing');
 
   console.log(`
 Webhook registered.

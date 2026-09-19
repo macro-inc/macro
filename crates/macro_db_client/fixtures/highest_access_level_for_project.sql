@@ -22,14 +22,14 @@ VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-000000000001', 'Grandparent Project', 'user-1',
        ('aaaaaaaa-aaaa-aaaa-aaaa-000000000004', 'Isolated Project', 'user-1', NULL);
 
 -- Add SharePermission records for public access.
-INSERT INTO public."SharePermission" ("id", "isPublic", "publicAccessLevel")
+INSERT INTO public."SharePermission" ("id", "linkShare", "linkShareAccessLevel")
 VALUES
     -- A public 'edit' permission. We'll attach this to the grandparent project.
-    ('sp-public-edit-proj', true, 'edit'),
+    ('sp-public-edit-proj', 'PUBLIC', 'edit'),
     -- A public 'view' permission. We'll attach this to the parent project.
-    ('sp-public-view-proj', true, 'view'),
-    -- A *private* 'owner' permission. This MUST be ignored by the query.
-    ('sp-private-owner-proj', false, 'owner');
+    ('sp-public-view-proj', 'PUBLIC', 'view'),
+    -- A private permission with no link-level access.
+    ('sp-private-owner-proj', NULL, NULL);
 
 -- Link share permissions to projects.
 INSERT INTO public."ProjectPermission" ("projectId", "sharePermissionId")

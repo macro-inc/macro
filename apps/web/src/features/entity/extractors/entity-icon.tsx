@@ -131,6 +131,7 @@ export function EntityIcon(props: EntityIconProps) {
         )
         .with({ type: 'foreign' }, () => 'default')
         .with({ type: 'crm_company' }, () => 'crm_company')
+        .with({ type: 'calendar_event' }, () => 'calendar')
         // Always the bell, never the referenced entity's icon: the row is a
         // reminder first, and what it points at is iconed beside its name
         // instead — see `reminderReferenceIconType`.

@@ -457,7 +457,7 @@ export default function DocumentWherePlayground() {
   };
 
   return (
-    <div class="flex h-full flex-col bg-bg text-ink">
+    <div class="flex h-full flex-col bg-surface text-ink">
       <header class="flex h-10 shrink-0 items-center border-edge-muted border-b px-4">
         <div class="text-sm font-medium">Document AST Playground</div>
       </header>
@@ -501,7 +501,7 @@ export default function DocumentWherePlayground() {
               <For each={EXAMPLES}>
                 {(example) => (
                   <Button
-                    variant="base"
+                    variant="outline"
                     size="sm"
                     class="h-auto justify-start py-1.5"
                     onClick={() => applyExample(example)}
@@ -531,7 +531,7 @@ export default function DocumentWherePlayground() {
                     <InlineCheckbox checked={selected().has(token.id)} />
                     <span class="min-w-0">
                       <span class="block">{token.label}</span>
-                      <span class="block text-ink-secondary text-xs">
+                      <span class="block text-ink-muted text-xs">
                         {token.detail}
                       </span>
                     </span>
@@ -592,7 +592,7 @@ export default function DocumentWherePlayground() {
           </section>
 
           <section class="flex gap-2">
-            <Button variant="base" size="sm" onClick={loadJsonFromControls}>
+            <Button variant="outline" size="sm" onClick={loadJsonFromControls}>
               Edit JSON
             </Button>
             <Button
@@ -632,7 +632,7 @@ export default function DocumentWherePlayground() {
               {JSON.stringify(activeRequestBody(), null, 2)}
             </pre>
             <Show when={mode() === 'simple' && selected().has('plain-md')}>
-              <div class="mt-3 rounded-sm border border-edge-muted bg-surface p-2 text-ink-secondary text-sm">
+              <div class="mt-3 rounded-sm border border-edge-muted bg-surface p-2 text-ink-muted text-sm">
                 Simple soup cannot express the plain-markdown exclusion for
                 snippet/task. It requests markdown documents and shows the old
                 flat-filter behavior.
@@ -652,7 +652,7 @@ export default function DocumentWherePlayground() {
               </div>
               <Show when={nextCursor()}>
                 <Button
-                  variant="base"
+                  variant="outline"
                   size="sm"
                   disabled={loading()}
                   onClick={() => run(nextCursor())}
@@ -663,11 +663,11 @@ export default function DocumentWherePlayground() {
             </div>
 
             <Show when={loading()}>
-              <div class="mb-3 text-ink-secondary text-sm">Loading...</div>
+              <div class="mb-3 text-ink-muted text-sm">Loading...</div>
             </Show>
 
             <Show when={items().length !== entities().length}>
-              <div class="mb-3 rounded-sm border border-edge-muted bg-surface p-2 text-ink-secondary text-sm">
+              <div class="mb-3 rounded-sm border border-edge-muted bg-surface p-2 text-ink-muted text-sm">
                 {items().length - entities().length} returned soup items were
                 not displayable entity rows.
               </div>

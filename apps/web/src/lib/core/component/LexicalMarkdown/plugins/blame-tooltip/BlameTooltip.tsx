@@ -82,7 +82,7 @@ export function BlameTooltip(props: {
     <Show when={visible() && query.data?.userId ? query.data : undefined}>
       {(b) => (
         <div
-          class="fixed z-tool-tip rounded-md bg-surface px-2 py-1 text-xs text-ink-secondary/70 pointer-events-none"
+          class="fixed z-tool-tip rounded-md bg-surface px-2 py-1 text-xs text-ink-muted/70 pointer-events-none"
           style={{
             left: `${props.state.x + 12}px`,
             top: `${props.state.y + 12}px`,

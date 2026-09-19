@@ -4,6 +4,13 @@ export type History<T extends object> = {
   readonly items: ReadonlyArray<T>;
   readonly index: Readonly<number>;
   back: () => T | null;
+  /**
+   * Jump to the nearest earlier entry matching `predicate`, skipping the
+   * entries in between. Those entries stay in the stack, so `forward` still
+   * reaches them. Returns null — leaving the index put — when nothing earlier
+   * matches.
+   */
+  backTo: (predicate: (item: T) => boolean) => T | null;
   forward: () => T | null;
   canGoBack: () => boolean;
   canGoForward: () => boolean;
@@ -88,6 +95,17 @@ export function createHistory<T extends object>(): History<T> {
     return items()[index()];
   };
 
+  const backTo = (predicate: (item: T) => boolean) => {
+    const list = items();
+    for (let i = index() - 1; i >= 0; i--) {
+      const item = list[i];
+      if (!predicate(item)) continue;
+      setIndex(i);
+      return item;
+    }
+    return null;
+  };
+
   const forward = () => {
     if (!canGoForward()) return null;
     setIndex(inc);
@@ -138,6 +156,7 @@ export function createHistory<T extends object>(): History<T> {
       return index();
     },
     back,
+    backTo,
     push,
     merge,
     replaceCurrent,

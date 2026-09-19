@@ -37,6 +37,28 @@ fn bot_id_str_from_bot_id_creates_storage_string() {
 }
 
 #[test]
+fn system_bot_id_is_stable_and_distinct_from_ai_personas() {
+    assert_eq!(
+        MACRO_SYSTEM_BOT_ID.into_storage_id().as_ref(),
+        "bot|00000000-0000-0000-0000-000000005759"
+    );
+    assert_ne!(MACRO_SYSTEM_BOT_ID, MACRO_AI_BOT_ID);
+    assert_ne!(MACRO_SYSTEM_BOT_ID, MACRO_CODER_BOT_ID);
+}
+
+#[test]
+fn macro_new_id_is_stable_and_distinct_from_macro() {
+    assert_eq!(
+        MACRO_NEW_BOT_ID.into_storage_id().as_ref(),
+        "bot|00000000-0000-0000-0000-00000000a2a2"
+    );
+    assert_ne!(MACRO_NEW_BOT_ID, MACRO_AI_BOT_ID);
+    // The classic bot answers in channel; only its replacement opens sessions.
+    assert!(!system_bot(MACRO_AI_BOT_ID).unwrap().has_agent);
+    assert!(system_bot(MACRO_NEW_BOT_ID).unwrap().has_agent);
+}
+
+#[test]
 fn rejects_non_bot_storage_string() {
     assert!(BotIdStr::parse_from_str("macro|teo@macro.com").is_err());
 }

@@ -47,6 +47,12 @@ export const RECOMPUTE_SELECTION_RECT: LexicalCommand<void> = createCommand(
 type PopupPluginProps = {
   setIsPopupVisible: (value: boolean) => boolean;
   setSelection: (value: any) => void;
+  /**
+   * Lets the host show the popup for an empty (collapsed) range selection it
+   * cares about — e.g. a caret inside a comment mark. Runs in a lexical read
+   * context. Without it, empty selections never show the popup.
+   */
+  $allowEmptySelection?: (selection: RangeSelection) => boolean;
 };
 
 function $tableSelectionToRect(selection: TableSelection) {
@@ -177,15 +183,18 @@ function registerPopupPlugin(editor: LexicalEditor, props: PopupPluginProps) {
       return $enhanceTableSelection(selection);
     }
 
-    if (selection.getTextContent().length === 0) {
+    if (!$isRangeSelection(selection)) {
       return null;
     }
 
-    if ($isRangeSelection(selection)) {
-      return $enhanceRangeSelection(selection);
+    if (
+      selection.getTextContent().length === 0 &&
+      !props.$allowEmptySelection?.(selection)
+    ) {
+      return null;
     }
 
-    return null;
+    return $enhanceRangeSelection(selection);
   }
 
   return mergeRegister(

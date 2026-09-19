@@ -7,6 +7,27 @@ use uuid::Uuid;
 
 /// Shared bot id used by bot principals.
 pub use bot_id::BotId;
+/// Shared harness id used by agent-harness bindings.
+pub use harness_id::HarnessId;
+
+/// Owner of a registered harness an agent wants to run on.
+///
+/// Kept minimal on purpose: the bots domain only needs enough to decide
+/// whether a caller may bind an agent to the harness. Mirrors the harnesses
+/// domain's `HarnessOwner`, whose table enforces exactly one owner.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HarnessOwner {
+    /// User-owned (private) harness.
+    User {
+        /// Owner user id.
+        user_id: String,
+    },
+    /// Team-owned harness, usable by every team member.
+    Team {
+        /// Owner team id.
+        team_id: Uuid,
+    },
+}
 
 /// Bot kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -100,6 +121,8 @@ pub enum BotOwner {
 }
 
 /// Bot row.
+///
+/// Clients deserialize this, so both derives are used.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct Bot {
@@ -125,6 +148,211 @@ pub struct Bot {
     pub updated_at: DateTime<Utc>,
     /// Soft-delete timestamp.
     pub deleted_at: Option<DateTime<Utc>>,
+    /// Whether mentioning this bot opens a sandboxed coding-agent session.
+    pub has_agent: bool,
+}
+
+impl Bot {
+    /// The [`Bot`] view of a first-party bot.
+    ///
+    /// First-party bots have no row (see [`bot_id::SystemBot`]), so the
+    /// row-shaped fields are the honest answers for something that was never
+    /// created and cannot be owned, edited, or deleted.
+    #[must_use]
+    pub fn system(bot: &bot_id::SystemBot) -> Self {
+        Self {
+            id: bot.id,
+            kind: BotKind::System,
+            owner: None,
+            name: bot.name.to_owned(),
+            handle: bot.handle.to_owned(),
+            description: None,
+            avatar_url: None,
+            created_by: None,
+            created_at: DateTime::UNIX_EPOCH,
+            updated_at: DateTime::UNIX_EPOCH,
+            deleted_at: None,
+            has_agent: bot.has_agent,
+        }
+    }
+}
+
+/// Whether an agent is available everywhere or only in selected channels.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    strum::EnumString,
+    strum::IntoStaticStr,
+)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum AgentChannelScope {
+    /// The agent is available in every channel its owner can use.
+    All,
+    /// The agent is available only in its persisted channel memberships.
+    Selected,
+}
+
+impl AgentChannelScope {
+    /// Storage representation.
+    pub fn as_str(self) -> &'static str {
+        self.into()
+    }
+}
+
+/// Which Pipedream MCP servers an agent's sessions are handed.
+///
+/// One value for the whole choice, so a selection can never travel without
+/// its scope or a scope without its selection. Serialized with a `scope` tag,
+/// which the generated TypeScript sees as a discriminated union.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(tag = "scope", rename_all = "snake_case")]
+pub enum AgentMcpServers {
+    /// Whatever apps the person running the session has connected.
+    #[default]
+    OwnerConnections,
+    /// Exactly these apps, connected or not.
+    Selected {
+        /// The apps, in the order the agent's author picked them.
+        servers: Vec<AgentMcpServer>,
+    },
+}
+
+impl AgentMcpServers {
+    /// Storage representation of the scope.
+    pub fn scope_str(&self) -> &'static str {
+        match self {
+            Self::OwnerConnections => "owner_connections",
+            Self::Selected { .. } => "selected",
+        }
+    }
+
+    /// The selected servers, empty under [`Self::OwnerConnections`].
+    pub fn servers(&self) -> &[AgentMcpServer] {
+        match self {
+            Self::OwnerConnections => &[],
+            Self::Selected { servers } => servers,
+        }
+    }
+
+    /// Rebuilds the value from its two stored columns.
+    pub fn from_columns(scope: &str, servers: Vec<AgentMcpServer>) -> anyhow::Result<Self> {
+        match scope {
+            "owner_connections" => Ok(Self::OwnerConnections),
+            "selected" => Ok(Self::Selected { servers }),
+            other => anyhow::bail!("unknown mcp scope {other:?}"),
+        }
+    }
+}
+
+/// One Pipedream app an agent lists under [`AgentMcpServers::Selected`].
+///
+/// Only the catalog identity is stored. Whether a given person has connected
+/// the app is theirs, resolved at call time by the egress proxy, never here.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct AgentMcpServer {
+    /// Pipedream app slug, e.g. `linear`.
+    pub app_slug: String,
+    /// Display name, e.g. `Linear`.
+    pub server_name: String,
+}
+
+/// A persisted user- or team-owned AI agent.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct Agent {
+    /// The bot identity used for mentions and channel participation.
+    pub bot: Bot,
+    /// Instructions supplied to the agent at the start of a conversation.
+    pub instructions: String,
+    /// Harness used to run the agent.
+    pub harness: String,
+    /// Registered harness the agent runs on, when `harness` is `macrod`.
+    pub harness_id: Option<HarnessId>,
+    /// Model selected specifically for this agent.
+    pub default_model: String,
+    /// Whether the agent is global or channel-specific.
+    pub channel_scope: AgentChannelScope,
+    /// Selected channel ids. Empty for a global agent.
+    pub channel_ids: Vec<Uuid>,
+    /// Which MCP servers sessions of this agent are handed.
+    pub mcp: AgentMcpServers,
+}
+
+/// Request to create a persisted AI agent.
+#[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct CreateAgentRequest {
+    /// Team owner. Omit for a private, user-owned agent.
+    pub team_id: Option<Uuid>,
+    /// Registered harness to run on. Required when `harness` is `macrod`,
+    /// forbidden otherwise.
+    #[serde(default)]
+    pub harness_id: Option<HarnessId>,
+    /// Display name.
+    pub name: String,
+    /// Stable `@` handle.
+    pub handle: String,
+    /// Optional description.
+    pub description: Option<String>,
+    /// Optional avatar URL or data URL.
+    pub avatar_url: Option<String>,
+    /// Instructions supplied to the agent at the start of a conversation.
+    pub instructions: String,
+    /// Harness used to run the agent.
+    pub harness: String,
+    /// Model selected specifically for this agent.
+    pub default_model: String,
+    /// Whether the agent is global or channel-specific.
+    pub channel_scope: AgentChannelScope,
+    /// Selected channels. Must be non-empty only for `selected` scope.
+    #[serde(default)]
+    pub channel_ids: Vec<Uuid>,
+    /// Which MCP servers sessions of this agent are handed.
+    #[serde(default)]
+    pub mcp: AgentMcpServers,
+}
+
+/// Request to replace the editable configuration of a persisted AI agent.
+#[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct UpdateAgentRequest {
+    /// Team owner. Omit to make the agent private to the caller.
+    pub team_id: Option<Uuid>,
+    /// Registered harness to run on. Required when `harness` is `macrod`,
+    /// forbidden otherwise.
+    #[serde(default)]
+    pub harness_id: Option<HarnessId>,
+    /// Display name.
+    pub name: String,
+    /// Stable `@` handle.
+    pub handle: String,
+    /// Optional description.
+    pub description: Option<String>,
+    /// Optional avatar URL or data URL.
+    pub avatar_url: Option<String>,
+    /// Instructions supplied to the agent at the start of a conversation.
+    pub instructions: String,
+    /// Harness used to run the agent.
+    pub harness: String,
+    /// Model selected specifically for this agent.
+    pub default_model: String,
+    /// Whether the agent is global or channel-specific.
+    pub channel_scope: AgentChannelScope,
+    /// Selected channels. Must be non-empty only for `selected` scope.
+    #[serde(default)]
+    pub channel_ids: Vec<Uuid>,
+    /// Which MCP servers sessions of this agent are handed.
+    #[serde(default)]
+    pub mcp: AgentMcpServers,
 }
 
 /// Channel containing a bot.
@@ -160,8 +388,8 @@ pub struct BotToken {
     pub id: Uuid,
     /// Owning bot id.
     pub bot_id: BotId,
-    /// Raw bearer token.
-    pub token: String,
+    /// Display prefix of the bearer token. The raw secret is never stored here.
+    pub token_prefix: String,
     /// Optional token label.
     pub label: Option<String>,
     /// Last successful use.
@@ -206,6 +434,8 @@ pub struct CreateBotRequest {
     pub description: Option<String>,
     /// Optional avatar URL.
     pub avatar_url: Option<String>,
+    /// Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+    pub has_agent: Option<bool>,
 }
 
 /// Request to patch a bot.
@@ -220,6 +450,8 @@ pub struct PatchBotRequest {
     pub description: Option<String>,
     /// Optional avatar URL.
     pub avatar_url: Option<String>,
+    /// Whether mentioning this bot opens a sandboxed coding-agent session. Omit to leave unchanged.
+    pub has_agent: Option<bool>,
 }
 
 /// Request to create a bot token.
@@ -258,6 +490,8 @@ pub struct CreateChannelScopedBotRequest {
     pub token_label: Option<String>,
     /// Optional token expiration timestamp.
     pub token_expires_at: Option<DateTime<Utc>>,
+    /// Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+    pub has_agent: Option<bool>,
 }
 
 /// Response containing a newly minted token.

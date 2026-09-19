@@ -1,3 +1,4 @@
+import { getPropertyOptionLabel } from '@entity/utils/task-properties';
 import { NUMBER_DECIMAL_PLACES } from '../constants';
 import type { Property, PropertyOptionValue } from '../types';
 
@@ -107,12 +108,9 @@ const formatOptionValueById = (
   optionId: string,
   options: Array<{ id: string; value: PropertyOptionValue }> | undefined
 ): string => {
-  if (!options) return optionId;
-
-  const option = options.find((opt) => opt.id === optionId);
-  if (!option) return optionId; // Fallback to showing the ID if option not found
-
-  return formatOptionValue(option);
+  const option = options?.find((opt) => opt.id === optionId);
+  if (option) return formatOptionValue(option);
+  return getPropertyOptionLabel(optionId) ?? optionId;
 };
 
 /**

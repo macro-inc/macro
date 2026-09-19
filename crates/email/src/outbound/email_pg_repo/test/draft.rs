@@ -503,6 +503,7 @@ async fn test_insert_draft_message_into_existing_thread(
         body_macro: None,
         headers_json: None,
         send_time: None,
+        actor_id: None,
     };
 
     let contacts = UpsertedContacts {
@@ -587,6 +588,7 @@ async fn test_insert_draft_message_with_new_thread(pool: Pool<Postgres>) -> anyh
         body_macro: None,
         headers_json: None,
         send_time: None,
+        actor_id: None,
     };
 
     let contacts = UpsertedContacts {
@@ -659,6 +661,7 @@ async fn test_insert_draft_message_with_scheduled_send(pool: Pool<Postgres>) -> 
         body_macro: None,
         headers_json: None,
         send_time: Some(send_time),
+        actor_id: None,
     };
 
     let contacts = UpsertedContacts {
@@ -716,6 +719,7 @@ async fn test_insert_draft_message_upsert_existing(pool: Pool<Postgres>) -> anyh
         body_macro: None,
         headers_json: None,
         send_time: None,
+        actor_id: None,
     };
 
     let contacts = UpsertedContacts {
@@ -783,6 +787,7 @@ async fn test_insert_draft_message_updates_thread_metadata(
         body_macro: None,
         headers_json: None,
         send_time: None,
+        actor_id: None,
     };
 
     let contacts = UpsertedContacts {
@@ -835,6 +840,7 @@ async fn test_insert_message_with_is_draft_false(pool: Pool<Postgres>) -> anyhow
         body_macro: None,
         headers_json: None,
         send_time: None,
+        actor_id: None,
     };
 
     let contacts = UpsertedContacts {

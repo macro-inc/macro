@@ -58,12 +58,64 @@ pub struct BroadcastManager<T, K, V> {
     channels: Arc<DashMap<K, tokio::sync::broadcast::Sender<V>>>,
 }
 
-#[derive(Debug)]
-enum ExitReason {
+/// The reason a broadcast subscription's forwarding task stopped.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExitReason {
+    /// The subscription receiver was dropped by its consumer.
     ReceiverClosed,
+    /// The keyed broadcast sender was closed.
     SenderClosed,
+    /// The subscriber's bounded buffer filled.
     SlowConsumer,
-    Lagging { skipped: u64 },
+    /// The subscriber fell behind the shared broadcast buffer.
+    Lagging {
+        /// Number of messages skipped by the broadcast receiver.
+        skipped: u64,
+    },
+}
+
+/// A bounded broadcast subscription and its independently reported exit reason.
+pub struct BroadcastSubscription<V> {
+    receiver: tokio::sync::mpsc::Receiver<V>,
+    exit_reason: tokio::sync::oneshot::Receiver<ExitReason>,
+}
+
+impl<V> BroadcastSubscription<V> {
+    /// Creates a subscription from its message and exit-reason receivers.
+    pub fn from_parts(
+        receiver: tokio::sync::mpsc::Receiver<V>,
+        exit_reason: tokio::sync::oneshot::Receiver<ExitReason>,
+    ) -> Self {
+        Self {
+            receiver,
+            exit_reason,
+        }
+    }
+
+    /// Splits the subscription into independently observable message and exit-reason receivers.
+    pub fn into_parts(
+        self,
+    ) -> (
+        tokio::sync::mpsc::Receiver<V>,
+        tokio::sync::oneshot::Receiver<ExitReason>,
+    ) {
+        (self.receiver, self.exit_reason)
+    }
+
+    /// Returns only the message receiver, discarding exit-reason reporting.
+    pub fn into_receiver(self) -> tokio::sync::mpsc::Receiver<V> {
+        self.receiver
+    }
+
+    /// Receives the next buffered value.
+    pub async fn recv(&mut self) -> Option<V> {
+        self.receiver.recv().await
+    }
+
+    /// Attempts to receive the next buffered value without waiting.
+    pub fn try_recv(&mut self) -> Result<V, tokio::sync::mpsc::error::TryRecvError> {
+        self.receiver.try_recv()
+    }
 }
 
 /// An error returned when a value has no active subscribers.
@@ -95,12 +147,9 @@ where
     /// subscriber as a slow consumer, disconnects it, and closes the receiver
     /// after its buffered values have been drained.
     #[must_use]
-    pub fn subscribe(
-        &self,
-        key: K,
-        subscriber_buffer: NonZeroUsize,
-    ) -> tokio::sync::mpsc::Receiver<V> {
+    pub fn subscribe(&self, key: K, subscriber_buffer: NonZeroUsize) -> BroadcastSubscription<V> {
         let (subscriber_tx, subscriber_rx) = tokio::sync::mpsc::channel(subscriber_buffer.get());
+        let (exit_reason_tx, exit_reason_rx) = tokio::sync::oneshot::channel();
 
         let entry = self
             .channels
@@ -154,9 +203,10 @@ where
                     tracing::debug!(?reason, "broadcast subscriber task exited");
                 }
             }
+            let _ = exit_reason_tx.send(reason);
         });
 
-        subscriber_rx
+        BroadcastSubscription::from_parts(subscriber_rx, exit_reason_rx)
     }
 
     /// Publishes `value` to every active subscriber for `key`.

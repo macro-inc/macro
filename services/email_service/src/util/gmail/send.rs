@@ -1,5 +1,5 @@
+use crate::outbound::email_api::GmailApi;
 use anyhow::Context;
-use gmail_client::GmailClient;
 use models_email::service::attachment::{AttachmentDraft, AttachmentToSend};
 use models_email::service::link::Link;
 use models_email::service::message;
@@ -109,13 +109,12 @@ pub async fn fetch_and_attach_draft_attachments(
 /// Forwarded attachments reference original Gmail attachments, so their data is fetched
 /// from Gmail at send time rather than from S3.
 #[tracing::instrument(
-    skip(db, gmail_client, access_token, message_to_send),
+    skip(db, email_api, message_to_send),
     fields(message_db_id = ?message_to_send.db_id), err
 )]
 pub async fn fetch_and_attach_forwarded_attachments(
     db: &PgPool,
-    gmail_client: &GmailClient,
-    access_token: &str,
+    email_api: &GmailApi,
     link: &Link,
     message_to_send: &mut message::MessageToSend,
 ) -> anyhow::Result<()> {
@@ -137,8 +136,8 @@ pub async fn fetch_and_attach_forwarded_attachments(
     let fetch_futures = fwd_attachments.iter().map(|fwd_att| async move {
         let provider_att_id = fwd_att.provider_attachment_id.as_deref().unwrap_or_default();
 
-        let data = gmail_client
-            .get_attachment_data(access_token, &fwd_att.message_provider_id, provider_att_id)
+        let data = email_api
+            .get_attachment(link.id, &fwd_att.message_provider_id, provider_att_id)
             .await
             .with_context(|| {
                 format!(

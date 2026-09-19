@@ -60,7 +60,7 @@ export function AddInboxDialog() {
           </Dialog.Description>
           <div class="pt-3 justify-end items-center gap-3 inline-flex">
             <Button
-              variant="base"
+              variant="outline"
               depth={3}
               disabled={pending()}
               onClick={() => setIsOpen(false)}
@@ -68,7 +68,7 @@ export function AddInboxDialog() {
               Cancel
             </Button>
             <Button
-              variant="active"
+              variant="accent"
               depth={3}
               disabled={pending()}
               onClick={handleConfirm}

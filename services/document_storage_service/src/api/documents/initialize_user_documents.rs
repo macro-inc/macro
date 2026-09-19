@@ -76,8 +76,10 @@ pub async fn handler(
             .into_response()
     })?;
 
-    // Create default share permission
-    let share_permission = SharePermissionV2::new_project_share_permission();
+    // Create default share permission. Onboarding documents are created at
+    // signup, before team membership is meaningful, so the team default
+    // link-share preference intentionally does not apply.
+    let share_permission = SharePermissionV2::new_project_share_permission(None);
 
     let start_time = std::time::Instant::now();
     let project =

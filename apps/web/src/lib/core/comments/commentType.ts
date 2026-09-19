@@ -45,7 +45,7 @@ export type Layout = {
 
 export type CommentOperations = {
   createComment: (
-    info: CreateCommentRequest
+    info: CreateCommentRequest & { threadId: number }
   ) => Promise<CreateCommentResponse | null>;
   deleteComment: (info: DeleteCommentInfo) => Promise<boolean> | undefined;
   updateComment: (

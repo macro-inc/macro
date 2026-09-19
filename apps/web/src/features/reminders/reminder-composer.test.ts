@@ -1,23 +1,17 @@
 import type { EntityData } from '@entity';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   closeReminderComposer,
   openReminderComposer,
-  openReminderEditor,
+  openStandaloneReminderComposer,
   reminderComposerOpen,
   reminderComposerState,
+  takeReminderCreatedHandler,
 } from './reminder-composer';
 
 const doc = (id: string, name: string) =>
   ({ type: 'document', id, name }) as EntityData;
-
-const draft = (id: string, description: string) => ({
-  id,
-  description,
-  remindAt: new Date('2026-08-09T09:00:00.000Z'),
-  completed: false,
-});
 
 describe('reminder composer state', () => {
   beforeEach(() => {
@@ -58,53 +52,74 @@ describe('reminder composer state', () => {
   });
 });
 
-describe('reminder composer edit mode', () => {
+describe('reminder composer standalone mode', () => {
   beforeEach(() => {
     closeReminderComposer();
   });
 
-  it('opens with the reminder being edited', () => {
-    openReminderEditor(draft('rem-1', 'Chase the contract'));
+  // The flag is what the modal reads to know it is composing at all: with no
+  // entity, a closed composer and a standalone one look alike.
+  it('opens with no entity target', () => {
+    openStandaloneReminderComposer();
 
     expect(reminderComposerOpen()).toBe(true);
-    expect(reminderComposerState.editing?.id).toBe('rem-1');
-    expect(reminderComposerState.editing?.description).toBe(
-      'Chase the contract'
-    );
+    expect(reminderComposerState.standalone).toBe(true);
+    expect(reminderComposerState.entity).toBeUndefined();
   });
 
-  it('clears the reminder on close', () => {
-    openReminderEditor(draft('rem-1', 'Chase the contract'));
+  it('clears the flag on close', () => {
+    openStandaloneReminderComposer();
     closeReminderComposer();
 
     expect(reminderComposerOpen()).toBe(false);
-    expect(reminderComposerState.editing).toBeUndefined();
+    expect(reminderComposerState.standalone).toBeUndefined();
   });
 
-  // The two modes are exclusive: the modal shows an entity chip for one and
-  // prefills from the reminder for the other, so a leftover from the previous
-  // open would put it in both at once.
-  it('drops a create target when opened to edit', () => {
+  // The two modes are exclusive. A leftover flag would make the modal treat an
+  // entity's reminder as being about nothing, and drop the attachment.
+  it('drops a create target when opened standalone', () => {
     openReminderComposer(doc('doc-1', 'Q3 Contract'));
-    openReminderEditor(draft('rem-1', 'Chase the contract'));
+    openStandaloneReminderComposer();
 
     expect(reminderComposerState.entity).toBeUndefined();
-    expect(reminderComposerState.editing?.id).toBe('rem-1');
+    expect(reminderComposerState.standalone).toBe(true);
   });
 
-  it('drops an edit target when opened to create', () => {
-    openReminderEditor(draft('rem-1', 'Chase the contract'));
+  it('drops the standalone flag when opened for an entity', () => {
+    openStandaloneReminderComposer();
     openReminderComposer(doc('doc-1', 'Q3 Contract'));
 
-    expect(reminderComposerState.editing).toBeUndefined();
+    expect(reminderComposerState.standalone).toBeUndefined();
     expect(reminderComposerState.entity?.id).toBe('doc-1');
   });
+});
 
-  it('replaces the reminder when reopened for another one', () => {
-    openReminderEditor(draft('rem-1', 'Chase the contract'));
-    openReminderEditor(draft('rem-2', 'Send the invoice'));
+describe('reminder composer created handler', () => {
+  beforeEach(() => {
+    closeReminderComposer();
+  });
 
-    expect(reminderComposerState.editing?.id).toBe('rem-2');
-    expect(reminderComposerState.editing?.description).toBe('Send the invoice');
+  // The composer closes before the create request is awaited, so the follow-up
+  // has to be taken out of here first rather than read after the fact.
+  it('hands the created handler over once', () => {
+    const onCreated = vi.fn();
+    openReminderComposer(doc('doc-1', 'Q3 Contract'), { onCreated });
+
+    expect(takeReminderCreatedHandler()).toBe(onCreated);
+    expect(takeReminderCreatedHandler()).toBeUndefined();
+  });
+
+  it('drops the created handler when the composer is closed', () => {
+    openReminderComposer(doc('doc-1', 'Q3 Contract'), { onCreated: vi.fn() });
+    closeReminderComposer();
+
+    expect(takeReminderCreatedHandler()).toBeUndefined();
+  });
+
+  it('drops the previous created handler when reopened to create', () => {
+    openReminderComposer(doc('doc-1', 'Q3 Contract'), { onCreated: vi.fn() });
+    openReminderComposer(doc('doc-2', 'Roadmap'));
+
+    expect(takeReminderCreatedHandler()).toBeUndefined();
   });
 });

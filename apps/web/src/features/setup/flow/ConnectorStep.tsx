@@ -1,7 +1,9 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import type { FeaturedMcpServer } from '@core/component/AI/constant/mcpServers';
+import { usePipedreamMcpFlag } from '@core/pipedream/flag';
 import SpinnerIcon from '@phosphor/spinner-gap.svg';
 import { useMcpServersQuery } from '@queries/mcp-servers';
+import { usePipedreamConnectionsQuery } from '@queries/pipedream-connectors';
 import { Layer } from '@ui';
 import { createEffect, createMemo, Show } from 'solid-js';
 import { ConnectorRow } from '../ConnectorRow';
@@ -21,19 +23,37 @@ export function ConnectorStep(props: {
 }) {
   // Poll: OAuth completes in a popup, and if this window never blurs no
   // focus-refetch would ever flip the step.
+  const pipedreamMcp = usePipedreamMcpFlag();
   const serversQuery = useMcpServersQuery({
+    refetchInterval: 4_000,
+    neverSuspend: true,
+  });
+  const pipedreamQuery = usePipedreamConnectionsQuery({
     refetchInterval: 4_000,
     neverSuspend: true,
   });
   const record = createMemo(() =>
     serversQuery.data?.find((server) => server.url === props.server.url)
   );
-  const authenticated = () => record()?.authenticated ?? false;
+  const pipedreamRecord = createMemo(() =>
+    pipedreamQuery.data?.find(
+      (connection) => connection.app_slug === props.server.app_slug
+    )
+  );
+  const authenticated = () =>
+    pipedreamMcp()
+      ? pipedreamRecord() !== undefined
+      : (record()?.authenticated ?? false);
 
   const analytics = useAnalytics();
   let wasAuthenticated: boolean | undefined;
   createEffect(() => {
-    if (serversQuery.isPlaceholderData) return;
+    if (
+      pipedreamMcp()
+        ? pipedreamQuery.isPlaceholderData
+        : serversQuery.isPlaceholderData
+    )
+      return;
     const authed = authenticated();
     if (wasAuthenticated === false && authed) {
       analytics.track('onboarding_v4_connector_connected', {
@@ -48,7 +68,11 @@ export function ConnectorStep(props: {
       {/* On the placeholder, an already-connected server would render as
           unconnected and clickable (duplicate add + pointless popup). */}
       <Show
-        when={!serversQuery.isPlaceholderData}
+        when={
+          pipedreamMcp()
+            ? !pipedreamQuery.isPlaceholderData
+            : !serversQuery.isPlaceholderData
+        }
         fallback={
           <Layer depth={2}>
             <div class="flex h-11 w-full items-center gap-2.5 rounded-xl border border-ink/[0.05] bg-surface px-3.5 text-sm">
@@ -68,7 +92,11 @@ export function ConnectorStep(props: {
       >
         <ConnectorRow
           server={props.server}
-          connected={record() !== undefined}
+          connected={
+            pipedreamMcp()
+              ? pipedreamRecord() !== undefined
+              : record() !== undefined
+          }
           authenticated={authenticated()}
         />
       </Show>

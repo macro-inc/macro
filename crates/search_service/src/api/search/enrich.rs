@@ -7,9 +7,9 @@ use opensearch_client::search::model::SearchHit;
 use crate::api::{
     context::SearchHandlerState,
     search::{
-        call_record::enrich_call_records, channel::enrich_channel_messages, chat::enrich_chats,
-        document::enrich_documents, email::enrich_emails, project::enrich_projects,
-        simple::SearchError,
+        calendar_event::enrich_calendar_events, call_record::enrich_call_records,
+        channel::enrich_channel_messages, chat::enrich_chats, document::enrich_documents,
+        email::enrich_emails, project::enrich_projects, simple::SearchError,
     },
 };
 
@@ -63,6 +63,13 @@ pub async fn enrich_search_response(
             Ok(response
                 .into_iter()
                 .map(UnifiedSearchResponseItem::Call)
+                .collect())
+        }
+        SearchEntityType::CalendarEvents => {
+            let response = enrich_calendar_events(ctx, user_id, results).await?;
+            Ok(response
+                .into_iter()
+                .map(UnifiedSearchResponseItem::CalendarEvent)
                 .collect())
         }
         // CRM companies are enriched separately (they need the team

@@ -63,6 +63,8 @@ pub enum GraphqlEntityType {
     Reminder,
     /// AI skill entity (skill document or built-in system skill).
     Skill,
+    /// AI coding agent session entity.
+    AgentSession,
 }
 
 impl GraphqlSoupEntityType {
@@ -130,6 +132,7 @@ impl GraphqlEntityType {
             EntityType::CrmContact => Self::CrmContact,
             EntityType::Reminder => Self::Reminder,
             EntityType::Skill => Self::Skill,
+            EntityType::AgentSession => Self::AgentSession,
         }
     }
 
@@ -157,6 +160,7 @@ impl GraphqlEntityType {
             Self::CrmContact => EntityType::CrmContact,
             Self::Reminder => EntityType::Reminder,
             Self::Skill => EntityType::Skill,
+            Self::AgentSession => EntityType::AgentSession,
         }
     }
 }

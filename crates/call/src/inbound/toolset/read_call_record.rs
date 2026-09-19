@@ -2,6 +2,7 @@
 
 use crate::domain::ports::CallService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use entity_access::domain::{
@@ -73,6 +74,10 @@ pub struct ReadCallRecordResponse {
 pub struct ReadCallRecord {
     #[schemars(description = "The id of the call whose transcript you want to retrieve.")]
     pub call_id: Uuid,
+}
+
+impl ToolAnnotated for ReadCallRecord {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Read call transcript");
 }
 
 #[async_trait]

@@ -6,6 +6,7 @@ import { AUTHENTICATION_SERVICE_DOMAIN } from './constants';
  */
 export const ALLOWED_ORIGINS = () => {
   const allowedOrigins = [AUTHENTICATION_SERVICE_DOMAIN];
+
   switch (stack) {
     case 'local':
       return [
@@ -25,10 +26,12 @@ export const ALLOWED_ORIGINS = () => {
         'https://claude.ai',
         'https://chatgpt.com',
         'https://chat.openai.com',
+        'https://cursor.com',
       ];
     case 'dev':
       return [
         ...allowedOrigins,
+        'https://dev-gateway.macro.com',
         'http://localhost:3000',
         'http://localhost:3001',
         'http://localhost:3002',
@@ -47,10 +50,12 @@ export const ALLOWED_ORIGINS = () => {
         'https://claude.ai',
         'https://chatgpt.com',
         'https://chat.openai.com',
+        'https://cursor.com',
       ];
     case 'prod':
       return [
         ...allowedOrigins,
+        'https://gateway.macro.com',
         'https://macro.com',
         'https://dashboard.macro.com',
         'https://staging.macro.com',
@@ -60,6 +65,7 @@ export const ALLOWED_ORIGINS = () => {
         'https://claude.ai',
         'https://chatgpt.com',
         'https://chat.openai.com',
+        'https://cursor.com',
       ];
   }
 

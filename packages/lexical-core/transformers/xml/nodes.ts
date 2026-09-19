@@ -165,6 +165,7 @@ export type UserMentionNode = Id & {
   version: number;
   userId: string;
   email: string;
+  displayName?: string;
 };
 
 export type DocumentMentionNode = Id & {

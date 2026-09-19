@@ -1,0 +1,9 @@
+check:
+  SQLX_OFFLINE=true cargo check
+
+# Run against host-exposed local Postgres and Kafka.
+run-local:
+  ENVIRONMENT=local \
+    DATABASE_URL=postgres://user:password@localhost:5432/macrodb \
+    KAFKA_BROKERS=localhost:9092 \
+    cargo run -p agent_trigger_service

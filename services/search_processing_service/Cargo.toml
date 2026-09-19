@@ -59,7 +59,9 @@ http-body-util = { workspace = true }
 kafka_util = { path = "../../crates/kafka_util", optional = true }
 lexical_client = { path = "../../crates/lexical_client" }
 macro_auth = { path = "../../crates/macro_auth" }
-macro_authorization = { path = "../../crates/macro_authorization" }
+macro_authorization = { path = "../../crates/macro_authorization", features = [
+  "postgres",
+] }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
 macro_cors = { path = "../../crates/macro_cors" }
 macro_config = { path = "../../crates/macro_config" }
@@ -67,6 +69,7 @@ macro_db_client = { path = "../../crates/macro_db_client", optional = true } # M
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
 macro_env_var = { path = "../../crates/macro_env_var" }
+calendar_events = { path = "../../crates/calendar_events" }
 macro_event_broker = { path = "../../crates/macro_event_broker", default-features = false, features = [
   "outbound",
 ], optional = true }

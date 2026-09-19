@@ -98,10 +98,22 @@ function relTime(ms: number | undefined, t0: number | undefined): string {
 }
 
 function indented(text: string): string {
-  return text
+  return String(text)
     .split('\n')
     .map((l) => `   ${l}`)
     .join('\n');
+}
+
+/** Render a snippet value for the trace.
+ *
+ *  The schema asks for `Record<string, string>`, but coders regularly send an
+ *  array (composing a list) or an object, and the whole trace used to fail to
+ *  render because of it. A trace is a debugging artifact — it must survive
+ *  whatever the model actually produced. */
+function formatSnippetValue(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value.map((v) => String(v)).join('\n');
+  return JSON.stringify(value, null, 2) ?? String(value);
 }
 
 /** Step header timing, e.g. `· 0.9s · t+1.4s` (this step / cumulative). */
@@ -139,7 +151,7 @@ function formatEditEntry(
       parts.push(`\n   \`\`\`js\n${indented(call.code)}\n   \`\`\``);
       for (const [key, value] of Object.entries(call.snippets ?? {})) {
         parts.push(
-          `   snippets.${key}:\n   \`\`\`\n${indented(value)}\n   \`\`\``
+          `   snippets.${key}:\n   \`\`\`\n${indented(formatSnippetValue(value))}\n   \`\`\``
         );
       }
     }

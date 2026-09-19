@@ -179,7 +179,7 @@ export function CreateCompanyModal() {
             <div class="flex shrink-0 items-end justify-end gap-2">
               <Button
                 type="submit"
-                variant={canSubmit() ? 'active' : 'ghost'}
+                variant={canSubmit() ? 'accent' : 'ghost'}
                 depth={3}
                 class="rounded-lg border-0"
                 disabled={!canSubmit()}

@@ -89,11 +89,12 @@ export function PlanStep(props: {
           </div>
           <Button
             variant="cta"
+            size="xl"
             disabled={props.finishing}
             onClick={() => props.onPremiumPaid()}
           >
             {props.finishing ? 'Setting up your workspace…' : 'Continue'}
-            <ArrowRight class="size-4" />
+            <ArrowRight class="size-5" />
           </Button>
         </div>
       }
@@ -155,13 +156,18 @@ export function PlanStep(props: {
         </div>
 
         <div class="flex flex-col gap-3">
-          <Button variant="cta" disabled={props.finishing} onClick={finish}>
+          <Button
+            variant="cta"
+            size="xl"
+            disabled={props.finishing}
+            onClick={finish}
+          >
             {props.finishing
               ? selected() === 'free'
                 ? 'Setting up your workspace…'
                 : 'Heading to checkout…'
               : `Continue with ${selected() === 'free' ? 'Free' : 'Premium'}`}
-            <ArrowRight class="size-4" />
+            <ArrowRight class="size-5" />
           </Button>
           <SkipButton
             label="Decide later"

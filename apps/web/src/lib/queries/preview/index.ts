@@ -1,6 +1,5 @@
 export { defaultNameTransform } from './fetchers';
 export {
-  getCachedItemPreview,
   getItemPreview,
   invalidatePreview,
   setPreviewFileType,
@@ -11,11 +10,13 @@ export {
 export type {
   AccessiblePreviewItem,
   ItemEntity,
+  PreviewCalendarEventAccess,
   PreviewItem,
   PreviewItemNoAccess,
 } from './types';
 export {
   isAccessiblePreviewItem,
+  isCalendarEventPreviewItem,
   isChannelPreviewItem,
   isPreviewItemNoAccess,
 } from './types';

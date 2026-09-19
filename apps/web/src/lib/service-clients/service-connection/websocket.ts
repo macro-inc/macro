@@ -34,7 +34,7 @@ async function resolveWsUrl() {
     const apiToken = await getMacroApiToken();
     if (!apiToken) throw new Error('No Macro API token');
 
-    return `${wsHost}/?macro-api-token=${apiToken}`;
+    return `${wsHost}?macro-api-token=${apiToken}`;
   }
   await fetchToken();
   return wsHost;

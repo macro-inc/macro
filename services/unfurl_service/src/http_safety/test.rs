@@ -63,6 +63,13 @@ fn test_is_private_ip_unspecified() {
 }
 
 #[test]
+fn test_is_private_ip_v6_unique_and_link_local() {
+    assert!(is_private_ip(&"fc00::1".parse().unwrap()));
+    assert!(is_private_ip(&"fd12:3456:789a::1".parse().unwrap()));
+    assert!(is_private_ip(&"fe80::1".parse().unwrap()));
+}
+
+#[test]
 fn test_is_private_ip_mapped_v4() {
     assert!(is_private_ip(&"::ffff:127.0.0.1".parse().unwrap()));
     assert!(is_private_ip(&"::ffff:169.254.169.254".parse().unwrap()));
@@ -76,6 +83,40 @@ fn test_is_private_ip_public() {
     assert!(!is_private_ip(&"8.8.8.8".parse().unwrap()));
     assert!(!is_private_ip(&"1.1.1.1".parse().unwrap()));
     assert!(!is_private_ip(&"2607:f8b0:4004:800::200e".parse().unwrap()));
+}
+
+fn redirect_response(location: Option<&str>) -> reqwest::Response {
+    let mut builder = axum::http::Response::builder().status(302);
+    if let Some(location) = location {
+        builder = builder.header("Location", location);
+    }
+    builder.body("").unwrap().into()
+}
+
+#[test]
+fn test_redirect_target_supports_absolute_and_relative_locations() {
+    let current = Url::parse("https://example.com/a/page").unwrap();
+
+    let relative = redirect_target(&current, &redirect_response(Some("../next"))).unwrap();
+    assert_eq!(relative.as_str(), "https://example.com/next");
+
+    let absolute = redirect_target(
+        &current,
+        &redirect_response(Some("https://cdn.example.com/final#fragment")),
+    )
+    .unwrap();
+    assert_eq!(absolute.as_str(), "https://cdn.example.com/final");
+}
+
+#[test]
+fn test_redirect_target_rejects_unsafe_or_missing_locations() {
+    let current = Url::parse("https://example.com/start").unwrap();
+
+    let unsafe_scheme = redirect_target(&current, &redirect_response(Some("file:///etc/passwd")));
+    assert!(matches!(unsafe_scheme, Err(FetchError::InvalidScheme)));
+
+    let missing = redirect_target(&current, &redirect_response(None));
+    assert!(matches!(missing, Err(FetchError::UpstreamRedirect(_))));
 }
 
 #[tokio::test]

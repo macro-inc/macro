@@ -39,7 +39,8 @@ async fn main() -> anyhow::Result<()> {
         config.internal_auth_key.clone(),
         config.dss_url.clone(),
     );
-    let gmail_client = gmail_client::GmailClient::new("unused".to_string());
+    let email_api_repository =
+        email_api_client::GmailApiClientRepository::from_subscription_topic("unused");
 
     let macro_ids: Vec<String> = config
         .macro_ids
@@ -57,8 +58,14 @@ async fn main() -> anyhow::Result<()> {
             macro_ids.len()
         );
 
-        match process::process_macro_id(&config, &db_pool, &dss_client, &gmail_client, macro_id)
-            .await
+        match process::process_macro_id(
+            &config,
+            &db_pool,
+            &dss_client,
+            &email_api_repository,
+            macro_id,
+        )
+        .await
         {
             Ok((success_count, total_attachments)) => {
                 println!(

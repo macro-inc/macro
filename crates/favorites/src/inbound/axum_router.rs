@@ -285,7 +285,9 @@ impl IntoResponse for FavoritesError {
     fn into_response(self) -> axum::response::Response {
         let status_code = match &self {
             FavoritesError::NotFound => StatusCode::NOT_FOUND,
-            FavoritesError::BadRequest(_) => StatusCode::BAD_REQUEST,
+            FavoritesError::UnsupportedEntityType(_) | FavoritesError::BadRequest(_) => {
+                StatusCode::BAD_REQUEST
+            }
             FavoritesError::Unauthorized => StatusCode::FORBIDDEN,
             FavoritesError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };

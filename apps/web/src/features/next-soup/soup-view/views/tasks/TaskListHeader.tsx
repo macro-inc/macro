@@ -5,6 +5,7 @@ import StatusInProgress from '@icon/square-task-in-progress-circle.svg';
 import PriorityHigh from '@icon/wide-priority-high.svg';
 import ArrowDownIcon from '@phosphor/arrow-down.svg';
 import UsersIcon from '@phosphor/users.svg';
+import { Tooltip } from '@ui';
 import { cn } from '@ui/utils/classname';
 import { createMemo, For, type JSX, Show } from 'solid-js';
 import {
@@ -13,12 +14,10 @@ import {
   TASK_GRID_TEMPLATE_COLUMNS_WIDE,
 } from './task-grid-template';
 import './list-property-value.css';
-import { Tooltip } from '@ui';
 
-// `size-3` at wide/medium (shown beside the label), upsizing to `size-4` on
-// narrow containers to match the row's collapsed status/priority icons
-// (`@max-[840px]/u-list:size-4` in list-property-value.tsx).
-const HEADER_ICON_CLASS = 'size-3 @max-[840px]/u-list:size-4 text-ink-muted';
+// Property icons stay at the sm Badge icon size in both labeled and collapsed
+// modes, so the narrow header matches each row's 24px property button.
+const HEADER_ICON_CLASS = 'size-3 text-ink-muted';
 
 /** Map column IDs to their icons for narrow mode */
 const COLUMN_ICONS: Record<string, () => JSX.Element> = {
@@ -176,7 +175,7 @@ function HeaderCell(props: {
             onClick={() => props.onSort?.(sortKey())}
             class={cn(
               'flex items-center gap-1 min-w-0 w-full h-full',
-              'hover:text-ink transition-colors cursor-pointer',
+              'hover:text-ink transition-colors',
               props.active && 'text-ink',
               justify(),
               narrowJustify()

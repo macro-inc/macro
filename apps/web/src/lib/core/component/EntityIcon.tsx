@@ -59,6 +59,7 @@ import FolderUser from '@phosphor/folder-user.svg';
 import GlobeIcon from '@phosphor/globe.svg';
 import FileImage from '@phosphor/image.svg';
 import Canvas from '@phosphor/pencil-circle.svg';
+import Robot from '@phosphor/robot.svg';
 import Users from '@phosphor/users.svg';
 import type { PreviewItem } from '@queries/preview';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
@@ -104,6 +105,12 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Call',
+  },
+  calendar: {
+    icon: WideCalendar,
+    foreground: 'text-default',
+    background: 'bg-default/20',
+    prettyName: 'Calendar',
   },
   canvas: {
     icon: Canvas,
@@ -273,6 +280,12 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-default/20',
     prettyName: 'Pull Request',
   },
+  agent: {
+    icon: Robot,
+    foreground: 'text-default',
+    background: 'bg-default/20',
+    prettyName: 'Agent',
+  },
   task: {
     icon: Check,
     foreground: 'text-task',
@@ -287,14 +300,14 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
   },
   skill: {
     icon: SkillIcon,
-    foreground: 'text-default',
-    background: 'bg-default/20',
+    foreground: 'text-chat',
+    background: 'bg-chat/20',
     prettyName: 'Skill',
   },
   automation: {
     icon: WideAutomation,
-    foreground: 'text-default',
-    background: 'bg-default/20',
+    foreground: 'text-chat',
+    background: 'bg-chat/20',
     prettyName: 'Automation',
   },
   crm_company: {
@@ -347,6 +360,7 @@ const WIDE_ICONS: Record<
   Component<JSX.SvgSVGAttributes<SVGSVGElement>>
 > = {
   call: PhoneCall,
+  calendar: WideCalendar,
   canvas: WideDiagram,
   html: WideFileCode,
   channel: WideChannel,
@@ -375,6 +389,7 @@ const WIDE_ICONS: Record<
   emailInvite: WideCalendar,
   githubPullRequest: GithubIcon,
   pr: GithubIcon,
+  agent: Robot,
   task: WideTask,
   snippet: WideSnippet,
   skill: SkillIcon,
@@ -530,6 +545,7 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
     // reminder first, and what it points at is iconed beside its name instead
     // — see `reminderReferenceIconType`.
     .with({ type: 'reminder' }, () => 'reminder')
+    .with({ type: 'calendar_event' }, () => 'calendar')
     .otherwise((e) => e.type);
 
   return validateEntity(typeString);

@@ -11,6 +11,7 @@ function reader(over: Partial<DocReader> = {}): DocReader {
     locate: () => [],
     textLength: () => 0,
     cellNode: () => 'cell',
+    blockRef: (node: string) => node,
     ...over,
   };
 }

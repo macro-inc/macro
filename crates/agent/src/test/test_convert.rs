@@ -311,6 +311,33 @@ fn trailing_separator_ids_are_trimmed_before_replay() {
     }
 }
 
+/// Anthropic's Messages API rejects a `tool_use.input` that is not a JSON
+/// object. Older persisted messages may carry a non-object `json` (e.g. from
+/// before the source of the value started guaranteeing an object); replay
+/// must coerce it to `{}` rather than resending the bad value.
+#[test]
+fn tool_call_with_non_object_json_coerces_to_empty_object() {
+    for bad in [json!(null), json!("oops"), json!([1, 2, 3])] {
+        let msg = assistant_parts(vec![AssistantMessagePart::ToolCall {
+            name: "ListSkills".to_owned(),
+            json: bad.clone(),
+            id: "call_1".to_owned(),
+        }]);
+        let messages = to_rig_messages(&[msg]);
+        let Message::Assistant { content, .. } = &messages[0] else {
+            panic!("expected assistant message");
+        };
+        let AssistantContent::ToolCall(call) = content.first() else {
+            panic!("expected tool call");
+        };
+        assert_eq!(
+            call.function.arguments,
+            json!({}),
+            "non-object json {bad:?} must coerce to an empty object"
+        );
+    }
+}
+
 #[test]
 fn mcp_tool_call_converts_like_regular_tool_call() {
     let msg = assistant_parts(vec![AssistantMessagePart::McpToolCall {

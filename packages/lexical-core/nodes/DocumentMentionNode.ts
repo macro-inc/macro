@@ -205,7 +205,7 @@ export class DocumentMentionNode extends DecoratorNode<
       'data-mention-uuid': this.__mentionUuid || '',
       'data-channel-type': this.__channelType || '',
       'data-created-at': this.__createdAt?.toString() || '',
-      DOMConversionMap: this.__collapsed.toString(),
+      'data-collapsed': this.__collapsed.toString(),
     };
   }
 

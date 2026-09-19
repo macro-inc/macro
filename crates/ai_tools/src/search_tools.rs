@@ -1,6 +1,7 @@
 use ai_toolset::{
     AsyncTool, RequestContext, SearchableTool, ServiceContext, ToolLoader, ToolResult,
 };
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -76,6 +77,10 @@ pub struct SearchTools {
     pub query: String,
 }
 
+impl ToolAnnotated for SearchTools {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Search tools");
+}
+
 #[async_trait]
 impl AsyncTool<ToolServiceContext> for SearchTools {
     type Output = SearchToolsResponse;
@@ -120,6 +125,10 @@ pub struct LoadTools {
     /// Exact tool names to load, as returned by `SearchTools`.
     #[schemars(description = "Exact tool names to load, taken from SearchTools results.")]
     pub names: Vec<String>,
+}
+
+impl ToolAnnotated for LoadTools {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Load tools");
 }
 
 #[async_trait]

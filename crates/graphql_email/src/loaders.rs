@@ -255,8 +255,11 @@ where
         for thread_id in thread_ids {
             match access_results
                 .remove(&thread_id.to_string())
-                .unwrap_or(Err(AccessError::Internal))
-            {
+                .unwrap_or_else(|| {
+                    Err(AccessError::internal(
+                        "bulk access resolution missing entry",
+                    ))
+                }) {
                 Ok(receipt) => {
                     authorized.push(receipt);
                     authorized_ids.push(thread_id);
@@ -331,8 +334,11 @@ where
         for thread_id in thread_ids {
             match access_results
                 .remove(&thread_id.to_string())
-                .unwrap_or(Err(AccessError::Internal))
-            {
+                .unwrap_or_else(|| {
+                    Err(AccessError::internal(
+                        "bulk access resolution missing entry",
+                    ))
+                }) {
                 Ok(receipt) => {
                     authorized.insert(thread_id, receipt);
                 }

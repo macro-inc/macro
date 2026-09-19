@@ -1,52 +1,35 @@
-import { toast } from '@core/component/Toast/Toast';
 import KeyIcon from '@phosphor/key.svg';
 import XIcon from '@phosphor/x.svg';
-import { useCreateBotTokenMutation } from '@queries/bots/bots';
 import type { Bot } from '@service-storage/generated/schemas/bot';
 import { Button, Dialog, Panel } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { BotAvatar } from './BotAvatar';
-import { CredentialField } from './CredentialField';
+import { MintCredential, useMintBotToken } from './MintCredential';
 
 export function CreateBotTokenDialog(props: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   bot?: Bot;
 }) {
-  const createTokenMutation = useCreateBotTokenMutation();
+  const minted = useMintBotToken();
   const [label, setLabel] = createSignal('webhook');
-  const [token, setToken] = createSignal<string>();
 
   const reset = () => {
     setLabel('webhook');
-    setToken(undefined);
+    minted.reset();
   };
 
   const close = () => {
-    if (createTokenMutation.isPending) return;
+    if (minted.isPending()) return;
     props.onOpenChange(false);
     reset();
-  };
-
-  const create = () => {
-    const bot = props.bot;
-    if (!bot) return;
-    createTokenMutation.mutate(
-      { botId: bot.id, label: label().trim() || undefined },
-      {
-        onSuccess: ({ bearer_token }) => setToken(bearer_token),
-        onError: () => toast.failure('Failed to create token'),
-      }
-    );
   };
 
   return (
     <Dialog
       open={props.open}
       onOpenChange={(open) => (open ? props.onOpenChange(true) : close())}
-      onEscapeKeyDown={(event) =>
-        createTokenMutation.isPending && event.preventDefault()
-      }
+      onEscapeKeyDown={(event) => minted.isPending() && event.preventDefault()}
       position="center"
       class="w-105"
     >
@@ -61,7 +44,7 @@ export function CreateBotTokenDialog(props: {
               size="icon-sm"
               label="Close"
               aria-label="Close"
-              disabled={createTokenMutation.isPending}
+              disabled={minted.isPending()}
               onClick={close}
             >
               <XIcon />
@@ -83,9 +66,13 @@ export function CreateBotTokenDialog(props: {
                   <KeyIcon class="size-5 text-ink-extra-muted" />
                 </div>
 
-                <Show
-                  when={token()}
-                  fallback={
+                <MintCredential
+                  minted={minted}
+                  botId={bot().id}
+                  label={label().trim() || undefined}
+                  fieldLabel="Webhook token"
+                  fieldHelp="Shown only once"
+                  fallback={({ mint, isPending }) => (
                     <>
                       <label class="flex flex-col gap-1.5">
                         <span class="text-xs font-medium text-ink">
@@ -100,7 +87,7 @@ export function CreateBotTokenDialog(props: {
                             setLabel(event.currentTarget.value)
                           }
                           onKeyDown={(event) => {
-                            if (event.key === 'Enter') create();
+                            if (event.key === 'Enter') mint();
                           }}
                         />
                         <span class="text-xs text-ink-muted">
@@ -114,24 +101,16 @@ export function CreateBotTokenDialog(props: {
                         <Button
                           variant="cta"
                           size="sm"
-                          disabled={createTokenMutation.isPending}
-                          onClick={create}
+                          disabled={isPending}
+                          onClick={mint}
                         >
-                          {createTokenMutation.isPending
-                            ? 'Creating…'
-                            : 'Create token'}
+                          {isPending ? 'Creating…' : 'Create token'}
                         </Button>
                       </div>
                     </>
-                  }
-                >
-                  {(rawToken) => (
+                  )}
+                  afterToken={
                     <>
-                      <CredentialField
-                        label="Webhook token"
-                        value={rawToken()}
-                        help="Shown only once"
-                      />
                       <div class="rounded-lg border border-alert/30 bg-alert-bg px-3 py-2.5 text-xs text-alert-ink">
                         Store this token somewhere secure before closing.
                       </div>
@@ -141,8 +120,8 @@ export function CreateBotTokenDialog(props: {
                         </Button>
                       </div>
                     </>
-                  )}
-                </Show>
+                  }
+                />
               </div>
             )}
           </Show>

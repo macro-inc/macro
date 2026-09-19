@@ -77,6 +77,8 @@ export type ScalarFieldFilters = {
   tagFilterMode?: TagFilterMode;
   documentSeen?: boolean;
   documentDone?: boolean;
+  /** For tasks, whether the current user is an assignee. */
+  documentImportance?: boolean;
   isEmailAttachment?: boolean;
   emailSeen?: boolean;
   emailDone?: boolean;
@@ -98,6 +100,8 @@ export type ScalarFieldFilters = {
   callStatus?: CallStatus;
   callAttended?: boolean;
   crmCompanyHidden?: boolean;
+  calendarEventSeen?: boolean;
+  calendarEventDone?: boolean;
   // Reminders are off by default in Soup; a view must opt in.
   includeReminders?: boolean;
   reminderCompleted?: boolean;
@@ -126,6 +130,7 @@ export type DocumentFieldName =
   | 'documentOwnerId'
   | 'documentSeen'
   | 'documentDone'
+  | 'documentImportance'
   | 'isEmailAttachment'
   | 'documentCreatedAt'
   | 'documentUpdatedAt';

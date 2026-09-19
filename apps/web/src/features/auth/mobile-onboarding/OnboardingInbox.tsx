@@ -202,37 +202,41 @@ export function OnboardingInbox() {
               )}
             </Show>
 
-            <For each={drawerActionGroups()}>
-              {(group, groupIndex) => (
-                <>
-                  <Show when={groupIndex() > 0}>
-                    <div class="mt-3" />
-                  </Show>
-                  <Show when={group.label}>
-                    <MobileDrawer.Label>{group.label}</MobileDrawer.Label>
-                  </Show>
-                  <MobileDrawer.Section class="flex flex-col shrink-0">
-                    <For each={group.items}>
-                      {(action) => (
-                        <button
-                          type="button"
-                          class={cn(
-                            'flex items-center gap-3 px-4 py-3 text-sm text-left not-last:mb-px bg-surface hover:bg-hover hover-transition-bg',
-                            action.destructive ? 'text-failure-ink' : 'text-ink'
-                          )}
-                          onClick={() => {
-                            action.onClick();
-                            closeDrawer();
-                          }}
-                        >
-                          {action.label}
-                        </button>
-                      )}
-                    </For>
-                  </MobileDrawer.Section>
-                </>
-              )}
-            </For>
+            <MobileDrawer.ScrollBody>
+              <For each={drawerActionGroups()}>
+                {(group, groupIndex) => (
+                  <>
+                    <Show when={groupIndex() > 0}>
+                      <div class="mt-3" />
+                    </Show>
+                    <Show when={group.label}>
+                      <MobileDrawer.Label>{group.label}</MobileDrawer.Label>
+                    </Show>
+                    <MobileDrawer.Section class="flex flex-col shrink-0">
+                      <For each={group.items}>
+                        {(action) => (
+                          <button
+                            type="button"
+                            class={cn(
+                              'flex items-center gap-3 px-4 py-3 text-sm text-left not-last:mb-px bg-surface hover:bg-hover hover-transition-bg',
+                              action.destructive
+                                ? 'text-failure-ink'
+                                : 'text-ink'
+                            )}
+                            onClick={() => {
+                              action.onClick();
+                              closeDrawer();
+                            }}
+                          >
+                            {action.label}
+                          </button>
+                        )}
+                      </For>
+                    </MobileDrawer.Section>
+                  </>
+                )}
+              </For>
+            </MobileDrawer.ScrollBody>
           </MobileDrawer.Content>
         </MobileDrawer.Portal>
       </MobileDrawer>

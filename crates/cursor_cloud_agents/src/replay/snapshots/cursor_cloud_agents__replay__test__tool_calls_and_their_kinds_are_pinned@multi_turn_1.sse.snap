@@ -1,0 +1,7 @@
+---
+source: crates/cursor_acp/src/replay/test.rs
+assertion_line: 201
+expression: calls
+input_file: crates/cursor_acp/fixtures/real/multi_turn_1.sse
+---
+[]

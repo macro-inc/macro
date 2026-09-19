@@ -36,7 +36,7 @@ use sqlx::postgres::PgPoolOptions;
 use adapters::interactive_mobile::{
     InteractiveMobileSender, PushPromptRequest, SandboxMobileSender,
 };
-use adapters::logging_websocket::LoggingWebSocketSender;
+use adapters::logging_realtime::LoggingRealtimeSender;
 use adapters::mpsc_queue::MpscQueue;
 use adapters::noop_rate_limiter::NoOpRateLimitPort;
 use adapters::sandbox_repository::SandboxNotificationRepository;
@@ -154,7 +154,7 @@ async fn main() -> Result<(), Report> {
     let egress_service = Arc::new(NotificationEgressService {
         queue: queue.clone(),
         repository: DbNotificationRepository::new(db.clone()),
-        websocket: LoggingWebSocketSender,
+        realtime: LoggingRealtimeSender,
         mobile: mobile_sender,
         email: email_adapter,
         rate_limiter: rate_limit::RateLimitServiceImpl {

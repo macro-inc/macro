@@ -1,6 +1,7 @@
 //! types
 use super::tool_object::{AsyncToolObject, UserTool, UserToolResponse};
 use crate::RequestContext;
+use crate::annotations::ToolAnnotated;
 use crate::schema::ValidationError;
 use crate::{AsyncTool, ToolResult};
 use axum::extract::FromRef;
@@ -137,7 +138,13 @@ where
     pub fn add_tool<T, ToolContext>(mut self) -> Self
     where
         ToolContext: Sync + Send + FromRef<ToolSetContext> + 'static,
-        T: JsonSchema + AsyncTool<ToolContext> + for<'de> Deserialize<'de> + 'static + Send + Sync,
+        T: JsonSchema
+            + AsyncTool<ToolContext>
+            + ToolAnnotated
+            + for<'de> Deserialize<'de>
+            + 'static
+            + Send
+            + Sync,
         T::Output: Serialize + JsonSchema + 'static,
     {
         let tool_object = AsyncToolObject::try_from_tool::<T, ToolContext, T::Output>()
@@ -158,7 +165,13 @@ where
     pub fn add_user_tool<T, ToolContext>(mut self) -> Self
     where
         ToolContext: Sync + Send + FromRef<ToolSetContext> + 'static,
-        T: JsonSchema + AsyncTool<ToolContext> + for<'de> Deserialize<'de> + 'static + Send + Sync,
+        T: JsonSchema
+            + AsyncTool<ToolContext>
+            + ToolAnnotated
+            + for<'de> Deserialize<'de>
+            + 'static
+            + Send
+            + Sync,
         T::Output: Serialize + JsonSchema + 'static,
     {
         let tool_object = AsyncToolObject::try_from_tool::<T, ToolContext, T::Output>()
@@ -249,7 +262,10 @@ where
     /// # Example
     ///
     /// ```
-    /// use ai_toolset::{AsyncTool, AsyncToolCollection, RequestContext, ServiceContext, ToolResult};
+    /// use ai_toolset::{
+    ///     AsyncTool, AsyncToolCollection, RequestContext, ServiceContext, ToolAnnotated,
+    ///     ToolAnnotations, ToolResult,
+    /// };
     /// use axum_macros::FromRef;
     /// use schemars::JsonSchema;
     /// use serde::{Deserialize, Serialize};
@@ -272,6 +288,10 @@ where
     /// #[derive(JsonSchema, Deserialize)]
     /// #[schemars(title = "SubTool", description = "A tool using SubContext")]
     /// struct SubTool { value: String }
+    ///
+    /// impl ToolAnnotated for SubTool {
+    ///     const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Sub tool");
+    /// }
     ///
     /// #[async_trait::async_trait]
     /// impl AsyncTool<SubContext> for SubTool {

@@ -1,0 +1,46 @@
+---
+title: CreateReminder
+description: "Schedule a reminder for the current user. At `remindAt` it is delivered to their Macro inbox as a notification and stays there until they mark it done.  A reminder is either attached to one Macro item — so clicking it opens that item — or standalone. Attached is the common case (\"remind me to reply to this email tomorrow\"); standalone is for everything else (\"remind me to book a flight\").  Reminders are private: one is only ever delivered to its owner, and there is no way to set one for somebody else. Only one-off reminders can be created — if the user asks for a repeating one, say so rather than creating a single reminder and implying it repeats.  ## Times are UTC — convert both ways  Timestamps are absolute instants, in and out, while the user asks in their own timezone. Getting this wrong silently sets the reminder to the wrong hour.  - **In:** resolve their wording against their local time, then convert. For America/New_York (UTC-4 in August), \"3pm tomorrow\" on 2026-08-12 is `\"2026-08-13T19:00:00Z\"`, not `\"2026-08-13T15:00:00Z\"`. - **Out:** report the response's UTC value back in their timezone — `\"2026-08-13T19:00:00Z\"` is \"3:00 PM tomorrow\".  Ask for their timezone rather than assuming UTC.  ## Attaching to an item  Pass `entityType` and `entityId` together, using ids from ListEntities, GetThread, or search. The user must already have access to what you attach. `entityType` accepts exactly these values, and a type not on the list cannot be attached even if ListEntities returns it:  - `document` — a Macro document - `ai_chat` — an AI chat conversation - `project` — a project, shown as a folder in the app - `email` — an email thread - `channel` — a chat channel - `call` — a call record - `calendar_event` — a calendar event  **A channel thread needs its parent channel's id.** `channel` is on the list; `channel_thread` is not. For a thread row, pass `entityType: \"channel\"` with the row's `channelId` — never the thread's own `id`, which will not resolve. Put what the thread is about in the description, since that is what tells two reminders on the same channel apart.  For any other unattachable type, create a standalone reminder naming the thing in the description rather than guessing at a type."
+---
+
+# CreateReminder
+
+Schedule a reminder for the current user. At `remindAt` it is delivered to their Macro inbox as a notification and stays there until they mark it done.
+
+A reminder is either attached to one Macro item — so clicking it opens that item — or standalone. Attached is the common case ("remind me to reply to this email tomorrow"); standalone is for everything else ("remind me to book a flight").
+
+Reminders are private: one is only ever delivered to its owner, and there is no way to set one for somebody else. Only one-off reminders can be created — if the user asks for a repeating one, say so rather than creating a single reminder and implying it repeats.
+
+## Times are UTC — convert both ways
+
+Timestamps are absolute instants, in and out, while the user asks in their own timezone. Getting this wrong silently sets the reminder to the wrong hour.
+
+- **In:** resolve their wording against their local time, then convert. For America/New_York (UTC-4 in August), "3pm tomorrow" on 2026-08-12 is `"2026-08-13T19:00:00Z"`, not `"2026-08-13T15:00:00Z"`.
+- **Out:** report the response's UTC value back in their timezone — `"2026-08-13T19:00:00Z"` is "3:00 PM tomorrow".
+
+Ask for their timezone rather than assuming UTC.
+
+## Attaching to an item
+
+Pass `entityType` and `entityId` together, using ids from ListEntities, GetThread, or search. The user must already have access to what you attach. `entityType` accepts exactly these values, and a type not on the list cannot be attached even if ListEntities returns it:
+
+- `document` — a Macro document
+- `ai_chat` — an AI chat conversation
+- `project` — a project, shown as a folder in the app
+- `email` — an email thread
+- `channel` — a chat channel
+- `call` — a call record
+- `calendar_event` — a calendar event
+
+**A channel thread needs its parent channel's id.** `channel` is on the list; `channel_thread` is not. For a thread row, pass `entityType: "channel"` with the row's `channelId` — never the thread's own `id`, which will not resolve. Put what the thread is about in the description, since that is what tells two reminders on the same channel apart.
+
+For any other unattachable type, create a standalone reminder naming the thing in the description rather than guessing at a type.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `description` | string | Yes | What to remind the user about, written as the reminder text they will read — e.g. "Reply to Dana about the Q3 budget". Max 2000 characters. |
+| `remindAt` | string | Yes | When to fire, as an RFC 3339 timestamp in UTC (e.g. "2026-08-08T14:00:00Z"). Must be in the future. Seconds are dropped, so a reminder fires on the minute. Convert from the user's local timezone before sending — see "Times are UTC" in the tool description. |
+| `entityType` | `"document"` \| `"ai_chat"` \| `"project"` \| `"email"` \| `"channel"` \| `"call"` \| `"calendar_event"` | No | Type of the thing the reminder is about — one of document, ai_chat, project, email, channel, call, calendar_event. Requires entityId; omit both for a standalone reminder. |
+| `entityId` | string | No | Id of the thing the reminder is about, as a UUID. Must be the id of an entity of entityType — for a channel_thread row that means its channelId, not its own id. Requires entityType. |

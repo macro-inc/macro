@@ -1,0 +1,151 @@
+---
+source: crates/agent_fold/src/domain/test/real_recordings.rs
+expression: messages
+input_file: crates/agent_fold/fixtures/real/subagent_claude_code.jsonl
+---
+[
+    FoldedMessage {
+        id: TurnId(
+            0,
+        ),
+        author: User {
+            user_id: None,
+        },
+        request_id: Some(
+            AgentActionId(
+                56062802-48df-4dca-b98d-966c762ee74c,
+            ),
+        ),
+        parts: NonEmpty {
+            inner: [
+                Control {
+                    control: SetModel {
+                        model: "opus[1m]",
+                    },
+                    outcome: Accepted,
+                },
+            ],
+        },
+        stop: None,
+    },
+    FoldedMessage {
+        id: TurnId(
+            1,
+        ),
+        author: User {
+            user_id: Some(
+                macro|eric@example.com,
+            ),
+        },
+        request_id: Some(
+            AgentActionId(
+                b63bb736-1022-4b01-abcf-d00c2b6adf90,
+            ),
+        ),
+        parts: NonEmpty {
+            inner: [
+                Text {
+                    text: "spwan a subagent to use python to add 5+5",
+                },
+            ],
+        },
+        stop: None,
+    },
+    FoldedMessage {
+        id: TurnId(
+            1,
+        ),
+        author: Agent,
+        request_id: None,
+        parts: NonEmpty {
+            inner: [
+                ToolUse {
+                    id: ToolUseId(
+                        "toolu_0134fqTfrmNcuarHkdgLtffW",
+                    ),
+                    name: Native {
+                        name: "Agent",
+                    },
+                    status: Completed,
+                    detail: Subagent {
+                        title: "Add 5+5 with Python",
+                        agent_type: Some(
+                            "general-purpose",
+                        ),
+                        description: Some(
+                            "Add 5+5 with Python",
+                        ),
+                        prompt: Some(
+                            "Run `python3 -c \"print(5+5)\"` in bash and report the output.",
+                        ),
+                        background: false,
+                        children: [
+                            ToolUse {
+                                id: ToolUseId(
+                                    "toolu_01CCNovB4Fe1yRrJNhJjx3ah",
+                                ),
+                                name: Native {
+                                    name: "Bash",
+                                },
+                                status: Completed,
+                                detail: Terminal {
+                                    command: Some(
+                                        "python3 -c \"print(5+5)\"",
+                                    ),
+                                    output: Some(
+                                        AnsiText(
+                                            "10",
+                                        ),
+                                    ),
+                                    exit_code: Some(
+                                        0,
+                                    ),
+                                },
+                            },
+                        ],
+                        result: Some(
+                            SubagentResult {
+                                text: Some(
+                                    "Output: `10`",
+                                ),
+                                error: None,
+                                agent_id: Some(
+                                    "af2647314187b6bf1",
+                                ),
+                                model: Some(
+                                    "claude-opus-5[1m]",
+                                ),
+                                duration_ms: Some(
+                                    3485,
+                                ),
+                                tokens: Some(
+                                    26077,
+                                ),
+                                tool_uses: Some(
+                                    1,
+                                ),
+                                stats: Some(
+                                    ToolStats {
+                                        reads: 0,
+                                        searches: 0,
+                                        commands: 1,
+                                        edits: 0,
+                                        lines_added: 0,
+                                        lines_removed: 0,
+                                        other: 0,
+                                    },
+                                ),
+                            },
+                        ),
+                    },
+                },
+                Text {
+                    text: "The subagent ran `python3 -c \"print(5+5)\"` → **10**.",
+                },
+            ],
+        },
+        stop: Some(
+            EndTurn,
+        ),
+    },
+]

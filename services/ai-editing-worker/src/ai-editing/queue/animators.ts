@@ -145,24 +145,51 @@ function sweepEachThen(
   return steps;
 }
 
-/* Replace a node's text by selecting all, deleting, and typing the new content.*/
+/* Replace a node's text by selecting all, deleting, and typing the new content.
+ *
+ * Branches on what the ref points at, because the two cases have incompatible
+ * safety requirements:
+ *
+ * - A BLOCK can be emptied and retyped: it survives having no children, so the
+ *   delete-then-type animation is safe and reads well.
+ * - An INLINE RUN cannot. Emptying it makes Lexical drop the node, so every later
+ *   step targets an id that no longer exists — the paragraph ends up empty and
+ *   the reply claims the id was never there. It is also wrong to widen the ref to
+ *   its block, because `setText` on a run means "set this run" and widening
+ *   deletes the run's siblings, which is how a coder rewriting several runs in one
+ *   paragraph destroyed its own remaining targets.
+ *
+ * So a run is selected and set atomically. That trades character-by-character
+ * typing for correctness on this one path; the block path, which is what a
+ * whole-paragraph rewrite uses, keeps the full animation. */
 function retype(
   node: NodeRef,
   text: string,
   ctx: AnimatorCtx
 ): DocumentOpStep[] {
-  const len = ctx.docReader.textLength(node);
-  const steps: DocumentOpStep[] = [...selectAll(node, ctx)];
+  const block = ctx.docReader.blockRef(node);
+  const isInlineRun = block !== node;
+
+  if (isInlineRun) {
+    return [
+      ...selectAll(node, ctx),
+      { kind: 'pause', ms: ctx.randomSource.integer(ctx.ranges.settlePauseMs) },
+      edit({ kind: 'setText', node, text }),
+    ];
+  }
+
+  const len = ctx.docReader.textLength(block);
+  const steps: DocumentOpStep[] = [...selectAll(block, ctx)];
   if (len > 0) {
     steps.push({
       kind: 'pause',
       ms: ctx.randomSource.integer(ctx.ranges.preDeletePauseMs),
     });
-    steps.push(edit({ kind: 'removeText', node, at: 0, len }));
-    steps.push(cursor(node, 0));
+    steps.push(edit({ kind: 'removeText', node: block, at: 0, len }));
+    steps.push(cursor(block, 0));
   }
-  steps.push(...typeText(node, text, 0, ctx));
-  steps.push(edit({ kind: 'setText', node, text }));
+  steps.push(...typeText(block, text, 0, ctx));
+  steps.push(edit({ kind: 'setText', node: block, text }));
   return steps;
 }
 

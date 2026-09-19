@@ -1,0 +1,16 @@
+---
+title: MoveToProject
+description: "Move a document, AI chat, email thread, or project into another project (projects are shown as folders in the app UI), or move it out to the top level. Requires edit access to the destination project. Moving a document or email thread requires edit access to it; moving an AI chat or a project requires owning it."
+---
+
+# MoveToProject
+
+Move a document, AI chat, email thread, or project into another project (projects are shown as folders in the app UI), or move it out to the top level. Requires edit access to the destination project. Moving a document or email thread requires edit access to it; moving an AI chat or a project requires owning it.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `entityType` | `"document"` \| `"chat"` \| `"email"` \| `"project"` | Yes | The kind of entity to move. |
+| `entityId` | string | Yes | The id of the entity to move. |
+| `projectId` | string | No | The id of the destination project. Omit to move the entity out of its current project to the top level. |

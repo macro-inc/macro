@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)\n            SELECT\n                u.id,\n                u.entity_id,\n                u.entity_type::property_entity_type,\n                u.property_definition_id,\n                u.values\n            FROM UNNEST(\n                $1::UUID[],\n                $2::TEXT[],\n                $3::TEXT[],\n                $4::UUID[],\n                $5::JSONB[]\n            ) AS u(id, entity_id, entity_type, property_definition_id, values)\n            ON CONFLICT (entity_id, entity_type, property_definition_id)\n            DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray",
+        "TextArray",
+        "UuidArray",
+        "JsonbArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c43a6c2bc9b44aca5837e186d411007edbce86a18218452bb8b967aba09275f2"
+}

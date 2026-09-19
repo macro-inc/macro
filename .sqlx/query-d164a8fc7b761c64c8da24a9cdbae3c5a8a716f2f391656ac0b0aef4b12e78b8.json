@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH requested_entities AS (\n                SELECT entity_type, entity_id\n                FROM UNNEST($2::text[], $3::text[]) AS entity(entity_type, entity_id)\n            )\n            SELECT un.notification_id\n            FROM user_notification un\n            JOIN notification n ON n.id = un.notification_id\n            WHERE un.user_id = $1\n              AND un.deleted_at IS NULL\n              AND EXISTS (\n                  SELECT 1\n                  FROM requested_entities entity\n                  WHERE (\n                      n.event_item_type = entity.entity_type\n                      AND n.event_item_id = entity.entity_id\n                  )\n                  OR (\n                      n.secondary_event_item_type = entity.entity_type\n                      AND n.secondary_event_item_id = entity.entity_id\n                  )\n                  OR (\n                      entity.entity_type = 'channel_message'\n                      AND COALESCE(n.metadata->>'messageId', n.metadata->>'message_id', '') = entity.entity_id\n                  )\n              )\n            ORDER BY un.created_at, un.notification_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "notification_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d164a8fc7b761c64c8da24a9cdbae3c5a8a716f2f391656ac0b0aef4b12e78b8"
+}

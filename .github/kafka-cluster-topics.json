@@ -1,5 +1,7 @@
 [
+  "macro.agent_sessions",
   "macro.bots",
+  "macro.calendar",
   "macro.calls",
   "macro.channels",
   "macro.chats",
@@ -7,6 +9,7 @@
   "macro.email",
   "macro.example",
   "macro.mentions",
+  "macro.notifications",
   "macro.projects",
   "macro.properties",
   "macro.soup",

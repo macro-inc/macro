@@ -252,55 +252,58 @@ export function ActionDrawer() {
               </div>
             </Show>
 
-            {/* Non-destructive actions */}
-            <Show when={nonDestructiveActions().length > 0}>
-              <MobileDrawer.Section class="flex flex-col shrink-0">
-                <For each={nonDestructiveActions()}>
-                  {(action) => (
-                    <button
-                      type="button"
-                      data-message-action={action.id}
-                      class="flex items-center gap-3 px-4 py-3 text-sm text-ink hover:bg-hover hover-transition-bg text-left not-last:mb-px bg-surface"
-                      ref={(el) => {
-                        const getTarget = action.getFocusTarget;
-                        if (getTarget) focusInput(el, () => ({ getTarget }));
-                      }}
-                      onClick={(event) => handleAction(action.onClick, event)}
-                    >
-                      <span class="size-5 flex items-center justify-center shrink-0">
-                        {renderIcon(action.icon)}
-                      </span>
-                      {action.label}
-                    </button>
-                  )}
-                </For>
-              </MobileDrawer.Section>
-            </Show>
+            {/* Action sections scroll; the handle and reaction row stay pinned */}
+            <MobileDrawer.ScrollBody>
+              {/* Non-destructive actions */}
+              <Show when={nonDestructiveActions().length > 0}>
+                <MobileDrawer.Section class="flex flex-col shrink-0">
+                  <For each={nonDestructiveActions()}>
+                    {(action) => (
+                      <button
+                        type="button"
+                        data-message-action={action.id}
+                        class="flex items-center gap-3 px-4 py-3 text-sm text-ink hover:bg-hover hover-transition-bg text-left not-last:mb-px bg-surface"
+                        ref={(el) => {
+                          const getTarget = action.getFocusTarget;
+                          if (getTarget) focusInput(el, () => ({ getTarget }));
+                        }}
+                        onClick={(event) => handleAction(action.onClick, event)}
+                      >
+                        <span class="size-5 flex items-center justify-center shrink-0">
+                          {renderIcon(action.icon)}
+                        </span>
+                        {action.label}
+                      </button>
+                    )}
+                  </For>
+                </MobileDrawer.Section>
+              </Show>
 
-            {/* Destructive actions */}
-            <Show when={destructiveActions().length > 0}>
-              <MobileDrawer.Section class="flex flex-col shrink-0 mt-3">
-                <For each={destructiveActions()}>
-                  {(action) => (
-                    <button
-                      type="button"
-                      data-message-action={action.id}
-                      class="flex items-center gap-3 px-4 py-3 text-sm text-failure-ink hover:bg-hover hover-transition-bg text-left not-last:mb-px bg-surface"
-                      ref={(el) => {
-                        const getTarget = action.getFocusTarget;
-                        if (getTarget) focusInput(el, () => ({ getTarget }));
-                      }}
-                      onClick={(event) => handleAction(action.onClick, event)}
-                    >
-                      <span class="size-5 flex items-center justify-center shrink-0">
-                        {renderIcon(action.icon)}
-                      </span>
-                      {action.label}
-                    </button>
-                  )}
-                </For>
-              </MobileDrawer.Section>
-            </Show>
+              {/* Destructive actions */}
+              <Show when={destructiveActions().length > 0}>
+                <MobileDrawer.Section class="flex flex-col shrink-0 mt-3">
+                  <For each={destructiveActions()}>
+                    {(action) => (
+                      <button
+                        type="button"
+                        data-message-action={action.id}
+                        class="flex items-center gap-3 px-4 py-3 text-sm text-failure-ink hover:bg-hover hover-transition-bg text-left not-last:mb-px bg-surface"
+                        ref={(el) => {
+                          const getTarget = action.getFocusTarget;
+                          if (getTarget) focusInput(el, () => ({ getTarget }));
+                        }}
+                        onClick={(event) => handleAction(action.onClick, event)}
+                      >
+                        <span class="size-5 flex items-center justify-center shrink-0">
+                          {renderIcon(action.icon)}
+                        </span>
+                        {action.label}
+                      </button>
+                    )}
+                  </For>
+                </MobileDrawer.Section>
+              </Show>
+            </MobileDrawer.ScrollBody>
           </Show>
         </MobileDrawer.Content>
       </MobileDrawer.Portal>

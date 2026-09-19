@@ -23,7 +23,7 @@ export function AttachmentEntityList(props: {
     <AttachmentSection label="Documents">
       <div class="grid grid-cols-1">
         <Show when={!hasDocuments()}>
-          <div class="py-3 text-sm text-ink-faint">
+          <div class="py-3 text-sm text-ink-subtle">
             No documents in this channel yet.
           </div>
         </Show>

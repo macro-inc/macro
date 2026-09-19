@@ -2,7 +2,10 @@
 
 use anyhow::Context;
 use redis::AsyncCommands;
-use std::future::Future;
+use std::{
+    future::Future,
+    time::{Duration, UNIX_EPOCH},
+};
 
 use crate::domain::{
     models::{IssuedAuthorizationCode, PendingAuthorization},
@@ -66,6 +69,10 @@ struct StoredIssuedAuthorizationCode {
     refresh_token: crate::domain::models::RefreshToken,
     code_challenge: String,
     redirect_uri: String,
+    /// Unix seconds at which the upstream access token expires. Defaults to
+    /// `None` so codes written before this field existed still deserialize.
+    #[serde(default)]
+    access_token_expires_at_unix: Option<u64>,
 }
 
 impl From<IssuedAuthorizationCode> for StoredIssuedAuthorizationCode {
@@ -75,6 +82,12 @@ impl From<IssuedAuthorizationCode> for StoredIssuedAuthorizationCode {
             refresh_token: value.refresh_token,
             code_challenge: value.code_challenge,
             redirect_uri: value.redirect_uri,
+            access_token_expires_at_unix: value.access_token_expires_at.and_then(|expires_at| {
+                expires_at
+                    .duration_since(UNIX_EPOCH)
+                    .ok()
+                    .map(|since_epoch| since_epoch.as_secs())
+            }),
         }
     }
 }
@@ -86,6 +99,9 @@ impl From<StoredIssuedAuthorizationCode> for IssuedAuthorizationCode {
             refresh_token: value.refresh_token,
             code_challenge: value.code_challenge,
             redirect_uri: value.redirect_uri,
+            access_token_expires_at: value
+                .access_token_expires_at_unix
+                .map(|unix_seconds| UNIX_EPOCH + Duration::from_secs(unix_seconds)),
         }
     }
 }

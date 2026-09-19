@@ -16,6 +16,10 @@ use crate::{
 
 static MAX_WAIT_TIME_SECONDS: u64 = 30;
 
+pub(super) fn is_docx_key(key: &str) -> bool {
+    key.to_ascii_lowercase().ends_with(".docx")
+}
+
 /// Processes a message from the convert queue
 /// Returns the job id and the convert queue message
 #[tracing::instrument(skip(worker, s3_client, lambda_client, message), fields(message_id = message.message_id))]
@@ -69,7 +73,7 @@ pub async fn process_message(
 
     match result {
         Ok(_) => {
-            if req.from_key.ends_with(".docx") {
+            if is_docx_key(&req.from_key) {
                 tracing::trace!("sending success message to lambda");
                 lambda_client
                     .invoke_event(
@@ -97,7 +101,7 @@ pub async fn process_message(
             }
         }
         Err(e) => {
-            if req.from_key.ends_with(".docx") {
+            if is_docx_key(&req.from_key) {
                 tracing::trace!("sending failure message to lambda");
                 lambda_client
                     .invoke_event(

@@ -11,6 +11,7 @@ use ai_toolset::{
     AsyncTool, AsyncToolCollection, RequestContext, RequestSchema, SearchableTool, ServiceContext,
     ToolResult, ToolSet as AiToolSet, ToolSetError,
 };
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use rig_core::test_utils::{MockCompletionModel, MockStreamEvent};
 use schemars::{JsonSchema, Schema};
@@ -27,6 +28,10 @@ use std::sync::Arc;
     description = "Find and stage searchable tools."
 )]
 struct SearchToolsTest {}
+
+impl ToolAnnotated for SearchToolsTest {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Search tools");
+}
 
 #[async_trait]
 impl AsyncTool<()> for SearchToolsTest {
@@ -53,6 +58,10 @@ impl AsyncTool<()> for SearchToolsTest {
 #[schemars(title = "load_tools", description = "Load searchable tools by name.")]
 struct LoadToolsTest {
     names: Vec<String>,
+}
+
+impl ToolAnnotated for LoadToolsTest {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Load tools");
 }
 
 #[async_trait]

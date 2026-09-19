@@ -10,12 +10,12 @@ import {
   useChatInputContext,
 } from '@core/component/AI/context';
 import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
+import { createMentionAttachmentCallbacks } from '@core/component/AI/signal/mention-attachment-callbacks';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
 import {
-  ENABLE_HOME_OVERRIDE,
-  ENABLE_HOME_RECOMMENDATIONS_FLAG,
-  ENABLE_HOME_RECOMMENDATIONS_OVERRIDE,
+  enableHomeRecommendations,
+  enableHomeView,
 } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { useUserContext } from '@core/context/user';
@@ -76,11 +76,7 @@ function getGreeting() {
 
 export function Home() {
   return (
-    <ShowFeatureFlag
-      key="enable-home-view"
-      enabledOverride={ENABLE_HOME_OVERRIDE}
-      fallback={<Navigate href="/" />}
-    >
+    <ShowFeatureFlag flag={enableHomeView} fallback={<Navigate href="/" />}>
       <ChatInputProvider>
         <DragDropWrapper class="relative size-full">
           <HomeContent />
@@ -126,7 +122,7 @@ function HomeContent() {
       }</style>
 
       <div class="min-h-0 flex-1 overflow-y-auto">
-        <div class="home-content mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 pb-6 pt-10 mobile:pt-[calc(var(--mobile-content-inset-top,0px)+0.5rem)] mobile:pb-(--mobile-content-inset-bottom) md:pt-16">
+        <div class="home-content mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 pb-6 pt-10 touch:pt-[calc(var(--mobile-content-inset-top,0px)+0.5rem)] touch:pb-(--mobile-content-inset-bottom) md:pt-16">
           <header class="flex items-center gap-2.5">
             <AnimatedHeroLogo class="size-6 shrink-0 text-accent" />
             <h1 class="text-xl font-normal tracking-tight text-ink">
@@ -138,10 +134,7 @@ function HomeContent() {
             <HomeBackfillProgress />
           </HomeSectionBoundary>
 
-          <ShowFeatureFlag
-            key={ENABLE_HOME_RECOMMENDATIONS_FLAG}
-            enabledOverride={ENABLE_HOME_RECOMMENDATIONS_OVERRIDE}
-          >
+          <ShowFeatureFlag flag={enableHomeRecommendations}>
             <HomeSectionBoundary title="recommendations" fallback={null}>
               <RecommendedSection />
             </HomeSectionBoundary>
@@ -158,7 +151,7 @@ function HomeContent() {
       </div>
 
       <FloatRegionOrInline region="accessory">
-        <div class="mx-auto w-full max-w-3xl shrink-0 px-4 pb-3 pointer-events-auto mobile:px-(--mobile-chrome-gutter) mobile:pb-0">
+        <div class="mx-auto w-full max-w-3xl shrink-0 px-4 pb-3 pointer-events-auto touch:px-(--mobile-chrome-gutter) touch:pb-0">
           <HomeChatInput />
         </div>
       </FloatRegionOrInline>
@@ -171,12 +164,12 @@ const HomeChatInput = () => {
   const input = useChatInputContext();
 
   const { getAttachmentFromMention } = useGetChatAttachmentInfo();
+  const attachmentMentionCallbacks = createMentionAttachmentCallbacks(
+    input.attachments,
+    getAttachmentFromMention
+  );
   const editor = buildChatEditor().withMentions({
-    onCreate: (mention) => {
-      const attachment = getAttachmentFromMention(mention);
-      if (attachment) input.attachments.addAttachment(attachment);
-    },
-    onRemove: (mention) => input.attachments.removeAttachment(mention.itemId),
+    ...attachmentMentionCallbacks,
     block: 'chat',
     showOpenTabs: true,
   });

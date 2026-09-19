@@ -25,8 +25,11 @@ export interface Propertied extends Favoritable {
   properties(opts?: {
     includeMetadata?: boolean;
   }): Promise<EntityPropertyWithDefinition[]>;
-  setProperty(propertyId: string, value?: SetPropertyValue): Promise<void>;
-  deleteProperty(entityPropertyId: string): Promise<void>;
+  setProperty(
+    property: PropertyDefinition,
+    value?: SetPropertyValue,
+  ): Promise<void>;
+  deleteProperty(assignment: EntityPropertyWithDefinition): Promise<void>;
 }
 
 /** A delta to apply to one multi-select property. */
@@ -180,19 +183,18 @@ export abstract class PropertiedEntity<Detail>
   }
 
   /**
-   * Set a property value on this entity by property definition id, or attach
-   * the property without a value when `value` is omitted.
+   * Set a property value on this entity, or attach the property without a
+   * value when `value` is omitted.
    */
   async setProperty(
-    propertyId: string,
+    property: PropertyDefinition,
     value?: SetPropertyValue,
   ): Promise<void> {
     unwrap(
       await this.client.properties.setEntityProperty({
         path: {
-          entity_type: this.propertyEntityType,
-          entity_id: this.id,
-          property_id: propertyId,
+          ...this.propertyReference(),
+          property_id: property.id,
         },
         body: { value: value ?? null },
       }),
@@ -221,14 +223,13 @@ export abstract class PropertiedEntity<Detail>
     );
   }
 
-  /**
-   * Remove a property from this entity by its entity-property assignment id
-   * (the `property.id` of a {@link properties} entry).
-   */
-  async deleteProperty(entityPropertyId: string): Promise<void> {
+  /** Remove a property from this entity, given its {@link properties} entry. */
+  async deleteProperty(
+    assignment: EntityPropertyWithDefinition,
+  ): Promise<void> {
     unwrap(
       await this.client.properties.deleteEntityProperty({
-        path: { entity_property_id: entityPropertyId },
+        path: { entity_property_id: assignment.property.id },
       }),
     );
   }

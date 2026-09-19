@@ -23,6 +23,7 @@ struct EmailInitOutboxRow {
     backfill_job_id: Uuid,
     email_link_id: Uuid,
     priority_pass: bool,
+    refresh_existing: bool,
 }
 
 struct EmailCompletionOutboxRow {
@@ -60,6 +61,13 @@ pub async fn run<R>(
                 .await
                 .inspect_err(|error| {
                     tracing::error!(error=?error, "failed to schedule due Google Calendar syncs");
+                })
+                .ok();
+            scheduler
+                .reap_once(Utc::now())
+                .await
+                .inspect_err(|error| {
+                    tracing::error!(error=?error, "failed to reap wedged Google Calendar syncs");
                 })
                 .ok();
             drain_calendar(&db, &sqs)
@@ -245,7 +253,10 @@ async fn drain_email_init(db: &PgPool, sqs: &SQS) -> anyhow::Result<usize> {
                 outbox.id,
                 outbox.backfill_job_id,
                 job.link_id AS "email_link_id!",
-                job.threads_requested_limit IS NULL AS "priority_pass!"
+                -- Recovery jobs skip the priority pass: the mailbox is already
+                -- populated, so there is no cold-start signal to seed.
+                (job.threads_requested_limit IS NULL AND NOT job.is_recovery) AS "priority_pass!",
+                job.is_recovery AS "refresh_existing!"
             FROM email_backfill_init_outbox outbox
             JOIN email_backfill_jobs job ON job.id = outbox.backfill_job_id
             WHERE outbox.published_at IS NULL
@@ -270,6 +281,7 @@ async fn drain_email_init(db: &PgPool, sqs: &SQS) -> anyhow::Result<usize> {
                 payload: ListThreadsPayload {
                     next_page_token: None,
                     priority_pass: row.priority_pass,
+                    refresh_existing: row.refresh_existing,
                 },
             }),
         };

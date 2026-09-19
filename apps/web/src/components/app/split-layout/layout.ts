@@ -1,9 +1,10 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useContext } from 'solid-js';
 import { SplitPanelContext } from './context';
 import type {
   OpenWithSplitOptions,
+  PopoverSplitOptions,
   ReferredFrom,
   SplitContent,
 } from './layoutManager';
@@ -16,7 +17,7 @@ export function useSplitLayout() {
     options?: OpenWithSplitOptions
   ) {
     const splitManager = globalSplitManager();
-    const preferNewSplit = isMobile() ? false : options?.preferNewSplit;
+    const preferNewSplit = isTouchDevice() ? false : options?.preferNewSplit;
 
     if (!splitManager) {
       console.error('No split manager found');
@@ -78,13 +79,16 @@ export function useSplitLayout() {
     });
   }
 
-  function popoverSplit(content: SplitContent) {
+  function popoverSplit(
+    content: SplitContent,
+    options: Omit<PopoverSplitOptions, 'content'> = {}
+  ) {
     const splitManager = globalSplitManager();
     if (!splitManager) {
       console.error('no split manager found');
       return;
     }
-    return splitManager.createPopoverSplit({ content: content });
+    return splitManager.createPopoverSplit({ ...options, content });
   }
 
   function replaceAllSplits(

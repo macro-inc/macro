@@ -1,0 +1,1514 @@
+---
+source: crates/cursor_cloud_agents/src/replay/test.rs
+assertion_line: 208
+expression: updates(sse)
+input_file: crates/cursor_cloud_agents/fixtures/real/file_operations.sse
+---
+[
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "I will create a file"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " at /tmp/probe/a.txt"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " containing \"hello\","
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " read it back, rename"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " it to /tmp/probe/b.txt,"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " and delete it. All "
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "operations will use "
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "dedicated file tools"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " rather than shell commands."
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "\n\nThere is no dedicated"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " rename tool. I will"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " copy the file to the"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " new path with Write"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " and remove the original"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " with Delete."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "I'll"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " create"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "tmp"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "probe"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "a"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ".txt"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`,"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " read"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " it"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " back"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ","
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " rename"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " it"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " to"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "b"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ".txt"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`,"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " then"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " delete"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " it"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " —"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " using"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " file"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " tools"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " only"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ","
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " with"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " no"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " git"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " or"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " PR"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " steps"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "."
+    }
+  },
+  {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "call-71af3a36-3c6c-40d7-b88f-19979fe279ca-0 fc_90e85ad4-7ce2-9e55-a67b-d17c8e78618f_0",
+    "title": "edit_file",
+    "kind": "edit",
+    "status": "in_progress"
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-71af3a36-3c6c-40d7-b88f-19979fe279ca-0 fc_90e85ad4-7ce2-9e55-a67b-d17c8e78618f_0",
+    "kind": "edit",
+    "status": "in_progress",
+    "title": "edit_file",
+    "locations": [
+      {
+        "path": "/tmp/probe/a.txt"
+      }
+    ],
+    "rawInput": {
+      "path": "/tmp/probe/a.txt"
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-71af3a36-3c6c-40d7-b88f-19979fe279ca-0 fc_90e85ad4-7ce2-9e55-a67b-d17c8e78618f_0",
+    "kind": "edit",
+    "status": "in_progress",
+    "title": "edit_file",
+    "locations": [
+      {
+        "path": "/tmp/probe/a.txt"
+      }
+    ],
+    "rawInput": {
+      "path": "/tmp/probe/a.txt",
+      "streamContent": "hello"
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-71af3a36-3c6c-40d7-b88f-19979fe279ca-0 fc_90e85ad4-7ce2-9e55-a67b-d17c8e78618f_0",
+    "kind": "edit",
+    "status": "completed",
+    "title": "edit_file",
+    "content": [
+      {
+        "type": "diff",
+        "path": "/tmp/probe/a.txt",
+        "newText": "hello"
+      }
+    ],
+    "locations": [
+      {
+        "path": "/tmp/probe/a.txt"
+      }
+    ],
+    "rawInput": {
+      "path": "/tmp/probe/a.txt",
+      "streamContent": "hello"
+    },
+    "rawOutput": {
+      "result": {
+        "success": {
+          "path": "/tmp/probe/a.txt",
+          "linesAdded": 1,
+          "linesRemoved": 0,
+          "diffString": "--- /dev/null\n+++ b//tmp/probe/a.txt\n@@ -1,0 +1 @@\n+hello",
+          "afterFullFileContent": "hello",
+          "message": "Wrote contents to /tmp/probe/a.txt"
+        }
+      }
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "Created the file successfully."
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " Now reading it back."
+    }
+  },
+  {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "call-073b8aae-a653-4847-8117-cc475f1100f9-1 fc_d69ccb6f-3b8b-9bf4-b24d-c45ab287ea0e_0",
+    "title": "read_file",
+    "kind": "read",
+    "status": "in_progress"
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-073b8aae-a653-4847-8117-cc475f1100f9-1 fc_d69ccb6f-3b8b-9bf4-b24d-c45ab287ea0e_0",
+    "kind": "read",
+    "status": "in_progress",
+    "title": "read_file",
+    "locations": [
+      {
+        "path": "/tmp/probe/a.txt"
+      }
+    ],
+    "rawInput": {
+      "path": "/tmp/probe/a.txt"
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-073b8aae-a653-4847-8117-cc475f1100f9-1 fc_d69ccb6f-3b8b-9bf4-b24d-c45ab287ea0e_0",
+    "kind": "read",
+    "status": "completed",
+    "title": "read_file",
+    "locations": [
+      {
+        "path": "/tmp/probe/a.txt"
+      }
+    ],
+    "rawInput": {
+      "path": "/tmp/probe/a.txt"
+    },
+    "rawOutput": {
+      "result": {
+        "success": {
+          "content": "hello",
+          "totalLines": 1,
+          "fileSize": 5,
+          "path": "/tmp/probe/a.txt",
+          "readRange": {
+            "startLine": 1,
+            "endLine": 1
+          }
+        }
+      }
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "The file was created"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " and read back successfully."
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " Now renaming it to "
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "/tmp/probe/b.txt."
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "\n\nNo dedicated rename"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " tool exists. I'll copy"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " the file to the new"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " path and delete the"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " original."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "The"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " file"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " contains"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "hello"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " I’ll"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " copy"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " that"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " to"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "tmp"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "probe"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "b"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ".txt"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " and"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " remove"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "tmp"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "probe"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "a"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ".txt"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " to"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " rename"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " it"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ","
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " then"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " delete"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "b"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ".txt"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`."
+    }
+  },
+  {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "call-7550ddaf-e1b3-4a85-a7cd-1aec4cf2d354-2 fc_61803e91-ba52-99de-9d7e-66a941b13ffa_0",
+    "title": "edit_file",
+    "kind": "edit",
+    "status": "in_progress"
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-7550ddaf-e1b3-4a85-a7cd-1aec4cf2d354-2 fc_61803e91-ba52-99de-9d7e-66a941b13ffa_0",
+    "kind": "edit",
+    "status": "in_progress",
+    "title": "edit_file",
+    "locations": [
+      {
+        "path": "/tmp/probe/b.txt"
+      }
+    ],
+    "rawInput": {
+      "path": "/tmp/probe/b.txt"
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-7550ddaf-e1b3-4a85-a7cd-1aec4cf2d354-2 fc_61803e91-ba52-99de-9d7e-66a941b13ffa_0",
+    "kind": "edit",
+    "status": "in_progress",
+    "title": "edit_file",
+    "locations": [
+      {
+        "path": "/tmp/probe/b.txt"
+      }
+    ],
+    "rawInput": {
+      "path": "/tmp/probe/b.txt",
+      "streamContent": "hello"
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-7550ddaf-e1b3-4a85-a7cd-1aec4cf2d354-2 fc_61803e91-ba52-99de-9d7e-66a941b13ffa_0",
+    "kind": "edit",
+    "status": "completed",
+    "title": "edit_file",
+    "content": [
+      {
+        "type": "diff",
+        "path": "/tmp/probe/b.txt",
+        "newText": "hello"
+      }
+    ],
+    "locations": [
+      {
+        "path": "/tmp/probe/b.txt"
+      }
+    ],
+    "rawInput": {
+      "path": "/tmp/probe/b.txt",
+      "streamContent": "hello"
+    },
+    "rawOutput": {
+      "result": {
+        "success": {
+          "path": "/tmp/probe/b.txt",
+          "linesAdded": 1,
+          "linesRemoved": 0,
+          "diffString": "--- /dev/null\n+++ b//tmp/probe/b.txt\n@@ -1,0 +1 @@\n+hello",
+          "afterFullFileContent": "hello",
+          "message": "Wrote contents to /tmp/probe/b.txt"
+        }
+      }
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "Deleting a.txt and then"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " b.txt."
+    }
+  },
+  {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "call-0030ac8a-125f-4c64-99fb-2433876e5e74-3 fc_9416dae7-fff6-9502-822d-044f9cdb491e_0",
+    "title": "delete_file",
+    "kind": "delete",
+    "status": "in_progress"
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-0030ac8a-125f-4c64-99fb-2433876e5e74-3 fc_9416dae7-fff6-9502-822d-044f9cdb491e_0",
+    "kind": "delete",
+    "status": "in_progress",
+    "title": "delete_file",
+    "locations": [
+      {
+        "path": "/tmp/probe/a.txt"
+      }
+    ],
+    "rawInput": {
+      "path": "/tmp/probe/a.txt",
+      "toolCallId": "call-0030ac8a-125f-4c64-99fb-2433876e5e74-3\nfc_9416dae7-fff6-9502-822d-044f9cdb491e_0"
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-0030ac8a-125f-4c64-99fb-2433876e5e74-3 fc_9416dae7-fff6-9502-822d-044f9cdb491e_0",
+    "kind": "delete",
+    "status": "completed",
+    "title": "delete_file",
+    "locations": [
+      {
+        "path": "/tmp/probe/a.txt"
+      }
+    ],
+    "rawInput": {
+      "path": "/tmp/probe/a.txt",
+      "toolCallId": "call-0030ac8a-125f-4c64-99fb-2433876e5e74-3\nfc_9416dae7-fff6-9502-822d-044f9cdb491e_0"
+    },
+    "rawOutput": {
+      "result": {
+        "success": {
+          "path": "/tmp/probe/a.txt",
+          "deletedFile": "/tmp/probe/a.txt",
+          "fileSize": "5",
+          "prevContent": "hello"
+        }
+      }
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "The file was renamed"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " to b.txt and then deleted."
+    }
+  },
+  {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "call-a17661fe-25c3-4ab9-9b07-7855ed67e238-4 fc_5fc6b01a-2fa9-91e0-a121-4cbc1e561fba_0",
+    "title": "delete_file",
+    "kind": "delete",
+    "status": "in_progress"
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-a17661fe-25c3-4ab9-9b07-7855ed67e238-4 fc_5fc6b01a-2fa9-91e0-a121-4cbc1e561fba_0",
+    "kind": "delete",
+    "status": "in_progress",
+    "title": "delete_file",
+    "locations": [
+      {
+        "path": "/tmp/probe/b.txt"
+      }
+    ],
+    "rawInput": {
+      "path": "/tmp/probe/b.txt",
+      "toolCallId": "call-a17661fe-25c3-4ab9-9b07-7855ed67e238-4\nfc_5fc6b01a-2fa9-91e0-a121-4cbc1e561fba_0"
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-a17661fe-25c3-4ab9-9b07-7855ed67e238-4 fc_5fc6b01a-2fa9-91e0-a121-4cbc1e561fba_0",
+    "kind": "delete",
+    "status": "completed",
+    "title": "delete_file",
+    "locations": [
+      {
+        "path": "/tmp/probe/b.txt"
+      }
+    ],
+    "rawInput": {
+      "path": "/tmp/probe/b.txt",
+      "toolCallId": "call-a17661fe-25c3-4ab9-9b07-7855ed67e238-4\nfc_5fc6b01a-2fa9-91e0-a121-4cbc1e561fba_0"
+    },
+    "rawOutput": {
+      "result": {
+        "success": {
+          "path": "/tmp/probe/b.txt",
+          "deletedFile": "/tmp/probe/b.txt",
+          "fileSize": "5",
+          "prevContent": "hello"
+        }
+      }
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "Created /tmp/probe/a.txt"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " with \"hello\", read "
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "it back, renamed it "
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "to /tmp/probe/b.txt,"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " and deleted it. No "
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "commits, pushes, or "
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "pull requests were made."
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "\n\nNo rename tool was available, so the rename was done by writing the new file and deleting the old one."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "Created"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "tmp"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "probe"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "a"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ".txt"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " with"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "hello"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`,"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " read"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " it"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " back"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " successfully"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ","
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " renamed"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " it"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " to"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "tmp"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "probe"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "b"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ".txt"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " ("
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "write"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " +"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " delete"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ","
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " since"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " there"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " is"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " no"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " dedicated"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " rename"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " tool"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "),"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " then"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " deleted"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "tmp"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "probe"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "b"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ".txt"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " No"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " commit"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ","
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " push"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ","
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " or"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " PR"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "."
+    }
+  }
+]

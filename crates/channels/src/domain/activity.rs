@@ -137,9 +137,16 @@ impl ActivitySource for ChannelTopicEvent {
             };
 
         match self {
-            ChannelTopicEvent::Created(m) => {
-                common(m.actor.clone(), CommonAction::Created, m.channel_id, now())
-            }
+            ChannelTopicEvent::Created(m) => Ingest::Insert(vec![Activity::common(
+                event_id,
+                0,
+                m.actor.clone(),
+                m.on_behalf_of.clone(),
+                EntityType::Channel,
+                m.channel_id.to_string(),
+                CommonAction::Created,
+                now(),
+            )]),
             ChannelTopicEvent::Updated(m) => common(
                 Actor::new_from_user(m.actor.clone()),
                 CommonAction::Edited,

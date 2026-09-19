@@ -1,4 +1,19 @@
 import {
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
+import { handleAgentSessionQueue } from '@queries/agent-session/queue-sync';
+import {
+  AGENT_SESSION_LOG_EVENT,
+  AGENT_SESSION_QUEUE_EVENT,
+  AGENT_SESSION_RENAMED_EVENT,
+  type AgentSessionLogEvent,
+  type AgentSessionQueueEvent,
+  type AgentSessionRenamedEvent,
+} from '@queries/agent-session/realtime-protocol';
+import { handleAgentSessionLog } from '@queries/agent-session/session-fold';
+import { handleAgentSessionRenamed } from '@queries/agent-session/session-metadata-sync';
+import {
   handleCommsAttachment,
   handleCommsMessage,
   handleCommsReaction,
@@ -50,6 +65,33 @@ export function QuerySyncProvider(props: SyncProviderProps) {
       .with({ type: 'comms_message' }, () => {
         withParsedWebsocketPayload(data.type, data.data, handleCommsMessage);
       })
+      // One frame appended to a live agent session's log. Routed to the
+      // channel's fold rather than to any cache: the frame is not a message,
+      // it is a step towards one, and only the fold knows which.
+      .with({ type: AGENT_SESSION_LOG_EVENT }, () => {
+        withParsedWebsocketPayload<AgentSessionLogEvent>(
+          data.type,
+          data.data,
+          handleAgentSessionLog
+        );
+      })
+      .with({ type: AGENT_SESSION_RENAMED_EVENT }, () => {
+        withParsedWebsocketPayload<AgentSessionRenamedEvent>(
+          data.type,
+          data.data,
+          handleAgentSessionRenamed
+        );
+      })
+      // A session's whole action queue after a change. Full snapshot every
+      // time: once one has arrived on this socket, the socket is the queue's
+      // only writer and the last event wins unconditionally.
+      .with({ type: AGENT_SESSION_QUEUE_EVENT }, () => {
+        withParsedWebsocketPayload<AgentSessionQueueEvent>(
+          data.type,
+          data.data,
+          handleAgentSessionQueue
+        );
+      })
       .with({ type: 'comms_reaction' }, () => {
         withParsedWebsocketPayload(data.type, data.data, handleCommsReaction);
       })
@@ -68,6 +110,7 @@ export function QuerySyncProvider(props: SyncProviderProps) {
         );
       })
       .with({ type: 'notification_status_updated' }, () => {
+        if (isFeatureEnabled(enableGraphqlSoup)) return;
         const result = notificationStatusUpdatePayloadSchema.safeParse(
           data.data
         );

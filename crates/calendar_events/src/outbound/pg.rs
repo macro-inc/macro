@@ -1,6 +1,6 @@
 //! PostgreSQL implementation of the calendar repository port.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, NaiveDate, Utc};
 use futures::try_join;
@@ -11,19 +11,25 @@ use uuid::Uuid;
 
 use crate::domain::{
     models::{
-        AppliedGoogleGrant, AttendeeResponseStatus, CalendarAttendee, CalendarBackfillClaim,
+        ActorInboxes, AppliedGoogleGrant, AttendeeResponseStatus,
+        CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD, CalendarAttendee, CalendarBackfillClaim,
         CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJob,
         CalendarBackfillJobKey, CalendarBackfillKind, CalendarCreationTarget, CalendarEvent,
         CalendarEventMutationTarget, CalendarEventOverride, CalendarEventSource,
-        CalendarEventUpsert, CalendarLinkTokenIdentity, CalendarOccurrence,
-        CalendarOccurrenceCursor, CalendarSyncStatus, EventStart, EventStatus, EventTime,
-        EventTransparency, EventVisibility, GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot,
-        GoogleScopeSet, GoogleWatchChannel, OccurrenceRange, ProviderCalendar,
-        StoredGoogleCalendar, VisibleCalendar,
+        CalendarEventSourceContent, CalendarEventUpsert, CalendarGrantIntent,
+        CalendarLinkTokenIdentity, CalendarMentionEvent, CalendarMentionPreview,
+        CalendarMentionRequestItem, CalendarOccurrence, CalendarOccurrenceCursor,
+        CalendarReminderFiring, CalendarSyncStatus, CalendarWatchRelease, ConferenceProvider,
+        DisconnectedGoogleCalendar, DueCalendarReminder, EventReminderOverride, EventReminders,
+        EventStart, EventStatus, EventTime, EventTransparency, EventType, EventVisibility,
+        GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleScopeSet, GoogleWatchChannel,
+        OccurrenceRange, ProviderCalendar, StoredGoogleCalendar, TeamOutOfOffice, VisibleCalendar,
+        is_system_calendar,
     },
     ports::{
-        CalendarBackfillRepository, CalendarEventWrite, CalendarRepository,
-        GoogleCalendarSyncRepository,
+        CalendarBackfillRepository, CalendarEventChange, CalendarEventWrite,
+        CalendarEventWriteOutcome, CalendarReminderDispatchRepo, CalendarRepository,
+        GoogleCalendarSyncRepository, RetiredCalendarEvent,
     },
 };
 
@@ -205,7 +211,9 @@ impl PgCalendarRepository {
 
     #[cfg(test)]
     async fn upsert_event_fixture(&self, upsert: CalendarEventUpsert) -> Result<Uuid, Report> {
-        self.upsert_event(CalendarEventWrite::Fixture(upsert)).await
+        self.upsert_event(CalendarEventWrite::Fixture(upsert))
+            .await
+            .map(|outcome| outcome.event_id)
     }
 
     #[cfg(test)]
@@ -230,7 +238,8 @@ impl PgCalendarRepository {
                 l.macro_id,
                 l.email_address::text AS "email_address!",
                 COALESCE(g.granted_scopes, '{}') AS "granted_scopes!",
-                COALESCE(g.grant_version, 0) AS "grant_version!"
+                COALESCE(g.grant_version, 0) AS "grant_version!",
+                g.calendar_disabled_at
             FROM email_links l
             LEFT JOIN email_link_google_scopes g ON g.link_id = l.id
             WHERE l.id = $1
@@ -253,6 +262,7 @@ struct GrantRow {
     email_address: String,
     granted_scopes: Vec<String>,
     grant_version: i64,
+    calendar_disabled_at: Option<DateTime<Utc>>,
 }
 
 struct StoredCalendarRow {
@@ -268,7 +278,6 @@ struct StoredCalendarRow {
 
 struct OccurrenceJoinRow {
     event_id: Uuid,
-    canonical_calendar_id: Option<Uuid>,
     occurrence_key: String,
     recurrence_id: Option<String>,
     occurrence_starts_at: Option<DateTime<Utc>>,
@@ -284,6 +293,7 @@ struct OccurrenceJoinRow {
     status: String,
     visibility: String,
     transparency: String,
+    event_type: String,
     starts_at: Option<DateTime<Utc>>,
     ends_at: Option<DateTime<Utc>>,
     start_date: Option<NaiveDate>,
@@ -292,11 +302,38 @@ struct OccurrenceJoinRow {
     recurrence_lines: Vec<String>,
     organizer_email: Option<String>,
     organizer_name: Option<String>,
+    creator_email: Option<String>,
+    creator_name: Option<String>,
     conference_url: Option<String>,
+    conference_provider: Option<String>,
     sequence: i32,
     is_read_only: bool,
+    reminders_use_default: bool,
+    reminder_overrides: serde_json::Value,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
+}
+
+struct MentionPreviewRow {
+    mention_exists: bool,
+    viewer_event_id: Option<Uuid>,
+    title: Option<String>,
+    location: Option<String>,
+    organizer_email: Option<String>,
+    organizer_name: Option<String>,
+    recurrence_lines: Option<Vec<String>>,
+    event_starts_at: Option<DateTime<Utc>>,
+    event_ends_at: Option<DateTime<Utc>>,
+    event_start_date: Option<NaiveDate>,
+    event_end_date: Option<NaiveDate>,
+    time_zone: Option<String>,
+    updated_at: Option<DateTime<Utc>>,
+    occurrence_key: Option<String>,
+    occurrence_starts_at: Option<DateTime<Utc>>,
+    occurrence_ends_at: Option<DateTime<Utc>>,
+    occurrence_start_date: Option<NaiveDate>,
+    occurrence_end_date: Option<NaiveDate>,
+    attendee_count: Option<i64>,
 }
 
 struct OverrideAttendeeRow {
@@ -346,6 +383,7 @@ impl CalendarRepository for PgCalendarRepository {
         &self,
         email_link_id: Uuid,
         scopes: GoogleScopeSet,
+        intent: CalendarGrantIntent,
     ) -> Result<AppliedGoogleGrant, Report> {
         let mut tx = self.pool.begin().await.map_err(report)?;
         // The email_links row remains the grant serialization point. Every
@@ -357,7 +395,8 @@ impl CalendarRepository for PgCalendarRepository {
                 l.macro_id,
                 l.email_address::text AS "email_address!",
                 COALESCE(g.granted_scopes, '{}') AS "granted_scopes!",
-                COALESCE(g.grant_version, 0) AS "grant_version!"
+                COALESCE(g.grant_version, 0) AS "grant_version!",
+                g.calendar_disabled_at
             FROM email_links l
             LEFT JOIN email_link_google_scopes g ON g.link_id = l.id
             WHERE l.id = $1
@@ -369,10 +408,25 @@ impl CalendarRepository for PgCalendarRepository {
         .await
         .map_err(report)?;
 
+        // The user's own opt-out outranks whatever Google reports. Consent
+        // requests carry `include_granted_scopes=true`, so a plain Gmail
+        // reconnect hands back the calendar scopes of an earlier grant; only a
+        // flow that explicitly asked for calendar counts as re-enabling it.
+        let clear_opt_out = matches!(intent, CalendarGrantIntent::CalendarRequested);
+        let calendar_opted_out = row.calendar_disabled_at.is_some() && !clear_opt_out;
+        let scopes = if calendar_opted_out {
+            scopes.without_calendar()
+        } else {
+            scopes
+        };
+
         let old_scopes = GoogleScopeSet::from_scopes(row.granted_scopes);
         let had_calendar_capability = old_scopes.has_calendar_capability();
         let changed = old_scopes != scopes;
         if !changed {
+            if clear_opt_out {
+                clear_calendar_opt_out_tx(&mut tx, email_link_id).await?;
+            }
             let jobs = if scopes.has_calendar_capability() {
                 retry_failed_backfills_tx(&mut tx, email_link_id, row.grant_version).await?
             } else {
@@ -395,11 +449,16 @@ impl CalendarRepository for PgCalendarRepository {
             ON CONFLICT (link_id) DO UPDATE
             SET granted_scopes = EXCLUDED.granted_scopes,
                 grant_version = EXCLUDED.grant_version,
+                calendar_disabled_at = CASE
+                    WHEN $4 THEN NULL
+                    ELSE email_link_google_scopes.calendar_disabled_at
+                END,
                 updated_at = now()
             "#,
             email_link_id,
             &granted_scopes,
             grant_version,
+            clear_opt_out,
         )
         .execute(&mut *tx)
         .await
@@ -470,9 +529,118 @@ impl CalendarRepository for PgCalendarRepository {
         })
     }
 
-    #[tracing::instrument(skip(self, write), err)]
-    async fn upsert_event(&self, write: CalendarEventWrite) -> Result<Uuid, Report> {
+    #[tracing::instrument(skip(self, requester_id), err)]
+    async fn disconnect_google_calendar(
+        &self,
+        requester_id: &str,
+        email_link_id: Uuid,
+    ) -> Result<Option<DisconnectedGoogleCalendar>, Report> {
         let mut tx = self.pool.begin().await.map_err(report)?;
+        // Same serialization point and lock order as grant application, so a
+        // consent landing concurrently either precedes or follows this removal.
+        // Only the inbox's owner may disconnect it: a delegate reads the
+        // owner's calendar and must not be able to delete the owner's data.
+        let row = sqlx::query!(
+            r#"
+            SELECT
+                l.fusionauth_user_id,
+                l.email_address::text AS "email_address!",
+                l.provider::text AS "provider!",
+                COALESCE(g.granted_scopes, '{}') AS "granted_scopes!"
+            FROM email_links l
+            LEFT JOIN email_link_google_scopes g ON g.link_id = l.id
+            WHERE l.id = $1 AND l.macro_id = $2
+            FOR UPDATE OF l
+            "#,
+            email_link_id,
+            requester_id,
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(report)?;
+        let Some(row) = row else {
+            return Ok(None);
+        };
+
+        // Read the open channels before the calendars go away; the caller
+        // closes them at Google once the local removal has committed.
+        let watch_channels = sqlx::query!(
+            r#"
+            SELECT
+                c.watch_channel_id AS "channel_id!",
+                c.watch_resource_id AS "resource_id!"
+            FROM calendars c
+            JOIN calendar_accounts a ON a.id = c.account_id
+            WHERE a.email_link_id = $1
+              AND c.watch_channel_id IS NOT NULL
+              AND c.watch_resource_id IS NOT NULL
+            "#,
+            email_link_id,
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(report)?
+        .into_iter()
+        .map(|row| CalendarWatchRelease {
+            channel_id: row.channel_id,
+            resource_id: row.resource_id,
+        })
+        .collect();
+
+        let granted_scopes = GoogleScopeSet::from_scopes(row.granted_scopes)
+            .without_calendar()
+            .into_vec();
+        let grant_version = sqlx::query_scalar!(
+            r#"
+            INSERT INTO email_link_google_scopes (
+                link_id, granted_scopes, grant_version, calendar_disabled_at
+            )
+            VALUES ($1, $2, 1, now())
+            ON CONFLICT (link_id) DO UPDATE
+            SET granted_scopes = EXCLUDED.granted_scopes,
+                grant_version = email_link_google_scopes.grant_version + 1,
+                calendar_disabled_at = now(),
+                updated_at = now()
+            RETURNING grant_version AS "grant_version!"
+            "#,
+            email_link_id,
+            &granted_scopes,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(report)?;
+
+        // Fence anything mid-flight against the superseded grant, then tear
+        // the local projection down and drop the account itself, which
+        // cascades its calendars and backfill jobs.
+        invalidate_stale_google_jobs_tx(&mut tx, email_link_id, grant_version).await?;
+        disable_google_calendar_capability_tx(&mut tx, email_link_id).await?;
+        sqlx::query!(
+            "DELETE FROM calendar_accounts WHERE email_link_id = $1",
+            email_link_id,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(report)?;
+
+        tx.commit().await.map_err(report)?;
+        Ok(Some(DisconnectedGoogleCalendar {
+            token_identity: CalendarLinkTokenIdentity {
+                fusionauth_user_id: row.fusionauth_user_id,
+                email_address: row.email_address,
+                provider: row.provider,
+            },
+            watch_channels,
+        }))
+    }
+
+    #[tracing::instrument(skip(self, write), err)]
+    async fn upsert_event(
+        &self,
+        write: CalendarEventWrite,
+    ) -> Result<CalendarEventWriteOutcome, Report> {
+        let mut tx = self.pool.begin().await.map_err(report)?;
+        let user_mutation = matches!(write, CalendarEventWrite::UserMutation(_));
         let upsert = match write {
             CalendarEventWrite::GoogleBackfill {
                 key,
@@ -510,7 +678,7 @@ impl CalendarRepository for PgCalendarRepository {
         // path entirely so rebuilds cost reads, not occurrence churn.
         let existing = sqlx::query!(
             r#"
-            SELECT event_id, normalized_payload
+            SELECT event_id, normalized_payload, source_sequence
             FROM calendar_event_sources
             WHERE source_kind = 'google'
               AND account_id = $1
@@ -524,71 +692,56 @@ impl CalendarRepository for PgCalendarRepository {
         .fetch_optional(&mut *tx)
         .await
         .map_err(report)?;
-        if let Some(row) = existing {
+        if let Some(row) = &existing {
             let incoming =
                 serde_json::to_value(StoredSourceProjection::from(&upsert)).map_err(report)?;
             if canonical_projection(&row.normalized_payload) == canonical_projection(&incoming) {
                 tx.commit().await.map_err(report)?;
-                return Ok(row.event_id);
+                return Ok(CalendarEventWriteOutcome {
+                    event_id: row.event_id,
+                    owner_id: upsert.event.owner_id.clone(),
+                    change: CalendarEventChange::Unchanged,
+                });
             }
         }
 
+        let incoming_sequence = db_sequence(upsert.event.sequence)?;
+        let copy_advanced = existing
+            .as_ref()
+            .is_none_or(|row| incoming_sequence > row.source_sequence);
         let (starts_at, ends_at, start_date, end_date, time_zone) = split_time(&upsert.event.time);
-        let proposed_id = upsert.event.id;
 
-        // Google is the authoritative source when the same RFC UID was first
-        // discovered in email. Email can still create/update entities that do
-        // not yet have a Google source.
-        let applied_id = sqlx::query_scalar!(
+        // The entity row is created by whichever source arrives first and
+        // carries that source's content until a better-ranked source claims
+        // it below. An existing row is left alone here: its content belongs
+        // to its canonical source, not to whichever copy synced last.
+        let inserted = sqlx::query_scalar!(
             r#"
             INSERT INTO calendar_events (
                 id, owner_id, source_link_id, ical_uid, title, description, location,
-                status, visibility, transparency,
+                status, visibility, transparency, event_type,
                 starts_at, ends_at, start_date, end_date, time_zone,
                 recurrence_lines, organizer_email, organizer_name,
-                conference_url, sequence, is_read_only, canonical_source_kind,
-                canonical_source_updated_at,
-                created_at, updated_at
+                creator_email, creator_name,
+                conference_url, conference_provider, sequence, is_read_only,
+                canonical_source_kind,
+                reminders_use_default, reminder_overrides,
+                created_at, updated_at, schedule_updated_at
             )
             VALUES (
                 $1, $2, $3, $4, $5, $6, $7,
-                $8, $9, $10,
+                $8, $9, $10, $30,
                 $11, $12, $13, $14, $15,
                 $16, $17, $18,
-                $19, $20, $21, $22, $24,
-                $23, $24
+                $28, $29,
+                $19, $27, $20, $21, $22,
+                $25, $26,
+                $23, $24, $24
             )
-            ON CONFLICT (owner_id, source_link_id, ical_uid) DO UPDATE SET
-                title = EXCLUDED.title,
-                description = EXCLUDED.description,
-                location = EXCLUDED.location,
-                status = EXCLUDED.status,
-                visibility = EXCLUDED.visibility,
-                transparency = EXCLUDED.transparency,
-                starts_at = EXCLUDED.starts_at,
-                ends_at = EXCLUDED.ends_at,
-                start_date = EXCLUDED.start_date,
-                end_date = EXCLUDED.end_date,
-                time_zone = EXCLUDED.time_zone,
-                recurrence_lines = EXCLUDED.recurrence_lines,
-                organizer_email = EXCLUDED.organizer_email,
-                organizer_name = EXCLUDED.organizer_name,
-                conference_url = EXCLUDED.conference_url,
-                sequence = EXCLUDED.sequence,
-                is_read_only = EXCLUDED.is_read_only,
-                canonical_source_kind = EXCLUDED.canonical_source_kind,
-                canonical_source_updated_at = EXCLUDED.canonical_source_updated_at,
-                updated_at = GREATEST(calendar_events.updated_at, EXCLUDED.updated_at)
-            WHERE
-                EXCLUDED.sequence > calendar_events.sequence
-                OR (
-                    EXCLUDED.sequence = calendar_events.sequence
-                    AND EXCLUDED.canonical_source_updated_at
-                        >= calendar_events.canonical_source_updated_at
-                )
+            ON CONFLICT (owner_id, source_link_id, ical_uid) DO NOTHING
             RETURNING id
             "#,
-            proposed_id,
+            upsert.event.id,
             &upsert.event.owner_id,
             source_link_id,
             &upsert.event.ical_uid,
@@ -607,47 +760,100 @@ impl CalendarRepository for PgCalendarRepository {
             upsert.event.organizer_email.as_deref(),
             upsert.event.organizer_name.as_deref(),
             upsert.event.conference_url.as_deref(),
-            db_sequence(upsert.event.sequence)?,
+            incoming_sequence,
             upsert.event.is_read_only,
             source_kind,
             upsert.event.created_at,
             upsert.event.updated_at,
+            upsert.event.reminders.use_default,
+            serde_json::to_value(&upsert.event.reminders.overrides).map_err(report)?,
+            upsert
+                .event
+                .conference_provider
+                .map(ConferenceProvider::as_str),
+            upsert.event.creator_email.as_deref(),
+            upsert.event.creator_name.as_deref(),
+            upsert.event.event_type.as_str(),
         )
         .fetch_optional(&mut *tx)
         .await
         .map_err(report)?;
-
-        let event_id = match applied_id {
-            Some(id) => id,
-            None => sqlx::query_scalar!(
-                "SELECT id FROM calendar_events WHERE owner_id = $1 AND source_link_id = $2 AND ical_uid = $3",
-                &upsert.event.owner_id,
-                source_link_id,
-                &upsert.event.ical_uid,
-            )
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(report)?,
+        let (event_id, inserted) = match inserted {
+            Some(id) => (id, true),
+            None => (
+                sqlx::query_scalar!(
+                    "SELECT id FROM calendar_events WHERE owner_id = $1 AND source_link_id = $2 AND ical_uid = $3",
+                    &upsert.event.owner_id,
+                    source_link_id,
+                    &upsert.event.ical_uid,
+                )
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(report)?,
+                false,
+            ),
         };
 
-        persist_source(&mut tx, event_id, &upsert).await?;
+        // The source row carries this copy's own content under its own
+        // freshness guard. A stale copy changes nothing at all.
+        let Some(source_id) = persist_source(&mut tx, event_id, &upsert).await? else {
+            tx.commit().await.map_err(report)?;
+            return Ok(CalendarEventWriteOutcome {
+                event_id,
+                owner_id: upsert.event.owner_id.clone(),
+                change: CalendarEventChange::Unchanged,
+            });
+        };
 
-        // Only the source selected as canonical replaces projections and
-        // attendees. Lower-sequence/stale sources are still recorded above.
-        if applied_id.is_some() {
-            replace_attendees(&mut tx, event_id, &upsert.event.attendees).await?;
-            replace_overrides(&mut tx, event_id, &upsert.overrides).await?;
-            replace_occurrences(
+        // Content always follows the canonical copy. The schedule follows
+        // whichever copy last wrote it: the canonical copy takes it when that
+        // copy is new to Macro, advanced its own sequence, or is at least as
+        // fresh as the write it replaces, a user edit through another copy
+        // lands when it is at least that fresh, and the copy that wrote the
+        // schedule keeps writing it until then.
+        let canonical = canonical_source(&mut tx, event_id).await?;
+        let schedule = schedule_owner(&mut tx, event_id).await?;
+        let projection = StoredSourceProjection::from(&upsert);
+        let is_canonical =
+            canonical.as_ref().map(|canonical| canonical.source_id) == Some(source_id);
+        let owns_schedule = schedule.source_id == Some(source_id);
+        let writes_schedule = if is_canonical {
+            owns_schedule || copy_advanced || upsert.event.updated_at >= schedule.updated_at
+        } else if user_mutation {
+            upsert.event.updated_at >= schedule.updated_at
+        } else {
+            owns_schedule
+        };
+        if is_canonical {
+            apply_content_projection(&mut tx, event_id, source_id, &projection, source_kind)
+                .await?;
+        }
+        if writes_schedule {
+            if is_canonical {
+                apply_schedule_projection(&mut tx, event_id, source_id, &projection).await?;
+            } else {
+                apply_time_projection(&mut tx, event_id, source_id, &projection).await?;
+            }
+        }
+        if is_canonical || writes_schedule {
+            rebuild_entity_reminder_firings(
                 &mut tx,
                 event_id,
-                &upsert.event.owner_id,
-                &upsert.occurrences,
+                canonical.map(|canonical| canonical.calendar_id),
             )
             .await?;
         }
 
         tx.commit().await.map_err(report)?;
-        Ok(event_id)
+        Ok(CalendarEventWriteOutcome {
+            event_id,
+            owner_id: upsert.event.owner_id.clone(),
+            change: if inserted {
+                CalendarEventChange::Created
+            } else {
+                CalendarEventChange::Updated
+            },
+        })
     }
 
     #[tracing::instrument(skip(self, requester_id, range), err)]
@@ -666,7 +872,6 @@ impl CalendarRepository for PgCalendarRepository {
             r#"
             SELECT
                 occurrence.event_id,
-                canonical_source.calendar_id AS "canonical_calendar_id?",
                 occurrence.occurrence_key,
                 occurrence.recurrence_id,
                 occurrence.starts_at AS occurrence_starts_at,
@@ -682,6 +887,7 @@ impl CalendarRepository for PgCalendarRepository {
                 event.status,
                 event.visibility,
                 event.transparency,
+                event.event_type,
                 event.starts_at,
                 event.ends_at,
                 event.start_date,
@@ -690,28 +896,18 @@ impl CalendarRepository for PgCalendarRepository {
                 event.recurrence_lines,
                 event.organizer_email,
                 event.organizer_name,
+                event.creator_email,
+                event.creator_name,
                 event.conference_url,
+                event.conference_provider,
                 event.sequence,
                 event.is_read_only,
+                event.reminders_use_default,
+                event.reminder_overrides,
                 event.created_at,
                 event.updated_at
             FROM calendar_event_occurrences occurrence
             JOIN calendar_events event ON event.id = occurrence.event_id
-            LEFT JOIN LATERAL (
-                SELECT source.calendar_id
-                FROM calendar_event_sources source
-                JOIN calendars calendar ON calendar.id = source.calendar_id
-                JOIN calendar_accounts account ON account.id = source.account_id
-                WHERE source.event_id = event.id
-                  AND NOT calendar.is_deleted
-                  AND account.sync_status <> 'disabled'
-                ORDER BY
-                    source.source_sequence DESC,
-                    source.source_updated_at DESC,
-                    source.last_seen_at DESC,
-                    source.id DESC
-                LIMIT 1
-            ) canonical_source ON true
             WHERE occurrence.owner_id IN (
                     SELECT $1::text
                     UNION
@@ -765,9 +961,10 @@ impl CalendarRepository for PgCalendarRepository {
         .await
         .map_err(report)?;
         let event_ids: Vec<_> = rows.iter().map(|row| row.event_id).collect();
-        let (attendees, override_attendees) = try_join!(
+        let (attendees, override_attendees, source_contents) = try_join!(
             fetch_attendees(&self.pool, &event_ids),
             fetch_override_attendees(&self.pool, &event_ids),
+            fetch_source_contents(&self.pool, &event_ids),
         )?;
         rows.into_iter()
             .map(|row| {
@@ -785,10 +982,249 @@ impl CalendarRepository for PgCalendarRepository {
                     .or_else(|| attendees.get(&event_id))
                     .cloned()
                     .unwrap_or_default();
-                let event = event_from_join(row, effective)?;
+                let sources = source_contents.get(&event_id).cloned().unwrap_or_default();
+                let event = event_from_join(row, effective, sources)?;
                 Ok((event, occurrence))
             })
             .collect()
+    }
+
+    #[tracing::instrument(skip(self, requester_id, range), err)]
+    async fn list_team_out_of_office(
+        &self,
+        requester_id: &str,
+        range: OccurrenceRange,
+        limit: u16,
+    ) -> Result<Vec<TeamOutOfOffice>, Report> {
+        // Type, title, and visibility come from the teammate's primary
+        // calendar copy, so a shared calendar's re-import of the event (which
+        // flattens the type and brackets the title) neither hides their status
+        // nor renames it, and an out-of-office event on a calendar they merely
+        // subscribe to belongs to that calendar's owner, not to them. DISTINCT
+        // ON collapses the same provider event synced through more than one of
+        // the teammate's inboxes before the limit, so duplicates never eat
+        // page slots or skew the caller's truncation detection.
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                owner_id AS "owner_id!",
+                event_id AS "event_id!",
+                ical_uid AS "ical_uid!",
+                occurrence_key AS "occurrence_key!",
+                title AS "title!",
+                visibility AS "visibility!",
+                time_zone,
+                occurrence_starts_at AS "occurrence_starts_at?",
+                occurrence_ends_at AS "occurrence_ends_at?",
+                occurrence_start_date AS "occurrence_start_date?",
+                occurrence_end_date AS "occurrence_end_date?"
+            FROM (
+                SELECT DISTINCT ON (event.owner_id, event.ical_uid, occurrence.occurrence_key)
+                    event.owner_id,
+                    occurrence.event_id,
+                    event.ical_uid,
+                    occurrence.occurrence_key,
+                    source.title,
+                    source.visibility,
+                    event.time_zone,
+                    occurrence.starts_at AS occurrence_starts_at,
+                    occurrence.ends_at AS occurrence_ends_at,
+                    occurrence.start_date AS occurrence_start_date,
+                    occurrence.end_date AS occurrence_end_date,
+                    COALESCE(
+                        occurrence.starts_at,
+                        occurrence.start_date::timestamp AT TIME ZONE 'UTC'
+                    ) AS occurrence_ordering
+                FROM calendar_event_occurrences occurrence
+                JOIN calendar_events event ON event.id = occurrence.event_id
+                JOIN calendar_event_sources source ON source.event_id = event.id
+                JOIN calendars calendar
+                  ON calendar.id = source.calendar_id
+                 AND calendar.is_primary
+                 AND NOT calendar.is_deleted
+                JOIN calendar_accounts account
+                  ON account.id = source.account_id
+                 AND account.sync_status <> 'disabled'
+                WHERE occurrence.owner_id IN (
+                        SELECT teammate.user_id
+                        FROM team_user membership
+                        JOIN team_user teammate ON teammate.team_id = membership.team_id
+                        WHERE membership.user_id = $1
+                          AND teammate.user_id <> $1
+                  )
+                  AND source.event_type = 'out_of_office'
+                  AND event.status <> 'cancelled'
+                  AND NOT occurrence.is_cancelled
+                  AND (
+                        occurrence.timed_span && tstzrange($2, $3, '[)')
+                        OR occurrence.day_span && daterange($4, $5, '[)')
+                  )
+                ORDER BY
+                    event.owner_id,
+                    event.ical_uid,
+                    occurrence.occurrence_key,
+                    occurrence.event_id,
+                    source.source_sequence DESC,
+                    source.source_updated_at DESC,
+                    source.id DESC
+            ) occurrence
+            ORDER BY
+                occurrence.occurrence_ordering,
+                occurrence.event_id,
+                occurrence.occurrence_key
+            LIMIT $6
+            "#,
+            requester_id,
+            range.starts_at,
+            range.ends_at,
+            range.start_date,
+            range.end_date,
+            i64::from(limit),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(report)?;
+        rows.into_iter()
+            .map(|row| {
+                Ok(TeamOutOfOffice {
+                    owner_id: row.owner_id,
+                    event_id: row.event_id,
+                    ical_uid: row.ical_uid,
+                    occurrence_key: row.occurrence_key,
+                    title: Some(row.title),
+                    visibility: event_visibility(&row.visibility),
+                    time: row_time(
+                        row.occurrence_starts_at,
+                        row.occurrence_ends_at,
+                        row.occurrence_start_date,
+                        row.occurrence_end_date,
+                        row.time_zone,
+                    )?,
+                })
+            })
+            .collect()
+    }
+
+    #[tracing::instrument(skip(self, requester_id, items), err)]
+    async fn mention_previews(
+        &self,
+        requester_id: &str,
+        items: Vec<CalendarMentionRequestItem>,
+        now: DateTime<Utc>,
+    ) -> Result<Vec<CalendarMentionPreview>, Report> {
+        let event_ids: Vec<Uuid> = items.iter().map(|item| item.event_id).collect();
+        let occurrence_keys: Vec<Option<String>> = items
+            .iter()
+            .map(|item| item.occurrence_key.clone())
+            .collect();
+        // The viewer lateral resolves the mentioned meeting to the
+        // requester's own projection through the shared iCalendar UID,
+        // preferring an owned copy over a delegated one and the mentioned
+        // row itself among ties, so the preview only ever reads rows the
+        // requester could already see on their calendar.
+        let rows = sqlx::query_as!(
+            MentionPreviewRow,
+            r#"
+            SELECT
+                (mentioned.id IS NOT NULL) AS "mention_exists!",
+                viewer_event.id AS "viewer_event_id?",
+                viewer_event.title AS "title?",
+                viewer_event.location AS "location?",
+                viewer_event.organizer_email AS "organizer_email?",
+                viewer_event.organizer_name AS "organizer_name?",
+                viewer_event.recurrence_lines AS "recurrence_lines?",
+                viewer_event.starts_at AS "event_starts_at?",
+                viewer_event.ends_at AS "event_ends_at?",
+                viewer_event.start_date AS "event_start_date?",
+                viewer_event.end_date AS "event_end_date?",
+                viewer_event.time_zone AS "time_zone?",
+                viewer_event.updated_at AS "updated_at?",
+                occurrence.occurrence_key AS "occurrence_key?",
+                occurrence.starts_at AS "occurrence_starts_at?",
+                occurrence.ends_at AS "occurrence_ends_at?",
+                occurrence.start_date AS "occurrence_start_date?",
+                occurrence.end_date AS "occurrence_end_date?",
+                attendees.attendee_count AS "attendee_count?"
+            FROM unnest($2::uuid[], $3::text[])
+                WITH ORDINALITY AS requested(event_id, occurrence_key, ord)
+            LEFT JOIN calendar_events mentioned
+                ON mentioned.id = requested.event_id
+               AND mentioned.status <> 'cancelled'
+            LEFT JOIN LATERAL (
+                SELECT
+                    candidate.id,
+                    candidate.title,
+                    candidate.location,
+                    candidate.organizer_email,
+                    candidate.organizer_name,
+                    candidate.recurrence_lines,
+                    candidate.starts_at,
+                    candidate.ends_at,
+                    candidate.start_date,
+                    candidate.end_date,
+                    candidate.time_zone,
+                    candidate.updated_at
+                FROM calendar_events candidate
+                WHERE candidate.ical_uid = mentioned.ical_uid
+                  AND candidate.status <> 'cancelled'
+                  AND (
+                        candidate.owner_id = $1
+                        OR EXISTS (
+                            SELECT 1
+                            FROM macro_user_links link
+                            WHERE link.link_id = candidate.source_link_id
+                              AND link.primary_macro_id = $1
+                        )
+                  )
+                ORDER BY
+                    (candidate.owner_id = $1) DESC,
+                    (candidate.id = mentioned.id) DESC,
+                    candidate.updated_at DESC,
+                    candidate.id
+                LIMIT 1
+            ) viewer_event ON true
+            LEFT JOIN LATERAL (
+                SELECT
+                    instance.occurrence_key,
+                    instance.starts_at,
+                    instance.ends_at,
+                    instance.start_date,
+                    instance.end_date
+                FROM calendar_event_occurrences instance
+                CROSS JOIN LATERAL (
+                    SELECT COALESCE(
+                        instance.starts_at,
+                        instance.start_date::timestamp AT TIME ZONE 'UTC'
+                    ) AS at
+                ) instance_start
+                WHERE instance.event_id = viewer_event.id
+                  AND NOT instance.is_cancelled
+                ORDER BY
+                    (instance.occurrence_key
+                        IS NOT DISTINCT FROM requested.occurrence_key) DESC,
+                    (instance_start.at >= $4) DESC,
+                    CASE WHEN instance_start.at >= $4 THEN instance_start.at END ASC,
+                    instance_start.at DESC,
+                    instance.occurrence_key
+                LIMIT 1
+            ) occurrence ON true
+            LEFT JOIN LATERAL (
+                SELECT count(*) AS attendee_count
+                FROM calendar_event_attendees attendee
+                WHERE attendee.event_id = viewer_event.id
+            ) attendees ON true
+            ORDER BY requested.ord
+            "#,
+            requester_id,
+            &event_ids,
+            &occurrence_keys as &[Option<String>],
+            now,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(report)?;
+
+        rows.into_iter().map(mention_preview_from_row).collect()
     }
 
     #[tracing::instrument(skip(self, requester_id), err)]
@@ -845,7 +1281,8 @@ impl CalendarRepository for PgCalendarRepository {
         account_id: Uuid,
         sync: GoogleCalendarSyncSnapshot,
         events_upserted: usize,
-    ) -> Result<(), Report> {
+    ) -> Result<Vec<RetiredCalendarEvent>, Report> {
+        let mut retired = Vec::new();
         let mut tx = self.pool.begin().await.map_err(report)?;
         fence_google_mutation_tx(&mut tx, key, lease_token, Some(account_id)).await?;
 
@@ -898,7 +1335,9 @@ impl CalendarRepository for PgCalendarRepository {
             .await
             .map_err(report)?;
             for event_id in affected_event_ids {
-                restore_best_source_or_delete(&mut tx, event_id).await?;
+                if let Some(outcome) = restore_best_source_or_delete(&mut tx, event_id).await? {
+                    retired.push(outcome);
+                }
             }
         }
 
@@ -924,7 +1363,9 @@ impl CalendarRepository for PgCalendarRepository {
             .await
             .map_err(report)?;
             for event_id in affected_event_ids {
-                restore_best_source_or_delete(&mut tx, event_id).await?;
+                if let Some(outcome) = restore_best_source_or_delete(&mut tx, event_id).await? {
+                    retired.push(outcome);
+                }
             }
         }
 
@@ -944,6 +1385,9 @@ impl CalendarRepository for PgCalendarRepository {
             UPDATE calendars
             SET sync_token = $3,
                 synced_at = now(),
+                last_sync_error = NULL,
+                last_sync_error_at = NULL,
+                consecutive_sync_failures = 0,
                 materialized_starts_at = CASE
                     WHEN $4 THEN $5
                     ELSE materialized_starts_at
@@ -983,6 +1427,39 @@ impl CalendarRepository for PgCalendarRepository {
             ));
         }
 
+        tx.commit().await.map_err(report)?;
+        Ok(retired)
+    }
+
+    #[tracing::instrument(skip(self, message), fields(job_id = %key.job_id), err)]
+    async fn record_google_calendar_sync_error(
+        &self,
+        key: CalendarBackfillJobKey,
+        lease_token: Uuid,
+        account_id: Uuid,
+        calendar_id: Uuid,
+        message: &str,
+    ) -> Result<(), Report> {
+        let mut tx = self.pool.begin().await.map_err(report)?;
+        fence_google_mutation_tx(&mut tx, key, lease_token, Some(account_id)).await?;
+        sqlx::query!(
+            r#"
+            UPDATE calendars
+            SET last_sync_error = $3,
+                last_sync_error_at = now(),
+                consecutive_sync_failures = consecutive_sync_failures + 1,
+                updated_at = now()
+            WHERE id = $1
+              AND account_id = $2
+              AND NOT is_deleted
+            "#,
+            calendar_id,
+            account_id,
+            message,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(report)?;
         tx.commit().await.map_err(report)
     }
 
@@ -1095,7 +1572,8 @@ impl CalendarRepository for PgCalendarRepository {
         lease_token: Uuid,
         account_id: Uuid,
         calendar_ids: Vec<Uuid>,
-    ) -> Result<(), Report> {
+    ) -> Result<Vec<RetiredCalendarEvent>, Report> {
+        let mut retired = Vec::new();
         let mut tx = self.pool.begin().await.map_err(report)?;
         fence_google_mutation_tx(&mut tx, key, lease_token, Some(account_id)).await?;
 
@@ -1121,7 +1599,9 @@ impl CalendarRepository for PgCalendarRepository {
         .await
         .map_err(report)?;
         for event_id in affected_event_ids {
-            restore_best_source_or_delete(&mut tx, event_id).await?;
+            if let Some(outcome) = restore_best_source_or_delete(&mut tx, event_id).await? {
+                retired.push(outcome);
+            }
         }
 
         sqlx::query!(
@@ -1159,7 +1639,94 @@ impl CalendarRepository for PgCalendarRepository {
         .await
         .map_err(report)?;
 
-        tx.commit().await.map_err(report)
+        // A copy's read-only flag mirrors its calendar's access role as of the
+        // event's last sync, and Google only resends events that changed, so a
+        // role change on the calendar list would otherwise leave every copy on
+        // that calendar stale. Refresh the copies from their calendars' live
+        // roles, including the stored projection a restore would replay, and
+        // the entities that mirror them.
+        sqlx::query!(
+            r#"
+            UPDATE calendar_event_sources source
+            SET is_read_only = live.is_read_only,
+                normalized_payload = jsonb_set(
+                    source.normalized_payload,
+                    '{event,isReadOnly}',
+                    to_jsonb(live.is_read_only)
+                )
+            FROM (
+                SELECT
+                    calendar.id AS calendar_id,
+                    NOT COALESCE(calendar.access_role IN ('owner', 'writer'), false)
+                        AS is_read_only
+                FROM calendars calendar
+                WHERE calendar.account_id = $1
+            ) live
+            WHERE source.calendar_id = live.calendar_id
+              AND source.is_read_only IS DISTINCT FROM live.is_read_only
+            "#,
+            account_id,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(report)?;
+        let refreshed_events = sqlx::query!(
+            r#"
+            UPDATE calendar_events event
+            SET is_read_only = source.is_read_only
+            FROM calendar_event_sources source
+            WHERE source.id = event.content_source_id
+              AND source.account_id = $1
+              AND event.is_read_only IS DISTINCT FROM source.is_read_only
+            RETURNING event.id, event.owner_id
+            "#,
+            account_id,
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(report)?;
+
+        // A calendar's access role or primary flag can change without any of
+        // its events changing, which moves the canonical copy without a source
+        // write. Re-project the entities whose content still mirrors another copy.
+        let reranked_event_ids = sqlx::query_scalar!(
+            r#"
+            SELECT event.id AS "id!"
+            FROM calendar_events event
+            WHERE event.id IN (
+                SELECT source.event_id
+                FROM calendar_event_sources source
+                WHERE source.account_id = $1
+                GROUP BY source.event_id
+                HAVING count(*) > 1
+            )
+              AND event.content_source_id
+                  IS DISTINCT FROM calendar_event_canonical_source_id(event.id)
+            "#,
+            account_id,
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(report)?;
+        for event_id in reranked_event_ids {
+            if let Some(outcome) = restore_best_source_or_delete(&mut tx, event_id).await? {
+                retired.push(outcome);
+            }
+        }
+        retired.extend(
+            refreshed_events
+                .into_iter()
+                .map(|row| RetiredCalendarEvent {
+                    event_id: row.id,
+                    owner_id: row.owner_id,
+                    deleted: false,
+                }),
+        );
+        let mut announced = HashSet::new();
+        retired.retain(|outcome| announced.insert(outcome.event_id));
+
+        tx.commit().await.map_err(report)?;
+        Ok(retired)
     }
 
     #[tracing::instrument(skip(self, requester_id), err)]
@@ -1167,15 +1734,17 @@ impl CalendarRepository for PgCalendarRepository {
         &self,
         requester_id: &str,
         event_id: Uuid,
+        calendar_id: Option<Uuid>,
     ) -> Result<Option<CalendarEventMutationTarget>, Report> {
-        // Rank Google sources exactly like source restoration so mutations
-        // address the same provider copy reads are projected from.
+        // Without a calendar, address the canonical copy the entity is
+        // projected from. With one, address that calendar's copy, whose own
+        // access role decides whether it can be edited.
         let row = sqlx::query!(
             r#"
             SELECT
                 event.id AS event_id,
                 event.owner_id,
-                event.is_read_only,
+                source.is_read_only,
                 source.provider_event_id AS "provider_event_id!",
                 source.provider_recurring_event_id,
                 source.account_id AS "account_id!",
@@ -1195,6 +1764,11 @@ impl CalendarRepository for PgCalendarRepository {
             WHERE event.id = $1
               AND NOT calendar.is_deleted
               AND account.sync_status <> 'disabled'
+              AND CASE
+                    WHEN $3::uuid IS NULL
+                        THEN source.id = calendar_event_canonical_source_id(event.id)
+                    ELSE source.calendar_id = $3
+                  END
               AND (
                     event.owner_id = $2
                     OR EXISTS (
@@ -1207,17 +1781,26 @@ impl CalendarRepository for PgCalendarRepository {
             ORDER BY
                 source.source_sequence DESC,
                 source.source_updated_at DESC,
-                source.last_seen_at DESC,
                 source.id DESC
             LIMIT 1
             "#,
             event_id,
             requester_id,
+            calendar_id,
         )
         .fetch_optional(&self.pool)
         .await
         .map_err(report)?;
-        Ok(row.map(|row| CalendarEventMutationTarget {
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        let actor = ActorInboxes::from_owned(self.owned_inbox_emails(requester_id).await?);
+        let token_identity = CalendarLinkTokenIdentity {
+            fusionauth_user_id: row.fusionauth_user_id,
+            email_address: row.email_address,
+            provider: row.provider,
+        };
+        Ok(Some(CalendarEventMutationTarget {
             event_id: row.event_id,
             is_read_only: row.is_read_only,
             provider_event_id: row.provider_event_id,
@@ -1227,12 +1810,28 @@ impl CalendarRepository for PgCalendarRepository {
             account_id: row.account_id,
             calendar_id: row.calendar_id,
             provider_calendar_id: row.provider_calendar_id,
-            token_identity: CalendarLinkTokenIdentity {
-                fusionauth_user_id: row.fusionauth_user_id,
-                email_address: row.email_address,
-                provider: row.provider,
-            },
+            token_identity,
+            actor,
         }))
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_event_attendees(&self, event_id: Uuid) -> Result<Vec<CalendarAttendee>, Report> {
+        Ok(fetch_attendees(&self.pool, &[event_id])
+            .await?
+            .remove(&event_id)
+            .unwrap_or_default())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_occurrence_override_attendees(
+        &self,
+        event_id: Uuid,
+        recurrence_id: &str,
+    ) -> Result<Option<Vec<CalendarAttendee>>, Report> {
+        Ok(fetch_override_attendees(&self.pool, &[event_id])
+            .await?
+            .remove(&(event_id, recurrence_id.to_string())))
     }
 
     #[tracing::instrument(skip(self, requester_id), err)]
@@ -1251,6 +1850,7 @@ impl CalendarRepository for PgCalendarRepository {
                 calendar.id AS calendar_id,
                 calendar.provider_calendar_id,
                 calendar.access_role,
+                calendar.is_primary,
                 link.fusionauth_user_id,
                 link.email_address,
                 link.provider::text AS "provider!"
@@ -1286,19 +1886,60 @@ impl CalendarRepository for PgCalendarRepository {
         .fetch_optional(&self.pool)
         .await
         .map_err(report)?;
-        Ok(row.map(|row| CalendarCreationTarget {
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        let actor = ActorInboxes::from_owned(self.owned_inbox_emails(requester_id).await?);
+        let token_identity = CalendarLinkTokenIdentity {
+            fusionauth_user_id: row.fusionauth_user_id,
+            email_address: row.email_address,
+            provider: row.provider,
+        };
+        Ok(Some(CalendarCreationTarget {
             owner_id: row.owner_id,
             email_link_id: row.email_link_id,
             account_id: row.account_id,
             calendar_id: row.calendar_id,
             provider_calendar_id: row.provider_calendar_id,
             is_read_only: !matches!(row.access_role.as_deref(), Some("owner" | "writer")),
-            token_identity: CalendarLinkTokenIdentity {
-                fusionauth_user_id: row.fusionauth_user_id,
-                email_address: row.email_address,
-                provider: row.provider,
-            },
+            is_primary: row.is_primary,
+            token_identity,
+            actor,
         }))
+    }
+
+    #[tracing::instrument(skip(self, requester_id), err)]
+    async fn primary_time_zone(&self, requester_id: &str) -> Result<Option<String>, Report> {
+        let time_zone = sqlx::query_scalar!(
+            r#"
+            SELECT calendar.time_zone
+            FROM email_links link
+            JOIN calendar_accounts account ON account.email_link_id = link.id
+            JOIN calendars calendar ON calendar.account_id = account.id
+            WHERE NOT calendar.is_deleted
+              AND account.sync_status <> 'disabled'
+              AND calendar.is_primary
+              AND (
+                    link.macro_id = $1
+                    OR EXISTS (
+                        SELECT 1
+                        FROM macro_user_links delegation
+                        WHERE delegation.link_id = link.id
+                          AND delegation.primary_macro_id = $1
+                    )
+              )
+            ORDER BY
+                (link.macro_id = $1) DESC,
+                link.is_primary DESC,
+                link.created_at ASC
+            LIMIT 1
+            "#,
+            requester_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(report)?;
+        Ok(time_zone.flatten())
     }
 
     #[tracing::instrument(skip(self, requester_id), err)]
@@ -1315,7 +1956,11 @@ impl CalendarRepository for PgCalendarRepository {
                 calendar.name,
                 calendar.color,
                 calendar.is_primary,
-                calendar.access_role
+                calendar.access_role,
+                calendar.provider_calendar_id,
+                calendar.default_reminders,
+                calendar.last_sync_error,
+                calendar.consecutive_sync_failures
             FROM email_links link
             JOIN calendar_accounts account ON account.email_link_id = link.id
             JOIN calendars calendar ON calendar.account_id = account.id
@@ -1353,8 +1998,32 @@ impl CalendarRepository for PgCalendarRepository {
                 color: row.color,
                 is_primary: row.is_primary,
                 is_writable: matches!(row.access_role.as_deref(), Some("owner" | "writer")),
+                is_subscription: is_system_calendar(&row.provider_calendar_id),
+                sync_error: row.last_sync_error.filter(|_| {
+                    row.consecutive_sync_failures >= CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD
+                }),
+                default_reminders: serde_json::from_value(row.default_reminders)
+                    .inspect_err(|e| {
+                        tracing::error!(error = ?e, calendar_id = %row.id, "malformed calendar default_reminders json");
+                    })
+                    .unwrap_or_default(),
             })
             .collect())
+    }
+
+    #[tracing::instrument(skip(self, requester_id), err)]
+    async fn owned_inbox_emails(&self, requester_id: &str) -> Result<Vec<String>, Report> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT email_address::text AS "email_address!"
+            FROM email_links
+            WHERE macro_id = $1
+            "#,
+            requester_id,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(report)
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -1363,7 +2032,7 @@ impl CalendarRepository for PgCalendarRepository {
         account_id: Uuid,
         calendar_id: Uuid,
         provider_event_id: &str,
-    ) -> Result<(), Report> {
+    ) -> Result<Vec<RetiredCalendarEvent>, Report> {
         let mut tx = self.pool.begin().await.map_err(report)?;
         let cancelled = [provider_event_id.to_string()];
         // A deleted recurring master retires its expanded instances via
@@ -1391,10 +2060,14 @@ impl CalendarRepository for PgCalendarRepository {
         .fetch_all(&mut *tx)
         .await
         .map_err(report)?;
+        let mut retired = Vec::new();
         for event_id in affected_event_ids {
-            restore_best_source_or_delete(&mut tx, event_id).await?;
+            if let Some(outcome) = restore_best_source_or_delete(&mut tx, event_id).await? {
+                retired.push(outcome);
+            }
         }
-        tx.commit().await.map_err(report)
+        tx.commit().await.map_err(report)?;
+        Ok(retired)
     }
 }
 
@@ -1443,6 +2116,71 @@ impl GoogleCalendarSyncRepository for PgCalendarRepository {
         .await
         .map_err(report)?;
         Ok(due_count as usize)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn reap_wedged_google_syncs(
+        &self,
+        stalled_before: DateTime<Utc>,
+    ) -> Result<usize, Report> {
+        let required_scopes = GOOGLE_CALENDAR_SCOPES.map(str::to_owned);
+        let reaped = sqlx::query_scalar!(
+            r#"
+            WITH wedged AS (
+                UPDATE calendar_backfill_jobs job
+                SET status = 'pending',
+                    last_error = NULL,
+                    started_at = NULL,
+                    completed_at = NULL,
+                    lease_token = NULL,
+                    lease_expires_at = NULL,
+                    updated_at = now()
+                FROM calendar_sync_outbox outbox,
+                     calendar_accounts account,
+                     email_link_google_scopes scopes
+                WHERE outbox.backfill_job_id = job.id
+                  AND account.id = job.account_id
+                  AND account.email_link_id = job.email_link_id
+                  AND scopes.link_id = job.email_link_id
+                  AND job.kind = 'google_calendar'
+                  AND job.grant_version = scopes.grant_version
+                  AND scopes.granted_scopes @> $2::text[]
+                  AND account.sync_status <> 'disabled'
+                  AND (
+                        -- Dead-lettered: a delivery reached a worker at least
+                        -- once (started_at is set) and failed back to pending,
+                        -- and nothing has touched the job since. started_at
+                        -- separates this from a job merely waiting its turn in a
+                        -- backed-up queue — the drain publishes that one without
+                        -- ever claiming it, so republishing would only duplicate
+                        -- the message still in flight.
+                        (job.status = 'pending'
+                         AND job.started_at IS NOT NULL
+                         AND outbox.published_at IS NOT NULL
+                         AND job.updated_at <= $1)
+                        -- Abandoned: a worker claimed the job and died without
+                        -- releasing or renewing the lease.
+                        OR (job.status = 'running'
+                            AND job.lease_expires_at IS NOT NULL
+                            AND job.lease_expires_at <= $1)
+                  )
+                RETURNING job.id
+            ),
+            republished AS (
+                UPDATE calendar_sync_outbox outbox
+                SET published_at = NULL
+                FROM wedged
+                WHERE outbox.backfill_job_id = wedged.id
+            )
+            SELECT count(*) AS "reaped!" FROM wedged
+            "#,
+            stalled_before,
+            &required_scopes,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(report)?;
+        Ok(reaped as usize)
     }
 }
 
@@ -1502,14 +2240,35 @@ async fn upsert_calendar_tx(
     account_id: Uuid,
     calendar: ProviderCalendar,
 ) -> Result<StoredCalendarRow, Report> {
-    sqlx::query_as!(
+    // Snapshot the reminder-relevant state before the upsert: a change to the
+    // default reminders or the zone that anchors all-day starts invalidates
+    // the firing schedule of every event that follows this calendar.
+    let previous = sqlx::query!(
+        r#"
+        SELECT time_zone, default_reminders
+        FROM calendars
+        WHERE account_id = $1 AND provider_calendar_id = $2
+        "#,
+        account_id,
+        &calendar.provider_calendar_id,
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(report)?;
+    let default_reminders = serde_json::to_value(&calendar.default_reminders).map_err(report)?;
+    let reminders_invalidated = previous.is_some_and(|previous| {
+        previous.default_reminders != default_reminders || previous.time_zone != calendar.time_zone
+    });
+    let anchor_zone = calendar.time_zone.clone();
+    let row = sqlx::query_as!(
         StoredCalendarRow,
         r#"
         INSERT INTO calendars (
             id, account_id, provider_calendar_id, name, description,
-            time_zone, color, access_role, is_primary, is_selected
+            time_zone, color, access_role, is_primary, is_selected,
+            default_reminders
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         ON CONFLICT (account_id, provider_calendar_id) DO UPDATE SET
             name = EXCLUDED.name,
             description = EXCLUDED.description,
@@ -1519,6 +2278,19 @@ async fn upsert_calendar_tx(
             is_primary = EXCLUDED.is_primary,
             is_selected = EXCLUDED.is_selected,
             is_deleted = false,
+            default_reminders = EXCLUDED.default_reminders,
+            last_sync_error = CASE
+                WHEN calendars.is_deleted THEN NULL
+                ELSE calendars.last_sync_error
+            END,
+            last_sync_error_at = CASE
+                WHEN calendars.is_deleted THEN NULL
+                ELSE calendars.last_sync_error_at
+            END,
+            consecutive_sync_failures = CASE
+                WHEN calendars.is_deleted THEN 0
+                ELSE calendars.consecutive_sync_failures
+            END,
             updated_at = now()
         RETURNING
             id,
@@ -1540,10 +2312,16 @@ async fn upsert_calendar_tx(
         calendar.access_role,
         calendar.is_primary,
         calendar.is_selected,
+        &default_reminders,
     )
     .fetch_one(&mut **tx)
     .await
-    .map_err(report)
+    .map_err(report)?;
+    if reminders_invalidated {
+        rebuild_calendar_reminder_firings(tx, row.id, anchor_zone.as_deref(), &default_reminders)
+            .await?;
+    }
+    Ok(row)
 }
 
 fn stored_google_calendar(row: StoredCalendarRow) -> Result<StoredGoogleCalendar, Report> {
@@ -1863,6 +2641,34 @@ async fn invalidate_stale_google_jobs_tx(
     Ok(())
 }
 
+async fn clear_calendar_opt_out_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    email_link_id: Uuid,
+) -> Result<(), Report> {
+    sqlx::query!(
+        r#"
+        UPDATE email_link_google_scopes
+        SET calendar_disabled_at = NULL,
+            updated_at = now()
+        WHERE link_id = $1 AND calendar_disabled_at IS NOT NULL
+        "#,
+        email_link_id,
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(report)?;
+    Ok(())
+}
+
+/// Retirements here are deliberately **not** returned for publication.
+///
+/// Both callers — a grant that lost its calendar scopes, and an explicit
+/// disconnect — purge every event on the inbox at once, so per-event `Deleted`
+/// topic messages would fan out to one message per event in the account.
+/// Search documents for those events are consequently left stale; they are
+/// invisible rather than leaked, because enrichment re-reads visibility from
+/// Postgres and drops a hit whose row is gone. Removing them wants a
+/// purge-by-owner operation, not this path.
 async fn disable_google_calendar_capability_tx(
     tx: &mut Transaction<'_, Postgres>,
     email_link_id: Uuid,
@@ -1919,9 +2725,26 @@ async fn disable_google_calendar_capability_tx(
     .fetch_all(&mut **tx)
     .await
     .map_err(report)?;
-    for event_id in affected_event_ids {
-        restore_best_source_or_delete(tx, event_id).await?;
+    for event_id in &affected_event_ids {
+        restore_best_source_or_delete(tx, *event_id).await?;
     }
+
+    // Reminder delivery claims are deliberately not foreign-keyed to
+    // occurrences, so an event that lost its last source takes its claims with
+    // it here rather than leaving them behind forever.
+    sqlx::query!(
+        r#"
+        DELETE FROM calendar_event_reminder_deliveries d
+        WHERE d.event_id = ANY($1)
+          AND NOT EXISTS (
+                SELECT 1 FROM calendar_events e WHERE e.id = d.event_id
+          )
+        "#,
+        &affected_event_ids,
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(report)?;
     Ok(())
 }
 
@@ -2027,25 +2850,35 @@ async fn retry_failed_backfills_tx(
     Ok(jobs)
 }
 
+/// Record one provider copy with its own content. Returns the source row's
+/// id when the write landed, or `None` when the per-source freshness guard
+/// rejected it as stale.
 async fn persist_source(
     tx: &mut Transaction<'_, Postgres>,
     event_id: Uuid,
     upsert: &CalendarEventUpsert,
-) -> Result<(), Report> {
+) -> Result<Option<Uuid>, Report> {
     let normalized_payload =
         serde_json::to_value(StoredSourceProjection::from(upsert)).map_err(report)?;
     let CalendarEventSource::Google(source) = &upsert.source;
-    sqlx::query!(
+    let event = &upsert.event;
+    sqlx::query_scalar!(
         r#"
                 INSERT INTO calendar_event_sources (
                     id, event_id, source_link_id, source_kind, account_id, calendar_id,
                     provider_event_id, provider_recurring_event_id,
                     provider_etag, raw_payload, source_sequence,
-                    source_updated_at, normalized_payload
+                    source_updated_at, normalized_payload,
+                    title, description, location, event_type, visibility, transparency,
+                    is_read_only, reminders_use_default, reminder_overrides,
+                    creator_email, creator_name
                 )
                 VALUES (
                     $1, $2, $3, 'google', $4, $5, $6, $7, $8, $9,
-                    $10, $11, $12
+                    $10, $11, $12,
+                    $13, $14, $15, $16, $17, $18,
+                    $19, $20, $21,
+                    $22, $23
                 )
                 ON CONFLICT (account_id, calendar_id, provider_event_id)
                     WHERE source_kind = 'google'
@@ -2057,6 +2890,17 @@ async fn persist_source(
                     source_sequence = EXCLUDED.source_sequence,
                     source_updated_at = EXCLUDED.source_updated_at,
                     normalized_payload = EXCLUDED.normalized_payload,
+                    title = EXCLUDED.title,
+                    description = EXCLUDED.description,
+                    location = EXCLUDED.location,
+                    event_type = EXCLUDED.event_type,
+                    visibility = EXCLUDED.visibility,
+                    transparency = EXCLUDED.transparency,
+                    is_read_only = EXCLUDED.is_read_only,
+                    reminders_use_default = EXCLUDED.reminders_use_default,
+                    reminder_overrides = EXCLUDED.reminder_overrides,
+                    creator_email = EXCLUDED.creator_email,
+                    creator_name = EXCLUDED.creator_name,
                     last_seen_at = now()
                 WHERE
                     EXCLUDED.source_sequence > calendar_event_sources.source_sequence
@@ -2064,6 +2908,7 @@ async fn persist_source(
                         EXCLUDED.source_sequence = calendar_event_sources.source_sequence
                         AND EXCLUDED.source_updated_at >= calendar_event_sources.source_updated_at
                     )
+                RETURNING id
                 "#,
         Uuid::now_v7(),
         event_id,
@@ -2074,9 +2919,129 @@ async fn persist_source(
         source.provider_recurring_event_id.as_deref(),
         source.provider_etag.as_deref(),
         &source.raw_payload,
-        db_sequence(upsert.event.sequence)?,
-        upsert.event.updated_at,
+        db_sequence(event.sequence)?,
+        event.updated_at,
         &normalized_payload,
+        &event.title,
+        event.description.as_deref(),
+        event.location.as_deref(),
+        event.event_type.as_str(),
+        event.visibility.as_str(),
+        event.transparency.as_str(),
+        event.is_read_only,
+        event.reminders.use_default,
+        serde_json::to_value(&event.reminders.overrides).map_err(report)?,
+        event.creator_email.as_deref(),
+        event.creator_name.as_deref(),
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(report)
+}
+
+/// The copy whose content the entity carries.
+struct CanonicalSource {
+    source_id: Uuid,
+    calendar_id: Uuid,
+}
+
+/// The source whose content the entity carries, ranked by
+/// `calendar_event_canonical_source_id`: the primary calendar's copy, else a
+/// copy the grant can write, else the freshest, on a live calendar of an
+/// enabled account. Every ranking site goes through that function so the
+/// entity, the mutation target, the reminder schedule, and the listing agree.
+async fn canonical_source(
+    tx: &mut Transaction<'_, Postgres>,
+    event_id: Uuid,
+) -> Result<Option<CanonicalSource>, Report> {
+    let row = sqlx::query!(
+        r#"
+        SELECT source.id, source.calendar_id AS "calendar_id!"
+        FROM calendar_event_sources source
+        WHERE source.id = calendar_event_canonical_source_id($1)
+        "#,
+        event_id,
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(report)?;
+    Ok(row.map(|row| CanonicalSource {
+        source_id: row.id,
+        calendar_id: row.calendar_id,
+    }))
+}
+
+/// The copy that last wrote the entity's schedule and that write's provider
+/// stamp. The copy is absent when it has since been retired.
+struct ScheduleOwner {
+    source_id: Option<Uuid>,
+    updated_at: DateTime<Utc>,
+}
+
+async fn schedule_owner(
+    tx: &mut Transaction<'_, Postgres>,
+    event_id: Uuid,
+) -> Result<ScheduleOwner, Report> {
+    let row = sqlx::query!(
+        r#"SELECT schedule_source_id, schedule_updated_at FROM calendar_events WHERE id = $1"#,
+        event_id,
+    )
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(report)?;
+    Ok(ScheduleOwner {
+        source_id: row.schedule_source_id,
+        updated_at: row.schedule_updated_at,
+    })
+}
+
+/// Rewrite the entity's copy-specific content from its canonical copy and
+/// record which copy it now mirrors.
+async fn apply_content_projection(
+    tx: &mut Transaction<'_, Postgres>,
+    event_id: Uuid,
+    source_id: Uuid,
+    projection: &StoredSourceProjection,
+    source_kind: &str,
+) -> Result<(), Report> {
+    sqlx::query!(
+        r#"
+        UPDATE calendar_events
+        SET content_source_id = $17,
+            title = $2,
+            description = $3,
+            location = $4,
+            visibility = $5,
+            transparency = $6,
+            event_type = $7,
+            creator_email = $8,
+            creator_name = $9,
+            sequence = $10,
+            is_read_only = $11,
+            canonical_source_kind = $12,
+            reminders_use_default = $13,
+            reminder_overrides = $14,
+            created_at = $15,
+            updated_at = GREATEST(calendar_events.updated_at, $16)
+        WHERE id = $1
+        "#,
+        event_id,
+        &projection.event.title,
+        projection.event.description.as_deref(),
+        projection.event.location.as_deref(),
+        projection.event.visibility.as_str(),
+        projection.event.transparency.as_str(),
+        projection.event.event_type.as_str(),
+        projection.event.creator_email.as_deref(),
+        projection.event.creator_name.as_deref(),
+        db_sequence(projection.event.sequence)?,
+        projection.event.is_read_only,
+        source_kind,
+        projection.event.reminders.use_default,
+        serde_json::to_value(&projection.event.reminders.overrides).map_err(report)?,
+        projection.event.created_at,
+        projection.event.updated_at,
+        source_id,
     )
     .execute(&mut **tx)
     .await
@@ -2084,95 +3049,37 @@ async fn persist_source(
     Ok(())
 }
 
-async fn restore_best_source_or_delete(
+/// Rewrite the whole schedule the canonical copy owns: status, time,
+/// recurrence, organizer, conference, attendees, overrides, and occurrences.
+/// Records the copy as the schedule's writer with its provider stamp.
+async fn apply_schedule_projection(
     tx: &mut Transaction<'_, Postgres>,
     event_id: Uuid,
+    source_id: Uuid,
+    projection: &StoredSourceProjection,
 ) -> Result<(), Report> {
-    let identity = sqlx::query!(
-        r#"
-        SELECT source_link_id, ical_uid
-        FROM calendar_events
-        WHERE id = $1
-        "#,
-        event_id,
-    )
-    .fetch_optional(&mut **tx)
-    .await
-    .map_err(report)?;
-    let Some(identity) = identity else {
-        return Ok(());
-    };
-    let reconciliation_lock =
-        event_reconciliation_lock(identity.source_link_id, &identity.ical_uid);
-    sqlx::query_scalar!(
-        r#"SELECT 1 AS "locked!" FROM pg_advisory_xact_lock($1)"#,
-        reconciliation_lock,
-    )
-    .fetch_one(&mut **tx)
-    .await
-    .map_err(report)?;
-
-    let source = sqlx::query!(
-        r#"
-        SELECT source_kind, source_updated_at, normalized_payload
-        FROM calendar_event_sources
-        WHERE event_id = $1
-        ORDER BY
-            source_sequence DESC,
-            source_updated_at DESC,
-            last_seen_at DESC,
-            id DESC
-        LIMIT 1
-        "#,
-        event_id,
-    )
-    .fetch_optional(&mut **tx)
-    .await
-    .map_err(report)?;
-    let Some(source) = source else {
-        sqlx::query!("DELETE FROM calendar_events WHERE id = $1", event_id)
-            .execute(&mut **tx)
-            .await
-            .map_err(report)?;
-        return Ok(());
-    };
-
-    let projection: StoredSourceProjection =
-        serde_json::from_value(source.normalized_payload).map_err(report)?;
     let (starts_at, ends_at, start_date, end_date, time_zone) = split_time(&projection.event.time);
     sqlx::query!(
         r#"
         UPDATE calendar_events
-        SET title = $2,
-            description = $3,
-            location = $4,
-            status = $5,
-            visibility = $6,
-            transparency = $7,
-            starts_at = $8,
-            ends_at = $9,
-            start_date = $10,
-            end_date = $11,
-            time_zone = $12,
-            recurrence_lines = $13,
-            organizer_email = $14,
-            organizer_name = $15,
-            conference_url = $16,
-            sequence = $17,
-            is_read_only = $18,
-            canonical_source_kind = $19,
-            canonical_source_updated_at = $20,
-            created_at = $21,
-            updated_at = GREATEST(calendar_events.updated_at, $22)
+        SET status = $2,
+            starts_at = $3,
+            ends_at = $4,
+            start_date = $5,
+            end_date = $6,
+            time_zone = $7,
+            recurrence_lines = $8,
+            organizer_email = $9,
+            organizer_name = $10,
+            conference_url = $11,
+            conference_provider = $12,
+            schedule_source_id = $13,
+            schedule_updated_at = $14,
+            updated_at = GREATEST(calendar_events.updated_at, $14)
         WHERE id = $1
         "#,
         event_id,
-        &projection.event.title,
-        projection.event.description.as_deref(),
-        projection.event.location.as_deref(),
         projection.event.status.as_str(),
-        projection.event.visibility.as_str(),
-        projection.event.transparency.as_str(),
         starts_at,
         ends_at,
         start_date,
@@ -2182,11 +3089,11 @@ async fn restore_best_source_or_delete(
         projection.event.organizer_email.as_deref(),
         projection.event.organizer_name.as_deref(),
         projection.event.conference_url.as_deref(),
-        db_sequence(projection.event.sequence)?,
-        projection.event.is_read_only,
-        &source.source_kind,
-        source.source_updated_at,
-        projection.event.created_at,
+        projection
+            .event
+            .conference_provider
+            .map(ConferenceProvider::as_str),
+        source_id,
         projection.event.updated_at,
     )
     .execute(&mut **tx)
@@ -2201,6 +3108,195 @@ async fn restore_best_source_or_delete(
         &projection.occurrences,
     )
     .await
+}
+
+/// Rewrite the time shape a non-canonical copy carries for the meeting:
+/// status, time, recurrence, overrides, and occurrences. Attendees,
+/// organizer, and conference stay the canonical copy's. Records the copy as
+/// the schedule's writer with its provider stamp.
+async fn apply_time_projection(
+    tx: &mut Transaction<'_, Postgres>,
+    event_id: Uuid,
+    source_id: Uuid,
+    projection: &StoredSourceProjection,
+) -> Result<(), Report> {
+    let (starts_at, ends_at, start_date, end_date, time_zone) = split_time(&projection.event.time);
+    sqlx::query!(
+        r#"
+        UPDATE calendar_events
+        SET status = $2,
+            starts_at = $3,
+            ends_at = $4,
+            start_date = $5,
+            end_date = $6,
+            time_zone = $7,
+            recurrence_lines = $8,
+            schedule_source_id = $9,
+            schedule_updated_at = $10,
+            updated_at = GREATEST(calendar_events.updated_at, $10)
+        WHERE id = $1
+        "#,
+        event_id,
+        projection.event.status.as_str(),
+        starts_at,
+        ends_at,
+        start_date,
+        end_date,
+        time_zone,
+        &projection.event.recurrence_lines,
+        source_id,
+        projection.event.updated_at,
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(report)?;
+    replace_overrides(tx, event_id, &projection.overrides).await?;
+    replace_occurrences(
+        tx,
+        event_id,
+        &projection.event.owner_id,
+        &projection.occurrences,
+    )
+    .await
+}
+
+/// Rebuild the entity's reminder firings from the content and occurrences it
+/// now carries, resolving calendar defaults against the canonical copy's
+/// calendar, so alerts follow the canonical copy's settings whichever copy
+/// last moved the schedule.
+async fn rebuild_entity_reminder_firings(
+    tx: &mut Transaction<'_, Postgres>,
+    event_id: Uuid,
+    canonical_calendar_id: Option<Uuid>,
+) -> Result<(), Report> {
+    let entity = sqlx::query!(
+        r#"
+        SELECT status, event_type, reminders_use_default, reminder_overrides
+        FROM calendar_events
+        WHERE id = $1
+        "#,
+        event_id,
+    )
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(report)?;
+    let reminders = EventReminders {
+        use_default: entity.reminders_use_default,
+        overrides: serde_json::from_value(entity.reminder_overrides)
+            .inspect_err(|e| {
+                tracing::error!(error = ?e, %event_id, "malformed event reminder_overrides json");
+            })
+            .unwrap_or_default(),
+    };
+    let calendar = fetch_calendar_reminder_context(tx, canonical_calendar_id).await?;
+    rebuild_event_reminder_firings(
+        tx,
+        event_id,
+        event_status(&entity.status),
+        event_type(&entity.event_type),
+        &reminders,
+        calendar.as_ref(),
+    )
+    .await
+}
+
+/// Rewrite the entity from the copy that inherits it after a retirement.
+/// Content always follows it. The schedule follows it unless another
+/// surviving copy wrote a fresher one, which is how a user's edit made
+/// through a copy outlives the retirement of an unrelated third copy.
+async fn apply_canonical_projection(
+    tx: &mut Transaction<'_, Postgres>,
+    event_id: Uuid,
+    source_id: Uuid,
+    projection: &StoredSourceProjection,
+    source_kind: &str,
+    calendar_id: Option<Uuid>,
+) -> Result<(), Report> {
+    apply_content_projection(tx, event_id, source_id, projection, source_kind).await?;
+    let schedule = schedule_owner(tx, event_id).await?;
+    if schedule.source_id.is_none_or(|owner| owner == source_id)
+        || projection.event.updated_at >= schedule.updated_at
+    {
+        apply_schedule_projection(tx, event_id, source_id, projection).await?;
+    }
+    rebuild_entity_reminder_firings(tx, event_id, calendar_id).await
+}
+
+/// Rewrite an event from its next-best remaining source, or delete it when no
+/// source on a live calendar is left, reporting which happened.
+///
+/// `None` means the row was already gone before this call.
+async fn restore_best_source_or_delete(
+    tx: &mut Transaction<'_, Postgres>,
+    event_id: Uuid,
+) -> Result<Option<RetiredCalendarEvent>, Report> {
+    let identity = sqlx::query!(
+        r#"
+        SELECT source_link_id, ical_uid, owner_id
+        FROM calendar_events
+        WHERE id = $1
+        "#,
+        event_id,
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(report)?;
+    let Some(identity) = identity else {
+        return Ok(None);
+    };
+    let reconciliation_lock =
+        event_reconciliation_lock(identity.source_link_id, &identity.ical_uid);
+    sqlx::query_scalar!(
+        r#"SELECT 1 AS "locked!" FROM pg_advisory_xact_lock($1)"#,
+        reconciliation_lock,
+    )
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(report)?;
+
+    let source = sqlx::query!(
+        r#"
+        SELECT
+            source.id,
+            source.source_kind,
+            source.normalized_payload,
+            source.calendar_id
+        FROM calendar_event_sources source
+        WHERE source.id = calendar_event_canonical_source_id($1)
+        "#,
+        event_id,
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(report)?;
+    let Some(source) = source else {
+        sqlx::query!("DELETE FROM calendar_events WHERE id = $1", event_id)
+            .execute(&mut **tx)
+            .await
+            .map_err(report)?;
+        return Ok(Some(RetiredCalendarEvent {
+            event_id,
+            owner_id: identity.owner_id,
+            deleted: true,
+        }));
+    };
+
+    let projection: StoredSourceProjection =
+        serde_json::from_value(source.normalized_payload).map_err(report)?;
+    apply_canonical_projection(
+        tx,
+        event_id,
+        source.id,
+        &projection,
+        &source.source_kind,
+        source.calendar_id,
+    )
+    .await?;
+    Ok(Some(RetiredCalendarEvent {
+        event_id,
+        owner_id: identity.owner_id,
+        deleted: false,
+    }))
 }
 
 async fn replace_attendees(
@@ -2348,6 +3444,14 @@ async fn replace_occurrences(
                 starts_at, ends_at, start_date, end_date, is_cancelled
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            ON CONFLICT (event_id, occurrence_key) DO UPDATE SET
+                owner_id = EXCLUDED.owner_id,
+                recurrence_id = EXCLUDED.recurrence_id,
+                starts_at = EXCLUDED.starts_at,
+                ends_at = EXCLUDED.ends_at,
+                start_date = EXCLUDED.start_date,
+                end_date = EXCLUDED.end_date,
+                is_cancelled = EXCLUDED.is_cancelled
             "#,
             event_id,
             owner_id,
@@ -2364,6 +3468,306 @@ async fn replace_occurrences(
         .map_err(report)?;
     }
     Ok(())
+}
+
+/// Calendar state a reminder firing schedule depends on: the zone that
+/// anchors all-day starts and the defaults `useDefault` events resolve to.
+struct CalendarReminderContext {
+    time_zone: Option<String>,
+    default_reminders: Vec<EventReminderOverride>,
+}
+
+async fn fetch_calendar_reminder_context(
+    tx: &mut Transaction<'_, Postgres>,
+    calendar_id: Option<Uuid>,
+) -> Result<Option<CalendarReminderContext>, Report> {
+    let Some(calendar_id) = calendar_id else {
+        return Ok(None);
+    };
+    let row = sqlx::query!(
+        r#"SELECT time_zone, default_reminders FROM calendars WHERE id = $1"#,
+        calendar_id,
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(report)?;
+    Ok(row.map(|row| CalendarReminderContext {
+        time_zone: row.time_zone,
+        // This feeds the firing schedule: a malformed value silently drops
+        // every default reminder on the calendar, so it must leave a trace.
+        default_reminders: serde_json::from_value(row.default_reminders)
+            .inspect_err(|e| {
+                tracing::error!(error = ?e, %calendar_id, "malformed calendar default_reminders json");
+            })
+            .unwrap_or_default(),
+    }))
+}
+
+/// The zone that anchors an all-day occurrence's midnight, validated against
+/// the server's own tzdata. Google resolves all-day reminders against the
+/// calendar's zone; a zone the server does not know falls back to UTC rather
+/// than failing the write. chrono-tz and Postgres carry independent IANA
+/// copies, so client-side parsing alone cannot guarantee `AT TIME ZONE`
+/// accepts the name.
+async fn anchor_time_zone(
+    tx: &mut Transaction<'_, Postgres>,
+    zone: Option<&str>,
+) -> Result<String, Report> {
+    let Some(zone) = zone.filter(|zone| *zone != "UTC") else {
+        return Ok("UTC".to_owned());
+    };
+    let known = sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM pg_timezone_names WHERE name = $1) AS "known!""#,
+        zone,
+    )
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(report)?;
+    if known {
+        Ok(zone.to_owned())
+    } else {
+        tracing::warn!(
+            zone,
+            "calendar time zone unknown to postgres, anchoring all-day reminders at UTC"
+        );
+        Ok("UTC".to_owned())
+    }
+}
+
+/// Rebuild one event's reminder firing schedule from its just-replaced
+/// occurrences and resolved popup offsets. Runs inside the canonical
+/// replacement transaction so the schedule can never disagree with the
+/// projections it derives from. Recently past firings are kept so the sweep's
+/// grace window still sees them; delivery claims live in the deliveries table
+/// and survive this rebuild.
+async fn rebuild_event_reminder_firings(
+    tx: &mut Transaction<'_, Postgres>,
+    event_id: Uuid,
+    status: EventStatus,
+    event_type: EventType,
+    reminders: &EventReminders,
+    calendar: Option<&CalendarReminderContext>,
+) -> Result<(), Report> {
+    sqlx::query!(
+        "DELETE FROM calendar_event_reminder_firings WHERE event_id = $1",
+        event_id,
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(report)?;
+    if status == EventStatus::Cancelled {
+        return Ok(());
+    }
+    let defaults = if event_type.uses_calendar_default_reminders() {
+        calendar.map_or(&[] as &[_], |calendar| &calendar.default_reminders)
+    } else {
+        &[]
+    };
+    let minutes: Vec<i32> = reminders
+        .popup_minutes(defaults)
+        .into_iter()
+        .filter_map(|minutes| i32::try_from(minutes).ok())
+        .collect();
+    if minutes.is_empty() {
+        return Ok(());
+    }
+    let time_zone = anchor_time_zone(
+        tx,
+        calendar.and_then(|calendar| calendar.time_zone.as_deref()),
+    )
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO calendar_event_reminder_firings (
+            event_id, occurrence_key, minutes_before, fire_at
+        )
+        SELECT
+            occurrence.event_id,
+            occurrence.occurrence_key,
+            offsets.minutes,
+            COALESCE(
+                occurrence.starts_at,
+                occurrence.start_date::timestamp AT TIME ZONE $3
+            ) - make_interval(mins => offsets.minutes)
+        FROM calendar_event_occurrences occurrence
+        CROSS JOIN UNNEST($2::int[]) AS offsets(minutes)
+        WHERE occurrence.event_id = $1
+          AND NOT occurrence.is_cancelled
+          AND COALESCE(
+                occurrence.starts_at,
+                occurrence.start_date::timestamp AT TIME ZONE $3
+              ) - make_interval(mins => offsets.minutes) > now() - interval '1 day'
+        "#,
+        event_id,
+        &minutes,
+        time_zone,
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(report)?;
+    Ok(())
+}
+
+/// Rebuild the firing schedule for every event whose canonical source lives
+/// on one calendar, after its default reminders or time zone changed.
+/// Set-based because a defaults change fans out to every `useDefault` event
+/// on the calendar. Both statements key on the canonical copy, so an event
+/// that also holds a secondary copy on this calendar keeps the schedule its
+/// canonical calendar derived and a shared calendar's defaults never reach a
+/// member's own event.
+async fn rebuild_calendar_reminder_firings(
+    tx: &mut Transaction<'_, Postgres>,
+    calendar_id: Uuid,
+    time_zone: Option<&str>,
+    default_reminders: &serde_json::Value,
+) -> Result<(), Report> {
+    sqlx::query!(
+        r#"
+        DELETE FROM calendar_event_reminder_firings firing
+        USING calendar_event_sources source
+        WHERE source.event_id = firing.event_id
+          AND source.calendar_id = $1
+          AND (
+              SELECT canonical.calendar_id
+              FROM calendar_event_sources canonical
+              WHERE canonical.id = calendar_event_canonical_source_id(firing.event_id)
+          ) = $1
+        "#,
+        calendar_id,
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(report)?;
+    let anchor_zone = anchor_time_zone(tx, time_zone).await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO calendar_event_reminder_firings (
+            event_id, occurrence_key, minutes_before, fire_at
+        )
+        SELECT DISTINCT
+            occurrence.event_id,
+            occurrence.occurrence_key,
+            offsets.minutes,
+            COALESCE(
+                occurrence.starts_at,
+                occurrence.start_date::timestamp AT TIME ZONE $2
+            ) - make_interval(mins => offsets.minutes)
+        FROM calendar_event_sources source
+        JOIN calendar_events event ON event.id = source.event_id
+        JOIN calendar_event_occurrences occurrence ON occurrence.event_id = event.id
+        CROSS JOIN LATERAL (
+            SELECT (reminder.value ->> 'minutes')::int AS minutes
+            FROM jsonb_array_elements(
+                CASE
+                    -- Status-style events never resolve the calendar
+                    -- defaults, mirroring EventType::uses_calendar_default_reminders.
+                    WHEN event.reminders_use_default
+                        AND event.event_type IN ('default', 'from_gmail')
+                        THEN $3::jsonb
+                    WHEN event.reminders_use_default THEN '[]'::jsonb
+                    ELSE event.reminder_overrides
+                END
+            ) AS reminder(value)
+            WHERE reminder.value ->> 'method' = 'popup'
+              AND (reminder.value ->> 'minutes')::int >= 0
+        ) offsets
+        WHERE source.calendar_id = $1
+          AND (
+              SELECT canonical.calendar_id
+              FROM calendar_event_sources canonical
+              WHERE canonical.id = calendar_event_canonical_source_id(event.id)
+          ) = $1
+          AND event.status <> 'cancelled'
+          AND NOT occurrence.is_cancelled
+          AND COALESCE(
+                occurrence.starts_at,
+                occurrence.start_date::timestamp AT TIME ZONE $2
+              ) - make_interval(mins => offsets.minutes) > now() - interval '1 day'
+        ON CONFLICT (event_id, occurrence_key, minutes_before) DO NOTHING
+        "#,
+        calendar_id,
+        anchor_zone,
+        default_reminders,
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(report)?;
+    Ok(())
+}
+
+/// Every active copy of each event in canonical order, the same keys
+/// `calendar_event_canonical_source_id` ranks by: the primary calendar's
+/// copy, then writable copies, then the freshest. Copies on deleted calendars
+/// or disabled accounts are omitted, mirroring what the calendar list shows.
+async fn fetch_source_contents(
+    pool: &PgPool,
+    event_ids: &[Uuid],
+) -> Result<HashMap<Uuid, Vec<CalendarEventSourceContent>>, Report> {
+    if event_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let rows = sqlx::query!(
+        r#"
+        SELECT
+            source.event_id,
+            source.calendar_id AS "calendar_id!",
+            source.title,
+            source.description,
+            source.location,
+            source.event_type,
+            source.visibility,
+            source.transparency,
+            source.is_read_only,
+            source.reminders_use_default,
+            source.reminder_overrides,
+            source.creator_email,
+            source.creator_name
+        FROM calendar_event_sources source
+        JOIN calendars calendar ON calendar.id = source.calendar_id
+        JOIN calendar_accounts account ON account.id = source.account_id
+        WHERE source.event_id = ANY($1)
+          AND NOT calendar.is_deleted
+          AND account.sync_status <> 'disabled'
+        ORDER BY
+            source.event_id,
+            calendar.is_primary DESC,
+            (calendar.access_role IN ('owner', 'writer')) DESC NULLS LAST,
+            source.source_sequence DESC,
+            source.source_updated_at DESC,
+            source.id DESC
+        "#,
+        event_ids,
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(report)?;
+    let mut grouped: HashMap<Uuid, Vec<CalendarEventSourceContent>> = HashMap::new();
+    for row in rows {
+        grouped
+            .entry(row.event_id)
+            .or_default()
+            .push(CalendarEventSourceContent {
+                calendar_id: row.calendar_id,
+                title: row.title,
+                description: row.description,
+                location: row.location,
+                event_type: event_type(&row.event_type),
+                visibility: event_visibility(&row.visibility),
+                transparency: event_transparency(&row.transparency),
+                is_read_only: row.is_read_only,
+                reminders: EventReminders {
+                    use_default: row.reminders_use_default,
+                    overrides: serde_json::from_value(row.reminder_overrides)
+                        .inspect_err(|e| {
+                            tracing::error!(error = ?e, event_id = %row.event_id, calendar_id = %row.calendar_id, "malformed source reminder_overrides json");
+                        })
+                        .unwrap_or_default(),
+                },
+                creator_email: row.creator_email,
+                creator_name: row.creator_name,
+            });
+    }
+    Ok(grouped)
 }
 
 async fn fetch_attendees(
@@ -2515,21 +3919,67 @@ fn row_time(
     }
 }
 
+fn mention_preview_from_row(row: MentionPreviewRow) -> Result<CalendarMentionPreview, Report> {
+    if !row.mention_exists {
+        return Ok(CalendarMentionPreview::DoesNotExist);
+    }
+    let Some(viewer_event_id) = row.viewer_event_id else {
+        return Ok(CalendarMentionPreview::NoAccess);
+    };
+    let time = if row.occurrence_key.is_some() {
+        row_time(
+            row.occurrence_starts_at,
+            row.occurrence_ends_at,
+            row.occurrence_start_date,
+            row.occurrence_end_date,
+            row.time_zone,
+        )?
+    } else {
+        // No materialized instance (the event sits outside the maintained
+        // window) — the series' own span still gives the preview a time.
+        row_time(
+            row.event_starts_at,
+            row.event_ends_at,
+            row.event_start_date,
+            row.event_end_date,
+            row.time_zone,
+        )?
+    };
+    Ok(CalendarMentionPreview::Accessible(Box::new(
+        CalendarMentionEvent {
+            viewer_event_id,
+            title: row.title.unwrap_or_default(),
+            time,
+            occurrence_key: row.occurrence_key,
+            is_recurring: !row.recurrence_lines.unwrap_or_default().is_empty(),
+            location: row.location,
+            organizer_email: row.organizer_email,
+            organizer_name: row.organizer_name,
+            attendee_count: usize::try_from(row.attendee_count.unwrap_or_default())
+                .unwrap_or_default(),
+            updated_at: row.updated_at.unwrap_or(DateTime::<Utc>::MIN_UTC),
+        },
+    )))
+}
+
 fn event_from_join(
     row: OccurrenceJoinRow,
     attendees: Vec<CalendarAttendee>,
+    sources: Vec<CalendarEventSourceContent>,
 ) -> Result<CalendarEvent, Report> {
     Ok(CalendarEvent {
         id: row.event_id,
         owner_id: row.owner_id,
         ical_uid: row.ical_uid,
-        calendar_id: row.canonical_calendar_id,
+        calendar_id: sources.first().map(|source| source.calendar_id),
+        sources,
         title: row.title,
         description: row.description,
         location: row.location,
         status: event_status(&row.status),
         visibility: event_visibility(&row.visibility),
         transparency: event_transparency(&row.transparency),
+        event_type: event_type(&row.event_type),
         time: row_time(
             row.starts_at,
             row.ends_at,
@@ -2540,9 +3990,20 @@ fn event_from_join(
         recurrence_lines: row.recurrence_lines,
         organizer_email: row.organizer_email,
         organizer_name: row.organizer_name,
+        creator_email: row.creator_email,
+        creator_name: row.creator_name,
         conference_url: row.conference_url,
+        conference_provider: row.conference_provider.as_deref().map(conference_provider),
         sequence: u32::try_from(row.sequence).unwrap_or_default(),
         is_read_only: row.is_read_only,
+        reminders: EventReminders {
+            use_default: row.reminders_use_default,
+            overrides: serde_json::from_value(row.reminder_overrides)
+                .inspect_err(|e| {
+                    tracing::error!(error = ?e, event_id = %row.event_id, "malformed event reminder_overrides json");
+                })
+                .unwrap_or_default(),
+        },
         attendees,
         created_at: row.created_at,
         updated_at: row.updated_at,
@@ -2582,11 +4043,33 @@ fn event_visibility(value: &str) -> EventVisibility {
     }
 }
 
+/// Parse the stored provider, treating an unknown value as a third-party
+/// conference so a row written by a newer deployment stays joinable and is
+/// never mistaken for one Macro may detach.
+fn conference_provider(value: &str) -> ConferenceProvider {
+    if value == "google_meet" {
+        ConferenceProvider::GoogleMeet
+    } else {
+        ConferenceProvider::Other
+    }
+}
+
 fn event_transparency(value: &str) -> EventTransparency {
     if value == "transparent" {
         EventTransparency::Transparent
     } else {
         EventTransparency::Opaque
+    }
+}
+
+fn event_type(value: &str) -> EventType {
+    match value {
+        "out_of_office" => EventType::OutOfOffice,
+        "focus_time" => EventType::FocusTime,
+        "working_location" => EventType::WorkingLocation,
+        "birthday" => EventType::Birthday,
+        "from_gmail" => EventType::FromGmail,
+        _ => EventType::Default,
     }
 }
 
@@ -2627,6 +4110,288 @@ fn db_sequence(sequence: u32) -> Result<i32, Report> {
             "calendar event sequence {sequence} overflows the database representation"
         )
     })
+}
+
+/// How stale a firing may be and still alert. A late reminder for a meeting
+/// already underway is noise; anything the dispatcher missed by more than
+/// this window is silently dropped rather than delivered hours late.
+const REMINDER_SWEEP_GRACE: chrono::Duration = chrono::Duration::minutes(30);
+
+impl CalendarReminderDispatchRepo for PgCalendarRepository {
+    #[tracing::instrument(err, skip(self))]
+    async fn due_reminder_firings(
+        &self,
+        now: DateTime<Utc>,
+        after: Option<&CalendarReminderFiring>,
+        limit: i64,
+    ) -> Result<Vec<CalendarReminderFiring>, Report> {
+        // Driven by `calendar_event_reminder_firings_due_idx`. A completed
+        // delivery claim is what makes a delivered firing stop being due; a
+        // held-but-unfinished claim still sweeps, and loses the claim race at
+        // delivery instead. The keyset resumes past `after` because nothing
+        // marks a swept firing — re-running the window from the top would
+        // return the same rows forever.
+        let rows = sqlx::query!(
+            r#"
+            SELECT firing.event_id, firing.occurrence_key, firing.minutes_before, firing.fire_at
+            FROM calendar_event_reminder_firings firing
+            WHERE firing.fire_at <= $1
+              AND firing.fire_at > $2
+              AND (
+                  $4::timestamptz IS NULL
+                  OR (firing.fire_at, firing.event_id, firing.minutes_before, firing.occurrence_key)
+                     > ($4, $5, $6, $7)
+              )
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM calendar_event_reminder_deliveries delivery
+                  WHERE delivery.event_id = firing.event_id
+                    AND delivery.occurrence_key = firing.occurrence_key
+                    AND delivery.minutes_before = firing.minutes_before
+                    AND delivery.fire_at = firing.fire_at
+                    AND delivery.sent_at IS NOT NULL
+              )
+            ORDER BY firing.fire_at, firing.event_id, firing.minutes_before, firing.occurrence_key
+            LIMIT $3
+            "#,
+            now,
+            now - REMINDER_SWEEP_GRACE,
+            limit,
+            after.map(|firing| firing.fire_at),
+            after.map(|firing| firing.event_id),
+            after.map(|firing| firing.minutes_before),
+            after.map(|firing| firing.occurrence_key.as_str()),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(report)?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| CalendarReminderFiring {
+                event_id: row.event_id,
+                occurrence_key: row.occurrence_key,
+                minutes_before: row.minutes_before,
+                fire_at: row.fire_at,
+            })
+            .collect())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn find_due_reminder(
+        &self,
+        firing: &CalendarReminderFiring,
+    ) -> Result<Option<DueCalendarReminder>, Report> {
+        // Matching the firing row exactly — including `fire_at` — is what
+        // makes a stale message safe: a moved event replaced its schedule
+        // rows, and this then finds nothing rather than alerting at a time
+        // that no longer exists. Joining the canonical copy through
+        // `calendar_event_canonical_source_id` skips deleted calendars and
+        // disabled accounts like the read path, so losing the calendar that
+        // owns the schedule stops its alerts.
+        // The grace bound is re-applied here because firing rows outlive the
+        // sweep window: a Deliver message that sat in the queue past the
+        // grace must drop, not alert hours late.
+        let stale_before = Utc::now() - REMINDER_SWEEP_GRACE;
+        let row = sqlx::query!(
+            r#"
+            SELECT
+                event.owner_id,
+                event.title,
+                event.time_zone AS "event_time_zone?",
+                occurrence.starts_at,
+                occurrence.ends_at,
+                occurrence.start_date,
+                occurrence.end_date,
+                canonical_calendar.time_zone AS "calendar_time_zone?",
+                CASE WHEN EXISTS (
+                        SELECT 1
+                        FROM calendar_event_overrides override
+                        WHERE override.event_id = event.id
+                          AND override.recurrence_id = occurrence.recurrence_id
+                          AND override.attendees_overridden
+                     )
+                     THEN EXISTS (
+                        SELECT 1
+                        FROM calendar_event_override_attendees attendee
+                        JOIN email_links owner_inbox
+                          ON owner_inbox.macro_id = event.owner_id
+                         AND lower(owner_inbox.email_address::text) = attendee.email
+                        WHERE attendee.event_id = event.id
+                          AND attendee.recurrence_id = occurrence.recurrence_id
+                          AND attendee.response_status = 'declined'
+                     )
+                     ELSE EXISTS (
+                        SELECT 1
+                        FROM calendar_event_attendees attendee
+                        JOIN email_links owner_inbox
+                          ON owner_inbox.macro_id = event.owner_id
+                         AND lower(owner_inbox.email_address::text) = attendee.email
+                        WHERE attendee.event_id = event.id
+                          AND attendee.response_status = 'declined'
+                     )
+                END AS "declined!"
+            FROM calendar_event_reminder_firings firing
+            JOIN calendar_events event ON event.id = firing.event_id
+            JOIN calendar_event_occurrences occurrence
+                ON occurrence.event_id = firing.event_id
+               AND occurrence.occurrence_key = firing.occurrence_key
+            JOIN calendar_event_sources canonical_source
+                ON canonical_source.id = calendar_event_canonical_source_id(event.id)
+            JOIN calendars canonical_calendar
+                ON canonical_calendar.id = canonical_source.calendar_id
+            WHERE firing.event_id = $1
+              AND firing.occurrence_key = $2
+              AND firing.minutes_before = $3
+              AND firing.fire_at = $4
+              AND firing.fire_at > $5
+              AND event.status <> 'cancelled'
+              AND NOT occurrence.is_cancelled
+            "#,
+            firing.event_id,
+            &firing.occurrence_key,
+            firing.minutes_before,
+            firing.fire_at,
+            stale_before,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(report)?;
+
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        let time = row_time(
+            row.starts_at,
+            row.ends_at,
+            row.start_date,
+            row.end_date,
+            row.event_time_zone.clone(),
+        )?;
+        Ok(Some(DueCalendarReminder {
+            firing: firing.clone(),
+            owner_id: row.owner_id,
+            title: row.title,
+            time,
+            display_time_zone: row.event_time_zone.or(row.calendar_time_zone),
+            declined: row.declined,
+        }))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn claim_reminder_delivery(
+        &self,
+        firing: &CalendarReminderFiring,
+        retry_before: DateTime<Utc>,
+    ) -> Result<bool, Report> {
+        // One statement covers both a first claim and a retry. The unique
+        // index on the firing identity makes the insert the claim; the
+        // conflict branch takes over a claim made before `retry_before` and
+        // never completed, so a dispatcher that died mid-flight does not
+        // strand the firing. Already sent or still fresh matches neither.
+        let claimed = sqlx::query_scalar!(
+            r#"
+            INSERT INTO calendar_event_reminder_deliveries (
+                id, event_id, occurrence_key, minutes_before, fire_at
+            )
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (event_id, occurrence_key, minutes_before, fire_at) DO UPDATE
+               SET created_at = now()
+             WHERE calendar_event_reminder_deliveries.sent_at IS NULL
+               AND calendar_event_reminder_deliveries.created_at < $6
+            RETURNING id
+            "#,
+            Uuid::now_v7(),
+            firing.event_id,
+            &firing.occurrence_key,
+            firing.minutes_before,
+            firing.fire_at,
+            retry_before,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(report)?;
+
+        Ok(claimed.is_some())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn release_reminder_delivery(
+        &self,
+        firing: &CalendarReminderFiring,
+    ) -> Result<(), Report> {
+        // `sent_at IS NULL` guards against releasing a firing that did go
+        // out: completion and release can only race if the same firing is
+        // handled twice, and the delivered one must win.
+        sqlx::query!(
+            r#"
+            DELETE FROM calendar_event_reminder_deliveries
+            WHERE event_id = $1
+              AND occurrence_key = $2
+              AND minutes_before = $3
+              AND fire_at = $4
+              AND sent_at IS NULL
+            "#,
+            firing.event_id,
+            &firing.occurrence_key,
+            firing.minutes_before,
+            firing.fire_at,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(report)?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn complete_reminder_delivery(
+        &self,
+        firing: &CalendarReminderFiring,
+    ) -> Result<(), Report> {
+        sqlx::query!(
+            r#"
+            UPDATE calendar_event_reminder_deliveries
+            SET sent_at = now()
+            WHERE event_id = $1
+              AND occurrence_key = $2
+              AND minutes_before = $3
+              AND fire_at = $4
+            "#,
+            firing.event_id,
+            &firing.occurrence_key,
+            firing.minutes_before,
+            firing.fire_at,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(report)?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn record_reminder_fired(
+        &self,
+        event_id: Uuid,
+        fired_at: DateTime<Utc>,
+    ) -> Result<(), Report> {
+        // GREATEST also covers the first delivery: it ignores the NULL.
+        sqlx::query!(
+            r#"
+            UPDATE calendar_events
+            SET last_reminder_fired_at = GREATEST(last_reminder_fired_at, $2)
+            WHERE id = $1
+            "#,
+            event_id,
+            fired_at,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(report)?;
+
+        Ok(())
+    }
 }
 
 fn event_reconciliation_lock(source_link_id: Uuid, ical_uid: &str) -> i64 {

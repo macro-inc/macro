@@ -1,4 +1,4 @@
-import type { EntityData, EntityDragEvent } from '@entity';
+import { type EntityData, isEntityDragEvent } from '@entity';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 
 export type EntityDropCoordinates = {
@@ -46,9 +46,9 @@ export function createEntityDropZone(
     droppable.isActiveDroppable ||
     state?.active.droppable?.id === options.droppableId;
 
-  onDragEnd((event: EntityDragEvent) => {
-    const data = event.draggable?.data;
-    if (!data || data.dragType !== 'entity') return;
+  onDragEnd((event) => {
+    if (!isEntityDragEvent(event)) return;
+    const data = event.draggable.data;
 
     options.onDragEntityEnd?.();
     if (!event.droppable) return;
@@ -58,13 +58,11 @@ export function createEntityDropZone(
     options.onDropEntity(data, coordinates);
   });
 
-  onDragMove((event: EntityDragEvent) => {
-    const data = event.draggable?.data;
-    if (!data || data.dragType !== 'entity' || !isOverThisDropZone()) {
+  onDragMove((event) => {
+    if (!isEntityDragEvent(event) || !isOverThisDropZone()) {
       options.onDragEntityEnd?.();
       return;
     }
-
     const coordinates = currentCoordinates();
     if (!coordinates) return;
     options.onDragEntityMove?.(coordinates);

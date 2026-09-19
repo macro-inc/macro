@@ -190,6 +190,9 @@ runs:
         command: up
         stack-name: macro-inc/${{ inputs.environment }}
         work-dir: ./infra/stacks/${{ inputs.pulumi-service-name }}
+        # Create the stack on first deploy of a new service; no-op for
+        # existing stacks.
+        upsert: true
       env:
         PULUMI_ACCESS_TOKEN: ${{ inputs.pulumi-access-token }}
         DD_APP_KEY: ${{ inputs.dd-app-key }}

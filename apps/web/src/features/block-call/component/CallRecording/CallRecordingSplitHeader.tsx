@@ -23,6 +23,7 @@ import {
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
 import { isMobile } from '@core/mobile/isMobile';
+import { buildEntityData } from '@entity';
 import PhoneCallIcon from '@icon/wide-call.svg';
 import IconShared from '@icon/wide-share.svg';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
@@ -139,7 +140,7 @@ export function CallRecordingSplitHeader(props: {
             <HeaderIsland>
               <Button
                 depth={2}
-                variant="base"
+                variant="outline"
                 size="icon-xs"
                 class="bg-surface"
                 tooltip="Call Again"
@@ -161,6 +162,16 @@ export function CallRecordingSplitHeader(props: {
         id={blockId}
         itemType="call"
         name={callName()}
+        // Generic chrome can't reconstruct a CallEntity (it lacks the
+        // channelId), so supply it for the menu's entity-gated items.
+        entity={buildEntityData({
+          id: record().callId,
+          name: callName(),
+          blockName: 'call',
+          channelId: record().channelId,
+          isActive: record().isActive,
+          status: record().status ?? undefined,
+        })}
       />
     </>
   );

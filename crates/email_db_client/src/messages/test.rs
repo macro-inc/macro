@@ -1,4 +1,4 @@
-use crate::messages::get::draft_exists_with_id;
+use crate::messages::get::{draft_exists_with_id, filter_existing_provider_message_ids};
 use crate::messages::scheduled::get::get_scheduled_db_messages_by_link_id;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::types::Uuid;
@@ -332,8 +332,7 @@ async fn delete_message_clears_calendar_flag_when_last_ics_message_removed(
     .expect("fixture message present");
 
     let mut tx = pool.begin().await?;
-    let deleted_thread =
-        crate::messages::delete::delete_message_with_tx(&mut tx, &message, true).await?;
+    let deleted_thread = crate::messages::delete::delete_message_with_tx(&mut tx, &message).await?;
     tx.commit().await?;
 
     // The thread survives (a second message remains) and the flag flips off
@@ -460,6 +459,35 @@ async fn update_message_read_status_ignores_wrong_link(pool: Pool<Postgres>) -> 
 
     assert!(updated.is_none());
     assert!(!fetch_is_read(&pool, message_id).await?);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("draft_exists_with_id"))
+)]
+async fn filter_existing_provider_message_ids_partitions_known_and_missing(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000e01")?;
+    let other_link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000e02")?;
+
+    let requested = vec![
+        "provider-msg-e501".to_string(),
+        "provider-msg-e502".to_string(),
+        "provider-msg-missing".to_string(),
+    ];
+
+    let existing = filter_existing_provider_message_ids(&pool, link_id, &requested).await?;
+    assert!(existing.contains("provider-msg-e501"));
+    assert!(existing.contains("provider-msg-e502"));
+    assert!(!existing.contains("provider-msg-missing"));
+    assert_eq!(existing.len(), 2);
+
+    // Messages belong to the first link only.
+    let cross_link = filter_existing_provider_message_ids(&pool, other_link_id, &requested).await?;
+    assert!(cross_link.is_empty());
 
     Ok(())
 }

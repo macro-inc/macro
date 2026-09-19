@@ -279,7 +279,7 @@ type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   hideMenuOnEscape?: boolean;
   horizontalScroll?: boolean;
   class?: string;
-  depth?: 0 | 1 | 2 | 3 | 4 | 5;
+  depth?: 0 | 1 | 2 | 3 | 4;
   portalScope?: 'local';
 };
 
@@ -796,6 +796,20 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                         }
                         setSuppressOpenUntilInputChange(true);
                         setIsOpen(false);
+                        return;
+                      }
+
+                      if (e.key === 'Escape') {
+                        e.preventDefault();
+                        const inputEl = inputRef();
+                        const currentSearch = inputValue().trim();
+                        if (currentSearch.length > 0) {
+                          setInputValue('');
+                          if (inputEl) inputEl.value = '';
+                          return;
+                        }
+
+                        inputEl?.blur();
                         return;
                       }
 

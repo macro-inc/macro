@@ -1,0 +1,2162 @@
+event: status
+data: {"runId":"run-e4fb4868-e6f6-4cbf-9322-8934cd0f10f8","status":"RUNNING"}
+
+id: 1787341864498-0
+event: interaction_update
+data: {"type":"step-started","stepId":0}
+
+id: 1787341864508-0
+event: interaction_update
+data: {"type":"user-message-appended","userMessage":{"type":"user_message","session_id":"run-e4fb4868-e6f6-4cbf-9322-8934cd0f10f8","text":"Name every MCP server you can see and list its tools. Then stop. Do not modify files."}}
+
+id: 1787341866582-0
+event: thinking
+data: {"text":"I will identify every"}
+
+id: 1787341866582-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"I will identify every"}
+
+id: 1787341866586-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787341866661-0
+event: thinking
+data: {"text":" MCP server visible "}
+
+id: 1787341866661-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" MCP server visible "}
+
+id: 1787341866665-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787341866745-0
+event: thinking
+data: {"text":"in the current environment"}
+
+id: 1787341866745-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"in the current environment"}
+
+id: 1787341866749-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787341866838-0
+event: thinking
+data: {"text":" and list each one's"}
+
+id: 1787341866838-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" and list each one's"}
+
+id: 1787341866841-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787341866920-0
+event: thinking
+data: {"text":" available tools. Then"}
+
+id: 1787341866920-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" available tools. Then"}
+
+id: 1787341866924-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787341867015-0
+event: thinking
+data: {"text":" I will stop without"}
+
+id: 1787341867015-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" I will stop without"}
+
+id: 1787341867028-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787341867085-0
+event: thinking
+data: {"text":" modifying any files."}
+
+id: 1787341867085-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" modifying any files."}
+
+id: 1787341867088-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787341867635-0
+event: thinking
+data: {"text":"\n\nI'll call GetMcpTools"}
+
+id: 1787341867635-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"\n\nI'll call GetMcpTools"}
+
+id: 1787341867672-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787341867676-0
+event: thinking
+data: {"text":" with no arguments to"}
+
+id: 1787341867676-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" with no arguments to"}
+
+id: 1787341867680-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787341867684-0
+event: thinking
+data: {"text":" retrieve the full catalog"}
+
+id: 1787341867684-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" retrieve the full catalog"}
+
+id: 1787341867687-0
+event: interaction_update
+data: {"type":"token-delta","tokens":7}
+
+id: 1787341867691-0
+event: thinking
+data: {"text":" of MCP servers and "}
+
+id: 1787341867691-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" of MCP servers and "}
+
+id: 1787341867694-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787341867699-0
+event: thinking
+data: {"text":"their tools. The system"}
+
+id: 1787341867699-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"their tools. The system"}
+
+id: 1787341867702-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787341867707-0
+event: thinking
+data: {"text":" prompt also indicates"}
+
+id: 1787341867707-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" prompt also indicates"}
+
+id: 1787341867711-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787341867715-0
+event: thinking
+data: {"text":" three available servers:"}
+
+id: 1787341867715-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" three available servers:"}
+
+id: 1787341867718-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787341867722-0
+event: thinking
+data: {"text":" deepwiki, cursor-cloud,"}
+
+id: 1787341867722-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" deepwiki, cursor-cloud,"}
+
+id: 1787341867726-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787341867730-0
+event: thinking
+data: {"text":" and cursor-subscriptions."}
+
+id: 1787341867730-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" and cursor-subscriptions."}
+
+id: 1787341867734-0
+event: interaction_update
+data: {"type":"token-delta","tokens":7}
+
+id: 1787341867738-0
+event: interaction_update
+data: {"type":"thinking-completed","thinkingDurationMs":1157}
+
+id: 1787341867742-0
+event: assistant
+data: {"text":"I'll"}
+
+id: 1787341867742-0
+event: interaction_update
+data: {"type":"text-delta","text":"I'll"}
+
+id: 1787341867746-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341867750-0
+event: assistant
+data: {"text":" list"}
+
+id: 1787341867750-0
+event: interaction_update
+data: {"type":"text-delta","text":" list"}
+
+id: 1787341867753-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341867757-0
+event: assistant
+data: {"text":" every"}
+
+id: 1787341867757-0
+event: interaction_update
+data: {"type":"text-delta","text":" every"}
+
+id: 1787341867760-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341867764-0
+event: assistant
+data: {"text":" MCP"}
+
+id: 1787341867764-0
+event: interaction_update
+data: {"type":"text-delta","text":" MCP"}
+
+id: 1787341867768-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341867771-0
+event: assistant
+data: {"text":" server"}
+
+id: 1787341867771-0
+event: interaction_update
+data: {"type":"text-delta","text":" server"}
+
+id: 1787341867775-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787341867778-0
+event: assistant
+data: {"text":" visible"}
+
+id: 1787341867778-0
+event: interaction_update
+data: {"type":"text-delta","text":" visible"}
+
+id: 1787341867782-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787341867786-0
+event: assistant
+data: {"text":" in"}
+
+id: 1787341867786-0
+event: interaction_update
+data: {"type":"text-delta","text":" in"}
+
+id: 1787341867790-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341867794-0
+event: assistant
+data: {"text":" this"}
+
+id: 1787341867794-0
+event: interaction_update
+data: {"type":"text-delta","text":" this"}
+
+id: 1787341867799-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341867803-0
+event: assistant
+data: {"text":" environment"}
+
+id: 1787341867803-0
+event: interaction_update
+data: {"type":"text-delta","text":" environment"}
+
+id: 1787341867807-0
+event: interaction_update
+data: {"type":"token-delta","tokens":3}
+
+id: 1787341867811-0
+event: assistant
+data: {"text":" and"}
+
+id: 1787341867811-0
+event: interaction_update
+data: {"type":"text-delta","text":" and"}
+
+id: 1787341867818-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341867822-0
+event: assistant
+data: {"text":" the"}
+
+id: 1787341867822-0
+event: interaction_update
+data: {"type":"text-delta","text":" the"}
+
+id: 1787341867826-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341867829-0
+event: assistant
+data: {"text":" tools"}
+
+id: 1787341867829-0
+event: interaction_update
+data: {"type":"text-delta","text":" tools"}
+
+id: 1787341867834-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787341867837-0
+event: assistant
+data: {"text":" each"}
+
+id: 1787341867837-0
+event: interaction_update
+data: {"type":"text-delta","text":" each"}
+
+id: 1787341867841-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341867845-0
+event: assistant
+data: {"text":" one"}
+
+id: 1787341867845-0
+event: interaction_update
+data: {"type":"text-delta","text":" one"}
+
+id: 1787341867848-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341867853-0
+event: assistant
+data: {"text":" exposes"}
+
+id: 1787341867853-0
+event: interaction_update
+data: {"type":"text-delta","text":" exposes"}
+
+id: 1787341867856-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787341867860-0
+event: assistant
+data: {"text":"."}
+
+id: 1787341867860-0
+event: interaction_update
+data: {"type":"text-delta","text":"."}
+
+id: 1787341867865-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341871927-0
+event: tool_call
+data: {"callId":"call-17ac3651-6436-4ff3-b043-b7199a3d3baf-0\nfc_c201edaf-8ed6-943a-9fee-6d2c66ca3c16_0","name":"get_mcp_tools","status":"running","args":{"toolCallId":"unknown-tool-call-id"},"result":{"error":{"error":"Invalid arguments"}}}
+
+id: 1787341871927-1
+event: tool_call
+data: {"callId":"call-17ac3651-6436-4ff3-b043-b7199a3d3baf-0\nfc_c201edaf-8ed6-943a-9fee-6d2c66ca3c16_0","name":"get_mcp_tools","status":"running","args":{"toolCallId":"call-17ac3651-6436-4ff3-b043-b7199a3d3baf-0\nfc_c201edaf-8ed6-943a-9fee-6d2c66ca3c16_0"}}
+
+id: 1787341872480-0
+event: tool_call
+data: {"callId":"call-17ac3651-6436-4ff3-b043-b7199a3d3baf-0\nfc_c201edaf-8ed6-943a-9fee-6d2c66ca3c16_0","name":"get_mcp_tools","status":"completed","args":{"toolCallId":"call-17ac3651-6436-4ff3-b043-b7199a3d3baf-0\nfc_c201edaf-8ed6-943a-9fee-6d2c66ca3c16_0"},"result":{"success":{"content":"{\n  \"mode\": \"catalog\",\n  \"servers\": [\n    {\n      \"server\": \"cursor-cloud\",\n      \"serverStatus\": \"ready\",\n      \"serverDescription\": \"Cursor-internal cloud-agent diagnostics (server `cursor-cloud`). - `cursor-cloud-run-info` — return the current cloud-agent run identity, basic run metadata (name, repo, branch, model, ... [truncated]\",\n      \"tools\": [\n        {\n          \"tool\": \"batch-fetch-details\",\n          \"description\": \"Fetch details for a batch of specified accessible cloud agents by bcIds. Users and service accounts can fetch their own runs. Team admins can additionally fetch teammates' runs only whe... [truncated]\"\n        },\n        {\n          \"tool\": \"environment-build-logs\",\n          \"description\": \"Fetch the install/setup logs for one environment build by buildId (bld-<YYYYMMDD>-<uuid>, as surfaced by environment-info's build block). Returns the log text inline (large outputs are ... [truncated]\"\n        },\n        {\n          \"tool\": \"environment-info\",\n          \"description\": \"Return the current cloud-agent run's environment (name, environment & version public ids, source, how/when it was recorded, repos, the full environment.json, a link to the environment i... [truncated]\"\n        },\n        {\n          \"tool\": \"get-automation\",\n          \"description\": \"Look up one Cursor automation by its id (UUID). Calls the AutomationsService GetAutomation API as the current run's principal and returns AutomationInfo metadata, enforcing the same rea... [truncated]\"\n        },\n        {\n          \"tool\": \"get-events\",\n          \"description\": \"Return the list of events recorded for the current cloud-agent run — the same events shown on the run's cursor.com dashboard page — ordered oldest first. Events cover run lifecycle and ... [truncated]\"\n        },\n        {\n          \"tool\": \"get-message-queue\",\n          \"description\": \"Return a point-in-time snapshot of THIS run's user-visible pending follow-up message queue — the same queue shown on the dashboard. No arguments; always scoped to this run. The currentl... [truncated]\"\n        },\n        {\n          \"tool\": \"list-cloud-agents\",\n          \"description\": \"List cloud agents accessible to the current run's principal in this run's environment (or, for a run without a saved environment, agents on the same repository), ordered by creation tim... [truncated]\"\n        },\n        {\n          \"tool\": \"list-environment-builds\",\n          \"description\": \"List this run's environment builds — the prebuilt environment snapshots a cloud agent can boot from instead of running install from scratch — newest first, so build ids can be found for... [truncated]\"\n        },\n        {\n          \"tool\": \"request-environment-setup-actions\",\n          \"description\": \"Record structured actions that the user must complete before environment setup can continue. Call after confirming the requested credentials are unavailable and after completing all ind... [truncated]\"\n        },\n        {\n          \"tool\": \"run-info\",\n          \"description\": \"Return the current cloud-agent run identity, basic run metadata (including lifecycle and setup status), and the URL where the run is available (https://cursor.com/agents/<bcId>).\"\n        },\n        {\n          \"tool\": \"trigger-environment-build\",\n          \"description\": \"Start one DRAFT environment build of this run's own environment (fresh git checkout + install script, snapshotted at the end). OK to call during environment setup to validate the config... [truncated]\"\n        }\n      ]\n    },\n    {\n      \"server\": \"cursor-subscriptions\",\n      \"serverStatus\": \"ready\",\n      \"tools\": [\n        {\n          \"tool\": \"list_subscriptions\",\n          \"description\": \"List active event subscriptions for this Cloud Agent.\"\n        },\n        {\n          \"tool\": \"subscribe_github_ci\",\n          \"description\": \"Subscribe this Cloud Agent to terminal GitHub CI results on one branch. Waits until every check run and commit-status context on a commit is terminal, then delivers one commit-wide resu... [truncated]\"\n        },\n        {\n          \"tool\": \"subscribe_github_pr\",\n          \"description\": \"Subscribe this Cloud Agent to future GitHub pull request events. After subscribing, state what you are waiting for and end your turn; the event arrives as a follow-up notification in th... [truncated]\"\n        },\n        {\n          \"tool\": \"subscribe_timer\",\n          \"description\": \"Subscribe a timer that enqueues the given prompt as a follow-up that runs when this Cloud Agent is otherwise free. Provide exactly one of `cron` (a cron expression) or `delaySeconds` (a... [truncated]\"\n        },\n        {\n          \"tool\": \"unsubscribe\",\n          \"description\": \"Close one active event subscription for this Cloud Agent.\"\n        }\n      ]\n    },\n    {\n      \"server\": \"deepwiki\",\n      \"serverStatus\": \"ready\",\n      \"serverDescription\": \"DeepWiki MCP provides AI-powered documentation for GitHub repositories. Available tools: - read_wiki_structure: Get a list of documentation topics for a repository - read_wiki_contents:... [truncated]\",\n      \"tools\": [\n        {\n          \"tool\": \"ask_question\",\n          \"description\": \"Ask any question about a GitHub repository and get an AI-powered, context-grounded response.\"\n        },\n        {\n          \"tool\": \"read_wiki_contents\",\n          \"description\": \"View documentation about a GitHub repository.\"\n        },\n        {\n          \"tool\": \"read_wiki_structure\",\n          \"description\": \"Get a list of documentation topics for a GitHub repository.\"\n        }\n      ]\n    }\n  ]\n}"}}}
+
+id: 1787341872485-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1394}
+
+id: 1787341872548-0
+event: interaction_update
+data: {"type":"step-completed","stepId":0,"stepDurationMs":8050}
+
+id: 1787341873151-0
+event: interaction_update
+data: {"type":"step-started","stepId":72}
+
+id: 1787341876066-0
+event: thinking
+data: {"text":"I will identify every"}
+
+id: 1787341876066-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"I will identify every"}
+
+id: 1787341876069-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787341876074-0
+event: thinking
+data: {"text":" visible MCP server "}
+
+id: 1787341876074-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" visible MCP server "}
+
+id: 1787341876077-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787341876081-0
+event: thinking
+data: {"text":"and list its tools. "}
+
+id: 1787341876081-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"and list its tools. "}
+
+id: 1787341876086-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787341876090-0
+event: thinking
+data: {"text":"Then I will stop."}
+
+id: 1787341876090-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"Then I will stop."}
+
+id: 1787341876094-0
+event: interaction_update
+data: {"type":"token-delta","tokens":4}
+
+id: 1787341876098-0
+event: interaction_update
+data: {"type":"thinking-completed","thinkingDurationMs":32}
+
+id: 1787341876103-0
+event: assistant
+data: {"text":"**"}
+
+id: 1787341876103-0
+event: interaction_update
+data: {"type":"text-delta","text":"**"}
+
+id: 1787341876107-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876112-0
+event: assistant
+data: {"text":"cursor"}
+
+id: 1787341876112-0
+event: interaction_update
+data: {"type":"text-delta","text":"cursor"}
+
+id: 1787341876117-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876122-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876122-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876127-0
+event: assistant
+data: {"text":"cloud"}
+
+id: 1787341876127-0
+event: interaction_update
+data: {"type":"text-delta","text":"cloud"}
+
+id: 1787341876131-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787341876135-0
+event: assistant
+data: {"text":"**"}
+
+id: 1787341876135-0
+event: interaction_update
+data: {"type":"text-delta","text":"**"}
+
+id: 1787341876140-0
+event: assistant
+data: {"text":" ("}
+
+id: 1787341876140-0
+event: interaction_update
+data: {"type":"text-delta","text":" ("}
+
+id: 1787341876144-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876149-0
+event: assistant
+data: {"text":"ready"}
+
+id: 1787341876149-0
+event: interaction_update
+data: {"type":"text-delta","text":"ready"}
+
+id: 1787341876153-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876158-0
+event: assistant
+data: {"text":")\n"}
+
+id: 1787341876158-0
+event: interaction_update
+data: {"type":"text-delta","text":")\n"}
+
+id: 1787341876162-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876162-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876166-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876171-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787341876171-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787341876177-0
+event: assistant
+data: {"text":"batch"}
+
+id: 1787341876177-0
+event: interaction_update
+data: {"type":"text-delta","text":"batch"}
+
+id: 1787341876182-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876188-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876188-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876192-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876196-0
+event: assistant
+data: {"text":"fetch"}
+
+id: 1787341876196-0
+event: interaction_update
+data: {"type":"text-delta","text":"fetch"}
+
+id: 1787341876201-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876205-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876205-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876209-0
+event: assistant
+data: {"text":"details"}
+
+id: 1787341876209-0
+event: interaction_update
+data: {"type":"text-delta","text":"details"}
+
+id: 1787341876213-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787341876219-0
+event: assistant
+data: {"text":"`\n"}
+
+id: 1787341876219-0
+event: interaction_update
+data: {"type":"text-delta","text":"`\n"}
+
+id: 1787341876223-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876223-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876227-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876232-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787341876232-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787341876236-0
+event: assistant
+data: {"text":"environment"}
+
+id: 1787341876236-0
+event: interaction_update
+data: {"type":"text-delta","text":"environment"}
+
+id: 1787341876240-0
+event: interaction_update
+data: {"type":"token-delta","tokens":3}
+
+id: 1787341876245-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876245-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876249-0
+event: assistant
+data: {"text":"build"}
+
+id: 1787341876249-0
+event: interaction_update
+data: {"type":"text-delta","text":"build"}
+
+id: 1787341876254-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876258-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876258-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876262-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876272-0
+event: assistant
+data: {"text":"logs"}
+
+id: 1787341876272-0
+event: interaction_update
+data: {"type":"text-delta","text":"logs"}
+
+id: 1787341876276-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876281-0
+event: assistant
+data: {"text":"`\n"}
+
+id: 1787341876281-0
+event: interaction_update
+data: {"type":"text-delta","text":"`\n"}
+
+id: 1787341876285-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876285-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876289-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787341876289-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787341876293-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876300-0
+event: assistant
+data: {"text":"environment"}
+
+id: 1787341876300-0
+event: interaction_update
+data: {"type":"text-delta","text":"environment"}
+
+id: 1787341876304-0
+event: interaction_update
+data: {"type":"token-delta","tokens":3}
+
+id: 1787341876309-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876309-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876313-0
+event: assistant
+data: {"text":"info"}
+
+id: 1787341876313-0
+event: interaction_update
+data: {"type":"text-delta","text":"info"}
+
+id: 1787341876317-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876322-0
+event: assistant
+data: {"text":"`\n"}
+
+id: 1787341876322-0
+event: interaction_update
+data: {"type":"text-delta","text":"`\n"}
+
+id: 1787341876326-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876326-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876333-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876337-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787341876337-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787341876342-0
+event: assistant
+data: {"text":"get"}
+
+id: 1787341876342-0
+event: interaction_update
+data: {"type":"text-delta","text":"get"}
+
+id: 1787341876346-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876350-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876350-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876355-0
+event: assistant
+data: {"text":"automation"}
+
+id: 1787341876355-0
+event: interaction_update
+data: {"type":"text-delta","text":"automation"}
+
+id: 1787341876360-0
+event: interaction_update
+data: {"type":"token-delta","tokens":3}
+
+id: 1787341876364-0
+event: assistant
+data: {"text":"`\n"}
+
+id: 1787341876364-0
+event: interaction_update
+data: {"type":"text-delta","text":"`\n"}
+
+id: 1787341876368-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876368-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876373-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787341876373-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787341876377-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876381-0
+event: assistant
+data: {"text":"get"}
+
+id: 1787341876381-0
+event: interaction_update
+data: {"type":"text-delta","text":"get"}
+
+id: 1787341876386-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876391-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876391-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876395-0
+event: assistant
+data: {"text":"events"}
+
+id: 1787341876395-0
+event: interaction_update
+data: {"type":"text-delta","text":"events"}
+
+id: 1787341876400-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876404-0
+event: assistant
+data: {"text":"`\n"}
+
+id: 1787341876404-0
+event: interaction_update
+data: {"type":"text-delta","text":"`\n"}
+
+id: 1787341876408-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876413-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876413-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876418-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787341876418-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787341876426-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876430-0
+event: assistant
+data: {"text":"get"}
+
+id: 1787341876430-0
+event: interaction_update
+data: {"type":"text-delta","text":"get"}
+
+id: 1787341876435-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876435-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876439-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876445-0
+event: assistant
+data: {"text":"message"}
+
+id: 1787341876445-0
+event: interaction_update
+data: {"type":"text-delta","text":"message"}
+
+id: 1787341876449-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876453-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876453-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876457-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876461-0
+event: assistant
+data: {"text":"queue"}
+
+id: 1787341876461-0
+event: interaction_update
+data: {"type":"text-delta","text":"queue"}
+
+id: 1787341876465-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876470-0
+event: assistant
+data: {"text":"`\n"}
+
+id: 1787341876470-0
+event: interaction_update
+data: {"type":"text-delta","text":"`\n"}
+
+id: 1787341876475-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876475-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876479-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876483-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787341876483-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787341876488-0
+event: assistant
+data: {"text":"list"}
+
+id: 1787341876488-0
+event: interaction_update
+data: {"type":"text-delta","text":"list"}
+
+id: 1787341876492-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876496-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876496-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876500-0
+event: assistant
+data: {"text":"cloud"}
+
+id: 1787341876500-0
+event: interaction_update
+data: {"type":"text-delta","text":"cloud"}
+
+id: 1787341876505-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787341876509-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876509-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876514-0
+event: assistant
+data: {"text":"agents"}
+
+id: 1787341876514-0
+event: interaction_update
+data: {"type":"text-delta","text":"agents"}
+
+id: 1787341876518-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876522-0
+event: assistant
+data: {"text":"`\n"}
+
+id: 1787341876522-0
+event: interaction_update
+data: {"type":"text-delta","text":"`\n"}
+
+id: 1787341876526-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876530-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876530-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876536-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787341876536-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787341876542-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876546-0
+event: assistant
+data: {"text":"list"}
+
+id: 1787341876546-0
+event: interaction_update
+data: {"type":"text-delta","text":"list"}
+
+id: 1787341876550-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876555-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876555-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876559-0
+event: assistant
+data: {"text":"environment"}
+
+id: 1787341876559-0
+event: interaction_update
+data: {"type":"text-delta","text":"environment"}
+
+id: 1787341876563-0
+event: interaction_update
+data: {"type":"token-delta","tokens":3}
+
+id: 1787341876568-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876568-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876573-0
+event: assistant
+data: {"text":"builds"}
+
+id: 1787341876573-0
+event: interaction_update
+data: {"type":"text-delta","text":"builds"}
+
+id: 1787341876578-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876583-0
+event: assistant
+data: {"text":"`\n"}
+
+id: 1787341876583-0
+event: interaction_update
+data: {"type":"text-delta","text":"`\n"}
+
+id: 1787341876589-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876593-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876593-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876597-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787341876597-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787341876602-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876606-0
+event: assistant
+data: {"text":"request"}
+
+id: 1787341876606-0
+event: interaction_update
+data: {"type":"text-delta","text":"request"}
+
+id: 1787341876610-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876615-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876615-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876619-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876623-0
+event: assistant
+data: {"text":"environment"}
+
+id: 1787341876623-0
+event: interaction_update
+data: {"type":"text-delta","text":"environment"}
+
+id: 1787341876630-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787341876635-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876635-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876639-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876644-0
+event: assistant
+data: {"text":"setup"}
+
+id: 1787341876644-0
+event: interaction_update
+data: {"type":"text-delta","text":"setup"}
+
+id: 1787341876655-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876659-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876659-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876663-0
+event: assistant
+data: {"text":"actions"}
+
+id: 1787341876663-0
+event: interaction_update
+data: {"type":"text-delta","text":"actions"}
+
+id: 1787341876667-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787341876671-0
+event: assistant
+data: {"text":"`\n"}
+
+id: 1787341876671-0
+event: interaction_update
+data: {"type":"text-delta","text":"`\n"}
+
+id: 1787341876676-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876676-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876681-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876686-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787341876686-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787341876690-0
+event: assistant
+data: {"text":"run"}
+
+id: 1787341876690-0
+event: interaction_update
+data: {"type":"text-delta","text":"run"}
+
+id: 1787341876696-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876700-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876700-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876704-0
+event: assistant
+data: {"text":"info"}
+
+id: 1787341876704-0
+event: interaction_update
+data: {"type":"text-delta","text":"info"}
+
+id: 1787341876708-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876713-0
+event: assistant
+data: {"text":"`\n"}
+
+id: 1787341876713-0
+event: interaction_update
+data: {"type":"text-delta","text":"`\n"}
+
+id: 1787341876718-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876722-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876722-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876726-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787341876726-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787341876731-0
+event: assistant
+data: {"text":"trigger"}
+
+id: 1787341876731-0
+event: interaction_update
+data: {"type":"text-delta","text":"trigger"}
+
+id: 1787341876735-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787341876739-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876739-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876743-0
+event: assistant
+data: {"text":"environment"}
+
+id: 1787341876743-0
+event: interaction_update
+data: {"type":"text-delta","text":"environment"}
+
+id: 1787341876749-0
+event: interaction_update
+data: {"type":"token-delta","tokens":3}
+
+id: 1787341876753-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876753-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876758-0
+event: assistant
+data: {"text":"build"}
+
+id: 1787341876758-0
+event: interaction_update
+data: {"type":"text-delta","text":"build"}
+
+id: 1787341876762-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787341876766-0
+event: assistant
+data: {"text":"`\n\n"}
+
+id: 1787341876766-0
+event: interaction_update
+data: {"type":"text-delta","text":"`\n\n"}
+
+id: 1787341876771-0
+event: assistant
+data: {"text":"**"}
+
+id: 1787341876771-0
+event: interaction_update
+data: {"type":"text-delta","text":"**"}
+
+id: 1787341876775-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876779-0
+event: assistant
+data: {"text":"cursor"}
+
+id: 1787341876779-0
+event: interaction_update
+data: {"type":"text-delta","text":"cursor"}
+
+id: 1787341876783-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876788-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876788-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876792-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876796-0
+event: assistant
+data: {"text":"subscriptions"}
+
+id: 1787341876796-0
+event: interaction_update
+data: {"type":"text-delta","text":"subscriptions"}
+
+id: 1787341876800-0
+event: interaction_update
+data: {"type":"token-delta","tokens":3}
+
+id: 1787341876804-0
+event: assistant
+data: {"text":"**"}
+
+id: 1787341876804-0
+event: interaction_update
+data: {"type":"text-delta","text":"**"}
+
+id: 1787341876809-0
+event: assistant
+data: {"text":" ("}
+
+id: 1787341876809-0
+event: interaction_update
+data: {"type":"text-delta","text":" ("}
+
+id: 1787341876812-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876822-0
+event: assistant
+data: {"text":"ready"}
+
+id: 1787341876822-0
+event: interaction_update
+data: {"type":"text-delta","text":"ready"}
+
+id: 1787341876830-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876834-0
+event: assistant
+data: {"text":")\n"}
+
+id: 1787341876834-0
+event: interaction_update
+data: {"type":"text-delta","text":")\n"}
+
+id: 1787341876839-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876843-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876843-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876847-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787341876847-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787341876852-0
+event: assistant
+data: {"text":"list"}
+
+id: 1787341876852-0
+event: interaction_update
+data: {"type":"text-delta","text":"list"}
+
+id: 1787341876858-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876863-0
+event: assistant
+data: {"text":"_"}
+
+id: 1787341876863-0
+event: interaction_update
+data: {"type":"text-delta","text":"_"}
+
+id: 1787341876867-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876871-0
+event: assistant
+data: {"text":"subscriptions"}
+
+id: 1787341876871-0
+event: interaction_update
+data: {"type":"text-delta","text":"subscriptions"}
+
+id: 1787341876876-0
+event: interaction_update
+data: {"type":"token-delta","tokens":3}
+
+id: 1787341876880-0
+event: assistant
+data: {"text":"`\n"}
+
+id: 1787341876880-0
+event: interaction_update
+data: {"type":"text-delta","text":"`\n"}
+
+id: 1787341876886-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876886-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876893-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876898-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787341876898-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787341876902-0
+event: assistant
+data: {"text":"subscribe"}
+
+id: 1787341876902-0
+event: interaction_update
+data: {"type":"text-delta","text":"subscribe"}
+
+id: 1787341876910-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787341876918-0
+event: assistant
+data: {"text":"_"}
+
+id: 1787341876918-0
+event: interaction_update
+data: {"type":"text-delta","text":"_"}
+
+id: 1787341876922-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876926-0
+event: assistant
+data: {"text":"github"}
+
+id: 1787341876926-0
+event: interaction_update
+data: {"type":"text-delta","text":"github"}
+
+id: 1787341876935-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876939-0
+event: assistant
+data: {"text":"_"}
+
+id: 1787341876939-0
+event: interaction_update
+data: {"type":"text-delta","text":"_"}
+
+id: 1787341876943-0
+event: assistant
+data: {"text":"ci"}
+
+id: 1787341876943-0
+event: interaction_update
+data: {"type":"text-delta","text":"ci"}
+
+id: 1787341876947-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876951-0
+event: assistant
+data: {"text":"`\n"}
+
+id: 1787341876951-0
+event: interaction_update
+data: {"type":"text-delta","text":"`\n"}
+
+id: 1787341876956-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341876956-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341876960-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341876964-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787341876964-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787341876970-0
+event: assistant
+data: {"text":"subscribe"}
+
+id: 1787341876970-0
+event: interaction_update
+data: {"type":"text-delta","text":"subscribe"}
+
+id: 1787341876983-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787341876987-0
+event: assistant
+data: {"text":"_"}
+
+id: 1787341876987-0
+event: interaction_update
+data: {"type":"text-delta","text":"_"}
+
+id: 1787341876992-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341877001-0
+event: assistant
+data: {"text":"github"}
+
+id: 1787341877001-0
+event: interaction_update
+data: {"type":"text-delta","text":"github"}
+
+id: 1787341877016-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341877021-0
+event: assistant
+data: {"text":"_"}
+
+id: 1787341877021-0
+event: interaction_update
+data: {"type":"text-delta","text":"_"}
+
+id: 1787341877025-0
+event: assistant
+data: {"text":"pr"}
+
+id: 1787341877025-0
+event: interaction_update
+data: {"type":"text-delta","text":"pr"}
+
+id: 1787341877029-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341877034-0
+event: assistant
+data: {"text":"`\n"}
+
+id: 1787341877034-0
+event: interaction_update
+data: {"type":"text-delta","text":"`\n"}
+
+id: 1787341877038-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341877038-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341877051-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341877057-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787341877057-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787341877062-0
+event: assistant
+data: {"text":"subscribe"}
+
+id: 1787341877062-0
+event: interaction_update
+data: {"type":"text-delta","text":"subscribe"}
+
+id: 1787341877066-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787341877071-0
+event: assistant
+data: {"text":"_"}
+
+id: 1787341877071-0
+event: interaction_update
+data: {"type":"text-delta","text":"_"}
+
+id: 1787341877075-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341877079-0
+event: assistant
+data: {"text":"timer"}
+
+id: 1787341877079-0
+event: interaction_update
+data: {"type":"text-delta","text":"timer"}
+
+id: 1787341877084-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341877088-0
+event: assistant
+data: {"text":"`\n"}
+
+id: 1787341877088-0
+event: interaction_update
+data: {"type":"text-delta","text":"`\n"}
+
+id: 1787341877093-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341877093-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341877101-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341877106-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787341877106-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787341877110-0
+event: assistant
+data: {"text":"unsubscribe"}
+
+id: 1787341877110-0
+event: interaction_update
+data: {"type":"text-delta","text":"unsubscribe"}
+
+id: 1787341877114-0
+event: interaction_update
+data: {"type":"token-delta","tokens":3}
+
+id: 1787341877117-0
+event: assistant
+data: {"text":"`\n\n"}
+
+id: 1787341877117-0
+event: interaction_update
+data: {"type":"text-delta","text":"`\n\n"}
+
+id: 1787341877121-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341877125-0
+event: assistant
+data: {"text":"**"}
+
+id: 1787341877125-0
+event: interaction_update
+data: {"type":"text-delta","text":"**"}
+
+id: 1787341877130-0
+event: assistant
+data: {"text":"deep"}
+
+id: 1787341877130-0
+event: interaction_update
+data: {"type":"text-delta","text":"deep"}
+
+id: 1787341877134-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341877146-0
+event: assistant
+data: {"text":"wiki"}
+
+id: 1787341877146-0
+event: interaction_update
+data: {"type":"text-delta","text":"wiki"}
+
+id: 1787341877152-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341877156-0
+event: assistant
+data: {"text":"**"}
+
+id: 1787341877156-0
+event: interaction_update
+data: {"type":"text-delta","text":"**"}
+
+id: 1787341877164-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341877170-0
+event: assistant
+data: {"text":" ("}
+
+id: 1787341877170-0
+event: interaction_update
+data: {"type":"text-delta","text":" ("}
+
+id: 1787341877174-0
+event: assistant
+data: {"text":"ready"}
+
+id: 1787341877174-0
+event: interaction_update
+data: {"type":"text-delta","text":"ready"}
+
+id: 1787341877178-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341877184-0
+event: assistant
+data: {"text":")\n"}
+
+id: 1787341877184-0
+event: interaction_update
+data: {"type":"text-delta","text":")\n"}
+
+id: 1787341877189-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341877204-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341877204-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341877216-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787341877216-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787341877220-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341877225-0
+event: assistant
+data: {"text":"ask"}
+
+id: 1787341877225-0
+event: interaction_update
+data: {"type":"text-delta","text":"ask"}
+
+id: 1787341877230-0
+event: assistant
+data: {"text":"_"}
+
+id: 1787341877230-0
+event: interaction_update
+data: {"type":"text-delta","text":"_"}
+
+id: 1787341877234-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341877238-0
+event: assistant
+data: {"text":"question"}
+
+id: 1787341877238-0
+event: interaction_update
+data: {"type":"text-delta","text":"question"}
+
+id: 1787341877242-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787341877247-0
+event: assistant
+data: {"text":"`\n"}
+
+id: 1787341877247-0
+event: interaction_update
+data: {"type":"text-delta","text":"`\n"}
+
+id: 1787341877251-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341877251-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341877255-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787341877255-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787341877260-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341877264-0
+event: assistant
+data: {"text":"read"}
+
+id: 1787341877264-0
+event: interaction_update
+data: {"type":"text-delta","text":"read"}
+
+id: 1787341877268-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341877273-0
+event: assistant
+data: {"text":"_"}
+
+id: 1787341877273-0
+event: interaction_update
+data: {"type":"text-delta","text":"_"}
+
+id: 1787341877277-0
+event: assistant
+data: {"text":"wiki"}
+
+id: 1787341877277-0
+event: interaction_update
+data: {"type":"text-delta","text":"wiki"}
+
+id: 1787341877281-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341877285-0
+event: assistant
+data: {"text":"_"}
+
+id: 1787341877285-0
+event: interaction_update
+data: {"type":"text-delta","text":"_"}
+
+id: 1787341877290-0
+event: assistant
+data: {"text":"contents"}
+
+id: 1787341877290-0
+event: interaction_update
+data: {"type":"text-delta","text":"contents"}
+
+id: 1787341877294-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787341877298-0
+event: assistant
+data: {"text":"`\n"}
+
+id: 1787341877298-0
+event: interaction_update
+data: {"type":"text-delta","text":"`\n"}
+
+id: 1787341877301-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341877306-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787341877306-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787341877311-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787341877311-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787341877315-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341877319-0
+event: assistant
+data: {"text":"read"}
+
+id: 1787341877319-0
+event: interaction_update
+data: {"type":"text-delta","text":"read"}
+
+id: 1787341877323-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341877327-0
+event: assistant
+data: {"text":"_"}
+
+id: 1787341877327-0
+event: interaction_update
+data: {"type":"text-delta","text":"_"}
+
+id: 1787341877331-0
+event: assistant
+data: {"text":"wiki"}
+
+id: 1787341877331-0
+event: interaction_update
+data: {"type":"text-delta","text":"wiki"}
+
+id: 1787341877335-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341877340-0
+event: assistant
+data: {"text":"_"}
+
+id: 1787341877340-0
+event: interaction_update
+data: {"type":"text-delta","text":"_"}
+
+id: 1787341877349-0
+event: assistant
+data: {"text":"structure"}
+
+id: 1787341877349-0
+event: interaction_update
+data: {"type":"text-delta","text":"structure"}
+
+id: 1787341877411-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787341877456-0
+event: assistant
+data: {"text":"`"}
+
+id: 1787341877456-0
+event: interaction_update
+data: {"type":"text-delta","text":"`"}
+
+id: 1787341877461-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787341877572-0
+event: interaction_update
+data: {"type":"turn-ended"}
+
+id: 1787341877581-0
+event: interaction_update
+data: {"type":"step-completed","stepId":72,"stepDurationMs":4427}
+
+event: status
+data: {"runId":"run-e4fb4868-e6f6-4cbf-9322-8934cd0f10f8","status":"FINISHED"}
+
+id: 1787341878773-0
+event: result
+data: {"runId":"run-e4fb4868-e6f6-4cbf-9322-8934cd0f10f8","status":"FINISHED","text":"**cursor-cloud** (ready)\n- `batch-fetch-details`\n- `environment-build-logs`\n- `environment-info`\n- `get-automation`\n- `get-events`\n- `get-message-queue`\n- `list-cloud-agents`\n- `list-environment-builds`\n- `request-environment-setup-actions`\n- `run-info`\n- `trigger-environment-build`\n\n**cursor-subscriptions** (ready)\n- `list_subscriptions`\n- `subscribe_github_ci`\n- `subscribe_github_pr`\n- `subscribe_timer`\n- `unsubscribe`\n\n**deepwiki** (ready)\n- `ask_question`\n- `read_wiki_contents`\n- `read_wiki_structure`","durationMs":15734,"git":{"branches":[{"repoUrl":"github.com/macro-inc/macro","branch":"cursor/mcp-server-tool-inventory-ac7c"}]}}
+
+id: 1787341878773-0
+event: done
+data: {}
+

@@ -17,6 +17,13 @@ export interface DocReader {
   textLength(node: NodeRef): number;
   /** The content block node of a table cell (header is row 0). */
   cellNode(table: NodeId, row: number, col: number): NodeRef;
+  /** The enclosing block for a ref, matching how mutating ops resolve it.
+   *
+   *  Animators must plan against the same node `Doc` will mutate. Planning
+   *  against an inline text run instead breaks whenever a step empties it:
+   *  Lexical drops empty text nodes, so the ref every later step depends on
+   *  stops existing mid-animation. */
+  blockRef(node: NodeRef): NodeRef;
 }
 
 export interface DocWriter {

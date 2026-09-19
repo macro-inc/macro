@@ -1,6 +1,6 @@
 //! Composition of the domain GraphQL adapter crates (`graphql_soup`,
 //! `graphql_channel`, `graphql_properties`, `graphql_notification`, `graphql_email`,
-//! `graphql_entity_mutation`) into the complete schema served by
+//! `graphql_favorite`, `graphql_entity_mutation`) into the complete schema served by
 //! `document_storage_service` and exported as SDL.
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
@@ -13,6 +13,13 @@ mod schema;
 mod sdl_test;
 
 pub use edges::{SoupEdges, SoupEmailThreadEdges};
+pub use graphql_activity::{
+    ActivityEdgeKey, ActivityEdgeLoad, ActivityFeedInput, ActivityFeedReader,
+    ActivityOverviewInput, ActivityPortReader, ActivityReader, EntityActivityLoader,
+    GraphqlActivityAction, GraphqlActivityDay, GraphqlActivityEntityRank, GraphqlActivityEvent,
+    GraphqlActivityOverview, GraphqlActivityPage, NoOpActivityReader, SoupActivityEdgeReader,
+    entity_activity_loader,
+};
 pub use graphql_channel::{
     ChannelActivityAuthorizer, ChannelActivityMutationService, ChannelMutationRoot,
     GraphqlChannelActivity, GraphqlChannelActivityType, NoOpChannelActivityMutationService,
@@ -31,17 +38,19 @@ pub use graphql_email::{
 pub use graphql_entity_mutation::{
     ChannelSharePolicyInput, DuplicateEntityInput, EntityMutationPayload, EntityMutationRoot,
     EntityRefInput, EntitySharePolicyInput, GraphqlEntityMutationError,
-    GraphqlEntityMutationErrorCode, GraphqlEntityMutationResult, GraphqlMutationError,
-    GraphqlMutationSuccess, GraphqlSharePolicyOperation, MoveEntityInput, RenameEntityInput,
-    UpdateEntitySharePolicyInput,
+    GraphqlEntityMutationErrorCode, GraphqlEntityMutationResult, GraphqlLinkShare,
+    GraphqlMutationError, GraphqlMutationSuccess, GraphqlSharePolicyOperation, MoveEntityInput,
+    RenameEntityInput, UpdateEntitySharePolicyInput,
 };
 pub use graphql_favorite::{
-    EntityFavoriteEdgeReader, EntityFavoriteLoader, entity_favorite_loader,
+    EntityFavoriteEdgeReader, EntityFavoriteLoader, FavoriteMutationRoot, FavoriteQueryReader,
+    GraphqlFavorite, NoOpFavoriteMutationService, ReorderFavoritesInput, entity_favorite_loader,
+    resolve_favorites,
 };
 pub use graphql_notification::{
     EntityNotificationsLoader, GraphqlNotificationUpdateOperation, NoOpNotificationMutationService,
     NotificationMutationRoot, NotificationMutationService, SoupNotificationEdgeReader,
-    UpdateNotificationsInput, entity_notifications_loader,
+    UpdateNotificationsForEntityInput, UpdateNotificationsInput, entity_notifications_loader,
 };
 pub use graphql_permission::{
     EntityPermissionEdgeReader, EntityPermissionLoader, GraphqlAccessLevelPermission,

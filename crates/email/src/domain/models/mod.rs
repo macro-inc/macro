@@ -8,6 +8,7 @@ pub mod link;
 pub mod message;
 pub mod parsed_message;
 pub mod preview;
+pub mod sender_policy;
 pub mod thread;
 
 #[cfg(test)]
@@ -35,4 +36,5 @@ pub use preview::{
     EmailThreadPreview, EnrichedEmailThreadPreview, GetEmailsRequest, PreviewCursorQuery,
     PreviewView, PreviewViewStandardLabel,
 };
+pub use sender_policy::SenderPolicy;
 pub use thread::{EmailThreadMetadata, Thread, ThreadRow};

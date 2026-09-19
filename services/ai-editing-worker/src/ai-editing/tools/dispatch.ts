@@ -165,6 +165,23 @@ export function computeContextRange(
   };
 }
 
+/**
+ * Node ids an instruction actually refers to.
+ *
+ * Filtered against ids present in the document so ordinary prose that happens
+ * to match the id shape (`Suggested`, `constraint`) doesn't create phantom
+ * conflicts that serialize unrelated edits.
+ */
+export function targetIds(
+  instruction: string,
+  session: LexicalSession
+): Set<string> {
+  const candidates = instruction.match(ID_PATTERN);
+  if (!candidates) return new Set();
+  const { byId } = indexXmlRanges(serializeWithXml(session));
+  return new Set(candidates.filter((id) => byId.has(id)));
+}
+
 /** Lines of context to show a writer around its target region. Generous on
  *  purpose: a roomy window means the writer rarely has to call `readDocument`. */
 const MIN_WINDOW_LINES = 20;
@@ -201,11 +218,18 @@ export type DispatchEditTrace = {
   coderStartedAt: number;
   coderFinishedAt: number;
   runCodeAt: number[];
+  /** Reply text per runCode call, positionally aligned with `runCodeAt`. */
+  runCodeResults: string[];
 };
 
 /** One runCode invocation as recorded for the trace: the code plus any content
  *  the writer composed and passed alongside it. */
-export type CoderRunCode = { code: string; snippets?: Record<string, string> };
+export type CoderRunCode = {
+  code: string;
+  snippets?: Record<string, string>;
+  /** The reply this call produced, as the coder saw it. */
+  result?: string;
+};
 
 export type DispatchToolOptions = {
   session: LexicalSession;
@@ -221,6 +245,8 @@ export type DispatchToolOptions = {
   sleep?: (ms: number) => Promise<void>;
   signal?: AbortSignal;
   makeWriter: () => Promise<Writer>;
+  /** Per-coder step cap, forwarded to every coder this tool spawns. */
+  maxCoderSteps?: number;
   runTask: typeof coder;
   serialize?: (session: LexicalSession) => string;
   onOps?: RunCodeToolOptions['onOps'];
@@ -257,6 +283,7 @@ export function createDispatchTool(opts: DispatchToolOptions) {
     sleep,
     signal,
     makeWriter,
+    maxCoderSteps,
     runTask,
     runner,
     onOps,
@@ -275,12 +302,38 @@ export function createDispatchTool(opts: DispatchToolOptions) {
   // Coders already started from onInputAvailable, keyed by tool call id.
   const calls = new Map<string, EditRun>();
 
+  /**
+   * Node ids each in-flight coder is working on, plus a promise that settles
+   * when it finishes. Parallel coders share one `LexicalSession`, so two
+   * dispatches aimed at the same node interleave their edits on the same
+   * subtree — the largest failure class in the trace corpus, and the one that
+   * produces silently corrupted documents rather than clean failures.
+   */
+  const inFlight: { ids: Set<string>; done: Promise<unknown> }[] = [];
+
+  /** Wait out any in-flight coder whose target ids overlap this instruction's.
+   *
+   *  Independent edits still run fully in parallel; only the ones that would
+   *  collide are serialized, so this costs latency exactly where the
+   *  alternative is corruption. */
+  async function awaitConflicts(ids: Set<string>): Promise<void> {
+    if (ids.size === 0) return;
+    const blockers = inFlight
+      .filter((entry) => [...ids].some((id) => entry.ids.has(id)))
+      .map((entry) => entry.done);
+    if (blockers.length > 0) await Promise.allSettled(blockers);
+  }
+
   async function runEdit(
     edit: DispatchEdit,
     trace: DispatchEditTrace,
     childModel: LanguageModel,
     span: Span
   ): Promise<CoderRun> {
+    // Hold off until nothing conflicting is running, THEN serialize the
+    // document — so this coder's window reflects the conflicting edit rather
+    // than a snapshot taken before it landed.
+    await awaitConflicts(targetIds(edit.editing_instruction, session));
     try {
       // Serialized at launch time so an edit launched early sees whatever earlier
       // coders have already applied.
@@ -302,6 +355,7 @@ export function createDispatchTool(opts: DispatchToolOptions) {
             doc,
             awarenessSource,
             context,
+            maxSteps: maxCoderSteps,
             request,
             params,
             typingAnimations,
@@ -310,6 +364,7 @@ export function createDispatchTool(opts: DispatchToolOptions) {
             runner,
             onOps,
             onRunCode: () => trace.runCodeAt.push(Date.now()),
+            onRunCodeResult: (result) => trace.runCodeResults.push(result),
             span,
           }
         );
@@ -345,6 +400,7 @@ export function createDispatchTool(opts: DispatchToolOptions) {
       coderStartedAt: Date.now(),
       coderFinishedAt: 0,
       runCodeAt: [],
+      runCodeResults: [],
     };
     // runEdit ends the span in its finally, so streamed runs that reject
     // before `execute` joins them still close it.
@@ -364,6 +420,21 @@ export function createDispatchTool(opts: DispatchToolOptions) {
     // A streamed run can reject before `execute` awaits it; keep that rejection
     // for the join instead of letting it escape as an unhandled rejection.
     entry.run.catch(() => {});
+
+    // Publish this coder's targets before it starts so a later dispatch in the
+    // same batch can see the conflict. Ids are resolved against the document as
+    // it stands now, which is what a concurrent sibling would collide with.
+    const claimed =
+      typeof edit.editing_instruction === 'string'
+        ? targetIds(edit.editing_instruction, session)
+        : new Set<string>();
+    const record = { ids: claimed, done: entry.run };
+    inFlight.push(record);
+    void entry.run.finally(() => {
+      const i = inFlight.indexOf(record);
+      if (i !== -1) inFlight.splice(i, 1);
+    });
+
     calls.set(toolCallId, entry);
     return entry;
   }
@@ -390,9 +461,9 @@ export function createDispatchTool(opts: DispatchToolOptions) {
           const codes = result.steps
             .flatMap((step) => step.toolCalls)
             .filter((call) => call.toolName === 'runCode')
-            .map((call) => {
+            .map((call, i) => {
               const { code, snippets } = call.input as CoderRunCode;
-              return { code, snippets };
+              return { code, snippets, result: entry.trace.runCodeResults[i] };
             });
           onCoderResult(codes);
         }

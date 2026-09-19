@@ -3,9 +3,9 @@ use crate::domain::models::{
     CreatedDraft, EmailErr, EmailFilter, EmailInboxDetails, EmailThreadMetadata,
     EmailThreadPreview, EnrichedEmailThreadPreview, GetEmailsRequest, Label, Link, LinkLabel,
     Message, MessageAttachment, MessageLabel, MessageRow, ParsedAddresses, ParsedMessage,
-    ParsedThread, PreviewCursorQuery, RecipientType, ResolvedDraftInput, SimpleMessage,
-    SimpleMessageInfo, Thread, ThreadRow, UpdateThreadLabelsResult, UpsertEmailFilterInput,
-    UpsertedContacts, UserEmailLink, UserProvider,
+    ParsedThread, PreviewCursorQuery, RecipientType, ResolvedDraftInput, SenderPolicy,
+    SimpleMessage, SimpleMessageInfo, Thread, ThreadRow, UpdateThreadLabelsResult,
+    UpsertEmailFilterInput, UpsertedContacts, UserEmailLink, UserProvider,
 };
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
@@ -37,6 +37,20 @@ pub trait EmailMessageEnqueuer: Send + Sync + 'static {
         messages: Vec<(Uuid, String)>,
         labels_to_add: Vec<String>,
         labels_to_remove: Vec<String>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Enqueue a Gmail-ops BlockSender operation for the link.
+    fn enqueue_gmail_ops_block_sender(
+        &self,
+        link_id: Uuid,
+        email_address: String,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Enqueue a Gmail-ops UnblockSender operation for the link.
+    fn enqueue_gmail_ops_unblock_sender(
+        &self,
+        link_id: Uuid,
+        email_address: String,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
@@ -219,6 +233,9 @@ pub trait EmailRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<SimpleMessageInfo>, Self::Err>> + Send;
 
     /// Delete a draft message and its thread if the thread is left empty.
+    /// A surviving thread gets its denormalized metadata (inbox visibility,
+    /// latest timestamps, is_signal) recomputed, since drafts count toward
+    /// those fields.
     fn delete_draft_message(
         &self,
         message_id: Uuid,
@@ -588,6 +605,17 @@ pub trait EmailService: Send + Sync + 'static {
         input: UpsertEmailFilterInput,
     ) -> impl Future<Output = Result<EmailFilter, EmailErr>> + Send;
 
+    /// Set where future mail from a sender lands for the given inbox.
+    ///
+    /// Signal and Noise also enqueue an UnblockSender so a prior Block does
+    /// not keep trashing new mail.
+    fn set_sender_policy(
+        &self,
+        link: &Link,
+        sender_email: &str,
+        policy: SenderPolicy,
+    ) -> impl Future<Output = Result<(), EmailErr>> + Send;
+
     /// Delete an email filter by its ID for the given link.
     fn delete_email_filter(
         &self,
@@ -661,6 +689,22 @@ impl EmailMessageEnqueuer for NoOpEnqueuer {
         _messages: Vec<(Uuid, String)>,
         _labels_to_add: Vec<String>,
         _labels_to_remove: Vec<String>,
+    ) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
+    async fn enqueue_gmail_ops_block_sender(
+        &self,
+        _link_id: Uuid,
+        _email_address: String,
+    ) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
+    async fn enqueue_gmail_ops_unblock_sender(
+        &self,
+        _link_id: Uuid,
+        _email_address: String,
     ) -> Result<(), Self::Err> {
         Ok(())
     }
@@ -794,6 +838,15 @@ impl EmailService for NoOpEmailService {
         _link: &Link,
         _input: UpsertEmailFilterInput,
     ) -> Result<EmailFilter, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn set_sender_policy(
+        &self,
+        _link: &Link,
+        _sender_email: &str,
+        _policy: SenderPolicy,
+    ) -> Result<(), EmailErr> {
         Err(no_op_email_err())
     }
 

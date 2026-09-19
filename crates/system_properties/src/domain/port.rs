@@ -16,6 +16,12 @@ pub trait SystemPropertiesRepository: Clone + Send + Sync + 'static {
         rows: Vec<crate::domain::model::PropertyRow>,
     ) -> impl Future<Output = Result<(), SystemPropertyError>> + Send;
 
+    /// Insert property rows, leaving any existing values unchanged.
+    fn bulk_insert_properties_if_absent(
+        &self,
+        rows: Vec<crate::domain::model::PropertyRow>,
+    ) -> impl Future<Output = Result<(), SystemPropertyError>> + Send;
+
     /// Copy all task properties from one entity to another.
     fn copy_task_properties(
         &self,

@@ -1,26 +1,33 @@
 /**
- * @file Column resize handles for tables. On pointer devices an invisible
- * strip along the hovered cell's right edge shows a line on hover and drags
- * that column border. Touch has no handle at all: a horizontal swipe that
- * starts near a column border resizes it. The first touchmove decides the
- * gesture — mostly-vertical movement is left to the browser as a scroll,
- * and a still finger disarms before the long-press cell selection fires.
- * The new width applies live while dragging, with the pointer captured so
- * the drag survives leaving the editor; Escape/pointercancel restores the
- * pre-drag width.
+ * @file Column and row resize handles for tables. On pointer devices an
+ * invisible strip along the hovered cell's right edge resizes that column,
+ * and one along the bottom edge resizes that row. Touch has no row handle
+ * (vertical movement stays a scroll) and no column handle either: a
+ * horizontal swipe that starts near a column border resizes it. The first
+ * touchmove decides the gesture — mostly-vertical movement is left to the
+ * browser as a scroll, and a still finger disarms before the long-press
+ * cell selection fires. The new size applies live while dragging, with the
+ * pointer captured so the drag survives leaving the editor; Escape /
+ * pointercancel restores the pre-drag width or height.
  */
 import { mdStore } from '@block-md/signal/markdownBlockData';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { getDOMCellFromTarget } from '@lexical/table';
+import { $isTableCellNode, getDOMCellFromTarget } from '@lexical/table';
 import { calculateZoomLevel } from '@lexical/utils';
+import { $getNearestNodeFromDOMNode } from 'lexical';
 import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
 import { registerEditorWidthObserver } from '../../plugins/shared/utils';
 import {
   $applyResizeDrag,
+  $applyRowResizeDrag,
   $captureResizeDrag,
+  $captureRowResizeDrag,
   $revertResizeDrag,
-  type ResizeEdge,
+  $revertRowResizeDrag,
+  type ResizeEdge as ColumnResizeEdge,
+  type ResizeDragSnapshot,
+  type RowResizeDragSnapshot,
 } from '../../plugins/tables/tableCellResize';
 import { createLayoutTick } from './createLayoutTick';
 
@@ -31,6 +38,12 @@ const TOUCH_EDGE_PX = 12;
 // A still finger is a long-press (cell selection), not a resize; disarm
 // before tableTouchSelection's 400ms long-press fires.
 const TOUCH_ARM_TIMEOUT_MS = 350;
+
+type ResizeEdge = ColumnResizeEdge | 'bottom';
+
+function isColumnEdge(edge: ResizeEdge): edge is ColumnResizeEdge {
+  return edge === 'left' || edge === 'right';
+}
 
 // Set while dragging; names the border of the active cell being dragged.
 // Module scope: at most one drag runs across all editors, and the other
@@ -44,21 +57,35 @@ export function TableCellResizer() {
   const editor = () => mdData.editor;
 
   // Cell whose border carries the handle: the hovered cell on pointer
-  // devices, the touched cell during a touch drag.
+  // devices, the touched cell during a touch drag. `activeCellKey` is set
+  // for the duration of a drag so we can re-resolve the element after
+  // Lexical recreates a row's DOM when height changes.
   const [activeCellElem, setActiveCellElem] = createSignal<HTMLElement>();
+  const [activeCellKey, setActiveCellKey] = createSignal<string>();
   const { layoutTick, bumpLayout } = createLayoutTick();
+  // Kept across a row-height drag so the handle stays mounted while Lexical
+  // recreates the <tr> (updateDOM returns true when height changes).
+  let lastCellRect: DOMRect | undefined;
 
   const startResize = (
     cellElem: HTMLElement,
     edge: ResizeEdge,
-    down: { pointerId: number; clientX: number; pointerType: string },
+    down: {
+      pointerId: number;
+      clientX: number;
+      clientY: number;
+      pointerType: string;
+    },
     captureTarget: HTMLElement
   ) => {
     const currentEditor = editor();
     if (!currentEditor) return;
     const zoom = calculateZoomLevel(cellElem);
+    const isRow = edge === 'bottom';
     const drag = currentEditor.read(() =>
-      $captureResizeDrag(currentEditor, cellElem, edge, zoom)
+      isRow
+        ? $captureRowResizeDrag(currentEditor, cellElem, zoom)
+        : $captureResizeDrag(currentEditor, cellElem, edge, zoom)
     );
     if (!drag) return;
 
@@ -70,10 +97,18 @@ export function TableCellResizer() {
       return;
     }
     setActiveCellElem(cellElem);
+    setActiveCellKey(
+      currentEditor.read(() => {
+        const node = $getNearestNodeFromDOMNode(cellElem);
+        return $isTableCellNode(node) ? node.getKey() : undefined;
+      })
+    );
     setDragEdge(edge);
 
     const previousCursor = document.body.style.cursor;
-    if (!isTouch) document.body.style.cursor = 'col-resize';
+    if (!isTouch) {
+      document.body.style.cursor = isRow ? 'row-resize' : 'col-resize';
+    }
 
     let frame = 0;
     let delta = 0;
@@ -87,13 +122,21 @@ export function TableCellResizer() {
         ? ['skip-scroll-into-view', 'history-merge']
         : ['skip-scroll-into-view'];
       pushedHistory = true;
-      currentEditor.update(() => $applyResizeDrag(drag, delta), { tag });
+      currentEditor.update(
+        () => {
+          if (isRow) $applyRowResizeDrag(drag as RowResizeDragSnapshot, delta);
+          else $applyResizeDrag(drag as ResizeDragSnapshot, delta);
+        },
+        { tag }
+      );
     };
 
     const onPointerMove = (move: PointerEvent) => {
       if (move.pointerId !== down.pointerId) return;
       move.preventDefault();
-      delta = (move.clientX - down.clientX) / zoom;
+      delta = isRow
+        ? (move.clientY - down.clientY) / zoom
+        : (move.clientX - down.clientX) / zoom;
       if (!frame) frame = requestAnimationFrame(applyDelta);
     };
 
@@ -111,9 +154,15 @@ export function TableCellResizer() {
     };
     const cancelDrag = () => {
       if (pushedHistory) {
-        currentEditor.update(() => $revertResizeDrag(drag), {
-          tag: ['skip-scroll-into-view', 'history-merge'],
-        });
+        currentEditor.update(
+          () => {
+            if (isRow) $revertRowResizeDrag(drag as RowResizeDragSnapshot);
+            else $revertResizeDrag(drag as ResizeDragSnapshot);
+          },
+          {
+            tag: ['skip-scroll-into-view', 'history-merge'],
+          }
+        );
       }
       cleanup();
     };
@@ -138,6 +187,7 @@ export function TableCellResizer() {
       document.removeEventListener('keydown', onKeyDown);
       document.body.style.cursor = previousCursor;
       setDragEdge(undefined);
+      setActiveCellKey(undefined);
       if (isTouch) setActiveCellElem(undefined);
     };
 
@@ -171,7 +221,7 @@ export function TableCellResizer() {
       down.target instanceof Node ? getDOMCellFromTarget(down.target) : null;
     if (!cell) return;
     const rect = cell.elem.getBoundingClientRect();
-    const edge: ResizeEdge | undefined =
+    const edge: ColumnResizeEdge | undefined =
       Math.abs(down.clientX - rect.right) <= TOUCH_EDGE_PX
         ? 'right'
         : Math.abs(down.clientX - rect.left) <= TOUCH_EDGE_PX
@@ -201,7 +251,7 @@ export function TableCellResizer() {
       startResize(
         cell.elem,
         edge,
-        { pointerId, clientX: startX, pointerType },
+        { pointerId, clientX: startX, clientY: startY, pointerType },
         cell.elem
       );
     };
@@ -246,12 +296,20 @@ export function TableCellResizer() {
 
   const cellRect = createMemo(() => {
     layoutTick();
-    const elem = activeCellElem();
-    if (!elem?.isConnected) return;
-    return elem.getBoundingClientRect();
+    const currentEditor = editor();
+    const key = activeCellKey();
+    const elem =
+      (key && currentEditor?.getElementByKey(key)) || activeCellElem();
+    if (elem?.isConnected) {
+      lastCellRect = elem.getBoundingClientRect();
+      return lastCellRect;
+    }
+    if (dragEdge()) return lastCellRect;
+    lastCellRect = undefined;
+    return undefined;
   });
 
-  const onStripPointerDown = (down: PointerEvent) => {
+  const onColumnStripPointerDown = (down: PointerEvent) => {
     if (down.pointerType === 'mouse' && down.button !== 0) return;
     const cellElem = activeCellElem();
     const strip = down.currentTarget;
@@ -261,16 +319,43 @@ export function TableCellResizer() {
     startResize(cellElem, 'right', down, strip);
   };
 
+  const onRowStripPointerDown = (down: PointerEvent) => {
+    if (down.pointerType === 'mouse' && down.button !== 0) return;
+    const cellElem = activeCellElem();
+    const strip = down.currentTarget;
+    if (!cellElem || !(strip instanceof HTMLElement)) return;
+    down.preventDefault();
+    down.stopPropagation();
+    startResize(cellElem, 'bottom', down, strip);
+  };
+
   // The strip doubles as the drag indicator on touch, pinned to whichever
   // border is being dragged.
   const stripX = (rect: DOMRect) =>
     dragEdge() === 'left' ? rect.left : rect.right;
 
+  const showColumnStrip = () => {
+    const edge = dragEdge();
+    if (isTouchDevice()) return edge === 'left' || edge === 'right';
+    return !edge || isColumnEdge(edge);
+  };
+
+  const showRowStrip = () => {
+    if (isTouchDevice()) return false;
+    const edge = dragEdge();
+    return !edge || edge === 'bottom';
+  };
+
+  const rowStripWidth = (rect: DOMRect) =>
+    dragEdge() === 'bottom'
+      ? rect.width
+      : Math.max(0, rect.width - HIT_ZONE_PX);
+
   return (
     <Show when={cellRect()}>
       {(rect) => (
         <ScopedPortal scope="split">
-          <Show when={!isTouchDevice() || dragEdge()}>
+          <Show when={showColumnStrip()}>
             <div
               class="group fixed z-20 flex cursor-col-resize touch-none justify-center"
               style={{
@@ -279,13 +364,33 @@ export function TableCellResizer() {
                 width: `${HIT_ZONE_PX}px`,
                 height: `${rect().height}px`,
               }}
-              onPointerDown={onStripPointerDown}
+              onPointerDown={onColumnStripPointerDown}
             >
               <div
                 class="h-full w-[3px] bg-accent transition-opacity"
                 classList={{
                   'opacity-100': !!dragEdge(),
                   'opacity-0 group-hover:opacity-70': !dragEdge(),
+                }}
+              />
+            </div>
+          </Show>
+          <Show when={showRowStrip()}>
+            <div
+              class="group fixed z-20 flex cursor-row-resize touch-none items-center"
+              style={{
+                left: `${rect().left}px`,
+                top: `${rect().bottom - HIT_ZONE_PX / 2}px`,
+                width: `${rowStripWidth(rect())}px`,
+                height: `${HIT_ZONE_PX}px`,
+              }}
+              onPointerDown={onRowStripPointerDown}
+            >
+              <div
+                class="h-[3px] w-full bg-accent transition-opacity"
+                classList={{
+                  'opacity-100': dragEdge() === 'bottom',
+                  'opacity-0 group-hover:opacity-70': dragEdge() !== 'bottom',
                 }}
               />
             </div>

@@ -23,8 +23,9 @@ use uuid::Uuid;
 use super::model::{
     EditReceipt, EntityPropertiesKey, EntityPropertyInfo, EntityPropertyMutationSnapshot,
     EntityPropertyOptionSelection, EntityPropertyOptionUpdate, GetOrCreateTagDefinitionResult,
-    PropertyDefinitionOwner, TagPromotionOutcome, TagRemapOutcome, TaskAssignedNotification,
-    UpdatePropertyOptionOutcome, ViewReceipt,
+    PropertyDefinitionOwner, PropertyOptionReplaceOutcome, PropertyOptionReplacePlan,
+    TagPromotionOutcome, TagRemapOutcome, TaskAssignedNotification, UpdatePropertyOptionOutcome,
+    ViewReceipt,
 };
 
 /// Repository trait for property operations.
@@ -131,6 +132,15 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         display_order: i32,
     ) -> impl Future<Output = Result<UpdatePropertyOptionOutcome, Self::Err>> + Send;
 
+    /// Apply a whole-set option change in one transaction: deletes (stripping
+    /// ids from entity values), in-place rewrites, then inserts. Rewrites go
+    /// through temporary values so a set of options can trade values.
+    fn replace_property_options(
+        &self,
+        property_definition_id: Uuid,
+        plan: &PropertyOptionReplacePlan,
+    ) -> impl Future<Output = Result<PropertyOptionReplaceOutcome, Self::Err>> + Send;
+
     /// Delete a property option and strip its id from every entity value that
     /// references it, atomically. Returns `true` if the option was deleted,
     /// `false` if it didn't exist.
@@ -195,14 +205,15 @@ pub trait PropertiesRepo: Send + Sync + 'static {
 
     /// Upsert an entity property value (insert or update).
     /// If the property doesn't exist, it will be created and attached to the entity.
-    /// If it exists, the value will be updated. Returns the persisted assignment.
+    /// If it exists, the value will be updated. Returns the persisted
+    /// assignment together with the pre-write value.
     fn upsert_entity_property(
         &self,
         entity_id: &str,
         entity_type: EntityType,
         property_definition_id: Uuid,
         value: Option<PropertyValue>,
-    ) -> impl Future<Output = Result<EntityProperty, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<EntityPropertyMutationSnapshot, Self::Err>> + Send;
 
     /// Atomically add one option to a multi-select entity property value,
     /// attaching the property if needed. Re-adding a present option is deduped.

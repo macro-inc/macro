@@ -5,12 +5,14 @@ publish = false
 version = "0.1.0"
 
 [features]
+default = ["native"]
 mock = []
+native = ["document_sub_type/default"]
 schema = ["dep:schemars", "dep:utoipa"]
 
 [dependencies]
 chrono = { workspace = true }
-document_sub_type = { path = "../document_sub_type" }
+document_sub_type = { path = "../document_sub_type", default-features = false }
 either = { workspace = true }
 filter_ast = { path = "../filter_ast" }
 macro_user_id = { path = "../macro_user_id" }
@@ -25,7 +27,6 @@ strum = { workspace = true }
 thiserror = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 cool_asserts = "2.0.3"

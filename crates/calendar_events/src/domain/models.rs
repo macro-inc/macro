@@ -6,12 +6,30 @@ use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Top-level Google scope granting the complete calendar capability,
-/// mirroring how email requests the single broad `gmail.modify` scope.
-pub const GOOGLE_CALENDAR_SCOPE: &str = "https://www.googleapis.com/auth/calendar";
+pub use super::acting::ActorInboxes;
+
+/// Read and write events on every calendar the user can access. Covers the
+/// event list, get, instances, insert, patch, and watch calls.
+pub const GOOGLE_CALENDAR_EVENTS_SCOPE: &str = "https://www.googleapis.com/auth/calendar.events";
+
+/// Read the user's calendar subscriptions. Covers the `calendarList` call that
+/// discovers which calendars to sync.
+pub const GOOGLE_CALENDAR_LIST_SCOPE: &str =
+    "https://www.googleapis.com/auth/calendar.calendarlist.readonly";
 
 /// The Google Calendar scopes Macro requests for the calendar capability.
-pub const GOOGLE_CALENDAR_SCOPES: [&str; 1] = [GOOGLE_CALENDAR_SCOPE];
+pub const GOOGLE_CALENDAR_SCOPES: [&str; 2] =
+    [GOOGLE_CALENDAR_EVENTS_SCOPE, GOOGLE_CALENDAR_LIST_SCOPE];
+
+/// The single broad scope Macro requested before narrowing to the two above.
+/// Google keeps a granted scope for the life of the grant, so inboxes connected
+/// before the narrowing still report it; it is what [`GoogleScopeSet::without_calendar`]
+/// must strip beyond the two scopes Macro requests today. It deliberately does
+/// not count towards the capability: an inbox reports it without Macro having
+/// asked for calendar in this era, so the user re-grants through the normal
+/// prompt (or drops it entirely by removing Macro's access at Google).
+pub const GOOGLE_CALENDAR_FULL_SCOPE: &str = "https://www.googleapis.com/auth/calendar";
+
 /// Build the space-delimited calendar scope fragment for an OAuth authorization URL.
 pub fn google_calendar_scope_parameter() -> String {
     GOOGLE_CALENDAR_SCOPES.join(" ")
@@ -53,6 +71,54 @@ impl GoogleScopeSet {
             .iter()
             .all(|scope| self.contains(scope))
     }
+
+    /// Return the same grant without any Google Calendar scope, leaving the
+    /// Gmail capability untouched. Every calendar scope is dropped, not just
+    /// the two Macro requests, so a grant that carries a broader calendar
+    /// scope cannot keep the capability alive.
+    pub fn without_calendar(self) -> Self {
+        Self(
+            self.0
+                .into_iter()
+                .filter(|scope| !scope.starts_with(GOOGLE_CALENDAR_SCOPE_PREFIX))
+                .collect(),
+        )
+    }
+}
+
+/// Every Google Calendar scope shares this prefix.
+const GOOGLE_CALENDAR_SCOPE_PREFIX: &str = "https://www.googleapis.com/auth/calendar";
+
+/// Why a Google grant is being recorded, which decides how it interacts with a
+/// standing calendar opt-out.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CalendarGrantIntent {
+    /// The consent flow explicitly asked for calendar access, so the user is
+    /// (re-)enabling the capability: clear any standing opt-out.
+    CalendarRequested,
+    /// Calendar scopes, if any are present, only rode along from an earlier
+    /// grant (`include_granted_scopes=true`) or a token-discovery probe. A
+    /// standing opt-out keeps calendar off and the scopes are not recorded.
+    Incidental,
+}
+
+/// A watch channel that must be closed at Google after its calendar is gone.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CalendarWatchRelease {
+    /// Channel identifier Macro opened the watch with.
+    pub channel_id: String,
+    /// Provider-assigned resource identifier for the watched calendar.
+    pub resource_id: String,
+}
+
+/// What a completed calendar disconnect leaves for the caller to finish at the
+/// provider. Local state is already gone by the time this is returned.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DisconnectedGoogleCalendar {
+    /// Token identity of the disconnected inbox, for closing its channels.
+    pub token_identity: CalendarLinkTokenIdentity,
+    /// Push channels that were open when the calendar was removed.
+    pub watch_channels: Vec<CalendarWatchRelease>,
 }
 
 /// The mutually exclusive time shape of a calendar event.
@@ -195,6 +261,146 @@ impl EventTransparency {
     }
 }
 
+/// Google's event type: ordinary meetings versus the status-style entries
+/// (working location, out of office, focus time, birthdays) Google renders
+/// and notifies differently. Immutable at the provider after creation.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum EventType {
+    /// Regular event; also the fallback for provider types Macro does not
+    /// know, so a new Google type never breaks ingestion.
+    #[default]
+    Default,
+    /// Out-of-office status event.
+    OutOfOffice,
+    /// Focus-time status event.
+    FocusTime,
+    /// Working-location status event.
+    WorkingLocation,
+    /// Annual all-day birthday event.
+    Birthday,
+    /// Event Google generated from a Gmail message.
+    FromGmail,
+}
+
+impl EventType {
+    /// Database representation.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Default => "default",
+            Self::OutOfOffice => "out_of_office",
+            Self::FocusTime => "focus_time",
+            Self::WorkingLocation => "working_location",
+            Self::Birthday => "birthday",
+            Self::FromGmail => "from_gmail",
+        }
+    }
+
+    /// Whether this is the regular event type. Kept out of serialized
+    /// projections so projections stored before event types were modeled
+    /// still compare equal to fresh ones.
+    pub fn is_default(&self) -> bool {
+        *self == Self::Default
+    }
+
+    /// Whether `useDefault` reminders resolve to the calendar's defaults.
+    /// Google never notifies for status-style events — its clients offer no
+    /// notification setting on them — so their `useDefault` resolves to no
+    /// reminders. Explicit overrides still apply on every type.
+    pub fn uses_calendar_default_reminders(self) -> bool {
+        matches!(self, Self::Default | Self::FromGmail)
+    }
+}
+
+/// How an out-of-office event responds to conflicting invitations, mirroring
+/// Google's `autoDeclineMode`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum OutOfOfficeAutoDeclineMode {
+    /// Leave conflicting invitations alone. The default, so an out-of-office
+    /// event only blocks time and shows the status until the user asks for
+    /// declines.
+    #[default]
+    DeclineNone,
+    /// Decline every conflicting invitation, existing and new.
+    DeclineAllConflictingInvitations,
+    /// Decline only invitations that arrive after the event is created.
+    DeclineOnlyNewConflictingInvitations,
+}
+
+impl OutOfOfficeAutoDeclineMode {
+    /// The provider representation Google's `autoDeclineMode` field expects.
+    pub fn as_google_str(self) -> &'static str {
+        match self {
+            Self::DeclineNone => "declineNone",
+            Self::DeclineAllConflictingInvitations => "declineAllConflictingInvitations",
+            Self::DeclineOnlyNewConflictingInvitations => "declineOnlyNewConflictingInvitations",
+        }
+    }
+}
+
+/// The extra properties Google requires on an out-of-office event, mirroring
+/// its `outOfOfficeProperties` block. Their presence on a draft or patch is
+/// what marks the mutation as out-of-office.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct OutOfOfficeProperties {
+    /// How conflicting invitations are handled while the user is out.
+    #[serde(default)]
+    pub auto_decline_mode: OutOfOfficeAutoDeclineMode,
+    /// Message returned to organizers whose invitations are auto-declined.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decline_message: Option<String>,
+}
+
+/// The conferencing system backing an event's join URL.
+///
+/// Macro generates only Google Meet conferences, so this distinguishes one it
+/// created from a third party's — Zoom and friends arriving as `addOn`
+/// conference data, or a legacy classic Hangout. Clients use it to label the
+/// conference and to tell whether the Meet toggle reflects a Macro-managed
+/// conference.
+///
+/// It does not gate mutation. An explicit request replaces or detaches any
+/// conference, third-party included, exactly as deleting the event would;
+/// what protects a conference is that omitting the field leaves it untouched,
+/// so an unrelated edit never disturbs it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum ConferenceProvider {
+    /// Google Meet.
+    GoogleMeet,
+    /// A third-party or legacy conference Macro leaves untouched.
+    Other,
+}
+
+impl ConferenceProvider {
+    /// Database representation.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::GoogleMeet => "google_meet",
+            Self::Other => "other",
+        }
+    }
+}
+
+/// A requested change to an event's conferencing. Omitting the field leaves
+/// the existing conference untouched; only these values change it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum ConferenceChange {
+    /// Generate a new Google Meet conference and attach it.
+    GoogleMeet,
+    /// Detach whatever conference is currently attached.
+    #[serde(rename = "none")]
+    Removed,
+}
+
 /// An attendee on a calendar event.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -210,7 +416,7 @@ pub struct CalendarAttendee {
     pub is_organizer: bool,
     /// Whether attendance is optional.
     pub is_optional: bool,
-    /// Whether this attendee represents the connected account.
+    /// Whether this attendee is one of the viewing requester's inboxes.
     pub is_self: bool,
     /// Optional attendee comment.
     pub comment: Option<String>,
@@ -244,7 +450,122 @@ impl AttendeeResponseStatus {
     }
 }
 
+/// Reminder method that fires a Macro notification. Google's other method,
+/// `email`, is delivered by Google itself and is only stored for round-trip
+/// fidelity.
+pub const REMINDER_METHOD_POPUP: &str = "popup";
+
+/// Reminder method Google delivers itself as an email.
+pub const REMINDER_METHOD_EMAIL: &str = "email";
+
+/// Google caps reminder offsets at four weeks before the event.
+pub const REMINDER_MINUTES_MAX: u32 = 40_320;
+
+/// Google caps an event at five reminder overrides.
+pub const REMINDER_OVERRIDES_MAX: usize = 5;
+
+/// One reminder: how it alerts and how many minutes before the event start
+/// (before midnight in the calendar's zone for all-day events) it fires.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct EventReminderOverride {
+    /// Provider method, stored verbatim; only `popup` fires Macro
+    /// notifications.
+    pub method: String,
+    /// Minutes before the event start.
+    pub minutes: u32,
+}
+
+/// Per-user reminder configuration for an event, mirroring Google's model:
+/// either the calendar's default reminders apply, or the explicit overrides
+/// replace them entirely.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct EventReminders {
+    /// Whether the calendar's default reminders apply.
+    pub use_default: bool,
+    /// Explicit reminders replacing the defaults when `use_default` is off.
+    #[serde(default)]
+    pub overrides: Vec<EventReminderOverride>,
+}
+
+impl Default for EventReminders {
+    fn default() -> Self {
+        Self {
+            use_default: true,
+            overrides: Vec::new(),
+        }
+    }
+}
+
+impl EventReminders {
+    /// Whether this is the provider default configuration. Kept out of
+    /// serialized projections so projections stored before reminders were
+    /// modeled still compare equal to fresh ones.
+    pub fn is_default(&self) -> bool {
+        self.use_default && self.overrides.is_empty()
+    }
+
+    /// Resolve the deduplicated, sorted popup offsets that fire Macro
+    /// notifications, applying the calendar defaults when configured.
+    pub fn popup_minutes(&self, calendar_defaults: &[EventReminderOverride]) -> Vec<u32> {
+        let overrides = if self.use_default {
+            calendar_defaults
+        } else {
+            &self.overrides
+        };
+        let mut minutes: Vec<u32> = overrides
+            .iter()
+            .filter(|reminder| reminder.method == REMINDER_METHOD_POPUP)
+            .map(|reminder| reminder.minutes)
+            .collect();
+        minutes.sort_unstable();
+        minutes.dedup();
+        minutes
+    }
+}
+
+/// The content one provider copy of an event carries.
+///
+/// Google keeps these fields per calendar copy: a shared calendar's copy of a
+/// member's event can have its own title, type, reminders, and access role.
+/// The entity holds its canonical source's values. Every other copy's values
+/// are read from here so a client can show the copy that belongs to the
+/// calendar being viewed.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarEventSourceContent {
+    /// Calendar this copy lives on.
+    pub calendar_id: Uuid,
+    /// Display title.
+    pub title: String,
+    /// Optional event body.
+    pub description: Option<String>,
+    /// Optional physical or virtual location label.
+    pub location: Option<String>,
+    /// Provider event type.
+    pub event_type: EventType,
+    /// Event visibility.
+    pub visibility: EventVisibility,
+    /// Availability behavior.
+    pub transparency: EventTransparency,
+    /// Whether the calendar's access role prohibits editing this copy.
+    pub is_read_only: bool,
+    /// Reminder configuration of this copy.
+    pub reminders: EventReminders,
+    /// Provider-reported creator email.
+    pub creator_email: Option<String>,
+    /// Provider-reported creator display name.
+    pub creator_name: Option<String>,
+}
+
 /// A stable, first-class Macro calendar event entity.
+///
+/// Content fields hold the canonical source's values: the account's primary
+/// calendar copy when one is synced, else the freshest remaining copy.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
@@ -259,6 +580,12 @@ pub struct CalendarEvent {
     /// projections stored before calendars were attributed.
     #[serde(default)]
     pub calendar_id: Option<Uuid>,
+    /// Content of every active copy of this event, canonical first: the
+    /// primary calendar's copy, then the freshest. A client picks the copy
+    /// whose calendar it is showing and falls back to the first. Populated
+    /// only on the read path, so stored projections omit it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sources: Vec<CalendarEventSourceContent>,
     /// Display title.
     pub title: String,
     /// Optional event body.
@@ -271,6 +598,11 @@ pub struct CalendarEvent {
     pub visibility: EventVisibility,
     /// Availability behavior.
     pub transparency: EventTransparency,
+    /// Provider event type. Skipped when it is the regular type so
+    /// projections stored before event types were modeled still compare
+    /// equal.
+    #[serde(default, skip_serializing_if = "EventType::is_default")]
+    pub event_type: EventType,
     /// Timed or all-day shape.
     pub time: EventTime,
     /// Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`).
@@ -279,14 +611,32 @@ pub struct CalendarEvent {
     pub organizer_email: Option<String>,
     /// Organizer display name.
     pub organizer_name: Option<String>,
+    /// Provider-reported creator email. Distinct from the organizer when
+    /// someone writes onto a calendar they do not own. Omitted from stored
+    /// projections when unknown so events ingested before this field still
+    /// compare equal.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub creator_email: Option<String>,
+    /// Provider-reported creator display name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub creator_name: Option<String>,
     /// Direct join URL when known.
     pub conference_url: Option<String>,
+    /// Which conferencing system backs `conference_url`. `None` whenever no
+    /// conference is attached.
+    #[serde(default)]
+    pub conference_provider: Option<ConferenceProvider>,
     /// Provider/iCalendar sequence number.
     pub sequence: u32,
-    /// Whether the current user can edit the canonical source.
+    /// Whether the canonical source's calendar prohibits editing it.
     pub is_read_only: bool,
     /// Attendees, keyed by email during persistence.
     pub attendees: Vec<CalendarAttendee>,
+    /// Per-user reminder configuration. Skipped when it is the provider
+    /// default so projections stored before reminders were modeled still
+    /// compare equal.
+    #[serde(default, skip_serializing_if = "EventReminders::is_default")]
+    pub reminders: EventReminders,
     /// Entity creation time.
     pub created_at: DateTime<Utc>,
     /// Entity update time.
@@ -384,6 +734,83 @@ impl CalendarOccurrenceCursor {
             occurrence_key: occurrence.occurrence_key.clone(),
         }
     }
+}
+
+/// One teammate's out-of-office occurrence, read from the projection their
+/// own connected primary calendar synced.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TeamOutOfOffice {
+    /// Macro user who is out of office.
+    pub owner_id: String,
+    /// The teammate's calendar event entity id.
+    pub event_id: Uuid,
+    /// RFC 5545 UID, used to collapse the same event synced through more
+    /// than one of the teammate's connected inboxes.
+    pub ical_uid: String,
+    /// Stable key of this occurrence within the event.
+    pub occurrence_key: String,
+    /// Event title. `None` once visibility policy withholds it.
+    pub title: Option<String>,
+    /// Stored event visibility backing the title policy.
+    pub visibility: EventVisibility,
+    /// Occurrence time span.
+    pub time: EventTime,
+}
+
+/// One mentioned event to resolve for a requester's mention preview.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CalendarMentionRequestItem {
+    /// Mentioned calendar event entity id, possibly another user's projection.
+    pub event_id: Uuid,
+    /// Occurrence the mention points at, when it targets one instance.
+    pub occurrence_key: Option<String>,
+}
+
+/// Resolution of one mentioned calendar event for a requester.
+///
+/// Event entities are per-owner projections of a meeting, so a mention from
+/// another attendee resolves through the shared iCalendar UID to the
+/// requester's own copy — the preview never exposes another user's row.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CalendarMentionPreview {
+    /// The requester holds a live copy of the meeting on a visible calendar.
+    Accessible(Box<CalendarMentionEvent>),
+    /// The event exists but is on no calendar the requester can see.
+    NoAccess,
+    /// No live event has this id.
+    DoesNotExist,
+}
+
+/// Meeting-level fields shown in a calendar event mention preview, taken from
+/// the requester's own projection of the meeting.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarMentionEvent {
+    /// The requester's own event entity for the mentioned meeting. Differs
+    /// from the mentioned id when the mention came from another attendee.
+    pub viewer_event_id: Uuid,
+    /// Display title.
+    pub title: String,
+    /// Time of the previewed instance: the requested occurrence when it
+    /// exists, else the next upcoming one, else the latest past one, else the
+    /// series start.
+    pub time: EventTime,
+    /// Key of the previewed instance, absent when no occurrence is
+    /// materialized.
+    pub occurrence_key: Option<String>,
+    /// Whether the event repeats.
+    pub is_recurring: bool,
+    /// Location label, when set.
+    pub location: Option<String>,
+    /// Organizer email.
+    pub organizer_email: Option<String>,
+    /// Organizer display name.
+    pub organizer_name: Option<String>,
+    /// Number of attendees on the requester's copy.
+    pub attendee_count: usize,
+    /// Entity update time of the requester's copy.
+    pub updated_at: DateTime<Utc>,
 }
 
 /// Inclusive/exclusive viewport range for occurrence queries.
@@ -554,6 +981,8 @@ pub struct CalendarAttendeeInput {
     pub email: String,
     /// Whether attendance is optional.
     pub is_optional: bool,
+    /// RSVP to write for this attendee. `None` leaves the provider default.
+    pub response_status: Option<AttendeeResponseStatus>,
 }
 
 /// User-supplied fields for a new provider event.
@@ -575,6 +1004,14 @@ pub struct CalendarEventDraft {
     pub visibility: Option<EventVisibility>,
     /// Availability behavior.
     pub transparency: Option<EventTransparency>,
+    /// Reminder configuration; `None` keeps the provider default.
+    pub reminders: Option<EventReminders>,
+    /// Conference to attach on creation. `None` creates the event without one.
+    pub conference: Option<ConferenceChange>,
+    /// Out-of-office properties. `Some` creates the event as a Google
+    /// out-of-office status event (primary calendar only, timed, no
+    /// attendees); `None` creates a regular event.
+    pub out_of_office: Option<OutOfOfficeProperties>,
 }
 
 /// User-supplied changes to an existing provider event. `None` fields are
@@ -597,6 +1034,14 @@ pub struct CalendarEventPatch {
     pub visibility: Option<EventVisibility>,
     /// Replacement transparency.
     pub transparency: Option<EventTransparency>,
+    /// Replacement reminder configuration.
+    pub reminders: Option<EventReminders>,
+    /// Conference change to apply; `None` leaves the conference untouched.
+    pub conference: Option<ConferenceChange>,
+    /// Replacement out-of-office properties, applied only to an event that is
+    /// already out-of-office — the provider event type is immutable. `None`
+    /// leaves them untouched.
+    pub out_of_office: Option<OutOfOfficeProperties>,
 }
 
 impl CalendarEventPatch {
@@ -622,9 +1067,10 @@ pub struct CalendarLinkTokenIdentity {
 pub struct CalendarEventMutationTarget {
     /// Macro entity identifier.
     pub event_id: Uuid,
-    /// Whether the canonical source prohibits mutation.
+    /// Whether the addressed copy's calendar prohibits mutation.
     pub is_read_only: bool,
-    /// Google event identifier of the best-ranked provider source.
+    /// Google event identifier of the addressed provider copy: the one on
+    /// the requested calendar, else the canonical source.
     pub provider_event_id: String,
     /// Recurring master identifier when the stored source is an instance.
     pub provider_recurring_event_id: Option<String>,
@@ -638,8 +1084,10 @@ pub struct CalendarEventMutationTarget {
     pub calendar_id: Uuid,
     /// Provider calendar identifier used in Google API paths.
     pub provider_calendar_id: String,
-    /// Token identity of the connected inbox.
+    /// Grant of the connected inbox this calendar belongs to.
     pub token_identity: CalendarLinkTokenIdentity,
+    /// The clicker's owned inboxes. `None` when they own none.
+    pub actor: Option<ActorInboxes>,
 }
 
 impl CalendarEventMutationTarget {
@@ -666,7 +1114,7 @@ impl CalendarEventMutationTarget {
 }
 
 /// A calendar visible to a requester, listed for pickers and filters.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct VisibleCalendar {
@@ -684,6 +1132,15 @@ pub struct VisibleCalendar {
     pub is_primary: bool,
     /// Whether the grant can create and modify events on this calendar.
     pub is_writable: bool,
+    /// Whether this is one of Google's shared system calendars (holidays,
+    /// birthdays) the account subscribes to rather than one a person maintains.
+    pub is_subscription: bool,
+    /// A persistent sync failure isolated to this calendar, surfaced so the
+    /// settings row can badge it. `None` while the calendar is syncing
+    /// normally or a failure has not yet crossed the persistence threshold.
+    pub sync_error: Option<String>,
+    /// Default reminders applied to events that keep `useDefault`.
+    pub default_reminders: Vec<EventReminderOverride>,
 }
 
 /// The writable calendar a new user-created event lands in.
@@ -701,8 +1158,13 @@ pub struct CalendarCreationTarget {
     pub provider_calendar_id: String,
     /// Whether the provider role prohibits event creation.
     pub is_read_only: bool,
-    /// Token identity of the connected inbox.
+    /// Whether this is its account's primary calendar. Out-of-office events
+    /// can only be created here.
+    pub is_primary: bool,
+    /// Grant of the connected inbox this calendar belongs to.
     pub token_identity: CalendarLinkTokenIdentity,
+    /// The clicker's owned inboxes. `None` when they own none.
+    pub actor: Option<ActorInboxes>,
 }
 
 impl CalendarCreationTarget {
@@ -740,6 +1202,11 @@ pub struct StoredGoogleCalendar {
 /// chronically resets their sync tokens, turning every poll into a full
 /// snapshot; a daily cadence keeps them fresh without that churn.
 pub const SYSTEM_CALENDAR_SYNC_INTERVAL: chrono::Duration = chrono::Duration::hours(24);
+
+/// Consecutive isolated sync failures a calendar must accumulate before its
+/// error surfaces to the user. A one-off transient failure clears on the next
+/// successful poll, so only a persistent failure earns a settings-row badge.
+pub const CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD: i32 = 3;
 
 /// Whether a provider calendar is one of Google's shared system calendars
 /// (`en.usa#holiday@group.v.calendar.google.com` and friends) rather than a
@@ -887,6 +1354,89 @@ pub enum RefreshCalendarEvent {
     },
 }
 
+/// Identity of one scheduled reminder firing: an occurrence, an offset, and
+/// the resolved instant. The instant is part of the identity so a moved event
+/// is a different firing that alerts again.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarReminderFiring {
+    /// Owning event entity.
+    pub event_id: Uuid,
+    /// Stable occurrence key within the event.
+    pub occurrence_key: String,
+    /// Minutes before the occurrence start.
+    pub minutes_before: i32,
+    /// Resolved alert instant.
+    pub fire_at: DateTime<Utc>,
+}
+
+/// A firing joined with everything its notification needs.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DueCalendarReminder {
+    /// The scheduled firing.
+    pub firing: CalendarReminderFiring,
+    /// Macro user the alert belongs to.
+    pub owner_id: String,
+    /// Event display title.
+    pub title: String,
+    /// The occurrence's time.
+    pub time: EventTime,
+    /// Zone for rendering local clock times: the event's, else its calendar's.
+    pub display_time_zone: Option<String>,
+    /// Whether the owner declined this occurrence; declined events alert
+    /// nobody, matching Google's default.
+    pub declined: bool,
+}
+
+/// One calendar reminder dispatch queue message.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarReminderDispatchMessage {
+    /// What the receiving worker must do.
+    pub operation: CalendarReminderDispatchOperation,
+}
+
+impl CalendarReminderDispatchMessage {
+    /// Build the fan-out message for one due firing.
+    pub fn deliver(firing: CalendarReminderFiring) -> Self {
+        Self {
+            operation: CalendarReminderDispatchOperation::Deliver(firing),
+        }
+    }
+}
+
+/// The two kinds of work on the calendar reminder dispatch queue: the
+/// minutely EventBridge tick, and one firing that a tick fanned out.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CalendarReminderDispatchOperation {
+    /// Find due firings and fan them out.
+    Sweep,
+    /// Deliver a single firing.
+    Deliver(CalendarReminderFiring),
+}
+
+/// What one sweep dispatched.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CalendarReminderSweepSummary {
+    /// Firings fanned out for delivery.
+    pub dispatched: usize,
+}
+
+/// Terminal result of handling one firing delivery.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CalendarReminderDeliveryOutcome {
+    /// The notification went out.
+    Delivered,
+    /// Another worker holds or completed the claim.
+    AlreadyClaimed,
+    /// The firing no longer exists as swept — the event moved, was
+    /// cancelled, or its account went away.
+    Gone,
+    /// The owner declined the occurrence, so nothing alerts.
+    SkippedDeclined,
+}
+
 /// Kind of idempotent historical work triggered by a Google grant.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CalendarBackfillKind {
@@ -1000,4 +1550,6 @@ pub struct ProviderCalendar {
     pub is_primary: bool,
     /// Whether Macro should display/sync it by default.
     pub is_selected: bool,
+    /// Default reminders applied to events that keep `useDefault`.
+    pub default_reminders: Vec<EventReminderOverride>,
 }

@@ -1,4 +1,5 @@
 import { recordEmojiUsage } from '@core/component/Emoji/emojiUsage';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import StarIcon from '@icon/wide-star.svg';
 import TaskIcon from '@icon/wide-task.svg';
 import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
@@ -8,11 +9,27 @@ import EditIcon from '@phosphor/pencil-simple.svg';
 import AddEmojiIcon from '@phosphor/smiley.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import { Button, cn, Layer } from '@ui';
-import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
-import { useMessage, useMessageActions } from './context';
+import {
+  type Component,
+  createSignal,
+  For,
+  type JSX,
+  onCleanup,
+  Show,
+} from 'solid-js';
+import {
+  getRenderedMessageReplyText,
+  getSelectedMessageText,
+} from './browser-selection';
+import {
+  useMessage,
+  useMessageActionMenuVisibility,
+  useMessageActions,
+} from './context';
 import { EmojiReactionPopover } from './EmojiReactionPopover';
 import { HoverActions } from './HoverActions';
 import { renderIcon } from './render-icon';
+import { Timestamp } from './Timestamp';
 import type { MessageActionEvent, MessageActionHandler } from './types';
 
 const QUICK_REACTION_EMOJIS = ['❤️', '👍', '😂'] as const;
@@ -38,17 +55,24 @@ type ActionItem = {
 
 type ActionMenuProps = {
   class?: string;
+  /**
+   * Lead the toolbar with the message's timestamp. Used by grouped rows,
+   * which have no header timestamp of their own.
+   */
+  showTimestamp?: boolean;
 };
 
 function ActionButton(props: {
   action: ActionItem;
   onClick: JSX.EventHandlerUnion<HTMLButtonElement, MouseEvent>;
+  onPointerDown?: JSX.EventHandlerUnion<HTMLButtonElement, PointerEvent>;
 }) {
   return (
     <Button
       aria-label={props.action.label}
       data-message-action={props.action.id}
       onClick={props.onClick}
+      onPointerDown={props.onPointerDown}
       tooltip={props.action.label}
       size="icon-sm"
       variant="ghost"
@@ -62,10 +86,20 @@ function ActionButton(props: {
   );
 }
 
-export function ActionMenu(props: ActionMenuProps) {
+function ActionMenuContent(props: ActionMenuProps) {
   const message = useMessage();
   const actions = useMessageActions();
+  const actionMenuVisibility = useMessageActionMenuVisibility();
   const [emojiMenuOpen, setEmojiMenuOpen] = createSignal(false);
+  let selectedReplyText: string | undefined;
+  let renderedReplyText: string | undefined;
+
+  const handleEmojiMenuOpenChange = (isOpen: boolean) => {
+    setEmojiMenuOpen(isOpen);
+    actionMenuVisibility.setPersistent(isOpen);
+  };
+
+  onCleanup(() => actionMenuVisibility.setPersistent(false));
 
   const handleReaction = (emoji: string, event?: MessageActionEvent) => {
     void actions?.onReact?.({
@@ -97,28 +131,28 @@ export function ActionMenu(props: ActionMenuProps) {
       label: 'Reply',
       icon: ReplyIcon,
       onClick: actions?.onReply,
-      iconClass: 'size-3.5',
+      iconClass: 'size-4',
     },
     {
       id: 'copy-link',
       label: 'Copy Link',
       icon: LinkIcon,
       onClick: actions?.onCopyLink,
-      iconClass: 'size-3.5',
+      iconClass: 'size-4',
     },
     {
       id: 'copy-message-text',
       label: 'Copy Text',
       icon: CopyIcon,
       onClick: actions?.onCopyMessageText,
-      iconClass: 'size-3.5',
+      iconClass: 'size-4',
     },
     {
       id: 'edit',
       label: 'Edit',
       icon: EditIcon,
       onClick: actions?.onEdit,
-      iconClass: 'size-3.5',
+      iconClass: 'size-4',
     },
     {
       id: 'delete',
@@ -127,7 +161,7 @@ export function ActionMenu(props: ActionMenuProps) {
       onClick: actions?.onDelete,
       destructive: true,
       class: 'text-failure-ink',
-      iconClass: 'size-3.5',
+      iconClass: 'size-4',
     },
   ];
 
@@ -137,12 +171,22 @@ export function ActionMenu(props: ActionMenuProps) {
 
   return (
     <Show when={hasReactAction() || visibleActions.length > 0}>
-      <HoverActions class={props.class} persistentVisible={emojiMenuOpen()}>
+      <HoverActions
+        class={props.class}
+        persistentVisible={emojiMenuOpen()}
+        // Grouped rows (the ones carrying the toolbar timestamp) have text at
+        // the very top; float the toolbar fully above so it never covers it.
+        position={props.showTimestamp ? 'above' : 'straddle'}
+      >
         <Layer depth={2}>
           <div
-            class="flex flex-row bg-surface border border-edge p-1 shadow items-center rounded-md"
+            class="flex flex-row bg-surface ring-1 ring-ink/10 p-1 shadow-md items-center rounded-lg"
             onClick={(e) => e.stopPropagation()}
           >
+            <Show when={props.showTimestamp}>
+              <Timestamp format="time" class="px-1.5 whitespace-nowrap" />
+              <div class="w-px self-stretch bg-ink/10 mx-1" />
+            </Show>
             <Show when={hasReactAction()}>
               <For each={QUICK_REACTION_EMOJIS}>
                 {(emoji) => (
@@ -158,7 +202,7 @@ export function ActionMenu(props: ActionMenuProps) {
                     data-message-action="react-quick"
                     data-emoji={emoji}
                   >
-                    <span class="text-md my-0">{emoji}</span>
+                    <span class="text-base my-0">{emoji}</span>
                   </Button>
                 )}
               </For>
@@ -166,11 +210,11 @@ export function ActionMenu(props: ActionMenuProps) {
               <EmojiReactionPopover
                 placement="left"
                 open={emojiMenuOpen()}
-                onOpenChange={setEmojiMenuOpen}
+                onOpenChange={handleEmojiMenuOpenChange}
                 onEmojiSelect={(emoji) => {
                   handleReaction(emoji);
                 }}
-                trigger={renderIcon(AddEmojiIcon, 'size-3.5')}
+                trigger={renderIcon(AddEmojiIcon, 'size-4')}
                 triggerProps={{
                   title: 'More reactions',
                   'aria-label': 'More reactions',
@@ -180,7 +224,7 @@ export function ActionMenu(props: ActionMenuProps) {
                 }}
               />
               <Show when={visibleActions.length > 0}>
-                <div class="w-px self-stretch bg-edge-muted mx-1" />
+                <div class="w-px self-stretch bg-ink/10 mx-1" />
               </Show>
             </Show>
 
@@ -195,14 +239,48 @@ export function ActionMenu(props: ActionMenuProps) {
               )}
             </For>
             <Show when={visibleCompose.length > 0 && visibleOther.length > 0}>
-              <div class="w-px self-stretch bg-edge-muted mx-1" />
+              <div class="w-px self-stretch bg-ink/10 mx-1" />
             </Show>
             <For each={visibleOther}>
               {(action) => (
                 <ActionButton
                   action={action}
+                  onPointerDown={(event) => {
+                    if (action.id !== 'reply') return;
+                    selectedReplyText = getSelectedMessageText(
+                      event.currentTarget,
+                      message().id
+                    );
+                    renderedReplyText = getRenderedMessageReplyText(
+                      event.currentTarget,
+                      message().id
+                    );
+                  }}
                   onClick={(event) => {
-                    void action.onClick?.({ message: message(), event });
+                    const selectedText =
+                      action.id === 'reply'
+                        ? (selectedReplyText ??
+                          getSelectedMessageText(
+                            event.currentTarget,
+                            message().id
+                          ))
+                        : undefined;
+                    selectedReplyText = undefined;
+                    const renderedText =
+                      action.id === 'reply'
+                        ? (renderedReplyText ??
+                          getRenderedMessageReplyText(
+                            event.currentTarget,
+                            message().id
+                          ))
+                        : undefined;
+                    renderedReplyText = undefined;
+                    void action.onClick?.({
+                      message: message(),
+                      event,
+                      selectedText,
+                      renderedText,
+                    });
                   }}
                 />
               )}
@@ -210,6 +288,16 @@ export function ActionMenu(props: ActionMenuProps) {
           </div>
         </Layer>
       </HoverActions>
+    </Show>
+  );
+}
+
+export function ActionMenu(props: ActionMenuProps) {
+  const actionMenuVisibility = useMessageActionMenuVisibility();
+
+  return (
+    <Show when={actionMenuVisibility.visible() && !isTouchDevice()}>
+      <ActionMenuContent {...props} />
     </Show>
   );
 }

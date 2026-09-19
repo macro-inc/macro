@@ -35,6 +35,9 @@
     "lint": "biome check",
     "format": "biome format --write"
   },
+  "dependencies": {
+    "ts-pattern": "^5.8.0"
+  },
   "devDependencies": {
     "@biomejs/biome": "2.4.12",
     "@types/bun": "^1.3.5",

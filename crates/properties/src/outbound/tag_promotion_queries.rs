@@ -324,6 +324,7 @@ async fn remap_entity_values(
             entity_type as "entity_type: EntityType",
             property_definition_id,
             values as "value: serde_json::Value",
+            NULL as "previous: serde_json::Value",
             created_at,
             updated_at
         "#,

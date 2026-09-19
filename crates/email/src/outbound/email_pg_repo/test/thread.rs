@@ -253,6 +253,42 @@ async fn test_messages_by_thread_id_paginated_fields_populated(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_thread"))
 )]
+async fn test_messages_by_thread_id_paginated_dateless_message_not_page_head(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // Thread 4 has a real dated message carrying the subject and an earlier dateless,
+    // subjectless one. A single-row fetch must return the subject-bearing message, not
+    // the dateless one that a bare `internal_date_ts DESC` floats to the top on NULL.
+    let repo = EmailPgRepo::new(pool);
+
+    let thread_id = Uuid::parse_str("44444444-4444-4444-4444-444444444444")?;
+
+    let preview = repo
+        .messages_by_thread_id_paginated(thread_id, 0, 1)
+        .await?;
+    assert_eq!(preview.len(), 1);
+    assert_eq!(preview[0].provider_id.as_deref(), Some("msg-4-real"));
+    assert_eq!(
+        preview[0].subject.as_deref(),
+        Some("Change workspace name and emails"),
+        "limit-1 fetch must return the subject-bearing message"
+    );
+
+    // The dateless message still comes back, ordered after the real one.
+    let all = repo
+        .messages_by_thread_id_paginated(thread_id, 0, 50)
+        .await?;
+    assert_eq!(all.len(), 2);
+    assert_eq!(all[0].provider_id.as_deref(), Some("msg-4-real"));
+    assert_eq!(all[1].provider_id.as_deref(), Some("msg-4-dateless"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_thread"))
+)]
 async fn test_latest_content_messages_are_batched_and_exclude_drafts(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {

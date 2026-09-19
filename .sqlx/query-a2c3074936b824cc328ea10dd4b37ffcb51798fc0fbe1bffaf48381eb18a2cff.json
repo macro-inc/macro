@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH user_source_ids AS (\n            SELECT cp.channel_id::text AS source_id\n            FROM comms_channel_participants cp\n            WHERE cp.user_id = $1 AND cp.left_at IS NULL\n            UNION ALL\n            SELECT t.team_id::text\n            FROM team_user t\n            WHERE t.user_id = $1\n            UNION ALL\n            SELECT $1\n        ),\n        visible_calls AS (\n            SELECT\n                cr.id,\n                CASE\n                    WHEN EXISTS (\n                        SELECT 1 FROM call_record_participants crp\n                        WHERE crp.call_record_id = cr.id AND crp.user_id = $1\n                    ) THEN 'ATTENDED'\n                    WHEN EXISTS (\n                        SELECT 1 FROM comms_channel_participants ccp\n                        WHERE ccp.channel_id = cr.channel_id\n                          AND ccp.user_id = $1\n                          AND ccp.left_at IS NULL\n                    ) THEN 'MISSED'\n                    ELSE 'UNATTENDED'\n                END AS status\n            FROM call_records cr\n            WHERE (\n                EXISTS (\n                    SELECT 1 FROM entity_access ea\n                    WHERE ea.entity_id = cr.id\n                      AND ea.entity_type = 'call'\n                      AND ea.source_id IN (SELECT source_id FROM user_source_ids)\n                ) OR EXISTS (\n                    SELECT 1 FROM \"SharePermission\" sp\n                    WHERE sp.id = cr.share_permission_id\n                      AND sp.\"linkShareAccessLevel\" IS NOT NULL\n                      AND (\n                          sp.\"linkShare\" = 'PUBLIC'\n                          OR (\n                              sp.\"linkShare\" = 'TEAM'\n                              AND EXISTS (\n                                  SELECT 1\n                                  FROM team_user owner_team\n                                  WHERE owner_team.user_id = cr.created_by\n                                    AND owner_team.team_id::text IN (\n                                        SELECT source_id FROM user_source_ids\n                                    )\n                              )\n                          )\n                      )\n                )\n            )\n        )\n        SELECT id AS \"id!\"\n        FROM visible_calls\n        WHERE cardinality($2::text[]) = 0 OR status = ANY($2)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a2c3074936b824cc328ea10dd4b37ffcb51798fc0fbe1bffaf48381eb18a2cff"
+}

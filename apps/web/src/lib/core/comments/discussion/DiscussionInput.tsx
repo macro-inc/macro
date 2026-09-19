@@ -216,7 +216,7 @@ export function DiscussionInput(props: DiscussionInputProps) {
         }}
         onFocusIn={() => setIsFocused(true)}
         active={isFocused()}
-        class="rounded-xl"
+        class="rounded-xl bg-surface"
         depth={2}
         solid
       >

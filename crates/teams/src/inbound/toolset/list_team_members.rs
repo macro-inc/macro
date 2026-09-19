@@ -6,6 +6,7 @@ use crate::domain::{
     team_repo::TeamMembersService,
 };
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::{
     models::{
@@ -75,6 +76,10 @@ pub struct ListTeamMembersResponse {
 #[allow(unused)]
 // empty structs can't be deserialized;
 pub struct ListTeamMembers {}
+
+impl ToolAnnotated for ListTeamMembers {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("List team members");
+}
 
 #[async_trait]
 impl<TSvc, ESvc> AsyncTool<TeamToolContext<TSvc, ESvc>> for ListTeamMembers
@@ -151,7 +156,9 @@ fn team_access_error(err: AccessError) -> ToolCallError {
         }
         AccessError::NotFound(_) => "team not found",
         AccessError::BadRequest(_) => "invalid team membership",
-        AccessError::DatabaseError(_) | AccessError::Internal => "failed to verify team membership",
+        AccessError::Unavailable(_) | AccessError::Internal(_) => {
+            "failed to verify team membership"
+        }
     };
 
     ToolCallError {

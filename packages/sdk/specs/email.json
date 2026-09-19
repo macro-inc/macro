@@ -131,6 +131,16 @@
             }
           },
           {
+            "name": "calendarId",
+            "in": "query",
+            "description": "Calendar whose copy of the event is deleted, for an event synced from\nmore than one calendar. Omit to delete the canonical copy.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
             "name": "scope",
             "in": "query",
             "description": "Deletion scope; defaults to the entire event or series.",
@@ -259,7 +269,7 @@
             }
           },
           "404": {
-            "description": "Event not found",
+            "description": "Event or targeted occurrence not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -423,7 +433,37 @@
               }
             }
           },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
             "description": "",
             "content": {
               "application/json": {
@@ -841,6 +881,36 @@
             }
           },
           "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
             "description": "",
             "content": {
               "application/json": {
@@ -1747,6 +1817,16 @@
               }
             }
           },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "",
             "content": {
@@ -1843,7 +1923,37 @@
               }
             }
           },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
             "description": "",
             "content": {
               "application/json": {
@@ -1989,7 +2099,7 @@
     "/email/links/health-check": {
       "post": {
         "tags": ["Links"],
-        "summary": "Probes the live auth state of each of the caller's inboxes (owned and delegated)\nagainst the auth service and records the result on each link. A grant that died\nwhile the caller was inactive is detected here within minutes instead of waiting on\nthe daily refresh sweep; the side effects (clearing or setting the reauth flag, and\nthe one-time reauth fan-out) are handled by `fetch_token_or_mark_reauth_no_cache`.",
+        "summary": "Probes the live auth state of each of the caller's inboxes (owned and delegated)\nagainst the auth service and records the result on each link. A grant that died\nwhile the caller was inactive is detected here within minutes instead of waiting on\nthe daily refresh sweep; the side effects (clearing or setting the reauth flag, and\nthe one-time reauth fan-out) are handled by the email service token source.",
         "description": "Probes run in the background and the response returns immediately to stay off the\nload path; each persisted flag is picked up by the next links read. Probes are\nthrottled per link in Redis so frequent calls — and many sharers of a shared inbox —\ncollapse to one refresh per window.",
         "operationId": "health_check_links",
         "responses": {
@@ -2032,6 +2142,78 @@
         "summary": "Removes a linked inbox.",
         "description": "For an inbox the caller owns this enqueues a full cascade teardown\n(`LinkManagerMessage::DeleteLink`). For an inbox reached via delegation it\nonly drops the `macro_user_links` edge, leaving the owner's data intact.",
         "operationId": "delete_link",
+        "parameters": [
+          {
+            "name": "link_id",
+            "in": "path",
+            "description": "Inbox link ID.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/links/{link_id}/calendar": {
+      "delete": {
+        "tags": ["Links"],
+        "summary": "Turns calendar off for a connected inbox.",
+        "description": "Removes the inbox's calendar data, drops the calendar scopes from its\nrecorded Google grant, and closes its push channels, so the inbox reads as\ncalendar-less until the user runs the calendar consent flow again. Gmail\nsync is untouched.\n\nOnly the inbox's owner may do this: a delegate can see the owner's calendar\nbut must not be able to delete the owner's data.",
+        "operationId": "disable_link_calendar",
         "parameters": [
           {
             "name": "link_id",
@@ -3391,7 +3573,7 @@
           },
           "body_html": {
             "type": ["string", "null"],
-            "description": "HTML body (base64 URL_SAFE_NO_PAD encoded)."
+            "description": "HTML body (base64 URL_SAFE_NO_PAD encoded). Sanitized before storage."
           },
           "body_macro": {
             "type": ["string", "null"],
@@ -4303,7 +4485,7 @@
           },
           "isSelf": {
             "type": "boolean",
-            "description": "Whether this attendee represents the connected account."
+            "description": "Whether this attendee is one of the viewing requester's inboxes."
           },
           "responseStatus": {
             "$ref": "#/components/schemas/AttendeeResponseStatus",
@@ -4333,7 +4515,7 @@
       },
       "CalendarEvent": {
         "type": "object",
-        "description": "A stable, first-class Macro calendar event entity.",
+        "description": "A stable, first-class Macro calendar event entity.\n\nContent fields hold the canonical source's values: the account's primary\ncalendar copy when one is synced, else the freshest remaining copy.",
         "required": [
           "id",
           "ownerId",
@@ -4363,6 +4545,17 @@
             "format": "uuid",
             "description": "Calendar the canonical source belongs to, when known. Absent only in\nprojections stored before calendars were attributed."
           },
+          "conferenceProvider": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ConferenceProvider",
+                "description": "Which conferencing system backs `conference_url`. `None` whenever no\nconference is attached."
+              }
+            ]
+          },
           "conferenceUrl": {
             "type": ["string", "null"],
             "description": "Direct join URL when known."
@@ -4372,9 +4565,21 @@
             "format": "date-time",
             "description": "Entity creation time."
           },
+          "creatorEmail": {
+            "type": ["string", "null"],
+            "description": "Provider-reported creator email. Distinct from the organizer when\nsomeone writes onto a calendar they do not own. Omitted from stored\nprojections when unknown so events ingested before this field still\ncompare equal."
+          },
+          "creatorName": {
+            "type": ["string", "null"],
+            "description": "Provider-reported creator display name."
+          },
           "description": {
             "type": ["string", "null"],
             "description": "Optional event body."
+          },
+          "eventType": {
+            "$ref": "#/components/schemas/EventType",
+            "description": "Provider event type. Skipped when it is the regular type so\nprojections stored before event types were modeled still compare\nequal."
           },
           "icalUid": {
             "type": "string",
@@ -4387,7 +4592,7 @@
           },
           "isReadOnly": {
             "type": "boolean",
-            "description": "Whether the current user can edit the canonical source."
+            "description": "Whether the canonical source's calendar prohibits editing it."
           },
           "location": {
             "type": ["string", "null"],
@@ -4412,11 +4617,22 @@
             },
             "description": "Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`)."
           },
+          "reminders": {
+            "$ref": "#/components/schemas/EventReminders",
+            "description": "Per-user reminder configuration. Skipped when it is the provider\ndefault so projections stored before reminders were modeled still\ncompare equal."
+          },
           "sequence": {
             "type": "integer",
             "format": "int32",
             "description": "Provider/iCalendar sequence number.",
             "minimum": 0
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CalendarEventSourceContent"
+            },
+            "description": "Content of every active copy of this event, canonical first: the\nprimary calendar's copy, then the freshest. A client picks the copy\nwhose calendar it is showing and falls back to the first. Populated\nonly on the read path, so stored projections omit it."
           },
           "status": {
             "$ref": "#/components/schemas/EventStatus",
@@ -4445,6 +4661,66 @@
           }
         }
       },
+      "CalendarEventSourceContent": {
+        "type": "object",
+        "description": "The content one provider copy of an event carries.\n\nGoogle keeps these fields per calendar copy: a shared calendar's copy of a\nmember's event can have its own title, type, reminders, and access role.\nThe entity holds its canonical source's values. Every other copy's values\nare read from here so a client can show the copy that belongs to the\ncalendar being viewed.",
+        "required": [
+          "calendarId",
+          "title",
+          "eventType",
+          "visibility",
+          "transparency",
+          "isReadOnly",
+          "reminders"
+        ],
+        "properties": {
+          "calendarId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Calendar this copy lives on."
+          },
+          "creatorEmail": {
+            "type": ["string", "null"],
+            "description": "Provider-reported creator email."
+          },
+          "creatorName": {
+            "type": ["string", "null"],
+            "description": "Provider-reported creator display name."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional event body."
+          },
+          "eventType": {
+            "$ref": "#/components/schemas/EventType",
+            "description": "Provider event type."
+          },
+          "isReadOnly": {
+            "type": "boolean",
+            "description": "Whether the calendar's access role prohibits editing this copy."
+          },
+          "location": {
+            "type": ["string", "null"],
+            "description": "Optional physical or virtual location label."
+          },
+          "reminders": {
+            "$ref": "#/components/schemas/EventReminders",
+            "description": "Reminder configuration of this copy."
+          },
+          "title": {
+            "type": "string",
+            "description": "Display title."
+          },
+          "transparency": {
+            "$ref": "#/components/schemas/EventTransparency",
+            "description": "Availability behavior."
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/EventVisibility",
+            "description": "Event visibility."
+          }
+        }
+      },
       "CalendarMutationApiError": {
         "type": "object",
         "description": "HTTP error body returned by calendar mutation endpoints.",
@@ -4465,6 +4741,7 @@
         "description": "Machine-readable failure category for calendar mutations.",
         "enum": [
           "not_found",
+          "occurrence_not_found",
           "read_only",
           "no_writable_calendar",
           "not_attendee",
@@ -4480,6 +4757,11 @@
         "description": "How much of a recurring series an RSVP applies to.\n\nUnlike deletion there is no this-and-following variant: the provider\ncannot express a forward-scoped response, so offering one would be a\npromise sync could not keep.",
         "enum": ["all", "this_event"]
       },
+      "CalendarUpdateScopeParam": {
+        "type": "string",
+        "description": "How much of a recurring series an update applies to.\n\nLike RSVPs there is no this-and-following variant: the provider cannot\nexpress a forward-scoped edit as one write, and emulating it (truncate\nthe series, insert an edited clone) is non-atomic and re-invites the\nattendees of the clone. Compose it from a this-and-following deletion\nand a create when that shape is wanted.",
+        "enum": ["all", "this_event"]
+      },
       "CancelBackfillParams": {
         "type": "object",
         "required": ["job_id"],
@@ -4489,6 +4771,16 @@
             "format": "uuid"
           }
         }
+      },
+      "ConferenceChange": {
+        "type": "string",
+        "description": "A requested change to an event's conferencing. Omitting the field leaves\nthe existing conference untouched; only these values change it.",
+        "enum": ["google_meet", "none"]
+      },
+      "ConferenceProvider": {
+        "type": "string",
+        "description": "The conferencing system backing an event's join URL.\n\nMacro generates only Google Meet conferences, so this distinguishes one it\ncreated from a third party's — Zoom and friends arriving as `addOn`\nconference data, or a legacy classic Hangout. Clients use it to label the\nconference and to tell whether the Meet toggle reflects a Macro-managed\nconference.\n\nIt does not gate mutation. An explicit request replaces or detaches any\nconference, third-party included, exactly as deleting the event would;\nwhat protects a conference is that omitting the field leaves it untouched,\nso an unrelated edit never disturbs it.",
+        "enum": ["google_meet", "other"]
       },
       "Contact": {
         "type": "object",
@@ -4583,6 +4875,17 @@
             "format": "uuid",
             "description": "Exact calendar to create the event on; takes precedence over the\ninbox default."
           },
+          "conference": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ConferenceChange",
+                "description": "Conference to attach to the new event; omit to create it without one."
+              }
+            ]
+          },
           "description": {
             "type": ["string", "null"],
             "description": "Optional event body."
@@ -4596,12 +4899,34 @@
             "type": ["string", "null"],
             "description": "Optional location label."
           },
+          "outOfOffice": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OutOfOfficeProperties",
+                "description": "Out-of-office properties; present to create the event as a Google\nout-of-office status event (primary calendar only, timed, no\nattendees), omitted for a regular event."
+              }
+            ]
+          },
           "recurrenceLines": {
             "type": "array",
             "items": {
               "type": "string"
             },
             "description": "Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`)."
+          },
+          "reminders": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EventReminders",
+                "description": "Reminder configuration; omit to keep the calendar defaults."
+              }
+            ]
           },
           "time": {
             "$ref": "#/components/schemas/EventTime",
@@ -4697,6 +5022,41 @@
           }
         }
       },
+      "EventReminderOverride": {
+        "type": "object",
+        "description": "One reminder: how it alerts and how many minutes before the event start\n(before midnight in the calendar's zone for all-day events) it fires.",
+        "required": ["method", "minutes"],
+        "properties": {
+          "method": {
+            "type": "string",
+            "description": "Provider method, stored verbatim; only `popup` fires Macro\nnotifications."
+          },
+          "minutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Minutes before the event start.",
+            "minimum": 0
+          }
+        }
+      },
+      "EventReminders": {
+        "type": "object",
+        "description": "Per-user reminder configuration for an event, mirroring Google's model:\neither the calendar's default reminders apply, or the explicit overrides\nreplace them entirely.",
+        "required": ["useDefault"],
+        "properties": {
+          "overrides": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventReminderOverride"
+            },
+            "description": "Explicit reminders replacing the defaults when `use_default` is off."
+          },
+          "useDefault": {
+            "type": "boolean",
+            "description": "Whether the calendar's default reminders apply."
+          }
+        }
+      },
       "EventStatus": {
         "type": "string",
         "description": "Canonical event status.",
@@ -4757,6 +5117,18 @@
         "type": "string",
         "description": "Whether an event blocks availability.",
         "enum": ["opaque", "transparent"]
+      },
+      "EventType": {
+        "type": "string",
+        "description": "Google's event type: ordinary meetings versus the status-style entries\n(working location, out of office, focus time, birthdays) Google renders\nand notifies differently. Immutable at the provider after creation.",
+        "enum": [
+          "default",
+          "out_of_office",
+          "focus_time",
+          "working_location",
+          "birthday",
+          "from_gmail"
+        ]
       },
       "EventVisibility": {
         "type": "string",
@@ -4969,12 +5341,18 @@
           "sync_status",
           "needs_reauth",
           "needs_calendar_permission",
+          "calendar_disabled",
+          "has_calendar_data",
           "settings",
           "is_primary",
           "created_at",
           "updated_at"
         ],
         "properties": {
+          "calendar_disabled": {
+            "type": "boolean",
+            "description": "Whether the user turned calendar off for this inbox, which also removed\nits calendar data. `needs_calendar_permission` is true either way, so\nthis is what separates \"never granted\" from \"deliberately off\" —\nunprompted calendar nags must stay quiet for the latter."
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -4984,6 +5362,10 @@
           },
           "fusionauth_user_id": {
             "type": "string"
+          },
+          "has_calendar_data": {
+            "type": "boolean",
+            "description": "Whether Macro holds calendar data for this inbox. Drives the turn-off\ncontrol on its own, so removing that data never depends on the recorded\nscopes still matching the set Macro requests today — a set that changes\nas the integration narrows, stranding data behind a capability check\nthat no longer recognizes an older grant."
           },
           "id": {
             "type": "string",
@@ -5301,6 +5683,29 @@
         "type": "string",
         "enum": ["Show", "Hide"]
       },
+      "OutOfOfficeAutoDeclineMode": {
+        "type": "string",
+        "description": "How an out-of-office event responds to conflicting invitations, mirroring\nGoogle's `autoDeclineMode`.",
+        "enum": [
+          "decline_none",
+          "decline_all_conflicting_invitations",
+          "decline_only_new_conflicting_invitations"
+        ]
+      },
+      "OutOfOfficeProperties": {
+        "type": "object",
+        "description": "The extra properties Google requires on an out-of-office event, mirroring\nits `outOfOfficeProperties` block. Their presence on a draft or patch is\nwhat marks the mutation as out-of-office.",
+        "properties": {
+          "autoDeclineMode": {
+            "$ref": "#/components/schemas/OutOfOfficeAutoDeclineMode",
+            "description": "How conflicting invitations are handled while the user is out."
+          },
+          "declineMessage": {
+            "type": ["string", "null"],
+            "description": "Message returned to organizers whose invitations are auto-declined."
+          }
+        }
+      },
       "ParsedMessage": {
         "type": "object",
         "required": [
@@ -5594,6 +5999,11 @@
         "description": "Request body setting the requester's RSVP on an event.",
         "required": ["response"],
         "properties": {
+          "calendarId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Calendar whose copy of the event is answered, for an event synced\nfrom more than one calendar. Omit to answer on the canonical copy."
+          },
           "recurrenceId": {
             "type": ["string", "null"],
             "description": "Original-start key of the occurrence the response targets."
@@ -5877,6 +6287,22 @@
             },
             "description": "Replacement attendee list."
           },
+          "calendarId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Calendar whose copy of the event is patched, for an event synced from\nmore than one calendar. Omit to patch the canonical copy."
+          },
+          "conference": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ConferenceChange",
+                "description": "Conference change: `google_meet` attaches a freshly generated Meet,\n`none` detaches the current conference, and omitting it leaves the\nconference untouched.\n\nA third-party conference is replaced or detached like any other, since\nthe request is explicit. Omit the field to leave it alone."
+              }
+            ]
+          },
           "description": {
             "type": ["string", "null"],
             "description": "Replacement description; an empty string clears it."
@@ -5885,12 +6311,49 @@
             "type": ["string", "null"],
             "description": "Replacement location; an empty string clears it."
           },
+          "outOfOffice": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OutOfOfficeProperties",
+                "description": "Replacement out-of-office properties, applied only to an event that is\nalready out-of-office — the provider event type is immutable. Omit to\nleave them untouched."
+              }
+            ]
+          },
+          "recurrenceId": {
+            "type": ["string", "null"],
+            "description": "Original-start key of the occurrence the update targets."
+          },
           "recurrenceLines": {
             "type": ["array", "null"],
             "items": {
               "type": "string"
             },
             "description": "Replacement recurrence properties; an empty list clears them."
+          },
+          "reminders": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EventReminders",
+                "description": "Replacement reminder configuration."
+              }
+            ]
+          },
+          "scope": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CalendarUpdateScopeParam",
+                "description": "How much of a recurring series the update covers. Omit to let\n`recurrenceId` decide: the identified occurrence alone when one is\nsupplied, otherwise the whole event or series. An explicit\n`this_event` scope requires `recurrenceId`, so a scoped request is\nnever silently widened to the series."
+              }
+            ]
           },
           "time": {
             "oneOf": [
@@ -6101,12 +6564,21 @@
           "emailAddress",
           "name",
           "isPrimary",
-          "isWritable"
+          "isWritable",
+          "isSubscription",
+          "defaultReminders"
         ],
         "properties": {
           "color": {
             "type": ["string", "null"],
             "description": "Provider color."
+          },
+          "defaultReminders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventReminderOverride"
+            },
+            "description": "Default reminders applied to events that keep `useDefault`."
           },
           "emailAddress": {
             "type": "string",
@@ -6126,6 +6598,10 @@
             "type": "boolean",
             "description": "Whether this is its account's primary calendar."
           },
+          "isSubscription": {
+            "type": "boolean",
+            "description": "Whether this is one of Google's shared system calendars (holidays,\nbirthdays) the account subscribes to rather than one a person maintains."
+          },
           "isWritable": {
             "type": "boolean",
             "description": "Whether the grant can create and modify events on this calendar."
@@ -6133,6 +6609,10 @@
           "name": {
             "type": "string",
             "description": "Provider display name."
+          },
+          "syncError": {
+            "type": ["string", "null"],
+            "description": "A persistent sync failure isolated to this calendar, surfaced so the\nsettings row can badge it. `None` while the calendar is syncing\nnormally or a failure has not yet crossed the persistence threshold."
           }
         }
       }

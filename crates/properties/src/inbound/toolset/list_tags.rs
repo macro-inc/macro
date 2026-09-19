@@ -2,6 +2,7 @@
 
 use crate::domain::service::PropertiesService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::ports::EntityAccessService;
 use models_properties::PropertyOwner;
@@ -58,6 +59,10 @@ pub struct ListTagsResponse {
 #[allow(unused)]
 // empty structs can't be deserialized;
 pub struct ListTags {}
+
+impl ToolAnnotated for ListTags {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("List tags");
+}
 
 #[async_trait]
 impl<T, A> AsyncTool<PropertiesToolContext<T, A>> for ListTags

@@ -6,6 +6,7 @@ import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { fireEvent, render, screen } from '@solidjs/testing-library';
+import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import type { JSX } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { EntityRowTags } from './EntityRowTags';
@@ -65,14 +66,18 @@ describe('TagSetsContext', () => {
       } as SoupProperty,
     ];
 
+    // Rows read pending option mutations to overlay an uncommitted selection,
+    // so they need a client even though they start no mutation of their own.
     render(() => (
-      <TagSetsProvider tagSets={tagSets}>
-        <EntityRowTags
-          entityId="document-1"
-          entityType={EntityType.DOCUMENT}
-          properties={properties}
-        />
-      </TagSetsProvider>
+      <QueryClientProvider client={new QueryClient()}>
+        <TagSetsProvider tagSets={tagSets}>
+          <EntityRowTags
+            entityId="document-1"
+            entityType={EntityType.DOCUMENT}
+            properties={properties}
+          />
+        </TagSetsProvider>
+      </QueryClientProvider>
     ));
 
     expect(screen.getByText('Urgent')).toBeTruthy();

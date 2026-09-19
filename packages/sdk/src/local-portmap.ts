@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ServiceName } from './config';
 
-type LocalPortmap = {
+export type LocalPortmap = {
   webAppUrl: string;
   hosts: Partial<Record<ServiceName, string>>;
   sdkWebhookHostReceiverPort: number;

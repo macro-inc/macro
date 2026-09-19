@@ -14,16 +14,26 @@ use email::{
     },
     outbound::{EmailPgRepo, GmailTokenProviderImpl},
 };
+use email_api_client::GmailApiClientRepository;
+use email_service::calendar_refresh::ConnectionGatewayCalendarRefresh;
 use email_service::calendar_tokens::CalendarTokenProviderAdapter;
+use email_service::outbound::email_api::{
+    EmailServiceTokenSource, GmailApi, RateBudget, RedisProviderRateLimiter,
+};
 use email_service::pubsub::calendar_backfill_adapters::RedisCalendarRequestGate;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
-use macro_authorization::{InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationState};
+use macro_authorization::{
+    InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationState,
+    PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
+};
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
-use macro_service_urls::{AuthServiceUrl, DocumentStorageServiceUrl, StaticFileServiceUrl};
+use macro_service_urls::{
+    AuthServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, StaticFileServiceUrl,
+};
 use sqlx::postgres::PgPoolOptions;
 use static_file_service_client::StaticFileServiceClient;
 use std::{sync::Arc, time::Duration};
@@ -93,6 +103,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let gmail_client = gmail_client::GmailClient::new(config.gmail_gcp_queue.as_ref().to_string());
+    let gmail_api_repository = GmailApiClientRepository::new(gmail_client.clone());
 
     let redis_inner_client = redis::Client::open(config.redis_uri.as_ref())
         .inspect(|client| {
@@ -137,6 +148,7 @@ async fn main() -> anyhow::Result<()> {
             default_user_id: Some("macro|INTERNAL@macro.com".to_string()),
         },
         macro_authorization::NoBotAuthorizer,
+        PgUserApiKeyAuthorizer::new(PgUserApiKeyAuthorizationRepo::new(db.clone())),
     )));
 
     let sqs_client = Arc::new(sqs_client);
@@ -181,12 +193,26 @@ async fn main() -> anyhow::Result<()> {
         .get_multiplexed_async_connection()
         .await
         .context("failed to get multiplexed redis connection for gmail token provider")?;
+    let email_api = GmailApi::new(
+        gmail_api_repository,
+        EmailServiceTokenSource::new(
+            db.clone(),
+            redis_conn.clone(),
+            auth_service_client.as_ref().clone(),
+            sqs_client.as_ref().clone(),
+        ),
+        RedisProviderRateLimiter::new(redis_client.clone(), RateBudget::Live),
+    );
     let redis_client = Arc::new(redis_client);
     let gmail_token_state = GmailTokenState::new(GmailTokenProviderImpl::new(
         redis_conn.clone(),
         auth_service_client.clone(),
     ));
     let calendar_service = Arc::new(CalendarService::new(PgCalendarRepository::new(db.clone())));
+    let connection_gateway_client = connection_gateway_client::client::ConnectionGatewayClient::new(
+        config.internal_api_key.to_string(),
+        ConnectionGatewayUrl::new()?.to_string(),
+    );
     let calendar_mutation_service = Arc::new(CalendarMutationServiceImpl::new(
         PgCalendarRepository::new(db.clone()),
         GoogleCalendarClient::with_gate(
@@ -197,6 +223,8 @@ async fn main() -> anyhow::Result<()> {
             RedisCalendarRequestGate::new((*redis_client).clone()),
         ),
         CalendarTokenProviderAdapter::new(redis_conn.clone(), auth_service_client.clone()),
+        macro_event_broker.clone(),
+        ConnectionGatewayCalendarRefresh::new(connection_gateway_client, db.clone()),
     ));
     let api_result = api::setup_and_serve(ApiContext {
         db,
@@ -207,6 +235,7 @@ async fn main() -> anyhow::Result<()> {
         sqs_client,
         sfs_client: Arc::new(sfs_client),
         gmail_client: gmail_client.clone(),
+        email_api,
         s3_client: Arc::new(s3_client),
         dss_client: Arc::new(dss_client),
         system_properties_service,

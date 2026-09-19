@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use futures::StreamExt;
 use futures::channel::mpsc;
 
-use crate::domain::ports::{Transport, TransportError};
+use crate::domain::ports::{Transport, TransportError, TransportReceiver, TransportSender};
 
 #[cfg(test)]
 mod test;
@@ -18,8 +18,20 @@ mod test;
 pub struct FakeTransport<Tx, Rx> {
     fail_next_recv: Arc<Mutex<Option<String>>>,
     fail_next_send: Arc<Mutex<Option<String>>>,
-    incoming: Arc<tokio::sync::Mutex<mpsc::UnboundedReceiver<Rx>>>,
+    incoming: mpsc::UnboundedReceiver<Rx>,
     sent: mpsc::UnboundedSender<Tx>,
+}
+
+/// A [`FakeTransport`]'s sending half.
+pub struct FakeSender<Tx> {
+    fail_next_send: Arc<Mutex<Option<String>>>,
+    sent: mpsc::UnboundedSender<Tx>,
+}
+
+/// A [`FakeTransport`]'s receiving half.
+pub struct FakeReceiver<Rx> {
+    fail_next_recv: Arc<Mutex<Option<String>>>,
+    incoming: mpsc::UnboundedReceiver<Rx>,
 }
 
 /// Observes and controls a [`FakeTransport`] from outside the transport port.
@@ -42,7 +54,7 @@ impl<Tx, Rx> FakeTransport<Tx, Rx> {
             Self {
                 fail_next_recv: Arc::clone(&fail_next_recv),
                 fail_next_send: Arc::clone(&fail_next_send),
-                incoming: Arc::new(tokio::sync::Mutex::new(incoming_rx)),
+                incoming: incoming_rx,
                 sent: sent_tx,
             },
             FakeTransportProbe {
@@ -57,9 +69,27 @@ impl<Tx, Rx> FakeTransport<Tx, Rx> {
 
 impl<Tx, Rx> Transport<Tx, Rx> for FakeTransport<Tx, Rx>
 where
-    Tx: Send + 'static,
+    Tx: Send + Sync + 'static,
     Rx: Send + 'static,
 {
+    type Sender = FakeSender<Tx>;
+    type Receiver = FakeReceiver<Rx>;
+
+    fn split(self) -> (Self::Sender, Self::Receiver) {
+        (
+            FakeSender {
+                fail_next_send: self.fail_next_send,
+                sent: self.sent,
+            },
+            FakeReceiver {
+                fail_next_recv: self.fail_next_recv,
+                incoming: self.incoming,
+            },
+        )
+    }
+}
+
+impl<Tx: Send + Sync + 'static> TransportSender<Tx> for FakeSender<Tx> {
     async fn send(&self, message: Tx) -> Result<(), TransportError> {
         let _ = self.sent.unbounded_send(message);
         if let Some(reason) = self
@@ -72,8 +102,10 @@ where
         }
         Ok(())
     }
+}
 
-    async fn recv(&self) -> Result<Option<Rx>, TransportError> {
+impl<Rx: Send + 'static> TransportReceiver<Rx> for FakeReceiver<Rx> {
+    async fn recv(&mut self) -> Result<Option<Rx>, TransportError> {
         if let Some(reason) = self
             .fail_next_recv
             .lock()
@@ -82,8 +114,7 @@ where
         {
             return Err(TransportError::Client(reason));
         }
-        let mut incoming = self.incoming.lock().await;
-        Ok(incoming.next().await)
+        Ok(self.incoming.next().await)
     }
 }
 

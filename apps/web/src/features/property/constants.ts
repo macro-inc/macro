@@ -12,7 +12,7 @@ export const NUMBER_DECIMAL_PLACES = 4;
  * (unique per team). Managed exclusively from CRM settings, so generic
  * property pickers must not offer it.
  */
-export const CRM_TEAM_STAGE_DEFINITION_NAME = 'Stage';
+export const CRM_TEAM_STAGE_DEFINITION_NAME = 'Deal Stage';
 
 /**
  * System property definition IDs (from backend seed migration).

@@ -1,4 +1,4 @@
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   createElementSize,
   makeResizeObserver,
@@ -10,7 +10,7 @@ import { type Accessor, createEffect, on, onMount } from 'solid-js';
 const NEAR_BOTTOM_THRESHOLD = 100;
 
 /**
- * Full-frame mobile: keep the AI chat pinned to the bottom across virtual
+ * Full-frame mobile/tablet: keep the AI chat pinned to the bottom across virtual
  * keyboard show/hide, when the user was already at the bottom. Two distinct
  * geometry changes move the bottom, so two observers:
  *
@@ -31,7 +31,7 @@ export function createMobileKeyboardScrollPin(opts: {
   wrapperEl: Accessor<HTMLElement | null | undefined>;
   scrollToBottom: (behavior: 'instant' | 'smooth') => void;
 }): void {
-  if (!isMobile()) return;
+  if (!isTouchDevice()) return;
   const { scrollEl, wrapperEl, scrollToBottom } = opts;
 
   // Scroller shrink (keyboard appearing). "Was at bottom" is measured against

@@ -10,7 +10,7 @@ import { EntityTimestamp } from './extractors/entity-timestamp';
 import { EntityTitle } from './extractors/entity-title';
 // Notification components
 import {
-  MobileNotificationStacks,
+  MobileNotificationStackRows,
   NotificationContent,
   NotificationCount,
   NotificationDescription,
@@ -43,7 +43,7 @@ export const Entity = {
   Notification: {
     StackRow: NotificationStackRow,
     Stacks: NotificationStacks,
-    MobileStacks: MobileNotificationStacks,
+    MobileStackRows: MobileNotificationStackRows,
     Icon: NotificationIcon,
     Sender: NotificationSender,
     Content: NotificationContent,

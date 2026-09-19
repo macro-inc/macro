@@ -1,0 +1,24 @@
+diff --git a/dist/index.js b/dist/index.js
+index af8161de27c2c79d0bfdac0edd3e901fcdda7a64..be8e5ef8cd64e4b05d309fddf012c6d74580e4a0 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -3,6 +3,7 @@ export function createFallback(settings) {
+ }
+ const retryableStatusCodes = [
+     401, // wrong API key
++    402, // payment required
+     403, // permission error, like cannot access model or from a non accessible region
+     408, // request timeout
+     409, // conflict
+diff --git a/src/index.ts b/src/index.ts
+index aa7b15c825c4c8e19e3eeaaf1b37cf634a627952..9e39400d45c357a53eb3cdf67c63d8a54132fcb6 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -20,6 +20,7 @@ export function createFallback(settings: Settings): FallbackModel {
+ 
+ const retryableStatusCodes = [
+     401, // wrong API key
++    402, // payment required
+     403, // permission error, like cannot access model or from a non accessible region
+     408, // request timeout
+     409, // conflict

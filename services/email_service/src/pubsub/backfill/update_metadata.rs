@@ -1,3 +1,4 @@
+use crate::pubsub::backfill::db_error::map_db_error;
 use crate::pubsub::backfill::increment_counters::incr_completed_threads;
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::util::publish_email_event;
@@ -30,12 +31,7 @@ pub async fn update_thread_metadata(
         // get to this point.
         email_db_client::threads::update::update_thread_metadata(&mut tx, p.thread_db_id, link.id)
             .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context("Failed to update thread metadata"),
-                })
-            })?;
+            .map_err(|e| map_db_error(e, "Failed to update thread metadata"))?;
 
         // update the replying_to_id of the messages in the thread. this can only be done once all
         // messages in the thread have been inserted, and we know this is the case by the time we
@@ -46,12 +42,7 @@ pub async fn update_thread_metadata(
             link.id,
         )
         .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: e.context("Failed to update message replying to id"),
-            })
-        })?;
+        .map_err(|e| map_db_error(e, "Failed to update message replying to id"))?;
 
         Ok(())
     }

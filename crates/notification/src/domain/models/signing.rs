@@ -1,13 +1,35 @@
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use std::borrow::Cow;
-use url::Url;
+use url::{ParseError, Url};
 
 #[cfg(test)]
 mod test;
 
 /// The query parameter name used to store the HMAC signature.
 const SIG_PARAM: &str = "sig";
+
+/// Append `path` onto `base` without discarding `base`'s existing path.
+pub fn append_path(mut base: Url, path: &str) -> Url {
+    let prefix = base.path().trim_end_matches('/');
+    let suffix = path.trim_start_matches('/');
+    base.set_path(&format!("{prefix}/{suffix}"));
+    base
+}
+
+/// Rebuild the public URL the client requested.
+pub fn public_request_url(
+    scheme: &str,
+    host: &str,
+    path_and_query: &str,
+) -> Result<Url, ParseError> {
+    let path_and_query = if path_and_query.starts_with('/') {
+        Cow::Borrowed(path_and_query)
+    } else {
+        Cow::Owned(format!("/{path_and_query}"))
+    };
+    Url::parse(&format!("{scheme}://{host}{path_and_query}"))
+}
 
 /// A wrapper over url which is guaranteed to be a cryptographically signed url.
 /// The signature exists as a query param under "sig".

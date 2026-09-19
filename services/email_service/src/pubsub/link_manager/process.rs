@@ -1,15 +1,12 @@
 use crate::pubsub::link_manager::context::LinkManagerContext;
 use crate::pubsub::util::{build_notification_recipients, cg_refresh_email, publish_email_event};
-use crate::util::gmail::auth::{
-    fetch_gmail_access_token_from_link, fetch_token_or_mark_reauth,
-    fetch_token_or_mark_reauth_no_cache, is_forbidden_error, is_reauth_required_error,
-};
 use crate::util::sync_contacts::sync_contacts;
 use anyhow::{Context, anyhow};
 use crm::domain::service::CrmService;
 use email::domain::events::{
     EmailMacroEvent, LinkDisconnectReason, LinkDisconnectedMetadata, LinkReauthRequiredMetadata,
 };
+use email_api_client::domain::models::{AccessToken, EmailApiError, TokenFreshness};
 use model_entity::EntityType;
 use model_notifications::InboxReauthRequiredMetadata;
 use models_email::api::refresh::RefreshEmailEvent;
@@ -19,8 +16,37 @@ use models_email::service::link::{Link, UserProvider};
 use notification::domain::models::SendNotificationRequestBuilder;
 use notification::domain::service::NotificationIngress;
 use sqs_worker::cleanup_message;
+use std::future::Future;
 use std::time::Duration;
-use tokio_retry::RetryIf;
+
+#[cfg(test)]
+mod test;
+
+/// Backoff schedule for teardown provider calls: three attempts total.
+const TEARDOWN_RETRY_DELAYS: [Duration; 2] =
+    [Duration::from_millis(200), Duration::from_millis(400)];
+
+/// Runs a teardown provider call with a bounded retry (3 attempts, 200/400ms).
+///
+/// Only transient failures retry. Permanent errors (revoked grants, missing
+/// scopes) return immediately: retrying cannot help while tearing a link down.
+async fn retry_teardown<F, Fut>(mut operation: F) -> Result<(), EmailApiError>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<(), EmailApiError>>,
+{
+    let mut delays = TEARDOWN_RETRY_DELAYS.iter();
+    loop {
+        match operation().await {
+            Ok(()) => return Ok(()),
+            Err(error) if error.is_transient() => match delays.next() {
+                Some(delay) => tokio::time::sleep(*delay).await,
+                None => return Err(error),
+            },
+            Err(error) => return Err(error),
+        }
+    }
+}
 
 #[tracing::instrument(skip(ctx, message), err)]
 pub async fn process_message(
@@ -34,17 +60,13 @@ pub async fn process_message(
             let link = get_link_or_skip(&ctx, message, link_id).await?;
             let Some(link) = link else { return Ok(()) };
 
-            let result = fetch_token_or_mark_reauth(
-                &link,
-                &ctx.db,
-                &ctx.redis_client,
-                &ctx.auth_service_client,
-                &ctx.sqs_client,
-            )
-            .await;
+            let result = ctx
+                .email_api
+                .get_access_token(link.id, TokenFreshness::Cached)
+                .await;
 
-            if let Some(gmail_access_token) = settle_reauth_fetch(&ctx, &link, result).await? {
-                handle_refresh(&ctx, &link, &gmail_access_token).await?;
+            if settle_reauth_fetch(&ctx, &link, result).await?.is_some() {
+                handle_refresh(&ctx, &link).await?;
             }
         }
         LinkManagerMessage::HealthCheck { link_id } => {
@@ -54,14 +76,10 @@ pub async fn process_message(
             // Probe-only: the health side effects happen inside the fetch; a live token
             // needs no follow-up work here. No-cache so a just-revoked grant is observed
             // now rather than masked by a still-valid cached access token.
-            let result = fetch_token_or_mark_reauth_no_cache(
-                &link,
-                &ctx.db,
-                &ctx.redis_client,
-                &ctx.auth_service_client,
-                &ctx.sqs_client,
-            )
-            .await;
+            let result = ctx
+                .email_api
+                .get_access_token(link.id, TokenFreshness::Fresh)
+                .await;
 
             settle_reauth_fetch(&ctx, &link, result).await?;
         }
@@ -78,8 +96,7 @@ pub async fn process_message(
             let link = get_link_or_skip(&ctx, message, link_id).await?;
             let Some(link) = link else { return Ok(()) };
 
-            let gmail_access_token = fetch_teardown_token(&ctx, &link).await;
-            handle_delete(&ctx, &link, gmail_access_token.as_deref(), &deletion_reason).await?;
+            handle_delete(&ctx, &link, &deletion_reason).await?;
         }
         LinkManagerMessage::DeleteUser { fusionauth_user_id } => {
             handle_delete_all_user_links(&ctx, &fusionauth_user_id).await?;
@@ -90,8 +107,8 @@ pub async fn process_message(
     Ok(())
 }
 
-/// Settles the outcome of a token fetch that records reauth health (the `*_or_mark_reauth`
-/// family). Returns the token on success. When the grant is gone the link has already been
+/// Settles the outcome of a service token probe that records reauth health.
+/// Returns the token on success. When the grant is gone the link has already been
 /// marked for reauth as a side effect, so the message is terminal — return `None` to let it
 /// be dropped — but only once that mark is persisted; if the mark write itself failed,
 /// propagate the error so the message retries and the health signal isn't lost. Other,
@@ -99,23 +116,30 @@ pub async fn process_message(
 async fn settle_reauth_fetch(
     ctx: &LinkManagerContext,
     link: &Link,
-    result: anyhow::Result<String>,
-) -> anyhow::Result<Option<String>> {
+    result: Result<AccessToken, EmailApiError>,
+) -> anyhow::Result<Option<AccessToken>> {
     match result {
         Ok(token) => Ok(Some(token)),
-        Err(e) if is_reauth_required_error(&e) => {
+        Err(EmailApiError::AuthRequired) => {
             let persisted = email_db_client::links::get::fetch_link_by_id(&ctx.db, link.id)
                 .await
                 .context("Failed to verify needs_reauth state after token fetch failure")?
                 .is_some_and(|l| l.needs_reauth);
 
-            if !persisted {
-                return Err(e.context("reauth required but needs_reauth not persisted"));
-            }
-
-            Ok(None)
+            settle_reauth_result(Err(EmailApiError::AuthRequired), persisted)
         }
-        Err(e) => Err(e),
+        result => settle_reauth_result(result, false),
+    }
+}
+
+fn settle_reauth_result(
+    result: Result<AccessToken, EmailApiError>,
+    needs_reauth_persisted: bool,
+) -> anyhow::Result<Option<AccessToken>> {
+    match result {
+        Ok(token) => Ok(Some(token)),
+        Err(EmailApiError::AuthRequired) if needs_reauth_persisted => Ok(None),
+        Err(error) => Err(anyhow::Error::new(error)),
     }
 }
 
@@ -133,77 +157,29 @@ async fn get_link_or_skip(
     Ok(link)
 }
 
-/// Best-effort token fetch for stopping a Gmail watch during link teardown. A transient
-/// auth-service failure would otherwise drop the stop silently and leave the watch
-/// running, so retry a few times. A revoked grant (Forbidden) can never yield a token,
-/// so don't retry it — the watch then lingers until Gmail expires it or the next connect
-/// stops it.
-async fn fetch_teardown_token(ctx: &LinkManagerContext, link: &Link) -> Option<String> {
-    const MAX_ATTEMPTS: usize = 3;
-
-    let retry_strategy = [Duration::from_millis(200), Duration::from_millis(400)];
-    let mut attempt = 0usize;
-    let result = RetryIf::start(
-        retry_strategy,
-        || {
-            attempt += 1;
-            async move {
-                let result = fetch_gmail_access_token_from_link(
-                    link,
-                    &ctx.redis_client,
-                    &ctx.auth_service_client,
-                )
-                .await;
-                if let Err(error) = &result
-                    && !is_forbidden_error(error)
-                    && attempt < MAX_ATTEMPTS
-                {
-                    tracing::warn!(error=?error, attempt, link_id=%link.id, "Transient failure fetching token to stop Gmail watch; retrying");
-                }
-                result
-            }
-        },
-        |error: &anyhow::Error| !is_forbidden_error(error),
-    )
-    .await;
-
-    match result {
-        Ok(token) => Some(token),
-        Err(error) if is_forbidden_error(&error) => {
-            tracing::warn!(error=?error, link_id=%link.id, "Gmail access revoked; cannot stop watch (it will expire on its own)");
-            None
-        }
-        Err(error) => {
-            tracing::warn!(error=?error, link_id=%link.id, "Could not fetch token to stop Gmail watch after retries; watch will linger until it expires or the next connect stops it");
-            None
-        }
-    }
-}
-
 /// Handles the Refresh operation: renews Gmail watch subscription and syncs contacts.
-#[tracing::instrument(skip(ctx, gmail_access_token), fields(link = ?link), err)]
-async fn handle_refresh(
-    ctx: &LinkManagerContext,
-    link: &Link,
-    gmail_access_token: &str,
-) -> anyhow::Result<()> {
-    // Renew the Gmail watch subscription to ensure we keep getting updates.
-    // We can proceed with contact sync even if this fails, so we'll just log the error.
-    renew_gmail_watch(ctx, gmail_access_token, link)
-        .await
-        .inspect_err(|e| {
-            tracing::error!(error=?e, "Failed to renew Gmail watch");
-        })
-        .ok();
+#[tracing::instrument(skip(ctx), fields(link = ?link), err)]
+async fn handle_refresh(ctx: &LinkManagerContext, link: &Link) -> anyhow::Result<()> {
+    // A refused or transient renewal must leave the worker message available for retry.
+    // Deterministic provider failures preserve the previous best-effort behavior.
+    if let Err(error) = ctx.email_api.register_subscription(link.id).await {
+        if matches!(error, EmailApiError::AuthRequired) {
+            settle_reauth_fetch(ctx, link, Err(error)).await?;
+            return Ok(());
+        }
+        if error.is_transient() {
+            return Err(anyhow::Error::new(error).context("Failed to renew Gmail watch"));
+        }
+        tracing::error!(error=?error, "Failed to renew Gmail watch");
+    }
 
     // Sync contacts and update sync tokens in the database
     if let Err(e) = sync_contacts(
         link,
         &ctx.db,
-        &ctx.gmail_client,
+        &ctx.email_api,
         &ctx.sqs_client,
         &ctx.macro_event_broker,
-        gmail_access_token,
     )
     .await
     {
@@ -291,16 +267,7 @@ async fn handle_delete_all_user_links(
     );
 
     for link in &links {
-        let gmail_access_token = fetch_teardown_token(ctx, link).await;
-
-        if let Err(e) = handle_delete(
-            ctx,
-            link,
-            gmail_access_token.as_deref(),
-            &DeletionReason::UserDeleted,
-        )
-        .await
-        {
+        if let Err(e) = handle_delete(ctx, link, &DeletionReason::UserDeleted).await {
             tracing::error!(error=?e, link_id=?link.id, "Failed to delete link during user cleanup");
         }
     }
@@ -309,11 +276,10 @@ async fn handle_delete_all_user_links(
 }
 
 /// notifies downstream dependencies of link deletion, and deletes link (and all data) from database
-#[tracing::instrument(skip(ctx, gmail_access_token), fields(link = ?link), err)]
+#[tracing::instrument(skip(ctx), fields(link = ?link), err)]
 async fn handle_delete(
     ctx: &LinkManagerContext,
     link: &Link,
-    gmail_access_token: Option<&str>,
     deletion_reason: &DeletionReason,
 ) -> anyhow::Result<()> {
     tracing::info!("Deleting link");
@@ -330,6 +296,17 @@ async fn handle_delete(
         })
         .ok();
 
+    // Best effort: revoked grants and provider failures must not block local teardown.
+    // Stop before evicting the token so a valid cached grant remains available for the call.
+    // The health-neutral path never marks the link as needing reauth or notifies the
+    // user about an inbox that is being intentionally removed.
+    retry_teardown(|| ctx.email_api.stop_subscription_for_link(link))
+        .await
+        .inspect_err(|error| {
+            tracing::warn!(error=?error, "Gmail call to stop watch failed");
+        })
+        .ok();
+
     // delete cached access token, in case user re-enables within cache window
     ctx.redis_client
         .delete_gmail_access_token(&TokenCacheKey::new(
@@ -342,16 +319,6 @@ async fn handle_delete(
             tracing::warn!(error=?e, "Failed to delete Gmail access token");
         })
         .ok();
-
-    // make call to gmail to unregister. may fail if the user revoked our access (which is a reason
-    // that we may be deleting their link in the first place)
-    if let Some(token) = gmail_access_token {
-        if let Err(e) = ctx.gmail_client.stop_watch(token).await {
-            tracing::warn!(error=?e, "Gmail call to stop watch failed");
-        }
-    } else {
-        tracing::debug!("Skipping Gmail stop_watch - no access token available");
-    }
 
     // remove google fusionauth link with gmail inbox permissions. best-effort: the FA user may
     // already be gone (e.g. account deleted before we delete their email), so we warn and keep
@@ -493,28 +460,4 @@ fn extract_message(message: &aws_sdk_sqs::types::Message) -> anyhow::Result<Link
 
     serde_json::from_str(message_body)
         .context("Failed to deserialize message body to LinkManagerMessage")
-}
-
-/// Calls the Gmail API to renew the watch subscription for inbox updates.
-async fn renew_gmail_watch(
-    ctx: &LinkManagerContext,
-    gmail_access_token: &str,
-    link: &Link,
-) -> anyhow::Result<()> {
-    // We ignore the result of the watch call itself, but map the error for logging.
-    let _ = ctx
-        .gmail_client
-        .register_watch(gmail_access_token)
-        .await
-        .map_err(|e| {
-            let error_message = "Unable to register Gmail watch";
-            tracing::error!(
-                error = ?e,
-                email = %link.macro_id,
-                provider = ?link.provider,
-                error_message
-            );
-            anyhow!(error_message)
-        });
-    Ok(())
 }

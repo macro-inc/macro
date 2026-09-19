@@ -1,14 +1,12 @@
 use std::collections::HashSet;
 
-use crate::convert::map_message_resource_to_service;
+use crate::pubsub::backfill::email_api_error::map_email_api_error;
 use crate::pubsub::context::PubSubContext;
-use crate::pubsub::util::{CheckGmailRateLimitArgs, check_gmail_rate_limit};
 use contacts::domain::ports::ContactsIngress;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::email::service::backfill::{JobScopedPayload, SeedSentContactPayload};
 use models_email::email::service::link;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use models_email::gmail::operations::GmailApiOperation;
 
 /// Consumer for `BackfillOperation::SeedSentContact`. Fetches one recent sent
 /// message and enqueues a sender<->recipient contact connection for every
@@ -19,46 +17,26 @@ use models_email::gmail::operations::GmailApiOperation;
 /// Each connection is enqueued as a 2-element set (`{owner, recipient}`) rather
 /// than the whole recipient list, so the contacts service connects the sender
 /// to each recipient only — not the recipients to each other.
-#[tracing::instrument(skip(ctx, access_token))]
+#[tracing::instrument(skip(ctx))]
 pub async fn seed_sent_contact(
     ctx: &PubSubContext,
-    access_token: &str,
     scope: &JobScopedPayload<SeedSentContactPayload>,
     link: &link::Link,
 ) -> Result<(), ProcessingError> {
     let p = &scope.payload;
 
-    check_gmail_rate_limit(CheckGmailRateLimitArgs {
-        redis_client: &ctx.redis_client,
-        link_id: link.id,
-        gmail_operation: GmailApiOperation::MessagesGet,
-        retryable: true,
-        is_backfill: true,
-    })
-    .await?;
-
-    let message_resource = match ctx
-        .gmail_client
-        .get_message(access_token, &p.message_provider_id)
+    let Some(fetched) = ctx
+        .email_api
+        .get_message(link.id, &p.message_provider_id)
         .await
-    {
-        Ok(Some(message)) => message,
+        .map_err(|error| {
+            map_email_api_error(error, "Failed to get sent message for contact seed")
+        })?
+    else {
         // The message was deleted between listing and this fetch; nothing to seed.
-        Ok(None) => return Ok(()),
-        Err(e) => {
-            return Err(ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::GmailApiFailed,
-                source: e.context("Gmail API failed to get sent message for contact seed"),
-            }));
-        }
+        return Ok(());
     };
-
-    let message = map_message_resource_to_service(message_resource, link.id).map_err(|e| {
-        ProcessingError::NonRetryable(DetailedError {
-            reason: FailureReason::GmailApiFailed,
-            source: e.context("Failed to map message resource to service"),
-        })
-    })?;
+    let message = fetched.message;
 
     let self_email = link.email_address.0.as_ref().to_ascii_lowercase();
 

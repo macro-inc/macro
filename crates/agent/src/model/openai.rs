@@ -78,12 +78,10 @@ impl<'a> OpenAiResponsesModel<'a> {
     ///
     /// Rig maps the generic `max_tokens` agent setting to the Responses API's
     /// `max_output_tokens`, avoiding the Chat Completions `max_tokens` 400s on
-    /// GPT reasoning models. Tools are sent verbatim (`with_non_strict_tools`)
-    /// rather than coerced into OpenAI's strict subset.
+    /// GPT reasoning models. Tools are sent verbatim (non-strict is rig's
+    /// default since 0.41) rather than coerced into OpenAI's strict subset.
     pub fn completion(&self) -> openai::responses_api::ResponsesCompletionModel {
-        self.client
-            .completion_model(self.model.name().to_string())
-            .with_non_strict_tools()
+        self.client.completion_model(self.model.name().to_string())
     }
 
     /// Best-effort reasoning config for OpenAI Responses models, or `None` if

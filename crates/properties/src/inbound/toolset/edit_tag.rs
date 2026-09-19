@@ -2,6 +2,7 @@
 
 use crate::domain::service::PropertiesService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::ports::EntityAccessService;
 use models_properties::api::UpdatePropertyOptionRequest;
@@ -55,6 +56,10 @@ pub struct EditTagResponse {
     pub property_definition_id: Uuid,
     /// Human-readable summary.
     pub summary: String,
+}
+
+impl ToolAnnotated for EditTag {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::destructive("Edit tag");
 }
 
 #[async_trait]

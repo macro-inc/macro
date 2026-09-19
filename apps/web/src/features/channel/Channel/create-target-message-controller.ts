@@ -3,25 +3,24 @@ import {
   getChannelMessagesQueryKey,
 } from '@queries/channel/channel-messages';
 import { queryClient } from '@queries/client';
-import { type Accessor, createEffect, on } from 'solid-js';
+import { type Accessor, createEffect, on, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import type { ThreadListNavigation } from './ThreadList';
+
+/**
+ * How long a navigation target keeps its accent highlight after its scroll
+ * has positioned it on screen. When the flash elapses the target releases
+ * itself; highlights owned by other state (e.g. the unified input's reply
+ * binding) are unaffected.
+ */
+export const TARGETED_MESSAGE_FLASH_MS = 1000;
 
 type CreateTargetMessageControllerOptions = {
   channelId: Accessor<string>;
   initialTargetMessageId?: string | undefined;
   initialTargetMessageReplyId?: string | undefined;
   messageKeys: Accessor<string[]>;
-  navigation: Accessor<ThreadListNavigation | undefined>;
-  /**
-   * Whether the ThreadList has completed its initial scroll.
-   *
-   * The controller defers pending scroll execution until this returns `true`
-   * so that a `goToMessage` call that fires while the initial scroll is still
-   * in progress does not get overridden by the initial-scroll retry logic
-   * inside ThreadList.
-   */
-  didInitialScroll: Accessor<boolean>;
+  /** The list publishes its handle after initial layout and positioning. */
+  isReady: Accessor<boolean>;
 };
 
 export type TargetMessageController = ReturnType<
@@ -50,6 +49,47 @@ export function createTargetMessageController(
   const [targetMessageData, setTargetMessageData] =
     createStore<TargetMessageData>(initialTargetMessageData);
 
+  let flashTimeout: ReturnType<typeof setTimeout> | undefined;
+
+  const cancelFlash = () => {
+    if (flashTimeout === undefined) return;
+    clearTimeout(flashTimeout);
+    flashTimeout = undefined;
+  };
+
+  /**
+   * Whether a target element still owes the viewport a scroll — the root row,
+   * a nested reply, or both. A nested target acknowledges its outer row early
+   * (see the effect below) so the reply's own scroll can begin, so the root's
+   * pending id alone does not answer this.
+   */
+  const hasPendingElementScroll = () =>
+    targetMessageData['pendingScrollTargetId'] !== undefined ||
+    targetMessageData['pendingTargetReplyId'] !== undefined;
+
+  const syncFlash = () => {
+    cancelFlash();
+
+    const activeTargetMessageId = targetMessageData['activeTargetMessageId'];
+
+    if (!activeTargetMessageId || hasPendingElementScroll()) return;
+
+    flashTimeout = setTimeout(() => {
+      flashTimeout = undefined;
+      clearActiveTarget(activeTargetMessageId);
+    }, TARGETED_MESSAGE_FLASH_MS);
+  };
+
+  // Highlight and scroll-state changes go through this function so the flash
+  // timer stays synchronized. loadAroundMessageId does not affect highlighting,
+  // so it can be updated directly with setTargetMessageData.
+  const updateTargetMessageData = (patch: Partial<TargetMessageData>) => {
+    setTargetMessageData(patch);
+    syncFlash();
+  };
+
+  onCleanup(cancelFlash);
+
   const hasMessageLoaded = (messageId: string) =>
     options.messageKeys().includes(messageId);
 
@@ -62,7 +102,7 @@ export function createTargetMessageController(
 
     if (isSameTarget && isSameReplyTarget && isPending) return;
 
-    setTargetMessageData({
+    updateTargetMessageData({
       activeTargetMessageId: messageId,
       activeTargetMessageReplyId: replyId,
       // TODO: need a better approach where the load around should be undefined
@@ -77,34 +117,25 @@ export function createTargetMessageController(
 
   const completePendingScroll = (messageId: string) => {
     if (targetMessageData['pendingScrollTargetId'] !== messageId) return;
-    setTargetMessageData('pendingScrollTargetId', undefined);
+    updateTargetMessageData({ pendingScrollTargetId: undefined });
   };
 
   const completePendingReplyScroll = (messageId: string, replyId: string) => {
     if (targetMessageData['activeTargetMessageId'] !== messageId) return;
     if (targetMessageData['pendingTargetReplyId'] !== replyId) return;
-    setTargetMessageData('pendingTargetReplyId', undefined);
+    updateTargetMessageData({ pendingTargetReplyId: undefined });
   };
 
   createEffect(
     on(
       [
-        options.navigation,
+        options.isReady,
         () => targetMessageData['pendingScrollTargetId'],
         options.messageKeys,
-        options.didInitialScroll,
       ],
-      ([navigation, pendingTargetId, , didInitialScroll]) => {
-        if (!navigation || !pendingTargetId) return;
+      ([isReady, pendingTargetId]) => {
+        if (!isReady || !pendingTargetId) return;
         if (!hasMessageLoaded(pendingTargetId)) return;
-
-        // Defer the scroll until the ThreadList has completed its initial
-        // scroll. This prevents a goToMessage call from being overridden by
-        // the initial-scroll retry logic in ThreadList's handleScrollEnd,
-        // which validates position against the *original* scroll target.
-        // The pending target stays queued; once didInitialScroll flips to
-        // true the effect re-fires and executes the scroll.
-        if (!didInitialScroll) return;
 
         // Channel keeps a pending target's row mounted. Scrolling the whole
         // row first can land on the wrong part of a tall thread and creates a
@@ -129,7 +160,7 @@ export function createTargetMessageController(
   );
 
   const reset = () => {
-    setTargetMessageData({
+    updateTargetMessageData({
       activeTargetMessageId: undefined,
       activeTargetMessageReplyId: undefined,
       loadAroundMessageId: undefined,
@@ -143,15 +174,15 @@ export function createTargetMessageController(
    * `messageId`; no-op if navigation has since moved elsewhere. Leaves
    * `loadAroundMessageId` untouched so pagination is not disturbed.
    */
-  const clearActiveTarget = (messageId: string) => {
+  function clearActiveTarget(messageId: string) {
     if (targetMessageData['activeTargetMessageId'] !== messageId) return;
-    setTargetMessageData({
+    updateTargetMessageData({
       activeTargetMessageId: undefined,
       activeTargetMessageReplyId: undefined,
       pendingScrollTargetId: undefined,
       pendingTargetReplyId: undefined,
     });
-  };
+  }
 
   return {
     activeTargetMessageId: () => targetMessageData['activeTargetMessageId'],
@@ -160,6 +191,7 @@ export function createTargetMessageController(
     loadAroundMessageId: () => targetMessageData['loadAroundMessageId'],
     pendingScrollTargetId: () => targetMessageData['pendingScrollTargetId'],
     pendingTargetReplyId: () => targetMessageData['pendingTargetReplyId'],
+    hasPendingElementScroll,
 
     goToMessage,
     completePendingScroll,

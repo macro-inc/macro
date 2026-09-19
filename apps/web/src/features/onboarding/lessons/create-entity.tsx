@@ -187,6 +187,7 @@ function CreateEntityDemo(props: LessonContentProps) {
         <Dialog.Portal>
           <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
           <Dialog.Content
+            class="[--color-surface:var(--color-dialog)]"
             onCloseAutoFocus={(e) => {
               // Once the lesson is complete, don't let the Dialog restore
               // focus to the element that opened it (containerRef or the `+`

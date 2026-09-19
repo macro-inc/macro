@@ -16,9 +16,9 @@ use crate::domain::{
         CreateChannelRequest, CreateEntityMentionOptions, CreatedChannel, EntityMention,
         GetChannelsParams, GetThreadReplyRowsParams, LatestMessage, MessageAttachment,
         MessagePageDirection, MutatedAttachment, MutatedMessage, NameLookup, NewChannelAttachment,
-        ParticipantRole, PatchChannelRequest, RecentChannelMessage, ResolvedChannelMessage,
-        SimpleMention, ThreadData, ThreadInfo, ThreadReply, ThreadReplyRow, TopLevelMessageRow,
-        UserName, fallback_user_name,
+        ParticipantRole, PatchChannelRequest, RecentChannelMessage, ReferencedShareItemType,
+        ResolvedChannelMessage, SimpleMention, ThreadData, ThreadInfo, ThreadReply, ThreadReplyRow,
+        TopLevelMessageRow, UserName, fallback_user_name,
     },
     ports::{ChannelRepo, TopLevelMessagesQueryResult},
 };
@@ -648,7 +648,19 @@ async fn load_bot_display_names(
     if bot_ids.is_empty() {
         return Ok(HashMap::new());
     }
-    let uuids: Vec<Uuid> = bot_ids.iter().map(|bot_id| bot_id.as_uuid()).collect();
+    // First-party bots have no row; their names come from the registry.
+    let mut names: HashMap<BotId, String> = bot_ids
+        .iter()
+        .filter_map(|bot_id| bot_id::system_bot(*bot_id).map(|bot| (*bot_id, bot.name.to_owned())))
+        .collect();
+    let uuids: Vec<Uuid> = bot_ids
+        .iter()
+        .filter(|bot_id| !bot_id::is_system_bot(**bot_id))
+        .map(|bot_id| bot_id.as_uuid())
+        .collect();
+    if uuids.is_empty() {
+        return Ok(names);
+    }
     let rows = sqlx::query!(
         r#"
         SELECT id, name
@@ -659,10 +671,11 @@ async fn load_bot_display_names(
     )
     .fetch_all(pool)
     .await?;
-    Ok(rows
-        .into_iter()
-        .map(|row| (BotId::new_from_uuid(row.id), row.name))
-        .collect())
+    names.extend(
+        rows.into_iter()
+            .map(|row| (BotId::new_from_uuid(row.id), row.name)),
+    );
+    Ok(names)
 }
 
 async fn load_user_display_names(
@@ -732,9 +745,10 @@ fn id_to_display_name(user_id: &MacroUserIdStr<'static>, name_lookup: &NameLooku
 #[cfg(feature = "list")]
 static CHANNEL_LIST_PREFIX: &str = r#"
     WITH user_channels AS (
-        SELECT DISTINCT c.*
+        SELECT c.*, a.viewed_at
         FROM comms_channels c
         INNER JOIN comms_channel_participants cp ON cp.channel_id = c.id
+        LEFT JOIN comms_activity a ON a.channel_id = c.id AND a.user_id = $1
         WHERE cp.user_id = $1 AND cp.left_at IS NULL
 "#;
 
@@ -744,8 +758,9 @@ static CHANNEL_LIST_PREFIX: &str = r#"
 #[cfg(feature = "list")]
 static CHANNEL_LIST_PREFIX_WITH_TEAM_CHANNELS: &str = r#"
     WITH user_channels AS (
-        SELECT DISTINCT c.*
+        SELECT c.*, a.viewed_at
         FROM comms_channels c
+        LEFT JOIN comms_activity a ON a.channel_id = c.id AND a.user_id = $1
         WHERE (
             EXISTS (
                 SELECT 1
@@ -769,9 +784,29 @@ static CHANNEL_LIST_PREFIX_WITH_TEAM_CHANNELS: &str = r#"
 #[cfg(feature = "list")]
 static CHANNEL_LIST_SELECT: &str = r#"
     ),
+    paged_channels AS (
+        SELECT uc.*
+        FROM user_channels uc
+        WHERE
+            ($4::timestamptz IS NULL)
+            OR
+            ((CASE $2
+                WHEN 'created_at' THEN uc.created_at
+                WHEN 'viewed_at' THEN COALESCE(uc.viewed_at, '1970-01-01 00:00:00+00')
+                WHEN 'viewed_updated' THEN COALESCE(uc.viewed_at, uc.updated_at)
+                ELSE uc.updated_at
+            END), uc.id::text) < ($4, $5)
+        ORDER BY (CASE $2
+            WHEN 'created_at' THEN uc.created_at
+            WHEN 'viewed_at' THEN COALESCE(uc.viewed_at, '1970-01-01 00:00:00+00')
+            WHEN 'viewed_updated' THEN COALESCE(uc.viewed_at, uc.updated_at)
+            ELSE uc.updated_at
+        END) DESC, uc.id::text DESC
+        LIMIT $3
+    ),
     channel_participants_json AS (
         SELECT
-            uc.id as channel_id,
+            pc.id as channel_id,
             ARRAY_AGG(
                 json_build_object(
                     'channel_id', cp.channel_id,
@@ -781,37 +816,37 @@ static CHANNEL_LIST_SELECT: &str = r#"
                     'left_at', cp.left_at
                 )
             ) as participants
-        FROM user_channels uc
-        JOIN comms_channel_participants cp ON cp.channel_id = uc.id
+        FROM paged_channels pc
+        JOIN comms_channel_participants cp ON cp.channel_id = pc.id
         WHERE cp.left_at IS NULL
-        GROUP BY uc.id
+        GROUP BY pc.id
     )
     SELECT
-        uc.id as "id",
-        uc.name as "name",
-        uc.channel_type as "channel_type",
-        uc.org_id as "org_id",
-        uc.team_id as "team_id",
-        uc.auto_join_team as "auto_join_team",
-        uc.created_at as "created_at",
-        uc.updated_at as "updated_at",
-        uc.owner_id as "owner_id",
+        pc.id as "id",
+        pc.name as "name",
+        pc.channel_type as "channel_type",
+        pc.org_id as "org_id",
+        pc.team_id as "team_id",
+        pc.auto_join_team as "auto_join_team",
+        pc.created_at as "created_at",
+        pc.updated_at as "updated_at",
+        pc.owner_id as "owner_id",
         cpj.participants as "participants_json",
         EXISTS (
             SELECT 1
             FROM comms_channel_participants cp_active
-            WHERE cp_active.channel_id = uc.id
+            WHERE cp_active.channel_id = pc.id
               AND cp_active.user_id = $1
               AND cp_active.left_at IS NULL
         ) as "is_participant"
-    FROM user_channels uc
-    LEFT JOIN channel_participants_json cpj ON cpj.channel_id = uc.id
-    WHERE
-        ($4::timestamptz IS NULL)
-        OR
-        ((CASE $2 WHEN 'created_at' THEN uc.created_at ELSE uc.updated_at END), uc.id::text) < ($4, $5)
-    ORDER BY (CASE $2 WHEN 'created_at' THEN uc.created_at ELSE uc.updated_at END) DESC, uc.id::text DESC
-    LIMIT $3
+    FROM paged_channels pc
+    LEFT JOIN channel_participants_json cpj ON cpj.channel_id = pc.id
+    ORDER BY (CASE $2
+        WHEN 'created_at' THEN pc.created_at
+        WHEN 'viewed_at' THEN COALESCE(pc.viewed_at, '1970-01-01 00:00:00+00')
+        WHEN 'viewed_updated' THEN COALESCE(pc.viewed_at, pc.updated_at)
+        ELSE pc.updated_at
+    END) DESC, pc.id::text DESC
 "#;
 
 #[cfg(feature = "list")]
@@ -931,6 +966,8 @@ fn channel_filter_mentions_participation(expr: &Expr<ChannelLiteral>) -> bool {
 fn build_channel_list_query(
     filter_ast: &LiteralTree<ChannelLiteral>,
 ) -> QueryBuilder<'_, Postgres> {
+    // QueryBuilder is required because the channel filter is an AST with arbitrary
+    // AND/OR/NOT shape. Dynamic literals are constrained to parsed domain types.
     let prefix = if filter_ast
         .as_deref()
         .is_some_and(channel_filter_mentions_participation)
@@ -2335,6 +2372,7 @@ impl ChannelRepo for PgChannelsRepo {
         entity_id: &str,
         user_id: &str,
     ) -> Result<Vec<AttachmentEntityReference>, Self::Err> {
+        let entity_types = ReferencedShareItemType::reference_lookup_types(entity_type);
         let attachment_references_fut = async {
             sqlx::query_as!(
                 AttachmentChannelReference,
@@ -2352,14 +2390,14 @@ impl ChannelRepo for PgChannelsRepo {
                 JOIN comms_messages m ON a.message_id = m.id
                 JOIN comms_channels c ON a.channel_id = c.id
                 JOIN comms_channel_participants cp ON cp.channel_id = c.id
-                WHERE a.entity_type = $1
+                WHERE a.entity_type = ANY($1)
                   AND a.entity_id  = $2
                   AND cp.user_id   = $3
                   AND cp.left_at  IS NULL
                   AND m.deleted_at IS NULL
                 ORDER BY a.created_at DESC
                 "#,
-                entity_type,
+                &entity_types,
                 entity_id,
                 user_id,
             )
@@ -2385,14 +2423,14 @@ impl ChannelRepo for PgChannelsRepo {
                 JOIN comms_messages m ON (em.source_entity_id = m.id::text AND em.source_entity_type = 'message')
                 JOIN comms_channels c ON m.channel_id = c.id
                 JOIN comms_channel_participants cp ON cp.channel_id = c.id
-                WHERE em.entity_type = $1
+                WHERE em.entity_type = ANY($1)
                   AND em.entity_id  = $2
                   AND cp.user_id   = $3
                   AND cp.left_at  IS NULL
                   AND m.deleted_at IS NULL
                 ORDER BY em.created_at DESC
                 "#,
-                entity_type,
+                &entity_types,
                 entity_id,
                 user_id,
             )
@@ -2412,12 +2450,12 @@ impl ChannelRepo for PgChannelsRepo {
                     em.user_id,
                     em.created_at
                 FROM comms_entity_mentions em
-                WHERE em.entity_type = $1
+                WHERE em.entity_type = ANY($1)
                   AND em.entity_id  = $2
                   AND em.source_entity_type != 'message'
                 ORDER BY em.created_at DESC
                 "#,
-                entity_type,
+                &entity_types,
                 entity_id,
             )
             .fetch_all(&self.pool)
@@ -3335,6 +3373,9 @@ impl ChannelRepo for PgChannelsRepo {
 
         let mut inserted = Vec::with_capacity(attachments.len());
         for attachment in attachments {
+            let entity_type = ReferencedShareItemType::from_raw(&attachment.entity_type)
+                .map(ReferencedShareItemType::as_str)
+                .unwrap_or(attachment.entity_type.as_str());
             let row = sqlx::query_as!(
                 MutatedAttachmentRow,
                 r#"
@@ -3353,7 +3394,7 @@ impl ChannelRepo for PgChannelsRepo {
                 macro_uuid::generate_uuid_v7(),
                 message_id,
                 channel_id,
-                attachment.entity_type,
+                entity_type,
                 attachment.entity_id,
                 attachment.width,
                 attachment.height,
@@ -3953,7 +3994,29 @@ impl ChannelRepo for PgChannelsRepo {
             return Ok(HashMap::new());
         }
 
-        let ids: Vec<Uuid> = bot_ids.iter().map(|id| id.as_uuid()).collect();
+        // First-party bots have no row; their profiles come from the registry.
+        let mut profiles: HashMap<BotId, BotSenderProfile> = bot_ids
+            .iter()
+            .filter_map(|id| {
+                bot_id::system_bot(*id).map(|bot| {
+                    (
+                        *id,
+                        BotSenderProfile {
+                            name: bot.name.to_owned(),
+                            avatar_url: None,
+                        },
+                    )
+                })
+            })
+            .collect();
+        let ids: Vec<Uuid> = bot_ids
+            .iter()
+            .filter(|id| !bot_id::is_system_bot(**id))
+            .map(|id| id.as_uuid())
+            .collect();
+        if ids.is_empty() {
+            return Ok(profiles);
+        }
         // Soft-deleted bots are included on purpose so historical messages
         // keep their sender identity.
         let rows = sqlx::query!(
@@ -3968,17 +4031,15 @@ impl ChannelRepo for PgChannelsRepo {
         .await
         .context("unable to fetch bot profiles")?;
 
-        Ok(rows
-            .into_iter()
-            .map(|row| {
-                (
-                    BotId::new_from_uuid(row.id),
-                    BotSenderProfile {
-                        name: row.name,
-                        avatar_url: row.avatar_url,
-                    },
-                )
-            })
-            .collect())
+        profiles.extend(rows.into_iter().map(|row| {
+            (
+                BotId::new_from_uuid(row.id),
+                BotSenderProfile {
+                    name: row.name,
+                    avatar_url: row.avatar_url,
+                },
+            )
+        }));
+        Ok(profiles)
     }
 }

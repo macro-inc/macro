@@ -1,0 +1,16 @@
+---
+title: SendChannelMessage
+description: "Send or reply to a channel on behalf of the user. Only use this when explicitly asked to send a message"
+---
+
+# SendChannelMessage
+
+Send or reply to a channel on behalf of the user. Only use this when explicitly asked to send a message
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `content` | string | Yes | Message content in macro markdown format. This uses the same syntax as markdown documents |
+| `channel_id` | string | Yes | The channel id to send the message to |
+| `thread_id` | string | No | An optional thread id to reply too |

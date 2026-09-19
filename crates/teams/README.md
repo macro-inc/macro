@@ -21,7 +21,7 @@ between different teams is unspecified.
 | `team.invite_created` | A new invite is persisted; one event is produced per newly invited lowercase email | `team_id`, `invite_id`, `email`, `invited_by`, `team_name` |
 | `team.invite_rejected` | The invitee successfully rejects and deletes an invite | `team_id`, `invite_id`, `email`, `actor_user_id` |
 | `team.invite_revoked` | An administrator successfully deletes an invite | `team_id`, `invite_id`, `email`, `actor_user_id` |
-| `team.member_joined` | An invited or domain-auto-joined membership and all rollback-capable side effects succeed | `team_id`, `member_id`, `role`, `join_method` |
+| `team.member_joined` | An invited or domain-auto-joined membership and all rollback-capable side effects succeed | `team_id`, `member_id`, `teammate_ids`, `role`, `join_method` |
 | `team.member_removed` | Membership removal and all rollback-capable side effects succeed | `team_id`, `member_id`, `removed_by`, `role` |
 | `team.member_role_changed` | Each individual member role update succeeds | `team_id`, `actor_user_id`, `member_id`, `role`, `previous_role` |
 | `team.auto_join_domain_toggled` | An explicit auto-join-domain toggle succeeds | `team_id`, `actor_user_id`, `auto_join_domain` |
@@ -43,6 +43,12 @@ updated event. Role updates are committed in request order: if a later update
 fails, earlier successful updates and their events remain committed, while no
 event is produced for the failed update.
 
+`teammate_ids` is the sorted, de-duplicated set of other current teammates at
+join time (owner plus members, excluding the joining user). It is empty when the
+roster could not be loaded or the team has no other members. Consumers must
+default a missing field to `[]` so events published before this field existed
+still decode.
+
 `join_method` is a tagged union. An accepted invite includes its invite UUID and
 the inviter; a domain auto-join is encoded as `{"type":"domain_auto_join"}`.
 A complete invite-accepted membership envelope has this shape:
@@ -55,6 +61,10 @@ A complete invite-accepted membership envelope has this shape:
   "metadata": {
     "team_id": "3f6f8b0a-6f9f-4a3f-9c3a-2b1e5d4c7a90",
     "member_id": "macro|joiner@acme.com",
+    "teammate_ids": [
+      "macro|admin@acme.com",
+      "macro|owner@acme.com"
+    ],
     "role": "member",
     "join_method": {
       "type": "invite_accepted",
@@ -79,9 +89,11 @@ notification outcomes also do not publish team events. Best-effort CRM,
 contact, and notification work after a committed mutation does not suppress the
 corresponding event.
 
-This change provides production only. It adds no team-event consumer, and the
-webhook Kafka consumer and webhook delivery pipeline do not consume or deliver
-these events.
+The document storage service consumes `team.member_joined` from `macro.teams`
+under the `teammate-dms` consumer group. The consumer lives in the channels
+crate and creates a DM between `member_id` and each id in `teammate_ids`; it
+does not load a team roster. The webhook Kafka consumer and webhook delivery
+pipeline do not consume or deliver these events.
 
 ## Delivery semantics and compatibility
 
@@ -92,6 +104,19 @@ successful request. There is no transaction, outbox, or retry coupling database
 persistence to publication. Delivery is therefore at-most-once relative to team
 mutations: a committed mutation can have no corresponding event.
 
+Teammate-DM consumption is at-least-once. The consumer commits an offset only
+after a successful or permanent result and retries transient failures. A missed
+publish can leave a team without DMs until `backfill_teammate_dms` runs.
+
+```bash
+just crates/teams/backfill_teammate_dms_local
+just crates/teams/backfill_teammate_dms_dev
+just crates/teams/backfill_teammate_dms_prod
+```
+
+The CLI pages every team and ensures the full teammate DM clique. It is
+idempotent. Prod asks you to type `prod backfill` before it writes.
+
 Consumers must tolerate unknown `event_type` values and unknown metadata fields
 so new event variants and additive fields remain forward compatible. Consumers
 should use `schema_version` when interpreting a known event; every event in this
@@ -99,6 +124,7 @@ contract currently uses version 1.
 
 Provision the `macro.teams` topic before deploying the producer. The rollout
 order is: deploy the Kafka-cluster stack, configure `KAFKA_BROKERS` for the
-authentication service in Doppler, then deploy the authentication service. If
-the producer is deployed before the topic is available, team mutations still
-succeed, but events can be lost under the at-most-once contract.
+authentication service (producer) and document storage service (teammate-DM
+consumer) in Doppler, then deploy those services. If the producer is deployed
+before the topic is available, team mutations still succeed, but events can be
+lost under the at-most-once contract.

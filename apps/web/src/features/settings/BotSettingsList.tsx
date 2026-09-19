@@ -27,7 +27,7 @@ function BotSettingsRow(props: { bot: Bot; onOpen: (botId: string) => void }) {
   return (
     <button
       type="button"
-      class="flex w-full items-center gap-4 px-6 py-4 text-left outline-none hover:bg-hover focus-visible:bg-hover mobile:items-start mobile:px-4"
+      class="flex w-full items-center gap-4 px-6 py-4 text-left outline-none hover:bg-hover focus-visible:bg-hover mobile:items-start touch:px-4"
       onClick={() => props.onOpen(props.bot.id)}
     >
       <BotAvatar bot={props.bot} size="lg" />

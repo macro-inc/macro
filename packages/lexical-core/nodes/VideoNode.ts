@@ -181,8 +181,17 @@ export class VideoNode extends MediaNode<{ controls: boolean }> {
         return null;
       },
       div: (domNode: HTMLElement) => {
-        const video = domNode.querySelector('video');
-        if (!video) return null;
+        // Match only the exported wrapper shape (<div> whose sole child is
+        // the <video>). Claiming any div with a descendant video would steal
+        // ancestor containers (quote wrappers, merged paragraph divs) and
+        // collapse them to just the video, dropping their other content.
+        const video = domNode.firstElementChild;
+        if (
+          domNode.childElementCount !== 1 ||
+          video?.tagName !== 'VIDEO' ||
+          domNode.textContent?.trim() !== ''
+        )
+          return null;
 
         const src = video.getAttribute('src');
         const controls = video.hasAttribute('controls');

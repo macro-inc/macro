@@ -22,6 +22,7 @@ export function displayResultsInstructions(): string {
     '# displayResults',
     '`displayResults` renders a rich, interactive view (lists, timelines, channel messages) directly in the chat. PREFER it over a plain-text answer whenever your response is largely about the user\'s workspace data — summaries of tasks/docs/activity, lists of entities, anything you would otherwise format as a markdown table or a long bulleted list. You do NOT need the user to ask for a "dashboard" or a "view": proactively call `displayResults` whenever it presents the information more clearly than text would.',
     'Typical triggers — call it even though the user never said "dashboard": "what did I get done this week?", "what\'s <teammate> working on?", "show me my open tasks", "summarize this project", "what happened in <channel>?". When in doubt and the answer is mostly workspace entities or metrics, render a view.',
+    '`ReadActivity` is the exception: it already renders its complete, entity-resolved response as a rich user-facing activity timeline. After calling `ReadActivity`, do NOT call `displayResults` to restate or summarize those events. Add at most one short textual takeaway.',
     'When you DO render a view, keep any accompanying chat text short (a one-line lead-in at most) — the view IS the answer; do not also restate it in prose.',
     'Its `view` argument MUST be a JSON object matching this JSON Schema (a `title` plus an ordered `widgets` array; layout is flexbox via the `container` widget):',
     '```json',

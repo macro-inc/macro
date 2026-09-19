@@ -18,8 +18,8 @@ use serde_json::json;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    AddParticipantError, ArchivedCall, Call, CallError, CallParticipant, CallRecord,
-    CallRecordTranscriptSegment, CallWebhookEvent, DeletedCallRecordStorageKeys,
+    ActiveCallSummary, AddParticipantError, ArchivedCall, Call, CallError, CallParticipant,
+    CallRecord, CallRecordTranscriptSegment, CallWebhookEvent, DeletedCallRecordStorageKeys,
     EditCallRecordRequest, EgressS3Config, RingStatus, VerifiedRingToken, VoipPushPayloadRequest,
 };
 use crate::domain::ports::{
@@ -1346,6 +1346,53 @@ fn assert_deleted_event(event_broker: &RecordingEventBroker) {
     );
 }
 
+// -- get_active_calls ---------------------------------------------------------
+
+#[tokio::test]
+async fn get_active_calls_maps_repo_rows_into_response() {
+    let summary = ActiveCallSummary {
+        call_id: MUTATED_EVENT_CALL_ID,
+        channel_id: MUTATED_EVENT_CHANNEL_ID,
+        created_by: "macro|user-a@test.com".to_string(),
+        created_at: started_event_timestamp(),
+        participant_count: 2,
+    };
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_active_calls_for_user()
+        .times(1)
+        .return_once(move |user_id| {
+            assert_eq!(user_id.as_ref(), "macro|viewer@example.com");
+            Box::pin(async move { Ok(vec![summary]) })
+        });
+    let service = build_mutation_service(repo, RecordingEventBroker::default());
+
+    let response = service
+        .get_active_calls(user("viewer@example.com"))
+        .await
+        .expect("get_active_calls should succeed");
+
+    assert_eq!(response.calls.len(), 1);
+    assert_eq!(response.calls[0].call_id, MUTATED_EVENT_CALL_ID);
+    assert_eq!(response.calls[0].channel_id, MUTATED_EVENT_CHANNEL_ID);
+    assert_eq!(response.calls[0].participant_count, 2);
+}
+
+#[tokio::test]
+async fn get_active_calls_wraps_repo_error_as_internal() {
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_active_calls_for_user()
+        .times(1)
+        .returning(|_| Box::pin(async { Err(anyhow::anyhow!("db down")) }));
+    let service = build_mutation_service(repo, RecordingEventBroker::default());
+
+    let err = service
+        .get_active_calls(user("viewer@example.com"))
+        .await
+        .expect_err("repo failure should surface");
+
+    assert!(matches!(err, CallError::Internal(_)));
+}
+
 fn mock_edit_repo(
     record: Option<CallRecord>,
     expected_custom_name: Option<&'static str>,
@@ -1443,8 +1490,10 @@ async fn edit_call_record_publishes_updated_event_for_share_permission_only() {
             EditCallRecordRequest {
                 share_permission: Some(
                     models_permissions::share_permission::UpdateSharePermissionRequestV2 {
-                        is_public: Some(true),
-                        public_access_level: None,
+                        link_share: Some(Some(
+                            models_permissions::share_permission::LinkShare::Public,
+                        )),
+                        link_share_access_level: None,
                         channel_share_permissions: None,
                     },
                 ),

@@ -20,6 +20,7 @@ use crate::domain::service::{
 use ai_toolset::{
     AsyncTool, AsyncToolCollection, RequestContext, ServiceContext, ToolCallError, ToolResult,
 };
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -253,6 +254,10 @@ pub struct CreateImportEntityResponse {
     pub message: String,
 }
 
+impl ToolAnnotated for CreateImportEntity {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::additive("Track import candidate");
+}
+
 #[async_trait]
 impl<T: ImportStager> AsyncTool<ImportToolContext<T>> for CreateImportEntity {
     type Output = CreateImportEntityResponse;
@@ -419,6 +424,11 @@ pub struct ImportNotionPageResponse {
     pub message: String,
 }
 
+impl ToolAnnotated for ImportNotionPage {
+    const ANNOTATIONS: ToolAnnotations =
+        ToolAnnotations::additive("Import Notion page").with_open_world();
+}
+
 #[async_trait]
 impl<T: NotionPageImporter> AsyncTool<ImportToolContext<T>> for ImportNotionPage {
     type Output = ImportNotionPageResponse;
@@ -516,6 +526,10 @@ pub struct DeleteImportEntityResponse {
     pub message: String,
 }
 
+impl ToolAnnotated for DeleteImportEntity {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::destructive("Decline import candidate");
+}
+
 #[async_trait]
 impl<T: ImportStager> AsyncTool<ImportToolContext<T>> for DeleteImportEntity {
     type Output = DeleteImportEntityResponse;
@@ -579,6 +593,10 @@ pub struct ListImportEntities {
 pub struct ListImportEntitiesResponse {
     /// The visible rows, newest first.
     pub entities: Vec<ImportEntityView>,
+}
+
+impl ToolAnnotated for ListImportEntities {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("List import ledger");
 }
 
 #[async_trait]
@@ -647,6 +665,10 @@ pub struct FinalizeImportResponse {
     pub entity_id: String,
     /// The Macro entity type.
     pub entity_type: String,
+}
+
+impl ToolAnnotated for FinalizeImport {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::additive("Finalize import");
 }
 
 #[async_trait]

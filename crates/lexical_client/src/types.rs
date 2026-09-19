@@ -40,3 +40,15 @@ pub enum NewMdNode {
 pub struct CognitionV2ResponseData {
     pub data: Vec<NewMdNode>,
 }
+
+/// One node of a document, as the lexical service's `/cognition` parse
+/// returns it.
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
+pub struct MarkdownParseResult {
+    /// Lexical node id
+    pub node_id: String,
+    /// The node's searchable text
+    pub content: String,
+    /// The node's serialized Lexical JSON
+    pub raw_content: String,
+}

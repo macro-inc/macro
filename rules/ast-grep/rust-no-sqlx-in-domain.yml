@@ -1,0 +1,31 @@
+id: rust-no-sqlx-in-domain
+language: rust
+severity: error
+message: Domain modules must not reference sqlx — database access belongs in outbound adapters behind a port.
+note: |-
+  Hexagonal architecture: the domain layer depends only on its own models and
+  port traits. Move the query into an outbound repo (e.g. outbound/pg_*_repo.rs)
+  and expose it through a port. Domain error variants carry causes as
+  `rootcause::Report` payloads, never as sqlx types; keep the
+  `impl From<sqlx::Error> for <DomainError>` in the outbound module (see
+  entity_access's pg_access_repo, which also classifies transient failures
+  as `Unavailable` there) so `?` still works in adapter code. DB-backed
+  tests (#[sqlx::test]) in domain test.rs files are exempt.
+files:
+  - crates/**/src/domain/**
+ignores:
+  - '**/test.rs'
+  - '**/tests.rs'
+  - '**/test/**'
+  - '**/tests/**'
+rule:
+  any:
+    - kind: scoped_identifier
+      regex: ^sqlx\b
+      not:
+        inside:
+          kind: scoped_identifier
+    - kind: scoped_type_identifier
+      regex: ^sqlx\b
+    - kind: use_declaration
+      regex: ^use sqlx\b

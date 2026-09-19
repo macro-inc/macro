@@ -1,6 +1,9 @@
+import { startPendingSession } from '@app/features/block-agent/context/pending-session';
+import { AGENT_INPUT_TEXT_AREA_ID } from '@app/features/block-agent/ui/AgentInput';
+import { EMAIL_COMPOSE_TO_INPUT_ID } from '@app/features/email-compose/core/constants';
+import { openStandaloneReminderComposer } from '@app/features/reminders/reminder-composer';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { setAutomationComposerOpen } from '@block-automation/component';
-import { EMAIL_COMPOSE_TO_INPUT_ID } from '@block-email/constants';
 import {
   endTrackedDocumentSpan,
   registerDocumentSpan,
@@ -13,8 +16,11 @@ import { CHAT_INPUT_TEXT_AREA_ID } from '@core/component/AI/component/input/Chat
 import { getIconConfig } from '@core/component/EntityIcon';
 import {
   ENABLE_ANIMATED_ICONS,
-  ENABLE_SNIPPETS_FLAG,
-  ENABLE_SNIPPETS_OVERRIDE,
+  enableAgentSessionComposer,
+  enableChatV3Agents,
+  enableReminders,
+  enableSnippets,
+  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import {
@@ -59,8 +65,10 @@ import WideTask from '@icon/wide-task.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { getMarkdownGoldenBytes } from '@macro-inc/lexical-core/markdown-golden';
 import type { Span } from '@macro-inc/observability';
+import BellSimpleIcon from '@phosphor/bell-simple.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import PlusIcon from '@phosphor/plus.svg';
+import Robot from '@phosphor/robot.svg';
 import { createProject } from '@queries/storage/projects';
 import { makePersisted } from '@solid-primitives/storage';
 import {
@@ -75,6 +83,7 @@ import {
 } from '@ui';
 import { getNormalizedKeyString } from '@ui/components/Hotkey';
 import {
+  type Accessor,
   createEffect,
   createMemo,
   createSignal,
@@ -84,7 +93,7 @@ import {
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
-import type { CreatableBlock } from './types';
+import type { CreatableBlock, CreatableName } from './types';
 
 const LAUNCHER_FRECENCY_STORE = 'launcher-frecency-v1';
 const LAUNCHER_SEARCH_MODE_STORE = 'launcher-search-mode-v1';
@@ -229,13 +238,18 @@ const createComponent = async (spec: {
   componentId: string;
   shouldInsert?: boolean;
   asPopover?: boolean;
+  params?: Record<string, unknown>;
 }) => {
   const { openWithSplit, popoverSplit } = useSplitLayout();
 
   // For popovers, create the popover BEFORE closing launcher
   // so the popover can acquire the focus lock while launcher still owns rootFocusElement
   if (spec.asPopover) {
-    popoverSplit({ type: 'component', id: spec.componentId });
+    popoverSplit({
+      type: 'component',
+      id: spec.componentId,
+      params: spec.params,
+    });
     setCreateMenuOpen(false, false);
     return;
   }
@@ -252,7 +266,7 @@ const createComponent = async (spec: {
 };
 
 export function runCreateAction(
-  blockName: BlockName | BlockAlias,
+  blockName: CreatableName,
   options: { shouldInsert?: boolean; source?: string } = {}
 ) {
   const shouldInsert = options.shouldInsert ?? false;
@@ -397,10 +411,55 @@ export function runCreateAction(
         asPopover: true,
       });
       return;
+    // A reminder has no block to open: the composer asks what and when, and the
+    // reminder lives in the Reminders lists from there.
+    case 'reminder':
+      if (!isFeatureEnabled(enableReminders)) return;
+      setCreateMenuOpen(false, false);
+      openStandaloneReminderComposer();
+      return;
+    case 'agent': {
+      if (isFeatureEnabled(enableAgentSessionComposer)) {
+        createComponent({
+          componentId: 'agent-session-compose',
+          asPopover: true,
+          // The popover itself is not split-placed; the session it creates
+          // is, so the new-split intent rides along for the composer to honor.
+          params: { preferNewSplit: shouldInsert },
+        });
+        return;
+      }
+      // Without the composer there is nothing to ask for: a managed session's
+      // bot, repository and workspace are all deployment configuration, so
+      // this opens one straight away.
+      //
+      // Opened against a placeholder rather than awaited: the create does not
+      // answer until its sandbox has booted and cloned the repo, and no one
+      // should watch a spinner for that. The block mounts now — composer live,
+      // prompts queueing — and adopts the real id when it lands
+      // (`block-agent/context/pending-session.ts`).
+      const { openWithSplit } = useSplitLayout();
+      setCreateMenuOpen(false, false);
+      // On mobile the agent input doesn't autofocus on mount, so arm focus
+      // within this gesture (iOS only raises the keyboard for a synchronous
+      // focus). The block mounts asynchronously, so this waits for the input.
+      if (isMobile()) {
+        triggerFocusInput(() =>
+          document
+            .getElementById(AGENT_INPUT_TEXT_AREA_ID)
+            ?.querySelector<HTMLElement>('[contenteditable="true"]')
+        );
+      }
+      openWithSplit(
+        { type: 'agent', id: startPendingSession() },
+        { referredFrom: 'launcher', preferNewSplit: shouldInsert }
+      );
+      return;
+    }
   }
 }
 
-export type { CreatableBlock } from './types';
+export type { CreatableBlock, CreatableName } from './types';
 
 export const CREATABLE_BLOCKS: CreatableBlock[] = [
   {
@@ -419,6 +478,9 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     },
   },
   {
+    // The pre-agent-session chat, kept on `a` for anyone the new agent flag
+    // has not reached. Mutually exclusive with the Agent entry below:
+    // both bind `a`, and exactly one is ever enabled.
     label: 'Agent',
     icon: WideStar,
     animatedIcon: AnimatedStarIcon,
@@ -429,6 +491,11 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     hotkeyToken: TOKENS.create.chat,
     altHotkeyToken: TOKENS.create.chatNewSplit,
     hotkey: 'a',
+    // Both `a` entries have to survive registration for the dispatcher to
+    // pick between them by condition; the default 'override' would let the
+    // later one silently replace the earlier.
+    registrationType: 'add',
+    enabled: () => !isFeatureEnabled(enableChatV3Agents),
     keyDownHandler: () => {
       runCreateAction('chat', { shouldInsert: pressedKeys().has('shift') });
       return true;
@@ -445,6 +512,23 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     hotkey: 'u',
     keyDownHandler: () => {
       runCreateAction('automation');
+      return true;
+    },
+  },
+  {
+    label: 'Agent',
+    icon: Robot,
+    description: 'Create agent session',
+    launcherHint: 'Dedicated Agent Session',
+    keywords: ['new', 'make', 'add', 'agent', 'code', 'coder', 'session'],
+    blockName: 'agent',
+    hotkeyToken: TOKENS.create.agent,
+    altHotkeyToken: TOKENS.create.agentNewSplit,
+    hotkey: 'a',
+    registrationType: 'add',
+    enabled: () => isFeatureEnabled(enableChatV3Agents),
+    keyDownHandler: () => {
+      runCreateAction('agent', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
@@ -489,6 +573,23 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     hotkey: 't' as const,
     keyDownHandler: () => {
       runCreateAction('task');
+      return true;
+    },
+  },
+  {
+    label: 'Reminder',
+    icon: BellSimpleIcon,
+    description: 'Create reminder',
+    launcherHint: 'Nudge yourself later',
+    keywords: ['new', 'make', 'add', 'remind', 'later', 'todo'],
+    blockName: 'reminder',
+    hotkeyToken: TOKENS.create.reminder,
+    // No `altHotkeyToken`: a reminder opens no split, so there is no
+    // shift-variant to bind.
+    hotkey: 'r',
+    enabled: () => isFeatureEnabled(enableReminders),
+    keyDownHandler: () => {
+      runCreateAction('reminder');
       return true;
     },
   },
@@ -589,6 +690,51 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
 ];
 
+/**
+ * The creatable-block entries a create menu renders, with feature gating
+ * applied — the single source of truth shared by the desktop menus and the
+ * mobile dock's Create menu, so they cannot drift. Callers with a custom
+ * block list (e.g. the onboarding sandbox launcher) pass it as `source` to
+ * run it through the same gating.
+ */
+export function useCreateMenuBlocks(
+  source: () => CreatableBlock[] = () => CREATABLE_BLOCKS
+): Accessor<CreatableBlock[]> {
+  const snippetsFlag = useFeatureFlag(enableSnippets);
+  // Subscribed to rather than left to the block's own `enabled`, which reads
+  // PostHog without tracking it: this memo has no other reason to re-run, so a
+  // flag that resolves after mount would leave the menu as it was until reload.
+  const remindersFlag = useFeatureFlag(enableReminders);
+  const agentsFlag = useFeatureFlag(enableChatV3Agents);
+  return createMemo(() => {
+    remindersFlag();
+    agentsFlag();
+    return source().filter((block) => {
+      if (block.blockName === 'snippet') return snippetsFlag().enabled;
+      return block.enabled?.() ?? true;
+    });
+  });
+}
+
+/**
+ * Whether one creatable is on offer right now, tracked reactively.
+ *
+ * For the surfaces that offer a single creatable by name rather than rendering
+ * the whole list — an empty state's button, a list view's `+`. Answered from
+ * {@link useCreateMenuBlocks} so there is one gate rather than a copy of it per
+ * surface, and so a flag that resolves after mount reaches these too: a gated
+ * entry left to its own `enabled` reads PostHog without tracking it, which
+ * strands the answer the surface first happened to get.
+ *
+ * A name that is not a creatable-block entry at all is not "disabled" — it is
+ * not this gate's business, and callers reaching for a view-only label handle
+ * it themselves.
+ */
+export function useCreatableEnabled(): (name: CreatableName) => boolean {
+  const blocks = useCreateMenuBlocks();
+  return (name) => blocks().some((block) => block.blockName === name);
+}
+
 export const [createMenuOpen, setCreateMenuOpen] = createControlledOpenSignal(
   false,
   { id: 'launcher' }
@@ -654,13 +800,9 @@ type LauncherInnerProps = {
 
 export const LauncherInner = (props: LauncherInnerProps) => {
   const hkGroup = createHotkeyGroup();
-  const snippetsFlag = useFeatureFlag(ENABLE_SNIPPETS_FLAG, {
-    enabledOverride: ENABLE_SNIPPETS_OVERRIDE,
-  });
-  const availableBlocks = () =>
-    (props.blocks ?? CREATABLE_BLOCKS).filter(
-      (block) => block.blockName !== 'snippet' || snippetsFlag().enabled
-    );
+  const availableBlocks = useCreateMenuBlocks(
+    () => props.blocks ?? CREATABLE_BLOCKS
+  );
   const sortedBlocks = createMemo(() => {
     const now = Date.now();
 
@@ -790,6 +932,18 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     runWithInputFocused: true,
   }).withGroup(hkGroup);
 
+  const searchModeHotkey = registerHotkey({
+    hotkey: '/',
+    scopeId: launcherScope,
+    description: 'Toggle search mode',
+    keyDownHandler: () => {
+      setLauncherSearchMode(!searchMode());
+      return true;
+    },
+    runWithInputFocused: true,
+    displayPriority: 6,
+  }).withGroup(hkGroup);
+
   registerHotkey({
     hotkey: 'escape',
     scopeId: launcherScope,
@@ -862,7 +1016,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
         ref={ref}
         tabindex={-1}
       >
-        <CommandMenuShell.Header class="gap-2 px-4 my-1 bg-surface border-b-0">
+        <CommandMenuShell.Header class="gap-2 px-4 my-1 border-b-0">
           <Show
             when={searchMode()}
             fallback={
@@ -880,12 +1034,6 @@ export const LauncherInner = (props: LauncherInnerProps) => {
                 placeholder="Search create options"
                 value={searchQuery()}
                 onInput={(event) => setSearchQuery(event.currentTarget.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape') {
-                    event.preventDefault();
-                    setLauncherSearchMode(false);
-                  }
-                }}
               />
             </div>
           </Show>
@@ -894,13 +1042,18 @@ export const LauncherInner = (props: LauncherInnerProps) => {
             onChange={setLauncherSearchMode}
             size="xs"
             label={
-              <span class="text-[11px] font-medium leading-none text-ink-extra-muted/70">
-                Search mode
+              <span class="flex items-center gap-1 text-[11px] font-medium leading-none text-ink-extra-muted/70">
+                Search mode{' '}
+                <Hotkey
+                  shortcut={searchModeHotkey.hotkey()}
+                  theme="subtle"
+                  class="px-2 py-0.5"
+                />
               </span>
             }
             labelClass="flex items-center"
             controlClass="bg-ink-extra-muted/25 data-checked:bg-accent"
-            class="ml-auto flex-row-reverse gap-1.5 rounded-full bg-ink/4 px-2 py-1"
+            class="ml-auto flex-row-reverse gap-1.5 px-2 py-1"
           />
         </CommandMenuShell.Header>
         <CommandMenuShell.Body>
@@ -985,7 +1138,7 @@ export const Launcher = (props: LauncherProps) => {
     <Dialog open={props.open} onOpenChange={props.onOpenChange} modal={true}>
       <Dialog.Portal>
         <Dialog.Overlay class="fixed inset-0 z-modal"></Dialog.Overlay>
-        <Dialog.Content>
+        <Dialog.Content class="[--color-surface:var(--color-dialog)]">
           <div
             class={cn(
               'fixed top-0 bottom-(--virtual-keyboard-height,0) inset-x-0 z-modal w-screen flex justify-center px-2',

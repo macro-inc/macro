@@ -107,16 +107,14 @@ export class PropertiesNamespace {
 
   /** Add a select option to a multi-select property value on an entity. */
   async addEntityPropertyOption(opts: {
-    entityType: PropertyEntityType;
-    entityId: string;
+    entity: PropertiedEntity<unknown>;
     property: PropertyDefinition;
     option: PropertyOption;
   }): Promise<void> {
     return unwrap(
       await this.client.properties.addEntityPropertyOption({
         path: {
-          entity_type: opts.entityType,
-          entity_id: opts.entityId,
+          ...opts.entity.propertyReference(),
           property_id: opts.property.id,
           option_id: opts.option.id,
         },
@@ -126,16 +124,14 @@ export class PropertiesNamespace {
 
   /** Remove a select option from a multi-select property value on an entity. */
   async removeEntityPropertyOption(opts: {
-    entityType: PropertyEntityType;
-    entityId: string;
+    entity: PropertiedEntity<unknown>;
     property: PropertyDefinition;
     option: PropertyOption;
   }): Promise<void> {
     return unwrap(
       await this.client.properties.removeEntityPropertyOption({
         path: {
-          entity_type: opts.entityType,
-          entity_id: opts.entityId,
+          ...opts.entity.propertyReference(),
           property_id: opts.property.id,
           option_id: opts.option.id,
         },

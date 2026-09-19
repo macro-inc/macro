@@ -3,7 +3,7 @@ import { useContacts } from '@core/user';
 import Refresh from '@phosphor-icons/core/regular/arrow-clockwise.svg?component-solid';
 import Copy from '@phosphor-icons/core/regular/copy.svg?component-solid';
 import { useHistoryQuery } from '@queries/history/history';
-import { Button } from '@ui';
+import { Button, Layer } from '@ui';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 
 interface SignalDebugCardProps {
@@ -38,7 +38,7 @@ function SignalDebugCard(props: SignalDebugCardProps) {
         <Show
           when={props.data.length > 0}
           fallback={
-            <div class="text-text-secondary italic">
+            <div class="text-ink-muted italic">
               No {props.title.toLowerCase()} found
             </div>
           }
@@ -52,13 +52,15 @@ function SignalDebugCard(props: SignalDebugCardProps) {
         <details>
           <summary class="text-accent text-sm">Raw JSON</summary>
           <div class="mt-2 relative">
-            <button
-              onClick={copyToClipboard}
-              class="absolute top-2 right-2 p-1 rounded bg-surface-secondary hover:bg-surface-tertiary text-text-secondary hover:text-text-primary transition-colors z-10"
-              title="Copy to clipboard"
-            >
-              <Copy class="size-4" />
-            </button>
+            <Layer offset={1}>
+              <button
+                onClick={copyToClipboard}
+                class="absolute top-2 right-2 p-1 rounded bg-panel hover:bg-surface text-ink-muted hover:text-ink transition-colors z-10"
+                title="Copy to clipboard"
+              >
+                <Copy class="size-4" />
+              </button>
+            </Layer>
             <pre class="text-xs bg-message p-3 rounded overflow-auto max-h-80 border border-edge">
               {formatJson(props.data)}
             </pre>
@@ -88,20 +90,20 @@ const DataDebug: Component = () => {
           </div>
         }
         center={
-          <Button variant="base" onClick={handleRefresh}>
+          <Button variant="outline" onClick={handleRefresh}>
             <Refresh /> Refresh
           </Button>
         }
       ></Bar>
       <div class="flex flex-col gap-6 p-6 overflow-scroll">
-        <div class="grid grid-cols-2 @width-md/split:-grid-cols-1 gap-6">
+        <div class="grid grid-cols-2 @max-md/split:grid-cols-1 gap-6">
           <SignalDebugCard
             title="useContacts()"
             data={contacts()}
             renderItem={(contact) => (
-              <div class="bg-surface-secondary p-2 rounded text-sm">
+              <div class="bg-panel p-2 rounded text-sm">
                 <div class="font-medium">{contact.email}</div>
-                <div class="text-text-secondary">ID: {contact.id}</div>
+                <div class="text-ink-muted">ID: {contact.id}</div>
               </div>
             )}
           />
@@ -110,9 +112,9 @@ const DataDebug: Component = () => {
             title="useHistoryQuery()"
             data={historyQuery.data ?? []}
             renderItem={(item) => (
-              <div class="bg-surface-secondary p-2 rounded text-sm">
+              <div class="bg-panel p-2 rounded text-sm">
                 <div class="font-medium">{item.name}</div>
-                <div class="text-text-secondary">
+                <div class="text-ink-muted">
                   ID: {item.id} | Type: {item.type}
                 </div>
               </div>

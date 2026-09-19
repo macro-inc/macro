@@ -1,10 +1,16 @@
+use cache_core::predicate::OptimisticUpsertReconciliation;
 use cache_core::queue::{
-    MutationClaimRequest, MutationClaimToken, MutationRequest, NewQueuedMutation, OptimisticSource,
-    PersistedOptimisticLayer, StoredMutation, decode_optimistic_source, encode_optimistic_source,
+    MutationClaimRequest, MutationClaimToken, MutationRequest, MutationUpsertKind,
+    NewQueuedMutation, OptimisticSource, PersistedOptimisticLayer, StoredMutation,
+    decode_optimistic_source, encode_optimistic_source,
 };
 use cache_core::store::{InMemoryStorage, Storage};
 use cache_core::value::{CacheValue, EntityKey, Record};
 use pollster::block_on;
+use predicate_index::{
+    ExactAttributePatch, ExactValue, IndexDocument, IntegerAttributePatch, IntegerFact,
+    OptimisticProjectionMutation, Profile, RecordKey, Token,
+};
 use serde_json::json;
 
 #[test]
@@ -13,6 +19,36 @@ fn optimistic_source_supports_versioned_and_legacy_json() {
         mutation_data: json!({"rename": {"name": "next"}}),
         link_patches: Vec::new(),
         revalidations: Vec::new(),
+        projection_mutations: vec![
+            OptimisticProjectionMutation::Replace(IndexDocument {
+                record_key: RecordKey::new("GraphqlSoupDocument:doc-1").unwrap(),
+                profile: Profile::new(Token::new("soup-flat-v1").unwrap()),
+                partition: Token::new("document").unwrap(),
+                exact_facts: Vec::new(),
+                integer_facts: Vec::new(),
+                sort_facts: vec![IntegerFact {
+                    attribute: Token::new("updated-at").unwrap(),
+                    value: 10,
+                }],
+            }),
+            OptimisticProjectionMutation::Patch {
+                record_key: RecordKey::new("GraphqlSoupDocument:doc-2").unwrap(),
+                profile: Profile::new(Token::new("soup-flat-v1").unwrap()),
+                partition: Token::new("document").unwrap(),
+                exact: vec![ExactAttributePatch {
+                    attribute: Token::new("owner").unwrap(),
+                    values: vec![ExactValue::utf8("user-1").unwrap()],
+                }],
+                integers: vec![IntegerAttributePatch {
+                    attribute: Token::new("updated-at").unwrap(),
+                    values: vec![20],
+                }],
+                sorts: vec![IntegerFact {
+                    attribute: Token::new("updated-at").unwrap(),
+                    value: 20,
+                }],
+            },
+        ],
     };
     assert_eq!(
         decode_optimistic_source(&encode_optimistic_source(&source)).unwrap(),
@@ -30,6 +66,23 @@ fn optimistic_source_supports_versioned_and_legacy_json() {
             "rename": {"name": "legacy"}
         })
     );
+
+    let legacy_v2 = decode_optimistic_source(
+        r#"@macro-cache/optimistic-source:{"version":2,"mutationData":{"rename":{"name":"legacy"}},"linkPatches":[],"revalidations":[]}"#,
+    )
+    .unwrap();
+    assert_eq!(
+        legacy_v2.mutation_data,
+        json!({"rename": {"name": "legacy"}})
+    );
+    assert!(legacy_v2.projection_mutations.is_empty());
+    assert!(
+        decode_optimistic_source(
+            r#"@macro-cache/optimistic-source:{"version":2,"mutationData":{},"projectionMutations":[]}"#,
+        )
+        .is_err(),
+        "version 2 must not silently accept a projection overlay"
+    );
 }
 
 fn queued(value: &str, created_at_ms: i64) -> NewQueuedMutation {
@@ -38,6 +91,7 @@ fn queued(value: &str, created_at_ms: i64) -> NewQueuedMutation {
         .fields
         .insert("name".into(), CacheValue::String(value.into()));
     NewQueuedMutation {
+        uuid: uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, value.as_bytes()),
         mutation: StoredMutation::new(
             MutationRequest {
                 query: "mutation Rename { rename { id } }".into(),
@@ -52,6 +106,119 @@ fn queued(value: &str, created_at_ms: i64) -> NewQueuedMutation {
             normalized_updates: [(EntityKey("Thing:1".into()), update)].into(),
         },
     }
+}
+
+#[test]
+fn queue_diagnostics_are_payload_free_and_track_oldest() {
+    block_on(async {
+        let mut storage = InMemoryStorage::new();
+        assert_eq!(
+            storage.queue_diagnostics().await.unwrap(),
+            cache_core::store::QueueDiagnostics {
+                availability: cache_core::store::QueueDiagnosticsAvailability::Available,
+                depth: 0,
+                oldest_created_at_ms: None,
+            }
+        );
+        let first = storage
+            .enqueue_mutation(queued("secret-a", 42))
+            .await
+            .unwrap();
+        storage
+            .enqueue_mutation(queued("secret-b", 21))
+            .await
+            .unwrap();
+        assert_eq!(
+            storage.queue_diagnostics().await.unwrap(),
+            cache_core::store::QueueDiagnostics {
+                availability: cache_core::store::QueueDiagnosticsAvailability::Available,
+                depth: 2,
+                oldest_created_at_ms: Some(21),
+            }
+        );
+        let claimed = storage
+            .claim_next_mutation(MutationClaimRequest {
+                owner: "runner".into(),
+                now_ms: 100,
+                lease_expires_at_ms: 200,
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        storage
+            .discard_mutation(
+                first,
+                MutationClaimToken {
+                    owner: "runner".into(),
+                    generation: claimed.lease_generation,
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            storage.queue_diagnostics().await.unwrap(),
+            cache_core::store::QueueDiagnostics {
+                availability: cache_core::store::QueueDiagnosticsAvailability::Available,
+                depth: 1,
+                oldest_created_at_ms: Some(21),
+            }
+        );
+    });
+}
+
+#[test]
+fn storage_upsert_reports_pending_and_active_uuid_collisions() {
+    block_on(async {
+        let mut storage = InMemoryStorage::new();
+        let uuid = uuid::Uuid::new_v4();
+        let mut first = queued("a", 1);
+        first.uuid = uuid;
+        let first = storage
+            .upsert_mutation_with_shadow(first, 1, OptimisticUpsertReconciliation::default())
+            .await
+            .unwrap();
+        assert_eq!(first.kind, MutationUpsertKind::Inserted);
+
+        let mut pending = queued("b", 2);
+        pending.uuid = uuid;
+        let pending = storage
+            .upsert_mutation_with_shadow(pending, 2, OptimisticUpsertReconciliation::default())
+            .await
+            .unwrap();
+        assert_eq!(
+            pending.kind,
+            MutationUpsertKind::ReplacedPending {
+                removed_id: first.id
+            }
+        );
+        let claimed = storage
+            .claim_next_mutation(MutationClaimRequest {
+                owner: "runner".into(),
+                now_ms: 3,
+                lease_expires_at_ms: 100,
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(claimed.queued.id, pending.id);
+
+        let mut active = queued("c", 4);
+        active.uuid = uuid;
+        let active = storage
+            .upsert_mutation_with_shadow(active, 4, OptimisticUpsertReconciliation::default())
+            .await
+            .unwrap();
+        assert_eq!(
+            active.kind,
+            MutationUpsertKind::AppendedAfterActive {
+                active_id: pending.id
+            }
+        );
+        let queue = storage.load_mutation_queue().await.unwrap();
+        assert_eq!(queue.len(), 2);
+        assert!(queue[0].superseded);
+        assert_eq!(queue[1].id, active.id);
+    });
 }
 
 #[test]

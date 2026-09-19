@@ -10,6 +10,24 @@ import { onCleanup, onMount } from 'solid-js';
 
 const ACTIVE_ELEMENT_POLL_INTERVAL_MS = 1000;
 
+/**
+ * A `keyboardWillShow` / `keyboardWillHide` event as dispatched by the native
+ * virtual keyboard bridge. `detail` is native-supplied, so it is read
+ * defensively rather than trusted: it is absent on hide, and `CustomEvent`
+ * leaves it `null` whenever the dispatcher omits it.
+ */
+type VirtualKeyboardEvent = CustomEvent<{
+  height?: number;
+  duration?: number;
+} | null>;
+
+declare global {
+  interface WindowEventMap {
+    keyboardWillShow: VirtualKeyboardEvent;
+    keyboardWillHide: VirtualKeyboardEvent;
+  }
+}
+
 function getViewportHeight() {
   return window.visualViewport?.height ?? window.innerHeight;
 }
@@ -57,11 +75,6 @@ function createActiveElementPolling(onActiveElementLost: () => void) {
  */
 export function useAppSquishHandlers() {
   if (isNativeMobilePlatform()) {
-    type VirtualKeyboardEvent = CustomEventInit<{
-      height: number;
-      duration: number;
-    }>;
-
     let activeElementPolling: ReturnType<typeof createActiveElementPolling>;
 
     function resetNativeVirtualKeyboardState() {

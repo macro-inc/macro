@@ -56,7 +56,7 @@ fn workflow_dispatch() -> WorkflowDispatch {
     inputs.insert(
         "ref".into(),
         WorkflowDispatchInput {
-            description: "Release tag to build (v* or refs/tags/v*). Defaults to the selected protected ref or release tag.".into(),
+            description: "Optional release tag override (v* or refs/tags/v*). Leave empty to build the branch or tag selected for this workflow run.".into(),
             required: false,
             input_type: "string".into(),
             default: None,
@@ -87,6 +87,4 @@ fn resolve_ref_step() -> Step<Run> {
         .add_env(("GITHUB_EVENT_REF", "${{ github.event.ref }}"))
         .add_env(("GITHUB_EVENT_REF_TYPE", "${{ github.event.ref_type }}"))
         .add_env(("SELECTED_REF", "${{ github.ref }}"))
-        .add_env(("SELECTED_REF_NAME", "${{ github.ref_name }}"))
-        .add_env(("SELECTED_REF_PROTECTED", "${{ github.ref_protected }}"))
 }

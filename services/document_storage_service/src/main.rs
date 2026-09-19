@@ -20,7 +20,11 @@ use cal::{
     inbound::cal_webhook_router::CalWebhookRouterState,
     outbound::analytics_client::AnalyticsClientSink,
 };
+use calendar_events::domain::reminder_dispatch::CalendarReminderDispatchService;
 use calendar_events::inbound::axum_router::CalendarRouterState;
+use calendar_events::inbound::dispatch_worker::CalendarReminderDispatchWorker;
+use calendar_events::outbound::notification_notifier::NotificationCalendarReminderNotifier;
+use calendar_events::outbound::sqs_dispatch_queue::SqsCalendarDispatchQueue;
 use call::{
     domain::service::CallServiceImpl,
     inbound::axum_router::{CallRouterState, InternalCallRouterState, WebhookRouterState},
@@ -47,6 +51,11 @@ use channels::{
         pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
     },
 };
+use collab_surface::{
+    domain::service::CollabSurfaceServiceImpl, inbound::axum_router::CollabSurfaceRouterState,
+    outbound::pg_collab_surface_repo::PgCollabSurfaceRepo,
+    outbound::surface_init::LexicalSyncSurfaceInitializer,
+};
 use config::{Config, Environment};
 use connection::{
     domain::service::ConnectionServiceImpl,
@@ -65,7 +74,8 @@ use email::{
 };
 use embedding::embedding_provider::openai::TextEmbedding3Small;
 use favorites::{
-    domain::service::FavoritesServiceImpl, inbound::axum_router::FavoritesRouterState,
+    domain::{mutation_service::FavoritesMutationServiceImpl, service::FavoritesServiceImpl},
+    inbound::axum_router::FavoritesRouterState,
     outbound::pg_favorites_repo::PgFavoritesRepo,
 };
 use foreign_entity::{
@@ -76,11 +86,13 @@ use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::F
 use github::domain::service::{GithubSyncConfig, GithubSyncServiceImpl};
 use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
+use harnesses::outbound::pg_harness_repo::PgHarnessRepo;
 use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
-    MacroAuthorizationState, PgBotAuthorizationRepo, PgBotAuthorizer,
+    MacroAuthorizationState, PgBotAuthorizationRepo, PgBotAuthorizer, PgHarnessAuthorizationRepo,
+    PgHarnessAuthorizer, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::maybe_env_vars;
@@ -89,9 +101,11 @@ use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use macro_service_urls::AiEditingWorkerUrl;
 use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl, SyncServiceUrl};
 use macro_sha_count_client::Redis;
-use notification::domain::service::SqsNotificationIngress;
-use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
-use notification::outbound::queue::SqsQueue;
+use notification::domain::service::{
+    NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
+    WebSocketNotificationConsumerService,
+};
+use notification::outbound::{notification_consumer::NotificationTopicConsumer, queue::SqsQueue};
 use opensearch_client::OpensearchClient;
 use projects_hex::{
     domain::service::ProjectServiceImpl,
@@ -139,6 +153,10 @@ use task_dedup::{
     },
 };
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
+use user_api_key::{
+    domain::service::UserApiKeyServiceImpl, inbound::axum_router::UserApiKeyRouterState,
+    outbound::pg_user_api_keys_repo::PgUserApiKeysRepo,
+};
 
 mod api;
 mod config;
@@ -161,7 +179,13 @@ maybe_env_vars! {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    MacroEntrypoint::default().init();
+    let entrypoint = MacroEntrypoint::default().init();
+    let result = run().await;
+    entrypoint.shutdown();
+    result
+}
+
+async fn run() -> anyhow::Result<()> {
     let env = Environment::new_or_prod();
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
@@ -232,6 +256,7 @@ async fn main() -> anyhow::Result<()> {
     let notification_queue = macro_queues::NotificationIngressQueue::new();
     let gmail_ops_queue = macro_queues::GmailOpsQueue::new();
     let reminder_dispatch_queue = macro_queues::ReminderDispatchQueue::new();
+    let calendar_reminder_dispatch_queue = macro_queues::CalendarReminderDispatchQueue::new();
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
         .search_event_queue(&search_event_queue)
         .document_delete_queue(&document_delete_queue)
@@ -305,8 +330,14 @@ async fn main() -> anyhow::Result<()> {
             default_user_id: Some(MACRO_INTERNAL_USER_ID.to_string()),
         },
         PgBotAuthorizer::new(PgBotAuthorizationRepo::new(db.clone())),
-    );
+        PgUserApiKeyAuthorizer::new(PgUserApiKeyAuthorizationRepo::new(db.clone())),
+    )
+    .with_harness_authorizer(PgHarnessAuthorizer::new(PgHarnessAuthorizationRepo::new(
+        db.clone(),
+    )));
     let authorization_state = MacroAuthorizationState::new(Arc::new(authorization_service));
+    let harnesses_service =
+        harnesses::domain::service::HarnessServiceImpl::new(PgHarnessRepo::new(db.clone()));
 
     // Initialize OpenSearch client
     let opensearch_client = OpensearchClient::new(
@@ -723,6 +754,50 @@ async fn main() -> anyhow::Result<()> {
         authorization_state.clone(),
     );
 
+    let (webhook_stream_sender, _) =
+        tokio::sync::broadcast::channel(webhook::domain::stream::WEBHOOK_STREAM_CHANNEL_CAPACITY);
+    let sse_stream_service = webhook::domain::stream::WebhookEventStreamServiceImpl::new(
+        webhook_stream_sender.clone(),
+        entity_access_service.clone(),
+        webhook_repository.clone(),
+    );
+    let sse_stream_state = webhook::inbound::stream_router::WebhookStreamRouterState::new(
+        sse_stream_service,
+        authorization_state.clone(),
+    );
+    consumer_tracker.spawn({
+        let brokers = config.kafka_brokers.as_ref().to_string();
+        let sender = webhook_stream_sender;
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            loop {
+                let result = tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    result = webhook::inbound::kafka_stream_consumer::run_webhook_stream_consumer(
+                        &brokers,
+                        &sender,
+                    ) => result,
+                };
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+                if let Err(error) = result {
+                    tracing::error!(
+                        error = ?error,
+                        "webhook SSE Kafka consumer stopped"
+                    );
+                    tokio::select! {
+                        biased;
+                        _ = cancellation_token.cancelled() => break,
+                        _ = tokio::time::sleep(Duration::from_secs(1)) => {}
+                    }
+                }
+            }
+        }
+    });
+
     let webhook_ingestion_service =
         webhook::domain::ingestion::WebhookEventIngestionServiceImpl::new(
             entity_access_service.clone(),
@@ -848,6 +923,7 @@ async fn main() -> anyhow::Result<()> {
 
     let sqs_client = Arc::new(sqs_client);
     let conn_gateway_client = Arc::new(conn_gateway_client);
+
     // The OpenAI key is injected as the required `OPENAI_API_KEY` env var
     // (resolved from the `openai-key` secret at deploy time by the infra stack),
     // the same way `document_cognition_service` consumes it. Fail fast if it's
@@ -895,9 +971,55 @@ async fn main() -> anyhow::Result<()> {
         )),
     );
 
-    // Wire Macro AI to react to mentions. The router posts replies through the
-    // channel service we just built and runs the agent loop in-process with the
-    // same pre-configured toolset used by other AI hosts.
+    let teammate_dms_brokers = config.kafka_brokers.as_ref().to_string();
+    consumer_tracker.spawn({
+        let cancellation_token = consumer_cancellation_token.clone();
+        let channels = (*channels_service).clone();
+        async move {
+            loop {
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                tracing::info!("starting teammate DM consumer");
+                let result = channels::inbound::teammate_dms_consumer::run_teammate_dms_consumer(
+                    &teammate_dms_brokers,
+                    channels.clone(),
+                    cancellation_token.cancelled(),
+                )
+                .await;
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                match result {
+                    Ok(()) => tracing::error!("teammate DM consumer exited unexpectedly"),
+                    Err(error) => {
+                        tracing::error!(
+                            error = ?error,
+                            "teammate DM consumer exited unexpectedly"
+                        );
+                    }
+                }
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(5)) => {}
+                }
+            }
+        }
+    });
+
+    // Wire Macro AI to react to mentions with the classic in-channel chat
+    // reply. The router posts replies through the channel service we just
+    // built and runs the agent loop in-process with the channel-bot toolset:
+    // a channel has no composer to finish a chat-deferred user tool in, so
+    // calendar event creation executes directly and SendEmail is unavailable.
+    // Agent sessions belong to a different bot entirely
+    // (`bot_id::MACRO_NEW_BOT_ID`, served by the harness), so the two paths
+    // can never answer the same mention.
     let mut macro_agent_tool_context =
         ai_tools::build_tool_service_context_from_env(db.clone(), event_broker_tracker.clone())
             .await
@@ -912,12 +1034,25 @@ async fn main() -> anyhow::Result<()> {
             std::sync::Arc::new(SpawnedChannelEventDispatcher::new(channel_side_effects)),
             lexical_client.clone(),
         );
-    let macro_agent_tools = ai_tools::all_tools();
+    let macro_agent_tools = ai_tools::tools_for(ai_tools::AiHost::ChannelBot);
     let bot_trigger_router = channel_bots::inbound::BotTriggerRouter::new(
         channels_service.clone(),
         Arc::new(channel_bots::outbound::AgentLoopResponder::new(
             macro_agent_tool_context,
             macro_agent_tools,
+        )),
+        Arc::new(
+            channel_bots::domain::trigger_detector::MentionOrInferredDetector::new(
+                channels_service.clone(),
+                Arc::new(channel_bots::outbound::FastModelTriggerClassifier::new(
+                    ai_usage::pg_recorder(db.clone()),
+                )),
+            ),
+        ),
+        Arc::new(channel_bots::outbound::PrimaryCalendarTimeZones::new(
+            Arc::new(calendar_events::domain::service::CalendarService::new(
+                calendar_events::outbound::pg::PgCalendarRepository::new(readonly_db.clone()),
+            )),
         )),
     );
     bot_trigger_router.spawn(bot_trigger_receiver);
@@ -934,6 +1069,15 @@ async fn main() -> anyhow::Result<()> {
     // pool handle, so cloning is cheap and `SoupImpl` needs an owned service.
     let reminders_service = RemindersServiceImpl::new(PgRemindersRepo::new(db.clone()));
 
+    let collab_surface_service = CollabSurfaceServiceImpl::new(
+        Arc::new(PgCollabSurfaceRepo::new(db.clone())),
+        Arc::new(LexicalSyncSurfaceInitializer::new(
+            lexical_client.as_ref().clone(),
+            sync_service_client.as_ref().clone(),
+        )),
+        config.document_permission_jwt.as_ref().to_string(),
+    );
+
     let soup_service = Arc::new(SoupImpl::new(
         PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
         frecency_service,
@@ -944,6 +1088,46 @@ async fn main() -> anyhow::Result<()> {
         foreign_entity_service_for_soup,
         reminders_service.clone(),
     ));
+
+    let websocket_notification_consumer_service =
+        Arc::new(WebSocketNotificationConsumerService::new(
+            NotificationTopicConsumer::<model_notifications::NotifEvent>::from_env(
+                config.kafka_brokers.as_ref(),
+            )
+            .map_err(|error| {
+                anyhow::anyhow!("failed to create WebSocket notification topic consumer: {error:?}")
+            })?,
+        ));
+    consumer_tracker.spawn({
+        let service = Arc::clone(&websocket_notification_consumer_service);
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            loop {
+                let result = tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    result = service.run() => result,
+                };
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                let _ = result.inspect_err(|error| {
+                    tracing::error!(
+                        error = ?error,
+                        "WebSocket notification consumer stopped"
+                    );
+                });
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(1)) => {}
+                }
+            }
+        }
+    });
 
     let soup_realtime_service = Arc::new(SoupRealtimeConsumerService::new(
         SoupTopicConsumer::from_env(config.kafka_brokers.as_ref()).map_err(|error| {
@@ -1044,6 +1228,13 @@ async fn main() -> anyhow::Result<()> {
     });
 
     let favorites_service = Arc::new(FavoritesServiceImpl::new(PgFavoritesRepo::new(db.clone())));
+    let favorites_mutation_service = Arc::new(FavoritesMutationServiceImpl::new(
+        favorites_service.clone(),
+        entity_access_service.clone(),
+    ));
+    let user_api_key_service = Arc::new(UserApiKeyServiceImpl::new(PgUserApiKeysRepo::new(
+        db.clone(),
+    )));
     let calendar_state = CalendarRouterState::new(
         Arc::new(calendar_events::domain::service::CalendarService::new(
             calendar_events::outbound::pg::PgCalendarRepository::new(readonly_db.clone()),
@@ -1076,6 +1267,41 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
+    // Calendar event reminder dispatch: same sweep/deliver shape as reminders,
+    // on its own queue. Behind a master switch — when off, the worker drains
+    // the minutely tick so the queue neither backs up nor dead-letters.
+    let calendar_reminder_dispatch_worker = {
+        let queue = SqsCalendarDispatchQueue::new(
+            aws_sdk_sqs::Client::new(&aws_config),
+            calendar_reminder_dispatch_queue.to_string(),
+        );
+        let dispatch_service = CalendarReminderDispatchService::new(
+            calendar_events::outbound::pg::PgCalendarRepository::new(db.clone()),
+            NotificationCalendarReminderNotifier::new((*notification_ingress_service).clone()),
+            queue.clone(),
+        );
+        CalendarReminderDispatchWorker::new(dispatch_service, queue)
+    };
+
+    consumer_tracker.spawn({
+        let cancellation_token = consumer_cancellation_token.clone();
+        let enabled = config.calendar_reminder_dispatch_enabled;
+        async move {
+            if enabled {
+                tracing::info!("starting calendar reminder dispatch worker");
+                calendar_reminder_dispatch_worker
+                    .run(cancellation_token)
+                    .await;
+                tracing::info!("calendar reminder dispatch worker stopped");
+            } else {
+                tracing::info!("calendar reminder dispatch disabled; draining its queue");
+                calendar_reminder_dispatch_worker
+                    .drain(cancellation_token)
+                    .await;
+            }
+        }
+    });
+
     let redis_sha_client = Arc::new(Redis::new(redis_client));
 
     let graphql_entity_mutation_service =
@@ -1087,7 +1313,6 @@ async fn main() -> anyhow::Result<()> {
             Arc::new(email_service.clone()),
             project_service.clone(),
             entity_access_service.clone(),
-            favorites_service.clone(),
             Arc::new(outbound::entity_mutation::DssEntityLifecycleAdapter::new(
                 db.clone(),
                 redis_sha_client.clone(),
@@ -1113,16 +1338,32 @@ async fn main() -> anyhow::Result<()> {
             authorization_state.clone(),
         ),
         favorites_service,
+        favorites_mutation_service,
+        user_api_key_state: UserApiKeyRouterState::new(
+            user_api_key_service,
+            authorization_state.clone(),
+        ),
         reminders_state: RemindersRouterState::new(
             Arc::new(reminders_service),
+            entity_access_service.clone(),
+            authorization_state.clone(),
+        ),
+        collab_surface_state: CollabSurfaceRouterState::new(
+            Arc::new(collab_surface_service),
             entity_access_service.clone(),
             authorization_state.clone(),
         ),
         graphql_soup_schema: complete_graph::build_schema_from_arcs(
             soup_service,
             soup_realtime_service,
+            websocket_notification_consumer_service,
         ),
         graphql_notification_reader,
+        // GraphQL reads the activity log through the readonly pool; the
+        // Kafka consumer's writer-pool repo above is separate on purpose.
+        activity_reader: complete_graph::ActivityPortReader::new(Arc::new(
+            activity::outbound::pg_activity_repo::PgActivityRepo::new(readonly_db.clone()),
+        )),
         graphql_entity_mutation_service,
         github_sync_service: Arc::new(github_sync_service_impl),
         foreign_entity_state,
@@ -1179,15 +1420,26 @@ async fn main() -> anyhow::Result<()> {
             (*entity_access_service).clone(),
             authorization_state.clone(),
         ),
+        harnesses_state: harnesses::inbound::axum_router::HarnessesRouterState::new(
+            harnesses_service,
+            authorization_state.clone(),
+        ),
         channel_bot_webhook_state,
         call_state,
         call_webhook_state,
         webhook_state,
+        sse_stream_state,
         call_internal_state,
         cal_webhook_state,
         entity_access_management_service,
         crm_state: crm::inbound::axum_router::CrmRouterState {
             service: Arc::new(crm_service),
+            stage_service: Arc::new(crm::domain::stages::CrmStageServiceImpl::new(
+                crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
+                crm::outbound::stage_definitions::PropertiesStageDefinitionStore::new(
+                    properties_service.clone(),
+                ),
+            )),
             entity_access_service: entity_access_service.clone(),
             authorization_state: authorization_state.clone(),
         },

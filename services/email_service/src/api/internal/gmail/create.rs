@@ -77,6 +77,7 @@ pub async fn handler(
             link.id,
             link.fusionauth_user_id.as_str(),
             req_body.num_threads,
+            false,
         )
         .await
         .map_err(|e| {

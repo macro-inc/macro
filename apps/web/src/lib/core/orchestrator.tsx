@@ -327,6 +327,22 @@ export type BlockOrchestrator = {
    *  @returns A managed block instance
    */
   createBlockInstance: CreateBlockInstanceFn;
+  /**
+   * Re-file a mounted instance under a new id, keeping the instance itself
+   * alive.
+   *
+   * For a block whose id is not knowable at mount time: the agent block opens
+   * on a client-minted placeholder and learns its real session id when the
+   * create resolves (`features/block-agent/context/pending-session.ts`). The
+   * mount must survive that — the user is already typing into it — so the
+   * registry is re-keyed rather than the block re-created. The element keeps
+   * the id it closed over, so `useBlockId()` still reports the placeholder;
+   * that is what the block resolves through the pending registry.
+   *
+   * A no-op when nothing is registered under `fromId`, or when `toId` is
+   * already taken.
+   */
+  rekeyBlockInstance: (type: BlockName, fromId: string, toId: string) => void;
 };
 
 export function createBlockOrchestrator(): BlockOrchestrator {
@@ -359,9 +375,17 @@ export function createBlockOrchestrator(): BlockOrchestrator {
     return ownedHandle;
   };
 
+  /** Placeholder id -> the id its instance was re-filed under. */
+  const rekeyed = new Map<string, string>();
+
   const deregisterBlock = (type: BlockName, id: string) => {
-    instances.delete(keyOf(type, id));
-    setBlocks(id, undefined!);
+    // The element closed over the id it mounted with, so a re-keyed instance
+    // asks to be torn down under its placeholder. Follow the move, or the
+    // real entry outlives the mount.
+    const current = rekeyed.get(keyOf(type, id)) ?? id;
+    rekeyed.delete(keyOf(type, id));
+    instances.delete(keyOf(type, current));
+    setBlocks(current, undefined!);
   };
 
   const getBlockHandle: GetBlockHandleFn = async function (
@@ -424,9 +448,29 @@ export function createBlockOrchestrator(): BlockOrchestrator {
     return instance;
   }
 
+  function rekeyBlockInstance(type: BlockName, fromId: string, toId: string) {
+    if (fromId === toId) return;
+    const from = keyOf(type, fromId);
+    const to = keyOf(type, toId);
+    const instance = instances.get(from);
+    if (!instance || instances.has(to)) return;
+
+    instances.delete(from);
+    instances.set(to, { ...instance, key: to, id: toId });
+    rekeyed.set(from, toId);
+
+    // The handle's `block.id` is what `getBlockHandle` resolves and what
+    // method registrations are looked up by, so it moves with the instance.
+    const existing = (blocks as any)[fromId] as BlockWithHandle | undefined;
+    if (!existing) return;
+    setBlocks(fromId, undefined!);
+    setBlocks(toId, { ...existing, id: toId });
+  }
+
   return {
     getBlockHandle,
     createBlockInstance: createManagedBlockInstance,
+    rekeyBlockInstance,
   };
 }
 

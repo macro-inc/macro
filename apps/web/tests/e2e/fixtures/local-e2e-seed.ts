@@ -33,6 +33,9 @@ type SeedManifest = {
       };
     };
   };
+  activity: {
+    seededEventCount: number;
+  };
   navigation: {
     genericChannelMention: {
       sourceChannelId: string;
@@ -78,7 +81,8 @@ export type SeedDocument = {
   document_id: string;
   document_name: string;
   file_name: string;
-  is_public: boolean;
+  link_share: 'PUBLIC' | 'TEAM' | null;
+  link_share_access_level: 'view' | 'comment' | 'edit' | null;
 };
 
 export type SeedChannel = {
@@ -232,5 +236,8 @@ export const localE2ESeed = {
       `channel ${manifest.navigation.unreadMessageNavigation.sourceChannelId}`
     ),
     unreadChannelNotificationId: manifest.navigation.unreadNotificationId,
+  },
+  activity: {
+    seededEventCount: manifest.activity.seededEventCount,
   },
 } as const;

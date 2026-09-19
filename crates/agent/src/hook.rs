@@ -1,13 +1,13 @@
-/// A [`rig_core::agent::PromptHook`] that bridges RIG lifecycle events into
+/// A [`rig_agent::agent::AgentHook`] that bridges rig lifecycle events into
 /// [`StreamPart`] items sent through a channel.
 use crate::AgentError;
 use crate::stream::{McpInfo, StreamPart, ToolCall, ToolResponse, Usage};
 use ai_toolset::{SearchableTool, ToolInfo};
-use rig_core::agent::{
-    HookAction, InvalidToolCallContext, InvalidToolCallHookAction, PromptHook, ToolCallHookAction,
+use rig_agent::agent::hook::{
+    AgentHook, HookContext, InvalidToolCallAction, InvalidToolCallContext, ObservationAction,
+    StreamResponseFinish, TextDelta, ToolCallAction, ToolResultAction, ToolResultEvent,
 };
-use rig_core::completion::{CompletionModel, GetTokenUsage};
-use rig_core::message::Message;
+use rig_agent::tool::ToolOutput;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
@@ -29,6 +29,60 @@ pub type ToolRouter = Arc<dyn Fn(&str) -> Option<ToolInfo> + Send + Sync>;
 /// session's context); context-erased so the bridge stays generic-free.
 pub type RegisterFn =
     Arc<dyn Fn(Vec<SearchableTool>) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>;
+
+/// A user tool the model called, as the host's [`UserToolFinisher`] sees it.
+///
+/// A user tool (`ai_toolset::UserTool`) answers `"PendingUserExecution"` and
+/// does nothing: the host is meant to finish it - let the user review the
+/// call, then execute or reject it. Chat does that after the turn, over HTTP;
+/// a host that can reach its user mid-turn does it here, before the model
+/// reads the result.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingUserTool {
+    /// The tool's name as the toolset knows it.
+    pub tool_name: String,
+    /// The call's id as the stream reported it ([`ToolCall::id`]): the
+    /// provider's, or rig's correlation id when the provider gave none. The
+    /// id the host's transcript shows the call under.
+    pub tool_call_id: String,
+    /// The arguments the model called the tool with.
+    pub args: serde_json::Value,
+}
+
+/// What a finished user tool comes back as, in place of the pending answer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FinishedUserTool {
+    /// The tool's own result (`UserToolResponse<T>` as JSON: the user's
+    /// action, or their rejection).
+    Result(serde_json::Value),
+    /// Finishing failed; the description is what the model reads.
+    Error(String),
+}
+
+/// Finishes a user tool inside the turn. Returns `None` to leave the pending
+/// answer as it is - the host will finish the call some other way, or not at
+/// all. Context-erased for the same reason as [`RegisterFn`].
+pub type UserToolFinisher = Arc<
+    dyn Fn(PendingUserTool) -> Pin<Box<dyn Future<Output = Option<FinishedUserTool>> + Send>>
+        + Send
+        + Sync,
+>;
+
+/// Everything the session hands the stream bridge besides the request context.
+#[derive(Clone)]
+pub struct BridgeInputs {
+    /// Resolves tool names to their MCP routing info.
+    pub routing: ToolRouter,
+    /// Tools `SearchTools` asked to load, awaiting registration.
+    pub loaded_buffer: Arc<Mutex<Vec<SearchableTool>>>,
+    /// Registers loaded tools with the live tool server.
+    pub register_loaded: RegisterFn,
+    /// Finishes user tools mid-turn, when the host can.
+    pub user_tool_finisher: Option<UserToolFinisher>,
+}
+
+/// The answer a user tool gives when it has not been finished.
+const PENDING_USER_EXECUTION: &str = "PendingUserExecution";
 
 static CANCELLED_REASON: &str = "user cancelled";
 
@@ -56,6 +110,9 @@ pub struct StreamBridge {
     /// [`Self::on_invalid_tool_call`] to recover calls to tools the model
     /// discovered but never loaded.
     searchable_catalog: Arc<Vec<SearchableTool>>,
+    /// Finishes a user tool's pending answer before the model reads it, on
+    /// hosts that can reach the user mid-turn (see [`UserToolFinisher`]).
+    user_tool_finisher: Option<UserToolFinisher>,
     /// the user has requested the stream stop
     cancel: CancellationToken,
 }
@@ -63,21 +120,25 @@ pub struct StreamBridge {
 impl StreamBridge {
     /// Create a bridge and its receiving half.
     ///
-    /// `routing` resolves tool names to [`ToolInfo`] so MCP calls can be
+    /// `inputs.routing` resolves tool names to [`ToolInfo`] so MCP calls can be
     /// tagged as such (see [`ToolRouter`]). `loaded_buffer` / `register_loaded`
     /// power on-demand tool loading: `SearchTools` pushes matches into the
     /// buffer, and the bridge registers them after the tool result, before the
     /// next turn (see [`Self::on_tool_result`]).
     pub fn channel(
-        routing: ToolRouter,
-        loaded_buffer: Arc<Mutex<Vec<SearchableTool>>>,
-        register_loaded: RegisterFn,
+        inputs: BridgeInputs,
         searchable_catalog: Arc<Vec<SearchableTool>>,
         cancel: CancellationToken,
     ) -> (
         Self,
         mpsc::UnboundedReceiver<Result<StreamPart, AgentError>>,
     ) {
+        let BridgeInputs {
+            routing,
+            loaded_buffer,
+            register_loaded,
+            user_tool_finisher,
+        } = inputs;
         let (tx, rx) = mpsc::unbounded_channel();
         (
             Self {
@@ -86,6 +147,7 @@ impl StreamBridge {
                 loaded_buffer,
                 register_loaded,
                 searchable_catalog,
+                user_tool_finisher,
                 cancel,
             },
             rx,
@@ -102,19 +164,34 @@ impl StreamBridge {
     }
 }
 
-impl<M> PromptHook<M> for StreamBridge
-where
-    M: CompletionModel,
-    M::StreamingResponse: GetTokenUsage + Send + Sync,
-{
-    async fn on_text_delta(&self, text_delta: &str, _aggregated_text: &str) -> HookAction {
-        let _ = self.tx.send(Ok(StreamPart::Content(text_delta.to_owned())));
+/// The model-visible presentation of a tool result as a single JSON value,
+/// mirroring what the pre-0.41 string-based hook saw: our adapters return
+/// structured JSON on success, so a JSON content block yields its value and
+/// plain text is tried as JSON for compatibility.
+fn presentation_json(presentation: &ToolOutput) -> Option<serde_json::Value> {
+    if let Some(json) = presentation.as_json() {
+        return Some(json.clone());
+    }
+    presentation
+        .as_text()
+        .and_then(|text| serde_json::from_str(text).ok())
+}
+
+/// Whether a tool's JSON result is a user tool's unfinished answer.
+fn is_pending_user_execution(json: &serde_json::Value) -> bool {
+    json.as_str() == Some(PENDING_USER_EXECUTION)
+}
+
+/// The hook bodies, as inherent methods so tests can exercise them directly:
+/// rig's [`HookContext`] has no public constructor, so the [`AgentHook`] impl
+/// below is a thin delegation layer over these.
+impl StreamBridge {
+    pub(crate) fn handle_text_delta(&self, delta: &str) -> ObservationAction {
+        let _ = self.tx.send(Ok(StreamPart::Content(delta.to_owned())));
         if self.cancel.is_cancelled() {
-            HookAction::Terminate {
-                reason: CANCELLED_REASON.into(),
-            }
+            ObservationAction::stop(CANCELLED_REASON)
         } else {
-            HookAction::Continue
+            ObservationAction::Continue
         }
     }
 
@@ -129,50 +206,49 @@ where
     /// is rebuilt from the live tool server, so the retried call is valid. For
     /// names that exist nowhere, the retry feedback points the model at
     /// `SearchTools` instead of failing the stream on a hallucinated name.
-    async fn on_invalid_tool_call(
+    pub(crate) async fn handle_invalid_tool_call(
         &self,
-        context: &InvalidToolCallContext,
-    ) -> InvalidToolCallHookAction {
+        tool_name: &str,
+    ) -> Option<InvalidToolCallAction> {
         match self
             .searchable_catalog
             .iter()
-            .find(|tool| tool.name == context.tool_name)
+            .find(|tool| tool.name == tool_name)
         {
             Some(tool) => {
                 (self.register_loaded)(vec![tool.clone()]).await;
                 tracing::info!(
-                    tool = %context.tool_name,
+                    tool = %tool_name,
                     "auto-loaded searchable tool the model called without loading"
                 );
-                InvalidToolCallHookAction::retry(format!(
-                    "The tool `{}` exists but was not loaded when you called it. \
-                     It is loaded now — call it again with the same arguments.",
-                    context.tool_name
-                ))
+                Some(InvalidToolCallAction::retry(format!(
+                    "The tool `{tool_name}` exists but was not loaded when you called it. \
+                     It is loaded now — call it again with the same arguments."
+                )))
             }
-            None => InvalidToolCallHookAction::retry(format!(
-                "Unknown tool `{}`: no tool with that name exists in this session \
+            None => Some(InvalidToolCallAction::retry(format!(
+                "Unknown tool `{tool_name}`: no tool with that name exists in this session \
                  or its connected integrations. Use `SearchTools` to find the \
-                 right tool, or continue without it.",
-                context.tool_name
-            )),
+                 right tool, or continue without it."
+            ))),
         }
     }
 
-    async fn on_tool_call(
+    pub(crate) fn handle_tool_call(
         &self,
         tool_name: &str,
-        tool_call_id: Option<String>,
+        tool_call_id: Option<&str>,
         internal_call_id: &str,
         args: &str,
-    ) -> ToolCallHookAction {
+    ) -> ToolCallAction {
         if self.cancel.is_cancelled() {
-            return ToolCallHookAction::Terminate {
-                reason: CANCELLED_REASON.into(),
-            };
+            return ToolCallAction::stop(CANCELLED_REASON);
         }
-        let json = serde_json::from_str(args).unwrap_or(serde_json::Value::Null);
-        let id = tool_call_id.unwrap_or_else(|| internal_call_id.to_owned());
+        let json = serde_json::from_str(args)
+            .ok()
+            .filter(serde_json::Value::is_object)
+            .unwrap_or_else(|| serde_json::json!({}));
+        let id = tool_call_id.unwrap_or(internal_call_id).to_owned();
         let mcp = (self.routing)(tool_name).map(|i| match i {
             ToolInfo::ExternalTool {
                 service_name,
@@ -190,17 +266,18 @@ where
             json,
             mcp,
         })));
-        ToolCallHookAction::Continue
+        ToolCallAction::Run
     }
 
-    async fn on_tool_result(
+    pub(crate) async fn handle_tool_result(
         &self,
         tool_name: &str,
-        tool_call_id: Option<String>,
+        tool_call_id: Option<&str>,
         internal_call_id: &str,
-        _args: &str,
-        result: &str,
-    ) -> HookAction {
+        args: &str,
+        presentation: &ToolOutput,
+        is_success: bool,
+    ) -> ToolResultAction {
         // Register any tools `SearchTools` asked to load. This fires after the
         // tool executes and before the next turn's request is built, so loaded
         // tools are advertised + callable next turn. (The lock guard is dropped
@@ -213,34 +290,120 @@ where
             (self.register_loaded)(pending).await;
         }
 
-        let id = tool_call_id.unwrap_or_else(|| internal_call_id.to_owned());
-        let response = match serde_json::from_str::<serde_json::Value>(result) {
-            Ok(json) => ToolResponse::Json {
+        let id = tool_call_id.unwrap_or(internal_call_id).to_owned();
+        let json = if is_success {
+            presentation_json(presentation)
+        } else {
+            None
+        };
+
+        // A user tool's pending answer is finished here when the host can:
+        // the user reviews the call while the turn waits, and the model reads
+        // what they decided instead of a "pending" it would take for success.
+        if let Some(finisher) = &self.user_tool_finisher
+            && json.as_ref().is_some_and(is_pending_user_execution)
+        {
+            let call = PendingUserTool {
+                tool_name: tool_name.to_owned(),
+                tool_call_id: id.clone(),
+                args: serde_json::from_str(args).unwrap_or(serde_json::Value::Null),
+            };
+            match finisher(call).await {
+                Some(FinishedUserTool::Result(result)) => {
+                    let _ = self
+                        .tx
+                        .send(Ok(StreamPart::ToolResponse(ToolResponse::Json {
+                            id,
+                            json: result.clone(),
+                            name: tool_name.to_owned(),
+                        })));
+                    return ToolResultAction::Rewrite(ToolOutput::json(result));
+                }
+                Some(FinishedUserTool::Error(description)) => {
+                    let _ = self.tx.send(Ok(StreamPart::ToolResponse(ToolResponse::Err {
+                        id,
+                        name: tool_name.to_owned(),
+                        description: description.clone(),
+                    })));
+                    return ToolResultAction::rewrite(description);
+                }
+                None => {}
+            }
+        }
+
+        let response = if let Some(json) = json {
+            ToolResponse::Json {
                 id,
                 json,
                 name: tool_name.to_owned(),
-            },
-            Err(_) => ToolResponse::Err {
+            }
+        } else {
+            ToolResponse::Err {
                 id,
                 name: tool_name.to_owned(),
-                description: result.to_owned(),
-            },
+                description: presentation.render(),
+            }
         };
         let _ = self.tx.send(Ok(StreamPart::ToolResponse(response)));
-        HookAction::Continue
+        ToolResultAction::Keep
     }
 
-    async fn on_stream_completion_response_finish(
+    pub(crate) fn handle_usage(&self, usage: rig_core::completion::Usage) -> ObservationAction {
+        let _ = self.tx.send(Ok(StreamPart::Usage(Usage {
+            input_tokens: usage.input_tokens,
+            output_tokens: usage.output_tokens,
+        })));
+        ObservationAction::Continue
+    }
+}
+
+impl AgentHook for StreamBridge {
+    async fn on_text_delta(&self, _ctx: &HookContext, event: TextDelta<'_>) -> ObservationAction {
+        self.handle_text_delta(event.delta)
+    }
+
+    async fn on_invalid_tool_call(
         &self,
-        _prompt: &Message,
-        response: &M::StreamingResponse,
-    ) -> HookAction {
-        if let Some(usage) = response.token_usage() {
-            let _ = self.tx.send(Ok(StreamPart::Usage(Usage {
-                input_tokens: usage.input_tokens,
-                output_tokens: usage.output_tokens,
-            })));
-        }
-        HookAction::Continue
+        _ctx: &HookContext,
+        event: &InvalidToolCallContext,
+    ) -> Option<InvalidToolCallAction> {
+        self.handle_invalid_tool_call(&event.tool_name).await
+    }
+
+    async fn on_tool_call(
+        &self,
+        _ctx: &HookContext,
+        event: rig_agent::agent::hook::ToolCall<'_>,
+    ) -> ToolCallAction {
+        self.handle_tool_call(
+            event.tool_name,
+            event.tool_call_id,
+            event.internal_call_id,
+            event.args,
+        )
+    }
+
+    async fn on_tool_result(
+        &self,
+        _ctx: &HookContext,
+        event: ToolResultEvent<'_>,
+    ) -> ToolResultAction {
+        self.handle_tool_result(
+            event.tool_name,
+            event.tool_call_id,
+            event.internal_call_id,
+            event.args,
+            event.presentation,
+            event.raw_result.is_success(),
+        )
+        .await
+    }
+
+    async fn on_stream_response_finish(
+        &self,
+        _ctx: &HookContext,
+        event: StreamResponseFinish<'_>,
+    ) -> ObservationAction {
+        self.handle_usage(event.usage)
     }
 }

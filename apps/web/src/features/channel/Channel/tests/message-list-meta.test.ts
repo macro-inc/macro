@@ -84,6 +84,32 @@ describe('buildChannelMessageListMeta', () => {
     expect(meta.m3.isGroupedWithPrevious).toBe(true);
   });
 
+  it('marks rows above a grouped thread fork with threadRailBelow', () => {
+    const messages = [
+      createMessage('m1', '2026-02-20T09:00:00.000Z'),
+      createMessage('m2', '2026-02-20T09:01:00.000Z'),
+      {
+        ...createMessage('m3', '2026-02-20T09:02:00.000Z'),
+        thread: {
+          preview: [],
+          reply_count: 2,
+          latest_reply_at: '2026-02-20T09:03:00.000Z',
+        },
+      },
+      createMessage('m4', '2026-02-20T10:30:00.000Z'),
+    ];
+
+    const meta = buildChannelMessageListMeta(messages, () => false, true);
+
+    // m3 is grouped into the run but owns a thread: the rail passes down
+    // through m1 (run header) and m2 to reach it.
+    expect(meta.m3.isGroupedWithPrevious).toBe(true);
+    expect(meta.m1.threadRailBelow).toBe(true);
+    expect(meta.m2.threadRailBelow).toBe(true);
+    expect(meta.m3.threadRailBelow).toBeFalsy();
+    expect(meta.m4.threadRailBelow).toBeFalsy();
+  });
+
   it('does not group agent messages triggered by different users, despite a shared bot sender_id', () => {
     const botId = 'bot|00000000-0000-0000-0000-000000000000';
     const agentSender = (triggeredBy: string): ApiMessageSender => ({

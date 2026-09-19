@@ -1,3 +1,4 @@
+import { createTabLeaderSignal } from '@core/cross-tab/tab-leader';
 import { makePersisted } from '@solid-primitives/storage';
 import {
   type Accessor,
@@ -8,7 +9,6 @@ import {
   type Setter,
   useContext,
 } from 'solid-js';
-import { createTabLeaderSignal } from '../notification-election';
 import type {
   PlatformNotificationData,
   PlatformNotificationHandle,

@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT code, requested_name, host_info, requested_scope, status, created_at,\n                   expires_at\n            FROM harness_pairing_requests\n            WHERE code = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "requested_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "host_info",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "requested_scope",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "expires_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "462894fae868528fbf10226edf99171a52bdcd0377f40616c3c304ab6a106f25"
+}

@@ -76,10 +76,11 @@ pub async fn handler(
             server_error("unable to get identity provider id")
         })?;
 
-    // Get-or-create the dedicated mailbox user. The signup webhook no-ops here because the
-    // verified MacroDB User for this mailbox already exists (created during promotion), so no
-    // Stripe customer is provisioned. Freshly created users start active; they are
-    // deactivated once the grant is in place.
+    // Get-or-create the dedicated mailbox user. In Develop, the mailbox email must be on
+    // the signup allowlist; the create-user webhook then no-ops because the verified
+    // MacroDB User for this mailbox already exists (created during promotion), so no Stripe
+    // customer is provisioned. Freshly created users start active; they are deactivated once
+    // the grant is in place.
     let shared_user_id = match auth.get_user_id_by_email(&email).await {
         Ok(id) => id,
         Err(fusionauth::error::FusionAuthClientError::UserDoesNotExist) => {
@@ -88,7 +89,7 @@ pub async fn handler(
                 password: Cow::Owned(uuid::Uuid::new_v4().to_string()),
                 username: Some(Cow::Borrowed(&email)),
             };
-            let created = match &desired_user_id {
+            let created = match desired_user_id.as_deref() {
                 Some(id) => {
                     auth.create_user_with_id(id, user, true, IpAddr::V4(Ipv4Addr::LOCALHOST))
                         .await

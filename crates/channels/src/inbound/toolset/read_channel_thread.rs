@@ -7,6 +7,7 @@ use super::types::{
 };
 use crate::domain::ports::ChannelService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use entity_access::domain::ports::EntityAccessService;
@@ -112,6 +113,10 @@ pub struct ReadChannelThreadResponse {
     pub channel_context: Option<Vec<ToolChannelMessage>>,
     /// Information about omitted or truncated content.
     pub omissions: Vec<ToolOmission>,
+}
+
+impl ToolAnnotated for ReadChannelThread {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Read channel thread");
 }
 
 #[async_trait]

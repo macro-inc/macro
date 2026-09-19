@@ -1,3 +1,4 @@
+import { EntityActivitySectionConditional } from '@app/features/activity/views/entity-activity-section';
 import {
   EntityPropertiesSection,
   EntityTagsSection,
@@ -12,6 +13,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
+import { ProgressMeter } from '@core/component/LexicalMarkdown/component/status/Progress';
 import { Wordcount } from '@core/component/LexicalMarkdown/component/status/Wordcount';
 import {
   $getPinnedProperties,
@@ -22,7 +24,8 @@ import { Notifications } from '@core/component/Notifications';
 import { References } from '@core/component/References';
 import { UserIcon } from '@core/component/UserIcon';
 import {
-  ENABLE_HISTORY_COMPONENT,
+  enableHistoryComponent,
+  isFeatureEnabled,
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
@@ -121,11 +124,16 @@ export function MarkdownSidePanelSections(
           <StatsSectionContent />
         </SidePanel.Section>
       </Show>
-      <Show when={ENABLE_HISTORY_COMPONENT()}>
+      <Show when={isFeatureEnabled(enableHistoryComponent)}>
         <SidePanel.Section id="history" title="History" order={35}>
           <HistorySectionContent />
         </SidePanel.Section>
       </Show>
+      <EntityActivitySectionConditional
+        entityId={blockId}
+        entityType={propertiesEntityType()}
+        order={40}
+      />
       <GithubSectionConditional documentId={blockId} isTask={isTask()} />
       <NotificationsSectionConditional entity={entity()} />
       <ReferencesSectionConditional documentId={blockId} />
@@ -231,7 +239,7 @@ function HistorySkeleton() {
       aria-hidden="true"
       class="hidden min-w-0 flex-col gap-2.5 overflow-hidden md:flex"
     >
-      <div class="skeleton-shimmer h-12 w-full rounded-md bg-ink/3" />
+      <div class="skeleton-shimmer h-12 w-full rounded-md bg-skeleton" />
     </div>
   );
 }
@@ -386,7 +394,7 @@ function FolderLink(props: { projectId: string; projectName: string }) {
   return (
     <span
       {...navHandlers}
-      class="pointer-events-auto min-w-0 truncate py-0.5 rounded-xs hover:bg-hover focus:bg-active"
+      class="pointer-events-auto min-w-0 truncate py-0.5 rounded-xs text-link hover:text-link-hover hover:bg-hover focus:bg-active"
     >
       <span class="relative top-[0.125em] size-[1em] inline-flex mx-1">
         <EntityIcon targetType="project" size="fill" />
@@ -517,6 +525,15 @@ function StatsSectionContent() {
             <SidePanel.Row label="Characters">
               <Wordcount.Characters />
             </SidePanel.Row>
+            <Show when={md.progressStats}>
+              {(progressStats) => (
+                <Show when={progressStats().total > 0}>
+                  <SidePanel.Row label="Progress">
+                    <ProgressMeter stats={progressStats()} />
+                  </SidePanel.Row>
+                </Show>
+              )}
+            </Show>
           </SidePanel.Grid>
         </Wordcount.Root>
       )}

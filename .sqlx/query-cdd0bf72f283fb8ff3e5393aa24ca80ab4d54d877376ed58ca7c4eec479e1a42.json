@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE reminder\n            SET next_run_at = $2,\n                -- Cleared only when the owner was notified. A firing they can\n                -- see supersedes their \"done\" on the previous one; a firing\n                -- rolled forward in silence supersedes nothing.\n                completed_at = CASE WHEN $4::bool THEN NULL ELSE completed_at END,\n                updated_at = now()\n            WHERE id = $1 AND next_run_at = $3\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cdd0bf72f283fb8ff3e5393aa24ca80ab4d54d877376ed58ca7c4eec479e1a42"
+}

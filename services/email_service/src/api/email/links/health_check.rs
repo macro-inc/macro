@@ -2,9 +2,7 @@ use crate::api::context::{ApiContext, AuthorizationService};
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json, Response};
-use email_service::util::gmail::auth::{
-    fetch_token_or_mark_reauth_no_cache, is_reauth_required_error,
-};
+use email_api_client::domain::models::{EmailApiError, TokenFreshness};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::{EmptyResponse, ErrorResponse};
 use models_email::email::service::pubsub::LinkManagerMessage;
@@ -38,7 +36,7 @@ impl IntoResponse for HealthCheckError {
 /// against the auth service and records the result on each link. A grant that died
 /// while the caller was inactive is detected here within minutes instead of waiting on
 /// the daily refresh sweep; the side effects (clearing or setting the reauth flag, and
-/// the one-time reauth fan-out) are handled by `fetch_token_or_mark_reauth_no_cache`.
+/// the one-time reauth fan-out) are handled by the email service token source.
 ///
 /// Probes run in the background and the response returns immediately to stay off the
 /// load path; each persisted flag is picked up by the next links read. Probes are
@@ -82,19 +80,15 @@ pub async fn health_check_handler(
                 return;
             }
 
-            let probe = fetch_token_or_mark_reauth_no_cache(
-                &link,
-                &ctx.db,
-                &ctx.redis_client,
-                &ctx.auth_service_client,
-                &ctx.sqs_client,
-            )
-            .await;
+            let probe = ctx
+                .email_api
+                .get_access_token(link.id, TokenFreshness::Fresh)
+                .await;
 
-            let Err(e) = probe else { return };
+            let Err(error) = probe else { return };
 
-            if !is_reauth_required_error(&e) {
-                tracing::debug!(error=?e, link_id=%link.id, "Health probe token fetch failed");
+            if !matches!(error, EmailApiError::AuthRequired) {
+                tracing::debug!(error=?error, link_id=%link.id, "Health probe token fetch failed");
                 return;
             }
 

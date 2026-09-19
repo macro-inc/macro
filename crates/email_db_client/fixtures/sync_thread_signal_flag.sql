@@ -15,7 +15,9 @@
 --   override (no address exception) forces noise.
 -- Thread d207 (flag=false): draft with a promotions label — drafts are signal.
 -- Thread d208 (flag=true, correct): promotions message + macro draft — the
---   draft is the only signal message; discarding it must flip the flag.
+--   draft is the only signal message; discarding it must flip the flag and
+--   deflate the draft-inflated metadata (inbox_visible,
+--   latest_inbound_message_ts — see the UPDATE at the bottom).
 
 INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active, created_at, updated_at)
 VALUES ('00000000-0000-0000-0000-000000000d01', 'macro|sigflag_user@example.com', '00000000-0000-0000-0000-000000000d01',
@@ -85,3 +87,10 @@ VALUES ('00000000-0000-0000-0000-00000000d502', '00000000-0000-0000-0000-0000000
        ('00000000-0000-0000-0000-00000000d506', '00000000-0000-0000-0000-0000000bd002'),
        ('00000000-0000-0000-0000-00000000d508', '00000000-0000-0000-0000-0000000bd002'),
        ('00000000-0000-0000-0000-00000000d509', '00000000-0000-0000-0000-0000000bd002');
+
+-- Saving d208's macro draft left the thread's metadata draft-inflated:
+-- drafts count toward latest_inbound_message_ts (and inbox_visible, already
+-- true above). Discarding the draft must reset both.
+UPDATE email_threads
+SET latest_inbound_message_ts = '2025-01-05 19:00:00 +00:00'
+WHERE id = '00000000-0000-0000-0000-00000000d208';

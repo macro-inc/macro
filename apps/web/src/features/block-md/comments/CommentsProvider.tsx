@@ -198,7 +198,13 @@ export const CommentsProvider: VoidComponent<{
       }
     }
 
-    activeCommentThreadSignal.set(null);
+    // Keep an explicitly activated thread (e.g. the touch toolbar's
+    // "Show comment") active while the caret still sits in its mark — this
+    // effect re-runs on every editor update, and clobbering it would snap
+    // the comment drawer shut right after it opens.
+    activeCommentThreadSignal.set((current) =>
+      current != null && threadIds.includes(current) ? current : null
+    );
     highlightedCommentThreadsSignal.set(threadIds);
   });
 

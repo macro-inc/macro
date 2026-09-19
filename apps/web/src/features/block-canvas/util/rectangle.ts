@@ -144,9 +144,10 @@ const rectangleMethods = {
   },
 
   alignToTarget(
+    this: Rectangle,
     target: Rectangle,
     opts: { x?: 'left' | 'center' | 'right'; y: 'top' | 'center' | 'bottom' }
-  ) {
+  ): Rectangle {
     let x = this.x;
     let y = this.y;
 

@@ -2,6 +2,7 @@ import type {
   GetChatHistoryHandlerResponses,
   GetChatResponses,
 } from '../../../generated/cognition/types.gen';
+import { type Mentionable, type MentionPart, wrapXml } from '../../mentions';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { PropertiedEntity } from '../entity';
@@ -12,7 +13,7 @@ type ChatDetail = GetChatResponses[200]['chat'];
 type ChatHistory = GetChatHistoryHandlerResponses[200]['conversation'];
 
 /** A Macro AI chat. */
-export class Chat extends PropertiedEntity<ChatDetail> {
+export class Chat extends PropertiedEntity<ChatDetail> implements Mentionable {
   /** Favorites identify chats as `chat`. */
   readonly entityType = 'chat';
 
@@ -125,4 +126,16 @@ export class Chat extends PropertiedEntity<ChatDetail> {
     type: 'chat',
     make: (client, hit) => new Chat(client, hit.chat_id),
   });
+
+  toMention(): MentionPart {
+    return {
+      tag: wrapXml('m-document-mention', {
+        documentId: this.id,
+        documentName: this.detail.peek()?.name ?? '',
+        blockName: 'chat',
+        blockParams: {},
+      }),
+      mention: { entity_type: 'chat', entity_id: this.id },
+    };
+  }
 }

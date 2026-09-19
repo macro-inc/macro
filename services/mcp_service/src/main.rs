@@ -6,6 +6,7 @@
 
 mod config;
 mod context;
+mod markdown_images;
 mod tool_service;
 use anyhow::Context;
 use config::Config;
@@ -41,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
     // Create the MCP service with authenticated tool handler
     let mcp_service = StreamableHttpService::new(
         move || {
-            let tools = ai_tools::mcp_tools();
+            let tools = ai_tools::tools_for(ai_tools::AiHost::Mcp);
             Ok(AuthenticatedToolService::new(
                 tools.toolset,
                 context.tool_context.clone(),
@@ -54,6 +55,8 @@ async fn main() -> anyhow::Result<()> {
                 context.mcp_public_host.clone(),
                 "localhost".into(),
                 "127.0.0.1".into(),
+                "gateway.macro.com".into(),
+                "dev-gateway.macro.com".into(),
             ]);
             config.stateful_mode = false;
             config.json_response = true;

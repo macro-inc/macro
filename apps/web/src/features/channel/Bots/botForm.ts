@@ -11,6 +11,7 @@ const botFormSchema = z.object({
     .regex(/^[a-z0-9_-]+$/, "Use lowercase letters, numbers, '-' or '_' only."),
   description: z.string().trim().max(500),
   avatarUrl: z.string().trim(),
+  hasAgent: z.boolean(),
 });
 
 export type BotFormValues = z.infer<typeof botFormSchema>;
@@ -21,6 +22,7 @@ export const EMPTY_BOT_FORM: BotFormValues = {
   handle: '',
   description: '',
   avatarUrl: '',
+  hasAgent: false,
 };
 
 export function botToFormValues(bot: Bot): BotFormValues {
@@ -29,6 +31,7 @@ export function botToFormValues(bot: Bot): BotFormValues {
     handle: bot.handle,
     description: bot.description ?? '',
     avatarUrl: bot.avatar_url ?? '',
+    hasAgent: bot.has_agent,
   };
 }
 

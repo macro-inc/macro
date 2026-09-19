@@ -40,6 +40,8 @@ fn created_maps_to_a_created_activity_with_the_metadata_timestamp() {
     let event = envelope(DocumentTopicEvent::Created(DocumentCreatedMetadata {
         document_id: DOCUMENT_ID.to_string(),
         owner: user("macro|creator@example.com"),
+        actor: None,
+        on_behalf_of: None,
         document_name: "spec".to_string(),
         file_type: Some(FileType::Md),
         project_id: None,
@@ -54,6 +56,55 @@ fn created_maps_to_a_created_activity_with_the_metadata_timestamp() {
     assert_eq!(activity.entity_id, DOCUMENT_ID);
     assert_eq!(activity.occurred_at, created_at);
     assert_eq!(activity.id, activity_id(event.event_id, 0));
+    assert_eq!(activity.actor.as_ref(), "macro|creator@example.com");
+}
+
+#[test]
+fn created_with_system_actor_is_not_the_owner_subject() {
+    let event = envelope(DocumentTopicEvent::Created(DocumentCreatedMetadata {
+        document_id: DOCUMENT_ID.to_string(),
+        owner: user("macro|owner@example.com"),
+        actor: Some(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID)),
+        on_behalf_of: None,
+        document_name: "invoice".to_string(),
+        file_type: None,
+        project_id: None,
+        sub_type: None,
+        created_at: None,
+    }));
+
+    let activity = single_activity(event.event.ingest(event.event_id));
+    assert_eq!(activity.action, Action::Created);
+    assert_eq!(
+        activity.actor.as_ref(),
+        bot_id::MACRO_SYSTEM_BOT_ID.into_storage_id().as_ref()
+    );
+    assert_eq!(
+        activity.subject_id,
+        bot_id::MACRO_SYSTEM_BOT_ID.into_storage_id().as_ref()
+    );
+}
+
+#[test]
+fn created_on_behalf_of_the_owner_stays_on_their_feed() {
+    let event = envelope(DocumentTopicEvent::Created(DocumentCreatedMetadata {
+        document_id: DOCUMENT_ID.to_string(),
+        owner: user("macro|owner@example.com"),
+        actor: Some(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID)),
+        on_behalf_of: Some(user("macro|owner@example.com")),
+        document_name: "welcome".to_string(),
+        file_type: None,
+        project_id: None,
+        sub_type: None,
+        created_at: None,
+    }));
+
+    let activity = single_activity(event.event.ingest(event.event_id));
+    assert_eq!(
+        activity.actor.as_ref(),
+        bot_id::MACRO_SYSTEM_BOT_ID.into_storage_id().as_ref()
+    );
+    assert_eq!(activity.subject_id, "macro|owner@example.com");
 }
 
 #[test]
@@ -62,6 +113,8 @@ fn attributed_update_and_delete_map_to_activities() {
         document_id: DOCUMENT_ID.to_string(),
         owner: user("macro|owner@example.com"),
         actor_user_id: Some(user("macro|editor@example.com")),
+        actor: None,
+        on_behalf_of: None,
         document_name: Some("renamed".to_string()),
         previous_project_id: None,
         project_id: None,
@@ -75,10 +128,35 @@ fn attributed_update_and_delete_map_to_activities() {
     let deleted = envelope(DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
         document_id: DOCUMENT_ID.to_string(),
         actor_user_id: Some(user("macro|editor@example.com")),
+        actor: None,
+        on_behalf_of: None,
         project_id: None,
     }));
     let activity = single_activity(deleted.event.ingest(deleted.event_id));
     assert_eq!(activity.action, Action::Deleted);
+}
+
+#[test]
+fn delegated_update_stays_on_the_user_feed() {
+    let updated = envelope(DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+        document_id: DOCUMENT_ID.to_string(),
+        owner: user("macro|owner@example.com"),
+        actor_user_id: None,
+        actor: Some(Actor::new_from_bot(bot_id::MACRO_AI_BOT_ID)),
+        on_behalf_of: Some(user("macro|owner@example.com")),
+        document_name: Some("renamed".to_string()),
+        previous_project_id: None,
+        project_id: None,
+        file_type: None,
+        share_permission_updated: false,
+    }));
+    let activity = single_activity(updated.event.ingest(updated.event_id));
+    assert_eq!(activity.action, Action::Edited);
+    assert_eq!(
+        activity.actor.as_ref(),
+        bot_id::MACRO_AI_BOT_ID.into_storage_id().as_ref()
+    );
+    assert_eq!(activity.subject_id, "macro|owner@example.com");
 }
 
 #[test]
@@ -87,6 +165,8 @@ fn unattributable_mutations_are_dropped() {
         document_id: DOCUMENT_ID.to_string(),
         owner: user("macro|owner@example.com"),
         actor_user_id: None,
+        actor: None,
+        on_behalf_of: None,
         document_name: None,
         previous_project_id: None,
         project_id: None,
@@ -98,6 +178,8 @@ fn unattributable_mutations_are_dropped() {
     let deleted = envelope(DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
         document_id: DOCUMENT_ID.to_string(),
         actor_user_id: None,
+        actor: None,
+        on_behalf_of: None,
         project_id: None,
     }));
     assert_eq!(deleted.event.ingest(deleted.event_id), Ingest::Ignore);
@@ -140,6 +222,8 @@ fn pipeline_and_session_events_are_ignored() {
             document_id: DOCUMENT_ID.to_string(),
             file_type: FileType::Md,
             document_version_id: None,
+            actor: None,
+            on_behalf_of: None,
         },
     ));
     assert_eq!(sync.event.ingest(sync.event_id), Ingest::Ignore);
@@ -157,10 +241,32 @@ fn pipeline_and_session_events_are_ignored() {
 }
 
 #[test]
+fn attributed_sync_content_is_an_edited_activity() {
+    let event = envelope(DocumentTopicEvent::SyncContentUpdated(
+        DocumentSyncContentUpdatedMetadata {
+            document_id: DOCUMENT_ID.to_string(),
+            file_type: FileType::Md,
+            document_version_id: None,
+            actor: Some(Actor::new_from_bot(bot_id::MACRO_AI_BOT_ID)),
+            on_behalf_of: Some(user("macro|owner@example.com")),
+        },
+    ));
+    let activity = single_activity(event.event.ingest(event.event_id));
+    assert_eq!(activity.action, Action::Edited);
+    assert_eq!(
+        activity.actor.as_ref(),
+        bot_id::MACRO_AI_BOT_ID.into_storage_id().as_ref()
+    );
+    assert_eq!(activity.subject_id, "macro|owner@example.com");
+}
+
+#[test]
 fn replaying_an_event_derives_identical_activity_ids() {
     let event = envelope(DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
         document_id: DOCUMENT_ID.to_string(),
         actor_user_id: Some(user("macro|editor@example.com")),
+        actor: None,
+        on_behalf_of: None,
         project_id: None,
     }));
 

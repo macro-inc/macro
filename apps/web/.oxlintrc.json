@@ -13,7 +13,10 @@
     "correctness": "off"
   },
   "rules": {
-    "promise/prefer-await-to-then": "warn"
+    "promise/prefer-await-to-then": "warn",
+    // eslint/complexity — McCabe cyclomatic complexity, default max 20.
+    // https://oxc.rs/docs/guide/usage/linter/rules/eslint/complexity
+    "complexity": "warn"
   },
   "ignorePatterns": [
     "**/node_modules/**",

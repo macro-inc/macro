@@ -190,7 +190,9 @@ fn validate_filter_ids(ids: &[String]) -> Result<(), WebhookError> {
     Ok(())
 }
 
-fn validate_filters(filters: &WebhookFilters) -> Result<(), WebhookError> {
+/// Validate a filter set for persistence or streaming: non-empty, within the
+/// per-list and per-value size caps, no blank entries.
+pub(crate) fn validate_filters(filters: &WebhookFilters) -> Result<(), WebhookError> {
     if filters.is_empty() {
         return Err(WebhookError::BadRequest(
             "filters must be a non-empty array".to_string(),

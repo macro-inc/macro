@@ -4,17 +4,20 @@ use std::borrow::Cow;
 
 use axum::{
     Json,
-    response::{IntoResponse, Redirect, Response},
+    response::{IntoResponse, Response},
 };
 use model::response::ErrorResponse;
 use reqwest::StatusCode;
 use tower_cookies::Cookies;
-use url::Url;
 
 use crate::api::{
     context::ApiContext,
     oauth2::{
-        OAuthState, format_redirect_uri,
+        OAuthState,
+        account_link::{
+            build_callback_redirect, cleanup_pending_link, replace_identity_provider_grant,
+        },
+        format_redirect_uri,
         login::{self},
     },
 };
@@ -106,26 +109,16 @@ async fn link_user(
     {
         Ok(()) => {}
         Err(FusionAuthClientError::IdentityProviderLinkAlreadyExists) => {
-            // The link already exists but its stored refresh token may be dead (this
-            // is the reconnect path). A plain `link_user` no-ops and leaves the dead
-            // token in place, so swap in the freshly minted token. With no fresh token
-            // (Google withheld a refresh token) there is nothing to swap, so leave the
-            // existing grant untouched.
-            if token_response.refresh_token.is_empty() {
-                tracing::info!(
-                    fusion_user_id = %idp_link_owner,
-                    "idp link already exists and no fresh refresh token returned, leaving existing grant"
-                );
-            } else {
-                relink_with_fresh_token(
-                    ctx,
-                    identity_provider_id,
-                    &idp_link_owner,
-                    &user_info_email,
-                    &token_response.refresh_token,
-                )
-                .await?;
-            }
+            // A plain `link_user` leaves the existing grant untouched. Reconnects
+            // replace a stale token when Google returns a fresh one.
+            replace_identity_provider_grant(
+                &ctx.auth_client,
+                identity_provider_id,
+                &idp_link_owner,
+                &user_info_email,
+                &token_response.refresh_token,
+            )
+            .await?;
         }
         Err(e) => {
             return Err((
@@ -165,103 +158,6 @@ fn resolved_granted_scopes(returned: &str, requested: Vec<String>) -> Vec<String
     }
 }
 
-/// Replaces a stale Google grant on an existing IdP link with a freshly minted
-/// refresh token. Used on reconnect, when the mailbox's FusionAuth link already
-/// exists but its stored token has gone dead — a plain `link_user` no-ops and
-/// leaves the dead token in place.
-///
-/// A Google identity binds to exactly one FusionAuth user, so the grant is swapped
-/// by unlinking the old link and re-linking with the new token, rolling back to the
-/// old token if the re-link fails. A shared mailbox's grant lives on a deactivated
-/// stub user; links are only created against active users, so the stub is
-/// reactivated for the swap and returned to its prior state afterward (a human's own
-/// active account is left active). Idempotent when the stored token already matches.
-async fn relink_with_fresh_token(
-    ctx: &ApiContext,
-    identity_provider_id: &str,
-    idp_link_owner: &str,
-    email: &str,
-    fresh_refresh_token: &str,
-) -> Result<(), (StatusCode, String)> {
-    let server_error = |message: String| (StatusCode::INTERNAL_SERVER_ERROR, message);
-    let auth = &ctx.auth_client;
-
-    let existing_links = auth
-        .get_links(idp_link_owner, Some(identity_provider_id.to_string()))
-        .await
-        .map_err(|e| server_error(format!("unable to read existing links {e}")))?;
-
-    let Some(existing) = existing_links.into_iter().find(|l| l.display_name == email) else {
-        // Owner resolution and the already-exists error disagree about where the
-        // link lives; there is nothing to relink on this user.
-        tracing::warn!(
-            fusion_user_id = %idp_link_owner,
-            "relink: no existing grant found for mailbox on resolved owner, skipping"
-        );
-        return Ok(());
-    };
-
-    if existing.token == fresh_refresh_token {
-        // Stored token already current; nothing to do.
-        return Ok(());
-    }
-
-    let sub = existing.identity_provider_user_id;
-    let stale_token = existing.token;
-
-    let was_active = auth
-        .get_user_active(idp_link_owner)
-        .await
-        .map_err(|e| server_error(format!("unable to read user active state {e}")))?;
-
-    if !was_active {
-        auth.reactivate_user(idp_link_owner)
-            .await
-            .map_err(|e| server_error(format!("unable to reactivate user for relink {e}")))?;
-    }
-
-    let link_with = |token: &str| LinkUserRequest {
-        identity_provider_link: IdentityProviderLink {
-            display_name: Cow::Owned(email.to_string()),
-            identity_provider_id: Cow::Borrowed(identity_provider_id),
-            identity_provider_user_id: Cow::Borrowed(&sub),
-            user_id: Cow::Borrowed(idp_link_owner),
-            token: Cow::Owned(token.to_string()),
-        },
-    };
-
-    // Swap the grant, capturing the outcome so the stub is re-deactivated below on
-    // every path — including an unlink failure — rather than leaking an active stub.
-    let swap_result: Result<(), (StatusCode, String)> = async {
-        auth.unlink_user(idp_link_owner, identity_provider_id, &sub)
-            .await
-            .map_err(|e| server_error(format!("unable to unlink stale grant {e}")))?;
-
-        let link_result = auth.link_user(link_with(fresh_refresh_token)).await;
-
-        if let Err(e) = &link_result {
-            tracing::error!(error=?e, "relink: failed to attach fresh grant, rolling back to stale token");
-            if let Err(rollback) = auth.link_user(link_with(&stale_token)).await {
-                tracing::error!(error=?rollback, "relink: rollback re-link also failed, grant is detached");
-            }
-        }
-
-        link_result.map_err(|e| server_error(format!("unable to attach fresh grant {e}")))
-    }
-    .await;
-
-    // Restore the stub's deactivated state on every path; a human's own account was
-    // active and is left as-is. Best-effort (logged) so a deactivation blip can't fail
-    // a reconnect whose grant swap already succeeded.
-    if !was_active && let Err(e) = auth.deactivate_user(idp_link_owner).await {
-        tracing::error!(error=?e, %idp_link_owner, "relink: failed to re-deactivate stub after relink");
-    }
-
-    swap_result?;
-
-    Ok(())
-}
-
 pub(in crate::api::oauth2) async fn handler(
     ctx: &ApiContext,
     cookies: Cookies,
@@ -274,20 +170,7 @@ pub(in crate::api::oauth2) async fn handler(
         let link_result = link_user(ctx, &state.identity_provider_id, code, link_id).await;
 
         if link_result.is_err() {
-            // The OAuth callback failed; the in_progress_user_link row will never be
-            // consumed by /email/init (no redirect carrying link_id is emitted on
-            // error). Best-effort delete so a failed attempt doesn't burn one of
-            // the user's 5 in-flight link slots.
-            macro_db_client::in_progress_user_link::delete_in_progress_user_link(&ctx.db, link_id)
-                .await
-                .inspect_err(|e| {
-                    tracing::warn!(
-                        error=?e,
-                        ?link_id,
-                        "failed to clean up in_progress_user_link after link_user error"
-                    );
-                })
-                .ok();
+            cleanup_pending_link(ctx, link_id).await;
         }
 
         link_result.map_err(|(status_code, error)| {
@@ -302,47 +185,8 @@ pub(in crate::api::oauth2) async fn handler(
         })?;
 
         if let Some(original_url) = &state.original_url {
-            let decoded = urlencoding::decode(original_url).map_err(|e| {
-                tracing::error!(error=?e, "unable to decode original url");
-                (
-                    StatusCode::BAD_REQUEST,
-                    Json(ErrorResponse {
-                        message: "unable to decode original url".into(),
-                    }),
-                )
-                    .into_response()
-            })?;
-
-            let mut url: Url = decoded
-                .parse()
-                .inspect_err(|e| tracing::error!(error=?e, "unable to parse string to url"))
-                .map_err(|_| {
-                    (
-                        StatusCode::BAD_REQUEST,
-                        Json(ErrorResponse {
-                            message: "unable to parse to original url".into(),
-                        }),
-                    )
-                        .into_response()
-                })?;
-
-            // Strip any stale identifiers embedded in the original_url
-            // before appending fresh ones; consumers read the first
-            // occurrence of each param.
-            let filtered: Vec<(String, String)> = url
-                .query_pairs()
-                .filter(|(k, _)| k != "link_id" && k != "token")
-                .map(|(k, v)| (k.into_owned(), v.into_owned()))
-                .collect();
-            url.query_pairs_mut().clear().extend_pairs(filtered);
-
-            // `token` mirrors link_id for callback consumers that only
-            // surface a `token` query param from the redirect URL.
-            url.query_pairs_mut()
-                .append_pair("link_id", &link_id.to_string())
-                .append_pair("token", &link_id.to_string());
-
-            return Ok(Redirect::to(url.as_str()).into_response());
+            return build_callback_redirect(original_url, link_id)
+                .map_err(IntoResponse::into_response);
         }
 
         return Ok(StatusCode::OK.into_response());

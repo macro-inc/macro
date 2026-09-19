@@ -1,11 +1,16 @@
+import { formatDateAndTime } from '@app/features/entity/utils/timestamp';
 import {
-  type DateOption,
-  formatDateWithContext,
-} from '@core/util/dateSearch/useDateSearch';
+  buildCron,
+  type CronParts,
+  describeCron,
+  getDefaultTimezone,
+  normalizeCron,
+  parseCron,
+  type ScheduleFrequency,
+} from '@core/util/cron';
 import type { EntityData } from '@entity';
 import type { ReminderSchedule } from '@service-storage/generated/schemas/reminderSchedule';
 import type { UpdateReminderRequest } from '@service-storage/generated/schemas/updateReminderRequest';
-import { addDays, addHours, addWeeks, endOfWeek } from 'date-fns';
 
 /**
  * The time of day a bare date resolves to.
@@ -19,125 +24,170 @@ export const REMINDER_DEFAULT_TIME = { hours: 9, minutes: 0 } as const;
 /** Longest description the API accepts, mirroring the service's own limit. */
 export const REMINDER_DESCRIPTION_MAX_LENGTH = 2000;
 
-/**
- * Drop options that have already passed.
- *
- * The API rejects a `remindAt` in the past, and the date search happily returns
- * past dates for a typed query ("yesterday", or a month already gone by). The
- * no-query preset list filters itself; this covers everything else.
- */
-export function futureDateOptions(
-  options: readonly DateOption[],
-  now: Date
-): DateOption[] {
-  return options.filter((option) => option.date.getTime() > now.getTime());
-}
-
 /** A one-shot schedule firing at `date`. */
 export function onceSchedule(date: Date): ReminderSchedule {
   return { type: 'once', remindAt: date.toISOString() };
 }
 
-/** The same instant, at `REMINDER_DEFAULT_TIME`. */
-function atDefaultTime(date: Date): Date {
-  const result = new Date(date);
-  result.setHours(
-    REMINDER_DEFAULT_TIME.hours,
-    REMINDER_DEFAULT_TIME.minutes,
-    0,
-    0
-  );
-  return result;
-}
-
-/** The same instant, with seconds dropped. */
-function toWholeMinute(date: Date): Date {
-  const result = new Date(date);
-  result.setSeconds(0, 0);
-  return result;
+/**
+ * A recurring schedule from picker parts, evaluated in the viewer's timezone.
+ *
+ * The zone travels with the cron because that is the only thing that makes
+ * "every day at 9am" mean 9am: the backend evaluates the expression in it, so a
+ * schedule built in Denver keeps firing at Denver's 9am after a move to Berlin.
+ */
+export function recurringSchedule(
+  parts: CronParts,
+  timezone: string = getDefaultTimezone()
+): ReminderSchedule {
+  return { type: 'recurring', cron: buildCron(parts), timezone };
 }
 
 /**
- * What the reminder picker offers before anything is typed.
+ * Cron day-of-week for a date, in the backend's 1=Sunday numbering.
  *
- * Deliberately not the shared `searchPresets` list, which is built for due dates
- * — it leads with "Today"/"Yesterday" and every entry lands on `endOfDay`.
- * Typing still goes through `useDateSearch`, so the shared presets remain
- * reachable by name; this only replaces the resting list.
- *
- * The hour offsets keep their computed clock time (an "in 1 hour" reminder at
- * 9am would be useless); the day-scale ones get the morning default.
+ * `Date.getDay()` is 0=Sunday, so every value is one higher here. Off-by-one
+ * lands the reminder on the wrong day of the week, which is the kind of bug
+ * that only shows up a week after it ships.
  */
-export function reminderDefaultOptions(now: Date): DateOption[] {
-  const entries: Array<{ id: string; label: string; date: Date }> = [
-    {
-      id: 'in-1-hour',
-      label: 'In 1 hour',
-      date: toWholeMinute(addHours(now, 1)),
-    },
-    {
-      id: 'in-2-hours',
-      label: 'In 2 hours',
-      date: toWholeMinute(addHours(now, 2)),
-    },
-    { id: 'tomorrow', label: 'Tomorrow', date: atDefaultTime(addDays(now, 1)) },
-    {
-      id: 'end-of-week',
-      label: 'End of week',
-      date: atDefaultTime(endOfWeek(now, { weekStartsOn: 1 })),
-    },
-    {
-      id: 'in-1-week',
-      label: 'In 1 week',
-      date: atDefaultTime(addWeeks(now, 1)),
-    },
-  ];
+function cronDayOfWeek(date: Date): string {
+  return String(date.getDay() + 1);
+}
 
-  // On a Saturday `endOfWeek` (Sunday) is the same instant as "Tomorrow" at the
-  // morning default, which would offer the same time under two labels.
-  const seen = new Set<number>();
-  const unique = entries.filter(({ date }) => {
-    const time = date.getTime();
-    if (seen.has(time)) return false;
-    seen.add(time);
-    return true;
-  });
-
-  return futureDateOptions(
-    unique.map(({ id, label, date }) => ({
-      id,
-      displayText: label,
-      secondaryText: formatDateWithContext(date, now, true),
-      date,
-      type: 'preset' as const,
-    })),
-    now
-  );
+/** `HH:MM` for a date, in local time — the form the cron helpers take. */
+function timeOfDay(date: Date): string {
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
 /**
- * What the picker offers when editing a reminder that already has a time.
+ * The recurrence to offer for a reminder the user has just dated.
  *
- * "Keep current time" leads, so a rename costs one Enter rather than forcing a
- * date to be re-picked. It is the only option exempt from the future filter: an
- * overdue reminder still has to be renamable, and keeping its time sends no
- * schedule at all — see {@link reminderEditPatch}.
- *
- * Presets landing on the current time are dropped, or the same instant would be
- * offered twice under two labels.
+ * Seeded entirely from that date, so choosing "weekly" repeats on the weekday
+ * they picked at the time they picked, and the repeat step needs no second time
+ * input to state the obvious.
  */
-export function reminderEditOptions(current: Date, now: Date): DateOption[] {
-  const keep: DateOption = {
-    id: 'keep',
-    displayText: 'Keep current time',
-    secondaryText: formatDateWithContext(current, now, true),
-    date: current,
-    type: 'preset',
+export function repeatPartsFromDate(
+  date: Date,
+  frequency: ScheduleFrequency = 'week'
+): CronParts {
+  return {
+    frequency,
+    time: timeOfDay(date),
+    daysOfWeek: [cronDayOfWeek(date)],
+    dayOfMonth: String(date.getDate()),
   };
-  const rest = reminderDefaultOptions(now).filter(
-    (option) => option.date.getTime() !== current.getTime()
+}
+
+/**
+ * The schedule a soup row is on, rebuilt as the tagged union the API speaks.
+ *
+ * A row carries the schedule flattened into `scheduleType` plus the fields that
+ * variant uses, and more than one surface needs it back in one piece — the
+ * editor to diff against, the row to describe. Shared so they cannot disagree:
+ * two call sites each picking their own fallback for an absent zone would
+ * describe the same reminder differently, and the editor's diff would read the
+ * substituted zone as a change and re-send it, moving when the reminder fires.
+ *
+ * `UTC` is the fallback rather than the viewer's zone, so the answer does not
+ * depend on who is looking. It should be unreachable: the database requires a
+ * timezone wherever a cron is set.
+ */
+export function scheduleFromRow(row: {
+  scheduleType: 'once' | 'recurring';
+  cron?: string;
+  timezone?: string;
+  nextRunAt: string | Date;
+}): ReminderSchedule {
+  if (row.scheduleType === 'recurring' && row.cron) {
+    return {
+      type: 'recurring',
+      cron: row.cron,
+      timezone: row.timezone ?? 'UTC',
+    };
+  }
+  return { type: 'once', remindAt: new Date(row.nextRunAt).toISOString() };
+}
+
+/**
+ * When a reminder next comes due, as one line for a row to show.
+ *
+ * A recurring reminder reads as its cadence ("Every weekday at 9:00 AM"), which
+ * is what says it fires again at all; a one-shot reads as the single instant it
+ * fires, date and time together. Both answer "when?" without repeating what the
+ * recurrence badge beside them already says.
+ */
+export function describeReminderWhen(row: {
+  scheduleType: 'once' | 'recurring';
+  cron?: string;
+  timezone?: string;
+  nextRunAt: string | Date;
+}): string {
+  return (
+    describeReminderSchedule(scheduleFromRow(row)) ??
+    formatDateAndTime(row.nextRunAt)
   );
-  return [keep, ...rest];
+}
+
+/** Whether a schedule repeats, narrowed for the caller. */
+export function isRecurring(
+  schedule: ReminderSchedule
+): schedule is Extract<ReminderSchedule, { type: 'recurring' }> {
+  return schedule.type === 'recurring';
+}
+
+/**
+ * The picker parts behind an existing recurring schedule, for editing one.
+ *
+ * Lossy in the same way {@link parseCron} is: a cron the picker cannot express
+ * comes back as the nearest thing it can, because there is no UI for the rest.
+ */
+export function repeatPartsFromSchedule(schedule: ReminderSchedule): CronParts {
+  return isRecurring(schedule)
+    ? parseCron(schedule.cron)
+    : repeatPartsFromDate(new Date(schedule.remindAt));
+}
+
+/**
+ * A schedule in words, for a row that has to say when it fires.
+ *
+ * Recurring schedules read as their recurrence ("Every weekday at 9:00 AM")
+ * since a single date says nothing useful about them. One-shots return
+ * undefined: their next firing is already rendered as a date, and repeating it
+ * in words would just be the same thing twice.
+ */
+export function describeReminderSchedule(
+  schedule: ReminderSchedule
+): string | undefined {
+  if (!isRecurring(schedule)) return undefined;
+  // The zone is part of the schedule, not decoration: "every day at 9:00 AM"
+  // means a different instant in Denver than in Berlin, and a reminder built in
+  // one and read in the other has to say which it fires by.
+  const described = describeCron(parseCron(schedule.cron), schedule.timezone);
+  return described.charAt(0).toUpperCase() + described.slice(1);
+}
+
+/** Whether two schedules are the same, so an unchanged one is not re-sent. */
+export function sameSchedule(
+  a: ReminderSchedule,
+  b: ReminderSchedule
+): boolean {
+  if (a.type !== b.type) return false;
+  if (isRecurring(a) && isRecurring(b)) {
+    // Normalized, not compared literally: two spellings of the same schedule
+    // must not read as an edit. Sending a schedule the owner did not change
+    // is not harmless — the backend treats any schedule write as a reschedule
+    // and clears the done flag with it.
+    return (
+      normalizeCron(a.cron) === normalizeCron(b.cron) &&
+      a.timezone === b.timezone
+    );
+  }
+  if (!isRecurring(a) && !isRecurring(b)) {
+    // Compared as instants, not strings: the same moment can be written with a
+    // different offset or precision.
+    return new Date(a.remindAt).getTime() === new Date(b.remindAt).getTime();
+  }
+  return false;
 }
 
 /**
@@ -149,8 +199,12 @@ export function reminderEditOptions(current: Date, now: Date): DateOption[] {
  * past. Omitting it is also what lets an overdue reminder be renamed at all.
  */
 export function reminderEditPatch(
-  original: { description: string; remindAt: Date; completed: boolean },
-  next: { description: string; remindAt: Date }
+  original: {
+    description: string;
+    schedule: ReminderSchedule;
+    completed: boolean;
+  },
+  next: { description: string; schedule: ReminderSchedule }
 ): UpdateReminderRequest | undefined {
   const patch: UpdateReminderRequest = {};
 
@@ -158,12 +212,14 @@ export function reminderEditPatch(
   if (description && description !== original.description) {
     patch.description = description;
   }
-  if (next.remindAt.getTime() !== original.remindAt.getTime()) {
-    patch.schedule = onceSchedule(next.remindAt);
-    // Giving a reminder that was marked done a new time is a request for it to
-    // fire again, and the dispatcher skips completed reminders — so without
-    // clearing the flag the time the user just picked would silently never
-    // arrive. A description-only edit leaves it alone.
+  if (!sameSchedule(original.schedule, next.schedule)) {
+    patch.schedule = next.schedule;
+    // Giving a reminder that was marked done a new schedule is a request for it
+    // to fire again. For a one-shot that is load-bearing: the dispatcher skips
+    // a completed one, so without clearing the flag the time just picked would
+    // silently never arrive. For a recurring one it is presentational — the
+    // series keeps running either way — but a reminder that fires tomorrow
+    // should not sit under Done today. A description-only edit leaves it alone.
     if (original.completed) patch.completed = false;
   }
 
@@ -230,6 +286,22 @@ export function resolveReminderDescription(
 }
 
 /**
+ * What to store as a standalone reminder's description, or undefined when
+ * there is nothing usable to store.
+ *
+ * A reminder about nothing has no name to fall back on, so unlike every other
+ * description path this one can come back empty — which is also the answer to
+ * "may the composer move off the description step yet?". Both questions go
+ * through here so the step's gate and its submit cannot disagree about a
+ * description made only of spaces.
+ */
+export function resolveStandaloneDescription(
+  input: string
+): string | undefined {
+  return clampDescription(input) || undefined;
+}
+
+/**
  * The same entity-derived description, from a resolved name rather than a whole
  * entity.
  *
@@ -260,25 +332,4 @@ export function resolveEditedDescription(
   fallback?: string
 ): string {
   return clampDescription(input) || fallback || current;
-}
-
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-
-/** Confirmation text for a reminder that was just set.
- *
- * The date is dropped for anything inside the next day: "set for 1:08 PM" is
- * what someone who just asked for three hours from now wants to read back, and
- * "Aug 7, 1:08 PM" only adds a date they already know. Past the day boundary
- * the date carries the meaning, so it stays.
- */
-export function formatReminderWhen(
-  date: Date,
-  now: number = Date.now()
-): string {
-  const withinADay = date.getTime() - now < ONE_DAY_MS;
-  return date.toLocaleString(undefined, {
-    ...(withinADay ? {} : { month: 'short', day: 'numeric' }),
-    hour: 'numeric',
-    minute: '2-digit',
-  });
 }

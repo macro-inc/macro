@@ -1,0 +1,6 @@
+"""
+Fetch and persist this field, but omit it from cache hydration results returned
+to the caller. This directive is stripped before sending the operation to the
+GraphQL server.
+"""
+directive @cacheOnly on FIELD

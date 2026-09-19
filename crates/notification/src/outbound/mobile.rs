@@ -190,8 +190,22 @@ fn build_voip_sns_attributes(voip_bundle_id: &str) -> HashMap<String, MessageAtt
                 .build()
                 .expect("valid attribute"),
         ),
+        // TTL is the one SNS attribute that is named per platform application
+        // (unlike TOPIC/PUSH_TYPE/PRIORITY, which are shared across APNs
+        // platforms). `AWS.SNS.MOBILE.APNS.TTL` is silently ignored on
+        // APNS_VOIP endpoints, leaving the SNS default of 4 weeks — APNs then
+        // stores the push while the device is unreachable and replays a dead
+        // call ring when it reconnects. TTL 0 means "deliver now or drop".
         (
-            "AWS.SNS.MOBILE.APNS.TTL".to_string(),
+            "AWS.SNS.MOBILE.APNS_VOIP.TTL".to_string(),
+            MessageAttributeValue::builder()
+                .data_type("String")
+                .string_value("0")
+                .build()
+                .expect("valid attribute"),
+        ),
+        (
+            "AWS.SNS.MOBILE.APNS_VOIP_SANDBOX.TTL".to_string(),
             MessageAttributeValue::builder()
                 .data_type("String")
                 .string_value("0")
@@ -199,4 +213,16 @@ fn build_voip_sns_attributes(voip_bundle_id: &str) -> HashMap<String, MessageAtt
                 .expect("valid attribute"),
         ),
     ])
+}
+
+impl<P: MobilePushOps + Send + Sync + 'static> crate::domain::ports::VoipPushDelivery
+    for MobilePushAdapter<P>
+{
+    async fn send_voip_push(
+        &self,
+        endpoint_arn: &str,
+        payload: &VoipPushPayload,
+    ) -> Result<String, Report> {
+        MobilePushAdapter::send_voip_push(self, endpoint_arn, payload).await
+    }
 }

@@ -2,15 +2,20 @@ import {
   $createTableCellNode,
   $createTableNode,
   $createTableRowNode,
+  $isTableRowNode,
   TableCellHeaderStates,
 } from '@lexical/table';
 import { $getRoot, type LexicalEditor } from 'lexical';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   $applyResizeDrag,
+  $applyRowResizeDrag,
   $captureResizeDrag,
+  $captureRowResizeDrag,
   $revertResizeDrag,
+  $revertRowResizeDrag,
   MIN_COLUMN_WIDTH,
+  MIN_ROW_HEIGHT,
 } from './tableCellResize';
 import {
   $getCell,
@@ -36,15 +41,15 @@ function getCellElement(
 }
 
 // jsdom lays nothing out, so rendered sizes are stubbed per element.
-function stubRect(elem: HTMLElement, width: number) {
+function stubRect(elem: HTMLElement, width: number, height = 0) {
   elem.getBoundingClientRect = () =>
     ({
       width,
-      height: 0,
+      height,
       top: 0,
       left: 0,
       right: width,
-      bottom: 0,
+      bottom: height,
       x: 0,
       y: 0,
       toJSON: () => ({}),
@@ -53,6 +58,25 @@ function stubRect(elem: HTMLElement, width: number) {
 
 function getColWidths(editor: LexicalEditor): readonly number[] | undefined {
   return editor.read(() => $getTable().getColWidths());
+}
+
+function getRowElement(editor: LexicalEditor, row: number): HTMLElement {
+  const rowKey = editor.read(() => {
+    const rowNode = $getTable().getChildren().filter($isTableRowNode)[row];
+    return rowNode.getKey();
+  });
+  const elem = editor.getElementByKey(rowKey);
+  if (!elem) throw new Error('no row element');
+  return elem;
+}
+
+function getRowHeights(editor: LexicalEditor): (number | undefined)[] {
+  return editor.read(() =>
+    $getTable()
+      .getChildren()
+      .filter($isTableRowNode)
+      .map((row) => row.getHeight())
+  );
 }
 
 describe('table column resize drag', () => {
@@ -198,5 +222,122 @@ describe('table column resize drag', () => {
 
     editor.update(() => $revertResizeDrag(drag!));
     expect(getColWidths(editor)).toBeUndefined();
+  });
+});
+
+describe('table row resize drag', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('writes height only on the dragged row, leaving siblings unset', async () => {
+    const editor = createTestEditor();
+    await buildTable(editor, coordGrid(2, 2));
+    stubRect(getRowElement(editor, 0), 0, 40);
+    stubRect(getRowElement(editor, 1), 0, 40);
+
+    const drag = editor.read(() =>
+      $captureRowResizeDrag(editor, getCellElement(editor, 0, 0), 1)
+    );
+    expect(drag).toMatchObject({
+      baseHeight: 40,
+      revertHeight: undefined,
+    });
+
+    editor.update(() => $applyRowResizeDrag(drag!, 24));
+    expect(getRowHeights(editor)).toEqual([64, undefined]);
+
+    // Each frame applies against the drag-start snapshot, not the last frame.
+    editor.update(() => $applyRowResizeDrag(drag!, 10));
+    expect(getRowHeights(editor)).toEqual([50, undefined]);
+  });
+
+  it('clamps the row to the minimum height', async () => {
+    const editor = createTestEditor();
+    await buildTable(editor, coordGrid(1, 1));
+    stubRect(getRowElement(editor, 0), 0, 80);
+
+    const drag = editor.read(() =>
+      $captureRowResizeDrag(editor, getCellElement(editor, 0, 0), 1)
+    );
+    editor.update(() => $applyRowResizeDrag(drag!, -1000));
+    expect(getRowHeights(editor)).toEqual([MIN_ROW_HEIGHT]);
+  });
+
+  it('resizes the last spanned row of a merged cell', async () => {
+    const editor = createTestEditor();
+    await new Promise<void>((resolve) => {
+      editor.update(
+        () => {
+          const table = $createTableNode();
+          const mergedRow = $createTableRowNode();
+          const merged = $createTableCellNode(TableCellHeaderStates.NO_STATUS);
+          merged.setRowSpan(2);
+          mergedRow.append(
+            merged,
+            $createTableCellNode(TableCellHeaderStates.NO_STATUS)
+          );
+          const continuation = $createTableRowNode();
+          continuation.append(
+            $createTableCellNode(TableCellHeaderStates.NO_STATUS)
+          );
+          table.append(mergedRow, continuation);
+          $getRoot().clear().append(table);
+        },
+        { onUpdate: () => resolve() }
+      );
+    });
+    stubRect(getRowElement(editor, 0), 0, 40);
+    stubRect(getRowElement(editor, 1), 0, 50);
+
+    const drag = editor.read(() =>
+      $captureRowResizeDrag(editor, getCellElement(editor, 0, 0), 1)
+    );
+    expect(drag).toMatchObject({
+      baseHeight: 50,
+      revertHeight: undefined,
+    });
+
+    editor.update(() => $applyRowResizeDrag(drag!, 20));
+    expect(getRowHeights(editor)).toEqual([undefined, 70]);
+  });
+
+  it('reverts a cancelled drag to the pre-drag height', async () => {
+    const editor = createTestEditor();
+    await buildTable(editor, coordGrid(1, 1));
+    await new Promise<void>((resolve) => {
+      editor.update(
+        () => {
+          const [row] = $getTable().getChildren().filter($isTableRowNode);
+          row.setHeight(48);
+        },
+        { onUpdate: () => resolve() }
+      );
+    });
+    stubRect(getRowElement(editor, 0), 0, 48);
+
+    const drag = editor.read(() =>
+      $captureRowResizeDrag(editor, getCellElement(editor, 0, 0), 1)
+    );
+    editor.update(() => $applyRowResizeDrag(drag!, 30));
+    expect(getRowHeights(editor)).toEqual([78]);
+
+    editor.update(() => $revertRowResizeDrag(drag!));
+    expect(getRowHeights(editor)).toEqual([48]);
+  });
+
+  it('reverts to unset height when the row had none', async () => {
+    const editor = createTestEditor();
+    await buildTable(editor, coordGrid(2, 1));
+    stubRect(getRowElement(editor, 0), 0, 40);
+
+    const drag = editor.read(() =>
+      $captureRowResizeDrag(editor, getCellElement(editor, 0, 0), 1)
+    );
+    editor.update(() => $applyRowResizeDrag(drag!, 25));
+    expect(getRowHeights(editor)).toEqual([65, undefined]);
+
+    editor.update(() => $revertRowResizeDrag(drag!));
+    expect(getRowHeights(editor)).toEqual([undefined, undefined]);
   });
 });

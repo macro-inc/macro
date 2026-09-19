@@ -7,6 +7,9 @@ pub mod axum_router;
 /// Axum handler and router for legacy channel list routes.
 #[cfg(all(feature = "inbound", feature = "list"))]
 pub mod list_router;
+/// Kafka consumer that ensures teammate DMs after `team.member_joined`.
+#[cfg(feature = "kafka_consumer")]
+pub mod teammate_dms_consumer;
 /// AI toolset for reading channel messages and threads.
 #[cfg(feature = "ai_tools")]
 pub mod toolset;

@@ -1,4 +1,7 @@
 //! Environment layering (lowest → highest precedence):
+//!   - Local only: the [`local_env::LocalEnv`] boot stubs — deterministic
+//!     placeholders that satisfy service config loaders on a `--no-doppler`
+//!     stack. Doppler overrides them, so real integration values always win.
 //!   - Doppler (`lcl_personal`/`dev_personal`) — the integration/secret config
 //!     services require.
 //!   - Local only: the typed [`local_env::LocalEnv`] overlaid on top —
@@ -43,6 +46,8 @@ pub fn resolve(
     no_doppler: bool,
     env_file: Option<&Path>,
     static_frontend: bool,
+    egress_public_url: Option<&str>,
+    wire_otel: bool,
 ) -> Result<ResolvedEnv> {
     // Base = Doppler (`lcl_personal`/`dev_personal`); it supplies the
     // integration/secret config services require. For local we then overlay the
@@ -51,23 +56,33 @@ pub fn resolve(
     // has — unlike the old defaults.env, which Doppler overrode). Dev keeps
     // Doppler as-is.
     let spec = mode.spec();
+    let local = spec.overlay_local_env.then(|| {
+        local_env::LocalEnv::for_instance(mode, instance, static_frontend, egress_public_url)
+    });
     let mut env = BTreeMap::new();
+    // Boot stubs go in FIRST so Doppler overrides them: they only exist to keep
+    // a `--no-doppler` stack's config loaders satisfied, never to replace a
+    // real integration value a developer's Doppler config supplies.
+    if let Some(local) = &local {
+        env.extend(local.boot_stub_env());
+    }
     let doppler_used = if no_doppler {
         false
     } else {
         pull_doppler(spec.doppler_config, &mut env)?
     };
-    if spec.overlay_local_env {
-        for (k, v) in local_env::LocalEnv::for_instance(mode, instance, static_frontend).to_env() {
+    if let Some(local) = &local {
+        for (k, v) in local.to_env() {
             env.insert(k, v);
         }
-        // Opt-in local trace export: point services at the local OTLP collector
-        // (docker-network alias `otel-collector`) only when one answers on the
-        // OTLP HTTP port, so services don't spam export errors when none is
-        // running. Both viewers bind 4318 — Jaeger (compose profile `jaeger`)
-        // and the Datadog agent (profile `datadog`) — so (re)start the stack
-        // after starting one to pick up tracing.
-        if super::summary::port_open(4318) {
+        // Local telemetry export: point services at the local OTLP collector
+        // (docker-network alias `otel-collector`) only when the run asked for
+        // tracing AND one answers on the OTLP HTTP port (so services don't
+        // spam export errors when none is running). The `wire_otel` gate is
+        // what makes `--traces off` real: collectors are global and left
+        // running across invocations, so the port alone can't distinguish
+        // "wants tracing" from "a collector happens to be up".
+        if wire_otel && super::summary::port_open(4318) {
             env.insert(
                 "OTEL_EXPORTER_OTLP_ENDPOINT".into(),
                 "http://otel-collector:4317".into(),
@@ -187,7 +202,7 @@ fn pull_aws_credentials(env: &mut BTreeMap<String, String>) {
 /// Pull Doppler secrets as a flat env overlay (mirrors the old
 /// `just get_environment`). Two modes:
 ///
-/// - `DOPPLER_TOKEN` in the process env (CI, Fly preview machines) is a
+/// - `DOPPLER_TOKEN` in the process env (CI, Cloud agents) is a
 ///   config-scoped service token: download WITHOUT `--project`/`--config` (the
 ///   token pins them), and treat failure as fatal — whoever provisioned the
 ///   token explicitly asked for these secrets, so proceeding without them

@@ -89,9 +89,10 @@ where
         let macro_user_id = match authorization.authorization.as_ref() {
             Some(MacroAuthorization::User(user))
             | Some(MacroAuthorization::Internal(Some(user))) => Some(user.macro_user_id.clone()),
-            Some(MacroAuthorization::Bot(_)) | Some(MacroAuthorization::Internal(None)) | None => {
-                None
-            }
+            Some(MacroAuthorization::Bot(_))
+            | Some(MacroAuthorization::Harness(_))
+            | Some(MacroAuthorization::Internal(None))
+            | None => None,
         };
 
         if let Some(ref user_id) = macro_user_id
@@ -345,6 +346,7 @@ where
             get_project_access_receipt(service.as_ref(), Some(user.macro_user_id), project.id())
                 .await?
         }
+        Some(MacroAuthorization::Harness(_)) => return Err(ExtractorError::Unauthorized),
         None => get_project_access_receipt(service.as_ref(), None, project.id()).await?,
     };
 

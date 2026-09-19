@@ -7,27 +7,27 @@ import {
   EcsDeploymentFailureAlarm,
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
-  serviceLoadBalancer,
+  ServiceTargetGroup,
 } from '../../packages/resources';
 import { EcrImage } from '../../packages/service';
 import {
   BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
   DopplerEcsEnvironment,
+  getGatewayAlb,
+  GatewayService,
   stack,
 } from '../../packages/shared';
 
+const gatewayLoadBalancer = getGatewayAlb();
+
 const BASE_NAME = pulumi.getProject();
 const REPO_ROOT = '../../..';
-export const SERVICE_DOMAIN_NAME = `convert-service${
-  stack === 'prod' ? '' : `-${stack}`
-}.${BASE_DOMAIN}`;
 
 type CreateConvertServiceArgs = {
   convertQueueArn: pulumi.Output<string> | string;
   vpc: {
     vpcId: pulumi.Output<string> | string;
-    publicSubnetIds: pulumi.Output<string[]> | string[];
     privateSubnetIds: pulumi.Output<string[]> | string[];
   };
   tags: { [key: string]: string };
@@ -35,7 +35,6 @@ type CreateConvertServiceArgs = {
   platform: { family: string; architecture: 'amd64' | 'arm64' };
   serviceContainerPort: number;
   healthCheckPath: string;
-  isPrivate?: boolean;
   ecsClusterArn: pulumi.Output<string> | string;
   cloudStorageClusterName: pulumi.Output<string> | string;
   jobUpdateHandlerLambdaArn: pulumi.Output<string> | string;
@@ -44,13 +43,10 @@ type CreateConvertServiceArgs = {
 export class ConvertService extends pulumi.ComponentResource {
   public role: aws.iam.Role;
   public ecr: awsx.ecr.Repository;
-  public serviceAlbSg: aws.ec2.SecurityGroup;
   public serviceSg: aws.ec2.SecurityGroup;
   public domain: string;
   public tags: { [key: string]: string };
   public targetGroup: aws.lb.TargetGroup;
-  public lb: aws.lb.LoadBalancer;
-  public listener: aws.lb.Listener;
   public service: awsx.ecs.FargateService;
   public cloudStorageClusterName: pulumi.Output<string> | string;
 
@@ -63,7 +59,6 @@ export class ConvertService extends pulumi.ComponentResource {
       platform,
       serviceContainerPort,
       healthCheckPath,
-      isPrivate,
       ecsClusterArn,
       containerEnvVars,
       cloudStorageClusterName,
@@ -72,7 +67,9 @@ export class ConvertService extends pulumi.ComponentResource {
     opts?: pulumi.ComponentResourceOptions
   ) {
     super('my:components:CloudStorageService', name, {}, opts);
-    this.domain = `https://${SERVICE_DOMAIN_NAME}`;
+    this.domain = `https://${
+      stack === 'prod' ? '' : `${stack}-`
+    }gateway.${BASE_DOMAIN}/convert`;
     this.tags = tags;
     this.cloudStorageClusterName = cloudStorageClusterName;
 
@@ -157,26 +154,25 @@ export class ConvertService extends pulumi.ComponentResource {
     this.ecr = image.ecr;
 
     // Security groups
-    const sg = this.initializeSecurityGroups({
-      vpcId: vpc.vpcId,
-      serviceContainerPort,
-    });
-    this.serviceAlbSg = sg.serviceAlbSg;
-    this.serviceSg = sg.serviceSg;
+    this.serviceSg = this.initializeSecurityGroups({ vpcId: vpc.vpcId });
 
-    // Load balancer
-    const { targetGroup, lb, listener } = serviceLoadBalancer(this, {
-      serviceName: BASE_NAME, // service name
-      serviceContainerPort,
-      healthCheckPath,
-      vpc,
-      albSecurityGroupId: this.serviceAlbSg.id,
-      isPrivate,
-      tags,
-    });
-    this.targetGroup = targetGroup;
-    this.lb = lb;
-    this.listener = listener;
+    const gatewayTargetGroup = new ServiceTargetGroup(
+      `${stack}-${BASE_NAME}`,
+      {
+        tags: this.tags,
+        listenerArn: gatewayLoadBalancer.httpsListenerArn,
+        vpcId: vpc.vpcId,
+        containerPort: serviceContainerPort,
+        service: GatewayService.CONVERT_SERVICE,
+        healthCheckPath,
+        pathPatterns: ['/convert', '/convert/*'],
+        serviceSecurityGroupId: this.serviceSg.id,
+        albSecurityGroupId: gatewayLoadBalancer.albSecurityGroupId,
+      },
+      { parent: this }
+    );
+
+    this.targetGroup = gatewayTargetGroup.target_group;
 
     const dopplerEcsEnvironment = new DopplerEcsEnvironment(
       BASE_NAME,
@@ -199,6 +195,14 @@ export class ConvertService extends pulumi.ComponentResource {
           enable: true,
           rollback: true,
         },
+        // Register tasks only with the shared gateway.
+        loadBalancers: [
+          {
+            targetGroupArn: gatewayTargetGroup.target_group.arn,
+            containerName: 'service',
+            containerPort: serviceContainerPort,
+          },
+        ],
         taskDefinitionArgs: {
           taskRole: {
             roleArn: this.role.arn,
@@ -241,7 +245,7 @@ export class ConvertService extends pulumi.ComponentResource {
                   name: `${BASE_NAME}-tcp-${stack}`,
                   hostPort: serviceContainerPort,
                   containerPort: serviceContainerPort,
-                  targetGroup,
+                  targetGroup: this.targetGroup,
                 },
               ],
             },
@@ -259,73 +263,33 @@ export class ConvertService extends pulumi.ComponentResource {
       },
       {
         parent: this,
+        // ECS refuses a service whose target group is not yet associated with
+        // a load balancer; it is the listener rule that creates that
+        // association
+        dependsOn: [gatewayTargetGroup.listener_rule],
       }
     );
     this.service = service;
 
     // auto-scaling and alarm notifications
-    this.setupAutoScaling();
+    this.setupAutoScaling({
+      gatewayAlbArnSuffix: gatewayLoadBalancer.albArnSuffix,
+      gatewayTargetGroup: gatewayTargetGroup.target_group,
+    });
     this.setupServiceAlarms();
-
-    // DNS
-    const zone = aws.route53.getZoneOutput({ name: BASE_DOMAIN });
-
-    new aws.route53.Record(
-      `${BASE_NAME}-domain-record`,
-      {
-        name: SERVICE_DOMAIN_NAME,
-        type: 'A',
-        zoneId: zone.zoneId,
-        aliases: [
-          {
-            evaluateTargetHealth: false,
-            name: this.lb.dnsName,
-            zoneId: this.lb.zoneId,
-          },
-        ],
-      },
-      { parent: this }
-    );
   }
 
   initializeSecurityGroups({
     vpcId,
-    serviceContainerPort,
   }: {
     vpcId: pulumi.Output<string> | string;
-    serviceContainerPort: number;
   }) {
-    const serviceAlbSg = new aws.ec2.SecurityGroup(
-      `${BASE_NAME}-alb-sg-${stack}`,
-      {
-        name: `${BASE_NAME}-alb-sg-${stack}`,
-        description: `${BASE_NAME} application load balancer security group`,
-        vpcId,
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
     const serviceSg = new aws.ec2.SecurityGroup(
       `${BASE_NAME}-sg-${stack}`,
       {
         name: `${BASE_NAME}-sg-${stack}`,
         vpcId,
         description: `${BASE_NAME} security group that is attached directly to the service`,
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
-    new aws.vpc.SecurityGroupIngressRule(
-      `${BASE_NAME}-alb-in`,
-      {
-        securityGroupId: serviceSg.id,
-        description: 'Allow inbound traffic from the services ALB',
-        referencedSecurityGroupId: serviceAlbSg.id,
-        fromPort: serviceContainerPort,
-        toPort: serviceContainerPort,
-        ipProtocol: 'tcp',
         tags: this.tags,
       },
       { parent: this }
@@ -343,53 +307,16 @@ export class ConvertService extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // ALB SG rules
-    new aws.vpc.SecurityGroupIngressRule(
-      `${BASE_NAME}-http`,
-      {
-        securityGroupId: serviceAlbSg.id,
-        description: 'Allow inbound HTTP traffic',
-        cidrIpv4: '0.0.0.0/0',
-        fromPort: 80,
-        ipProtocol: 'tcp',
-        toPort: 80,
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
-    new aws.vpc.SecurityGroupIngressRule(
-      `${BASE_NAME}-https`,
-      {
-        securityGroupId: serviceAlbSg.id,
-        description: 'Allow inbound HTTPS traffic',
-        cidrIpv4: '0.0.0.0/0',
-        fromPort: 443,
-        ipProtocol: 'tcp',
-        toPort: 443,
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
-    new aws.vpc.SecurityGroupEgressRule(
-      `${BASE_NAME}-out-service`,
-      {
-        description: 'Allow traffic to the service security group',
-        securityGroupId: serviceAlbSg.id,
-        referencedSecurityGroupId: serviceSg.id,
-        fromPort: serviceContainerPort,
-        ipProtocol: 'tcp',
-        toPort: serviceContainerPort,
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
-    return { serviceAlbSg, serviceSg };
+    return serviceSg;
   }
 
-  setupAutoScaling() {
+  setupAutoScaling({
+    gatewayAlbArnSuffix,
+    gatewayTargetGroup,
+  }: {
+    gatewayAlbArnSuffix: pulumi.Output<string>;
+    gatewayTargetGroup: aws.lb.TargetGroup;
+  }) {
     if (!this.service) return;
 
     const serviceScalableTarget = new aws.appautoscaling.Target(
@@ -405,21 +332,8 @@ export class ConvertService extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const lbPortion: pulumi.Output<string> = this.lb.arn.apply((arn) => {
-      const parts = arn.split(':loadbalancer/');
-      return parts[1];
-    });
+    const resourceLabel = pulumi.interpolate`${gatewayAlbArnSuffix}/${gatewayTargetGroup.arnSuffix}`;
 
-    const tgPortion: pulumi.Output<string> = this.targetGroup.arn.apply(
-      (arn) => {
-        const parts = arn.split(':');
-        return parts[parts.length - 1];
-      }
-    );
-
-    const resourceLabel = pulumi.interpolate`${lbPortion}/${tgPortion}`;
-
-    // Create an Auto Scaling policy for request count.
     new aws.appautoscaling.Policy(
       `${BASE_NAME}-scaling-policy-request-count-${stack}`,
       {
@@ -541,7 +455,7 @@ export class ConvertService extends pulumi.ComponentResource {
       `${BASE_NAME}-http-5xx-alarm`,
       {
         name: `${BASE_NAME}-http-5xx-${stack}`,
-        metricName: 'HTTPCode_ELB_5XX_Count',
+        metricName: 'HTTPCode_Target_5XX_Count',
         namespace: 'AWS/ApplicationELB',
         statistic: 'Sum',
         period: 180,
@@ -549,9 +463,10 @@ export class ConvertService extends pulumi.ComponentResource {
         threshold: 25,
         comparisonOperator: 'GreaterThanOrEqualToThreshold',
         dimensions: {
-          LoadBalancer: this.lb.arn,
+          LoadBalancer: gatewayLoadBalancer.albArnSuffix,
+          TargetGroup: this.targetGroup.arnSuffix,
         },
-        alarmDescription: `High HTTP 5XX count alarm for ${BASE_NAME} Load Balancer.`,
+        alarmDescription: `High HTTP 5XX count alarm for ${BASE_NAME} gateway target group.`,
         actionsEnabled: true,
         alarmActions: [CLOUD_TRAIL_SNS_TOPIC_ARN],
         tags: this.tags,

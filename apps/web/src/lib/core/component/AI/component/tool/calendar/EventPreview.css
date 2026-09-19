@@ -1,0 +1,77 @@
+.calendar-tool-preview .calendar-view {
+	--fc-border-color: var(--color-edge);
+}
+
+.calendar-tool-preview
+	.calendar-view
+	.fc
+	.fc-timeGridWeek-view
+	.fc-col-header-cell-cushion {
+	flex-direction: row;
+	gap: 0.25rem;
+}
+
+.calendar-tool-preview
+	.calendar-view
+	.fc
+	.fc-timeGridWeek-view
+	.calendar-day-header-date {
+	width: auto;
+	height: 1.5rem;
+	min-width: 1.5rem;
+	padding: 0 0.125rem;
+	font-size: 0.875rem;
+}
+
+/* Keep surrounding events legible while making the live tool proposal unmistakable. */
+.calendar-tool-preview
+	.calendar-view
+	.fc
+	.fc-event:not(.calendar-event-emphasized) {
+	opacity: 0.62;
+}
+
+.calendar-tool-preview .calendar-view .fc .calendar-event-emphasized {
+	--fc-event-bg-color: color-mix(
+		in oklch,
+		var(--event-calendar-color, var(--color-calendar)) 22%,
+		var(--color-surface)
+	);
+	--fc-event-text-color: color-mix(
+		in oklch,
+		var(--event-calendar-color, var(--color-calendar)) 72%,
+		var(--color-ink)
+	);
+	z-index: 4;
+	border-width: 2px;
+	box-shadow:
+		0 0 0 1px
+		color-mix(
+			in oklch,
+			var(--event-calendar-color, var(--color-calendar)) 35%,
+			transparent
+		),
+		0 3px 8px
+		color-mix(
+			in oklch,
+			var(--event-calendar-color, var(--color-calendar)) 20%,
+			transparent
+		);
+	opacity: 1;
+}
+
+.calendar-tool-preview
+	.calendar-view
+	.fc.fc-direction-ltr
+	.fc-timeGridWeek-view
+	:is(.fc-timegrid-axis, .fc-timegrid-slot-label) {
+	border-right: 1px solid var(--fc-border-color);
+}
+
+.calendar-tool-preview
+	.calendar-view
+	.fc.fc-direction-rtl
+	.fc-timeGridWeek-view
+	:is(.fc-timegrid-axis, .fc-timegrid-slot-label) {
+	border-left: 1px solid var(--fc-border-color);
+}

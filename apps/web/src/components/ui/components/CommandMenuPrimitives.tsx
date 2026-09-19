@@ -119,7 +119,10 @@ function CommandMenuShellRoot(props: SurfaceProps) {
   const [local, rest] = splitProps(props, ['children', 'class']);
 
   return (
-    <Panel class={cn('max-h-[75vh] rounded-xl', local.class)} {...rest}>
+    <Panel
+      class={cn('max-h-[75vh] rounded-xl bg-dialog', local.class)}
+      {...rest}
+    >
       {local.children}
     </Panel>
   );
@@ -127,7 +130,7 @@ function CommandMenuShellRoot(props: SurfaceProps) {
 
 function CommandMenuHeader(props: ParentProps<{ class?: string }>) {
   return (
-    <Panel.Header class={cn('gap-2 px-4 my-1 bg-surface', props.class)}>
+    <Panel.Header class={cn('gap-2 px-4 my-1', props.class)}>
       {props.children}
     </Panel.Header>
   );
@@ -135,7 +138,7 @@ function CommandMenuHeader(props: ParentProps<{ class?: string }>) {
 
 function CommandMenuToolbar(props: ParentProps<{ class?: string }>) {
   return (
-    <Panel.Toolbar class={cn('bg-surface', props.class)}>
+    <Panel.Toolbar class={cn('bg-dialog', props.class)}>
       {props.children}
     </Panel.Toolbar>
   );
@@ -155,7 +158,7 @@ function CommandMenuFooter(props: ParentProps<{ class?: string }>) {
   return (
     <Panel.Footer
       class={cn(
-        'gap-4 px-4 bg-surface text-xs text-ink-extra-muted/80',
+        'gap-4 px-4 bg-dialog text-xs text-ink-extra-muted/80',
         props.class
       )}
     >

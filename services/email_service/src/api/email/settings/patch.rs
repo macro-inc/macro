@@ -4,7 +4,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
 use email_service::util::process_pre_insert::sfs_map;
-use email_service::util::sanitizer::sanitize_html_fragment;
+use email_utils::sanitize_html_fragment;
 use model::response::ErrorResponse;
 use models_email::service::link::Link;
 use models_email::{api, service};

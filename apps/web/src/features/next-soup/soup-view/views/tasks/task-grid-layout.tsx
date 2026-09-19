@@ -27,6 +27,7 @@ import { useUserId } from '@queries/auth';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
+import { Badge } from '@ui';
 import { cn } from '@ui/utils/classname';
 import { createMemo, For, Show, Suspense } from 'solid-js';
 import { ListPropertyValue } from './list-property-value';
@@ -219,10 +220,12 @@ export function TaskGridLayout(props: LayoutProps) {
         {/* Created By column - only shown on wide containers (>1220px) */}
         <Entity.Slot
           placement="createdBy"
-          class="hidden @min-[1221px]/u-list:flex items-center gap-1.5 min-w-0 overflow-hidden text-xs ph-no-capture"
+          class="hidden @min-[1221px]/u-list:flex min-w-0 overflow-hidden ph-no-capture"
         >
-          <UserIcon id={props.entity.ownerId} size="sm" showTooltip={true} />
-          <span class="truncate text-ink-muted">{ownerDisplayName()}</span>
+          <Badge variant="ghost" size="sm" class="max-w-full gap-1.5">
+            <UserIcon id={props.entity.ownerId} size="sm" showTooltip={true} />
+            <span class="truncate">{ownerDisplayName()}</span>
+          </Badge>
         </Entity.Slot>
 
         <Entity.Slot

@@ -12,6 +12,10 @@ use uuid::Uuid;
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct BackfillThreadPayload {
     pub thread_provider_id: String,
+    /// When true (stale-cursor recovery jobs), an already-known thread is
+    /// refreshed — missing messages are backfilled — instead of skipped.
+    #[serde(default)]
+    pub refresh_existing: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]

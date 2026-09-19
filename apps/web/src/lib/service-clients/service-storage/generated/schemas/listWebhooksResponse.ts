@@ -8,6 +8,8 @@ import type { Webhook } from './webhook';
 
 /**
  * Webhooks visible to the caller across their personal and team workspaces.
+
+Clients deserialize this, so both derives are used.
  */
 export interface ListWebhooksResponse {
   /** The caller's webhooks, newest first. Signing secrets are omitted. */

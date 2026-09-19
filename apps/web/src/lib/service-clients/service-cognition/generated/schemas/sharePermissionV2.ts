@@ -5,16 +5,16 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { SharePermissionV2ChannelSharePermissions } from './sharePermissionV2ChannelSharePermissions';
-import type { SharePermissionV2PublicAccessLevel } from './sharePermissionV2PublicAccessLevel';
+import type { SharePermissionV2LinkShare } from './sharePermissionV2LinkShare';
+import type { SharePermissionV2LinkShareAccessLevel } from './sharePermissionV2LinkShareAccessLevel';
 
 export interface SharePermissionV2 {
   /** The channel share permissions for the item */
   channelSharePermissions?: SharePermissionV2ChannelSharePermissions;
   /** The share permission id */
   id: string;
-  /** If the item is publicly accessible */
-  isPublic: boolean;
+  linkShare?: SharePermissionV2LinkShare;
+  linkShareAccessLevel?: SharePermissionV2LinkShareAccessLevel;
   /** The owner of the item */
   owner: string;
-  publicAccessLevel?: SharePermissionV2PublicAccessLevel;
 }

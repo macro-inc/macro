@@ -1,4 +1,4 @@
-import { type Accessor, type JSX, onCleanup } from 'solid-js';
+import { type Accessor, onCleanup } from 'solid-js';
 
 interface FolderSelectorProps {
   onSelect: (files: File[]) => void;
@@ -16,11 +16,8 @@ export function folderSelector(
   element: HTMLElement,
   accessor: Accessor<FolderSelectorProps | undefined>
 ) {
-  const handleFolderInputChange: JSX.ChangeEventHandlerUnion<
-    HTMLInputElement,
-    Event
-  > = (e) => {
-    const files = Array.from(e.target.files || []).filter(
+  const handleFolderInputChange = () => {
+    const files = Array.from(input.files || []).filter(
       (file) => !file.name.startsWith('.')
     );
     accessor()?.onSelect?.(files);

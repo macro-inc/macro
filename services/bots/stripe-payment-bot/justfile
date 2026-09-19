@@ -3,3 +3,6 @@ dev:
 
 check:
   bunx tsc --noEmit --project tsconfig.json
+
+test:
+  bun test

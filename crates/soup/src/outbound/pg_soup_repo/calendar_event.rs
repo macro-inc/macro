@@ -34,9 +34,11 @@ struct CalendarEventRow {
     organizer_email: Option<String>,
     organizer_name: Option<String>,
     conference_url: Option<String>,
+    conference_provider: Option<String>,
     is_read_only: bool,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
+    last_reminder_fired_at: Option<DateTime<Utc>>,
 }
 
 struct CursorParts {
@@ -114,7 +116,9 @@ pub(super) async fn by_ids(
     query.push_bind(req.user_id.as_ref().to_string());
     query.push(")) AND event.id = ANY(");
     query.push_bind(ids);
-    query.push(") ORDER BY event.updated_at DESC, event.id DESC");
+    query.push(
+        ") ORDER BY GREATEST(event.updated_at, event.last_reminder_fired_at) DESC, event.id DESC",
+    );
     query
         .build_query_as::<CalendarEventRow>()
         .fetch_all(db)
@@ -187,9 +191,11 @@ fn select_sql() -> &'static str {
         event.organizer_email,
         event.organizer_name,
         event.conference_url,
+        event.conference_provider,
         event.is_read_only,
         event.created_at,
-        event.updated_at
+        event.updated_at,
+        event.last_reminder_fired_at
     FROM calendar_events event
     "#
 }
@@ -197,7 +203,14 @@ fn select_sql() -> &'static str {
 fn sort_sql(sort: SimpleSortMethod) -> &'static str {
     match sort {
         SimpleSortMethod::CreatedAt => "event.created_at",
-        SimpleSortMethod::UpdatedAt | SimpleSortMethod::ViewedUpdated => "event.updated_at",
+        // A fired alarm counts as the event's latest activity, so the inbox
+        // row a reminder surfaces sorts at delivery time rather than at the
+        // event's Google last-modified time. GREATEST ignores the NULL when
+        // no reminder has fired. Must mirror `cursor_timestamp` in
+        // models_soup or keyset pagination breaks.
+        SimpleSortMethod::UpdatedAt | SimpleSortMethod::ViewedUpdated => {
+            "GREATEST(event.updated_at, event.last_reminder_fired_at)"
+        }
         SimpleSortMethod::ViewedAt => "'1970-01-01 00:00:00+00'::timestamptz",
     }
 }
@@ -258,6 +271,25 @@ pub(super) fn push_filter(
             builder.push_bind(email.clone());
             builder.push(")");
         }
+        // Bind-free on purpose: `$1` is the requesting user in every query
+        // that renders this clause (`cursor_soup` binds it first; the grouped
+        // dynamic query renders the whole filter bind-free via
+        // `build_calendar_event_filter` for the same reason), the contract
+        // the other arms' notification clauses rely on.
+        Expr::Literal(CalendarEventLiteral::NotificationDone(done)) => {
+            builder.push(super::expanded::dynamic::build_notification_done_clause(
+                "event.id",
+                "calendar_event",
+                *done,
+            ));
+        }
+        Expr::Literal(CalendarEventLiteral::NotificationSeen(seen)) => {
+            builder.push(super::expanded::dynamic::build_notification_seen_clause(
+                "event.id",
+                "calendar_event",
+                *seen,
+            ));
+        }
     }
 }
 
@@ -297,9 +329,11 @@ fn row_to_item(row: CalendarEventRow) -> Result<SoupItem<()>, sqlx::Error> {
         organizer_email: row.organizer_email,
         organizer_name: row.organizer_name,
         conference_url: row.conference_url,
+        conference_provider: row.conference_provider,
         is_read_only: row.is_read_only,
         created_at: row.created_at,
         updated_at: row.updated_at,
+        last_reminder_fired_at: row.last_reminder_fired_at,
         extra: (),
     }))
 }

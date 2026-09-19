@@ -5,6 +5,7 @@ use crate::domain::ports::{
 };
 use crate::domain::response::DocumentMetadataWithContent;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::{
     models::{AccessLevel, EntityType},
@@ -42,6 +43,10 @@ pub struct ReadMetadataResponse {
 pub struct ReadMetadata {
     #[schemars(description = "The id of the document you want to retrieve metadata for.")]
     pub document_id: Uuid,
+}
+
+impl ToolAnnotated for ReadMetadata {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Read document metadata");
 }
 
 #[async_trait]

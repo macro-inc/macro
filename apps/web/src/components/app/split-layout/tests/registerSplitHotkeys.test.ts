@@ -48,7 +48,7 @@ describe('registerSplitHotkeys', () => {
       goBack: vi.fn(),
       canGoForward: () => false,
       goForward: vi.fn(),
-      goHome: vi.fn(),
+      goToList: vi.fn(),
       splitName: () => 'Test',
       getSplitCount: () => 2,
       isNotUnifiedList: () => true,

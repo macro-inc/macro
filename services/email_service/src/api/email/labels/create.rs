@@ -32,39 +32,40 @@ pub struct CreateLabelResponse {
             (status = 201, body=CreateLabelResponse),
             (status = 400, body=ErrorResponse),
             (status = 401, body=ErrorResponse),
+            (status = 403, body=ErrorResponse),
+            (status = 404, body=ErrorResponse),
             (status = 409, body=ErrorResponse),
+            (status = 429, body=ErrorResponse),
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization, link, gmail_token), fields(user_id=authorization.authorization.user.user_context.user_id, fusionauth_user_id=authorization.authorization.user.user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, authorization, link), fields(user_id=authorization.authorization.user.user_context.user_id, fusionauth_user_id=authorization.authorization.user.user_context.fusion_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     link: Extension<Link>,
-    gmail_token: Extension<String>,
     Json(request_body): Json<CreateLabelRequest>,
 ) -> Result<Response, Response> {
     let created_label = ctx
-        .gmail_client
-        .create_label(gmail_token.as_str(), link.id, &request_body.label_name)
+        .email_api
+        .create_label(link.id, &request_body.label_name)
         .await
         .map_err(|e| {
-            tracing::error!(error=?e, "gmail call to create label failed");
-            match e {
-                gmail_client::GmailError::Conflict(_) => (
-                    StatusCode::CONFLICT,
-                    Json(ErrorResponse {
-                        message: "label with that name already exists".into(),
-                    }),
-                ),
-                _ => (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse {
-                        message: "create label call failed".into(),
-                    }),
-                ),
-            }
-            .into_response()
+            tracing::error!(error=?e, "email provider call to create label failed");
+            let status = crate::api::email::provider_error::provider_error_status(&e);
+            let message = if status == StatusCode::CONFLICT {
+                "label with that name already exists"
+            } else {
+                "create label call failed"
+            };
+            (
+                status,
+                crate::api::email::provider_error::provider_error_headers(&e),
+                Json(ErrorResponse {
+                    message: message.into(),
+                }),
+            )
+                .into_response()
         })?;
 
     let inserted_label = email_db_client::labels::insert::insert_label(&ctx.db, created_label)

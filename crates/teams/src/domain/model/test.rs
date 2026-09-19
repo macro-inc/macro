@@ -45,6 +45,28 @@ fn serialized_team_preserves_enterprise_value() {
 }
 
 #[test]
+fn new_team_defaults_link_share_to_team() {
+    let team = team_with_enterprise_status(false);
+    assert_eq!(team.default_link_share(), Some(LinkShare::Team));
+
+    let serialized = serde_json::to_value(team).unwrap();
+    assert_eq!(serialized["default_link_share"], "TEAM");
+}
+
+#[test]
+fn patch_team_request_distinguishes_omitted_and_null_default_link_share() {
+    let omitted: PatchTeamRequest = serde_json::from_str("{}").unwrap();
+    assert_eq!(omitted.default_link_share, None);
+
+    let null: PatchTeamRequest = serde_json::from_str(r#"{"default_link_share": null}"#).unwrap();
+    assert_eq!(null.default_link_share, Some(None));
+
+    let set: PatchTeamRequest =
+        serde_json::from_str(r#"{"default_link_share": "PUBLIC"}"#).unwrap();
+    assert_eq!(set.default_link_share, Some(Some(LinkShare::Public)));
+}
+
+#[test]
 fn invite_users_to_team_error_preserves_customer_storage_error() {
     let error = InviteUsersToTeamError::from(customer_storage_error());
     assert_preserves_customer_storage_error(error);

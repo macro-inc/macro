@@ -70,7 +70,7 @@ where
 
         let sort_method = *query.sort_method();
 
-        const MIN_PAGE: u32 = 20;
+        const MIN_PAGE: u32 = 1;
         const MAX_PAGE: u32 = 500;
 
         let limit = limit.unwrap_or_default().clamp(MIN_PAGE, MAX_PAGE);

@@ -86,7 +86,7 @@ export type RestoreSnapshotOptions = {
   /**
    * `'trailing-paragraph'` places the caret at the end of the restored
    * content's trailing paragraph, appending an empty one when the content
-   * ends in a non-paragraph block (e.g. a quote-reply's blockquote) — so
+   * ends in a non-paragraph block (e.g. a reply reference) — so
    * typing never extends the block itself. With `focus: false` the caret
    * is placed when the input is next focused programmatically (e.g. via a
    * focus request), so the restore itself never steals focus.

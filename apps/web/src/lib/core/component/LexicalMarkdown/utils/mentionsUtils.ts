@@ -74,6 +74,12 @@ type DateItem = ParsedDate & {
   id: string;
 };
 
+function getUserMentionDisplayName(user: IUser): string {
+  const name = user.name.trim();
+  if (name && name !== user.email) return name.split(/\s+/)[0] || name;
+  return user.email.split('@')[0] || user.email;
+}
+
 export type UserMentionRecord = {
   documentId: string;
   mentions: string[];
@@ -173,6 +179,7 @@ export async function handleUserMention(
   editor.dispatchCommand(INSERT_USER_MENTION_COMMAND, {
     userId: user.id,
     email: user.email,
+    displayName: getUserMentionDisplayName(user),
     mentionUuid: mentionId,
   });
 }

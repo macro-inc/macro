@@ -29,6 +29,7 @@ import {
   PropertyEmpty,
   PropertyIcon,
   PropertyLabel,
+  PropertyPill,
   PropertyRemoveButton,
   PropertyText,
   PropertyTooltip,
@@ -52,6 +53,7 @@ export const Property = {
   // Behavior extractors — read from <Property.Root> context.
   Caret: PropertyCaret,
   EditTrigger: PropertyEditTrigger,
+  Pill: PropertyPill,
   RemoveButton: PropertyRemoveButton,
   AddButton: PropertyAddButton,
 

@@ -1,0 +1,9 @@
+-- Reverse of the squashed new-ai-agents migration, newest object first.
+DELETE FROM bots WHERE id = '00000000-0000-0000-0000-00000000a9e7';
+
+ALTER TABLE bots
+    DROP COLUMN has_agent;
+
+DROP TABLE agent_session_log;
+
+DROP TABLE agent_session;

@@ -375,6 +375,15 @@ impl RemindersRepo for FakeRemindersRepo {
         if let Some(enabled) = update.enabled {
             reminder.enabled = enabled;
         }
+        if let Some(completed) = update.completed {
+            // Mirrors the SQL: an explicit `completed` outranks the reschedule
+            // revival above, and re-completing leaves the original stamp be.
+            reminder.completed_at = if completed {
+                reminder.completed_at.or_else(|| Some(now()))
+            } else {
+                None
+            };
+        }
         reminder.updated_at = now();
 
         Ok(Some(reminder.clone()))
@@ -405,6 +414,29 @@ fn complete(service: &RemindersServiceImpl<FakeRemindersRepo, FixedClock>, id: U
         .find(|(_, reminder)| reminder.id == id)
         .expect("reminder exists");
     reminder.completed_at = Some(now());
+}
+
+/// Park a reminder out of service with its firing left in the past, which is
+/// the state a recurring reminder is in after spending a while switched off.
+fn park(
+    service: &RemindersServiceImpl<FakeRemindersRepo, FixedClock>,
+    id: Uuid,
+    next_run_at: DateTime<Utc>,
+) {
+    let mut rows = service.repo.rows.lock().expect("rows lock poisoned");
+    let (_, reminder) = rows
+        .iter_mut()
+        .find(|(_, reminder)| reminder.id == id)
+        .expect("reminder exists");
+    reminder.enabled = false;
+    reminder.next_run_at = next_run_at;
+}
+
+/// The next 09:00 in New York after [`now`], which is 12:00 UTC — 08:00 there.
+fn next_daily_9am() -> DateTime<Utc> {
+    Utc.with_ymd_and_hms(2026, 7, 1, 13, 0, 0)
+        .single()
+        .expect("unambiguous instant")
 }
 
 #[tokio::test]
@@ -901,6 +933,185 @@ async fn updates_description_and_enabled() {
     assert!(!updated.enabled);
     // Untouched fields keep their value.
     assert_eq!(updated.next_run_at, created.next_run_at);
+}
+
+#[tokio::test]
+async fn rejects_a_cron_that_fires_more_often_than_the_minimum() {
+    // Every minute. The sweep could almost keep up, which is exactly why this
+    // needs refusing: it would deliver, not fall behind.
+    let every_minute = ReminderSchedule::Recurring {
+        cron: ReminderCron::parse("0 * * * * *").expect("valid cron"),
+        timezone: New_York,
+    };
+
+    let result = service()
+        .create_reminder(&user(USER_A), create_request(every_minute), None)
+        .await;
+
+    assert!(matches!(result, Err(ReminderError::BadRequest(_))));
+}
+
+#[tokio::test]
+async fn interval_validation_does_not_depend_on_when_the_request_arrives() {
+    // Firings need not be evenly spaced. `0 0,4 9 * * *` fires at 09:00 and
+    // 09:04 daily, so the gap after `now` is four minutes before 09:00 and
+    // nearly a day after it. Measuring only the first gap accepted or rejected
+    // the same schedule depending on the hour it was submitted.
+    let clustered = ReminderSchedule::Recurring {
+        cron: ReminderCron::parse("0 0,4 9 * * *").expect("valid cron"),
+        timezone: New_York,
+    };
+
+    // `now` here is 12:00 UTC — 08:00 in New York, ahead of both firings.
+    let before = service()
+        .create_reminder(&user(USER_A), create_request(clustered.clone()), None)
+        .await;
+    assert!(matches!(before, Err(ReminderError::BadRequest(_))));
+
+    // 13:02 UTC is 09:02 in New York, between the two firings.
+    let between = RemindersServiceImpl::with_clock(
+        FakeRemindersRepo::default(),
+        FixedClock(now() + Duration::hours(1) + Duration::minutes(2)),
+    )
+    .create_reminder(&user(USER_A), create_request(clustered), None)
+    .await;
+    assert!(
+        matches!(between, Err(ReminderError::BadRequest(_))),
+        "the same schedule must be rejected whenever it is submitted"
+    );
+}
+
+#[tokio::test]
+async fn re_enabling_a_long_disabled_recurring_reminder_moves_its_firing_forward() {
+    let service = service();
+    let created = service
+        .create_reminder(&user(USER_A), create_request(recurring()), None)
+        .await
+        .expect("created");
+    // Switched off months ago, so its firing is long past.
+    park(&service, created.id, now() - Duration::days(90));
+
+    let updated = service
+        .update_reminder(
+            owner_receipt(USER_A, created.id),
+            ReminderPatch {
+                enabled: Some(true),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("update should succeed");
+
+    // Switching a reminder back on should not present a date from April as the
+    // next thing that will happen.
+    assert_eq!(updated.next_run_at, next_daily_9am());
+    assert!(updated.enabled);
+}
+
+#[tokio::test]
+async fn un_completing_a_long_finished_recurring_reminder_moves_its_firing_forward() {
+    let service = service();
+    let created = service
+        .create_reminder(&user(USER_A), create_request(recurring()), None)
+        .await
+        .expect("created");
+    park(&service, created.id, now() - Duration::days(90));
+    complete(&service, created.id);
+
+    let updated = service
+        .update_reminder(
+            owner_receipt(USER_A, created.id),
+            ReminderPatch {
+                enabled: Some(true),
+                completed: Some(false),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("update should succeed");
+
+    assert_eq!(updated.next_run_at, next_daily_9am());
+    assert!(updated.completed_at.is_none());
+}
+
+#[tokio::test]
+async fn re_enabling_does_not_move_a_firing_that_is_merely_due() {
+    // The guard that keeps this narrow. A firing a minute old is one the
+    // dispatcher is about to deliver, and moving it would make that delivery
+    // find the time changed underneath it and drop the notification.
+    let service = service();
+    let created = service
+        .create_reminder(&user(USER_A), create_request(recurring()), None)
+        .await
+        .expect("created");
+    let imminent = now() - Duration::minutes(1);
+    park(&service, created.id, imminent);
+
+    let updated = service
+        .update_reminder(
+            owner_receipt(USER_A, created.id),
+            ReminderPatch {
+                enabled: Some(true),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("update should succeed");
+
+    assert_eq!(updated.next_run_at, imminent);
+}
+
+#[tokio::test]
+async fn re_enabling_alongside_a_new_schedule_keeps_the_schedule_the_owner_chose() {
+    let service = service();
+    let created = service
+        .create_reminder(&user(USER_A), create_request(recurring()), None)
+        .await
+        .expect("created");
+    park(&service, created.id, now() - Duration::days(90));
+    let chosen = now() + Duration::days(3);
+
+    let updated = service
+        .update_reminder(
+            owner_receipt(USER_A, created.id),
+            ReminderPatch {
+                schedule: Some(once(chosen)),
+                enabled: Some(true),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("update should succeed");
+
+    // Naming a firing is not a revival: recomputing over the top of it would
+    // discard what the owner just asked for.
+    assert_eq!(updated.next_run_at, chosen);
+}
+
+#[tokio::test]
+async fn re_enabling_a_one_shot_leaves_its_firing_alone() {
+    // A one-shot has no cron to recompute from, and an overdue one staying
+    // overdue is the point of it.
+    let service = service();
+    let created = service
+        .create_reminder(&user(USER_A), create_request(once(future())), None)
+        .await
+        .expect("created");
+    let past = now() - Duration::days(90);
+    park(&service, created.id, past);
+
+    let updated = service
+        .update_reminder(
+            owner_receipt(USER_A, created.id),
+            ReminderPatch {
+                enabled: Some(true),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("update should succeed");
+
+    assert_eq!(updated.next_run_at, past);
 }
 
 #[tokio::test]

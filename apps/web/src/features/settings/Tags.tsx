@@ -84,7 +84,7 @@ function TagListSection(props: {
       description={props.description}
       actions={
         <Button
-          variant="base"
+          variant="outline"
           size="sm"
           class="rounded-xs"
           onClick={() => props.onCreate(props.scope)}
@@ -212,7 +212,7 @@ function ConfirmDialog(props: {
               Cancel
             </Button>
             <Button
-              variant="active"
+              variant="accent"
               class="rounded-xs"
               disabled={props.pending}
               onClick={props.onConfirm}

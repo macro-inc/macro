@@ -2,10 +2,15 @@
 
 //! Channel bots: trigger built-in bot behavior from channel events.
 //!
-//! Channels emit [`ChannelBotTrigger`](channels::domain::side_effects::ChannelBotTrigger)s
-//! when a user message mentions one or more bots. The inbound
-//! [`BotTriggerRouter`](inbound::BotTriggerRouter) resolves each mentioned
-//! system bot and runs the appropriate domain service:
+//! Channels emit a [`ChannelBotTrigger`](channels::domain::side_effects::ChannelBotTrigger)
+//! candidate for every user-authored message. The inbound
+//! [`BotTriggerRouter`](inbound::BotTriggerRouter) resolves each candidate
+//! through a [`TriggerDetector`](domain::ports::TriggerDetector) — an explicit
+//! `@`-mention triggers the mentioned bots, and a thread reply with no mention
+//! may trigger an *inferred* Macro AI invocation when the thread already
+//! contains an agent message and a fast-model classifier judges that the
+//! message expects an agent response — and runs the appropriate domain
+//! service:
 //!
 //! * **System bots** (defined inside Macro) run in-process. The only one today
 //!   is Macro AI, handled by

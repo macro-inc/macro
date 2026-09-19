@@ -18,12 +18,14 @@ use teams::inbound::axum_router::{
 use user_quota::UserQuota;
 use utoipa::OpenApi;
 
+use crate::api::cursor_api_key::{CursorApiKeyStatus, put_cursor_api_key::PutCursorApiKeyRequest};
 use crate::api::email::generate_email_link::GenerateEmailLinkRequest;
 use crate::api::email::resend_fusionauth_verify_user_email::ResendFusionauthVerifyUserEmailRequest;
 use crate::api::jwt::macro_api_token::MacroApiTokenResponse;
 use crate::api::link::create_in_progress_link::CreateInProgressLinkResponse;
 use crate::api::link::github::{GithubLinkStatusResponse, InitGithubLinkResponse};
 use crate::api::link::gmail::{GmailLinkStatusResponse, InitGmailLinkResponse};
+use crate::api::link::outlook::InitOutlookLinkResponse;
 use crate::api::merge::create_merge_request::CreateAccountMergeRequest;
 use crate::api::user::create_user::CreateUserRequest;
 use crate::api::user::get_legacy_user_permissions::GetLegacyUserPermissionsResponse;
@@ -80,6 +82,16 @@ use model::user::{
                 link::github::check_github_link_status_handler,
                 link::gmail::init_gmail_link_handler,
                 link::gmail::check_gmail_link_status_handler,
+                link::outlook::init_outlook_link_handler,
+
+                // Cursor API key (settings -> Connections). Fully qualified:
+                // the `cursor_api_key` crate shadows the module of the same
+                // name in this path position.
+                crate::api::cursor_api_key::get_cursor_api_key::handler,
+                crate::api::cursor_api_key::put_cursor_api_key::handler,
+                crate::api::cursor_api_key::delete_cursor_api_key::handler,
+                crate::api::cursor_api_key::list_cursor_models::handler,
+                crate::api::cursor_api_key::put_cursor_default_model::handler,
 
                 /// /github_pull_requests
                 github_pull_requests::handler,
@@ -181,6 +193,9 @@ use model::user::{
                         GithubLinkStatusResponse,
                         InitGmailLinkResponse,
                         GmailLinkStatusResponse,
+                        InitOutlookLinkResponse,
+                        CursorApiKeyStatus,
+                        PutCursorApiKeyRequest,
 
                         // GitHub pull requests
                         EnrichGithubPullRequestsProxyRequest,
@@ -206,6 +221,7 @@ use model::user::{
                         PatchUserOnboardingRequest,
 
                         // Teams
+                        models_permissions::share_permission::LinkShare,
                         TeamRole,
                         TeamMember,
                         Team,

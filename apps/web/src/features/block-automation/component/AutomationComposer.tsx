@@ -303,7 +303,7 @@ export function AutomationComposer() {
 
             <div class="flex items-center justify-end gap-2 border-t border-edge-muted px-3 py-2">
               <Button
-                variant="base"
+                variant="outline"
                 size="sm"
                 class="cursor-default"
                 onClick={() => setAutomationComposerOpen(false, false)}
@@ -311,7 +311,7 @@ export function AutomationComposer() {
                 Cancel
               </Button>
               <Button
-                variant="active"
+                variant="accent"
                 size="sm"
                 class="cursor-default"
                 disabled={createMutation.isPending}

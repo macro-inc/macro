@@ -5,6 +5,7 @@
  * service-clients package).
  */
 export const services = [
+  'agent-harness',
   'auth',
   'cognition',
   'connection',

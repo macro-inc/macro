@@ -3,8 +3,8 @@
 
 /// Domain models, ports, and service.
 pub mod domain;
-#[cfg(feature = "inbound")]
-/// HTTP adapters.
+#[cfg(any(feature = "inbound", feature = "ai_tools"))]
+/// Inbound HTTP and AI-tool adapters.
 pub mod inbound;
 #[cfg(feature = "outbound")]
 /// Postgres adapters.

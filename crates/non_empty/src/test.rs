@@ -104,3 +104,28 @@ fn test_deserialize_non_empty_string() {
     let result: NonEmpty<String> = serde_json::from_str(json).unwrap();
     assert_eq!(result.inner(), "hello");
 }
+
+#[test]
+fn test_push_grows_the_vec() {
+    let mut vec = NonEmpty::one(1);
+    vec.push(2);
+    vec.push(3);
+    assert_eq!(vec.inner(), &vec![1, 2, 3]);
+}
+
+#[test]
+fn test_get_mut_replaces_in_place() {
+    let mut vec = NonEmpty::new(vec![1, 2, 3]).unwrap();
+    *vec.get_mut(1).unwrap() = 20;
+    assert_eq!(vec.get_mut(3), None, "out of bounds");
+    assert_eq!(vec.inner(), &vec![1, 20, 3]);
+}
+
+#[test]
+fn test_last_mut_needs_no_option() {
+    let mut vec = NonEmpty::one(1);
+    *vec.last_mut() = 10;
+    vec.push(2);
+    *vec.last_mut() = 20;
+    assert_eq!(vec.inner(), &vec![10, 20]);
+}

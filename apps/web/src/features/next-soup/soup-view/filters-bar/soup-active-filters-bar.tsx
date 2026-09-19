@@ -52,7 +52,7 @@ export function SoupActiveFiltersBar(props: SoupActiveFiltersBarProps) {
             <div class="flex items-center shrink-0">
               <Button
                 onClick={() => props.onClearAll()}
-                variant="base"
+                variant="outline"
                 size="sm"
                 class="h-7 rounded-md"
                 tooltip="Clear active filters"

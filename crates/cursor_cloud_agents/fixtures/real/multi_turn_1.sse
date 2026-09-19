@@ -1,0 +1,82 @@
+event: status
+data: {"runId":"run-b8d6fdb3-5454-46d2-94a1-75465cf48367","status":"RUNNING"}
+
+id: 1787331101885-0
+event: interaction_update
+data: {"type":"step-started","stepId":0}
+
+id: 1787331101897-0
+event: interaction_update
+data: {"type":"user-message-appended","userMessage":{"type":"user_message","session_id":"run-b8d6fdb3-5454-46d2-94a1-75465cf48367","text":"Say only the word 'first' and nothing else. Do not use any tools."}}
+
+id: 1787331103300-0
+event: thinking
+data: {"text":"The user wants me to"}
+
+id: 1787331103300-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"The user wants me to"}
+
+id: 1787331103307-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787331103310-0
+event: thinking
+data: {"text":" say only the word \"first\""}
+
+id: 1787331103310-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" say only the word \"first\""}
+
+id: 1787331103312-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787331103315-0
+event: thinking
+data: {"text":" and nothing else."}
+
+id: 1787331103315-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" and nothing else."}
+
+id: 1787331103318-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787331103322-0
+event: interaction_update
+data: {"type":"thinking-completed","thinkingDurationMs":23}
+
+id: 1787331103326-0
+event: assistant
+data: {"text":"first"}
+
+id: 1787331103326-0
+event: interaction_update
+data: {"type":"text-delta","text":"first"}
+
+id: 1787331103330-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331103534-0
+event: interaction_update
+data: {"type":"turn-ended"}
+
+id: 1787331103537-0
+event: interaction_update
+data: {"type":"step-completed","stepId":0,"stepDurationMs":1653}
+
+event: status
+data: {"runId":"run-b8d6fdb3-5454-46d2-94a1-75465cf48367","status":"FINISHED"}
+
+id: 1787331112133-0
+event: result
+data: {"runId":"run-b8d6fdb3-5454-46d2-94a1-75465cf48367","status":"FINISHED","text":"first","durationMs":10531,"git":{"branches":[{"repoUrl":"github.com/macro-inc/macro","branch":"cursor/single-word-output-70ef"}]}}
+
+id: 1787331112133-0
+event: done
+data: {}
+

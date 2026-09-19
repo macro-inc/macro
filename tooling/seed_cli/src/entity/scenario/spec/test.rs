@@ -54,6 +54,14 @@ fn example_scenario_parses() {
     assert_eq!(spec.scenario, "team-perms");
     assert_eq!(spec.users.len(), 6);
     assert_eq!(spec.user_id("alice"), "macro|alice@seed.macro.local");
+
+    let handbook = &spec.documents["handbook"];
+    assert_eq!(handbook.link_share, Some(LinkShare::Public));
+    assert_eq!(handbook.link_share_access_level, Some(ShareLevel::View));
+
+    let bob_notes = &spec.documents["bob-notes"];
+    assert_eq!(bob_notes.link_share, Some(LinkShare::Team));
+    assert_eq!(bob_notes.link_share_access_level, Some(ShareLevel::View));
 }
 
 #[test]
@@ -204,6 +212,47 @@ fn rejects_unknown_fields() {
 }
 
 #[test]
+fn rejects_incomplete_link_share_policies() {
+    let missing_access_level = minimal(serde_json::json!({
+        "scenario": "bad",
+        "users": { "alice": { "email": "alice@x.local" } },
+        "documents": {
+            "doc": { "owner": "alice", "link_share": "TEAM" }
+        }
+    }));
+    let error = missing_access_level.unwrap_err().to_string();
+    assert!(
+        error.contains("sets link_share but not link_share_access_level"),
+        "{error}"
+    );
+
+    let missing_scope = minimal(serde_json::json!({
+        "scenario": "bad",
+        "users": { "alice": { "email": "alice@x.local" } },
+        "chats": {
+            "chat": { "owner": "alice", "link_share_access_level": "view" }
+        }
+    }));
+    let error = missing_scope.unwrap_err().to_string();
+    assert!(
+        error.contains("sets link_share_access_level but not link_share"),
+        "{error}"
+    );
+}
+
+#[test]
+fn rejects_legacy_public_link_field() {
+    let result = minimal(serde_json::json!({
+        "scenario": "bad",
+        "users": { "alice": { "email": "alice@x.local" } },
+        "projects": {
+            "project": { "owner": "alice", "public": "view" }
+        }
+    }));
+    assert!(result.unwrap_err().to_string().contains("unknown field"));
+}
+
+#[test]
 fn entity_ref_parsing() {
     assert_eq!(
         EntityRef::parse("user:alice").unwrap(),
@@ -216,6 +265,34 @@ fn entity_ref_parsing() {
     assert!(EntityRef::parse("nope").is_err());
     assert!(EntityRef::parse("user:").is_err());
     assert!(EntityRef::parse("widget:x").is_err());
+}
+
+#[test]
+fn email_thread_keeps_supplied_html() {
+    let spec = minimal(serde_json::json!({
+        "scenario": "html-mail",
+        "users": { "alice": { "email": "alice@x.local" } },
+        "emails": {
+            "alice-inbox": {
+                "owner": "alice",
+                "threads": {
+                    "wide": {
+                        "subject": "Wide HTML",
+                        "from": "notifications@github.com",
+                        "body": "plain",
+                        "body_html": "<pre style='color:#555'>diff</pre>"
+                    }
+                }
+            }
+        }
+    }))
+    .unwrap();
+    let thread = &spec.emails["alice-inbox"].threads["wide"];
+    assert_eq!(
+        thread.body_html.as_deref(),
+        Some("<pre style='color:#555'>diff</pre>")
+    );
+    assert_eq!(thread.body.as_deref(), Some("plain"));
 }
 
 #[test]

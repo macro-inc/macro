@@ -5,16 +5,17 @@ use model::document::FileType;
 use models_properties::EntityType;
 use sqlx::PgPool;
 use sqs_client::search::{
-    SearchQueueMessage, call::CallRecordMessage, channel::ChannelMessageUpdate, chat::ChatMessage,
-    email::EmailThreadBatchMessage, project::UpsertProject,
+    SearchQueueMessage, calendar_event::UpsertCalendarEvent, call::CallRecordMessage,
+    channel::ChannelMessageUpdate, chat::ChatMessage, email::EmailThreadBatchMessage,
+    project::UpsertProject,
 };
 
 use crate::config::BackfillPageSizes;
 use crate::domain::models::{
-    BackfillError, CallBackfillCursor, CallBackfillRequest, ChannelBackfillRequest,
-    ChatBackfillCursor, ChatBackfillRequest, DocumentBackfillCursor, DocumentBackfillRequest,
-    EmailBackfillRequest, ProjectBackfillCursor, ProjectBackfillRequest, PropertiesBackfillRequest,
-    PropertySourcePage, SourcePage,
+    BackfillError, CalendarEventBackfillCursor, CalendarEventBackfillRequest, CallBackfillCursor,
+    CallBackfillRequest, ChannelBackfillRequest, ChatBackfillCursor, ChatBackfillRequest,
+    DocumentBackfillCursor, DocumentBackfillRequest, EmailBackfillRequest, ProjectBackfillCursor,
+    ProjectBackfillRequest, PropertiesBackfillRequest, PropertySourcePage, SourcePage,
 };
 use crate::domain::ports::BackfillSource;
 
@@ -360,6 +361,46 @@ impl BackfillSource for PgBackfillSource {
             entity_type,
             rows_consumed,
         })
+    }
+
+    async fn fetch_calendar_events(
+        &self,
+        req: &CalendarEventBackfillRequest,
+        cursor: Option<CalendarEventBackfillCursor>,
+    ) -> Result<(SourcePage, Option<CalendarEventBackfillCursor>), BackfillError> {
+        let db_cursor = cursor.map(|c| (c.updated_at, c.event_id));
+        let batch = macro_db_client::calendar_event::get_events_for_backfill::get_calendar_events_for_search_backfill(
+            &self.db,
+            self.page_sizes.calendar_events as i64,
+            db_cursor,
+            req.updated_after,
+            req.updated_before,
+        )
+        .await
+        .map_err(BackfillError::Source)?;
+
+        let next_cursor = batch.last().map(|event| CalendarEventBackfillCursor {
+            updated_at: event.updated_at,
+            event_id: event.event_id,
+        });
+        let rows_consumed = batch.len();
+        let messages: Vec<SearchQueueMessage> = batch
+            .into_iter()
+            .map(|event| {
+                SearchQueueMessage::UpsertCalendarEvent(UpsertCalendarEvent {
+                    event_id: event.event_id.to_string(),
+                    index_override: req.index_override.clone(),
+                })
+            })
+            .collect();
+
+        Ok((
+            SourcePage {
+                messages,
+                rows_consumed,
+            },
+            next_cursor,
+        ))
     }
 
     async fn fetch_projects(

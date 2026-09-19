@@ -17,12 +17,12 @@ use super::repo_root;
 /// project and the fixed base ports.
 pub const DEFAULT_NAME: &str = "macro";
 
-/// Start of the non-default port window. Each named instance gets a 1000-port
-/// stride starting here; per-port offsets (all < `STRIDE`) live within a
-/// stride, so two distinct strides can never overlap.
+/// Start of the non-default port window. Keep the entire allocation below
+/// Linux's default ephemeral range (32768-60999), otherwise an ordinary
+/// outbound connection can intermittently occupy a Compose host port.
 const WINDOW_START: u32 = 20_000;
-const STRIDE: u32 = 1_000;
-const BUCKETS: u32 = 40; // 20000..=60000
+const STRIDE: u32 = 100;
+const BUCKETS: u32 = 120; // 20000..=31999
 
 /// A validated instance name: lowercase ASCII alphanumerics, hyphen, and
 /// underscore, starting alphanumeric, non-empty, <= 40 chars. The newtype
@@ -96,6 +96,20 @@ pub enum Port {
     Kafka = 9092,
     SdkWebhookSsh = 8788,
     SdkWebhookHostReceiver = 8789,
+    // Appended (not slotted by number) so existing per-instance port offsets,
+    // which come from declaration order, stay stable.
+    /// Retired with agent_proxy_service; kept (in place, at the end) because
+    /// per-instance port offsets come from declaration order, and removing a
+    /// variant would shift every one declared after it.
+    AgentProxy = 8091,
+    /// Agent session control API.
+    AgentHarness = 8101,
+    /// The agent egress proxy, `agent_harness_service`'s second listener.
+    /// Published on every local instance - it is what the Cursor egress
+    /// tunnel points at, and Cursor's cloud is outside the compose network.
+    AgentHarnessEgress = 8102,
+    /// Scheduled actions API and dispatcher (default compose port 8099).
+    ScheduledAction = 8099,
 }
 
 impl Port {

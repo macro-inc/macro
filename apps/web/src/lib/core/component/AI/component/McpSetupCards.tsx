@@ -51,7 +51,7 @@ function CollapsibleCard(props: {
                 (borderless pill) once that refactor lands — deferred out of the
                 empty-states styling PR to keep it focused. */}
             <Button
-              variant={isCopied() ? 'base' : 'ghost'}
+              variant={isCopied() ? 'outline' : 'ghost'}
               size="sm"
               class="shrink-0"
               onClick={() => props.onCopy(props.copyKey, props.copyValue)}

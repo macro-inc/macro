@@ -4,22 +4,18 @@ name = "gmail_client"
 publish = false
 version = "0.1.0"
 
-[features]
-gmail_test = []
-
 [dependencies]
-anyhow = { workspace = true }
 base64 = { workspace = true }
-chrono = { workspace = true }
+httpdate = { workspace = true }
 jsonwebtoken = { workspace = true }
-mail-builder = "0.4.3"
-mockall = { workspace = true }
 models_email = { path = "../models_email" }
 regex = { workspace = true }
-reqwest = { workspace = true, features = ["stream"] }
+reqwest = { workspace = true }
 serde = { workspace = true }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
 serde_json = { workspace = true }
 tokio = { workspace = true }
-tracing = { workspace = true }
-uuid = { workspace = true }
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+wiremock = { workspace = true }

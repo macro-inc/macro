@@ -27,9 +27,9 @@ use crate::testing::fake_wire::FakeTransport;
 /// on this protocol is a tagged enum or struct, so it is always an object in
 /// practice; there is no other reason to prefer an object here now that the
 /// wire carries the bare envelope with no outer framing.
-async fn asserts_runtime_to_server_delivery<T, F, Fut>(transport: Arc<T>, receive_from_transport: F)
+async fn asserts_runtime_to_server_delivery<T, F, Fut>(transport: T, receive_from_transport: F)
 where
-    T: Transport<Value, Value> + Send + Sync + 'static,
+    T: Transport<Value, Value>,
     F: FnOnce() -> Fut,
     Fut: Future<Output = Value>,
 {
@@ -46,11 +46,7 @@ where
 #[tokio::test]
 async fn fake_transport_delivers_runtime_to_server_messages() {
     let (transport, mut probe) = FakeTransport::new();
-    asserts_runtime_to_server_delivery(
-        Arc::new(transport),
-        || async move { probe.next_send().await },
-    )
-    .await;
+    asserts_runtime_to_server_delivery(transport, || async move { probe.next_send().await }).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -70,7 +66,7 @@ async fn websocket_transport_delivers_runtime_to_server_messages() {
         .expect("runtime should connect");
     let wire = client_wire::<Value, _>(stream);
 
-    asserts_runtime_to_server_delivery(Arc::new(wire), || async {
+    asserts_runtime_to_server_delivery(wire, || async {
         let mut channel = timeout(Duration::from_secs(1), transport.accept())
             .await
             .expect("server accept should not hang")

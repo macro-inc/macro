@@ -1,0 +1,18 @@
+---
+title: ListNotifications
+description: "List the current user's notifications. By default returns active notifications (not deleted, not done), ordered by most recent first. Use `done` and `seen` to request done/not-done or seen/unseen notifications."
+---
+
+# ListNotifications
+
+List the current user's notifications. By default returns active notifications (not deleted, not done), ordered by most recent first. Use `done` and `seen` to request done/not-done or seen/unseen notifications.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `limit` | integer | No | Maximum number of notifications to return. Defaults to 20, max 50. |
+| `done` | boolean | No | Filter by done status. If omitted, only not-done notifications are returned. Set true for done notifications, false for not-done notifications. |
+| `seen` | boolean | No | Filter by seen status. If omitted, both seen and unseen notifications are returned. Set true for seen notifications, false for unseen notifications. |
+| `includeTypes` | (`"email"` \| `"message"` \| `"channel"` \| `"document"` \| `"project"` \| `"chat"` \| `"call"` \| `"task"` \| `"github"` \| `"reminder"` \| `"calendar"`)[] | No | Filter to specific notification item types. If omitted, returns all types. Example: ["email", "message"] returns only email and message notifications. |
+| `entities` | NotificationEntityFilter[] | No | Filter to notifications for specific entities. Pair each id with its canonical entityType to avoid ambiguity. Example: [{"entityType":"email_thread","id":"..."}] returns notifications for one email thread. |

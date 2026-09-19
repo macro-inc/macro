@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH user_source_ids AS (\n            SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp\n                WHERE cp.user_id = $2 AND cp.left_at IS NULL\n            UNION ALL\n            SELECT t.team_id::text FROM team_user t\n                WHERE t.user_id = $2\n            UNION ALL\n            SELECT $2\n        )\n        SELECT\n            chat_id,\n            access_level\n        FROM (\n            -- Source 1: entity_access for chats\n            SELECT\n                ea.entity_id::text as chat_id,\n                ea.access_level::text as access_level\n            FROM entity_access ea\n            WHERE ea.source_id = ANY(SELECT source_id FROM user_source_ids)\n                AND ea.entity_id = ANY(SELECT id::uuid FROM \"Chat\" WHERE id = ANY($1) AND \"deletedAt\" IS NULL)\n                AND ea.entity_type = 'chat'\n            UNION ALL\n            -- Source 2: Direct chat link permissions\n            SELECT\n                c.id as chat_id,\n                sp.\"linkShareAccessLevel\"::text as access_level\n            FROM \"Chat\" c\n            JOIN \"ChatPermission\" cp ON cp.\"chatId\" = c.id\n            JOIN \"SharePermission\" sp ON sp.id = cp.\"sharePermissionId\"\n                AND sp.\"linkShareAccessLevel\" IS NOT NULL\n                AND (\n                    sp.\"linkShare\" = 'PUBLIC'\n                    OR (\n                        sp.\"linkShare\" = 'TEAM'\n                        AND EXISTS (\n                            SELECT 1\n                            FROM team_user owner_team\n                            WHERE owner_team.user_id = c.\"userId\"\n                                AND owner_team.team_id::text = ANY(\n                                    SELECT source_id FROM user_source_ids\n                                )\n                        )\n                    )\n                )\n            WHERE c.id = ANY($1) AND c.\"deletedAt\" IS NULL\n        ) as all_levels\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "chat_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "access_level",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "c6a7c0f79caa2cb4f5f29ee9c7e40a310aa3da512e914357ea6f9783c389a232"
+}

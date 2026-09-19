@@ -8,7 +8,7 @@ use super::pull_request_metadata::{
 
 use crate::domain::{
     models::{
-        EnrichedGithubPullRequest, GithubAuthenticatedUser, GithubError,
+        AppJwt, EnrichedGithubPullRequest, GithubAuthenticatedUser, GithubError,
         GithubInstallationAccessToken, GithubPullRequestDetails, GithubSetupAccessToken,
         GithubUserInstallation, GithubUserInstallationsPage,
     },
@@ -222,7 +222,7 @@ impl GithubSyncClient for GithubSyncClientImpl {
     #[tracing::instrument(skip(self, jwt), err)]
     async fn generate_installation_access_token(
         &self,
-        jwt: &str,
+        jwt: &AppJwt,
         installation_id: u64,
     ) -> Result<GithubInstallationAccessToken, GithubError> {
         let response = self
@@ -230,7 +230,7 @@ impl GithubSyncClient for GithubSyncClientImpl {
             .post(format!(
                 "https://api.github.com/app/installations/{installation_id}/access_tokens"
             ))
-            .header("Authorization", format!("Bearer {jwt}"))
+            .header("Authorization", format!("Bearer {}", jwt.as_str()))
             .header("Accept", "application/vnd.github+json")
             .header("User-Agent", "Macro-Auth-Service")
             .header("X-GitHub-Api-Version", "2022-11-28")
@@ -255,6 +255,114 @@ impl GithubSyncClient for GithubSyncClientImpl {
             .map_err(|e| GithubError::Internal(e.into()))?;
 
         Ok(token)
+    }
+
+    #[tracing::instrument(skip(self, jwt), err)]
+    async fn get_repository_installation(
+        &self,
+        jwt: &AppJwt,
+        owner: &str,
+        repository: &str,
+    ) -> Result<Option<u64>, GithubError> {
+        #[derive(serde::Deserialize)]
+        struct InstallationResponse {
+            id: u64,
+        }
+
+        let response = self
+            .client
+            .get(format!(
+                "{}/repos/{owner}/{repository}/installation",
+                self.api_base_url()
+            ))
+            .header("Authorization", format!("Bearer {}", jwt.as_str()))
+            .header("Accept", "application/vnd.github+json")
+            .header("User-Agent", "Macro-Auth-Service")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .send()
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))?;
+
+        // Not installed and not visible to our App look the same from here, and
+        // both mean the same thing to a caller: no token is coming.
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
+
+        let status = response.status();
+        if !status.is_success() {
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "unknown error".to_string());
+            return Err(GithubError::Internal(anyhow::anyhow!(
+                "failed to look up a repository installation (status {status}): {error_body}"
+            )));
+        }
+
+        let installation: InstallationResponse = response
+            .json()
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))?;
+
+        Ok(Some(installation.id))
+    }
+
+    #[tracing::instrument(skip(self, jwt), err)]
+    async fn generate_scoped_installation_access_token(
+        &self,
+        jwt: &AppJwt,
+        installation_id: u64,
+        repository: &str,
+        permissions: &[(&str, &str)],
+    ) -> Result<GithubInstallationAccessToken, GithubError> {
+        /// The narrowing GitHub applies to the minted token. Omitting either
+        /// field widens it to everything the installation can reach, so both
+        /// are always sent.
+        #[derive(serde::Serialize)]
+        struct ScopedTokenRequest<'a> {
+            /// Names only, without the owner - GitHub resolves them within the
+            /// installation.
+            repositories: [&'a str; 1],
+            /// Permission name to level, as GitHub names them.
+            permissions: std::collections::BTreeMap<&'a str, &'a str>,
+        }
+
+        let body = ScopedTokenRequest {
+            repositories: [repository],
+            permissions: permissions.iter().copied().collect(),
+        };
+
+        let response = self
+            .client
+            .post(format!(
+                "{}/app/installations/{installation_id}/access_tokens",
+                self.api_base_url()
+            ))
+            .header("Authorization", format!("Bearer {}", jwt.as_str()))
+            .header("Accept", "application/vnd.github+json")
+            .header("User-Agent", "Macro-Auth-Service")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "unknown error".to_string());
+            return Err(GithubError::Internal(anyhow::anyhow!(
+                "failed to create a scoped installation access token (status {status}): {error_body}"
+            )));
+        }
+
+        response
+            .json()
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))
     }
 
     #[tracing::instrument(skip(self, access_token, body), err)]

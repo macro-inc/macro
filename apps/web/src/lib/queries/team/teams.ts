@@ -66,6 +66,23 @@ export function useIsTeamAdmin(): Accessor<boolean> {
   };
 }
 
+/** Reactive boolean: true iff the current user owns the current team. */
+export function useIsTeamOwner(): Accessor<boolean> {
+  const userId = useUserId();
+  const teamQuery = useCurrentTeamQuery();
+  return () => {
+    const uid = userId();
+    if (!uid) return false;
+    if (!queryReadyGate(teamQuery)) return false;
+    const team = teamQuery.data;
+    if (!team) return false;
+    return (
+      team.members.find((member) => member.user_id === uid)?.role ===
+      TeamRole.owner
+    );
+  };
+}
+
 export function invalidateUserTeams() {
   queryClient.invalidateQueries({
     queryKey: teamKeys.userTeams.queryKey,
@@ -385,6 +402,7 @@ export function useCreateTeamWithInvitesMutation(
               auto_join_domain: null,
               enterprise: false,
               allow_non_admin_invites: true,
+              default_link_share: 'TEAM',
             };
 
             queryClient.setQueryData<Team[]>(

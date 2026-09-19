@@ -49,6 +49,10 @@
       "name": "vpc",
       "version": "0.0.0",
     },
+    "stacks/agent-harness-service": {
+      "name": "agent-harness-service-stack",
+      "version": "0.0.0",
+    },
     "stacks/agent-schedule-service": {
       "name": "agent-schedule-service-stack",
       "version": "0.0.0",
@@ -466,6 +470,8 @@
     "acorn-walk": ["acorn-walk@8.3.5", "", { "dependencies": { "acorn": "^8.11.0" } }, "sha512-HEHNfbars9v4pgpW6SO1KSPkfoS0xVOM/9UzkJltjlsHZmJasxg8aXkuZa7SMf8vKGIBhpUsPluQSqhJFCqebw=="],
 
     "agent-base": ["agent-base@7.1.4", "", {}, "sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ=="],
+
+    "agent-harness-service-stack": ["agent-harness-service-stack@workspace:stacks/agent-harness-service"],
 
     "agent-schedule-service-stack": ["agent-schedule-service-stack@workspace:stacks/agent-schedule-service"],
 

@@ -1,0 +1,22 @@
+{
+	"name": "coding-agent-worker",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"start": "bun run index.ts"
+	},
+	"dependencies": {
+		"@agentclientprotocol/sdk": "^1.2.1",
+		"@daytona/sdk": "latest",
+		"@macro/sdk": "file:../../packages/sdk",
+		"envsafe": "^2.0.3",
+		"hono": "^4.12.30",
+		"ink": "^7.1.1",
+		"ink-text-input": "^6.0.0",
+		"react": "^19.2.7"
+	},
+	"devDependencies": {
+		"@types/bun": "^1.3.14",
+		"@types/react": "^19.2.17"
+	}
+}

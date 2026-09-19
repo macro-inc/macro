@@ -23,7 +23,7 @@ describe('preview controller content', () => {
   });
 
   it('resolves default and content-specific widths from the same config', () => {
-    const defaultWidth = previewControllerWidthForContent({
+    const inboxWidth = previewControllerWidthForContent({
       type: 'component',
       id: 'inbox',
     });
@@ -40,10 +40,10 @@ describe('preview controller content', () => {
       id: 'companies',
     });
 
-    expect(defaultWidth).toBeDefined();
-    expect(channelsWidth).not.toBe(defaultWidth);
-    expect(mailWidth).not.toBe(defaultWidth);
-    expect(companiesWidth).not.toBe(defaultWidth);
+    expect(inboxWidth).toBe(360);
+    expect(channelsWidth).not.toBe(inboxWidth);
+    expect(mailWidth).not.toBe(inboxWidth);
+    expect(companiesWidth).not.toBe(inboxWidth);
 
     const companiesWidthInNarrowViewport = previewControllerWidthForContent(
       { type: 'component', id: 'companies' },
@@ -64,7 +64,7 @@ describe('preview controller content', () => {
         type: 'project',
         id: 'project-1',
       })
-    ).toBe(defaultWidth);
+    ).toBe(440);
   });
 
   it('uses the configured list-view minimum only for Preview Controllers', () => {

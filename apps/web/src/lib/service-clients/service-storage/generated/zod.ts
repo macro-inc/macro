@@ -7,165 +7,382 @@
 import * as zod from 'zod';
 
 /**
- * @deprecated
- * @summary Gets the users recent activities
+ * @summary Handler for `GET /agents`.
  */
-export const getRecentActivityHandlerQueryParams = zod.object({
-  limit: zod
-    .number()
-    .describe('The maximum number of items to retreive. Default 10, max 100.'),
-  offset: zod.number().describe('The offset to start from. Default 0.'),
+export const listAgentsResponseItem = zod
+  .object({
+    bot: zod
+      .object({
+        avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+        created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+        created_by: zod
+          .string()
+          .nullish()
+          .describe('User that created this bot.'),
+        deleted_at: zod.iso
+          .datetime({})
+          .nullish()
+          .describe('Soft-delete timestamp.'),
+        description: zod.string().nullish().describe('Optional description.'),
+        handle: zod.string().describe('Stable handle.'),
+        has_agent: zod
+          .boolean()
+          .describe(
+            'Whether mentioning this bot opens a sandboxed coding-agent session.'
+          ),
+        id: zod.string(),
+        kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
+        name: zod.string().describe('Display name.'),
+        owner: zod
+          .union([
+            zod.null(),
+            zod
+              .union([
+                zod
+                  .object({
+                    type: zod.enum(['user']),
+                    user_id: zod.string().describe('Owner user id.'),
+                  })
+                  .describe('User-owned bot.'),
+                zod
+                  .object({
+                    team_id: zod.uuid().describe('Owner team id.'),
+                    type: zod.enum(['team']),
+                  })
+                  .describe('Team-owned bot.'),
+              ])
+              .describe('Bot owner.'),
+          ])
+          .optional(),
+        updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+      })
+      .describe(
+        'Bot row.\n\nClients deserialize this, so both derives are used.'
+      ),
+    channel_ids: zod
+      .array(zod.uuid())
+      .describe('Selected channel ids. Empty for a global agent.'),
+    channel_scope: zod
+      .enum(['all', 'selected'])
+      .describe(
+        'Whether an agent is available everywhere or only in selected channels.'
+      ),
+    default_model: zod
+      .string()
+      .describe('Model selected specifically for this agent.'),
+    harness: zod.string().describe('Harness used to run the agent.'),
+    harness_id: zod.union([zod.null(), zod.string()]).optional(),
+    instructions: zod
+      .string()
+      .describe(
+        'Instructions supplied to the agent at the start of a conversation.'
+      ),
+    mcp: zod
+      .union([
+        zod
+          .object({
+            scope: zod.enum(['owner_connections']),
+          })
+          .describe(
+            'Whatever apps the person running the session has connected.'
+          ),
+        zod
+          .object({
+            scope: zod.enum(['selected']),
+            servers: zod
+              .array(
+                zod
+                  .object({
+                    app_slug: zod
+                      .string()
+                      .describe('Pipedream app slug, e.g. `linear`.'),
+                    server_name: zod
+                      .string()
+                      .describe('Display name, e.g. `Linear`.'),
+                  })
+                  .describe(
+                    'One Pipedream app an agent lists under [`AgentMcpServers::Selected`].\n\nOnly the catalog identity is stored. Whether a given person has connected\nthe app is theirs, resolved at call time by the egress proxy, never here.'
+                  )
+              )
+              .describe(
+                "The apps, in the order the agent's author picked them."
+              ),
+          })
+          .describe('Exactly these apps, connected or not.'),
+      ])
+      .describe(
+        "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
+      ),
+  })
+  .describe('A persisted user- or team-owned AI agent.');
+export const listAgentsResponse = zod.array(listAgentsResponseItem);
+
+/**
+ * @summary Handler for `POST /agents`.
+ */
+export const createAgentBody = zod
+  .object({
+    avatar_url: zod
+      .string()
+      .nullish()
+      .describe('Optional avatar URL or data URL.'),
+    channel_ids: zod
+      .array(zod.uuid())
+      .optional()
+      .describe(
+        'Selected channels. Must be non-empty only for `selected` scope.'
+      ),
+    channel_scope: zod
+      .enum(['all', 'selected'])
+      .describe(
+        'Whether an agent is available everywhere or only in selected channels.'
+      ),
+    default_model: zod
+      .string()
+      .describe('Model selected specifically for this agent.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    handle: zod.string().describe('Stable `@` handle.'),
+    harness: zod.string().describe('Harness used to run the agent.'),
+    harness_id: zod.union([zod.null(), zod.string()]).optional(),
+    instructions: zod
+      .string()
+      .describe(
+        'Instructions supplied to the agent at the start of a conversation.'
+      ),
+    mcp: zod
+      .union([
+        zod
+          .object({
+            scope: zod.enum(['owner_connections']),
+          })
+          .describe(
+            'Whatever apps the person running the session has connected.'
+          ),
+        zod
+          .object({
+            scope: zod.enum(['selected']),
+            servers: zod
+              .array(
+                zod
+                  .object({
+                    app_slug: zod
+                      .string()
+                      .describe('Pipedream app slug, e.g. `linear`.'),
+                    server_name: zod
+                      .string()
+                      .describe('Display name, e.g. `Linear`.'),
+                  })
+                  .describe(
+                    'One Pipedream app an agent lists under [`AgentMcpServers::Selected`].\n\nOnly the catalog identity is stored. Whether a given person has connected\nthe app is theirs, resolved at call time by the egress proxy, never here.'
+                  )
+              )
+              .describe(
+                "The apps, in the order the agent's author picked them."
+              ),
+          })
+          .describe('Exactly these apps, connected or not.'),
+      ])
+      .optional()
+      .describe(
+        "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
+      ),
+    name: zod.string().describe('Display name.'),
+    team_id: zod
+      .uuid()
+      .nullish()
+      .describe('Team owner. Omit for a private, user-owned agent.'),
+  })
+  .describe('Request to create a persisted AI agent.');
+
+/**
+ * @summary Handler for `PUT /agents/{agent_id}`.
+ */
+export const updateAgentParams = zod.object({
+  agent_id: zod.string().describe('Agent bot ID'),
 });
 
-export const getRecentActivityHandlerResponse = zod.object({
-  data: zod
-    .union([
-      zod.null(),
-      zod.object({
-        next_offset: zod
-          .number()
+export const updateAgentBody = zod
+  .object({
+    avatar_url: zod
+      .string()
+      .nullish()
+      .describe('Optional avatar URL or data URL.'),
+    channel_ids: zod
+      .array(zod.uuid())
+      .optional()
+      .describe(
+        'Selected channels. Must be non-empty only for `selected` scope.'
+      ),
+    channel_scope: zod
+      .enum(['all', 'selected'])
+      .describe(
+        'Whether an agent is available everywhere or only in selected channels.'
+      ),
+    default_model: zod
+      .string()
+      .describe('Model selected specifically for this agent.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    handle: zod.string().describe('Stable `@` handle.'),
+    harness: zod.string().describe('Harness used to run the agent.'),
+    harness_id: zod.union([zod.null(), zod.string()]).optional(),
+    instructions: zod
+      .string()
+      .describe(
+        'Instructions supplied to the agent at the start of a conversation.'
+      ),
+    mcp: zod
+      .union([
+        zod
+          .object({
+            scope: zod.enum(['owner_connections']),
+          })
+          .describe(
+            'Whatever apps the person running the session has connected.'
+          ),
+        zod
+          .object({
+            scope: zod.enum(['selected']),
+            servers: zod
+              .array(
+                zod
+                  .object({
+                    app_slug: zod
+                      .string()
+                      .describe('Pipedream app slug, e.g. `linear`.'),
+                    server_name: zod
+                      .string()
+                      .describe('Display name, e.g. `Linear`.'),
+                  })
+                  .describe(
+                    'One Pipedream app an agent lists under [`AgentMcpServers::Selected`].\n\nOnly the catalog identity is stored. Whether a given person has connected\nthe app is theirs, resolved at call time by the egress proxy, never here.'
+                  )
+              )
+              .describe(
+                "The apps, in the order the agent's author picked them."
+              ),
+          })
+          .describe('Exactly these apps, connected or not.'),
+      ])
+      .optional()
+      .describe(
+        "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
+      ),
+    name: zod.string().describe('Display name.'),
+    team_id: zod
+      .uuid()
+      .nullish()
+      .describe('Team owner. Omit to make the agent private to the caller.'),
+  })
+  .describe(
+    'Request to replace the editable configuration of a persisted AI agent.'
+  );
+
+export const updateAgentResponse = zod
+  .object({
+    bot: zod
+      .object({
+        avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+        created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+        created_by: zod
+          .string()
           .nullish()
-          .describe('The next offset to be used if there is one'),
-        recent: zod
-          .array(
-            zod.union([
-              zod.object({
-                Document: zod.object({
-                  branchedFromId: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'The id of the document this document branched from'
-                    ),
-                  branchedFromVersionId: zod
-                    .number()
-                    .nullish()
-                    .describe(
-                      'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
-                    ),
-                  createdAt: zod.iso
-                    .datetime({})
-                    .nullish()
-                    .describe('The time the document was created'),
-                  deletedAt: zod.iso
-                    .datetime({})
-                    .nullish()
-                    .describe('The time the document was deleted'),
-                  documentFamilyId: zod
-                    .number()
-                    .nullish()
-                    .describe(
-                      'The id of the document family this document belongs to'
-                    ),
-                  documentVersionId: zod
-                    .number()
-                    .describe(
-                      'The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'
-                    ),
-                  fileType: zod
-                    .string()
-                    .nullish()
-                    .describe('The file type of the document (e.g. pdf, docx)'),
-                  id: zod.string().describe('The document id'),
-                  name: zod.string().describe('The name of the document'),
-                  owner: zod.string().describe('The owner of the document'),
-                  projectId: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'The id of the project that this document belongs to'
-                    ),
-                  sha: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
-                    ),
-                  subType: zod
-                    .union([
-                      zod.null(),
-                      zod
-                        .union([
-                          zod
-                            .object({
-                              is_completed: zod
-                                .boolean()
-                                .describe(
-                                  'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
-                                ),
-                              type: zod.enum(['task']),
-                            })
-                            .describe(
-                              'A task document with its associated properties'
-                            ),
-                          zod
-                            .object({
-                              type: zod.enum(['snippet']),
-                            })
-                            .describe('A snippet document — reusable markdown'),
-                          zod
-                            .object({
-                              type: zod.enum(['skill']),
-                            })
-                            .describe(
-                              'A skill document — markdown instructions for AI'
-                            ),
-                        ])
-                        .describe(
-                          'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
-                        ),
-                    ])
-                    .optional(),
-                  updatedAt: zod.iso
-                    .datetime({})
-                    .nullish()
-                    .describe(
-                      'The time the document instance \/ document BOM was updated'
-                    ),
-                  type: zod.enum(['document']),
-                }),
-              }),
-              zod.object({
-                Chat: zod.object({
-                  createdAt: zod.iso
-                    .datetime({})
-                    .nullish()
-                    .describe('The time the chat was created'),
-                  deletedAt: zod.iso
-                    .datetime({})
-                    .nullish()
-                    .describe('The time the chat was deleted'),
-                  id: zod.string().describe('The chat uuid'),
-                  isPersistent: zod.boolean(),
-                  model: zod
-                    .string()
-                    .nullish()
-                    .describe('The model used to generate the chat'),
-                  name: zod.string().describe('The name of the chat'),
-                  projectId: zod
-                    .string()
-                    .nullish()
-                    .describe('The project id of the chat'),
-                  tokenCount: zod.number().nullish(),
-                  updatedAt: zod.iso
-                    .datetime({})
-                    .nullish()
-                    .describe('The time the chat was last updated'),
-                  userId: zod.string().describe('Who the chat belongs to'),
-                  type: zod.enum(['chat']),
-                }),
-              }),
-            ])
-          )
-          .describe('The activities returned from the query'),
-        total: zod
-          .number()
-          .describe('The total number of activities the user has'),
-      }),
-    ])
-    .optional(),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+          .describe('User that created this bot.'),
+        deleted_at: zod.iso
+          .datetime({})
+          .nullish()
+          .describe('Soft-delete timestamp.'),
+        description: zod.string().nullish().describe('Optional description.'),
+        handle: zod.string().describe('Stable handle.'),
+        has_agent: zod
+          .boolean()
+          .describe(
+            'Whether mentioning this bot opens a sandboxed coding-agent session.'
+          ),
+        id: zod.string(),
+        kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
+        name: zod.string().describe('Display name.'),
+        owner: zod
+          .union([
+            zod.null(),
+            zod
+              .union([
+                zod
+                  .object({
+                    type: zod.enum(['user']),
+                    user_id: zod.string().describe('Owner user id.'),
+                  })
+                  .describe('User-owned bot.'),
+                zod
+                  .object({
+                    team_id: zod.uuid().describe('Owner team id.'),
+                    type: zod.enum(['team']),
+                  })
+                  .describe('Team-owned bot.'),
+              ])
+              .describe('Bot owner.'),
+          ])
+          .optional(),
+        updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+      })
+      .describe(
+        'Bot row.\n\nClients deserialize this, so both derives are used.'
+      ),
+    channel_ids: zod
+      .array(zod.uuid())
+      .describe('Selected channel ids. Empty for a global agent.'),
+    channel_scope: zod
+      .enum(['all', 'selected'])
+      .describe(
+        'Whether an agent is available everywhere or only in selected channels.'
+      ),
+    default_model: zod
+      .string()
+      .describe('Model selected specifically for this agent.'),
+    harness: zod.string().describe('Harness used to run the agent.'),
+    harness_id: zod.union([zod.null(), zod.string()]).optional(),
+    instructions: zod
+      .string()
+      .describe(
+        'Instructions supplied to the agent at the start of a conversation.'
+      ),
+    mcp: zod
+      .union([
+        zod
+          .object({
+            scope: zod.enum(['owner_connections']),
+          })
+          .describe(
+            'Whatever apps the person running the session has connected.'
+          ),
+        zod
+          .object({
+            scope: zod.enum(['selected']),
+            servers: zod
+              .array(
+                zod
+                  .object({
+                    app_slug: zod
+                      .string()
+                      .describe('Pipedream app slug, e.g. `linear`.'),
+                    server_name: zod
+                      .string()
+                      .describe('Display name, e.g. `Linear`.'),
+                  })
+                  .describe(
+                    'One Pipedream app an agent lists under [`AgentMcpServers::Selected`].\n\nOnly the catalog identity is stored. Whether a given person has connected\nthe app is theirs, resolved at call time by the egress proxy, never here.'
+                  )
+              )
+              .describe(
+                "The apps, in the order the agent's author picked them."
+              ),
+          })
+          .describe('Exactly these apps, connected or not.'),
+      ])
+      .describe(
+        "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
+      ),
+  })
+  .describe('A persisted user- or team-owned AI agent.');
 
 /**
  * @summary Deletes a single unthreaded anchor for a document
@@ -843,6 +1060,11 @@ export const getSelfBotResponse = zod
       .describe('Soft-delete timestamp.'),
     description: zod.string().nullish().describe('Optional description.'),
     handle: zod.string().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .describe(
+        'Whether mentioning this bot opens a sandboxed coding-agent session.'
+      ),
     id: zod.string(),
     kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
     name: zod.string().describe('Display name.'),
@@ -869,7 +1091,7 @@ export const getSelfBotResponse = zod
       .optional(),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
-  .describe('Bot row.');
+  .describe('Bot row.\n\nClients deserialize this, so both derives are used.');
 
 /**
  * @summary Handler for `GET /bots/{bot_id}/channels`.
@@ -928,7 +1150,11 @@ export const listOccurrencesQueryParams = zod.object({
     .describe('Opaque continuation cursor returned by the previous page.'),
 });
 
+export const listOccurrencesResponseItemsItemEventRemindersOverridesItemMinutesMin = 0;
+
 export const listOccurrencesResponseItemsItemEventSequenceMin = 0;
+
+export const listOccurrencesResponseItemsItemEventSourcesItemRemindersOverridesItemMinutesMin = 0;
 
 export const listOccurrencesResponse = zod
   .object({
@@ -960,7 +1186,7 @@ export const listOccurrencesResponse = zod
                       isSelf: zod
                         .boolean()
                         .describe(
-                          'Whether this attendee represents the connected account.'
+                          "Whether this attendee is one of the viewing requester's inboxes."
                         ),
                       responseStatus: zod
                         .enum([
@@ -980,15 +1206,48 @@ export const listOccurrencesResponse = zod
                 .describe(
                   'Calendar the canonical source belongs to, when known. Absent only in\nprojections stored before calendars were attributed.'
                 ),
+              conferenceProvider: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .enum(['google_meet', 'other'])
+                    .describe(
+                      "The conferencing system backing an event's join URL.\n\nMacro generates only Google Meet conferences, so this distinguishes one it\ncreated from a third party's — Zoom and friends arriving as `addOn`\nconference data, or a legacy classic Hangout. Clients use it to label the\nconference and to tell whether the Meet toggle reflects a Macro-managed\nconference.\n\nIt does not gate mutation. An explicit request replaces or detaches any\nconference, third-party included, exactly as deleting the event would;\nwhat protects a conference is that omitting the field leaves it untouched,\nso an unrelated edit never disturbs it."
+                    ),
+                ])
+                .optional(),
               conferenceUrl: zod
                 .string()
                 .nullish()
                 .describe('Direct join URL when known.'),
               createdAt: zod.iso.datetime({}).describe('Entity creation time.'),
+              creatorEmail: zod
+                .string()
+                .nullish()
+                .describe(
+                  'Provider-reported creator email. Distinct from the organizer when\nsomeone writes onto a calendar they do not own. Omitted from stored\nprojections when unknown so events ingested before this field still\ncompare equal.'
+                ),
+              creatorName: zod
+                .string()
+                .nullish()
+                .describe('Provider-reported creator display name.'),
               description: zod
                 .string()
                 .nullish()
                 .describe('Optional event body.'),
+              eventType: zod
+                .enum([
+                  'default',
+                  'out_of_office',
+                  'focus_time',
+                  'working_location',
+                  'birthday',
+                  'from_gmail',
+                ])
+                .optional()
+                .describe(
+                  "Google's event type: ordinary meetings versus the status-style entries\n(working location, out of office, focus time, birthdays) Google renders\nand notifies differently. Immutable at the provider after creation."
+                ),
               icalUid: zod
                 .string()
                 .describe(
@@ -998,7 +1257,7 @@ export const listOccurrencesResponse = zod
               isReadOnly: zod
                 .boolean()
                 .describe(
-                  'Whether the current user can edit the canonical source.'
+                  "Whether the canonical source's calendar prohibits editing it."
                 ),
               location: zod
                 .string()
@@ -1020,10 +1279,141 @@ export const listOccurrencesResponse = zod
                 .describe(
                   'Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`).'
                 ),
+              reminders: zod
+                .object({
+                  overrides: zod
+                    .array(
+                      zod
+                        .object({
+                          method: zod
+                            .string()
+                            .describe(
+                              'Provider method, stored verbatim; only `popup` fires Macro\nnotifications.'
+                            ),
+                          minutes: zod
+                            .number()
+                            .min(
+                              listOccurrencesResponseItemsItemEventRemindersOverridesItemMinutesMin
+                            )
+                            .describe('Minutes before the event start.'),
+                        })
+                        .describe(
+                          "One reminder: how it alerts and how many minutes before the event start\n(before midnight in the calendar's zone for all-day events) it fires."
+                        )
+                    )
+                    .optional()
+                    .describe(
+                      'Explicit reminders replacing the defaults when `use_default` is off.'
+                    ),
+                  useDefault: zod
+                    .boolean()
+                    .describe(
+                      "Whether the calendar's default reminders apply."
+                    ),
+                })
+                .optional()
+                .describe(
+                  "Per-user reminder configuration for an event, mirroring Google's model:\neither the calendar's default reminders apply, or the explicit overrides\nreplace them entirely."
+                ),
               sequence: zod
                 .number()
                 .min(listOccurrencesResponseItemsItemEventSequenceMin)
                 .describe('Provider\/iCalendar sequence number.'),
+              sources: zod
+                .array(
+                  zod
+                    .object({
+                      calendarId: zod
+                        .uuid()
+                        .describe('Calendar this copy lives on.'),
+                      creatorEmail: zod
+                        .string()
+                        .nullish()
+                        .describe('Provider-reported creator email.'),
+                      creatorName: zod
+                        .string()
+                        .nullish()
+                        .describe('Provider-reported creator display name.'),
+                      description: zod
+                        .string()
+                        .nullish()
+                        .describe('Optional event body.'),
+                      eventType: zod
+                        .enum([
+                          'default',
+                          'out_of_office',
+                          'focus_time',
+                          'working_location',
+                          'birthday',
+                          'from_gmail',
+                        ])
+                        .describe(
+                          "Google's event type: ordinary meetings versus the status-style entries\n(working location, out of office, focus time, birthdays) Google renders\nand notifies differently. Immutable at the provider after creation."
+                        ),
+                      isReadOnly: zod
+                        .boolean()
+                        .describe(
+                          "Whether the calendar's access role prohibits editing this copy."
+                        ),
+                      location: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'Optional physical or virtual location label.'
+                        ),
+                      reminders: zod
+                        .object({
+                          overrides: zod
+                            .array(
+                              zod
+                                .object({
+                                  method: zod
+                                    .string()
+                                    .describe(
+                                      'Provider method, stored verbatim; only `popup` fires Macro\nnotifications.'
+                                    ),
+                                  minutes: zod
+                                    .number()
+                                    .min(
+                                      listOccurrencesResponseItemsItemEventSourcesItemRemindersOverridesItemMinutesMin
+                                    )
+                                    .describe(
+                                      'Minutes before the event start.'
+                                    ),
+                                })
+                                .describe(
+                                  "One reminder: how it alerts and how many minutes before the event start\n(before midnight in the calendar's zone for all-day events) it fires."
+                                )
+                            )
+                            .optional()
+                            .describe(
+                              'Explicit reminders replacing the defaults when `use_default` is off.'
+                            ),
+                          useDefault: zod
+                            .boolean()
+                            .describe(
+                              "Whether the calendar's default reminders apply."
+                            ),
+                        })
+                        .describe(
+                          "Per-user reminder configuration for an event, mirroring Google's model:\neither the calendar's default reminders apply, or the explicit overrides\nreplace them entirely."
+                        ),
+                      title: zod.string().describe('Display title.'),
+                      transparency: zod
+                        .enum(['opaque', 'transparent'])
+                        .describe('Whether an event blocks availability.'),
+                      visibility: zod
+                        .enum(['default', 'public', 'private', 'confidential'])
+                        .describe('Visibility of event details.'),
+                    })
+                    .describe(
+                      "The content one provider copy of an event carries.\n\nGoogle keeps these fields per calendar copy: a shared calendar's copy of a\nmember's event can have its own title, type, reminders, and access role.\nThe entity holds its canonical source's values. Every other copy's values\nare read from here so a client can show the copy that belongs to the\ncalendar being viewed."
+                    )
+                )
+                .optional()
+                .describe(
+                  "Content of every active copy of this event, canonical first: the\nprimary calendar's copy, then the freshest. A client picks the copy\nwhose calendar it is showing and falls back to the first. Populated\nonly on the read path, so stored projections omit it."
+                ),
               status: zod
                 .enum(['confirmed', 'tentative', 'cancelled'])
                 .describe('Canonical event status.'),
@@ -1072,7 +1462,9 @@ export const listOccurrencesResponse = zod
                 .enum(['default', 'public', 'private', 'confidential'])
                 .describe('Visibility of event details.'),
             })
-            .describe('A stable, first-class Macro calendar event entity.'),
+            .describe(
+              "A stable, first-class Macro calendar event entity.\n\nContent fields hold the canonical source's values: the account's primary\ncalendar copy when one is synced, else the freshest remaining copy."
+            ),
           occurrence: zod
             .object({
               eventId: zod.uuid().describe('Owning event entity.'),
@@ -1139,6 +1531,246 @@ export const listOccurrencesResponse = zod
       ),
   })
   .describe('Paginated calendar occurrence viewport response.');
+
+/**
+ * @summary Resolve mentioned calendar events to the requester's own projections.
+ */
+export const mentionPreviewsBody = zod
+  .object({
+    items: zod
+      .array(
+        zod
+          .object({
+            eventId: zod.uuid().describe('Mentioned calendar event id.'),
+            occurrenceKey: zod
+              .string()
+              .nullish()
+              .describe(
+                'Occurrence the mention points at, when it targets one instance.'
+              ),
+          })
+          .describe('One mentioned event to resolve for the requester.')
+      )
+      .describe('Mentioned events to resolve, at most 100.'),
+  })
+  .describe('Batch calendar mention preview request.');
+
+export const mentionPreviewsResponseItemsItemEventAttendeeCountMin = 0;
+
+export const mentionPreviewsResponse = zod
+  .object({
+    items: zod.array(
+      zod
+        .object({
+          event: zod
+            .union([
+              zod.null(),
+              zod
+                .object({
+                  attendeeCount: zod
+                    .number()
+                    .min(mentionPreviewsResponseItemsItemEventAttendeeCountMin)
+                    .describe("Number of attendees on the requester's copy."),
+                  isRecurring: zod
+                    .boolean()
+                    .describe('Whether the event repeats.'),
+                  location: zod
+                    .string()
+                    .nullish()
+                    .describe('Location label, when set.'),
+                  occurrenceKey: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'Key of the previewed instance, absent when no occurrence is\nmaterialized.'
+                    ),
+                  organizerEmail: zod
+                    .string()
+                    .nullish()
+                    .describe('Organizer email.'),
+                  organizerName: zod
+                    .string()
+                    .nullish()
+                    .describe('Organizer display name.'),
+                  time: zod
+                    .union([
+                      zod
+                        .object({
+                          endsAt: zod.iso
+                            .datetime({})
+                            .describe('Exclusive end instant.'),
+                          kind: zod.enum(['timed']),
+                          startsAt: zod.iso
+                            .datetime({})
+                            .describe('Inclusive start instant.'),
+                          timeZone: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Original IANA time-zone identifier, when supplied.'
+                            ),
+                        })
+                        .describe('An event with absolute instants.'),
+                      zod
+                        .object({
+                          endDate: zod.iso
+                            .date()
+                            .describe('Exclusive local end date.'),
+                          kind: zod.enum(['allDay']),
+                          startDate: zod.iso
+                            .date()
+                            .describe('Inclusive local start date.'),
+                        })
+                        .describe(
+                          "An all-day event using RFC 5545's exclusive end date."
+                        ),
+                    ])
+                    .describe(
+                      'The mutually exclusive time shape of a calendar event.\n\nFields are renamed per variant rather than with `rename_all_fields`\nbecause utoipa only honors variant-level serde renames when it\nderives the OpenAPI schema.'
+                    ),
+                  title: zod.string().describe('Display title.'),
+                  updatedAt: zod.iso
+                    .datetime({})
+                    .describe("Entity update time of the requester's copy."),
+                  viewerEventId: zod
+                    .uuid()
+                    .describe(
+                      "The requester's own event entity for the mentioned meeting. Differs\nfrom the mentioned id when the mention came from another attendee."
+                    ),
+                })
+                .describe(
+                  "Meeting-level fields shown in a calendar event mention preview, taken from\nthe requester's own projection of the meeting."
+                ),
+            ])
+            .optional(),
+          eventId: zod
+            .uuid()
+            .describe('The mentioned event id, echoed from the request.'),
+          type: zod
+            .enum(['access', 'no_access', 'does_not_exist'])
+            .describe('Requester-relative visibility of one mentioned event.'),
+        })
+        .describe('Resolution of one mentioned event, in request order.')
+    ),
+  })
+  .describe('Batch calendar mention preview response.');
+
+/**
+ * @summary Return teammates' out-of-office occurrences in the requested viewport.
+ */
+export const listTeamOutOfOfficeQueryLimitMax = 2000;
+
+export const listTeamOutOfOfficeQueryParams = zod.object({
+  start: zod.iso.datetime({}).describe('Inclusive UTC viewport start.'),
+  end: zod.iso.datetime({}).describe('Exclusive UTC viewport end.'),
+  startDate: zod.iso
+    .date()
+    .optional()
+    .describe('Inclusive local date boundary for all-day events.'),
+  endDate: zod.iso
+    .date()
+    .optional()
+    .describe('Exclusive local date boundary for all-day events.'),
+  limit: zod
+    .number()
+    .min(1)
+    .max(listTeamOutOfOfficeQueryLimitMax)
+    .optional()
+    .describe('Maximum number of occurrences, from 1 through 2,000.'),
+});
+
+export const listTeamOutOfOfficeResponse = zod
+  .object({
+    hasMore: zod.boolean(),
+    items: zod.array(
+      zod
+        .object({
+          eventId: zod.uuid().describe("The teammate's calendar event id."),
+          occurrenceKey: zod
+            .string()
+            .describe('Stable occurrence key within the event.'),
+          ownerId: zod
+            .string()
+            .describe('Macro user id of the teammate who is out.'),
+          time: zod
+            .union([
+              zod
+                .object({
+                  endsAt: zod.iso
+                    .datetime({})
+                    .describe('Exclusive end instant.'),
+                  kind: zod.enum(['timed']),
+                  startsAt: zod.iso
+                    .datetime({})
+                    .describe('Inclusive start instant.'),
+                  timeZone: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'Original IANA time-zone identifier, when supplied.'
+                    ),
+                })
+                .describe('An event with absolute instants.'),
+              zod
+                .object({
+                  endDate: zod.iso.date().describe('Exclusive local end date.'),
+                  kind: zod.enum(['allDay']),
+                  startDate: zod.iso
+                    .date()
+                    .describe('Inclusive local start date.'),
+                })
+                .describe(
+                  "An all-day event using RFC 5545's exclusive end date."
+                ),
+            ])
+            .describe(
+              'The mutually exclusive time shape of a calendar event.\n\nFields are renamed per variant rather than with `rename_all_fields`\nbecause utoipa only honors variant-level serde renames when it\nderives the OpenAPI schema.'
+            ),
+          title: zod
+            .string()
+            .nullish()
+            .describe(
+              "Event title, absent when the event's visibility withholds details."
+            ),
+        })
+        .describe("One teammate's out-of-office occurrence.")
+    ),
+  })
+  .describe('Team out-of-office viewport response.');
+
+/**
+ * Lists all active calls in channels the caller is an active member of,
+newest first. Calls with no active participants (orphaned by dropped RTC
+webhooks) are excluded.
+ * @summary Handler for `GET /call/active`.
+ */
+export const getActiveCallsResponse = zod
+  .object({
+    calls: zod
+      .array(
+        zod
+          .object({
+            callId: zod.uuid().describe('The call identifier.'),
+            channelId: zod.uuid().describe('The channel this call belongs to.'),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the call was created.'),
+            createdBy: zod.string().describe('User who created the call.'),
+            participantCount: zod
+              .number()
+              .describe(
+                'Number of active participants. Always >= 1 — calls with no active\nparticipants (e.g. orphaned by a dropped RTC webhook) are excluded.'
+              ),
+          })
+          .describe(
+            'A currently active call, as returned by the batch active-calls listing.'
+          )
+      )
+      .describe('The active calls, newest first.'),
+  })
+  .describe(
+    'Response listing all active calls in channels the caller is a member of.'
+  );
 
 /**
  * Batch-fetches lightweight previews for a list of call ids. Mirrors the
@@ -1417,11 +2049,17 @@ export const editCallRecordBody = zod
             .describe(
               'Any channel share permissions to be created\/updated\/removed'
             ),
-          isPublic: zod
-            .boolean()
-            .nullish()
-            .describe('If the item is publicly accessible'),
-          publicAccessLevel: zod
+          linkShare: zod
+            .union([
+              zod.null(),
+              zod
+                .enum(['PUBLIC', 'TEAM'])
+                .describe(
+                  'Defines who can access an item through its share link.'
+                ),
+            ])
+            .optional(),
+          linkShareAccessLevel: zod
             .union([
               zod.null(),
               zod
@@ -2266,6 +2904,12 @@ export const createChannelScopedBotBody = zod
     avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
     description: zod.string().nullish().describe('Optional description.'),
     handle: zod.string().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.'
+      ),
     name: zod.string().describe('Display name.'),
     team_id: zod
       .uuid()
@@ -3203,6 +3847,156 @@ export const postChannelBotWebhookResponse = zod
   .describe('Response returned after posting a channel webhook message.');
 
 /**
+ * @summary Fetch a collab surface.
+ */
+export const getCollabSurfaceParams = zod.object({
+  id: zod.uuid().describe('The surface id.'),
+});
+
+export const getCollabSurfaceResponse = zod
+  .object({
+    id: zod
+      .uuid()
+      .describe('The surface id — also the sync-service session key.'),
+    parentEntityId: zod.string().describe('Id of the parent entity.'),
+    parentEntityType: zod
+      .enum([
+        'user',
+        'chat',
+        'channel',
+        'channel_message',
+        'document',
+        'project',
+        'email_thread',
+        'calendar_event',
+        'team',
+        'call',
+        'foreign_entity',
+        'static_file',
+        'crm_company',
+        'crm_contact',
+        'reminder',
+        'skill',
+        'agent_session',
+      ])
+      .describe('The type of an entity in Macro')
+      .describe('Type of the parent entity.'),
+    state: zod
+      .enum(['pending', 'ready'])
+      .describe(
+        'Lifecycle state of a collab surface.\n\n`Pending` means the row exists but the sync-service session may not: the\nrow is inserted before the durable object is initialized and flipped to\n`Ready` once the initial snapshot is stored. A persisted `Pending` row is\nan ensure that died or failed mid-init; the next ensure for the same id\nretries initialization (the initializer tolerates an already-initialized\nsession), so `Pending` is self-healing rather than terminal.'
+      ),
+  })
+  .describe('A collab surface, as returned by the API.');
+
+/**
+ * The id is caller-supplied, so an embedding surface can hold a stable id
+and blindly ensure it on mount: the first ensure creates and initializes
+the session, every later one (including concurrent ones) returns the same
+surface. A soft-deleted id is `410 Gone` and never comes back.
+ * @summary Idempotently ensure a collab surface exists (load-or-create).
+ */
+export const ensureCollabSurfaceParams = zod.object({
+  id: zod.uuid().describe('The surface id.'),
+});
+
+export const ensureCollabSurfaceBody = zod
+  .object({
+    initialMarkdown: zod
+      .string()
+      .optional()
+      .describe(
+        'Markdown to seed the surface with when this ensure creates it. Empty\n(or omitted) seeds the canonical blank document. Ignored when the\nsurface already exists and is ready.'
+      ),
+    parentEntityId: zod.string().describe('Id of the parent entity (a uuid).'),
+    parentEntityType: zod
+      .enum([
+        'user',
+        'chat',
+        'channel',
+        'channel_message',
+        'document',
+        'project',
+        'email_thread',
+        'calendar_event',
+        'team',
+        'call',
+        'foreign_entity',
+        'static_file',
+        'crm_company',
+        'crm_contact',
+        'reminder',
+        'skill',
+        'agent_session',
+      ])
+      .describe('The type of an entity in Macro')
+      .describe('Type of the parent entity access derives from.'),
+  })
+  .describe('Request body for ensuring a collab surface.');
+
+export const ensureCollabSurfaceResponse = zod
+  .object({
+    id: zod
+      .uuid()
+      .describe('The surface id — also the sync-service session key.'),
+    parentEntityId: zod.string().describe('Id of the parent entity.'),
+    parentEntityType: zod
+      .enum([
+        'user',
+        'chat',
+        'channel',
+        'channel_message',
+        'document',
+        'project',
+        'email_thread',
+        'calendar_event',
+        'team',
+        'call',
+        'foreign_entity',
+        'static_file',
+        'crm_company',
+        'crm_contact',
+        'reminder',
+        'skill',
+        'agent_session',
+      ])
+      .describe('The type of an entity in Macro')
+      .describe('Type of the parent entity.'),
+    state: zod
+      .enum(['pending', 'ready'])
+      .describe(
+        'Lifecycle state of a collab surface.\n\n`Pending` means the row exists but the sync-service session may not: the\nrow is inserted before the durable object is initialized and flipped to\n`Ready` once the initial snapshot is stored. A persisted `Pending` row is\nan ensure that died or failed mid-init; the next ensure for the same id\nretries initialization (the initializer tolerates an already-initialized\nsession), so `Pending` is self-healing rather than terminal.'
+      ),
+  })
+  .describe('A collab surface, as returned by the API.');
+
+/**
+ * @summary Soft-delete a collab surface.
+ */
+export const deleteCollabSurfaceParams = zod.object({
+  id: zod.uuid().describe('The surface id.'),
+});
+
+/**
+ * @summary Mint a sync-service connection token for a surface.
+ */
+export const createCollabSurfaceTokenParams = zod.object({
+  id: zod.uuid().describe('The surface id.'),
+});
+
+export const createCollabSurfaceTokenResponse = zod
+  .object({
+    token: zod
+      .string()
+      .describe(
+        'The signed JWT to pass to the sync-service websocket connect.'
+      ),
+  })
+  .describe(
+    'Response carrying a freshly minted sync-service connection token.'
+  );
+
+/**
  * @summary Handle channel list requests for `GET /comms/channels`.
  */
 export const getChannelsQueryLimitMin = 0;
@@ -4033,6 +4827,60 @@ export const setCrmCompanyNameBody = zod
   .describe('Request body for `PUT \/companies\/{company_id}\/name`.');
 
 /**
+ * @summary Look up a CRM contact by email in the caller's team. Returns a null
+`contact` when no visible contact exists. Any team member may resolve a
+visible contact; admin/owner callers may also resolve hidden contacts and
+contacts under hidden companies.
+ */
+export const getContactByEmailQueryParams = zod.object({
+  email: zod
+    .string()
+    .describe("The contact email to resolve within the caller's team."),
+});
+
+export const getContactByEmailResponse = zod
+  .object({
+    contact: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            companyId: zod
+              .uuid()
+              .describe('The id of the company the contact belongs to.'),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the contact record was created.'),
+            email: zod.string().describe("The contact's email address."),
+            firstInteraction: zod.iso
+              .datetime({})
+              .describe('Earliest known interaction with this contact.'),
+            hidden: zod
+              .boolean()
+              .describe(
+                'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+              ),
+            id: zod.uuid().describe('The id of the contact record.'),
+            lastInteraction: zod.iso
+              .datetime({})
+              .describe('Most recent known interaction with this contact.'),
+            name: zod
+              .string()
+              .nullish()
+              .describe('Display name observed for the contact, if any.'),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When the contact record was last updated.'),
+          })
+          .describe(
+            'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe('Response from looking up a CRM contact by email.');
+
+/**
  * @summary Fetch a single CRM contact by id. Access is enforced by
 [`CrmContactAccessLevelExtractor`]: the user must be on the team that
 owns the contact's parent company, and hidden contacts are invisible
@@ -4143,6 +4991,11 @@ export const getCrmTeamSettingsResponse = zod
       .describe(
         'Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
       ),
+    legacy_stage_ids: zod
+      .record(zod.string(), zod.uuid())
+      .describe(
+        'System stage option id to team stage option id for seeded stages.'
+      ),
     move_closed_deals_role: zod
       .enum(['admin', 'owner'])
       .describe(
@@ -4243,6 +5096,11 @@ export const putCrmTeamSettingsResponse = zod
       .describe(
         'Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
       ),
+    legacy_stage_ids: zod
+      .record(zod.string(), zod.uuid())
+      .describe(
+        'System stage option id to team stage option id for seeded stages.'
+      ),
     move_closed_deals_role: zod
       .enum(['admin', 'owner'])
       .describe(
@@ -4257,6 +5115,53 @@ export const putCrmTeamSettingsResponse = zod
   .describe(
     "The team's CRM configuration (everything on `team_crm_settings`\nexcept the `crm_enabled` killswitch, which is managed via\n`PATCH \/team\/crm` on the auth service)."
   );
+
+/**
+ * @summary Replace the team's deal stages; requires `edit_stages_role` (403 otherwise).
+ */
+export const putCrmTeamStagesBody = zod
+  .object({
+    stages: zod
+      .array(
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .nullish()
+              .describe('Existing stage to keep; omit to add one.'),
+            label: zod
+              .string()
+              .describe(
+                'Label after the update; non-blank and unique within the set.'
+              ),
+          })
+          .describe('One stage in a `PUT \/crm\/stages` body.')
+      )
+      .describe('Stages first to last.'),
+  })
+  .describe(
+    'Request body for `PUT \/crm\/stages`: the whole stage set in order.'
+  );
+
+export const putCrmTeamStagesResponse = zod
+  .object({
+    definition_id: zod.uuid().describe('Team-scoped stage definition id.'),
+    stages: zod
+      .array(
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe(
+                'Property option id companies carry as their stage value.'
+              ),
+            label: zod.string().describe('Label.'),
+          })
+          .describe("One stage of the team's custom pipeline.")
+      )
+      .describe('Stages in pipeline order.'),
+  })
+  .describe("The team's custom stage set.");
 
 /**
  * @summary Gets the users documents to populate their recent document list
@@ -5026,6 +5931,11 @@ export const createTaskHandlerResponse = zod
         .nullish()
         .describe('The time the document instance \/ document BOM was updated'),
     }),
+    initialSnapshot: zod
+      .string()
+      .describe(
+        'Base64-encoded canonical Loro snapshot used to initialize the task.'
+      ),
     teamId: zod
       .uuid()
       .nullish()
@@ -6229,11 +7139,17 @@ export const editDocumentBody = zod
             .describe(
               'Any channel share permissions to be created\/updated\/removed'
             ),
-          isPublic: zod
-            .boolean()
-            .nullish()
-            .describe('If the item is publicly accessible'),
-          publicAccessLevel: zod
+          linkShare: zod
+            .union([
+              zod.null(),
+              zod
+                .enum(['PUBLIC', 'TEAM'])
+                .describe(
+                  'Defines who can access an item through its share link.'
+                ),
+            ])
+            .optional(),
+          linkShareAccessLevel: zod
             .union([
               zod.null(),
               zod
@@ -7429,6 +8345,7 @@ export const listFavoritesResponse = zod
                 'crm_contact',
                 'reminder',
                 'skill',
+                'agent_session',
               ])
               .describe('The type of an entity in Macro')
               .describe('The type of the favorited entity.'),
@@ -7474,6 +8391,7 @@ export const addFavoriteBody = zod
         'crm_contact',
         'reminder',
         'skill',
+        'agent_session',
       ])
       .describe('The type of an entity in Macro')
       .describe('The type of the entity to favorite.'),
@@ -7520,6 +8438,7 @@ export const addFavoriteResponse = zod
         'crm_contact',
         'reminder',
         'skill',
+        'agent_session',
       ])
       .describe('The type of an entity in Macro')
       .describe('The type of the favorited entity.'),
@@ -7563,6 +8482,7 @@ export const reorderFavoritesBody = zod
                 'crm_contact',
                 'reminder',
                 'skill',
+                'agent_session',
               ])
               .describe('The type of an entity in Macro')
               .describe('The type of the favorited entity.'),
@@ -7599,6 +8519,7 @@ export const removeFavoriteByEntityParams = zod.object({
       'crm_contact',
       'reminder',
       'skill',
+      'agent_session',
     ])
     .describe('The type of the favorited entity.'),
   entity_id: zod.string().describe('The id of the favorited entity.'),
@@ -7647,6 +8568,328 @@ export const getForeignEntityResponse = zod
       .describe('Timestamp when the record was last updated.'),
   })
   .describe('A persisted mapping to an entity owned by an external system.');
+
+/**
+ * Unauthenticated by design: the daemon has no credential yet - obtaining one
+is the point. The pairing releases nothing until a signed-in user approves
+it, and creation is throttled in the domain service.
+ * @summary Handler for `POST /harness-pairings`.
+ */
+export const createHarnessPairingBody = zod
+  .object({
+    host: zod
+      .string()
+      .nullish()
+      .describe(
+        'Display-only description of the machine, e.g. `eric@macbook \/ darwin`.'
+      ),
+    name: zod
+      .string()
+      .describe(
+        "Requested harness display name (typically the machine's hostname)."
+      ),
+    scope: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['private', 'team'])
+          .describe(
+            "The ownership scope a daemon's config asks for.\n\nAdvisory, not binding: the approving user confirms it in the dialog, which\narrives preselected to this. Approval is what actually sets ownership."
+          ),
+      ])
+      .optional(),
+  })
+  .describe(
+    'Request to open a pairing: the daemon asks for a code the user approves.\n\nThe daemon serializes this, so both derives are used.'
+  );
+
+/**
+ * @summary Handler for `GET /harness-pairings/{code}`.
+ */
+export const getHarnessPairingParams = zod.object({
+  code: zod.string().describe('Pairing code'),
+});
+
+export const getHarnessPairingResponse = zod
+  .object({
+    code: zod.string().describe('The pairing code, normalized to `XXXX-XXXX`.'),
+    created_at: zod.iso.datetime({}).describe('When the pairing was created.'),
+    expires_at: zod.iso.datetime({}).describe('When the pairing expires.'),
+    host: zod
+      .string()
+      .nullish()
+      .describe('Display-only description of the machine.'),
+    requested_name: zod
+      .string()
+      .describe('Harness display name the daemon asked for.'),
+    requested_scope: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['private', 'team'])
+          .describe(
+            "The ownership scope a daemon's config asks for.\n\nAdvisory, not binding: the approving user confirms it in the dialog, which\narrives preselected to this. Approval is what actually sets ownership."
+          ),
+      ])
+      .optional(),
+  })
+  .describe('A pending pairing, as shown to the approving user.');
+
+/**
+ * @summary Handler for `POST /harness-pairings/{code}/approve`.
+ */
+export const approveHarnessPairingParams = zod.object({
+  code: zod.string().describe('Pairing code'),
+});
+
+export const approveHarnessPairingBody = zod
+  .object({
+    name: zod
+      .string()
+      .nullish()
+      .describe(
+        "Display name override. Defaults to the daemon's requested name."
+      ),
+    team_id: zod
+      .uuid()
+      .nullish()
+      .describe('Owning team. Omit for a private, user-owned harness.'),
+  })
+  .describe('Request to approve a pairing and register the harness.');
+
+export const approveHarnessPairingResponse = zod
+  .object({
+    connected: zod
+      .boolean()
+      .describe('Whether the daemon currently holds a runtime connection.'),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by: zod.string().describe('User that registered this harness.'),
+    id: zod.string(),
+    kind: zod.string().describe('Runtime kind. Currently always `macrod`.'),
+    last_connected_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the daemon last attached a runtime connection.'),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .union([
+        zod
+          .object({
+            type: zod.enum(['user']),
+            user_id: zod.string().describe('Owner user id.'),
+          })
+          .describe('User-owned (private) harness.'),
+        zod
+          .object({
+            team_id: zod.uuid().describe('Owner team id.'),
+            type: zod.enum(['team']),
+          })
+          .describe('Team-owned harness, usable by every team member.'),
+      ])
+      .describe(
+        'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+      ),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+  })
+  .describe(
+    'A registered user-run harness.\n\nClients deserialize this, so both derives are used.'
+  );
+
+/**
+ * Unauthenticated like pairing creation; the device secret minted alongside
+the pairing is the credential, and the pairing id (not the short user
+code) addresses it.
+ * @summary Handler for `POST /harness-pairings/{pairing_id}/claim`.
+ */
+export const claimHarnessPairingParams = zod.object({
+  pairing_id: zod.uuid().describe('Pairing ID'),
+});
+
+export const claimHarnessPairingBody = zod
+  .object({
+    device_secret: zod
+      .string()
+      .describe('The claim credential returned when the pairing was created.'),
+  })
+  .describe(
+    "Request to claim an approved pairing's credential.\n\nThe daemon serializes this, so both derives are used."
+  );
+
+export const claimHarnessPairingResponse = zod
+  .object({
+    harness: zod
+      .object({
+        connected: zod
+          .boolean()
+          .describe('Whether the daemon currently holds a runtime connection.'),
+        created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+        created_by: zod.string().describe('User that registered this harness.'),
+        id: zod.string(),
+        kind: zod.string().describe('Runtime kind. Currently always `macrod`.'),
+        last_connected_at: zod.iso
+          .datetime({})
+          .nullish()
+          .describe('When the daemon last attached a runtime connection.'),
+        name: zod.string().describe('Display name.'),
+        owner: zod
+          .union([
+            zod
+              .object({
+                type: zod.enum(['user']),
+                user_id: zod.string().describe('Owner user id.'),
+              })
+              .describe('User-owned (private) harness.'),
+            zod
+              .object({
+                team_id: zod.uuid().describe('Owner team id.'),
+                type: zod.enum(['team']),
+              })
+              .describe('Team-owned harness, usable by every team member.'),
+          ])
+          .describe(
+            'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+          ),
+        updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+      })
+      .describe(
+        'A registered user-run harness.\n\nClients deserialize this, so both derives are used.'
+      ),
+    token: zod
+      .string()
+      .describe(
+        'The raw harness bearer token. Shown only here; only its hash is stored.'
+      ),
+  })
+  .describe('The credential released to the daemon when a pairing is claimed.');
+
+/**
+ * @summary Handler for `GET /harnesses`.
+ */
+export const listHarnessesResponseItem = zod
+  .object({
+    connected: zod
+      .boolean()
+      .describe('Whether the daemon currently holds a runtime connection.'),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by: zod.string().describe('User that registered this harness.'),
+    id: zod.string(),
+    kind: zod.string().describe('Runtime kind. Currently always `macrod`.'),
+    last_connected_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the daemon last attached a runtime connection.'),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .union([
+        zod
+          .object({
+            type: zod.enum(['user']),
+            user_id: zod.string().describe('Owner user id.'),
+          })
+          .describe('User-owned (private) harness.'),
+        zod
+          .object({
+            team_id: zod.uuid().describe('Owner team id.'),
+            type: zod.enum(['team']),
+          })
+          .describe('Team-owned harness, usable by every team member.'),
+      ])
+      .describe(
+        'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+      ),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+  })
+  .describe(
+    'A registered user-run harness.\n\nClients deserialize this, so both derives are used.'
+  );
+export const listHarnessesResponse = zod.array(listHarnessesResponseItem);
+
+/**
+ * @summary Handler for `GET /harnesses/me`.
+ */
+export const getSelfHarnessResponse = zod
+  .object({
+    connected: zod
+      .boolean()
+      .describe('Whether the daemon currently holds a runtime connection.'),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by: zod.string().describe('User that registered this harness.'),
+    id: zod.string(),
+    kind: zod.string().describe('Runtime kind. Currently always `macrod`.'),
+    last_connected_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the daemon last attached a runtime connection.'),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .union([
+        zod
+          .object({
+            type: zod.enum(['user']),
+            user_id: zod.string().describe('Owner user id.'),
+          })
+          .describe('User-owned (private) harness.'),
+        zod
+          .object({
+            team_id: zod.uuid().describe('Owner team id.'),
+            type: zod.enum(['team']),
+          })
+          .describe('Team-owned harness, usable by every team member.'),
+      ])
+      .describe(
+        'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+      ),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+  })
+  .describe(
+    'A registered user-run harness.\n\nClients deserialize this, so both derives are used.'
+  );
+
+/**
+ * @summary Handler for `GET /harnesses/me/agents`.
+ */
+export const listHarnessAgentsResponseItem = zod
+  .object({
+    bot_id: zod.string(),
+    handle: zod.string().describe('Stable `@` handle.'),
+    name: zod.string().describe('Display name.'),
+  })
+  .describe('An agent bound to a harness, as listed for the daemon.');
+export const listHarnessAgentsResponse = zod.array(
+  listHarnessAgentsResponseItem
+);
+
+/**
+ * @summary Handler for `GET /harnesses/me/sessions`.
+ */
+export const listHarnessSessionsResponseItem = zod
+  .object({
+    bot_handle: zod.string().describe("The agent's `@` handle."),
+    bot_id: zod.string(),
+    bot_name: zod.string().describe("The agent's display name."),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    model: zod.string().describe('Model the session was opened with.'),
+    modified_at: zod.iso.datetime({}).describe('Last-activity timestamp.'),
+    name: zod.string().describe("The session's display name."),
+    owner_id: zod.string().describe('The user the session belongs to.'),
+    session_id: zod.uuid().describe('The session id.'),
+    status: zod
+      .string()
+      .describe('Session lifecycle status, e.g. `no_messages`, `active`.'),
+  })
+  .describe(
+    "An agent session running on a harness, as listed for the daemon's UI."
+  );
+export const listHarnessSessionsResponse = zod.array(
+  listHarnessSessionsResponseItem
+);
+
+/**
+ * @summary Handler for `DELETE /harnesses/{harness_id}`.
+ */
+export const deleteHarnessParams = zod.object({
+  harness_id: zod.string().describe('Harness ID'),
+});
 
 /**
  * @summary Gets the users history
@@ -7859,10 +9102,12 @@ export const getItemsSoupQueryParams = zod.object({
       'updated_at',
       'viewed_updated',
       'frecency',
+      'touched_by_me',
+      'notified_at',
     ])
     .optional()
     .describe(
-      'Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_at.'
+      'Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me, notified_at. Defaults to\nviewed_at.'
     ),
   sort_direction: zod
     .enum(['asc', 'desc'])
@@ -8758,6 +10003,11 @@ export const getItemsSoupResponse = zod
                   isRead: zod
                     .boolean()
                     .describe('Whether the thread has been read.'),
+                  isSignal: zod
+                    .boolean()
+                    .describe(
+                      "The denormalized `email_threads.is_signal` importance classification —\nthe same flag the soup Importance filter evaluates, distinct from\n`is_important` (Gmail's IMPORTANT label)."
+                    ),
                   name: zod
                     .string()
                     .nullish()
@@ -9810,6 +11060,12 @@ export const getItemsSoupResponse = zod
             .object({
               data: zod
                 .object({
+                  conferenceProvider: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'Which conferencing system backs `conference_url`.'
+                    ),
                   conferenceUrl: zod
                     .string()
                     .nullish()
@@ -10058,6 +11314,12 @@ export const getItemsSoupResponse = zod
                     .describe(
                       'Whether the selected canonical source is read-only.'
                     ),
+                  lastReminderFiredAt: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe(
+                      "When this event's most recent reminder notification was delivered."
+                    ),
                   location: zod
                     .string()
                     .nullish()
@@ -10076,14 +11338,14 @@ export const getItemsSoupResponse = zod
                     .union([
                       zod
                         .object({
-                          ends_at: zod.iso
+                          endsAt: zod.iso
                             .datetime({})
                             .describe('Exclusive end.'),
                           kind: zod.enum(['timed']),
-                          starts_at: zod.iso
+                          startsAt: zod.iso
                             .datetime({})
                             .describe('Inclusive start.'),
-                          time_zone: zod
+                          timeZone: zod
                             .string()
                             .nullish()
                             .describe('Original IANA time zone.'),
@@ -10091,17 +11353,19 @@ export const getItemsSoupResponse = zod
                         .describe('Absolute timed event.'),
                       zod
                         .object({
-                          end_date: zod.iso
+                          endDate: zod.iso
                             .date()
                             .describe('Exclusive end date.'),
                           kind: zod.enum(['allDay']),
-                          start_date: zod.iso
+                          startDate: zod.iso
                             .date()
                             .describe('Inclusive start date.'),
                         })
                         .describe('All-day event with an exclusive end date.'),
                     ])
-                    .describe('Timed or all-day calendar event span.'),
+                    .describe(
+                      'Timed or all-day calendar event span.\n\nFields are camelCased per variant rather than via `rename_all_fields`,\nwhich utoipa ignores — the generated OpenAPI schema would otherwise\nclaim snake_case fields the wire never carries.'
+                    ),
                   title: zod.string().describe('Display title.'),
                   transparency: zod
                     .string()
@@ -10742,6 +12006,7 @@ export const getItemsSoupResponse = zod
                                 'crm_contact',
                                 'reminder',
                                 'skill',
+                                'agent_session',
                               ])
                               .describe('The type of an entity in Macro')
                               .describe("The referenced entity's type."),
@@ -10818,9 +12083,23 @@ export const getItemsSoupResponse = zod
               .describe(
                 'Whether the requesting user has favorited this entity.'
               ),
+            notified_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe(
+                'When the caller was last notified about this entity, present only\nwhen the page was ordered by `notified_at`. Clients keep the notified\nfeed ordered and date-bucketed on this value.'
+              ),
+            touched_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe(
+                "The caller's latest own mutation of this entity, present only when the\npage was ordered by `touched_by_me`. Clients keep the touched feed\nordered on this value, so it can be bumped optimistically."
+              ),
           })
         )
-        .describe('API representation of a soup item with its frecency score.')
+        .describe(
+          'API representation of a soup item with its per-viewer enrichments.'
+        )
     ),
     next_cursor: zod.string().nullish(),
   })
@@ -11479,6 +12758,8 @@ export const postItemsSoupBody = zod
                 'updated_at',
                 'viewed_updated',
                 'frecency',
+                'touched_by_me',
+                'notified_at',
               ])
               .describe(
                 'Sort options accepted by non-grouped soup API endpoints.'
@@ -12383,6 +13664,11 @@ export const postItemsSoupResponse = zod
                   isRead: zod
                     .boolean()
                     .describe('Whether the thread has been read.'),
+                  isSignal: zod
+                    .boolean()
+                    .describe(
+                      "The denormalized `email_threads.is_signal` importance classification —\nthe same flag the soup Importance filter evaluates, distinct from\n`is_important` (Gmail's IMPORTANT label)."
+                    ),
                   name: zod
                     .string()
                     .nullish()
@@ -13435,6 +14721,12 @@ export const postItemsSoupResponse = zod
             .object({
               data: zod
                 .object({
+                  conferenceProvider: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'Which conferencing system backs `conference_url`.'
+                    ),
                   conferenceUrl: zod
                     .string()
                     .nullish()
@@ -13683,6 +14975,12 @@ export const postItemsSoupResponse = zod
                     .describe(
                       'Whether the selected canonical source is read-only.'
                     ),
+                  lastReminderFiredAt: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe(
+                      "When this event's most recent reminder notification was delivered."
+                    ),
                   location: zod
                     .string()
                     .nullish()
@@ -13701,14 +14999,14 @@ export const postItemsSoupResponse = zod
                     .union([
                       zod
                         .object({
-                          ends_at: zod.iso
+                          endsAt: zod.iso
                             .datetime({})
                             .describe('Exclusive end.'),
                           kind: zod.enum(['timed']),
-                          starts_at: zod.iso
+                          startsAt: zod.iso
                             .datetime({})
                             .describe('Inclusive start.'),
-                          time_zone: zod
+                          timeZone: zod
                             .string()
                             .nullish()
                             .describe('Original IANA time zone.'),
@@ -13716,17 +15014,19 @@ export const postItemsSoupResponse = zod
                         .describe('Absolute timed event.'),
                       zod
                         .object({
-                          end_date: zod.iso
+                          endDate: zod.iso
                             .date()
                             .describe('Exclusive end date.'),
                           kind: zod.enum(['allDay']),
-                          start_date: zod.iso
+                          startDate: zod.iso
                             .date()
                             .describe('Inclusive start date.'),
                         })
                         .describe('All-day event with an exclusive end date.'),
                     ])
-                    .describe('Timed or all-day calendar event span.'),
+                    .describe(
+                      'Timed or all-day calendar event span.\n\nFields are camelCased per variant rather than via `rename_all_fields`,\nwhich utoipa ignores — the generated OpenAPI schema would otherwise\nclaim snake_case fields the wire never carries.'
+                    ),
                   title: zod.string().describe('Display title.'),
                   transparency: zod
                     .string()
@@ -14367,6 +15667,7 @@ export const postItemsSoupResponse = zod
                                 'crm_contact',
                                 'reminder',
                                 'skill',
+                                'agent_session',
                               ])
                               .describe('The type of an entity in Macro')
                               .describe("The referenced entity's type."),
@@ -14443,9 +15744,23 @@ export const postItemsSoupResponse = zod
               .describe(
                 'Whether the requesting user has favorited this entity.'
               ),
+            notified_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe(
+                'When the caller was last notified about this entity, present only\nwhen the page was ordered by `notified_at`. Clients keep the notified\nfeed ordered and date-bucketed on this value.'
+              ),
+            touched_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe(
+                "The caller's latest own mutation of this entity, present only when the\npage was ordered by `touched_by_me`. Clients keep the touched feed\nordered on this value, so it can be bumped optimistically."
+              ),
           })
         )
-        .describe('API representation of a soup item with its frecency score.')
+        .describe(
+          'API representation of a soup item with its per-viewer enrichments.'
+        )
     ),
     next_cursor: zod.string().nullish(),
   })
@@ -14568,6 +15883,8 @@ export const postItemsSoupAstBody = zod
                 'updated_at',
                 'viewed_updated',
                 'frecency',
+                'touched_by_me',
+                'notified_at',
               ])
               .describe(
                 'Sort options accepted by non-grouped soup API endpoints.'
@@ -15472,6 +16789,11 @@ export const postItemsSoupAstResponse = zod
                   isRead: zod
                     .boolean()
                     .describe('Whether the thread has been read.'),
+                  isSignal: zod
+                    .boolean()
+                    .describe(
+                      "The denormalized `email_threads.is_signal` importance classification —\nthe same flag the soup Importance filter evaluates, distinct from\n`is_important` (Gmail's IMPORTANT label)."
+                    ),
                   name: zod
                     .string()
                     .nullish()
@@ -16526,6 +17848,12 @@ export const postItemsSoupAstResponse = zod
             .object({
               data: zod
                 .object({
+                  conferenceProvider: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'Which conferencing system backs `conference_url`.'
+                    ),
                   conferenceUrl: zod
                     .string()
                     .nullish()
@@ -16774,6 +18102,12 @@ export const postItemsSoupAstResponse = zod
                     .describe(
                       'Whether the selected canonical source is read-only.'
                     ),
+                  lastReminderFiredAt: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe(
+                      "When this event's most recent reminder notification was delivered."
+                    ),
                   location: zod
                     .string()
                     .nullish()
@@ -16792,14 +18126,14 @@ export const postItemsSoupAstResponse = zod
                     .union([
                       zod
                         .object({
-                          ends_at: zod.iso
+                          endsAt: zod.iso
                             .datetime({})
                             .describe('Exclusive end.'),
                           kind: zod.enum(['timed']),
-                          starts_at: zod.iso
+                          startsAt: zod.iso
                             .datetime({})
                             .describe('Inclusive start.'),
-                          time_zone: zod
+                          timeZone: zod
                             .string()
                             .nullish()
                             .describe('Original IANA time zone.'),
@@ -16807,17 +18141,19 @@ export const postItemsSoupAstResponse = zod
                         .describe('Absolute timed event.'),
                       zod
                         .object({
-                          end_date: zod.iso
+                          endDate: zod.iso
                             .date()
                             .describe('Exclusive end date.'),
                           kind: zod.enum(['allDay']),
-                          start_date: zod.iso
+                          startDate: zod.iso
                             .date()
                             .describe('Inclusive start date.'),
                         })
                         .describe('All-day event with an exclusive end date.'),
                     ])
-                    .describe('Timed or all-day calendar event span.'),
+                    .describe(
+                      'Timed or all-day calendar event span.\n\nFields are camelCased per variant rather than via `rename_all_fields`,\nwhich utoipa ignores — the generated OpenAPI schema would otherwise\nclaim snake_case fields the wire never carries.'
+                    ),
                   title: zod.string().describe('Display title.'),
                   transparency: zod
                     .string()
@@ -17458,6 +18794,7 @@ export const postItemsSoupAstResponse = zod
                                 'crm_contact',
                                 'reminder',
                                 'skill',
+                                'agent_session',
                               ])
                               .describe('The type of an entity in Macro')
                               .describe("The referenced entity's type."),
@@ -17534,9 +18871,23 @@ export const postItemsSoupAstResponse = zod
               .describe(
                 'Whether the requesting user has favorited this entity.'
               ),
+            notified_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe(
+                'When the caller was last notified about this entity, present only\nwhen the page was ordered by `notified_at`. Clients keep the notified\nfeed ordered and date-bucketed on this value.'
+              ),
+            touched_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe(
+                "The caller's latest own mutation of this entity, present only when the\npage was ordered by `touched_by_me`. Clients keep the touched feed\nordered on this value, so it can be bumped optimistically."
+              ),
           })
         )
-        .describe('API representation of a soup item with its frecency score.')
+        .describe(
+          'API representation of a soup item with its per-viewer enrichments.'
+        )
     ),
     next_cursor: zod.string().nullish(),
   })
@@ -18825,6 +20176,11 @@ export const postItemsSoupAstGroupedResponse = zod
                         isRead: zod
                           .boolean()
                           .describe('Whether the thread has been read.'),
+                        isSignal: zod
+                          .boolean()
+                          .describe(
+                            "The denormalized `email_threads.is_signal` importance classification —\nthe same flag the soup Importance filter evaluates, distinct from\n`is_important` (Gmail's IMPORTANT label)."
+                          ),
                         name: zod
                           .string()
                           .nullish()
@@ -19943,6 +21299,12 @@ export const postItemsSoupAstGroupedResponse = zod
                   .object({
                     data: zod
                       .object({
+                        conferenceProvider: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            'Which conferencing system backs `conference_url`.'
+                          ),
                         conferenceUrl: zod
                           .string()
                           .nullish()
@@ -20201,6 +21563,12 @@ export const postItemsSoupAstGroupedResponse = zod
                           .describe(
                             'Whether the selected canonical source is read-only.'
                           ),
+                        lastReminderFiredAt: zod.iso
+                          .datetime({})
+                          .nullish()
+                          .describe(
+                            "When this event's most recent reminder notification was delivered."
+                          ),
                         location: zod
                           .string()
                           .nullish()
@@ -20219,14 +21587,14 @@ export const postItemsSoupAstGroupedResponse = zod
                           .union([
                             zod
                               .object({
-                                ends_at: zod.iso
+                                endsAt: zod.iso
                                   .datetime({})
                                   .describe('Exclusive end.'),
                                 kind: zod.enum(['timed']),
-                                starts_at: zod.iso
+                                startsAt: zod.iso
                                   .datetime({})
                                   .describe('Inclusive start.'),
-                                time_zone: zod
+                                timeZone: zod
                                   .string()
                                   .nullish()
                                   .describe('Original IANA time zone.'),
@@ -20234,11 +21602,11 @@ export const postItemsSoupAstGroupedResponse = zod
                               .describe('Absolute timed event.'),
                             zod
                               .object({
-                                end_date: zod.iso
+                                endDate: zod.iso
                                   .date()
                                   .describe('Exclusive end date.'),
                                 kind: zod.enum(['allDay']),
-                                start_date: zod.iso
+                                startDate: zod.iso
                                   .date()
                                   .describe('Inclusive start date.'),
                               })
@@ -20246,7 +21614,9 @@ export const postItemsSoupAstGroupedResponse = zod
                                 'All-day event with an exclusive end date.'
                               ),
                           ])
-                          .describe('Timed or all-day calendar event span.'),
+                          .describe(
+                            'Timed or all-day calendar event span.\n\nFields are camelCased per variant rather than via `rename_all_fields`,\nwhich utoipa ignores — the generated OpenAPI schema would otherwise\nclaim snake_case fields the wire never carries.'
+                          ),
                         title: zod.string().describe('Display title.'),
                         transparency: zod
                           .string()
@@ -20901,6 +22271,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                       'crm_contact',
                                       'reminder',
                                       'skill',
+                                      'agent_session',
                                     ])
                                     .describe('The type of an entity in Macro')
                                     .describe("The referenced entity's type."),
@@ -20977,10 +22348,22 @@ export const postItemsSoupAstGroupedResponse = zod
                     .describe(
                       'Whether the requesting user has favorited this entity.'
                     ),
+                  notified_at: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe(
+                      'When the caller was last notified about this entity, present only\nwhen the page was ordered by `notified_at`. Clients keep the notified\nfeed ordered and date-bucketed on this value.'
+                    ),
+                  touched_at: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe(
+                      "The caller's latest own mutation of this entity, present only when the\npage was ordered by `touched_by_me`. Clients keep the touched feed\nordered on this value, so it can be bumped optimistically."
+                    ),
                 })
               )
               .describe(
-                'API representation of a soup item with its frecency score.'
+                'API representation of a soup item with its per-viewer enrichments.'
               )
           )
           .describe(
@@ -21920,6 +23303,11 @@ export const postItemsSoupAstGroupedResponse = zod
                         isRead: zod
                           .boolean()
                           .describe('Whether the thread has been read.'),
+                        isSignal: zod
+                          .boolean()
+                          .describe(
+                            "The denormalized `email_threads.is_signal` importance classification —\nthe same flag the soup Importance filter evaluates, distinct from\n`is_important` (Gmail's IMPORTANT label)."
+                          ),
                         name: zod
                           .string()
                           .nullish()
@@ -23038,6 +24426,12 @@ export const postItemsSoupAstGroupedResponse = zod
                   .object({
                     data: zod
                       .object({
+                        conferenceProvider: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            'Which conferencing system backs `conference_url`.'
+                          ),
                         conferenceUrl: zod
                           .string()
                           .nullish()
@@ -23296,6 +24690,12 @@ export const postItemsSoupAstGroupedResponse = zod
                           .describe(
                             'Whether the selected canonical source is read-only.'
                           ),
+                        lastReminderFiredAt: zod.iso
+                          .datetime({})
+                          .nullish()
+                          .describe(
+                            "When this event's most recent reminder notification was delivered."
+                          ),
                         location: zod
                           .string()
                           .nullish()
@@ -23314,14 +24714,14 @@ export const postItemsSoupAstGroupedResponse = zod
                           .union([
                             zod
                               .object({
-                                ends_at: zod.iso
+                                endsAt: zod.iso
                                   .datetime({})
                                   .describe('Exclusive end.'),
                                 kind: zod.enum(['timed']),
-                                starts_at: zod.iso
+                                startsAt: zod.iso
                                   .datetime({})
                                   .describe('Inclusive start.'),
-                                time_zone: zod
+                                timeZone: zod
                                   .string()
                                   .nullish()
                                   .describe('Original IANA time zone.'),
@@ -23329,11 +24729,11 @@ export const postItemsSoupAstGroupedResponse = zod
                               .describe('Absolute timed event.'),
                             zod
                               .object({
-                                end_date: zod.iso
+                                endDate: zod.iso
                                   .date()
                                   .describe('Exclusive end date.'),
                                 kind: zod.enum(['allDay']),
-                                start_date: zod.iso
+                                startDate: zod.iso
                                   .date()
                                   .describe('Inclusive start date.'),
                               })
@@ -23341,7 +24741,9 @@ export const postItemsSoupAstGroupedResponse = zod
                                 'All-day event with an exclusive end date.'
                               ),
                           ])
-                          .describe('Timed or all-day calendar event span.'),
+                          .describe(
+                            'Timed or all-day calendar event span.\n\nFields are camelCased per variant rather than via `rename_all_fields`,\nwhich utoipa ignores — the generated OpenAPI schema would otherwise\nclaim snake_case fields the wire never carries.'
+                          ),
                         title: zod.string().describe('Display title.'),
                         transparency: zod
                           .string()
@@ -23996,6 +25398,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                       'crm_contact',
                                       'reminder',
                                       'skill',
+                                      'agent_session',
                                     ])
                                     .describe('The type of an entity in Macro')
                                     .describe("The referenced entity's type."),
@@ -24072,10 +25475,22 @@ export const postItemsSoupAstGroupedResponse = zod
                     .describe(
                       'Whether the requesting user has favorited this entity.'
                     ),
+                  notified_at: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe(
+                      'When the caller was last notified about this entity, present only\nwhen the page was ordered by `notified_at`. Clients keep the notified\nfeed ordered and date-bucketed on this value.'
+                    ),
+                  touched_at: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe(
+                      "The caller's latest own mutation of this entity, present only when the\npage was ordered by `touched_by_me`. Clients keep the touched feed\nordered on this value, so it can be bumped optimistically."
+                    ),
                 })
               )
               .describe(
-                'API representation of a soup item with its frecency score.'
+                'API representation of a soup item with its per-viewer enrichments.'
               )
           )
           .describe(
@@ -25841,9 +27256,15 @@ export const getProjectPermissionsV2Response = zod.object({
     .nullish()
     .describe('The channel share permissions for the item'),
   id: zod.string().describe('The share permission id'),
-  isPublic: zod.boolean().describe('If the item is publicly accessible'),
-  owner: zod.string().describe('The owner of the item'),
-  publicAccessLevel: zod
+  linkShare: zod
+    .union([
+      zod.null(),
+      zod
+        .enum(['PUBLIC', 'TEAM'])
+        .describe('Defines who can access an item through its share link.'),
+    ])
+    .optional(),
+  linkShareAccessLevel: zod
     .union([
       zod.null(),
       zod
@@ -25851,6 +27272,7 @@ export const getProjectPermissionsV2Response = zod.object({
         .describe('Ordered from least to most access top -> bottom'),
     ])
     .optional(),
+  owner: zod.string().describe('The owner of the item'),
 });
 
 /**
@@ -26049,6 +27471,7 @@ export const listRemindersQueryParams = zod.object({
       'crm_contact',
       'reminder',
       'skill',
+      'agent_session',
     ])
     .optional()
     .describe(
@@ -26131,6 +27554,7 @@ export const listRemindersResponse = zod
                     'crm_contact',
                     'reminder',
                     'skill',
+                    'agent_session',
                   ])
                   .describe('The type of an entity in Macro'),
               ])
@@ -26216,6 +27640,7 @@ export const createReminderBody = zod
             'crm_contact',
             'reminder',
             'skill',
+            'agent_session',
           ])
           .describe('The type of an entity in Macro'),
       ])
@@ -26298,6 +27723,7 @@ export const getReminderResponse = zod
             'crm_contact',
             'reminder',
             'skill',
+            'agent_session',
           ])
           .describe('The type of an entity in Macro'),
       ])
@@ -26440,6 +27866,7 @@ export const updateReminderResponse = zod
             'crm_contact',
             'reminder',
             'skill',
+            'agent_session',
           ])
           .describe('The type of an entity in Macro'),
       ])
@@ -26588,11 +28015,17 @@ export const editThreadV2Body = zod.object({
           .describe(
             'Any channel share permissions to be created\/updated\/removed'
           ),
-        isPublic: zod
-          .boolean()
-          .nullish()
-          .describe('If the item is publicly accessible'),
-        publicAccessLevel: zod
+        linkShare: zod
+          .union([
+            zod.null(),
+            zod
+              .enum(['PUBLIC', 'TEAM'])
+              .describe(
+                'Defines who can access an item through its share link.'
+              ),
+          ])
+          .optional(),
+        linkShareAccessLevel: zod
           .union([
             zod.null(),
             zod
@@ -26610,6 +28043,47 @@ export const editThreadV2Response = zod.object({
     success: zod.boolean().describe('Indicates if the request was successful'),
   }),
   error: zod.boolean().describe('Indicates if an error occurred'),
+});
+
+/**
+ * @summary List the caller's API keys.
+ */
+export const listUserApiKeysResponse = zod
+  .object({
+    keys: zod
+      .array(
+        zod
+          .object({
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the key was created.'),
+            id: zod
+              .uuid()
+              .describe('Opaque identifier for a stored user API key.'),
+            name: zod.string().describe('User-facing name.'),
+          })
+          .describe(
+            'Safe metadata for a stored key. Never contains the secret or its hash.'
+          )
+      )
+      .describe("The caller's keys. Never includes the raw secret or hash."),
+  })
+  .describe("The caller's API keys as id, name, and created_at.");
+
+/**
+ * @summary Mint a new API key for the caller.
+ */
+export const createUserApiKeyBody = zod
+  .object({
+    name: zod.string().describe('User-facing name for the key.'),
+  })
+  .describe('Request body for minting a key.');
+
+/**
+ * @summary Delete one of the caller's API keys.
+ */
+export const deleteUserApiKeyParams = zod.object({
+  id: zod.uuid().describe('Opaque key identifier.'),
 });
 
 /**
@@ -26673,9 +28147,15 @@ export const getDocumentPermissionsV2Response = zod.object({
       .nullish()
       .describe('The channel share permissions for the item'),
     id: zod.string().describe('The share permission id'),
-    isPublic: zod.boolean().describe('If the item is publicly accessible'),
-    owner: zod.string().describe('The owner of the item'),
-    publicAccessLevel: zod
+    linkShare: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['PUBLIC', 'TEAM'])
+          .describe('Defines who can access an item through its share link.'),
+      ])
+      .optional(),
+    linkShareAccessLevel: zod
       .union([
         zod.null(),
         zod
@@ -26683,6 +28163,7 @@ export const getDocumentPermissionsV2Response = zod.object({
           .describe('Ordered from least to most access top -> bottom'),
       ])
       .optional(),
+    owner: zod.string().describe('The owner of the item'),
   }),
 });
 
@@ -26724,11 +28205,17 @@ export const editProjectV2Body = zod.object({
           .describe(
             'Any channel share permissions to be created\/updated\/removed'
           ),
-        isPublic: zod
-          .boolean()
-          .nullish()
-          .describe('If the item is publicly accessible'),
-        publicAccessLevel: zod
+        linkShare: zod
+          .union([
+            zod.null(),
+            zod
+              .enum(['PUBLIC', 'TEAM'])
+              .describe(
+                'Defines who can access an item through its share link.'
+              ),
+          ])
+          .optional(),
+        linkShareAccessLevel: zod
           .union([
             zod.null(),
             zod
@@ -26746,6 +28233,23 @@ export const editProjectV2Response = zod.object({
     success: zod.boolean().describe('Indicates if the request was successful'),
   }),
   error: zod.boolean().describe('Indicates if an error occurred'),
+});
+
+/**
+ * @summary Stream matching broker events to the caller over Server-Sent Events.
+ */
+export const streamEventsQueryParams = zod.object({
+  scope: zod
+    .enum(['user', 'team'])
+    .describe(
+      'Personal or team workspace whose webhook lifecycle events are delivered.'
+    ),
+  filters: zod
+    .string()
+    .optional()
+    .describe(
+      'URL-encoded JSON array of webhook filters, identical to the persisted\nwebhook `filters` field.'
+    ),
 });
 
 /**
@@ -26806,14 +28310,16 @@ export const listWebhooksResponse = zod
             updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
             workspace_id: zod.string().describe('Owning workspace id.'),
           })
-          .describe('Webhook row returned by application APIs.')
+          .describe(
+            'Webhook row returned by application APIs.\n\nClients deserialize this, so both derives are used.'
+          )
       )
       .describe(
         "The caller's webhooks, newest first. Signing secrets are omitted."
       ),
   })
   .describe(
-    'Webhooks visible to the caller across their personal and team workspaces.'
+    'Webhooks visible to the caller across their personal and team workspaces.\n\nClients deserialize this, so both derives are used.'
   );
 
 /**
@@ -26852,9 +28358,13 @@ export const createWebhookBody = zod
       ),
     scope: zod
       .enum(['user', 'team'])
-      .describe('Scope that owns a newly-created webhook.'),
+      .describe(
+        'Scope that owns a newly-created webhook.\n\nClients serialize this, so both derives are used. `Display`\/`FromStr`\nspell the same names as serde, for query strings and config values.'
+      ),
   })
-  .describe('Request to create a webhook.');
+  .describe(
+    'Request to create a webhook.\n\nClients serialize this, so both derives are used.'
+  );
 
 /**
  * @summary Get a webhook.
@@ -26910,7 +28420,9 @@ export const getWebhookResponse = zod
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
     workspace_id: zod.string().describe('Owning workspace id.'),
   })
-  .describe('Webhook row returned by application APIs.');
+  .describe(
+    'Webhook row returned by application APIs.\n\nClients deserialize this, so both derives are used.'
+  );
 
 /**
  * @summary Delete a webhook.
@@ -27018,7 +28530,9 @@ export const patchWebhookResponse = zod
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
     workspace_id: zod.string().describe('Owning workspace id.'),
   })
-  .describe('Webhook row returned by application APIs.');
+  .describe(
+    'Webhook row returned by application APIs.\n\nClients deserialize this, so both derives are used.'
+  );
 
 /**
  * @summary Validate a webhook endpoint.

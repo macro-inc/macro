@@ -3,6 +3,7 @@
 mod api;
 mod config;
 mod generate_password;
+mod microsoft_token_cipher;
 mod rate_limit_config;
 mod service;
 

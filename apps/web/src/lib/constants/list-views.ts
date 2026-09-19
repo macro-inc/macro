@@ -1,5 +1,6 @@
 import type { TagFilterMode } from '@app/features/next-soup/filters/filter-store/types';
 import type { EntityData } from '@entity';
+import { hasOwnTouchFloor } from '@queries/soup/normalized-cache/own-touch';
 import type {
   SoupApiItem,
   SoupProperty,
@@ -8,6 +9,7 @@ import { match } from 'ts-pattern';
 
 export const LIST_VIEWS = [
   'inbox',
+  'recent',
   'agents',
   'mail',
   'documents',
@@ -24,6 +26,7 @@ export type ListView = (typeof LIST_VIEWS)[number];
 
 export const LIST_VIEW_PATHS = {
   inbox: '/inbox',
+  recent: '/recent',
   agents: '/agents',
   mail: '/mail',
   documents: '/documents',
@@ -38,6 +41,7 @@ export const LIST_VIEW_PATHS = {
 
 export const LIST_VIEW_ID = {
   inbox: 'inbox',
+  recent: 'recent',
   agents: 'agents',
   mail: 'mail',
   documents: 'documents',
@@ -70,6 +74,18 @@ export const TAGGABLE_LIST_VIEWS: ReadonlySet<ListView> = new Set<ListView>([
   'calls',
 ]);
 
+/** The entity id a soup item normalizes under (channels/calls nest theirs). */
+const soupItemEntityId = (item: SoupApiItem): string => {
+  switch (item.tag) {
+    case 'channel':
+      return item.data.channel.id;
+    case 'call':
+      return item.data.callId;
+    default:
+      return item.data.id;
+  }
+};
+
 export const soupItemMatchesListView = (
   item: SoupApiItem,
   view: ListView | undefined
@@ -94,6 +110,15 @@ export const soupItemMatchesListView = (
     .with('calls', () => item.tag === 'call')
     .with('folders', () => item.tag === 'project')
     .with('inbox', 'search', undefined, () => true)
+    // Membership in the recent view is "did I touch it", not a type check:
+    // only rows that carry a touch timestamp (from the touched_by_me page)
+    // or an outstanding optimistic own-touch belong. Without this, any
+    // websocket-inserted entity — including other people's — would enter
+    // the feed.
+    .with(
+      'recent',
+      () => item.touched_at != null || hasOwnTouchFloor(soupItemEntityId(item))
+    )
     .with('companies', () => item.tag === 'crmCompany')
     .with('reminders', () => item.tag === 'reminder')
     .exhaustive();

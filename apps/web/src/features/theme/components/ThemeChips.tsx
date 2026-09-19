@@ -1,8 +1,8 @@
-import type { ThemeV2 } from '@theme/types/themeTypes';
 import IconTextA from '@phosphor-icons/core/regular/text-aa.svg?component-solid';
+import type { ThemeV3 } from '@theme/types/themeTypes';
 import { cn } from '@ui';
+import type { JSX } from 'solid-js';
 
-type Token = { l: number; c: number; h: number };
 type ThemeChipsSize = 'inline' | 'sm' | 'md';
 
 const sizeStyles: Record<
@@ -35,27 +35,17 @@ const sizeStyles: Record<
 /** A theme swatch: an encompassing square of the theme's panel surface with the
  *  accent and ink (A) inside. Always shows the theme's original intended colors
  *  — each theme is intrinsically light or dark. */
-export function ThemeChips(props: { theme: ThemeV2; size?: ThemeChipsSize }) {
+export function ThemeChips(props: { theme: ThemeV3; size?: ThemeChipsSize }) {
   const styles = () => sizeStyles[props.size ?? 'md'];
-  const oklch = (token: Token) => {
-    if (!token) {
-      return 'transparent';
+  const tokenStyle = (): JSX.CSSProperties => {
+    const style: Record<string, string> = {
+      'background-color': 'var(--color-panel)',
+    };
+    for (const [token, value] of Object.entries(props.theme.colorTokens)) {
+      style[`--color-${token}`] = value;
     }
-    return `oklch(${token.l} ${token.c} ${token.h}deg)`;
+    return style as JSX.CSSProperties;
   };
-
-  // Approximate the app's prevalent panel surface rather than the darkest base
-  // background: lift b0's lightness by the theme's depth, matching how Layer
-  // elevates surfaces (b0l + (layer/5) * themeDepth) at a typical panel depth.
-  // Flat b0 made the swatches read too dark and blend together.
-  const PANEL_LAYER = 2;
-  const bg = () => {
-    const b0 = props.theme.tokens.b0;
-    const l = b0.l + (PANEL_LAYER / 5) * (props.theme.depth ?? 0.15);
-    return `oklch(${l} ${b0.c} ${b0.h}deg)`;
-  };
-  const accent = () => oklch(props.theme.tokens.a0);
-  const ink = () => oklch(props.theme.tokens.c0);
 
   // Uniform padding around and gap between the items so the spacing reads evenly.
   return (
@@ -64,17 +54,15 @@ export function ThemeChips(props: { theme: ThemeV2; size?: ThemeChipsSize }) {
         'inline-flex items-center border border-edge-muted',
         styles().root
       )}
-      style={{
-        'background-color': bg(),
-      }}
+      style={tokenStyle()}
     >
       <span
         class={cn('inline-block rounded-sm', styles().accent)}
         style={{
-          'background-color': accent(),
+          'background-color': 'var(--color-accent)',
         }}
       />
-      <IconTextA class={styles().icon} style={{ color: ink() }} />
+      <IconTextA class={styles().icon} style={{ color: 'var(--color-ink)' }} />
     </span>
   );
 }

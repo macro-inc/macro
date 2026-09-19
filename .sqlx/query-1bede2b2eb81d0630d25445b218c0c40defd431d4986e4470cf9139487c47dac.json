@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE calendar_events\n            SET last_reminder_fired_at = GREATEST(last_reminder_fired_at, $2)\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1bede2b2eb81d0630d25445b218c0c40defd431d4986e4470cf9139487c47dac"
+}

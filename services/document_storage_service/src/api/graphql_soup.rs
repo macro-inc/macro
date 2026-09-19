@@ -154,7 +154,13 @@ fn insert_graphql_context_data(
         user_id: macro_user_id.clone(),
         organization_id,
     });
+    data.insert(favorites::domain::models::FavoritesMutationActor {
+        user_id: macro_user_id.clone(),
+        organization_id,
+    });
     data.insert(state.graphql_entity_mutation_service.clone());
+    data.insert(state.favorites_mutation_service.clone());
+    data.insert(state.favorites_service.clone());
     data.insert(state.channel_service.clone());
     data.insert(state.graphql_notification_reader.clone());
     data.insert(state.soup_router_state.email_service());
@@ -185,5 +191,11 @@ fn insert_graphql_context_data(
     data.insert(complete_graph::entity_notifications_loader(
         macro_user_id,
         state.graphql_notification_reader.clone(),
+    ));
+    // The feed resolver reads the reader directly; the edge goes through
+    // the request's DataLoader.
+    data.insert(state.activity_reader.clone());
+    data.insert(complete_graph::entity_activity_loader(
+        state.activity_reader.clone(),
     ));
 }

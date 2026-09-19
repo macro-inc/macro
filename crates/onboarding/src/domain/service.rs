@@ -59,28 +59,31 @@ pub trait OnboardingService: Send + Sync + 'static {
 
 /// Concrete orchestrator wiring the repo, the user's MCP servers, and the
 /// import service together.
-pub struct OnboardingServiceImpl<R, S, I> {
+pub struct OnboardingServiceImpl<R, S, I, M> {
     repo: R,
     mcp_store: Arc<S>,
     import: Arc<I>,
+    mcp_select: Arc<M>,
 }
 
-impl<R, S, I> OnboardingServiceImpl<R, S, I> {
+impl<R, S, I, M> OnboardingServiceImpl<R, S, I, M> {
     /// Build the orchestrator.
-    pub fn new(repo: R, mcp_store: Arc<S>, import: Arc<I>) -> Self {
+    pub fn new(repo: R, mcp_store: Arc<S>, import: Arc<I>, mcp_select: Arc<M>) -> Self {
         Self {
             repo,
             mcp_store,
             import,
+            mcp_select,
         }
     }
 }
 
-impl<R, S, I> OnboardingServiceImpl<R, S, I>
+impl<R, S, I, M> OnboardingServiceImpl<R, S, I, M>
 where
     R: OnboardingRepo,
     S: McpServerStore,
     I: ImportService,
+    M: mcp_select::ConnectorSelect,
 {
     async fn connected_servers(
         &self,
@@ -104,11 +107,22 @@ where
     /// Start an auto-importing gather run for every authenticated connector
     /// that never had one. A failing source must not block the others (or
     /// the read).
-    async fn start_due_gathers(&self, user: &MacroUserIdStr<'static>, servers: &[ConnectedServer]) {
+    async fn start_due_gathers(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        _servers: &[ConnectedServer],
+    ) {
         for source in ImportSource::all() {
-            let connected = servers
-                .iter()
-                .any(|server| server.authenticated && server.url == source.mcp_server_url());
+            // Which stack backs the connector is the selector's call
+            // (Pipedream connectors win over native ones, see `mcp_select`).
+            let connected = self
+                .mcp_select
+                .connector_connected(user, source.connector_ref())
+                .await
+                .inspect_err(
+                    |e| tracing::warn!(source = source.as_ref(), error = ?e, "connected check failed"),
+                )
+                .unwrap_or(false);
             if !connected {
                 continue;
             }
@@ -119,11 +133,12 @@ where
     }
 }
 
-impl<R, S, I> OnboardingService for OnboardingServiceImpl<R, S, I>
+impl<R, S, I, M> OnboardingService for OnboardingServiceImpl<R, S, I, M>
 where
     R: OnboardingRepo,
     S: McpServerStore,
     I: ImportService,
+    M: mcp_select::ConnectorSelect,
 {
     #[tracing::instrument(skip(self, user), err)]
     async fn get_state(&self, user: MacroUserIdStr<'static>) -> Result<OnboardingState> {

@@ -5,8 +5,8 @@ use std::sync::Arc;
 use tracing::Instrument;
 
 use crate::domain::{
-    models::RefreshToken,
-    ports::{OAuthProvider, TokenPairFuture},
+    models::{RefreshToken, UpstreamTokens},
+    ports::{OAuthProvider, UpstreamTokensFuture},
 };
 
 /// FusionAuth-backed OAuth provider for the MCP auth proxy.
@@ -43,33 +43,44 @@ impl OAuthProvider for FusionAuthOAuthProvider {
         )
     }
 
-    fn exchange_authorization_code<'a>(&'a self, code: &'a str) -> TokenPairFuture<'a> {
+    fn exchange_authorization_code<'a>(&'a self, code: &'a str) -> UpstreamTokensFuture<'a> {
         let span = tracing::debug_span!("FusionAuthOAuthProvider::exchange_authorization_code");
         Box::pin(
             async move {
-                let (access_token, refresh_token) = self
+                let grant = self
                     .client
                     .complete_authorization_code_grant(code)
                     .await
                     .map_err(anyhow::Error::from)?;
 
-                Ok((access_token.into(), refresh_token.into()))
+                Ok(UpstreamTokens {
+                    access_token: grant.access_token.into(),
+                    refresh_token: grant.refresh_token.into(),
+                    expires_in: grant.expires_in,
+                })
             }
             .instrument(span),
         )
     }
 
-    fn refresh_access_token<'a>(&'a self, refresh_token: &'a RefreshToken) -> TokenPairFuture<'a> {
+    fn refresh_access_token<'a>(
+        &'a self,
+        refresh_token: &'a RefreshToken,
+    ) -> UpstreamTokensFuture<'a> {
         let span = tracing::debug_span!("FusionAuthOAuthProvider::refresh_access_token");
         Box::pin(
             async move {
-                let (access_token, refresh_token) = self
+                let grant = self
                     .client
                     .complete_refresh_token_grant(refresh_token.as_str())
                     .await
                     .map_err(anyhow::Error::from)?;
 
-                Ok((access_token.into(), refresh_token.into()))
+                Ok(UpstreamTokens {
+                    access_token: grant.access_token.into(),
+                    refresh_token: grant.refresh_token.into(),
+                    expires_in: grant.expires_in,
+                })
             }
             .instrument(span),
         )

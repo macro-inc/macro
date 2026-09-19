@@ -36,7 +36,7 @@
       }
     },
     {
-      "includes": ["src/lib/animate/**", "src/features/theme/**"],
+      "includes": ["src/lib/animate/**"],
       "formatter": {
         "enabled": false
       },

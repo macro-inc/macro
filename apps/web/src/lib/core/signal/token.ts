@@ -28,7 +28,11 @@ async function fetchNewToken(blockId: string) {
   return token.value.token;
 }
 
-function isTokenExpired(token: string) {
+/**
+ * Whether a JWT expires within {@link EXPIRATION_THRESHOLD_SECONDS}. Treats an
+ * unparseable token as expired.
+ */
+export function isTokenExpired(token: string) {
   try {
     const payload = JSON.parse(atob(token.split('.')[1]));
     const currentTime = Math.floor(Date.now() / 1000);

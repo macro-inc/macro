@@ -1,0 +1,10 @@
+---
+title: ListCalendars
+description: "List the calendars the user can see across their connected inboxes, with each calendar's `calendarId`, display name, owning inbox address, and whether it is primary and writable.  Use this before CreateCalendarEvent when the user wants an event on a specific non-default calendar (e.g. \"add it to my work calendar\") so you can pass the exact `calendarId`. Most users have a single primary calendar, in which case CreateCalendarEvent targets it by default and you do not need this tool. An empty result means no calendar is connected."
+---
+
+# ListCalendars
+
+List the calendars the user can see across their connected inboxes, with each calendar's `calendarId`, display name, owning inbox address, and whether it is primary and writable.
+
+Use this before CreateCalendarEvent when the user wants an event on a specific non-default calendar (e.g. "add it to my work calendar") so you can pass the exact `calendarId`. Most users have a single primary calendar, in which case CreateCalendarEvent targets it by default and you do not need this tool. An empty result means no calendar is connected.

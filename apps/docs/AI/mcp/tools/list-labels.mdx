@@ -1,0 +1,30 @@
+---
+title: ListLabels
+description: "List the user's Gmail labels. Returns both system labels (INBOX, SENT, DRAFTS, UNREAD, STARRED, TRASH, SPAM, IMPORTANT, CATEGORY_PERSONAL, CATEGORY_SOCIAL, CATEGORY_PROMOTIONS, CATEGORY_UPDATES, CATEGORY_FORUMS, etc.) and any custom user-created labels. Each label has a UUID `id` and a `name`.  Gmail represents nearly every inbox operation as a label add/remove, so this tool is the first step for almost any thread-management action: call ListLabels once to find the label `id` by `name`, then pass that `id` to UpdateThreadLabels. Common pairings (look up the named system label here, then call UpdateThreadLabels with that id): - Archive a thread → remove `INBOX` (add=false) - Move back to inbox → add `INBOX` (add=true) - Mark as read → remove `UNREAD` (add=false) - Mark as unread → add `UNREAD` (add=true) - Star → add `STARRED`; Unstar → remove `STARRED` - Move to trash → add `TRASH`; Restore from trash → remove `TRASH` - Mark important → add `IMPORTANT`; Mark unimportant → remove `IMPORTANT` - Report spam → add `SPAM`; Not spam → remove `SPAM` - Apply or remove a custom user label → look up the label by its display name and add/remove it  Match label names case-insensitively when searching the response. You can also use this to understand how the user's mail is organized before filtering or searching by label.  Labels are per-inbox: each inbox has its own label `id`s, so a label id from one inbox will not work on a thread in another. When acting on a specific thread, pass its `thread_id` and this returns the labels of the inbox that owns that thread (the matching ids to pass to UpdateThreadLabels). Otherwise, in a multi-inbox setup, pass `inbox` (an inbox email address from ListInboxes) to list a specific inbox's labels; omit both to use the primary inbox."
+---
+
+# ListLabels
+
+List the user's Gmail labels. Returns both system labels (INBOX, SENT, DRAFTS, UNREAD, STARRED, TRASH, SPAM, IMPORTANT, CATEGORY_PERSONAL, CATEGORY_SOCIAL, CATEGORY_PROMOTIONS, CATEGORY_UPDATES, CATEGORY_FORUMS, etc.) and any custom user-created labels. Each label has a UUID `id` and a `name`.
+
+Gmail represents nearly every inbox operation as a label add/remove, so this tool is the first step for almost any thread-management action: call ListLabels once to find the label `id` by `name`, then pass that `id` to UpdateThreadLabels. Common pairings (look up the named system label here, then call UpdateThreadLabels with that id):
+- Archive a thread → remove `INBOX` (add=false)
+- Move back to inbox → add `INBOX` (add=true)
+- Mark as read → remove `UNREAD` (add=false)
+- Mark as unread → add `UNREAD` (add=true)
+- Star → add `STARRED`; Unstar → remove `STARRED`
+- Move to trash → add `TRASH`; Restore from trash → remove `TRASH`
+- Mark important → add `IMPORTANT`; Mark unimportant → remove `IMPORTANT`
+- Report spam → add `SPAM`; Not spam → remove `SPAM`
+- Apply or remove a custom user label → look up the label by its display name and add/remove it
+
+Match label names case-insensitively when searching the response. You can also use this to understand how the user's mail is organized before filtering or searching by label.
+
+Labels are per-inbox: each inbox has its own label `id`s, so a label id from one inbox will not work on a thread in another. When acting on a specific thread, pass its `thread_id` and this returns the labels of the inbox that owns that thread (the matching ids to pass to UpdateThreadLabels). Otherwise, in a multi-inbox setup, pass `inbox` (an inbox email address from ListInboxes) to list a specific inbox's labels; omit both to use the primary inbox.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `thread_id` | string | No | List the labels of the inbox that owns this thread. Use this when you intend to add or remove a label on a specific thread so the label ids match that thread's inbox. Takes precedence over `inbox`. |
+| `inbox` | string | No | Restrict to a specific inbox by its email address (from ListInboxes). Omit to use the primary inbox. Ignored when `thread_id` is set. |

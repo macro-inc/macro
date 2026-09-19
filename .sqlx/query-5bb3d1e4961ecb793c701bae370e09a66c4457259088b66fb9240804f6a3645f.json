@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO comms_channel_participants (channel_id, user_id, role, left_at)\n                SELECT channel_id, $2, 'member'::comms_participant_role, NULL\n                FROM UNNEST($1::uuid[]) AS channel_id\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5bb3d1e4961ecb793c701bae370e09a66c4457259088b66fb9240804f6a3645f"
+}

@@ -2,7 +2,13 @@
  * @vitest-environment jsdom
  */
 
-import { render } from '@solidjs/testing-library';
+import type { useRemoveLinkPreviewMutation } from '@queries/channel/message';
+import { render, waitFor } from '@solidjs/testing-library';
+import {
+  QueryClient,
+  QueryClientProvider,
+  useMutation,
+} from '@tanstack/solid-query';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { LinkPreviews } from '../LinkPreviews';
@@ -36,6 +42,9 @@ type MockUnfurlData =
 
 const unfurlResults = new Map<string, MockUnfurlData>();
 const suppressMutate = vi.fn();
+const suppressRequest = vi.fn<() => Promise<never>>(
+  () => new Promise(() => {})
+);
 
 vi.mock('@core/signal/unfurl', () => ({
   useUnfurl: (url: string) => [
@@ -53,7 +62,20 @@ vi.mock('@core/context/user', () => ({
 }));
 
 vi.mock('@queries/channel/message', () => ({
-  useRemoveLinkPreviewMutation: () => ({ mutate: suppressMutate }),
+  useRemoveLinkPreviewMutation: (
+    callbacks: Parameters<typeof useRemoveLinkPreviewMutation>[0]
+  ) => {
+    const mutation = useMutation(() => ({
+      mutationFn: suppressRequest,
+      ...callbacks,
+    }));
+    return {
+      mutate: (...args: Parameters<typeof mutation.mutate>) => {
+        suppressMutate(...args);
+        mutation.mutate(...args);
+      },
+    };
+  },
 }));
 
 describe('extractUnfurlableUrls', () => {
@@ -203,9 +225,11 @@ function renderPreviews(
   channelId: string | undefined = 'channel-1'
 ) {
   return render(() => (
-    <Root message={{ ...baseMessage, content, ...message }}>
-      <LinkPreviews channelId={channelId} />
-    </Root>
+    <QueryClientProvider client={new QueryClient()}>
+      <Root message={{ ...baseMessage, content, ...message }}>
+        <LinkPreviews channelId={channelId} />
+      </Root>
+    </QueryClientProvider>
   ));
 }
 
@@ -291,6 +315,57 @@ describe('LinkPreviews', () => {
     const second = renderPreviews(url, { sender_id: 'user-1' });
     expect(second.container.querySelector('[data-link-preview]')).toBeNull();
   });
+
+  it.each([0, 1])(
+    'rolls back concurrent failures in order %s',
+    async (firstFailure) => {
+      const user = userEvent.setup({ skipHover: true });
+      const urls = [
+        'https://example.com/concurrent-a',
+        'https://example.com/concurrent-b',
+      ];
+      const messageId = `concurrent-${firstFailure}`;
+      const failures: Array<(error: Error) => void> = [];
+      for (const url of urls) {
+        suppressRequest.mockImplementationOnce(
+          () =>
+            new Promise((_, reject) => {
+              failures.push(reject);
+            })
+        );
+        unfurlResults.set(url, {
+          type: 'success',
+          data: { url, title: 'Article' },
+          _createdAt: new Date(),
+        });
+      }
+      const view = renderPreviews(urls.join(' '), {
+        id: messageId,
+        sender_id: 'user-1',
+      });
+      for (const url of urls) {
+        await user.click(
+          view.getAllByRole('button', { name: 'Remove link preview' })[0]
+        );
+        expect(isLinkPreviewHidden(messageId, url)).toBe(true);
+      }
+      await waitFor(() => expect(failures).toHaveLength(2));
+      failures[firstFailure](new Error('Request failed'));
+      await waitFor(() =>
+        expect(isLinkPreviewHidden(messageId, urls[firstFailure])).toBe(false)
+      );
+      expect(isLinkPreviewHidden(messageId, urls[1 - firstFailure])).toBe(true);
+      failures[1 - firstFailure](new Error('Request failed'));
+      await waitFor(() =>
+        expect(
+          view.container.querySelectorAll('[data-link-preview]')
+        ).toHaveLength(2)
+      );
+      expect(urls.some((url) => isLinkPreviewHidden(messageId, url))).toBe(
+        false
+      );
+    }
+  );
 
   it('clears the optimistic hide once the rewritten content arrives', () => {
     const url = 'https://example.com/confirmed';

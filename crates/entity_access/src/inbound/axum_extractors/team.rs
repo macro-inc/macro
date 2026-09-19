@@ -142,7 +142,7 @@ where
         MacroAuthorization::Bot(authentication) => {
             bot_team_access_outcome::<T, Svc>(service, &authentication).await
         }
-        MacroAuthorization::Internal(None) => {
+        MacroAuthorization::Harness(_) | MacroAuthorization::Internal(None) => {
             Err(ExtractorError::UnauthorizedWithMessage("unauthorized"))
         }
     }

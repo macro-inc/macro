@@ -221,14 +221,44 @@ function mutateMatches(
   return count;
 }
 
-/** Wrap a matched substring in a new element node (link, mark, …). Returns the count changed. */
+/** How to recognise and update a wrapper that is already in place. */
+export type ExistingWrapper = {
+  /** True for a wrapper of the same kind as `createWrapper` produces. */
+  is: (node: LexicalNode) => boolean;
+  /** Bring the existing wrapper in line with the requested change. */
+  update: (node: ElementNode) => void;
+};
+
+/**
+ * Wrap a matched substring in a new element node (link, mark, …). Returns the
+ * count changed.
+ *
+ * When `existing` is supplied and the match already sits inside a wrapper of
+ * that kind, the existing wrapper is updated instead of a new one being nested
+ * inside it. Without this, `link()` on already-linked text produced
+ *
+ *   <a href="https://old.test"><a href="https://new.test">docs</a></a>
+ *
+ * — a malformed nested anchor that also left the stale href in place, and no
+ * API existed to retarget a link at all. Ten defects across the failure corpus
+ * trace back to it.
+ */
 export function $wrapInBlock(
   block: ElementNode,
   needle: string,
   createWrapper: () => ElementNode,
-  scope?: Scope
+  scope?: Scope,
+  existing?: ExistingWrapper
 ): number {
   return mutateMatches(block, needle, scope, (matchNode) => {
+    if (existing) {
+      const parent = matchNode.getParent();
+      const enclosing = parent ? $findMatchingParent(parent, existing.is) : null;
+      if (enclosing && $isElementNode(enclosing)) {
+        existing.update(enclosing);
+        return;
+      }
+    }
     const wrapper = createWrapper();
     matchNode.replace(wrapper);
     wrapper.append(matchNode);

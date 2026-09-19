@@ -1,5 +1,6 @@
 //! Database adapter for device registration operations.
 
+use super::repository::DbDeviceType;
 use crate::domain::models::device::DeviceType;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
@@ -78,7 +79,7 @@ impl DeviceRegistrationDbOps for PgPool {
             LIMIT 1
             "#,
             device_token,
-            device_type as _,
+            DbDeviceType::from(device_type) as _,
         )
         .map(|row| row.device_endpoint)
         .fetch_optional(self)
@@ -106,7 +107,7 @@ impl DeviceRegistrationDbOps for PgPool {
             user_id_str,
             device_token,
             device_endpoint,
-            device_type as _,
+            DbDeviceType::from(device_type) as _,
         )
         .execute(self)
         .await?;
@@ -129,7 +130,7 @@ impl DeviceRegistrationDbOps for PgPool {
             "#,
             user_id_str,
             device_token,
-            device_type as _,
+            DbDeviceType::from(device_type) as _,
         )
         .map(|row| row.device_endpoint)
         .fetch_all(self)
@@ -151,7 +152,7 @@ impl DeviceRegistrationDbOps for PgPool {
             RETURNING device_endpoint
             "#,
             device_token,
-            device_type as _,
+            DbDeviceType::from(device_type) as _,
             active_endpoint,
         )
         .map(|row| row.device_endpoint)

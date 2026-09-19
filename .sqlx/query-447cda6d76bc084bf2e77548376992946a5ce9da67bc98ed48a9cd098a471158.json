@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_session\n            SET name = $2,\n                modified_at = CASE\n                    WHEN name IS DISTINCT FROM $2 THEN NOW()\n                    ELSE modified_at\n                END\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "447cda6d76bc084bf2e77548376992946a5ce9da67bc98ed48a9cd098a471158"
+}

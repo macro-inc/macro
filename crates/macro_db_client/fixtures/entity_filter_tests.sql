@@ -149,6 +149,22 @@ VALUES
         'TASK',
         '00000001-0000-0000-0000-000000000001',
         '{"type": "EntityReference", "value": [{"entity_type": "USER", "entity_id": "macro|user-1@test.com"}]}'
+    ),
+    -- doc-in-A: Status = Not Started
+    (
+        'a0000001-0000-0000-0000-000000000004',
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        'TASK',
+        '00000001-0000-0000-0000-000000000002',
+        '{"type": "SelectOption", "value": ["00000001-0000-0000-0002-000000000001"]}'
+    ),
+    -- doc-in-B: Status = In Progress
+    (
+        'a0000001-0000-0000-0000-000000000005',
+        'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+        'TASK',
+        '00000001-0000-0000-0000-000000000002',
+        '{"type": "SelectOption", "value": ["00000001-0000-0000-0002-000000000002"]}'
     );
 
 -- Email attachments linked to some documents via document_email

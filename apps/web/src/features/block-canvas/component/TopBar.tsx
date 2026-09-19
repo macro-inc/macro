@@ -113,6 +113,7 @@ export function TopBar() {
     { op: 'rename' },
     { op: 'moveToProject' },
     {
+      group: 'file',
       label: 'Download',
       icon: DownloadSimple,
       action: downloadDocument,
@@ -146,6 +147,7 @@ export function TopBar() {
       ),
     },
     {
+      group: 'sharing',
       label: 'Share',
       icon: IconShared,
       action: () => shareCtx.open(),
@@ -161,8 +163,8 @@ export function TopBar() {
         <BlockItemSplitLabel />
       </SplitHeaderLeft>
       <SplitHeaderRight>
-        {/* Hidden on mobile: no floating-island treatment for live avatars yet. */}
-        <div class="-order-1 mobile:hidden">
+        {/* Hidden on mobile/tablet: no floating-island treatment for live avatars yet. */}
+        <div class="-order-1 touch:hidden">
           <BlockLiveIndicators />
         </div>
       </SplitHeaderRight>

@@ -66,7 +66,7 @@ where
         &self,
         document_id: &str,
         markdown: &str,
-    ) -> Result<(), DocumentError> {
+    ) -> Result<Vec<u8>, DocumentError> {
         let loro_snapshot = if markdown.is_empty() {
             MARKDOWN_GOLDEN_SNAPSHOT.into()
         } else {
@@ -78,6 +78,7 @@ where
 
         let sync_service_client = self.sync_service_client.clone();
         let document_id = document_id.to_owned();
+        let initial_snapshot = loro_snapshot.clone();
         tokio::spawn(async move {
             const MAX_ATTEMPTS: usize = 3;
             const RETRY_DELAY: Duration = Duration::from_secs(1);
@@ -111,7 +112,7 @@ where
             }
         });
 
-        Ok(())
+        Ok(initial_snapshot)
     }
 }
 
@@ -132,10 +133,11 @@ mod tests {
             .returning(|_, _| Box::pin(async { Ok(()) }));
 
         let initializer = LexicalSyncMarkdownInitializer::new(lexical, sync);
-        initializer
+        let snapshot = initializer
             .initialize_existing_markdown("doc1", "")
             .await
             .unwrap();
+        assert_eq!(snapshot, MARKDOWN_GOLDEN_SNAPSHOT);
     }
 
     #[tokio::test]
@@ -154,9 +156,10 @@ mod tests {
             .returning(|_, _| Box::pin(async { Ok(()) }));
 
         let initializer = LexicalSyncMarkdownInitializer::new(lexical, sync);
-        initializer
+        let snapshot = initializer
             .initialize_existing_markdown("doc2", "# hi")
             .await
             .unwrap();
+        assert_eq!(snapshot, [1, 2, 3]);
     }
 }

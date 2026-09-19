@@ -12,9 +12,9 @@ INSERT INTO public."Project" ("id","name","userId","parentId","createdAt","updat
 VALUES
 ('p1', 'test_project_name','macro|user@user.com', NULL, '2019-10-16 00:00:00', '2019-10-16 00:00:00');
 
-INSERT INTO public."SharePermission" ("id", "isPublic", "publicAccessLevel", "createdAt", "updatedAt")
+INSERT INTO public."SharePermission" ("id", "linkShare", "linkShareAccessLevel", "createdAt", "updatedAt")
 VALUES
-('sp-p1', true, 'edit', '2019-10-16 00:00:00', '2019-10-16 00:00:00');
+('sp-p1', 'PUBLIC', 'edit', '2019-10-16 00:00:00', '2019-10-16 00:00:00');
 
 INSERT INTO public."ProjectPermission" ("projectId", "sharePermissionId")
 VALUES
@@ -32,9 +32,9 @@ INSERT INTO public."Project" ("id","name","userId","parentId","createdAt","updat
 VALUES
 ('p2', 'test_project_name','macro|user2@user.com', NULL, '2019-10-16 00:00:00', '2019-10-16 00:00:00');
 
-INSERT INTO public."SharePermission" ("id", "isPublic", "publicAccessLevel", "createdAt", "updatedAt")
+INSERT INTO public."SharePermission" ("id", "linkShare", "linkShareAccessLevel", "createdAt", "updatedAt")
 VALUES
-('sp-p2', false, NULL, '2019-10-16 00:00:00', '2019-10-16 00:00:00');
+('sp-p2', NULL, NULL, '2019-10-16 00:00:00', '2019-10-16 00:00:00');
 
 INSERT INTO public."ProjectPermission" ("projectId", "sharePermissionId")
 VALUES
@@ -45,10 +45,10 @@ VALUES
 ('d1', 'test_document_name','macro|user@user.com', 'docx'),
 ('d2', 'test_document_name','macro|user2@user.com', 'pdf');
 
-INSERT INTO public."SharePermission" ("id", "isPublic", "publicAccessLevel")
+INSERT INTO public."SharePermission" ("id", "linkShare", "linkShareAccessLevel")
 VALUES
-('sp-d1', true, 'edit'),
-('sp-d2', false, NULL);
+('sp-d1', 'PUBLIC', 'edit'),
+('sp-d2', NULL, NULL);
 
 INSERT INTO public."DocumentPermission" ("documentId", "sharePermissionId")
 VALUES
@@ -65,10 +65,10 @@ VALUES
 ('c1', 'test_chat_name','macro|user@user.com', '2019-10-16 00:00:00', '2019-10-16 00:00:00'),
 ('c2', 'test_chat_name','macro|user2@user.com', '2019-10-16 00:00:00', '2019-10-16 00:00:00');
 
-INSERT INTO public."SharePermission" ("id", "isPublic", "publicAccessLevel", "createdAt", "updatedAt")
+INSERT INTO public."SharePermission" ("id", "linkShare", "linkShareAccessLevel", "createdAt", "updatedAt")
 VALUES
-('sp-c1', true, 'edit', '2019-10-16 00:00:00', '2019-10-16 00:00:00'),
-('sp-c2', false, NULL, '2019-10-16 00:00:00', '2019-10-16 00:00:00');
+('sp-c1', 'PUBLIC', 'edit', '2019-10-16 00:00:00', '2019-10-16 00:00:00'),
+('sp-c2', NULL, NULL, '2019-10-16 00:00:00', '2019-10-16 00:00:00');
 
 INSERT INTO public."ChatPermission" ("chatId", "sharePermissionId")
 VALUES

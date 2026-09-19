@@ -1,0 +1,133 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                (mentioned.id IS NOT NULL) AS \"mention_exists!\",\n                viewer_event.id AS \"viewer_event_id?\",\n                viewer_event.title AS \"title?\",\n                viewer_event.location AS \"location?\",\n                viewer_event.organizer_email AS \"organizer_email?\",\n                viewer_event.organizer_name AS \"organizer_name?\",\n                viewer_event.recurrence_lines AS \"recurrence_lines?\",\n                viewer_event.starts_at AS \"event_starts_at?\",\n                viewer_event.ends_at AS \"event_ends_at?\",\n                viewer_event.start_date AS \"event_start_date?\",\n                viewer_event.end_date AS \"event_end_date?\",\n                viewer_event.time_zone AS \"time_zone?\",\n                viewer_event.updated_at AS \"updated_at?\",\n                occurrence.occurrence_key AS \"occurrence_key?\",\n                occurrence.starts_at AS \"occurrence_starts_at?\",\n                occurrence.ends_at AS \"occurrence_ends_at?\",\n                occurrence.start_date AS \"occurrence_start_date?\",\n                occurrence.end_date AS \"occurrence_end_date?\",\n                attendees.attendee_count AS \"attendee_count?\"\n            FROM unnest($2::uuid[], $3::text[])\n                WITH ORDINALITY AS requested(event_id, occurrence_key, ord)\n            LEFT JOIN calendar_events mentioned\n                ON mentioned.id = requested.event_id\n               AND mentioned.status <> 'cancelled'\n            LEFT JOIN LATERAL (\n                SELECT\n                    candidate.id,\n                    candidate.title,\n                    candidate.location,\n                    candidate.organizer_email,\n                    candidate.organizer_name,\n                    candidate.recurrence_lines,\n                    candidate.starts_at,\n                    candidate.ends_at,\n                    candidate.start_date,\n                    candidate.end_date,\n                    candidate.time_zone,\n                    candidate.updated_at\n                FROM calendar_events candidate\n                WHERE candidate.ical_uid = mentioned.ical_uid\n                  AND candidate.status <> 'cancelled'\n                  AND (\n                        candidate.owner_id = $1\n                        OR EXISTS (\n                            SELECT 1\n                            FROM macro_user_links link\n                            WHERE link.link_id = candidate.source_link_id\n                              AND link.primary_macro_id = $1\n                        )\n                  )\n                ORDER BY\n                    (candidate.owner_id = $1) DESC,\n                    (candidate.id = mentioned.id) DESC,\n                    candidate.updated_at DESC,\n                    candidate.id\n                LIMIT 1\n            ) viewer_event ON true\n            LEFT JOIN LATERAL (\n                SELECT\n                    instance.occurrence_key,\n                    instance.starts_at,\n                    instance.ends_at,\n                    instance.start_date,\n                    instance.end_date\n                FROM calendar_event_occurrences instance\n                CROSS JOIN LATERAL (\n                    SELECT COALESCE(\n                        instance.starts_at,\n                        instance.start_date::timestamp AT TIME ZONE 'UTC'\n                    ) AS at\n                ) instance_start\n                WHERE instance.event_id = viewer_event.id\n                  AND NOT instance.is_cancelled\n                ORDER BY\n                    (instance.occurrence_key\n                        IS NOT DISTINCT FROM requested.occurrence_key) DESC,\n                    (instance_start.at >= $4) DESC,\n                    CASE WHEN instance_start.at >= $4 THEN instance_start.at END ASC,\n                    instance_start.at DESC,\n                    instance.occurrence_key\n                LIMIT 1\n            ) occurrence ON true\n            LEFT JOIN LATERAL (\n                SELECT count(*) AS attendee_count\n                FROM calendar_event_attendees attendee\n                WHERE attendee.event_id = viewer_event.id\n            ) attendees ON true\n            ORDER BY requested.ord\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "mention_exists!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "viewer_event_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "title?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "location?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "organizer_email?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "organizer_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "recurrence_lines?",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 7,
+        "name": "event_starts_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "event_ends_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "event_start_date?",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 10,
+        "name": "event_end_date?",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 11,
+        "name": "time_zone?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "updated_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "occurrence_key?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "occurrence_starts_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "occurrence_ends_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 16,
+        "name": "occurrence_start_date?",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 17,
+        "name": "occurrence_end_date?",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 18,
+        "name": "attendee_count?",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray",
+        "TextArray",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "3fbe926f3799c34ca5df0e947e387203a9700ca0aaec3609a84078aa3f50ae98"
+}

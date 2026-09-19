@@ -38,7 +38,7 @@ pub struct DuplicateEntityRequest {
     pub display_name: Option<String>,
 }
 
-/// Request to update an entity's public and channel share policy.
+/// Request to update an entity's link and channel share policy.
 #[derive(Clone, Debug)]
 pub struct UpdateEntitySharePolicyRequest {
     /// Entity whose share policy should change.

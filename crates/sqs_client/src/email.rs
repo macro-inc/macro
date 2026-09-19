@@ -176,6 +176,40 @@ impl EmailMessageEnqueuer for SQS {
         self.enqueue_gmail_ops_notifications_batch(gmail_ops_messages)
             .await
     }
+
+    #[tracing::instrument(skip(self, email_address), err)]
+    async fn enqueue_gmail_ops_block_sender(
+        &self,
+        link_id: Uuid,
+        email_address: String,
+    ) -> Result<(), Self::Err> {
+        use models_email::gmail::gmail_ops::{
+            BlockSenderPayload, GmailOpsOperation, GmailOpsPubsubMessage,
+        };
+
+        self.enqueue_gmail_ops_notification(GmailOpsPubsubMessage {
+            link_id,
+            operation: GmailOpsOperation::BlockSender(BlockSenderPayload { email_address }),
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip(self, email_address), err)]
+    async fn enqueue_gmail_ops_unblock_sender(
+        &self,
+        link_id: Uuid,
+        email_address: String,
+    ) -> Result<(), Self::Err> {
+        use models_email::gmail::gmail_ops::{
+            GmailOpsOperation, GmailOpsPubsubMessage, UnblockSenderPayload,
+        };
+
+        self.enqueue_gmail_ops_notification(GmailOpsPubsubMessage {
+            link_id,
+            operation: GmailOpsOperation::UnblockSender(UnblockSenderPayload { email_address }),
+        })
+        .await
+    }
 }
 
 #[tracing::instrument(skip(sqs_client))]

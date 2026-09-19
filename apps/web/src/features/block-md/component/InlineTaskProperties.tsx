@@ -4,6 +4,7 @@ import {
   useBlockAliasedName,
   useBlockId,
 } from '@core/block';
+import { ProgressChip } from '@core/component/LexicalMarkdown/component/status/Progress';
 import { useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { Modals } from '@property/component/modal';
@@ -19,6 +20,7 @@ import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity'
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { createMemo, For, Show, Suspense } from 'solid-js';
 import { match } from 'ts-pattern';
+import { mdStore } from '../signal/markdownBlockData';
 import { InlinePropertyValue } from './InlinePropertyValue';
 
 /**
@@ -26,6 +28,7 @@ import { InlinePropertyValue } from './InlinePropertyValue';
  * Displays status, priority, and assignees in a single row, editable like in list view.
  */
 export function InlineTaskProperties() {
+  const md = mdStore.get;
   const blockId = useBlockId();
   const blockName = useBlockAliasedName();
   const canEdit = useCanEdit();
@@ -85,12 +88,25 @@ export function InlineTaskProperties() {
           saveHandler={saveHandler}
         >
           <For each={inlineProperties()}>
-            {(property) => <InlinePropertyValue property={property} />}
+            {(property) => (
+              <InlinePropertyValue
+                property={property}
+                class="bg-surface-2 border border-edge"
+              />
+            )}
           </For>
           <InlineFetchedEntityTagsPill
             entityId={blockId}
             entityType={entityType}
+            class="bg-surface-2"
           />
+          <Show when={blockName === 'task' && md.progressStats}>
+            {(progressStats) => (
+              <Show when={progressStats().total > 0}>
+                <ProgressChip stats={progressStats()} />
+              </Show>
+            )}
+          </Show>
           <Modals />
         </PropertiesProvider>
       </Show>

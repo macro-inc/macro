@@ -45,7 +45,7 @@ function ParticipantTileWrapper(props: {
     <div
       class={cn(
         'relative flex items-center justify-center rounded-lg overflow-hidden bg-message min-h-30 border border-edge-muted',
-        props.isSpeaking && 'ring-inset ring-2 ring-accent-2',
+        props.isSpeaking && 'ring-inset ring-2 ring-accent',
         props.isConnecting && 'animate-pulse',
         props.class
       )}
@@ -281,7 +281,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
   };
 
   return (
-    <div class="flex flex-col h-full mobile:pb-(--mobile-content-inset-bottom)">
+    <div class="flex flex-col h-full touch:pb-(--mobile-content-inset-bottom)">
       {/* Screen share area */}
       <Show when={hasAnyScreenShare()}>
         <div class="flex-1 min-h-0 pt-2">

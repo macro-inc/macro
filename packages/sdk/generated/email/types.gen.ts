@@ -149,7 +149,7 @@ export type ApiDraftInput = {
      */
     bcc?: Array<ApiDraftContactInfo> | null;
     /**
-     * HTML body (base64 URL_SAFE_NO_PAD encoded).
+     * HTML body (base64 URL_SAFE_NO_PAD encoded). Sanitized before storage.
      */
     body_html?: string | null;
     /**
@@ -559,7 +559,7 @@ export type CalendarAttendee = {
      */
     isOrganizer: boolean;
     /**
-     * Whether this attendee represents the connected account.
+     * Whether this attendee is one of the viewing requester's inboxes.
      */
     isSelf: boolean;
     /**
@@ -589,6 +589,9 @@ export type CalendarDeletionScopeParam = 'all' | 'this_event' | 'this_and_follow
 
 /**
  * A stable, first-class Macro calendar event entity.
+ *
+ * Content fields hold the canonical source's values: the account's primary
+ * calendar copy when one is synced, else the freshest remaining copy.
  */
 export type CalendarEvent = {
     /**
@@ -600,6 +603,7 @@ export type CalendarEvent = {
      * projections stored before calendars were attributed.
      */
     calendarId?: string | null;
+    conferenceProvider?: null | ConferenceProvider;
     /**
      * Direct join URL when known.
      */
@@ -609,9 +613,26 @@ export type CalendarEvent = {
      */
     createdAt: string;
     /**
+     * Provider-reported creator email. Distinct from the organizer when
+     * someone writes onto a calendar they do not own. Omitted from stored
+     * projections when unknown so events ingested before this field still
+     * compare equal.
+     */
+    creatorEmail?: string | null;
+    /**
+     * Provider-reported creator display name.
+     */
+    creatorName?: string | null;
+    /**
      * Optional event body.
      */
     description?: string | null;
+    /**
+     * Provider event type. Skipped when it is the regular type so
+     * projections stored before event types were modeled still compare
+     * equal.
+     */
+    eventType?: EventType;
     /**
      * RFC 5545 UID used to reconcile provider and email sources.
      */
@@ -621,7 +642,7 @@ export type CalendarEvent = {
      */
     id: string;
     /**
-     * Whether the current user can edit the canonical source.
+     * Whether the canonical source's calendar prohibits editing it.
      */
     isReadOnly: boolean;
     /**
@@ -645,9 +666,22 @@ export type CalendarEvent = {
      */
     recurrenceLines: Array<string>;
     /**
+     * Per-user reminder configuration. Skipped when it is the provider
+     * default so projections stored before reminders were modeled still
+     * compare equal.
+     */
+    reminders?: EventReminders;
+    /**
      * Provider/iCalendar sequence number.
      */
     sequence: number;
+    /**
+     * Content of every active copy of this event, canonical first: the
+     * primary calendar's copy, then the freshest. A client picks the copy
+     * whose calendar it is showing and falls back to the first. Populated
+     * only on the read path, so stored projections omit it.
+     */
+    sources?: Array<CalendarEventSourceContent>;
     /**
      * Event status.
      */
@@ -675,6 +709,62 @@ export type CalendarEvent = {
 };
 
 /**
+ * The content one provider copy of an event carries.
+ *
+ * Google keeps these fields per calendar copy: a shared calendar's copy of a
+ * member's event can have its own title, type, reminders, and access role.
+ * The entity holds its canonical source's values. Every other copy's values
+ * are read from here so a client can show the copy that belongs to the
+ * calendar being viewed.
+ */
+export type CalendarEventSourceContent = {
+    /**
+     * Calendar this copy lives on.
+     */
+    calendarId: string;
+    /**
+     * Provider-reported creator email.
+     */
+    creatorEmail?: string | null;
+    /**
+     * Provider-reported creator display name.
+     */
+    creatorName?: string | null;
+    /**
+     * Optional event body.
+     */
+    description?: string | null;
+    /**
+     * Provider event type.
+     */
+    eventType: EventType;
+    /**
+     * Whether the calendar's access role prohibits editing this copy.
+     */
+    isReadOnly: boolean;
+    /**
+     * Optional physical or virtual location label.
+     */
+    location?: string | null;
+    /**
+     * Reminder configuration of this copy.
+     */
+    reminders: EventReminders;
+    /**
+     * Display title.
+     */
+    title: string;
+    /**
+     * Availability behavior.
+     */
+    transparency: EventTransparency;
+    /**
+     * Event visibility.
+     */
+    visibility: EventVisibility;
+};
+
+/**
  * HTTP error body returned by calendar mutation endpoints.
  */
 export type CalendarMutationApiError = {
@@ -691,7 +781,7 @@ export type CalendarMutationApiError = {
 /**
  * Machine-readable failure category for calendar mutations.
  */
-export type CalendarMutationErrorCode = 'not_found' | 'read_only' | 'no_writable_calendar' | 'not_attendee' | 'invalid_input' | 'reauth_required' | 'provider_rejected' | 'retryable' | 'persist_failed';
+export type CalendarMutationErrorCode = 'not_found' | 'occurrence_not_found' | 'read_only' | 'no_writable_calendar' | 'not_attendee' | 'invalid_input' | 'reauth_required' | 'provider_rejected' | 'retryable' | 'persist_failed';
 
 /**
  * How much of a recurring series an RSVP applies to.
@@ -702,9 +792,42 @@ export type CalendarMutationErrorCode = 'not_found' | 'read_only' | 'no_writable
  */
 export type CalendarRsvpScopeParam = 'all' | 'this_event';
 
+/**
+ * How much of a recurring series an update applies to.
+ *
+ * Like RSVPs there is no this-and-following variant: the provider cannot
+ * express a forward-scoped edit as one write, and emulating it (truncate
+ * the series, insert an edited clone) is non-atomic and re-invites the
+ * attendees of the clone. Compose it from a this-and-following deletion
+ * and a create when that shape is wanted.
+ */
+export type CalendarUpdateScopeParam = 'all' | 'this_event';
+
 export type CancelBackfillParams = {
     job_id: string;
 };
+
+/**
+ * A requested change to an event's conferencing. Omitting the field leaves
+ * the existing conference untouched; only these values change it.
+ */
+export type ConferenceChange = 'google_meet' | 'none';
+
+/**
+ * The conferencing system backing an event's join URL.
+ *
+ * Macro generates only Google Meet conferences, so this distinguishes one it
+ * created from a third party's — Zoom and friends arriving as `addOn`
+ * conference data, or a legacy classic Hangout. Clients use it to label the
+ * conference and to tell whether the Meet toggle reflects a Macro-managed
+ * conference.
+ *
+ * It does not gate mutation. An explicit request replaces or detaches any
+ * conference, third-party included, exactly as deleting the event would;
+ * what protects a conference is that omitting the field leaves it untouched,
+ * so an unrelated edit never disturbs it.
+ */
+export type ConferenceProvider = 'google_meet' | 'other';
 
 export type Contact = {
     email_address?: string | null;
@@ -745,6 +868,7 @@ export type CreateCalendarEventRequest = {
      * inbox default.
      */
     calendarId?: string | null;
+    conference?: null | ConferenceChange;
     /**
      * Optional event body.
      */
@@ -758,10 +882,12 @@ export type CreateCalendarEventRequest = {
      * Optional location label.
      */
     location?: string | null;
+    outOfOffice?: null | OutOfOfficeProperties;
     /**
      * Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`).
      */
     recurrenceLines?: Array<string>;
+    reminders?: null | EventReminders;
     /**
      * Timed or all-day shape.
      */
@@ -831,6 +957,38 @@ export type ErrorResponse = {
 };
 
 /**
+ * One reminder: how it alerts and how many minutes before the event start
+ * (before midnight in the calendar's zone for all-day events) it fires.
+ */
+export type EventReminderOverride = {
+    /**
+     * Provider method, stored verbatim; only `popup` fires Macro
+     * notifications.
+     */
+    method: string;
+    /**
+     * Minutes before the event start.
+     */
+    minutes: number;
+};
+
+/**
+ * Per-user reminder configuration for an event, mirroring Google's model:
+ * either the calendar's default reminders apply, or the explicit overrides
+ * replace them entirely.
+ */
+export type EventReminders = {
+    /**
+     * Explicit reminders replacing the defaults when `use_default` is off.
+     */
+    overrides?: Array<EventReminderOverride>;
+    /**
+     * Whether the calendar's default reminders apply.
+     */
+    useDefault: boolean;
+};
+
+/**
  * Canonical event status.
  */
 export type EventStatus = 'confirmed' | 'tentative' | 'cancelled';
@@ -872,6 +1030,13 @@ export type EventTime = {
  * Whether an event blocks availability.
  */
 export type EventTransparency = 'opaque' | 'transparent';
+
+/**
+ * Google's event type: ordinary meetings versus the status-style entries
+ * (working location, out of office, focus time, birthdays) Google renders
+ * and notifies differently. Immutable at the provider after creation.
+ */
+export type EventType = 'default' | 'out_of_office' | 'focus_time' | 'working_location' | 'birthday' | 'from_gmail';
 
 /**
  * Visibility of event details.
@@ -980,9 +1145,24 @@ export type LabelListVisibility = 'LabelShow' | 'LabelShowIfUnread' | 'LabelHide
 export type LabelType = 'System' | 'User';
 
 export type Link = {
+    /**
+     * Whether the user turned calendar off for this inbox, which also removed
+     * its calendar data. `needs_calendar_permission` is true either way, so
+     * this is what separates "never granted" from "deliberately off" —
+     * unprompted calendar nags must stay quiet for the latter.
+     */
+    calendar_disabled: boolean;
     created_at: string;
     email_address: string;
     fusionauth_user_id: string;
+    /**
+     * Whether Macro holds calendar data for this inbox. Drives the turn-off
+     * control on its own, so removing that data never depends on the recorded
+     * scopes still matching the set Macro requests today — a set that changes
+     * as the integration narrows, stranding data behind a capability check
+     * that no longer recognizes an older grant.
+     */
+    has_calendar_data: boolean;
     id: string;
     is_primary: boolean;
     is_sync_active: boolean;
@@ -1117,6 +1297,28 @@ export type Message = {
 
 export type MessageListVisibility = 'Show' | 'Hide';
 
+/**
+ * How an out-of-office event responds to conflicting invitations, mirroring
+ * Google's `autoDeclineMode`.
+ */
+export type OutOfOfficeAutoDeclineMode = 'decline_none' | 'decline_all_conflicting_invitations' | 'decline_only_new_conflicting_invitations';
+
+/**
+ * The extra properties Google requires on an out-of-office event, mirroring
+ * its `outOfOfficeProperties` block. Their presence on a draft or patch is
+ * what marks the mutation as out-of-office.
+ */
+export type OutOfOfficeProperties = {
+    /**
+     * How conflicting invitations are handled while the user is out.
+     */
+    autoDeclineMode?: OutOfOfficeAutoDeclineMode;
+    /**
+     * Message returned to organizers whose invitations are auto-declined.
+     */
+    declineMessage?: string | null;
+};
+
 export type ParsedMessage = {
     bcc: Array<ContactInfo>;
     body_parsed?: string | null;
@@ -1207,6 +1409,11 @@ export type ResyncResponse = {
  * Request body setting the requester's RSVP on an event.
  */
 export type RsvpCalendarEventRequest = {
+    /**
+     * Calendar whose copy of the event is answered, for an event synced
+     * from more than one calendar. Omit to answer on the canonical copy.
+     */
+    calendarId?: string | null;
     /**
      * Original-start key of the occurrence the response targets.
      */
@@ -1348,6 +1555,12 @@ export type UpdateCalendarEventRequest = {
      */
     attendees?: Array<CalendarAttendeeInputBody> | null;
     /**
+     * Calendar whose copy of the event is patched, for an event synced from
+     * more than one calendar. Omit to patch the canonical copy.
+     */
+    calendarId?: string | null;
+    conference?: null | ConferenceChange;
+    /**
      * Replacement description; an empty string clears it.
      */
     description?: string | null;
@@ -1355,10 +1568,17 @@ export type UpdateCalendarEventRequest = {
      * Replacement location; an empty string clears it.
      */
     location?: string | null;
+    outOfOffice?: null | OutOfOfficeProperties;
+    /**
+     * Original-start key of the occurrence the update targets.
+     */
+    recurrenceId?: string | null;
     /**
      * Replacement recurrence properties; an empty list clears them.
      */
     recurrenceLines?: Array<string> | null;
+    reminders?: null | EventReminders;
+    scope?: null | CalendarUpdateScopeParam;
     time?: null | EventTime;
     /**
      * Replacement title; an empty string clears it.
@@ -1466,6 +1686,10 @@ export type VisibleCalendar = {
      */
     color?: string | null;
     /**
+     * Default reminders applied to events that keep `useDefault`.
+     */
+    defaultReminders: Array<EventReminderOverride>;
+    /**
      * Connected inbox address, for grouping in multi-inbox pickers.
      */
     emailAddress: string;
@@ -1482,6 +1706,11 @@ export type VisibleCalendar = {
      */
     isPrimary: boolean;
     /**
+     * Whether this is one of Google's shared system calendars (holidays,
+     * birthdays) the account subscribes to rather than one a person maintains.
+     */
+    isSubscription: boolean;
+    /**
      * Whether the grant can create and modify events on this calendar.
      */
     isWritable: boolean;
@@ -1489,6 +1718,12 @@ export type VisibleCalendar = {
      * Provider display name.
      */
     name: string;
+    /**
+     * A persistent sync failure isolated to this calendar, surfaced so the
+     * settings row can badge it. `None` while the calendar is syncing
+     * normally or a failure has not yet crossed the persistence threshold.
+     */
+    syncError?: string | null;
 };
 
 export type ListCalendarsData = {
@@ -1571,6 +1806,11 @@ export type DeleteCalendarEventData = {
     };
     query?: {
         /**
+         * Calendar whose copy of the event is deleted, for an event synced from
+         * more than one calendar. Omit to delete the canonical copy.
+         */
+        calendarId?: string;
+        /**
          * Deletion scope; defaults to the entire event or series.
          */
         scope?: CalendarDeletionScopeParam;
@@ -1642,7 +1882,7 @@ export type UpdateCalendarEventErrors = {
      */
     403: CalendarMutationApiError;
     /**
-     * Event not found
+     * Event or targeted occurrence not found
      */
     404: CalendarMutationApiError;
     /**
@@ -1727,7 +1967,10 @@ export type GetAttachmentData = {
 export type GetAttachmentErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
+    403: ErrorResponse;
     404: ErrorResponse;
+    409: ErrorResponse;
+    429: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -1903,6 +2146,9 @@ export type ListBlockedSendersData = {
 export type ListBlockedSendersErrors = {
     401: ErrorResponse;
     403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    429: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -2268,6 +2514,7 @@ export type InitUserErrors = {
     400: InitErrorCodeResponse;
     401: ErrorResponse;
     409: SharedInboxConflictResponse;
+    429: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -2309,7 +2556,10 @@ export type CreateLabelData = {
 export type CreateLabelErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
     409: ErrorResponse;
+    429: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -2415,6 +2665,33 @@ export type DeleteLinkResponses = {
 };
 
 export type DeleteLinkResponse = DeleteLinkResponses[keyof DeleteLinkResponses];
+
+export type DisableLinkCalendarData = {
+    body?: never;
+    path: {
+        /**
+         * Inbox link ID.
+         */
+        link_id: string;
+    };
+    query?: never;
+    url: '/email/links/{link_id}/calendar';
+};
+
+export type DisableLinkCalendarErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DisableLinkCalendarError = DisableLinkCalendarErrors[keyof DisableLinkCalendarErrors];
+
+export type DisableLinkCalendarResponses = {
+    204: EmptyResponse;
+};
+
+export type DisableLinkCalendarResponse = DisableLinkCalendarResponses[keyof DisableLinkCalendarResponses];
 
 export type ResyncLinkData = {
     body?: never;

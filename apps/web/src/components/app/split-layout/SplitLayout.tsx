@@ -4,8 +4,8 @@ import {
   useSidebarCollapse,
 } from '@components/app/sidebarVisibility';
 import { Resize } from '@core/component/Resize';
-import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { tabTitleSignal } from '@core/signal/tabTitle';
 import { useWindowSize } from '@solid-primitives/resize-observer';
 import { useLocation, useNavigate } from '@solidjs/router';
@@ -53,7 +53,7 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   const previewQuery = () => location.query[PREVIEW_QUERY_PARAM];
   const decodedLayout = createMemo(() =>
     loadRestorablePreviewLayout(props.pairs, previewQuery(), {
-      allowPreviewPairs: !isMobile(),
+      allowPreviewPairs: !isTouchDevice(),
     })
   );
   const initialLayout = decodedLayout();
@@ -116,7 +116,7 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   return (
     <SplitLayoutContext.Provider value={{ manager: splitManager }}>
       <div
-        class={cn('size-full p-2 mobile:p-0', {
+        class={cn('size-full p-2 touch:p-0', {
           'pl-0': isSidebarVisible() && !sidebar.isCollapsed(),
         })}
       >

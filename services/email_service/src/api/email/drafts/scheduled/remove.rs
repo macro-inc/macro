@@ -75,8 +75,24 @@ pub async fn handler(
     let scheduled_message = email_db_client::messages::scheduled::get::get_scheduled_message(
         &mut *tx, link.id, message_id,
     )
-    .await?
-    .ok_or(DeleteScheduledError::NotFound)?;
+    .await?;
+
+    let Some(scheduled_message) = scheduled_message else {
+        // No scheduled row under this link. If the message is already back to
+        // a draft, a previous undo has applied (a duplicate click, or a retry
+        // after a lost response) — idempotent success, so the client doesn't
+        // surface a false "Failed to undo send" for an undo that worked.
+        let message = email_db_client::messages::get_simple_messages::get_simple_message(
+            &ctx.db,
+            &message_id,
+            &link.fusionauth_user_id,
+        )
+        .await?;
+        return match message {
+            Some(m) if m.is_draft => Ok(StatusCode::NO_CONTENT),
+            _ => Err(DeleteScheduledError::NotFound),
+        };
+    };
 
     if scheduled_message.sent || scheduled_message.processing {
         return Err(DeleteScheduledError::AlreadySent);

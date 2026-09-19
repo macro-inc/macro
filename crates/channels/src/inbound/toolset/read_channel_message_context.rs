@@ -8,6 +8,7 @@ use super::types::{
 use crate::domain::models::ChannelMessageKind;
 use crate::domain::ports::ChannelService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::ports::EntityAccessService;
 use schemars::JsonSchema;
@@ -106,6 +107,10 @@ pub struct ReadChannelMessageContextResponse {
     pub thread_context: Option<ToolThreadReplyContextWindow>,
     /// Information about omitted or truncated content.
     pub omissions: Vec<ToolOmission>,
+}
+
+impl ToolAnnotated for ReadChannelMessageContext {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Read message context");
 }
 
 #[async_trait]
