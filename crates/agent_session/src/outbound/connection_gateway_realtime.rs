@@ -10,23 +10,30 @@
 //! agreement.
 //!
 //! Messages go out as type [`AGENT_SESSION_LOG`] with a
-//! [`AgentSessionLogEvent`] body:
+//! [`AgentSessionLogEvent`] body: the session, and the run of frames the
+//! writer just flushed, in log order.
 //!
 //! ```json
 //! {
 //!   "agentSessionId": "019f…",
-//!   "createdAt":      "2026-08-13T12:34:56.789Z",
-//!   "userId":         "macro|someone@example.com",
-//!   "direction":      "to_server",
-//!   "content":        { "type": "acp", "jsonrpc": "2.0", … }
+//!   "entries": [
+//!     {
+//!       "id":        "019f…",
+//!       "createdAt": "2026-08-13T12:34:56.789Z",
+//!       "userId":    "macro|someone@example.com",
+//!       "direction": "to_server",
+//!       "content":   { "type": "acp", "jsonrpc": "2.0", … }
+//!     }
+//!   ]
 //! }
 //! ```
 //!
-//! The last four fields are exactly the entry shape
-//! `GET /agent-sessions/{id}/log` serves, flattened in the same way. That is
-//! the point of the contract rather than an accident of it: a client catching
-//! up on a log and a client following one are folding the same bytes, so they
-//! can share one fold and cannot disagree about what a frame means.
+//! Each entry is exactly the entry shape `GET /agent-sessions/{id}/log`
+//! serves, flattened in the same way. That is the point of the contract
+//! rather than an accident of it: a client catching up on a log and a client
+//! following one are folding the same bytes, so they can share one fold and
+//! cannot disagree about what a frame means. A batch rather than a frame
+//! because the writer publishes once per flush, however many frames that is.
 //!
 //! `agentSessionId` both addresses the frame and is what the fold keys its
 //! messages on, so it must be passed through unchanged: a message is
@@ -45,7 +52,7 @@ use model_entity::EntityType as GatewayEntityType;
 use serde::Serialize;
 use std::sync::Arc;
 
-/// The realtime message type carrying one appended log frame.
+/// The realtime message type carrying a run of appended log frames.
 ///
 /// Matched on by the web client's websocket dispatch; changing it breaks
 /// streaming silently, since an unrecognized type is ignored rather than
@@ -72,12 +79,19 @@ pub const AGENT_SESSION_CHANGES: &str = "agent_session_changes";
 /// contract.
 #[derive(Debug, Serialize)]
 pub struct AgentSessionLogEvent {
-    /// Durable row identity, matching the GET log entry and breaking timestamp ties.
-    pub id: Uuid,
-    /// The session the frame belongs to, and half of the composite id its
+    /// The session the frames belong to, and half of the composite id their
     /// folded messages are keyed by.
     #[serde(rename = "agentSessionId")]
     pub agent_session_id: Uuid,
+    /// The flushed frames, in log order. Never empty.
+    pub entries: Vec<AgentSessionLogEventEntry>,
+}
+
+/// One frame of an [`AgentSessionLogEvent`]: the GET log entry shape.
+#[derive(Debug, Serialize)]
+pub struct AgentSessionLogEventEntry {
+    /// Durable row identity, matching the GET log entry and breaking timestamp ties.
+    pub id: Uuid,
     /// When the durable log recorded the frame.
     #[serde(rename = "createdAt")]
     pub created_at: chrono::DateTime<chrono::Utc>,
@@ -143,23 +157,30 @@ impl From<AgentSessionQueueChanged> for AgentSessionQueueEvent {
 }
 
 impl AgentSessionLogEvent {
-    /// The event for one appended frame.
+    /// The event for one flushed run of frames.
     #[must_use]
     pub fn new(event: LogAppended) -> Self {
-        let StoredAgentSessionLog {
-            id,
-            created_at,
-            entry: AgentSessionLog {
-                user_id, content, ..
-            },
-        } = event.entry;
-
         Self {
-            id,
             agent_session_id: event.agent_session_id.as_uuid(),
-            created_at,
-            user_id: user_id.map(|user| user.to_string()),
-            message: content,
+            entries: event
+                .entries
+                .into_iter()
+                .map(
+                    |StoredAgentSessionLog {
+                         id,
+                         created_at,
+                         entry:
+                             AgentSessionLog {
+                                 user_id, content, ..
+                             },
+                     }| AgentSessionLogEventEntry {
+                        id,
+                        created_at,
+                        user_id: user_id.map(|user| user.to_string()),
+                        message: content,
+                    },
+                )
+                .collect(),
         }
     }
 }

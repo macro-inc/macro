@@ -41,6 +41,7 @@ vi.mock('@queries/agent-session/queue-sync', () => ({
 }));
 
 import { AgentSession } from './AgentSession';
+import { resetSessionTurns, sessionTurn } from './session-turn';
 
 const SESSION = '01a0abed-279f-724c-9f49-60dbedc79b6e';
 
@@ -77,6 +78,7 @@ function deferred<T>() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetSessionTurns();
   socket.listeners.clear();
   // Instances are shared and refcounted, so a test that fails before its
   // `release()` would hand the next one a session that is already loaded.
@@ -103,8 +105,8 @@ describe('AgentSession', () => {
     harness.getLog.mockReturnValue(log.promise);
 
     const live = AgentSession.acquire(SESSION);
-    AgentSession.ingest({ agentSessionId: SESSION, ...row(2) });
-    AgentSession.ingest({ agentSessionId: SESSION, ...row(3) });
+    AgentSession.ingest({ agentSessionId: SESSION, entries: [row(2)] });
+    AgentSession.ingest({ agentSessionId: SESSION, entries: [row(3)] });
     log.resolve(logOf([row(1), row(2)]));
     const record = await live.load();
 
@@ -118,7 +120,7 @@ describe('AgentSession', () => {
   });
 
   it('ignores rows for sessions nobody has open', () => {
-    AgentSession.ingest({ agentSessionId: 'other', ...row(1) });
+    AgentSession.ingest({ agentSessionId: 'other', entries: [row(1)] });
     expect(fold.pushSession).not.toHaveBeenCalled();
   });
 
@@ -371,12 +373,24 @@ describe('AgentSession', () => {
     fold.pushSession.mockResolvedValueOnce([
       { kind: 'metadata', metadata: { turn: 'running' } },
     ]);
-    AgentSession.ingest({ agentSessionId: SESSION, ...row(2) });
+    AgentSession.ingest({ agentSessionId: SESSION, entries: [row(2)] });
     await settle();
 
     await live.issue({ type: 'prompt', prompt: 'later' });
 
     expect(speculations()).toEqual([]);
+    live.release();
+  });
+
+  it('publishes the fold turn so list rows can follow a working session', async () => {
+    const live = await loadedWith('running');
+    expect(sessionTurn(SESSION)).toBe('running');
+    fold.pushSession.mockResolvedValueOnce([
+      { kind: 'metadata', metadata: { turn: 'idle' } },
+    ]);
+    AgentSession.ingest({ agentSessionId: SESSION, entries: [row(2)] });
+    await settle();
+    expect(sessionTurn(SESSION)).toBe('idle');
     live.release();
   });
 

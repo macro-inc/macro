@@ -21,10 +21,7 @@ import {
   type SessionFoldSnapshot,
 } from '@core/agent-fold/client';
 import { subscribeSocketSessionStarted } from '@queries/agent-session/queue-sync';
-import {
-  type AgentSessionLogEvent,
-  entryOf,
-} from '@queries/agent-session/realtime-protocol';
+import type { AgentSessionLogEvent } from '@queries/agent-session/realtime-protocol';
 import type {
   FoldedStreamEvent,
   TurnState,
@@ -37,6 +34,7 @@ import type {
   SessionBot,
 } from '@service-agent-harness/generated/schemas';
 import { v7 as uuidv7 } from 'uuid';
+import { publishSessionTurn } from './session-turn';
 
 export type AgentSessionListener = (events: FoldedStreamEvent[]) => void;
 
@@ -80,14 +78,15 @@ export class AgentSession {
   }
 
   /**
-   * Realtime ingress: one persisted row, addressed by session. The socket
-   * dispatch and the replay driver both call this; a session nobody has open
-   * ignores it.
+   * Realtime ingress: a run of persisted rows in log order, addressed by
+   * session. The socket dispatch and the replay driver both call this; a
+   * session nobody has open ignores it. The run reaches the machine as one
+   * push, so a flush of many frames costs one worker round trip.
    */
   static ingest(event: AgentSessionLogEvent): void {
     AgentSession.open
       .get(event.agentSessionId)
-      ?.enqueue({ kind: 'confirmed', row: entryOf(event) });
+      ?.enqueueAll(event.entries.map((row) => ({ kind: 'confirmed', row })));
   }
 
   readonly id: string;
@@ -113,6 +112,12 @@ export class AgentSession {
    * wait in the server's queue.
    */
   private turn: TurnState = 'idle';
+
+  private setTurn(turn: TurnState | undefined): void {
+    const next = turn ?? 'idle';
+    this.turn = next;
+    publishSessionTurn(this.id, next);
+  }
 
   private constructor(id: string) {
     this.id = id;
@@ -164,7 +169,7 @@ export class AgentSession {
       // moves when the worker answers, and two prompts sent inside that
       // window would both speculate - the second one showing a bubble the
       // server's `queued` then takes away again.
-      if (occupiesTurn(action)) this.turn = 'starting';
+      if (occupiesTurn(action)) this.setTurn('starting');
       void this.enqueue({
         kind: 'speculated',
         actionId,
@@ -220,7 +225,7 @@ export class AgentSession {
     action: AgentAction,
     options: { userId?: string } = {}
   ): void {
-    if (occupiesTurn(action)) this.turn = 'starting';
+    if (occupiesTurn(action)) this.setTurn('starting');
     void this.enqueue({
       kind: 'speculated',
       actionId,
@@ -316,7 +321,7 @@ export class AgentSession {
       await this.apply(inputs);
     }
     this.ready = true;
-    this.turn = (await readSession(this.id)).metadata.turn;
+    this.setTurn((await readSession(this.id)).metadata.turn);
     return { session: session.value, bot: log.value.bot };
   }
 
@@ -333,11 +338,16 @@ export class AgentSession {
   }
 
   private enqueue(input: FoldInput): Promise<void> {
+    return this.enqueueAll([input]);
+  }
+
+  private enqueueAll(inputs: FoldInput[]): Promise<void> {
+    if (inputs.length === 0) return Promise.resolve();
     if (!this.ready) {
-      this.buffered.push(input);
+      this.buffered.push(...inputs);
       return Promise.resolve();
     }
-    return this.apply([input]);
+    return this.apply(inputs);
   }
 
   private apply(inputs: FoldInput[]): Promise<void> {
@@ -346,7 +356,7 @@ export class AgentSession {
       const events = await pushSession(this.id, inputs);
       if (this.closed || events.length === 0) return;
       const metadata = events.findLast((event) => event.kind === 'metadata');
-      if (metadata) this.turn = metadata.metadata.turn;
+      if (metadata) this.setTurn(metadata.metadata.turn);
       for (const listener of this.listeners) listener(events);
     });
     // A failed push must not poison the chain for every input after it.
