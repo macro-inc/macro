@@ -1259,13 +1259,24 @@ async fn a_connections_frames_are_published_to_its_channel() {
             .expect("append succeeds");
     }
 
+    AgentSessionLogWriter::flush(&mut logs)
+        .await
+        .expect("flush succeeds");
     let published = realtime.published();
-    assert_eq!(published.len(), log.len(), "one event per frame, no more");
     assert!(
         published
             .iter()
             .all(|event| event.agent_session_id == test_session()),
         "every event names the session"
+    );
+    let published: Vec<StoredAgentSessionLog> = published
+        .into_iter()
+        .flat_map(|event| event.entries)
+        .collect();
+    assert_eq!(
+        published.len(),
+        log.len(),
+        "every frame goes out exactly once"
     );
     let stored = AgentSessionLogRepo::list_by_session(&repo, test_session())
         .await
@@ -1273,7 +1284,7 @@ async fn a_connections_frames_are_published_to_its_channel() {
     assert_eq!(
         published
             .iter()
-            .map(|event| event.entry.created_at)
+            .map(|event| event.created_at)
             .collect::<Vec<_>>(),
         stored
             .iter()
@@ -1292,7 +1303,7 @@ async fn a_connections_frames_are_published_to_its_channel() {
     assert_eq!(
         published
             .into_iter()
-            .map(|event| frame(event.entry.entry))
+            .map(|event| frame(event.entry))
             .collect::<Vec<_>>(),
         log.into_iter().map(frame).collect::<Vec<_>>(),
         "the frames go out as they were logged"
@@ -1954,4 +1965,166 @@ mod fold_signals {
 
         assert!(appended.signals.is_empty(), "{:#?}", appended.signals);
     }
+}
+
+// Batching: streamed output is stored at once but pushed to viewers in runs
+// - one publish per flush - while anything they must see now goes through
+// immediately.
+
+/// A streamed ACP notification: the frame kind that is the bulk of every
+/// session and the whole of a `session/load` replay.
+fn streamed_frame(text: &str) -> AgentSessionLog {
+    AgentSessionLog {
+        agent_session_id: test_session(),
+        user_id: None,
+        content: Message::ToServer(ToServerMessage::Acp(AcpMessage(
+            agent_client_protocol::RawJsonRpcMessage::notification(
+                "session/update".to_owned(),
+                serde_json::json!({
+                    "sessionId": "acp-1",
+                    "update": {
+                        "sessionUpdate": "agent_thought_chunk",
+                        "content": { "type": "text", "text": text }
+                    }
+                }),
+            )
+            .unwrap(),
+        ))),
+    }
+}
+
+/// Streamed frames are durable at once but published only on flush, all
+/// together, in log order, as one event.
+#[tokio::test]
+async fn streamed_frames_are_stored_at_once_and_published_on_flush() {
+    let repo = InMemoryAgentSessionRepo::new();
+    repo.insert_session(test_agent_session(test_session()));
+    let realtime = RecordingRealtime::new();
+    let mut logs = streaming_connection(repo.clone(), realtime.clone());
+
+    let mut appended = Vec::new();
+    for text in ["one", "two", "three"] {
+        appended.push(
+            AgentSessionLogWriter::append(&mut logs, streamed_frame(text))
+                .await
+                .expect("append succeeds")
+                .log_id,
+        );
+    }
+
+    let stored = AgentSessionLogRepo::list_by_session(&repo, test_session())
+        .await
+        .unwrap();
+    assert_eq!(
+        stored.iter().map(|row| row.id).collect::<Vec<_>>(),
+        appended,
+        "every frame is durable before its append returns"
+    );
+    assert!(
+        realtime.published().is_empty(),
+        "nothing is published before the flush"
+    );
+    assert!(
+        logs.flush_deadline().is_some(),
+        "a pending frame gives the actor a deadline to flush by"
+    );
+
+    AgentSessionLogWriter::flush(&mut logs)
+        .await
+        .expect("flush succeeds");
+
+    let published = realtime.published();
+    assert_eq!(published.len(), 1, "one flush is one publish");
+    assert_eq!(
+        published[0]
+            .entries
+            .iter()
+            .map(|row| row.id)
+            .collect::<Vec<_>>(),
+        appended,
+        "the publish carries the stored frames in log order"
+    );
+    assert!(
+        logs.flush_deadline().is_none(),
+        "nothing pending needs no wake-up"
+    );
+}
+
+/// A frame headed to the runtime pushes everything pending through with
+/// itself, so a viewer never sees a prompt before the output it followed.
+#[tokio::test]
+async fn frames_headed_to_the_runtime_flush_pending_frames_through() {
+    let repo = InMemoryAgentSessionRepo::new();
+    repo.insert_session(test_agent_session(test_session()));
+    let realtime = RecordingRealtime::new();
+    let mut logs = streaming_connection(repo.clone(), realtime.clone());
+
+    AgentSessionLogWriter::append(&mut logs, streamed_frame("pending"))
+        .await
+        .unwrap();
+    let prompt = parse_log_as(test_session(), TURN)
+        .into_iter()
+        .find(|entry| matches!(entry.content, Message::ToRuntime(_)))
+        .expect("the fixture turn prompts the runtime");
+    let prompt_id = AgentSessionLogWriter::append(&mut logs, prompt)
+        .await
+        .unwrap()
+        .log_id;
+
+    let published = realtime.published();
+    assert_eq!(published.len(), 1, "flushed through as one publish");
+    assert_eq!(published[0].entries.len(), 2);
+    assert_eq!(published[0].entries[1].id, prompt_id);
+    assert!(logs.flush_deadline().is_none());
+}
+
+/// System events move the composer's idea of whether the agent is working,
+/// so they go out at once, with whatever was pending ahead of them.
+#[tokio::test]
+async fn system_events_flush_pending_frames_through() {
+    let repo = InMemoryAgentSessionRepo::new();
+    repo.insert_session(test_agent_session(test_session()));
+    let realtime = RecordingRealtime::new();
+    let mut logs = streaming_connection(repo.clone(), realtime.clone());
+
+    AgentSessionLogWriter::append(&mut logs, streamed_frame("pending"))
+        .await
+        .unwrap();
+    AgentSessionLogWriter::append(
+        &mut logs,
+        AgentSessionLog {
+            agent_session_id: test_session(),
+            user_id: None,
+            content: Message::ToServer(ToServerMessage::Event {
+                event: SystemEvent::AcpReady,
+            }),
+        },
+    )
+    .await
+    .unwrap();
+
+    let published = realtime.published();
+    assert_eq!(published.len(), 1);
+    assert_eq!(published[0].entries.len(), 2);
+    assert!(logs.flush_deadline().is_none());
+}
+
+/// Enough pending frames flush themselves, bounding one publish.
+#[tokio::test]
+async fn a_full_pending_run_flushes_itself() {
+    let repo = InMemoryAgentSessionRepo::new();
+    repo.insert_session(test_agent_session(test_session()));
+    let realtime = RecordingRealtime::new();
+    let mut logs = streaming_connection(repo.clone(), realtime.clone());
+
+    for index in 0..MAX_PENDING_LOG_FRAMES {
+        AgentSessionLogWriter::append(&mut logs, streamed_frame(&index.to_string()))
+            .await
+            .unwrap();
+    }
+
+    let published = realtime.published();
+    assert_eq!(published.len(), 1);
+    assert_eq!(published[0].entries.len(), MAX_PENDING_LOG_FRAMES);
+    assert!(logs.flush_deadline().is_none());
 }

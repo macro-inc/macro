@@ -1871,14 +1871,14 @@ async fn history_boundary_range_uses_order_index_and_uuid_tie_break(pool: PgPool
         let event = crate::outbound::connection_gateway_realtime::AgentSessionLogEvent::new(
             crate::domain::model::LogAppended {
                 agent_session_id: session.id,
-                entry: stored.clone(),
+                entries: vec![stored.clone()],
             },
         );
         let dto = serde_json::to_value(dto).unwrap();
         let event = serde_json::to_value(event).unwrap();
         assert_eq!(dto["id"], stored.id.to_string());
-        assert_eq!(dto["id"], event["id"]);
-        assert_eq!(dto["createdAt"], event["createdAt"]);
+        assert_eq!(dto["id"], event["entries"][0]["id"]);
+        assert_eq!(dto["createdAt"], event["entries"][0]["createdAt"]);
     }
 
     // Explain the production query itself so this check cannot drift from the reader.

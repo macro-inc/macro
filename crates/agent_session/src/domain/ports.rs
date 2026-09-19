@@ -625,6 +625,11 @@ pub struct Appended {
 }
 
 /// Sequential live log writer owned by one session actor.
+///
+/// A writer may hold the *publishing* of appended frames back and push them
+/// to viewers in runs; the durable append itself is never deferred.
+/// [`flush_deadline`](Self::flush_deadline) tells the owning actor when the
+/// held frames must next be pushed out with [`flush`](Self::flush).
 pub trait AgentSessionLogWriter: Send + 'static {
     /// Persist and fold one frame into this connection's live projection.
     fn append(&mut self, log: AgentSessionLog) -> impl Future<Output = Result<Appended>> + Send {
@@ -639,6 +644,18 @@ pub trait AgentSessionLogWriter: Send + 'static {
         log: AgentSessionLog,
         boundary: Option<HistoryBoundary>,
     ) -> impl Future<Output = Result<Appended>> + Send;
+
+    /// Push any frames still held back to the session's viewers. A writer
+    /// that holds nothing back has nothing to do.
+    fn flush(&mut self) -> impl Future<Output = Result<()>> + Send {
+        async { Ok(()) }
+    }
+
+    /// When held frames must be flushed by - `None` while nothing is held,
+    /// so an idle writer never wakes its owner.
+    fn flush_deadline(&self) -> Option<tokio::time::Instant> {
+        None
+    }
 }
 
 /// A session's queue changed; this is the whole queue as it stands now.
@@ -663,7 +680,7 @@ pub struct AgentSessionQueueChanged {
 /// they reload, and the log it was derived from is already durable - so an
 /// implementation may drop, and callers must not fail an append over it.
 pub trait AgentSessionRealtime {
-    /// Publish one appended frame to the session's viewers.
+    /// Publish a run of appended frames to the session's viewers.
     fn publish(
         &self,
         event: LogAppended,

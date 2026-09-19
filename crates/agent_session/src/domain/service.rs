@@ -1089,8 +1089,25 @@ fn validate_agent_session_name(raw: &str) -> Result<&str> {
     Ok(name)
 }
 
+/// How long a stored frame may wait before it is pushed to viewers. The
+/// latency a viewer sees on streamed output; durability is never deferred.
+const LOG_FLUSH_INTERVAL: std::time::Duration = std::time::Duration::from_millis(1500);
+/// How many stored frames may accumulate before they are pushed regardless
+/// of age, bounding the size of one publish.
+const MAX_PENDING_LOG_FRAMES: usize = 256;
+
 /// The [`AgentSessionLogRepo`] a session's actor writes through: the durable
 /// append, then the push to whoever is watching the session right now.
+///
+/// The push is batched. Every frame is stored at once, as before, but
+/// streamed output - the overwhelming bulk of a live session's frames, and
+/// the whole of a `session/load` replay - is pushed to viewers
+/// [`MAX_PENDING_LOG_FRAMES`] at a time or every [`LOG_FLUSH_INTERVAL`],
+/// whichever comes first, as one publish, instead of costing an audience
+/// lookup and a gateway round trip each. Frames the rest of the system
+/// reacts to right away - anything headed to the runtime, and system events,
+/// which move the composer's idea of whether the agent is working - push
+/// everything pending through with themselves before `append` returns.
 ///
 /// This is also where a writer's fold lives, and the fold is what makes
 /// re-attaching correct: [`TurnId`](agent_fold::domain::model::TurnId)s are a
@@ -1116,6 +1133,21 @@ pub struct LiveSessionLogWriter<R, Rt> {
     /// default reported by session/new replaces it even when selection fails.
     initial_model: Option<String>,
     initial_model_request: Option<RequestId>,
+    /// Stored frames not yet pushed to viewers, in log order.
+    pending: Vec<StoredAgentSessionLog>,
+    /// When the oldest pending frame must be pushed by; `None` while nothing
+    /// is pending, so an idle writer never wakes its actor.
+    flush_due: Option<tokio::time::Instant>,
+}
+
+/// Frames viewers must see as soon as they are stored rather than with the
+/// next batch: anything the runtime will act on, and anything that projects
+/// onto the session's status.
+fn flushes_through(content: &Message) -> bool {
+    matches!(
+        content,
+        Message::ToRuntime(_) | Message::ToServer(ToServerMessage::Event { .. })
+    )
 }
 
 impl<R, Rt> LiveSessionLogWriter<R, Rt> {
@@ -1133,6 +1165,8 @@ impl<R, Rt> LiveSessionLogWriter<R, Rt> {
             claim: None,
             initial_model: None,
             initial_model_request: None,
+            pending: Vec::new(),
+            flush_due: None,
         }
     }
 
@@ -1146,6 +1180,8 @@ impl<R, Rt> LiveSessionLogWriter<R, Rt> {
             claim: Some(claim),
             initial_model: None,
             initial_model_request: None,
+            pending: Vec::new(),
+            flush_due: None,
         }
     }
 
@@ -1257,18 +1293,41 @@ where
             );
         }
 
-        // Best-effort once the durable append has succeeded: the port drops
-        // frames by contract, and the log this was derived from is already
-        // durable, so the worst a failure costs is a viewer who has to reload.
+        // Durable already; the push to viewers waits for the batch unless
+        // this frame is one they must see now.
         let log_id = stored.id;
-        if let Err(error) = self.stream(session, stored).await {
+        let flush_now = flushes_through(&stored.entry.content);
+        self.pending.push(stored);
+        self.flush_due
+            .get_or_insert_with(|| tokio::time::Instant::now() + LOG_FLUSH_INTERVAL);
+        if flush_now || self.pending.len() >= MAX_PENDING_LOG_FRAMES {
+            AgentSessionLogWriter::flush(self).await?;
+        }
+        Ok(Appended { log_id, signals })
+    }
+
+    async fn flush(&mut self) -> Result<()> {
+        if self.pending.is_empty() {
+            return Ok(());
+        }
+        let entries = std::mem::take(&mut self.pending);
+        self.flush_due = None;
+        let session = entries[0].entry.agent_session_id;
+        // Best-effort: the port drops frames by contract, and every frame
+        // here is already durable, so the worst a failure costs is a viewer
+        // who has to reload.
+        if let Err(error) = self.stream(session, entries).await {
             tracing::error!(
                 error = ?error,
                 %session,
-                "failed to stream agent session frame"
+                "failed to stream agent session frames"
             );
         }
-        Ok(Appended { log_id, signals })
+        Ok(())
+    }
+
+    fn flush_deadline(&self) -> Option<tokio::time::Instant> {
+        self.flush_due
     }
 }
 
@@ -1386,16 +1445,17 @@ where
 {
     /// Push the frame just appended out to whoever is watching the session.
     ///
-    /// The frame's kind rides along because this span is the only per-frame
-    /// signal a session emits: a status event here is what moves the
-    /// composer's whole notion of whether the agent is working, and without
-    /// naming it "a frame was published" answers nothing.
+    /// The last frame's kind rides along because this span is the only
+    /// per-flush signal a session emits: a status event here is what moves
+    /// the composer's whole notion of whether the agent is working, and
+    /// without naming it "frames were published" answers nothing.
     #[tracing::instrument(
         name = "agent.session.realtime.publish",
         err,
-        skip(self, agent_session_id, entry),
+        skip(self, agent_session_id, entries),
         fields(
             agent.session.id = %agent_session_id,
+            agent.log.frame_count = entries.len(),
             agent.log.frame_kind = tracing::field::Empty,
             agent.log.event = tracing::field::Empty,
         )
@@ -1403,18 +1463,20 @@ where
     async fn stream(
         &mut self,
         agent_session_id: AgentSessionId,
-        entry: StoredAgentSessionLog,
+        entries: Vec<StoredAgentSessionLog>,
     ) -> std::result::Result<(), rootcause::Report> {
         let span = tracing::Span::current();
-        let (frame_kind, event) = frame_telemetry(&entry.entry.content);
-        span.record("agent.log.frame_kind", frame_kind);
-        if let Some(event) = event {
-            span.record("agent.log.event", event);
+        if let Some(last) = entries.last() {
+            let (frame_kind, event) = frame_telemetry(&last.entry.content);
+            span.record("agent.log.frame_kind", frame_kind);
+            if let Some(event) = event {
+                span.record("agent.log.event", event);
+            }
         }
         self.realtime
             .publish(LogAppended {
                 agent_session_id,
-                entry,
+                entries,
             })
             .await
     }

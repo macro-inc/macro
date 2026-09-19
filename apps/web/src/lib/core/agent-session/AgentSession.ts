@@ -21,10 +21,7 @@ import {
   type SessionFoldSnapshot,
 } from '@core/agent-fold/client';
 import { subscribeSocketSessionStarted } from '@queries/agent-session/queue-sync';
-import {
-  type AgentSessionLogEvent,
-  entryOf,
-} from '@queries/agent-session/realtime-protocol';
+import type { AgentSessionLogEvent } from '@queries/agent-session/realtime-protocol';
 import type {
   FoldedStreamEvent,
   TurnState,
@@ -80,14 +77,15 @@ export class AgentSession {
   }
 
   /**
-   * Realtime ingress: one persisted row, addressed by session. The socket
-   * dispatch and the replay driver both call this; a session nobody has open
-   * ignores it.
+   * Realtime ingress: a run of persisted rows in log order, addressed by
+   * session. The socket dispatch and the replay driver both call this; a
+   * session nobody has open ignores it. The run reaches the machine as one
+   * push, so a flush of many frames costs one worker round trip.
    */
   static ingest(event: AgentSessionLogEvent): void {
     AgentSession.open
       .get(event.agentSessionId)
-      ?.enqueue({ kind: 'confirmed', row: entryOf(event) });
+      ?.enqueueAll(event.entries.map((row) => ({ kind: 'confirmed', row })));
   }
 
   readonly id: string;
@@ -333,11 +331,16 @@ export class AgentSession {
   }
 
   private enqueue(input: FoldInput): Promise<void> {
+    return this.enqueueAll([input]);
+  }
+
+  private enqueueAll(inputs: FoldInput[]): Promise<void> {
+    if (inputs.length === 0) return Promise.resolve();
     if (!this.ready) {
-      this.buffered.push(input);
+      this.buffered.push(...inputs);
       return Promise.resolve();
     }
-    return this.apply([input]);
+    return this.apply(inputs);
   }
 
   private apply(inputs: FoldInput[]): Promise<void> {

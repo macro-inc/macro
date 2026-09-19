@@ -103,8 +103,8 @@ describe('AgentSession', () => {
     harness.getLog.mockReturnValue(log.promise);
 
     const live = AgentSession.acquire(SESSION);
-    AgentSession.ingest({ agentSessionId: SESSION, ...row(2) });
-    AgentSession.ingest({ agentSessionId: SESSION, ...row(3) });
+    AgentSession.ingest({ agentSessionId: SESSION, entries: [row(2)] });
+    AgentSession.ingest({ agentSessionId: SESSION, entries: [row(3)] });
     log.resolve(logOf([row(1), row(2)]));
     const record = await live.load();
 
@@ -118,7 +118,7 @@ describe('AgentSession', () => {
   });
 
   it('ignores rows for sessions nobody has open', () => {
-    AgentSession.ingest({ agentSessionId: 'other', ...row(1) });
+    AgentSession.ingest({ agentSessionId: 'other', entries: [row(1)] });
     expect(fold.pushSession).not.toHaveBeenCalled();
   });
 
@@ -371,7 +371,7 @@ describe('AgentSession', () => {
     fold.pushSession.mockResolvedValueOnce([
       { kind: 'metadata', metadata: { turn: 'running' } },
     ]);
-    AgentSession.ingest({ agentSessionId: SESSION, ...row(2) });
+    AgentSession.ingest({ agentSessionId: SESSION, entries: [row(2)] });
     await settle();
 
     await live.issue({ type: 'prompt', prompt: 'later' });
