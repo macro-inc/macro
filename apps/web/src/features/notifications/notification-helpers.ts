@@ -21,6 +21,7 @@ import {
   CHANNEL_EVENT_TYPES,
   DOCUMENT_COMMENT_EVENT_TYPES,
   setDoneOverride,
+  setSeenOverride,
 } from './notification-source';
 import { compositeEntity, type UnifiedNotification } from './types';
 
@@ -203,10 +204,19 @@ export async function markNotificationsForEntityAsRead(
 ): Promise<void> {
   const entityRef = toNotificationEntityRef(entity);
   if (isFeatureEnabled(enableGraphqlSoup) && entityRef) {
-    await updateNotificationsForEntities({
+    const updatedNotifications = await updateNotificationsForEntities({
       entities: [entityRef],
       operation: 'MARK_SEEN',
     });
+    // Apply local seen overrides so the notification source reflects the
+    // seen state immediately, without waiting for a cache refetch. This
+    // parallels how bulkMarkAsRead sets seenOverride before its mutation.
+    if (updatedNotifications.length > 0) {
+      setSeenOverride(
+        updatedNotifications.map((n) => n.id),
+        new Date().toISOString()
+      );
+    }
     return;
   }
 
