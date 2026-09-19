@@ -1,3 +1,4 @@
+import { setSessionLastError } from '@app/features/block-agent/state/session-last-error';
 import { HomeListEntity } from '@app/features/inbox-view/components/HomeListEntity';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
@@ -14,6 +15,9 @@ vi.mock('@app/components/view-shell', async (importOriginal) => ({
 }));
 vi.mock('@phosphor/code.svg', () => ({
   default: () => <svg data-coding-icon />,
+}));
+vi.mock('@phosphor/warning-circle.svg', () => ({
+  default: () => <svg data-error-icon />,
 }));
 vi.mock('@queries/agent-session/session', () => ({
   useAgentSessionQuery: () => ({
@@ -199,5 +203,81 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
     expect(view.container.querySelector('[data-kind="chat"]')).toBeTruthy();
     expect(screen.queryByRole('link')).toBeNull();
     expect(screen.queryByText('Ready')).toBeNull();
+  });
+});
+
+describe('errored agent rows', () => {
+  it('marks a failed session in the sidebar', () => {
+    render(() => (
+      <AgentsSidebar
+        groups={groupConversations([
+          {
+            type: 'agent_session',
+            id: 'failed-session',
+            name: 'Broken run',
+            ownerId: 'me',
+            botId: 'cursor',
+            status: 'failed',
+          },
+        ])}
+        modeForConversation={() => 'code'}
+        activeConversationId={undefined}
+        search=""
+        loading={false}
+        error={false}
+        hasNextPage={false}
+        loadingNextPage={false}
+        onNewConversation={vi.fn()}
+        onSearchChange={vi.fn()}
+        onOpenConversation={vi.fn()}
+        onRetry={vi.fn()}
+        onLoadMore={vi.fn()}
+      />
+    ));
+    expect(screen.getByText('Error')).toBeTruthy();
+    expect(document.querySelector('[data-error-icon]')).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Broken run' }).closest('[data-kind]')
+    ).toBeTruthy();
+  });
+
+  it('marks a ready session once its newest turn fails', () => {
+    render(() => (
+      <AgentsSidebar
+        groups={groupConversations([
+          {
+            type: 'agent_session',
+            id: 'live-error',
+            name: 'Live run',
+            ownerId: 'me',
+            botId: 'cursor',
+            status: 'acp_ready',
+          },
+        ])}
+        modeForConversation={() => 'code'}
+        activeConversationId={undefined}
+        search=""
+        loading={false}
+        error={false}
+        hasNextPage={false}
+        loadingNextPage={false}
+        onNewConversation={vi.fn()}
+        onSearchChange={vi.fn()}
+        onOpenConversation={vi.fn()}
+        onRetry={vi.fn()}
+        onLoadMore={vi.fn()}
+      />
+    ));
+    expect(screen.queryByText('Error')).toBeNull();
+    setSessionLastError(
+      'live-error',
+      'Authorization header is badly formatted'
+    );
+    const label = screen.getByText('Error');
+    expect(label.getAttribute('title')).toBe(
+      'Authorization header is badly formatted'
+    );
+    expect(document.querySelector('[data-error-icon]')).toBeTruthy();
+    setSessionLastError('live-error', undefined);
   });
 });

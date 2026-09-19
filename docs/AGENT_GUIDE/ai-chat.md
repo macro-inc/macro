@@ -15,9 +15,12 @@
   of chats and coding sessions, newest first, with one search across both.
   Chat rows use a chat icon; coding rows use `</>` (the PR status icon when a
   pull request is linked). Home and the Agents sidebar share these agent rows.
-  Rows have no agent or runtime-status subtext. Sessions with a linked PR show
+  Rows have no agent or runtime-status subtext except when the last turn
+  failed: those rows show a warning icon and **Error** in failure ink, with
+  the runtime message as a tooltip. Sessions with a linked PR show
   **View PR #<number> in GitHub** beneath the title; clicking it opens GitHub in
-  a new tab without opening the session. The leading icon reflects the PR status. Changing the composer mode does not filter the sidebar.
+  a new tab without opening the session. The leading icon is a warning when
+  the session errored, otherwise the PR status. Changing the composer mode does not filter the sidebar.
   Selecting a row opens its own mode; Shift-click opens it in a new split.
 - The starting page has a compact composer that starts at one line and grows
   with longer prompts or Shift+Enter. Lists, quotes, headings, and other
@@ -368,6 +371,12 @@ visible. Only the newest turn can be live: once the composer stops showing the
 agent as working, every Thinking label, **Calling N tools** row, shimmering
 tool title, and working row settles — earlier turns never shimmer, even ones
 the runtime cut off mid-call. At most one shimmering row is ever expected.
+
+A turn the runtime answered with an error shows **The agent couldn't answer**
+as a wrapping failure, with the runtime message below it — not a truncated
+red rule. The side-panel Status pill reads **Error** while that is the newest
+turn. Quiet session actions (model switch, compaction) stay on the centered
+rule.
 
 ### Sharing a session
 

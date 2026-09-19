@@ -293,7 +293,7 @@ export function Message(props: {
           <Show when={failure()}>
             {(message) => (
               <ActionLine
-                label={`The agent couldn't answer — ${message()}`}
+                label="The agent couldn't answer"
                 detail={message()}
                 failed
               />

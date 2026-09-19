@@ -38,6 +38,8 @@ import {
   untrack,
 } from 'solid-js';
 import { createStore, produce, reconcile } from 'solid-js/store';
+import { setSessionLastError } from '../state/session-last-error';
+import { latestFailure } from '../state/session-summary';
 
 export type AgentSessionHandle = {
   /** Session row, absent until the load resolves. */
@@ -168,6 +170,11 @@ export function createAgentSession(
       upsert(messages);
     });
 
+  const publishFailure = () => {
+    const id = untrack(sessionId);
+    if (id) setSessionLastError(id, latestFailure(list));
+  };
+
   const applyEvents = (events: FoldedStreamEvent[]) =>
     batch(() => {
       for (const event of events) {
@@ -175,6 +182,7 @@ export function createAgentSession(
         else if (event.kind === 'metadata') setMetadata(event.metadata);
         else upsert([event.message]);
       }
+      publishFailure();
     });
 
   // The shared session for the current id. A memo rather than an effect so
@@ -218,6 +226,7 @@ export function createAgentSession(
         setBot(record.bot);
         setMetadata(snapshot.metadata);
         replace(snapshot.messages);
+        publishFailure();
       });
 
       return renameRefresh > renameRefreshAtStart &&

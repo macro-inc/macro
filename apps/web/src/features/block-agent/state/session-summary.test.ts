@@ -7,6 +7,7 @@ import {
   activityCounts,
   changedFiles,
   countDiffChanges,
+  latestFailure,
   latestPlan,
 } from './session-summary';
 
@@ -52,6 +53,45 @@ describe('countDiffChanges', () => {
     ]);
     expect(additions).toBe(3); // c, d, new
     expect(deletions).toBe(1); // b
+  });
+});
+
+describe('latestFailure', () => {
+  it('reads the newest agent turn when it failed', () => {
+    expect(
+      latestFailure([
+        {
+          ...message(0, [{ kind: 'text', text: 'ok' }]),
+          author: { kind: 'agent' },
+          stop: { kind: 'end_turn' },
+        },
+        {
+          ...message(1, []),
+          author: { kind: 'agent' },
+          stop: {
+            kind: 'failed',
+            message: 'Authorization header is badly formatted',
+          },
+        },
+      ])
+    ).toBe('Authorization header is badly formatted');
+  });
+
+  it('forgets an older failure once a later turn finishes', () => {
+    expect(
+      latestFailure([
+        {
+          ...message(0, []),
+          author: { kind: 'agent' },
+          stop: { kind: 'failed', message: 'old' },
+        },
+        {
+          ...message(1, [{ kind: 'text', text: 'recovered' }]),
+          author: { kind: 'agent' },
+          stop: { kind: 'end_turn' },
+        },
+      ])
+    ).toBeUndefined();
   });
 });
 

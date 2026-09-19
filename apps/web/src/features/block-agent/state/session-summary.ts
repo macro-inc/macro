@@ -89,6 +89,25 @@ export function changedFiles(messages: FoldedMessage[]): ChangedFile[] {
 }
 
 /**
+ * Why the newest agent turn failed, when it did.
+ *
+ * Only the tail agent message counts: a later turn that finished (or is
+ * still open) means the session recovered, so an older error is history
+ * rather than the session's current state.
+ */
+export function latestFailure(
+  messages: readonly FoldedMessage[]
+): string | undefined {
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index];
+    if (message?.author.kind !== 'agent') continue;
+    if (message.stop?.kind === 'failed') return message.stop.message;
+    return undefined;
+  }
+  return undefined;
+}
+
+/**
  * Tool-call counts by kind, shaped for `ui/CountSummary` ("3 files read,
  * 2 searches"). Zero-count items are included — the summary component slides
  * them in and out as counts move.

@@ -815,7 +815,7 @@ export default function AgentUiGallery() {
               detail="no credentials configured for provider openai"
             />
             <ActionLine
-              label="The agent couldn't answer — Internal error: Bad Request: bad request: Authorization header is badly formatted"
+              label="The agent couldn't answer"
               detail="Internal error: Bad Request: bad request: Authorization header is badly formatted"
               failed
             />

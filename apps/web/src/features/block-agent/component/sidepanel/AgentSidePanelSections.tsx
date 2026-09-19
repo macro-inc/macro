@@ -20,6 +20,7 @@ import { sessionStatus } from '../../state/session-status';
 import {
   activityCounts,
   changedFiles,
+  latestFailure,
   latestPlan,
 } from '../../state/session-summary';
 import {
@@ -37,6 +38,10 @@ export function AgentSidePanelSections() {
   const plan = createMemo(() => latestPlan(messages()));
   const files = createMemo(() => changedFiles(messages()));
   const activity = createMemo(() => activityCounts(messages()));
+  const status = () =>
+    latestFailure(messages())
+      ? { kind: 'event' as const, event: 'failed' }
+      : sessionStatus(metadata());
   const totals = createMemo(() => ({
     additions: files().reduce((sum, file) => sum + file.additions, 0),
     deletions: files().reduce((sum, file) => sum + file.deletions, 0),
@@ -47,7 +52,7 @@ export function AgentSidePanelSections() {
       <SidePanel.Section id="details" title="Details" defaultOpen order={10}>
         <SidePanel.Grid>
           <SidePanel.Row label="Status">
-            <SessionStatusPill status={sessionStatus(metadata())} />
+            <SessionStatusPill status={status()} />
           </SidePanel.Row>
           <Show when={bot()?.name}>
             {(name) => (
