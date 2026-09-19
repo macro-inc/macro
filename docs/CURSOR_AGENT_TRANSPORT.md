@@ -56,6 +56,13 @@ It never sends `fs/read_text_file`, `fs/write_text_file`, or any `terminal/*`
 request. This matters: a Cursor cloud agent's filesystem lives inside Cursor's
 VM and we only observe it through SSE tool-call events. If the harness needed
 filesystem service from the agent side, this design would not work. It doesn't.
+Terminal output goes the other way: the client advertises Zed's
+`clientCapabilities._meta.terminal_output` extension, and an agent that runs
+a command mirrors what it writes into `tool_call_update` frames
+(`_meta.terminal_info` / `terminal_output` / `terminal_exit`), which the fold
+streams into the session page. The Cursor translator reports a finished
+command's output in `rawOutput` instead, and the fold's Cursor reader takes it
+from there.
 
 ### `crates/cursor_acp`
 

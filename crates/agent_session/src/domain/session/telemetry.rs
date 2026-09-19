@@ -45,7 +45,7 @@ use agent_client_protocol::schema::v1::{
     ToolCallUpdate, ToolKind,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage, RawJsonRpcParams};
-use agent_fold::domain::harness::{ToolFrame, tool_name};
+use agent_fold::domain::harness::{HarnessReader, ToolFrame, is_terminal, tool_name};
 use agent_fold::domain::model::{Harness, ToolName, ToolStatus};
 use agent_runtime_protocol::domain::action::MODEL_CONFIG_ID;
 use agent_runtime_protocol::domain::schema::v0::{AcpMessage, ToRuntimeMessage, ToServerMessage};
@@ -155,8 +155,40 @@ struct OpenTool {
     /// The latest `rawInput` seen: a harness may stream the arguments over
     /// several patches, and the last complete value is the call's.
     arguments: Option<Value>,
+    /// Whether the call runs in a terminal, decided at open like the fold
+    /// does: only then is a frame read for command output.
+    is_terminal: bool,
+    /// A shell command's output as its frames have reported it so far - a
+    /// stream of writes appended, or the latest snapshot - since no one
+    /// frame carries the whole of it. Bounded by the content policy's
+    /// per-part limit: past it, the span could not carry more anyway.
+    terminal_output: Option<String>,
     /// Index of this call's part in the turn's output, when it has one.
     part: Option<usize>,
+}
+
+impl OpenTool {
+    /// Fold what `frame` says about the command's output into what is held.
+    fn take_terminal_output(
+        &mut self,
+        reader: &dyn HarnessReader,
+        frame: &ToolFrame<'_>,
+        limit: usize,
+    ) {
+        if !self.is_terminal {
+            return;
+        }
+        let Some(found) = reader.terminal_output(frame) else {
+            return;
+        };
+        found.apply_to(&mut self.terminal_output);
+        if let Some(output) = &mut self.terminal_output
+            && output.len() > limit
+        {
+            let cut = output.floor_char_boundary(limit);
+            output.truncate(cut);
+        }
+    }
 }
 
 /// How a turn ended.
@@ -632,16 +664,17 @@ impl GenAiProjector {
             turn.parts.len() - 1
         });
         let status = frame.status.unwrap_or_default();
-        if let Some(replaced) = self.tools.insert(
-            id.clone(),
-            OpenTool {
-                span,
-                name,
-                status,
-                arguments,
-                part,
-            },
-        ) {
+        let mut tool = OpenTool {
+            span,
+            name,
+            status,
+            arguments,
+            is_terminal: is_terminal(&frame),
+            terminal_output: None,
+            part,
+        };
+        tool.take_terminal_output(reader, &frame, self.policy.limits.max_part_chars);
+        if let Some(replaced) = self.tools.insert(id.clone(), tool) {
             replaced
                 .span
                 .set_error("superseded", "the harness reopened this tool call id");
@@ -671,6 +704,11 @@ impl GenAiProjector {
         {
             tool.arguments = Some(input.clone());
         }
+        tool.take_terminal_output(
+            self.harness.reader(),
+            &frame,
+            self.policy.limits.max_part_chars,
+        );
         // A harness may name the tool only once it knows what it is running.
         if tool.name.is_empty() {
             let named = tool_name(self.harness.reader(), &frame);
@@ -694,18 +732,16 @@ impl GenAiProjector {
             return;
         };
         let reader = self.harness.reader();
-        let (result, mut error) = match frame.raw_output {
-            Some(raw) => {
+        // A command's output is what its frames streamed, in full; a
+        // `rawOutput` on the closing frame is the harness's own record of
+        // the same thing (or, for any other tool, its result).
+        let (result, mut error) = match (tool.terminal_output, frame.raw_output) {
+            (Some(output), _) => (Some(Value::String(output)), None),
+            (None, Some(raw)) => {
                 let (value, error) = reader.unwrap_tool_output(raw);
                 (Some(value), error)
             }
-            None => (
-                frame
-                    .content_text()
-                    .or_else(|| reader.terminal_output(frame))
-                    .map(Value::String),
-                None,
-            ),
+            (None, None) => (frame.content_text().map(Value::String), None),
         };
         if error.is_none()
             && let Some(code) = reader.terminal_exit_code(frame)

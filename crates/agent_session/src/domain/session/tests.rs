@@ -1312,6 +1312,28 @@ mod elicitation {
         );
     }
 
+    /// The terminal-output extension is advertised the way Zed spells it,
+    /// and ACP's own terminal capability - `terminal/create` and friends,
+    /// which this client cannot host - is not.
+    #[test]
+    fn initialize_advertises_mirrored_terminal_output_but_not_terminals() {
+        let mut machine = machine();
+        let effects = machine.handle(acp_ready());
+        let Effect::Send {
+            message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))),
+            ..
+        } = &effects[1]
+        else {
+            panic!("initialize is sent");
+        };
+        let params = serde_json::to_value(&request.params).unwrap();
+        assert_eq!(
+            params["clientCapabilities"]["_meta"],
+            serde_json::json!({ "terminal_output": true })
+        );
+        assert_eq!(params["clientCapabilities"]["terminal"], false);
+    }
+
     #[test]
     fn a_form_elicitation_is_held_not_answered() {
         let mut machine = live_machine();

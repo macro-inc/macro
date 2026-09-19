@@ -179,11 +179,12 @@ fn a_turn_becomes_an_agent_span_with_a_tool_span_per_call() {
         json_attribute(bash, attr::TOOL_CALL_ARGUMENTS),
         Some(json!({ "command": "ls examples" }))
     );
-    // No `rawOutput`; the terminal output in `_meta` is the result.
+    // No `rawOutput`; the terminal output streamed through `_meta` over two
+    // writes is the result, whole.
     let result = string_attribute(bash, attr::TOOL_CALL_RESULT).expect("result recorded");
-    assert!(
-        result.contains("events.rs"),
-        "terminal output recorded: {result}"
+    assert_eq!(
+        result, "\u{1b}[01;34macp.rs\u{1b}[0m\nevents.rs",
+        "every streamed write is recorded, in order"
     );
     assert_eq!(bash.status, Status::Unset);
 

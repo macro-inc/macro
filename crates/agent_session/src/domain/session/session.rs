@@ -6,9 +6,10 @@ use agent_client_protocol::schema::v1::{
     ClientCapabilities, CreateElicitationRequest, CreateElicitationResponse, ElicitationAction,
     ElicitationCapabilities, ElicitationFormCapabilities, ElicitationMode, ElicitationScope,
     ElicitationUrlCapabilities, InitializeRequest, InitializeResponse, LoadSessionRequest,
-    LoadSessionResponse, McpServer, NewSessionRequest, NewSessionResponse, PermissionOptionKind,
-    RequestId, RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse,
-    Response, ResumeSessionRequest, ResumeSessionResponse, SelectedPermissionOutcome, SessionId,
+    LoadSessionResponse, McpServer, Meta, NewSessionRequest, NewSessionResponse,
+    PermissionOptionKind, RequestId, RequestPermissionOutcome, RequestPermissionRequest,
+    RequestPermissionResponse, Response, ResumeSessionRequest, ResumeSessionResponse,
+    SelectedPermissionOutcome, SessionId,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
@@ -27,6 +28,10 @@ use super::types::{
 };
 
 const INITIAL_REQUEST_NUM: u64 = 0;
+
+/// The `clientCapabilities._meta` key that asks an agent to mirror each
+/// command's terminal output into its `tool_call_update` frames.
+const TERMINAL_OUTPUT_CAPABILITY: &str = "terminal_output";
 
 /// Protocol state for one connection of a session to an agent runtime.
 ///
@@ -558,11 +563,27 @@ impl<Token> SessionMachine<Token> {
         // will only ask once this says they may - so this line must never
         // ship ahead of `hold_or_refuse_elicitation`, or every agent that
         // asks hangs on a request nothing answers.
-        let capabilities = ClientCapabilities::new().elicitation(
-            ElicitationCapabilities::new()
-                .form(ElicitationFormCapabilities::new())
-                .url(ElicitationUrlCapabilities::new()),
-        );
+        //
+        // `_meta.terminal_output` is the extension Zed defined for a client
+        // that shows a command's output without owning its terminal: the
+        // agent runs the command itself and mirrors what it writes into
+        // `tool_call_update` frames (`_meta.terminal_info` / `terminal_output`
+        // / `terminal_exit`), which the fold streams into the session page.
+        // Without it, claude-agent-acp reports a command's output only once
+        // it has finished, and codex-acp under a different key. ACP's own
+        // `terminal` capability stays off: it promises `terminal/create` and
+        // friends, and the command runs on the far side of a byte pipe where
+        // this client could not host a terminal.
+        let capabilities = ClientCapabilities::new()
+            .elicitation(
+                ElicitationCapabilities::new()
+                    .form(ElicitationFormCapabilities::new())
+                    .url(ElicitationUrlCapabilities::new()),
+            )
+            .meta(Meta::from_iter([(
+                TERMINAL_OUTPUT_CAPABILITY.to_owned(),
+                serde_json::Value::Bool(true),
+            )]));
         let (method, params) = InitializeRequest::new(PROTOCOL_VERSION)
             .client_capabilities(capabilities)
             .to_untyped_message()?
