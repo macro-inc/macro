@@ -278,18 +278,28 @@ where
                         (actor.as_user(), message.sender_id.as_user())
                     && actor_id != message_sender_id
                 {
-                    Some(ReactionNotificationContext {
-                        added: true,
-                        emoji: emoji.clone(),
-                        message_sender: message.sender_id.clone(),
-                        thread_id: message.thread_id,
-                        message_content: message.content.clone(),
-                        metadata: self
-                            .repo
-                            .get_channel_metadata(channel_id, message_sender_id.clone())
-                            .await
-                            .map_err(repo_error)?,
-                    })
+                    match self
+                        .repo
+                        .get_channel_metadata(channel_id, message_sender_id.clone())
+                        .await
+                    {
+                        Ok(metadata) => Some(ReactionNotificationContext {
+                            added: true,
+                            emoji: emoji.clone(),
+                            message_sender: message.sender_id.clone(),
+                            thread_id: message.thread_id,
+                            message_content: message.content.clone(),
+                            metadata,
+                        }),
+                        Err(_) => {
+                            tracing::warn!(
+                                %channel_id,
+                                message_id = %message.id,
+                                "unable to build reaction notification context"
+                            );
+                            None
+                        }
+                    }
                 } else {
                     None
                 };
