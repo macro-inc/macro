@@ -6,9 +6,165 @@
 //! rebuilds it from the frame log (see [`crate::domain::replay`]).
 
 use agent::types::{AssistantMessagePart, ChatMessage, ChatMessageContent, Role};
-use agent_client_protocol::schema::v1::SessionId;
+use agent_client_protocol::schema::v1::{ContentBlock, PromptRequest, SessionId};
+use agent_runtime_protocol::domain::action::{COMPACT_COMMAND, PromptAttachment};
 use agent_session::domain::model::AgentSessionId;
+use attachment::image::ImageData;
+use attachment::{AttachmentContent, AttachmentPart, Attachments};
 use dashmap::DashMap;
+use model_entity::EntityType;
+use non_empty::NonEmpty;
+
+#[cfg(test)]
+mod test;
+
+/// What a user said in one turn: the prompt's text, and the files it named.
+///
+/// Files arrive as ACP `resource_link` blocks - URLs, never bytes. HTTPS
+/// images go to the model as image URLs, which the provider fetches itself;
+/// anything else is described to the model by name and URL, since there is
+/// no way to show it the bytes and the URL is still something its tools can
+/// fetch.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserPrompt {
+    /// The prompt's text blocks, joined.
+    pub text: String,
+    /// The prompt's `resource_link` blocks, in order.
+    pub attachments: Vec<PromptAttachment>,
+}
+
+impl UserPrompt {
+    /// A prompt of text alone.
+    #[must_use]
+    pub fn text(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            attachments: Vec::new(),
+        }
+    }
+
+    /// Read a prompt off the content blocks of a `session/prompt`. Block kinds
+    /// this agent has no use for (inline images, audio, embedded resources -
+    /// none of which it advertises) are skipped.
+    #[must_use]
+    pub fn from_blocks(blocks: &[ContentBlock]) -> Self {
+        let mut prompt = Self::text(String::new());
+        for block in blocks {
+            match block {
+                ContentBlock::Text(text) => prompt.text.push_str(&text.text),
+                block => {
+                    if let Some(attachment) = PromptAttachment::from_content_block(block) {
+                        prompt.attachments.push(attachment);
+                    }
+                }
+            }
+        }
+        prompt
+    }
+
+    /// Read a prompt off a `session/prompt` request.
+    #[must_use]
+    pub fn from_request(request: &PromptRequest) -> Self {
+        Self::from_blocks(&request.prompt)
+    }
+
+    /// Whether this is the compaction control rather than a message.
+    ///
+    /// The command word and nothing else. A `/compact` that also carries
+    /// files is a real prompt about those files, and compacting would throw
+    /// them away unseen - so serving a turn and replaying one must agree on
+    /// this, or a cold attach would drop a conversation the live session
+    /// kept. The harness applies the same rule where it reads a control off
+    /// the wire (`AgentAction::control_from_runtime`).
+    #[must_use]
+    pub fn is_compact_command(&self) -> bool {
+        self.text.trim() == COMPACT_COMMAND && self.attachments.is_empty()
+    }
+
+    /// The model-facing form of the attached files, `None` without any.
+    #[must_use]
+    pub fn to_attachments(&self) -> Option<Attachments<'static>> {
+        let resolved: Vec<_> = self
+            .attachments
+            .iter()
+            .map(|attachment| Ok(attachment_content(attachment)))
+            .collect();
+        NonEmpty::new(resolved).ok().map(Attachments::new)
+    }
+
+    /// The message this prompt is to the model.
+    #[must_use]
+    pub fn to_chat_message(&self) -> ChatMessage {
+        ChatMessage {
+            content: ChatMessageContent::Text(self.text.clone()),
+            role: Role::User,
+            attachments: self.to_attachments(),
+        }
+    }
+}
+
+/// The image file extensions the composer's chips classify as images, so a
+/// file the user sees as a thumbnail is one the model sees as an image. Keep
+/// in step with `CHANNEL_IMAGE_FILE_EXTENSIONS` on the web side.
+const IMAGE_EXTENSIONS: &[&str] = &[
+    "apng", "avif", "bmp", "gif", "heic", "heif", "jpeg", "jpg", "png", "svg", "tif", "tiff",
+    "webp",
+];
+
+/// Whether this file is an image, by media type and then by name.
+///
+/// A browser can report no media type at all for a `.png`, and the composer
+/// still shows it as a thumbnail, so the name decides when the type cannot.
+fn is_image(attachment: &PromptAttachment) -> bool {
+    let mime = attachment.mime_type.as_deref().unwrap_or_default();
+    if mime.starts_with("image/") {
+        return true;
+    }
+    // Mirrors the composer's own order: a media type naming another medium
+    // wins, and otherwise the name decides.
+    if mime.starts_with("video/") {
+        return false;
+    }
+    attachment
+        .name
+        .rsplit_once('.')
+        .map(|(_, extension)| extension.to_ascii_lowercase())
+        .is_some_and(|extension| IMAGE_EXTENSIONS.contains(&extension.as_str()))
+}
+
+/// One attached file as resolved attachment content.
+///
+/// Only an HTTPS image is handed over as an image URL: providers refuse plain
+/// HTTP, and history keeps every attachment for the rest of the session, so
+/// one such link would fail every later turn. Anything else is named in text.
+fn attachment_content(attachment: &PromptAttachment) -> AttachmentContent<'static> {
+    let is_image = is_image(attachment);
+    let fetchable = attachment.uri.starts_with("https://");
+    let part = if is_image && fetchable {
+        AttachmentPart::Image(ImageData::StaticUrl(attachment.uri.clone()))
+    } else {
+        let kind = attachment.mime_type.as_deref().unwrap_or("unknown type");
+        AttachmentPart::Content(format!(
+            "Attached file \"{}\" ({kind}): {}",
+            attachment.name, attachment.uri
+        ))
+    };
+    AttachmentContent {
+        // The static file id is the URL's last path segment; a URL shaped
+        // some other way is identified by the whole URL.
+        reference: EntityType::StaticFile.with_entity_string(
+            attachment
+                .uri
+                .rsplit('/')
+                .next()
+                .filter(|id| !id.is_empty())
+                .unwrap_or(&attachment.uri)
+                .to_owned(),
+        ),
+        name: Some(attachment.name.clone()),
+        content: NonEmpty::one(part),
+    }
+}
 
 use super::engine::AgentIdentity;
 
@@ -17,7 +173,7 @@ use super::engine::AgentIdentity;
 #[derive(Debug, Clone)]
 pub enum HistoryEntry {
     /// A prompt from a user.
-    User(String),
+    User(UserPrompt),
     /// One assistant turn: text, tool calls, and tool results, flattened.
     Assistant(Vec<AssistantMessagePart>),
 }
@@ -63,25 +219,17 @@ pub type SessionStore = DashMap<AgentSessionId, SessionState>;
 /// Materialize the conversation for one turn: the recorded history followed
 /// by the prompt being answered.
 #[must_use]
-pub fn messages_for_turn(history: &[HistoryEntry], prompt: &str) -> Vec<ChatMessage> {
+pub fn messages_for_turn(history: &[HistoryEntry], prompt: &UserPrompt) -> Vec<ChatMessage> {
     history
         .iter()
         .map(|entry| match entry {
-            HistoryEntry::User(text) => ChatMessage {
-                content: ChatMessageContent::Text(text.clone()),
-                role: Role::User,
-                attachments: None,
-            },
+            HistoryEntry::User(prompt) => prompt.to_chat_message(),
             HistoryEntry::Assistant(parts) => ChatMessage {
                 content: ChatMessageContent::AssistantMessageParts(parts.clone()),
                 role: Role::Assistant,
                 attachments: None,
             },
         })
-        .chain(std::iter::once(ChatMessage {
-            content: ChatMessageContent::Text(prompt.to_owned()),
-            role: Role::User,
-            attachments: None,
-        }))
+        .chain(std::iter::once(prompt.to_chat_message()))
         .collect()
 }

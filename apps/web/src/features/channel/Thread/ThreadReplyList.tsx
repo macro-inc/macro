@@ -1,6 +1,9 @@
 import type { IUser } from '@core/user/types';
 import { MarkMessageNotifications } from '@notifications/components/MarkMessageNotifications';
-import type { ApiThreadReply } from '@service-storage/generated/schemas/apiThreadReply';
+import type {
+  Message as EntityMessage,
+  MessageParent,
+} from '@service-storage/messages';
 import { type Accessor, createMemo, For, onCleanup, onMount } from 'solid-js';
 import type { MessageEditor } from '../Channel/create-message-editor';
 import type { NewMessageCheckable } from '../Channel/util';
@@ -19,9 +22,10 @@ export type ThreadReplyListHandle = {
 };
 
 export function ThreadReplyList(props: {
-  channelId: string;
+  parent: MessageParent;
+  inputMode?: 'inline' | 'unified';
   threadId: string;
-  replies: Array<ApiThreadReply>;
+  replies: Array<EntityMessage>;
   getMessageActions?: (message: MessageData) => MessageActions | undefined;
   messageEditor?: MessageEditor;
   participants?: Accessor<IUser[]>;
@@ -42,9 +46,12 @@ export function ThreadReplyList(props: {
   const listMetaByReplyId = createMemo(() =>
     buildThreadReplyListMeta(props.replies, props.isNewMessage)
   );
-  const replyElements: Array<HTMLElement | undefined> = [];
+  const repliesById = createMemo(
+    () => new Map(props.replies.map((reply) => [reply.id, reply]))
+  );
+  const replyElements = new Map<string, HTMLElement>();
   const targetReplyScroller = createTargetReplyScroller({
-    getTarget: (index) => replyElements[index],
+    getTarget: (index) => replyElements.get(props.replies[index]?.id),
     positionTarget: props.positionTarget,
   });
 
@@ -58,40 +65,39 @@ export function ThreadReplyList(props: {
   onCleanup(targetReplyScroller.dispose);
 
   return (
-    <For each={props.replies}>
-      {(reply, index) => {
+    <For each={[...repliesById().keys()]}>
+      {(id) => {
+        onCleanup(() => replyElements.delete(id));
         const replyMessage = () => ({
-          ...reply,
+          ...repliesById().get(id)!,
           thread_id: props.threadId,
         });
 
         const isReplySelected = () =>
-          !!props.isThreadFocused?.() && props.selectedReplyId?.() === reply.id;
+          !!props.isThreadFocused?.() && props.selectedReplyId?.() === id;
 
         return (
           <div
             ref={(element) => {
-              replyElements[index()] = element;
+              replyElements.set(id, element);
             }}
             class="relative"
           >
             <ThreadReplyRail
-              grouped={listMetaByReplyId()[reply.id].isGroupedWithPrevious}
+              grouped={listMetaByReplyId()[id].isGroupedWithPrevious}
             />
-            <MarkMessageNotifications
-              messageId={reply.id}
-              channelId={props.channelId}
-            >
+            <MarkMessageNotifications messageId={id} parent={props.parent}>
               <ChannelMessage
-                channelId={props.channelId}
+                parent={props.parent}
+                inputMode={props.inputMode}
                 message={replyMessage()}
                 actions={props.getMessageActions?.(replyMessage())}
-                listMeta={listMetaByReplyId()[reply.id]}
+                listMeta={listMetaByReplyId()[id]}
                 messageEditor={props.messageEditor}
                 participants={props.participants}
-                onClick={() => props.onSelectReply?.(reply.id)}
+                onClick={() => props.onSelectReply?.(id)}
                 selected={isReplySelected()}
-                targeted={props.targetedReplyId?.() === reply.id}
+                targeted={props.targetedReplyId?.() === id}
               />
             </MarkMessageNotifications>
           </div>

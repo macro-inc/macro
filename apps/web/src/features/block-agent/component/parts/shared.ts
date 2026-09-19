@@ -37,6 +37,8 @@ export type ToolCallCommon = {
   /** The ACP tool call id. */
   id: string;
   label: string;
+  /** The MCP server the tool was reached over, for a tool that was. */
+  server: string | undefined;
   status: ToolStatus;
   /** The chat block's failed treatment: faded row, quiet trailing label. */
   muted: boolean;
@@ -49,6 +51,11 @@ export type ToolCallCommon = {
  */
 export function toolLabel(name: ToolName): string {
   return name.kind === 'mcp' ? name.tool : name.name;
+}
+
+/** The MCP server a tool was reached over, when it was one. */
+export function toolServer(name: ToolName): string | undefined {
+  return name.kind === 'mcp' ? name.server : undefined;
 }
 
 /** Subtitle for a call that touched paths: the path, or how many. */

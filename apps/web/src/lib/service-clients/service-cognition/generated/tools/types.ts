@@ -5510,7 +5510,7 @@ export interface ReadSpreadsheet {
   includeStyles?: boolean | null;
 }
 /**
- * Rename an existing channel. Requires the current user to be a channel admin or owner. Direct-message channels cannot be renamed. Use only when the user asks to rename a channel.
+ * Rename an existing channel. Requires the current user to be an active channel participant. Direct-message channels cannot be renamed. Use only when the user asks to rename a channel.
  */
 export interface RenameChannel {
   /**

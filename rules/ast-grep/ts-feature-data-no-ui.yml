@@ -26,6 +26,8 @@ files:
   - apps/web/src/features/email-thread/primitives/**
   - apps/web/src/features/email-compose/queries/**
   - apps/web/src/features/email-compose/primitives/**
+  - apps/web/src/features/agent-changes/queries/**
+  - apps/web/src/features/agent-changes/primitives/**
 rule:
   kind: string
   regex: ^['"](solid-js/web|@ui|@components/|(\.\./)+(components|views)/)

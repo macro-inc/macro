@@ -21,6 +21,13 @@ pub trait EmailMutationService: Send + Sync + 'static {
         thread_id: Uuid,
     ) -> impl Future<Output = Result<(), EmailErr>> + Send;
 
+    /// Mark an accessible email thread unread, resolving its inbox's label server-side.
+    fn mark_email_thread_unread(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        thread_id: Uuid,
+    ) -> impl Future<Output = Result<(), EmailErr>> + Send;
+
     /// Add or remove one label from every message in an accessible email thread.
     fn update_email_thread_label(
         &self,
@@ -41,6 +48,14 @@ where
         thread_id: Uuid,
     ) -> Result<(), EmailErr> {
         self.mark_thread_seen(user_id, thread_id).await
+    }
+
+    async fn mark_email_thread_unread(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        thread_id: Uuid,
+    ) -> Result<(), EmailErr> {
+        self.mark_thread_unread(user_id, thread_id).await
     }
 
     async fn update_email_thread_label(
@@ -95,6 +110,13 @@ impl<S, O> Default for GraphqlEmailMutation<S, O> {
 #[derive(InputObject)]
 pub struct MarkEmailThreadSeenInput {
     /// Email thread to mark as seen.
+    pub thread_id: ID,
+}
+
+/// Input for marking an email thread unread.
+#[derive(InputObject)]
+pub struct MarkEmailThreadUnreadInput {
+    /// Email thread to mark unread; its inbox determines the UNREAD label.
     pub thread_id: ID,
 }
 
@@ -157,6 +179,33 @@ where
                     user_id = %user_id,
                     %thread_id,
                     "failed to mark email thread seen"
+                );
+                mutation_error(&error)
+            })?;
+
+        reload_thread::<O>(ctx, user_id, thread_id).await
+    }
+
+    /// Mark an accessible email thread unread and return its authoritative cache record.
+    #[tracing::instrument(skip_all, err(Debug))]
+    async fn mark_email_thread_unread(
+        &self,
+        ctx: &Context<'_>,
+        input: MarkEmailThreadUnreadInput,
+    ) -> async_graphql::Result<O::Thread> {
+        let user_id = require_authenticated_user(ctx)?;
+        let thread_id = parse_id(input.thread_id, "threadId")?;
+        let service = ctx.data::<Arc<S>>()?;
+
+        service
+            .mark_email_thread_unread(user_id.clone(), thread_id)
+            .await
+            .map_err(|error| {
+                tracing::error!(
+                    error = ?error,
+                    user_id = %user_id,
+                    %thread_id,
+                    "failed to mark email thread unread"
                 );
                 mutation_error(&error)
             })?;

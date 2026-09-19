@@ -20,6 +20,7 @@ files:
   - apps/web/src/features/email-message/components/**
   - apps/web/src/features/email-thread/components/**
   - apps/web/src/features/email-compose/components/**
+  - apps/web/src/features/agent-changes/components/**
 rule:
   any:
     - kind: string

@@ -44,7 +44,8 @@ const useScrollToActiveThreadEffect = () => {
 
     if (!hasMatch()) return;
 
-    scrollToCommentThread(activeThreadId);
+    if (typeof activeThreadId === 'number')
+      scrollToCommentThread(activeThreadId);
   });
 };
 

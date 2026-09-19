@@ -65,6 +65,9 @@ impl SearchText {
     fn part(&mut self, part: &MessagePart) {
         match part {
             MessagePart::Text { text } | MessagePart::Thought { text } => self.push(text),
+            // The file's name is what a person would recognize and search
+            // for; its static file URL is opaque and would only add noise.
+            MessagePart::Attachment { name, .. } => self.push(name),
             MessagePart::ToolUse { name, detail, .. } => {
                 self.push(name.display());
                 self.tool(detail);
@@ -153,12 +156,25 @@ impl SearchText {
                     self.push(output);
                 }
             }
-            ToolDetail::Other { input, output, .. } => {
+            ToolDetail::Other {
+                input,
+                output,
+                result,
+                error,
+                ..
+            } => {
                 if let Some(input) = input {
                     self.json(input);
                 }
-                if let Some(output) = output {
-                    self.push(output);
+                if let Some(error) = error {
+                    self.push(error);
+                }
+                // The text blocks and the unwrapped result usually carry the
+                // same words; either alone is enough to find the call by.
+                match (result, output) {
+                    (Some(result), _) => self.json(result),
+                    (None, Some(output)) => self.push(output),
+                    (None, None) => {}
                 }
             }
             ToolDetail::Macro {

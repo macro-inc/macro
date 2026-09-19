@@ -75,7 +75,8 @@ export function MinimizedThread(props: {
   //   return Array.from(ids);
   // });
 
-  const commentCount = () => 1 + props.comment.children.length;
+  const commentCount = () =>
+    1 + (props.comment.replyCount ?? props.comment.children.length);
   const clickHandler = () => {
     if (expandable()) {
       setExpanded(true);

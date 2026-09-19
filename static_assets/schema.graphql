@@ -124,6 +124,10 @@ type CompleteMutationRoot {
 	"""
 	markEmailThreadSeen(input: MarkEmailThreadSeenInput!): GraphqlSoupEmailThread!
 	"""
+	Mark an accessible email thread unread and return its authoritative cache record.
+	"""
+	markEmailThreadUnread(input: MarkEmailThreadUnreadInput!): GraphqlSoupEmailThread!
+	"""
 	Add or remove one label from an accessible email thread and return its authoritative cache record.
 	"""
 	updateEmailThreadLabel(input: UpdateEmailThreadLabelInput!): GraphqlSoupEmailThread!
@@ -5866,6 +5870,16 @@ Input for marking an email thread as seen.
 input MarkEmailThreadSeenInput {
 	"""
 	Email thread to mark as seen.
+	"""
+	threadId: ID!
+}
+
+"""
+Input for marking an email thread unread.
+"""
+input MarkEmailThreadUnreadInput {
+	"""
+	Email thread to mark unread; its inbox determines the UNREAD label.
 	"""
 	threadId: ID!
 }

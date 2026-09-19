@@ -13,6 +13,7 @@ import type { JSX } from 'solid-js';
 import { match } from 'ts-pattern';
 import { settledToolStatus } from '../../ui';
 import { EditToolCall } from './EditToolCall';
+import { ExchangeToolCall } from './ExchangeToolCall';
 import { MacroToolCall } from './MacroToolCall';
 import { OutputToolCall } from './OutputToolCall';
 import { PathsToolCall } from './PathsToolCall';
@@ -23,6 +24,7 @@ import {
   type ToolCallContext,
   type ToolUsePart,
   toolLabel,
+  toolServer,
 } from './shared';
 import { TerminalToolCall } from './TerminalToolCall';
 import { UserToolCall } from './UserToolCall';
@@ -43,6 +45,7 @@ export function ToolCallPart(props: {
   const common = (): ToolCallCommon => ({
     id: props.part.id,
     label: toolLabel(props.part.name),
+    server: toolServer(props.part.name),
     status: status(),
     muted: failed(),
     trailing: failed() ? <span class="text-ink">Failed</span> : undefined,
@@ -61,8 +64,11 @@ export function ToolCallPart(props: {
     .with({ kind: 'search' }, (detail) => (
       <SearchToolCall detail={detail} common={common()} />
     ))
-    .with({ kind: 'fetch' }, { kind: 'think' }, { kind: 'other' }, (detail) => (
+    .with({ kind: 'fetch' }, { kind: 'think' }, (detail) => (
       <OutputToolCall detail={detail} common={common()} />
+    ))
+    .with({ kind: 'other' }, (detail) => (
+      <ExchangeToolCall detail={detail} common={common()} />
     ))
     .with({ kind: 'macro' }, (detail) => (
       <MacroToolCall

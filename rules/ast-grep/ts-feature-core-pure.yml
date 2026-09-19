@@ -22,6 +22,7 @@ files:
   - apps/web/src/features/email-message/core/**
   - apps/web/src/features/email-thread/core/**
   - apps/web/src/features/email-compose/core/**
+  - apps/web/src/features/agent-changes/core/**
 rule:
   kind: string
   regex: ^['"](solid-js|@urql|urql|@app/lib/urql|@queries/|@service-storage/|@core/|@property/|@components/|@ui|@entity/|(\.\./)+(queries|primitives|components|views)/|(\.\./)+context/)

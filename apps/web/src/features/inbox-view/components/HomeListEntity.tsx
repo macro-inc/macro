@@ -6,7 +6,7 @@ import { Entity, MaybeEntityRow } from '@entity';
 import type { BaseListEntityProps } from '@entity/composed/list-entity/shared';
 import { unreadFilterFn } from '@entity/utils/filter';
 import ArrowBendUpLeftIcon from '@phosphor-icons/core/regular/arrow-bend-up-left.svg?component-solid';
-import { getBotDisplayName } from '@queries/channel/message-sender';
+import { getBotDisplayName } from '@queries/messages/message-sender';
 import { cn, pressHandlers } from '@ui';
 import { Show } from 'solid-js';
 import { HomeEntityIcon } from './HomeEntityIcon';

@@ -89,13 +89,26 @@ function SectionScrollArea(props: {
   );
 }
 
+/**
+ * How an open section claims height in its flex column.
+ *
+ * - `half`: natural height, capped at half the column and shrinkable. Two
+ *   `half` siblings split the column; a third sibling is starved to zero
+ *   once both hit the cap, so keep `half` sections in a column of their own.
+ * - `fill`: grows into whatever the column has left.
+ * - `content`: natural height, never shrunk below it, capped at a third of
+ *   the column so a long list still leaves room for its siblings.
+ */
+type CollapsibleSectionSizing = 'half' | 'fill' | 'content';
+
 function CollapsibleSectionRoot(props: {
   open: boolean;
-  fillAvailable?: boolean;
+  sizing?: CollapsibleSectionSizing;
   class?: string;
   children: JSX.Element;
 }) {
   let sectionRef: HTMLElement | undefined;
+  const sizing = () => props.sizing ?? 'half';
 
   return (
     <SectionContainerContext.Provider value={() => sectionRef}>
@@ -103,10 +116,12 @@ function CollapsibleSectionRoot(props: {
         ref={sectionRef}
         class={cn(
           'group/sidebar-section flex min-h-0 flex-col gap-(--sidebar-section-content-gap)',
-          props.open && props.fillAvailable && 'flex-1',
-          props.open && !props.fillAvailable && 'shrink',
           !props.open && 'shrink-0',
-          props.open && !props.fillAvailable && 'max-h-[calc(50%_-_0.375rem)]',
+          props.open && sizing() === 'fill' && 'flex-1',
+          props.open &&
+            sizing() === 'half' &&
+            'shrink max-h-[calc(50%_-_0.375rem)]',
+          props.open && sizing() === 'content' && 'shrink-0 max-h-1/3',
           props.class
         )}
       >

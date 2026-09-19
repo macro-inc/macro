@@ -28,9 +28,11 @@ import { useSoupItemsQuery } from '@queries/soup/items';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { Harness } from '@service-storage/client';
 import {
+  createEffect,
   createMemo,
   createSignal,
   Match,
+  on,
   onMount,
   Show,
   Suspense,
@@ -162,6 +164,20 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
     setSelected(undefined);
     setPage('new');
   };
+  // A launcher navigation can target this already-mounted workspace.
+  createEffect(
+    on(
+      () => {
+        const content = panel.handle.content();
+        return content.type === 'component'
+          ? content.params?.focusComposer
+          : undefined;
+      },
+      (request) => {
+        if (request) showComposer();
+      }
+    )
+  );
   const openRoster = (kind: AgentKind) => {
     setSelected(undefined);
     setRosterKind(kind);
@@ -190,6 +206,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
     const id = startPendingSession({
       botId: start.botId,
       prompt: start.prompt,
+      attachments: start.attachments,
       modelOverride: start.modelOverride,
       repoUrl: start.repoUrl,
       repoBranch: start.repoBranch,
@@ -286,6 +303,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
         <DataModeProvider value={dataMode}>
           <div
             class="agents-view"
+            data-agents-workspace={panel.handle.id}
             data-mode={dataMode()}
             data-session={selected() ? '1' : undefined}
           >

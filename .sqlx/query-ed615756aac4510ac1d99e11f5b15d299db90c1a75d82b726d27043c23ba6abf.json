@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                \"macro_user_id\",\n                \"email\",\n                \"is_verified\"\n            FROM \"macro_user_email_verification\"\n            WHERE \"macro_user_id\" = $1 AND \"email\" = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "macro_user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "is_verified",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "ed615756aac4510ac1d99e11f5b15d299db90c1a75d82b726d27043c23ba6abf"
+}

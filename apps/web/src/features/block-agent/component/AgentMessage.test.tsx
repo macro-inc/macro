@@ -18,8 +18,11 @@ import { Message } from './AgentMessage';
 vi.mock('@core/util/message-send-motion', () => ({
   messageSendMotion: () => {},
 }));
+const viewerId = vi.hoisted(() => ({
+  current: 'macro|me@macro.com' as string | undefined,
+}));
 vi.mock('@core/context/user', () => ({
-  useUserId: () => () => 'macro|me@macro.com',
+  useUserId: () => () => viewerId.current,
 }));
 vi.mock('@core/user/util', () => ({
   idToDisplayName: (id: string) => id.replace(/^macro\|/, ''),
@@ -46,6 +49,11 @@ vi.mock('./parts/PermissionPart', () => ({
   PermissionPart: () => <div data-testid="permission" />,
 }));
 vi.mock('./parts/PlanPart', () => ({ PlanPart: () => null }));
+vi.mock('./parts/AttachmentPart', () => ({
+  AttachmentPart: (props: { part: { name: string } }) => (
+    <div data-testid="attachment">{props.part.name}</div>
+  ),
+}));
 vi.mock('./parts/ControlPart', () => ({ ControlPart: () => null }));
 vi.mock('./parts/ElicitationPart', () => ({ ElicitationPart: () => null }));
 vi.mock('../ui', () => ({
@@ -56,7 +64,9 @@ vi.mock('../ui', () => ({
       {props.text}
     </div>
   ),
-  WorkingLine: () => <div data-testid="working" />,
+  WorkingLine: (props: { label?: string }) => (
+    <div data-testid="working">{props.label}</div>
+  ),
   ActionLine: (props: { label: string }) => <div>{props.label}</div>,
   ToolGroup: (props: {
     count: number;
@@ -75,7 +85,10 @@ vi.mock('../ui', () => ({
   ),
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  viewerId.current = 'macro|me@macro.com';
+  cleanup();
+});
 
 const text = (value: string): MessagePart => ({ kind: 'text', text: value });
 const tool = (
@@ -101,6 +114,7 @@ const message = (
 ): FoldedMessage => ({
   agentSessionId: 'session',
   requestId: null,
+  pending: false,
   turn: 0,
   author: { kind: 'agent' },
   parts,
@@ -236,6 +250,18 @@ describe('Message tool grouping', () => {
     );
     expect(view.getByTestId('group').dataset.count).toBe('2');
     expect(view.getByTestId('text')).toBe(prose);
+  });
+});
+
+describe('Message working tail', () => {
+  it('names the work after the last part of an open turn', () => {
+    const view = render(() => (
+      <Message
+        message={message([text('Looking.'), tool('a')], null)}
+        inFlight
+      />
+    ));
+    expect(view.getByTestId('working').textContent).toBe('Running tools');
   });
 });
 
@@ -376,6 +402,15 @@ describe('Message prompt attribution', () => {
   it('leaves an unattributed prompt unlabelled', () => {
     const view = render(() => (
       <Message message={prompt(null)} inFlight={false} />
+    ));
+    expect(view.queryByTestId('prompt-author')).toBeNull();
+    expect(view.getByTestId('bubble')).toBeTruthy();
+  });
+
+  it('leaves a prompt unlabelled while the viewer id is still loading', () => {
+    viewerId.current = undefined;
+    const view = render(() => (
+      <Message message={prompt('macro|me@macro.com')} inFlight={false} />
     ));
     expect(view.queryByTestId('prompt-author')).toBeNull();
     expect(view.getByTestId('bubble')).toBeTruthy();

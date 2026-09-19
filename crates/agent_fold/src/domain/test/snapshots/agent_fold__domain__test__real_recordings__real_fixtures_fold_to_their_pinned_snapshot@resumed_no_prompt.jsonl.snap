@@ -20,6 +20,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
             ],
         },
         stop: None,
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
@@ -469,6 +470,10 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                                 ],
                             },
                         ),
+                        result: Some(
+                            String("The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed.\n\nNote: The user's next message may contain a correction or preference. Pay close attention — if they explain what went wrong or how they'd prefer you to work, consider saving that to memory for future sessions."),
+                        ),
+                        error: None,
                     },
                 },
             ],
@@ -476,6 +481,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
         stop: Some(
             EndTurn,
         ),
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
@@ -493,6 +499,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
             ],
         },
         stop: None,
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
@@ -623,6 +630,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
         stop: Some(
             EndTurn,
         ),
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
@@ -640,6 +648,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
             ],
         },
         stop: None,
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
@@ -823,6 +832,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
         stop: Some(
             EndTurn,
         ),
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
@@ -840,6 +850,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
             ],
         },
         stop: None,
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
@@ -1906,6 +1917,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
         stop: Some(
             EndTurn,
         ),
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
@@ -1923,6 +1935,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
             ],
         },
         stop: None,
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
@@ -1950,6 +1963,10 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                                 "skill": String("cloud-storage-hexagonal-architecture"),
                             },
                         ),
+                        result: Some(
+                            String("Launching skill: cloud-storage-hexagonal-architecture"),
+                        ),
+                        error: None,
                     },
                 },
                 ToolUse {
@@ -2725,6 +2742,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
         stop: Some(
             EndTurn,
         ),
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
@@ -2742,6 +2760,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
             ],
         },
         stop: None,
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
@@ -3633,6 +3652,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
             ],
         },
         stop: None,
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
@@ -3657,5 +3677,6 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
             ],
         },
         stop: None,
+        pending: false,
     },
 ]

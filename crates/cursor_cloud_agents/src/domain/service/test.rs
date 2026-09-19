@@ -2700,6 +2700,110 @@ async fn an_unconnected_repository_reaches_the_client_as_an_instruction() {
     );
 }
 
+/// After Cursor refuses the first create, the next prompt is almost always
+/// about the refusal ("what's the error?"), which is no evidence of where
+/// the work belongs. The repository decided from the first prompt has to
+/// stand, and the agent that finally starts has to see the message that
+/// was refused, or it is asked about a conversation it never had.
+#[tokio::test]
+async fn a_refused_create_keeps_its_repository_and_carries_the_prompt_forward() {
+    struct CountingChooser(RepoUrl, Arc<std::sync::atomic::AtomicUsize>);
+    impl RepositoryChooser for CountingChooser {
+        async fn choose(
+            &self,
+            _: &str,
+            _: &std::path::Path,
+        ) -> Result<SessionIntent, rootcause::Report> {
+            self.1.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(SessionIntent {
+                repository: Some(self.0.clone()),
+                open_pull_request: true,
+            })
+        }
+    }
+
+    let repo = RepoUrl::parse("https://github.com/macro-inc/macro").expect("an https remote");
+    let cursor = FakeCursor::new();
+    let choices = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let service = Arc::new(CursorSessionService::new(
+        cursor.clone(),
+        RecordingNotifier::new(),
+        CountingChooser(repo.clone(), choices.clone()),
+        Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
+    ));
+    let id = service.new_session(Path::new(""), vec![]);
+
+    cursor.script_repository_rejection();
+    let refusal = service
+        .prompt(&id, "fix the notification grouping bug")
+        .await
+        .expect_err("the first create is refused");
+
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    service
+        .prompt(&id, "what's the error?")
+        .await
+        .expect("the second create succeeds");
+
+    assert_eq!(
+        choices.load(std::sync::atomic::Ordering::SeqCst),
+        1,
+        "the repository is decided once, on the prompt that carried the evidence"
+    );
+    let creates: Vec<_> = cursor
+        .calls()
+        .into_iter()
+        .filter_map(|call| match call {
+            CursorCall::CreateAgent(prompt, repo, ..) => Some((prompt, repo)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(creates.len(), 2, "one refused create, one accepted");
+    assert_eq!(creates[0].1.as_ref(), Some(&repo));
+    assert_eq!(
+        creates[1].1.as_ref(),
+        Some(&repo),
+        "the follow-up is created against the same repository"
+    );
+    assert_eq!(creates[0].0, "fix the notification grouping bug");
+    let carried = &creates[1].0;
+    assert!(
+        carried.contains("fix the notification grouping bug"),
+        "the refused prompt rides along: {carried}"
+    );
+    assert!(
+        carried.contains(&refusal.to_string()),
+        "and so does what the person was told: {carried}"
+    );
+    assert!(
+        carried.ends_with("what's the error?"),
+        "the current prompt is last, marked as the one to answer: {carried}"
+    );
+
+    // Once an agent exists nothing is carried any more: the conversation is
+    // on cursor.com, and the next prompt is an ordinary follow-up run.
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-2")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    service
+        .prompt(&id, "thanks")
+        .await
+        .expect("a follow-up run");
+    let follow_up = cursor
+        .calls()
+        .into_iter()
+        .rev()
+        .find_map(|call| match call {
+            CursorCall::CreateRun(_, prompt, ..) => Some(prompt),
+            _ => None,
+        })
+        .expect("a run was created");
+    assert_eq!(follow_up, "thanks");
+}
+
 #[tokio::test]
 async fn repository_setup_failure_is_retryable_and_not_reported_as_prompt_ambiguity() {
     struct UnavailableChooser;

@@ -44,6 +44,10 @@ files:
   - apps/web/src/features/email-compose/queries/**
   - apps/web/src/features/email-compose/primitives/**
   - apps/web/src/features/email-compose/views/**
+  - apps/web/src/features/agent-changes/components/**
+  - apps/web/src/features/agent-changes/queries/**
+  - apps/web/src/features/agent-changes/primitives/**
+  - apps/web/src/features/agent-changes/views/**
 rule:
   kind: string
   regex: ^['"](@service-storage/graphql-soup|@core/context/user|@core/user|@property/hooks|@property/editor/hooks|@core/component/LexicalMarkdown/component/core/BlockLink|@app/lib/analytics/posthog)

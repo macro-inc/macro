@@ -3,8 +3,8 @@ use std::sync::Arc;
 use agent::StreamPart;
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
-    ContentBlock, InitializeRequest, NewSessionRequest, PromptRequest, SessionNotification,
-    TextContent,
+    ContentBlock, InitializeRequest, NewSessionRequest, PromptRequest, ResourceLink,
+    SessionNotification, TextContent,
 };
 use agent_client_protocol::{Client, ConnectionTo};
 use rig_agent::agent::StreamingError;
@@ -337,6 +337,58 @@ async fn turns_accumulate_history_and_send_the_model() {
 }
 
 #[tokio::test]
+async fn attached_files_reach_the_model_and_stay_in_history() {
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content(
+        "blue".into(),
+    )]));
+    let image = "https://static.example/file/11111111-1111-4111-8111-111111111111";
+    let notes = "https://static.example/file/22222222-2222-4222-8222-222222222222";
+
+    with_agent(Arc::clone(&engine), async |connection, session| {
+        let prompt = PromptRequest::new(
+            session.clone(),
+            vec![
+                ContentBlock::Text(TextContent::new("what color is this?")),
+                ContentBlock::ResourceLink(
+                    ResourceLink::new("screenshot.png", image).mime_type("image/png".to_owned()),
+                ),
+                ContentBlock::ResourceLink(
+                    ResourceLink::new("notes.txt", notes).mime_type("text/plain".to_owned()),
+                ),
+            ],
+        );
+        connection
+            .send_request(prompt)
+            .block_task()
+            .await
+            .expect("the prompt should complete");
+        connection
+            .send_request(text_prompt(&session, "and now?"))
+            .block_task()
+            .await
+            .expect("the prompt should complete");
+    })
+    .await;
+
+    let requests = engine.requests();
+    assert_eq!(requests.len(), 2);
+    // The image rides the user message as an image URL the provider fetches;
+    // the text file has no image form, so it is named to the model instead.
+    assert_eq!(requests[0].messages, vec!["what color is this?".to_owned()]);
+    assert_eq!(requests[0].images, vec![image.to_owned()]);
+    // History keeps the files: a follow-up still shows the model the image.
+    assert_eq!(requests[1].images, vec![image.to_owned()]);
+    assert_eq!(
+        requests[1].messages,
+        vec![
+            "what color is this?".to_owned(),
+            "blue".to_owned(),
+            "and now?".to_owned()
+        ]
+    );
+}
+
+#[tokio::test]
 async fn compact_clears_history_without_running_a_turn() {
     let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content("ok".into())]));
 
@@ -366,6 +418,48 @@ async fn compact_clears_history_without_running_a_turn() {
         requests[1].messages,
         vec!["after".to_owned()],
         "compaction empties the conversation"
+    );
+}
+
+#[tokio::test]
+async fn compact_with_a_file_attached_is_a_prompt_about_the_file() {
+    // The command word alone is the control. With a file alongside, the user
+    // is asking about that file, and compacting would drop it unseen.
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content("ok".into())]));
+    let notes = "https://static.example/file/33333333-3333-4333-8333-333333333333";
+
+    with_agent(Arc::clone(&engine), async |connection, session| {
+        connection
+            .send_request(text_prompt(&session, "remember this"))
+            .block_task()
+            .await
+            .expect("the prompt should complete");
+        connection
+            .send_request(PromptRequest::new(
+                session.clone(),
+                vec![
+                    ContentBlock::Text(TextContent::new("/compact")),
+                    ContentBlock::ResourceLink(
+                        ResourceLink::new("notes.txt", notes).mime_type("text/plain".to_owned()),
+                    ),
+                ],
+            ))
+            .block_task()
+            .await
+            .expect("the prompt should complete");
+    })
+    .await;
+
+    let requests = engine.requests();
+    assert_eq!(requests.len(), 2, "the attached prompt runs a turn");
+    assert_eq!(
+        requests[1].messages,
+        vec![
+            "remember this".to_owned(),
+            "ok".to_owned(),
+            "/compact".to_owned()
+        ],
+        "the conversation is kept, not compacted"
     );
 }
 

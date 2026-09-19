@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  AgentRepositoriesResponse,
+  AgentSessionChangesPatchResponse,
+  AgentSessionChangesResponse,
   AgentSessionLogResponse,
   AgentSessionQueueResponse,
   AgentSessionResponse,
@@ -107,6 +110,63 @@ export const loadAgentModelsHandler = async (
     status: res.status,
     headers: res.headers,
   } as loadAgentModelsHandlerResponse;
+};
+
+/**
+ * @summary List the GitHub repositories the caller can select for a coding session.
+ */
+export type listAgentRepositoriesResponse200 = {
+  data: AgentRepositoriesResponse;
+  status: 200;
+};
+
+export type listAgentRepositoriesResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type listAgentRepositoriesResponse502 = {
+  data: void;
+  status: 502;
+};
+
+export type listAgentRepositoriesResponseSuccess =
+  listAgentRepositoriesResponse200 & {
+    headers: Headers;
+  };
+export type listAgentRepositoriesResponseError = (
+  | listAgentRepositoriesResponse401
+  | listAgentRepositoriesResponse502
+) & {
+  headers: Headers;
+};
+
+export type listAgentRepositoriesResponse =
+  | listAgentRepositoriesResponseSuccess
+  | listAgentRepositoriesResponseError;
+
+export const getListAgentRepositoriesUrl = () => {
+  return `/agent-repositories`;
+};
+
+export const listAgentRepositories = async (
+  options?: RequestInit
+): Promise<listAgentRepositoriesResponse> => {
+  const res = await fetch(getListAgentRepositoriesUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listAgentRepositoriesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listAgentRepositoriesResponse;
 };
 
 /**
@@ -501,8 +561,212 @@ export const deleteAgentSession = async (
 };
 
 /**
+ * @summary The latest captured changes of an agent session: the changed files with
+statuses and line counts, and how the latest capture attempt went.
+ */
+export type getAgentSessionChangesResponse200 = {
+  data: AgentSessionChangesResponse;
+  status: 200;
+};
+
+export type getAgentSessionChangesResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getAgentSessionChangesResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type getAgentSessionChangesResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type getAgentSessionChangesResponseSuccess =
+  getAgentSessionChangesResponse200 & {
+    headers: Headers;
+  };
+export type getAgentSessionChangesResponseError = (
+  | getAgentSessionChangesResponse401
+  | getAgentSessionChangesResponse403
+  | getAgentSessionChangesResponse500
+) & {
+  headers: Headers;
+};
+
+export type getAgentSessionChangesResponse =
+  | getAgentSessionChangesResponseSuccess
+  | getAgentSessionChangesResponseError;
+
+export const getGetAgentSessionChangesUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/changes`;
+};
+
+export const getAgentSessionChanges = async (
+  sessionId: string,
+  options?: RequestInit
+): Promise<getAgentSessionChangesResponse> => {
+  const res = await fetch(getGetAgentSessionChangesUrl(sessionId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentSessionChangesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentSessionChangesResponse;
+};
+
+/**
+ * @summary The unified diff behind the session's latest changeset.
+ */
+export type getAgentSessionChangesPatchResponse200 = {
+  data: AgentSessionChangesPatchResponse;
+  status: 200;
+};
+
+export type getAgentSessionChangesPatchResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getAgentSessionChangesPatchResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type getAgentSessionChangesPatchResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type getAgentSessionChangesPatchResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type getAgentSessionChangesPatchResponseSuccess =
+  getAgentSessionChangesPatchResponse200 & {
+    headers: Headers;
+  };
+export type getAgentSessionChangesPatchResponseError = (
+  | getAgentSessionChangesPatchResponse401
+  | getAgentSessionChangesPatchResponse403
+  | getAgentSessionChangesPatchResponse404
+  | getAgentSessionChangesPatchResponse500
+) & {
+  headers: Headers;
+};
+
+export type getAgentSessionChangesPatchResponse =
+  | getAgentSessionChangesPatchResponseSuccess
+  | getAgentSessionChangesPatchResponseError;
+
+export const getGetAgentSessionChangesPatchUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/changes/patch`;
+};
+
+export const getAgentSessionChangesPatch = async (
+  sessionId: string,
+  options?: RequestInit
+): Promise<getAgentSessionChangesPatchResponse> => {
+  const res = await fetch(getGetAgentSessionChangesPatchUrl(sessionId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentSessionChangesPatchResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentSessionChangesPatchResponse;
+};
+
+/**
+ * @summary Capture the session's changes again now. Answers at once with the state
+as it stands; the capture runs on and viewers are told when it lands.
+ */
+export type refreshAgentSessionChangesResponse202 = {
+  data: AgentSessionChangesResponse;
+  status: 202;
+};
+
+export type refreshAgentSessionChangesResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type refreshAgentSessionChangesResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type refreshAgentSessionChangesResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type refreshAgentSessionChangesResponseSuccess =
+  refreshAgentSessionChangesResponse202 & {
+    headers: Headers;
+  };
+export type refreshAgentSessionChangesResponseError = (
+  | refreshAgentSessionChangesResponse401
+  | refreshAgentSessionChangesResponse403
+  | refreshAgentSessionChangesResponse500
+) & {
+  headers: Headers;
+};
+
+export type refreshAgentSessionChangesResponse =
+  | refreshAgentSessionChangesResponseSuccess
+  | refreshAgentSessionChangesResponseError;
+
+export const getRefreshAgentSessionChangesUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/changes/refresh`;
+};
+
+export const refreshAgentSessionChanges = async (
+  sessionId: string,
+  options?: RequestInit
+): Promise<refreshAgentSessionChangesResponse> => {
+  const res = await fetch(getRefreshAgentSessionChangesUrl(sessionId), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: refreshAgentSessionChangesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as refreshAgentSessionChangesResponse;
+};
+
+/**
  * Edit access suffices: whoever can prompt the bot through its thread can
 prompt it here.
+
+A caller may name the action with `actionId`; the response echoes it.
+Re-posting an id the session still holds queued or in flight reports that
+action's status rather than accepting a duplicate.
  * @summary Perform a control operation on a live agent session.
  */
 export type controlAgentSessionResponse200 = {

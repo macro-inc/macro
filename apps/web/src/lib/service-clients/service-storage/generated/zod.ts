@@ -4046,7 +4046,7 @@ export const removeParticipantsBody = zod
   .describe('Request to remove participants.');
 
 /**
- * @summary Set a channel or group chat profile picture. Requires rename permission.
+ * @summary Set a channel or group chat profile picture. Requires channel admin or owner access.
  */
 export const setChannelPictureParams = zod.object({
   channel_id: zod.uuid().describe('Channel ID'),

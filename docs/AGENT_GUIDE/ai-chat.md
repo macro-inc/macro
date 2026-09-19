@@ -60,9 +60,20 @@
   behind it throughout the transition, keeping its existing edge-muted border.
   Selecting a chat agent retracts it. Reduced-motion
   preferences disable the animation. The hidden drawer is inert. **Repository**
-  offers **Choose automatically**, recent repositories, or GitHub `owner/repo` /
-  URL entry confirmed with **Use repository**. Once selected, **Branch** opens
-  a starting-branch field confirmed with **Use branch** (initially `main`).
+  (**Choose repository** until one is picked) opens a searchable list:
+  **Choose automatically**, then the repositories the signed-in user reaches
+  through Macro's GitHub App (`GET /agent-repositories` on the agent harness),
+  recently used ones first. Typing filters the list; an unlisted GitHub
+  `owner/repo` or URL adds a **Use owner/repo** row. Arrow keys move the
+  highlight and Enter or a click picks it; there is no separate confirm
+  button. Someone who reaches no repository sees a hint with **Connect
+  GitHub**, which opens Settings → Connected. The last repository picked is
+  remembered per user in local storage and preselected next time. Once
+  selected, **Branch** shows the repository's default branch (`main` when it
+  has none) and opens a starting-branch field confirmed with **Use branch**;
+  picking a different repository resets the branch to that repository's
+  default. Omitting the branch on the create-session API likewise starts on
+  the repository's default branch.
   Both controls open above the drawer without clipping. The selections survive
   agent changes and are sent only to coding agents. Cursor honors the explicit
   repository and branch instead of choosing a repository from the prompt;
@@ -100,8 +111,9 @@
   the right.
   Existing sessions retain their agent and kind; use **New conversation** to
   choose another. Stop, queued-message advancement, and quoting remain available.
-- Users outside the flag retain the Owned / Running / Shared / Automations /
-  Skills list. A standalone legacy chat is `/app/chat/<uuid>`; doc-scoped chat
+- Touch devices and users outside the flag retain the Owned / Running / Shared /
+  Automations / Skills list. On touch devices, conversation links open standalone
+  agent sessions or legacy chats instead of the desktop Agents workspace. A standalone legacy chat is `/app/chat/<uuid>`; doc-scoped chat
   is `/app/md/<doc>/chat/<chat>` (split view).
 
 ## Start a standalone chat
@@ -152,30 +164,16 @@ composer with placeholder **`Ask AI, @mention anything`**. Click it, `type_text`
 press Enter — the app creates a chat and navigates to `/app/chat/<uuid>`. Alternatively,
 when `enable-chat-v3-agents` is on (default in dev;
 `VITE_ENABLE_CHAT_V3_AGENTS` overrides), `Create` → `Agent`, or keyboard `c`
-then `a`, opens the **Start a session** composer popover. A centered title sits
-above two rounded boxes of equal width: a shallow agent strip and a prompt box
-about twice its height, separated by a small gap. The picker has
-compact choices in a horizontally scrolling `radiogroup` (`aria-label="Agent"`,
-`aria-orientation="horizontal"`, `role="radio"`, `aria-checked`). All agents are
-available by scrolling sideways, with recent successful choices first.
-An accent **Create agent** button stays fixed to the right of the strip.
-It closes the session composer and opens the new-agent form at
-`/app/settings/agents?createAgent=true`; it does not create a session.
-Recents are remembered per user on this device. With no history, **Macro**
-`@macro` (the default), **Cursor** `@cursor`, and **Codex** `@codex` lead, followed by saved agents
-the caller can start: their own, team-shared personas, and selected-channel
-personas they can `@` mention.
-Without a connected Cursor API key, Cursor is a **Connect Cursor** button:
-clicking it closes the composer and opens Settings → Harness without creating
-a session. It is keyboard-accessible; arrow navigation focuses it without
-activating it. Connected Cursor remains a selectable agent. Setup navigation
-is disabled while a session is being created or its setup is being retried.
-Codex composer choices and its Settings → Harness section require both
-`enable-chat-v3-agents` and `enable-codex-agents`.
-Codex shows **Set up Codex** until ChatGPT is connected and a cloud environment
-is saved in Settings → Harness. New sessions use the saved environment and
-always start from `main`. The composer hides model overrides for
-Codex because this harness does not expose model selection. Codex assistant
+then `a`, opens `/app/component/agents` with the new-conversation input focused
+and ready to type. No session is created until you send a prompt. If Agents is
+already open on its roster, the shortcut returns it to the composer; if its
+composer already has a draft, that draft stays intact. `C Shift+A` requests a
+new split using the standard split-navigation behavior. The shared agent/model
+selector and coding repository controls are described above.
+
+## Codex session output
+
+Codex assistant
 text appears when the provider supplies a completed message or final snapshot.
 Incomplete text fragments are withheld; tool activity and thinking still update
 during the turn. Verified Codex PR associations appear as a completed **Found
@@ -184,60 +182,7 @@ PR chip. This reports an existing PR; it does not publish one. Opening a detache
 session reads saved history; sending a message reattaches the runtime.
 Codex file citations render as inline code with the path and
 line range, such as `.gitkeep:1` or `src/main.rs:2-12`; they do not link to a local
-file or a guessed remote revision. A recorded two-turn Codex conversation is
-covered by ACP/fold snapshots and checked with the production Markdown renderer. Setup navigation,
-selection, and the create/prompt payloads were verified in Chromium with mocked
-app navigation and backend state; no remote session was created by that check.
-Each row shows its `@handle` beneath the name. There are no coding tags;
-default models appear only in the prompt's model selector.
-There is no search field or browse/expand control. Left/Right change the selected
-agent and scroll it into view; Home/End jump to the first/last available agent.
-Unavailable agents without a connection action are skipped.
-
-The prompt box uses the agent session composer's surface, regular message text,
-and arrow send button, with a three-line editing area. It names the
-current selection:
-`What would you like Macro to work on?` becomes
-`What would you like Cursor to work on?` when Cursor is selected. Its aria-label
-is `Task for the agent`. Autofocus lands on that prompt so you can type
-immediately; skip it on touch so the keyboard does not jump up unsolicited.
-The prompt and agent strip share the same surface layer and background.
-A centered caption below the prompt describes the selected runtime: Macro
-shows “Starts quickly and runs in-memory. Great for workspace tasks”; Cursor
-shows “Bring in Cursor for some heavier coding work”. Local-connector agents
-are still excluded from creation by this modal's managed-session endpoint.
-The **Model override** selector (`aria-label="Model override"`) sits inside the
-prompt box at the bottom left. It
-shows `default (<model name>)` when using the agent's configured default and
-the model name alone when overridden. It has no model icon. Saved-agent defaults
-come from their configuration; built-in defaults are loaded from model discovery.
-While a default is unknown, the selector reads `default`. Changing agent resets
-the override. Tab order is selected agent row (and any connection action) →
-**Create agent** → prompt → model → **Start session**.
-Escape in the prompt first blurs to the dialog; a second Escape closes it.
-The prompt footer’s start control is a **Live / Background** dropdown
-(`aria-label="Session start mode"`) to the left of the circular send button.
-**Live** (default) opens the new session; **Background** closes the composer
-and shows a bottom-right toast **Session started in background** with an
-**Open session** action. The send button starts the selected mode. The
-dropdown lists both options; **Background** shows `Cmd` / `Ctrl`. The choice
-persists per user in localStorage.
-Holding `Cmd`/`Ctrl` previews Background on the dropdown and send button only
-while Live is selected; releasing restores Live. If Background is already
-selected, the modifier does nothing.
-`Enter` starts the selected mode (`Shift+Enter` still inserts a newline).
-`Cmd`/`Ctrl+Enter` starts in the background when Live is selected.
-The send button shows a spinner and is labelled **Starting…**
-while the server creates the session, applies the model override, and accepts the
-first prompt. Live mode then closes
-and opens the real `/app/agent/<uuid>` URL. It never navigates to a temporary
-`pending-…` URL. Creation failures keep the prompt in the modal and show **Retry**.
-If model setup or prompt delivery fails after creation, **Retry** reuses that
-session, and **Open session** opens it directly; agent and model selection stay
-locked to the session already created.
-Leaving Macro selected uses the backend's in-memory default in every
-environment, including production; it does not provision a Daytona container.
-Explicit coding-agent selections still use their configured runtimes.
+file or a guessed remote revision.
 
 ## Starting from Home
 
@@ -355,7 +300,9 @@ transcript at `/app/agent/<uuid>` whose replies also stream back into the thread
 An agent session is `/app/agent/<uuid>`. The composer placeholder is
 **`Message the agent, @mention anything`**. Creating one (`c` then `a`, or
 `Create` → `Agent`) leaves that composer focused — on mobile that is the same
-Create-menu `triggerFocusInput` as chat, so the keyboard opens. Type `@` to insert the same mention chips
+Create-menu `triggerFocusInput` as chat, so the keyboard opens. Type `/` to
+open slash commands the connected agent advertised (Claude, OpenCode, and
+Cursor). `/` stays ordinary text until that list arrives. Type `@` to insert the same mention chips
 used in chat and channels; they serialize as mention-chip tags in the prompt
 the agent sees (`<m-document-mention>` for docs/channels/chats/tasks/emails/calendar
 events/skills, `<m-date-mention>` for a day or time, `<m-agent-session-mention>`
@@ -367,6 +314,20 @@ latest turn.
 `@mention` a person in a prompt and, if you can edit the session, they are granted edit
 access and get an `agent_session_mentioned` notification that opens the session; a viewer's
 mention only notifies people who could already open it.
+
+In Home, a new Agents conversation, and an existing agent session, files can be
+attached to a prompt three ways: drop them anywhere on the composer (a
+"Drop files here to send them to the agent" overlay appears), paste them from the
+clipboard, or use the paperclip **`Attach files`** button. Every file uploads to the
+static file service and shows as a chip above the text (media thumbnails, document
+pills with a remove `×`); **Send** is disabled while an upload is pending. The agent
+receives each file as an ACP `resource_link` (a URL it can fetch) after the prompt text,
+and the sent prompt renders its files in the transcript (image thumbnails, video
+previews, file chips that open the file). A prompt may be files only, including the
+first message in a new conversation. Uploading attachments survive switching the
+agent or opening repository settings; sending clears the attachment previews.
+Queued prompts
+list their attached file names under the text; editing a queued prompt keeps them.
 
 On mobile the composer (and any queued prompts above it) floats in the bottom
 accessory region above the dock — same placement as channel and AI chat — so it
@@ -437,6 +398,45 @@ for agent responses and follows the session's latest turn as it streams. Use
 The display choice survives reload and copying; expansion still references the
 same session and does not invoke a bot. Compact mentions do not load transcripts.
 Existing announcement chips remain locked to the turn they announced.
+
+### Reviewing a linked GitHub pull request
+
+Sessions with a linked GitHub pull request capture that PR's diff when each
+turn ends, regardless of the agent runtime. Unpushed workspace changes and
+branches without a PR are not included. The session header gains a **Changes**
+toggle (`aria-pressed`) with green additions and red deletions (`+N −M`); it opens a resizable
+**Changes** pane beside the transcript (drag the 1px divider between them).
+The URL's `diff` query parameter stores each session's pane state and diff
+layout (`session-id:split:unified`, or `changes-only` / `agent-only` and
+`split` for side-by-side diffs). Copying the URL preserves that view; reload
+and Back/Forward restore it. A plain session URL starts with Changes closed.
+Divider width, collapsed files, and review notes stay local.
+The pane header shows a `head → base` branch pill, a **Unified / Split**
+segmented control (`aria-label="Diff layout"`), a refresh button, the
+**View pull request** button (opens GitHub), and **Expand changes to the full width**
+(spotlight; **Bring the session back** returns to the split) and **Close the
+changes pane**. Below it is a **Collapse all / Expand all** button.
+The body is a file tree (`nav[aria-label="Changed files"]`, directories
+compressed along single-child chains, status letters A/M/D/R and +/− counts)
+next to a scrollable stack of file cards. Expanded cards keep their full height;
+**Collapse all / Expand all** hides or restores their bodies. Each card's header has a disclosure
+caret, the path, `+adds −dels`, and **Copy path**. Diffs render with Pierre; hover a
+line and click the accent **+** in the gutter (drag for a range) to leave a
+review note for the agent (`aria-label="Review note"`; `Cmd/Ctrl+Enter` adds,
+`Escape` cancels). Notes hang under their line as "queued for the agent" and a
+**N review notes queued · Send to agent** chip appears above the composer;
+sending posts one prompt listing every note by file and line and marks them
+"sent to agent". Notes never go to GitHub. Collapsed files and unsent notes
+persist per session in localStorage; a new capture expands all files.
+
+While the pane is closed and a capture has files, a **Changes ready to
+review** card sits above the composer with **Review changes**, **Pull request
+#N** (opens GitHub), and **Dismiss**. With no linked PR, the pane explains
+that a GitHub PR is required. Ask the agent to open one and register its URL
+with `set_pull_request`, then use **Refresh changes**. An unavailable or
+oversized PR is explained in the pane; there is no branch or container fallback.
+Refresh request failures show a retry banner while keeping the last diff visible.
+The pane does not create PRs or generate their descriptions.
 
 ### Transcript navigation
 

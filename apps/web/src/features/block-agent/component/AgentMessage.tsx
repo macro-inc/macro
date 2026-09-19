@@ -29,6 +29,7 @@ import {
   ToolGroup,
   WorkingLine,
 } from '../ui';
+import { AttachmentPart } from './parts/AttachmentPart';
 import { ControlPart } from './parts/ControlPart';
 import { ElicitationPart } from './parts/ElicitationPart';
 import { PermissionPart } from './parts/PermissionPart';
@@ -49,6 +50,7 @@ function AgentMessagePart(props: {
     .with({ kind: 'text' }, (part) => (
       <TextPart text={part.text} inFlight={props.inFlight} />
     ))
+    .with({ kind: 'attachment' }, (part) => <AttachmentPart part={part} />)
     .with({ kind: 'thought' }, (part) => (
       <Thought
         text={part.text}
@@ -148,16 +150,36 @@ function showsWorkingLine(message: FoldedMessage): boolean {
 }
 
 /**
+ * What the working row says: the last part names the work — a tool call or
+ * a plan — and a bare turn is just working.
+ */
+function workingLabel(message: FoldedMessage): string {
+  const last = message.parts.at(-1);
+  if (last === undefined) return 'Working';
+  return match(last)
+    .with({ kind: 'tool_use' }, () => 'Running tools')
+    .with({ kind: 'plan' }, () => 'Planning')
+    .otherwise(() => 'Working');
+}
+
+/**
  * The display name of whoever sent a prompt, when that is somebody other
  * than the viewer. A session is shared, so a prompt may be another
  * participant's; one's own prompts (and unattributed ones) need no byline,
- * matching the queued-prompt list in `AgentComposer`.
+ * matching the queued-prompt list in `AgentComposer`. Attribution waits
+ * until the viewer id is known — `useUserId` is undefined while user-info
+ * is still loading, and a missing viewer must not look like another person.
  */
 function promptAuthorName(
   author: FoldedMessage['author'],
   viewerId: string | undefined
 ): string | undefined {
-  if (author.kind !== 'user' || author.userId === null) return undefined;
+  if (
+    author.kind !== 'user' ||
+    author.userId === null ||
+    viewerId === undefined
+  )
+    return undefined;
   return author.userId === viewerId
     ? undefined
     : idToDisplayName(author.userId);
@@ -175,7 +197,11 @@ function UserMessage(props: { message: FoldedMessage }) {
 
   return (
     <div
-      class="flex w-full flex-col items-end gap-0.5"
+      class="flex w-full flex-col items-end gap-0.5 transition-opacity"
+      // Still on the wire: the fold shows the prompt before the log confirms
+      // it, and the confirmation clears this in place.
+      classList={{ 'opacity-60': props.message.pending }}
+      aria-busy={props.message.pending || undefined}
       ref={(el) =>
         messageSendMotion(el, () =>
           props.message.requestId
@@ -254,10 +280,10 @@ export function Message(props: {
               </Show>
             )}
           </Index>
-          {/* The turn is open with nothing to read yet — a dot and a rotating
-              verb, so the wait reads as work rather than as a stall. */}
+          {/* The turn is open with nothing to read yet — a ripple and a label
+              naming the work, so the wait reads as work rather than a stall. */}
           <Show when={inFlight() && showsWorkingLine(props.message)}>
-            <WorkingLine />
+            <WorkingLine label={workingLabel(props.message)} />
           </Show>
           {/* A turn the runtime errored is something that happened to the
               session, like a model change or a stop — so it reads as one,

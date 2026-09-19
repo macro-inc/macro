@@ -41,7 +41,6 @@ vi.mock('@app/features/activity/open-entity-in-split', () => ({
 
 // Quarantine unrelated registered views and their module-load side effects.
 vi.mock('@app/features/agents-view/views/AgentsView', () => ({}));
-vi.mock('@app/features/block-agent/component/ComposeAgentSession', () => ({}));
 vi.mock('@app/features/channels-view/channels-view', () => ({}));
 vi.mock('@app/features/drive-view/drive-view', () => ({}));
 vi.mock('@app/features/email-compose/email-compose', () => ({}));

@@ -14,7 +14,7 @@ export default defineConfig({
     globals: true,
     deps: {
       optimizer: {
-        web: {
+        client: {
           include: ['solid-js', '@tanstack/solid-query', 'zod'],
         },
       },
