@@ -30,7 +30,7 @@
   Saved and coding agents show their identity beside the current model. There is
   no Chat/Code switch or separate model button.
 - The agent dropdown includes every saved agent regardless of runtime, plus Cursor,
-  grouped in **Coding agents** and **Agents** sections. A **Models** section lists
+  grouped in **Models**, **Agents**, and **Coding agents** sections. **Models** lists
   Macro’s available models with readable names (for example, **Sonnet 5**) and
   provider icons aligned with the agent icons. The chat catalog offers Sonnet 5,
   Opus 5, and Haiku 4.5; older Sonnet and Opus versions are not offered.

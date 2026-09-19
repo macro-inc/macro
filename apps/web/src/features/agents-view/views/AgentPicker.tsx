@@ -96,35 +96,6 @@ export function AgentPicker(props: {
       >
         <div class="flex min-h-0 max-h-[min(28rem,var(--kb-popper-content-available-height))] flex-col">
           <div class="min-h-0 overflow-y-auto overscroll-contain">
-            <For each={['coder', 'agent'] as const}>
-              {(kind) => (
-                <Show when={agents().some((agent) => agent.kind === kind)}>
-                  <Dropdown.Group>
-                    <Dropdown.GroupLabel>
-                      {kind === 'coder' ? 'Coding agents' : 'Agents'}
-                    </Dropdown.GroupLabel>
-                    <For each={agents().filter((agent) => agent.kind === kind)}>
-                      {(agent) => (
-                        <AgentPickerRow
-                          agent={agent}
-                          selected={agent.id === props.selected?.id}
-                          modelOverride={
-                            agent.id === props.selected?.id
-                              ? props.modelOverride
-                              : undefined
-                          }
-                          onSelect={(model) => choose(agent, model)}
-                          onConnect={() => {
-                            setOpen(false);
-                            props.onConnect(agent);
-                          }}
-                        />
-                      )}
-                    </For>
-                  </Dropdown.Group>
-                </Show>
-              )}
-            </For>
             <Show when={macro()}>
               {(agent) => (
                 <Dropdown.Group>
@@ -169,6 +140,35 @@ export function AgentPicker(props: {
                 </Dropdown.Group>
               )}
             </Show>
+            <For each={['agent', 'coder'] as const}>
+              {(kind) => (
+                <Show when={agents().some((agent) => agent.kind === kind)}>
+                  <Dropdown.Group>
+                    <Dropdown.GroupLabel>
+                      {kind === 'coder' ? 'Coding agents' : 'Agents'}
+                    </Dropdown.GroupLabel>
+                    <For each={agents().filter((agent) => agent.kind === kind)}>
+                      {(agent) => (
+                        <AgentPickerRow
+                          agent={agent}
+                          selected={agent.id === props.selected?.id}
+                          modelOverride={
+                            agent.id === props.selected?.id
+                              ? props.modelOverride
+                              : undefined
+                          }
+                          onSelect={(model) => choose(agent, model)}
+                          onConnect={() => {
+                            setOpen(false);
+                            props.onConnect(agent);
+                          }}
+                        />
+                      )}
+                    </For>
+                  </Dropdown.Group>
+                </Show>
+              )}
+            </For>
             <Show when={props.loading}>
               <div
                 role="status"

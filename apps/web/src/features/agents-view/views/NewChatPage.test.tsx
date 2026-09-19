@@ -419,12 +419,28 @@ describe('agent-led new conversation', () => {
     );
   });
   it('groups by kind and selects direct models through Macro with readable names and icons', async () => {
-    const send = page();
+    const send = page(true, [
+      {
+        bot: { id: 'saved-agent', name: 'Reviewer', handle: 'reviewer' },
+        harness: 'in-memory',
+        default_model: 'saved-default',
+      },
+    ]);
     await selectAgent(/Cursor/);
     openAgents();
-    const coding = within(screen.getByRole('group', { name: 'Coding agents' }));
-    expect(screen.queryByRole('group', { name: 'Agents' })).toBeNull();
-    const models = within(screen.getByRole('group', { name: 'Models' }));
+    const modelsGroup = screen.getByRole('group', { name: 'Models' });
+    const agentsGroup = screen.getByRole('group', { name: 'Agents' });
+    const codingGroup = screen.getByRole('group', { name: 'Coding agents' });
+    expect(
+      modelsGroup.compareDocumentPosition(agentsGroup) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(
+      agentsGroup.compareDocumentPosition(codingGroup) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    const coding = within(codingGroup);
+    const models = within(modelsGroup);
     expect(coding.getByRole('menuitem', { name: /Cursor/ })).toBeTruthy();
     expect(coding.queryByRole('menuitem', { name: /Macro/ })).toBeNull();
     expect(screen.queryByRole('menuitem', { name: /Macro/ })).toBeNull();
