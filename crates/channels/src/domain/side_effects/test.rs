@@ -186,7 +186,6 @@ async fn added_reaction_notifies_message_author() {
             message_id,
             reactions: Vec::new(),
             notification: Some(ReactionNotificationContext {
-                added: true,
                 emoji: "👍".to_string(),
                 message_sender: Sender::new_from_user(author.clone()),
                 thread_id: None,
@@ -239,7 +238,6 @@ async fn removed_or_self_reactions_do_not_notify() {
             message_id: Uuid::new_v4(),
             reactions: Vec::new(),
             notification: Some(ReactionNotificationContext {
-                added: true,
                 emoji: "👍".to_string(),
                 message_sender: Sender::new_from_user(user_id.clone()),
                 thread_id: None,

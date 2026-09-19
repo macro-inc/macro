@@ -57,7 +57,13 @@ pub(crate) static BLOCKABLE_NOTIFICATIONS: LazyLock<HashSet<&'static str>> = Laz
 
 /// Notification types users must explicitly opt into.
 pub(crate) static DEFAULT_DISABLED_NOTIFICATIONS: LazyLock<HashSet<&'static str>> =
-    LazyLock::new(|| HashSet::from([ChannelMessageReactionMetadata::TYPE_NAME]));
+    LazyLock::new(|| {
+        BLOCKABLE_NOTIFICATIONS
+            .iter()
+            .copied()
+            .filter(|type_name| NotifEvent::default_enabled_for_type_name(type_name) == Some(false))
+            .collect()
+    });
 
 #[cfg(test)]
 mod test;

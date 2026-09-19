@@ -25,8 +25,6 @@ pub struct MessageChangedNotificationContext {
 /// Context needed to notify a channel message author about a reaction.
 #[derive(Debug, Clone)]
 pub struct ReactionNotificationContext {
-    /// Whether the reaction was added (`true`) or removed (`false`).
-    pub added: bool,
     /// Emoji whose membership changed.
     pub emoji: String,
     /// Author of the reacted-to message.

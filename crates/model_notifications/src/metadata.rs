@@ -891,6 +891,8 @@ impl NotificationTitle for ChannelMessageSendMetadata {
     }
 }
 
+const CHANNEL_REACTION_EXCERPT_MAX_CHARS: usize = 80;
+
 impl NotificationTitle for ChannelMessageReactionMetadata {
     fn format_title(
         &self,
@@ -899,9 +901,15 @@ impl NotificationTitle for ChannelMessageReactionMetadata {
         let sender = sender_id
             .map(|sender| sender.email_part().local_part().to_string())
             .ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))?;
-        let message = parse_message_plain_text(&self.message_content)?;
-        let excerpt: String = message.trim().chars().take(80).collect();
-        let suffix = (message.trim().chars().count() > 80)
+        let message = parse_message_plain_text(&self.message_content)?
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        let excerpt: String = message
+            .chars()
+            .take(CHANNEL_REACTION_EXCERPT_MAX_CHARS)
+            .collect();
+        let suffix = (message.chars().count() > CHANNEL_REACTION_EXCERPT_MAX_CHARS)
             .then_some("…")
             .unwrap_or("");
         Ok(format!(

@@ -130,6 +130,20 @@ macro_rules! define_notif_event {
             )+
         }
 
+        impl $Name {
+            /// Return the default preference for a registered notification type name.
+            pub fn default_enabled_for_type_name(type_name: &str) -> Option<bool> {
+                match type_name {
+                    $(
+                        <$Ty as ::notification::domain::models::Notification>::TYPE_NAME => {
+                            Some(<$Ty as ::notification::domain::models::Notification>::DEFAULT_ENABLED)
+                        }
+                    )+
+                    _ => None,
+                }
+            }
+        }
+
         // Compile-time assertions:
         // 1. Every inner type implements Notification.
         // 2. TYPE_NAME matches the snake_case of the variant name.
