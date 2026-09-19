@@ -18,8 +18,9 @@ import { UserMessageBubble } from '@ui';
 import { For, Index, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { isControlMessage } from '../state/control-message';
+import { shouldAutoExpandDiff } from '../state/session-summary';
 import { thoughtIsStreaming } from '../state/thought-streaming';
-import { segmentParts } from '../state/tool-groups';
+import { groupDiffChanges, segmentParts } from '../state/tool-groups';
 import {
   ActionLine,
   isToolActive,
@@ -98,6 +99,7 @@ function ToolGroupPart(props: {
   // `settledToolStatus`), so a settled turn's run is never "Calling".
   const active = () =>
     props.inFlight && calls().some((call) => isToolActive(call.status));
+  const changes = () => groupDiffChanges(parts());
 
   return (
     <Show when={calls().at(-1)}>
@@ -109,6 +111,8 @@ function ToolGroupPart(props: {
             label: toolLabel(latest().name),
             detail: toolCallDetail(latest()),
           }}
+          changes={changes()}
+          defaultOpen={shouldAutoExpandDiff(changes())}
         >
           <For each={parts()}>
             {(part, offset) => (

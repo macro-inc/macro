@@ -86,4 +86,21 @@ describe('ToolCard', () => {
     expect(view.getByRole('textbox', { name: 'Answer' })).toBeTruthy();
     expect(view.getAllByRole('button')).toHaveLength(1);
   });
+
+  it('opens when defaultOpen becomes true unless the reader already closed it', () => {
+    const [open, setOpen] = createSignal(false);
+    const view = render(() => (
+      <ToolCard title="Edit" status="completed" defaultOpen={open()}>
+        <div>Diff</div>
+      </ToolCard>
+    ));
+    expect(view.queryByText('Diff')).toBeNull();
+    setOpen(true);
+    expect(view.getByText('Diff')).toBeTruthy();
+    view.getByRole('button').click();
+    expect(view.queryByText('Diff')).toBeNull();
+    setOpen(false);
+    setOpen(true);
+    expect(view.queryByText('Diff')).toBeNull();
+  });
 });

@@ -348,11 +348,14 @@ to open the PR entity in a split; until GitHub has synced the entity the
 chip is a GitHub link instead. The icon and status word follow open /
 merged / closed.
 
-Tool groups and individual tool cards start collapsed. Expand a group to see
-its calls, then expand an edit card to view its file diffs. Diff bodies load
-only when their card opens; syntax highlighting may appear after the diff text.
-Opening a session or expanding a group should leave the app responsive, even
-when the session contains many file edits.
+Tool groups start collapsed unless they contain a file diff under 50 changed
+lines, in which case the group and that diff open automatically. A group that
+contains any diffs shows +/− counts on the group row so the changes are
+visible even while the group stays closed. Larger diffs stay folded until
+you expand the edit card. Diff bodies load only when their card opens; syntax
+highlighting may appear after the diff text. Opening a session or expanding a
+group should leave the app responsive, even when the session contains many
+file edits.
 
 A thought row reads **Thinking** and shimmers only while it is the last part
 of the turn the session is working on. Earlier thoughts settle to **Thought**

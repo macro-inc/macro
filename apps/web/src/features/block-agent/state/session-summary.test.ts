@@ -4,10 +4,12 @@ import type {
 } from '@service-agent-fold/generated/types';
 import { describe, expect, it } from 'vitest';
 import {
+  AUTO_EXPAND_DIFF_LINES,
   activityCounts,
   changedFiles,
   countDiffChanges,
   latestPlan,
+  shouldAutoExpandDiff,
 } from './session-summary';
 
 function message(turn: number, parts: MessagePart[]): FoldedMessage {
@@ -52,6 +54,26 @@ describe('countDiffChanges', () => {
     ]);
     expect(additions).toBe(3); // c, d, new
     expect(deletions).toBe(1); // b
+  });
+});
+
+describe('shouldAutoExpandDiff', () => {
+  it('opens a present diff under the line cap', () => {
+    expect(shouldAutoExpandDiff({ additions: 20, deletions: 10 })).toBe(true);
+    expect(
+      shouldAutoExpandDiff({
+        additions: AUTO_EXPAND_DIFF_LINES - 1,
+        deletions: 0,
+      })
+    ).toBe(true);
+  });
+
+  it('leaves empty or long diffs folded', () => {
+    expect(shouldAutoExpandDiff({ additions: 0, deletions: 0 })).toBe(false);
+    expect(
+      shouldAutoExpandDiff({ additions: AUTO_EXPAND_DIFF_LINES, deletions: 0 })
+    ).toBe(false);
+    expect(shouldAutoExpandDiff({ additions: 40, deletions: 20 })).toBe(false);
   });
 });
 

@@ -27,6 +27,18 @@ export function countDiffChanges(
   return { additions, deletions };
 }
 
+/** Small diffs open on their own; larger ones stay folded behind a click. */
+export const AUTO_EXPAND_DIFF_LINES = 50;
+
+/** True when a diff is present and short enough to show without a click. */
+export function shouldAutoExpandDiff(changes: {
+  additions: number;
+  deletions: number;
+}): boolean {
+  const lines = changes.additions + changes.deletions;
+  return lines > 0 && lines < AUTO_EXPAND_DIFF_LINES;
+}
+
 /**
  * The agent's current plan: the last `plan` part in the transcript. Plans are
  * carried whole each time, so later ones replace earlier ones.

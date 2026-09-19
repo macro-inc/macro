@@ -2,6 +2,7 @@
  * A run of consecutive tool calls folded to one row: how many, and — while
  * closed — the latest one in a quiet line beneath, so a reader following a
  * long stretch of tool use sees what the agent is on without a card per call.
+ * Edits in the run always put +/− on that row. A short diff opens the group.
  *
  * Shaped like `Thought` rather than `ToolCard`: a bare caret row, no surface,
  * because the cards themselves appear once it opens.
@@ -9,6 +10,7 @@
 
 import CaretRight from '@phosphor/caret-right.svg';
 import { createSignal, type JSX, Show } from 'solid-js';
+import { DiffChanges } from './DiffChanges';
 import { TextShimmer } from './TextShimmer';
 
 export interface ToolGroupProps {
@@ -17,29 +19,46 @@ export interface ToolGroupProps {
   active: boolean;
   /** The most recent call: its label and, when it has one, what it touched. */
   latest: { label: string; detail?: string };
+  /** +/− for edits in the run. Shown on the row whether the group is open. */
+  changes?: { additions: number; deletions: number };
   defaultOpen?: boolean;
   /** The calls themselves, shown in place of the latest line once open. */
   children: JSX.Element;
 }
 
 export function ToolGroup(props: ToolGroupProps) {
-  const [expanded, setExpanded] = createSignal(props.defaultOpen ?? false);
+  // Follow `defaultOpen` until the reader toggles — a small diff that
+  // streams in should open the group; a click after that is theirs.
+  const [userExpanded, setUserExpanded] = createSignal<boolean | undefined>(
+    undefined
+  );
+  const expanded = () => userExpanded() ?? props.defaultOpen ?? false;
   const title = () =>
     `${props.active ? 'Calling' : 'Called'} ${props.count} tools`;
+  const hasChanges = () =>
+    (props.changes?.additions ?? 0) + (props.changes?.deletions ?? 0) > 0;
 
   return (
     <div class="min-w-0 text-xs leading-5 text-ink-extra-muted">
       <button
         type="button"
         aria-expanded={expanded()}
-        class="flex min-h-7 items-center gap-1 py-1 text-left text-ink-extra-muted hover:text-ink-muted"
-        onClick={() => setExpanded((prev) => !prev)}
+        class="flex min-h-7 items-center gap-1.5 py-1 text-left text-ink-extra-muted hover:text-ink-muted"
+        onClick={() => setUserExpanded(!expanded())}
       >
         <CaretRight
           class="size-4 shrink-0 transition-transform motion-reduce:transition-none"
           classList={{ 'rotate-90': expanded() }}
         />
         <TextShimmer text={title()} active={props.active} />
+        <Show when={hasChanges() && props.changes}>
+          {(changes) => (
+            <DiffChanges
+              additions={changes().additions}
+              deletions={changes().deletions}
+            />
+          )}
+        </Show>
       </button>
       <Show
         when={expanded()}

@@ -1,6 +1,6 @@
 import type { MessagePart } from '@service-agent-fold/generated/types';
 import { describe, expect, it } from 'vitest';
-import { segmentParts } from './tool-groups';
+import { groupDiffChanges, segmentParts } from './tool-groups';
 
 const text = (): MessagePart => ({ kind: 'text', text: 'hi' });
 const tool = (): MessagePart => ({
@@ -117,5 +117,35 @@ describe('segmentParts', () => {
       { kind: 'part', start: 2, end: 3 },
       { kind: 'tools', start: 3, end: 5 },
     ]);
+  });
+});
+
+describe('groupDiffChanges', () => {
+  const edit = (
+    diffs: { path: string; oldText: string | null; newText: string }[]
+  ): MessagePart => ({
+    kind: 'tool_use',
+    id: 'edit',
+    name: { kind: 'native', name: 'Edit' },
+    status: 'completed',
+    detail: { kind: 'edit', diffs },
+  });
+
+  it('sums every edit in the run and ignores other calls', () => {
+    expect(
+      groupDiffChanges([
+        thought(),
+        tool(),
+        edit([{ path: 'a.ts', oldText: 'x\n', newText: 'y\n' }]),
+        edit([{ path: 'b.ts', oldText: null, newText: 'one\ntwo\n' }]),
+      ])
+    ).toEqual({ additions: 3, deletions: 1 });
+  });
+
+  it('is zero when the run has no edits', () => {
+    expect(groupDiffChanges([tool(), thought(), tool()])).toEqual({
+      additions: 0,
+      deletions: 0,
+    });
   });
 });

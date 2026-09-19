@@ -67,9 +67,11 @@ vi.mock('../../ui', async () => ({
     trailing?: JSX.Element;
     status: string;
     muted?: boolean;
+    defaultOpen?: boolean;
     children?: JSX.Element;
   }) => (
     <div
+      data-default-open={String(props.defaultOpen ?? false)}
       data-muted={String(props.muted ?? false)}
       data-status={props.status}
       data-testid="tool-card"
@@ -262,6 +264,21 @@ describe('ToolCallPart routing', () => {
     expect(rendered.getByTestId('subtitle').textContent).toBe('src/a.rs');
     expect(rendered.getByTestId('diff-changes').textContent).toBe('+1 −1');
     expect(rendered.getByTestId('pierre-diff').textContent).toBe('src/a.rs');
+    expect(rendered.getByTestId('tool-card').dataset.defaultOpen).toBe('true');
+  });
+
+  it('leaves a long edit folded', () => {
+    const oldText = Array.from({ length: 40 }, (_, i) => `old ${i}`).join('\n');
+    const newText = Array.from({ length: 40 }, (_, i) => `new ${i}`).join('\n');
+    const rendered = render(() => (
+      <ToolCallPart
+        part={toolUse({
+          kind: 'edit',
+          diffs: [{ path: 'src/big.rs', oldText, newText }],
+        })}
+      />
+    ));
+    expect(rendered.getByTestId('tool-card').dataset.defaultOpen).toBe('false');
   });
 
   it('summarizes multi-path reads and lists the paths in the body', () => {
