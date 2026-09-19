@@ -78,7 +78,7 @@ function SessionContent(props: { onDeleted: () => void }) {
   const userId = useUserId();
 
   const title = () => agentSessionTitle(session(), metadata()?.title);
-  const recentRepositories = createRecentRepositories(userId());
+  const recentRepositories = createRecentRepositories(userId);
   let rememberedRepository = '';
   createEffect(() => {
     const id = sessionId();

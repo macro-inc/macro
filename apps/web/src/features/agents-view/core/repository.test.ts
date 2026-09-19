@@ -80,6 +80,9 @@ describe('repository recency', () => {
     expect(
       touchRepository(second, scratch.url, 30).map((touch) => touch.at)
     ).toEqual([30, 20]);
+    expect(touchRepository(second, scratch.url.toUpperCase(), 10)).toEqual(
+      second
+    );
   });
 
   it('restores the dated shape and the earlier newest-first url list', () => {

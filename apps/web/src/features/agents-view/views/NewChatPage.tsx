@@ -45,7 +45,7 @@ export function NewChatPage(props: {
   const userId = useUserId();
   const { openSettings } = useSettingsState();
   const recentAgents = createRecentAgentSelections(userId());
-  const repositories = createRecentRepositories(userId());
+  const repositories = createRecentRepositories(userId);
   const options = () => props.roster;
   const [agentId, setAgentId] = createSignal<string>();
   const [modelOverride, setModelOverride] = createSignal<string>();

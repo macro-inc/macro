@@ -97,8 +97,8 @@ export type RepositoryTouch = {
 
 /**
  * Record a use of `url` at `at`. A later timestamp replaces an earlier one
- * for the same repository (any spelling); an older timestamp is ignored.
- * Newest first.
+ * for the same repository (any spelling); an older or equal timestamp is
+ * ignored. Newest first.
  */
 export function touchRepository(
   recents: readonly RepositoryTouch[],
@@ -106,7 +106,7 @@ export function touchRepository(
   at: number
 ): RepositoryTouch[] {
   const current = recents.find((recent) => sameRepository(recent.url, url));
-  if (current && current.at > at) return [...recents];
+  if (current && current.at >= at) return [...recents];
   return recentRepositoryTouches([
     { url, at },
     ...recents.filter((recent) => !sameRepository(recent.url, url)),

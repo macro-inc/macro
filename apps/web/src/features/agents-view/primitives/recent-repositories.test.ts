@@ -25,7 +25,20 @@ describe('createRecentRepositories', () => {
     first.observe(MACRO, 500);
     const second = createRecentRepositories(USER);
     expect(second.urls()).toEqual([INFRA, MACRO]);
-    expect(second).toBe(first);
+  });
+
+  it('reads and writes the current user when the id is an accessor', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    let current = USER;
+    const recents = createRecentRepositories(() => current);
+    recents.remember(MACRO);
+    current = 'macro|other@example.com';
+    expect(recents.urls()).toEqual([]);
+    recents.remember(INFRA);
+    expect(recents.urls()).toEqual([INFRA]);
+    current = USER;
+    expect(recents.urls()).toEqual([MACRO]);
   });
 
   it('restores the earlier url list as newest first', () => {

@@ -46,7 +46,7 @@ function SessionListItem(props: Props) {
   const agents = useAgentsQuery();
   const session = () => (query.isSuccess ? query.data : undefined);
   const userId = useUserId();
-  const recentRepositories = createRecentRepositories(userId());
+  const recentRepositories = createRecentRepositories(userId);
   createEffect(() => {
     const url = session()?.repoUrl;
     if (url) {

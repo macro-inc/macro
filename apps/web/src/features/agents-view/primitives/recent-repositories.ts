@@ -1,6 +1,6 @@
 import { makePersistedState } from '@app/lib/persistence';
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
-import { createSignal } from 'solid-js';
+import { type Accessor, createSignal } from 'solid-js';
 import {
   parseRepositoryTouches,
   type RepositoryTouch,
@@ -22,22 +22,36 @@ export type RecentRepositories = {
   observe: (url: string, at: number) => void;
 };
 
+type UserId = string | undefined | Accessor<string | undefined>;
+
 const stores = new Map<string, RecentRepositories>();
 
-/**
- * Repositories the signed-in user has used, newest first. Shared across the
- * composer and conversation list so opening a session and picking in the
- * dropdown agree on order.
- */
-export function createRecentRepositories(
-  userId: string | undefined
-): RecentRepositories {
+function readUserId(userId: UserId): string | undefined {
+  return typeof userId === 'function' ? userId() : userId;
+}
+
+function storeFor(userId: string | undefined): RecentRepositories {
   const key = userId ?? '';
   const existing = stores.get(key);
   if (existing) return existing;
   const created = createRecentRepositoriesStore(userId);
   stores.set(key, created);
   return created;
+}
+
+/**
+ * Repositories the signed-in user has used, newest first. Shared across the
+ * composer and conversation list so opening a session and picking in the
+ * dropdown agree on order. Looks up the current user on each read/write so a
+ * user switch without a remount cannot keep writing the previous key.
+ */
+export function createRecentRepositories(userId: UserId): RecentRepositories {
+  const currentUserId = () => readUserId(userId);
+  return {
+    urls: () => storeFor(currentUserId()).urls(),
+    remember: (url) => storeFor(currentUserId()).remember(url),
+    observe: (url, at) => storeFor(currentUserId()).observe(url, at),
+  };
 }
 
 /** Drops in-memory stores so tests do not leak recents across cases. */
