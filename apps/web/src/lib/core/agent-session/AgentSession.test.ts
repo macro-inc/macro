@@ -449,6 +449,26 @@ describe('AgentSession', () => {
     live.release();
   });
 
+  it('reports an expected head as starting before the fold answers', async () => {
+    const live = await loadedWith('running');
+    expect(live.currentTurn()).toBe('running');
+
+    // The worker has not been asked yet, let alone answered: this is the
+    // window in which two send-next presses would otherwise both read the
+    // turn as the server's and both expect a head.
+    live.expect('head-id', { type: 'prompt', prompt: 'next' });
+    expect(live.currentTurn()).toBe('starting');
+
+    // The fold's report takes over once it lands.
+    fold.pushSession.mockResolvedValueOnce([
+      { kind: 'metadata', metadata: { turn: 'running' } },
+    ]);
+    AgentSession.ingest({ agentSessionId: SESSION, ...row(2) });
+    await settle();
+    expect(live.currentTurn()).toBe('running');
+    live.release();
+  });
+
   it('re-runs a failed load on the next call only', async () => {
     harness.getLog.mockResolvedValueOnce(err([{ code: 'NOT_FOUND' }]));
     const live = AgentSession.acquire(SESSION);

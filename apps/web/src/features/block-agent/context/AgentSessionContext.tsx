@@ -46,6 +46,7 @@ import {
   type QueueController,
 } from './create-queue-controller';
 import { resolveSessionId } from './resolve-session-id';
+import { createSendNext } from './send-next';
 
 export type AgentSessionState = {
   /**
@@ -91,7 +92,10 @@ export type AgentSessionState = {
    * Send the next queued message now: stop the running turn, and show the
    * queue head as sent under the id the server already holds it by. The
    * server dispatches it when the turn actually ends, and that row promotes
-   * the speculation in place. No-op with nothing queued.
+   * the speculation in place. No-op with nothing queued, and while the head
+   * a previous call showed as sent is still unconfirmed (`turn` reads
+   * `starting`): a stop posted then would end the turn already ending, and
+   * the server would dispatch that head, not the next one.
    */
   sendNext: () => void;
   /** The live question, and the action that answers it. */
@@ -146,20 +150,13 @@ export function AgentSessionProvider(
       return served.remove(actionId);
     },
   };
-  const sendNext = () => {
-    const head = queue.entries()[0];
-    if (!head) return;
-    const action: AgentAction | undefined =
-      head.kind === 'prompt' && head.prompt != null
-        ? { type: 'prompt', prompt: head.prompt }
-        : head.kind === 'compact'
-          ? { type: 'compact' }
-          : undefined;
-    void live.issue({ type: 'stop' })?.then((result) => {
-      if (result.isErr()) live.retract(head.actionId);
-    });
-    if (action) live.expect(head.actionId, action);
-  };
+  const sendNext = createSendNext({
+    currentTurn: live.currentTurn,
+    entries: queue.entries,
+    issue: live.issue,
+    expect: live.expect,
+    retract: live.retract,
+  });
   // A question the connection that asked is gone cannot be answered; the
   // fold keeps the part but the slot is dead.
   const pendingElicitation = () =>

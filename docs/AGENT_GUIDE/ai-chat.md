@@ -503,8 +503,13 @@ must stay hidden; subsequent live messages must still appear.
   walks back and past the bottom row returns to the input. When the composer is empty
   and a prompt is queued, its action becomes `Send next queued message` (an Enter
   symbol); pressing Enter or clicking that button cancels the current turn so the next
-  queued prompt starts immediately. Typed composer text still takes priority and Enter
-  queues that new prompt normally.
+  queued prompt starts immediately. The advance is held — the control reads `Stop` and
+  Enter is inert — while a stop is already in flight or while the prompt the last
+  advance sent is still unconfirmed (it shows as a pending bubble); once the server
+  confirms that prompt as the running turn, Enter advances the queue again. Two rapid
+  Enters therefore advance one entry, not two: each advance ends the turn the server is
+  actually running. Typed composer text still takes priority and Enter queues that new
+  prompt normally.
 - The stop button cancels only the **current** turn. The queue keeps draining: the next
   queued prompt starts a new turn. To fully quiesce a session, remove the queued
   entries, then stop.
