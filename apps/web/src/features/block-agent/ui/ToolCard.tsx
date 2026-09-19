@@ -40,12 +40,12 @@ const ROW_CLASS =
 
 export function ToolCard(props: ToolCardProps) {
   const active = () => isToolActive(props.status);
-  const [uncontrolledOpen, setUncontrolledOpen] = createSignal(
-    props.defaultOpen ?? false
-  );
-  const open = () => props.open ?? uncontrolledOpen();
+  // Follow `defaultOpen` until the reader toggles — a small diff that
+  // streams in should open; a click after that is theirs.
+  const [userOpen, setUserOpen] = createSignal<boolean | undefined>(undefined);
+  const open = () => props.open ?? userOpen() ?? props.defaultOpen ?? false;
   const setOpen = (value: boolean) => {
-    setUncontrolledOpen(value);
+    setUserOpen(value);
     props.onOpenChange?.(value);
   };
   // Reading children to inspect them mounts expensive bodies even while closed.

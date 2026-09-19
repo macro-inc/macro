@@ -193,6 +193,42 @@ const FIXTURE_DIFF = {
     'fn fold(log: &[Frame]) -> Vec<Message> {\n    let mut machine = FoldMachine::default();\n    for frame in log {\n        machine.push(frame);\n    }\n    machine.finish()\n}\n',
 };
 
+const FIXTURE_LARGE_DIFF = {
+  path: 'crates/agent_fold/src/domain/big.rs',
+  oldText: Array.from({ length: 60 }, (_, i) => `    old_line_${i}();`).join(
+    '\n'
+  ),
+  newText: Array.from({ length: 60 }, (_, i) => `    new_line_${i}();`).join(
+    '\n'
+  ),
+};
+
+const FIXTURE_LARGE_DIFF_MESSAGE: FoldedMessage = {
+  agentSessionId: 'demo',
+  requestId: null,
+  pending: false,
+  turn: 3,
+  author: { kind: 'agent' },
+  stop: { kind: 'end_turn' },
+  parts: [
+    { kind: 'text', text: 'Rewriting the bulk of the machine.' },
+    {
+      kind: 'tool_use',
+      id: 'large-read',
+      name: { kind: 'native', name: 'Read' },
+      status: 'completed',
+      detail: { kind: 'read', paths: [FIXTURE_LARGE_DIFF.path] },
+    },
+    {
+      kind: 'tool_use',
+      id: 'large-edit',
+      name: { kind: 'native', name: 'Edit' },
+      status: 'completed',
+      detail: { kind: 'edit', diffs: [FIXTURE_LARGE_DIFF] },
+    },
+  ],
+};
+
 const FIXTURE_MESSAGE: FoldedMessage = {
   agentSessionId: 'demo',
   requestId: null,
@@ -849,6 +885,8 @@ export default function AgentUiGallery() {
               count={3}
               active={pulse()}
               latest={{ label: 'Bash', detail: 'cargo test -p agent_fold' }}
+              changes={{ additions: 4, deletions: 3 }}
+              defaultOpen
             >
               <ToolCard
                 title="Read"
@@ -858,8 +896,12 @@ export default function AgentUiGallery() {
               <ToolCard
                 title="Edit"
                 subtitle={FIXTURE_DIFF.path}
+                trailing={<DiffChanges additions={4} deletions={3} />}
                 status="completed"
-              />
+                defaultOpen
+              >
+                <PierreDiff diffs={[FIXTURE_DIFF]} />
+              </ToolCard>
               <ToolCard
                 title="Bash"
                 subtitle="cargo test -p agent_fold"
@@ -869,11 +911,16 @@ export default function AgentUiGallery() {
             <ToolGroup
               count={2}
               active={false}
-              latest={{ label: 'ReadContent' }}
-              defaultOpen
+              latest={{ label: 'Edit', detail: 'crates/agent_fold/src/big.rs' }}
+              changes={{ additions: 80, deletions: 12 }}
             >
-              <ToolCard title="NameSearch" subtitle="fold" status="completed" />
-              <ToolCard title="ReadContent" status="completed" />
+              <ToolCard title="Read" subtitle="fold.rs" status="completed" />
+              <ToolCard
+                title="Edit"
+                subtitle="crates/agent_fold/src/big.rs"
+                trailing={<DiffChanges additions={80} deletions={12} />}
+                status="completed"
+              />
             </ToolGroup>
           </Item>
 
@@ -982,6 +1029,10 @@ export default function AgentUiGallery() {
 
           <Item label="AgentMessage (end-to-end)">
             <Message message={FIXTURE_MESSAGE} inFlight={false} />
+          </Item>
+
+          <Item label="AgentMessage (large grouped diff stays collapsed)">
+            <Message message={FIXTURE_LARGE_DIFF_MESSAGE} inFlight={false} />
           </Item>
 
           <Item label="AgentMessage (Cursor turn in flight)">

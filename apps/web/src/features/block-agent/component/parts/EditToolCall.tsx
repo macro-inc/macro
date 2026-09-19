@@ -2,7 +2,10 @@
 
 import type { ToolDetail } from '@service-agent-fold/generated/types';
 import { Show } from 'solid-js';
-import { countDiffChanges } from '../../state/session-summary';
+import {
+  countDiffChanges,
+  shouldAutoExpandDiff,
+} from '../../state/session-summary';
 import { DiffChanges, PierreDiff, ToolCard } from '../../ui';
 import { pathsSubtitle, type ToolCallCommon } from './shared';
 
@@ -20,6 +23,7 @@ export function EditToolCall(props: {
       status={props.common.status}
       muted={props.common.muted}
       hasContent={props.detail.diffs.length > 0}
+      defaultOpen={shouldAutoExpandDiff(changes())}
     >
       <Show when={props.detail.diffs.length > 0}>
         <PierreDiff diffs={props.detail.diffs} />

@@ -14,6 +14,7 @@
  */
 
 import type { MessagePart } from '@service-agent-fold/generated/types';
+import { countDiffChanges } from './session-summary';
 
 export type PartSegment = {
   kind: 'part' | 'tools';
@@ -24,6 +25,16 @@ export type PartSegment = {
 
 function isGroupable(part: MessagePart | undefined): boolean {
   return part?.kind === 'tool_use' || part?.kind === 'thought';
+}
+
+/** +/− across every edit in a run — the badge a collapsed group shows. */
+export function groupDiffChanges(parts: readonly MessagePart[]) {
+  const diffs: { oldText?: string | null; newText: string }[] = [];
+  for (const part of parts) {
+    if (part.kind !== 'tool_use' || part.detail.kind !== 'edit') continue;
+    diffs.push(...part.detail.diffs);
+  }
+  return countDiffChanges(diffs);
 }
 
 export function segmentParts(parts: readonly MessagePart[]): PartSegment[] {

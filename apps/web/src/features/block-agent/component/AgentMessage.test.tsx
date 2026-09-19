@@ -72,12 +72,17 @@ vi.mock('../ui', () => ({
     count: number;
     active: boolean;
     latest: { label: string; detail?: string };
+    changes?: { additions: number; deletions: number };
+    defaultOpen?: boolean;
     children: JSX.Element;
   }) => (
     <div
       data-active={String(props.active)}
       data-count={props.count}
+      data-default-open={String(props.defaultOpen ?? false)}
       data-latest={`${props.latest.label}${props.latest.detail ? ` · ${props.latest.detail}` : ''}`}
+      data-additions={String(props.changes?.additions ?? 0)}
+      data-deletions={String(props.changes?.deletions ?? 0)}
       data-testid="group"
     >
       {props.children}
@@ -251,6 +256,51 @@ describe('Message tool grouping', () => {
     );
     expect(view.getByTestId('group').dataset.count).toBe('2');
     expect(view.getByTestId('text')).toBe(prose);
+  });
+
+  it('marks a group that contains diffs and opens it when they are short', () => {
+    const view = render(() => (
+      <Message
+        message={message([
+          tool('read'),
+          tool('edit', {
+            name: { kind: 'native', name: 'Edit' },
+            detail: {
+              kind: 'edit',
+              diffs: [{ path: 'a.rs', oldText: 'old\n', newText: 'new\n' }],
+            },
+          }),
+        ])}
+        inFlight={false}
+      />
+    ));
+    const group = view.getByTestId('group');
+    expect(group.dataset.additions).toBe('1');
+    expect(group.dataset.deletions).toBe('1');
+    expect(group.dataset.defaultOpen).toBe('true');
+  });
+
+  it('keeps a long grouped diff collapsed while still marking the +/−', () => {
+    const oldText = Array.from({ length: 40 }, (_, i) => `old ${i}`).join('\n');
+    const newText = Array.from({ length: 40 }, (_, i) => `new ${i}`).join('\n');
+    const view = render(() => (
+      <Message
+        message={message([
+          tool('read'),
+          tool('edit', {
+            name: { kind: 'native', name: 'Edit' },
+            detail: {
+              kind: 'edit',
+              diffs: [{ path: 'big.rs', oldText, newText }],
+            },
+          }),
+        ])}
+        inFlight={false}
+      />
+    ));
+    const group = view.getByTestId('group');
+    expect(Number(group.dataset.additions)).toBeGreaterThanOrEqual(40);
+    expect(group.dataset.defaultOpen).toBe('false');
   });
 });
 
