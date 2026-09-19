@@ -31,6 +31,12 @@ const socket = vi.hoisted(() => ({
     return () => socket.listeners.delete(listener);
   }),
 }));
+const cache = vi.hoisted(() => ({
+  SESSION_LOG_CACHE_VERSION: 1,
+  readCachedSessionLog: vi.fn(),
+  writeCachedSessionLog: vi.fn(),
+  flushCachedSessionLogs: vi.fn(),
+}));
 
 vi.mock('@core/agent-fold/client', () => fold);
 vi.mock('@service-agent-harness/client', () => ({
@@ -39,6 +45,7 @@ vi.mock('@service-agent-harness/client', () => ({
 vi.mock('@queries/agent-session/queue-sync', () => ({
   subscribeSocketSessionStarted: socket.subscribeSocketSessionStarted,
 }));
+vi.mock('./session-log-cache', () => cache);
 
 import { AgentSession } from './AgentSession';
 
@@ -89,6 +96,9 @@ beforeEach(() => {
   }
   fold.pushSession.mockResolvedValue([]);
   fold.readSession.mockResolvedValue({ messages: [], metadata: {} });
+  cache.readCachedSessionLog.mockResolvedValue(undefined);
+  cache.writeCachedSessionLog.mockReset();
+  cache.flushCachedSessionLogs.mockResolvedValue(undefined);
   harness.get.mockResolvedValue(ok(session));
   harness.getLog.mockResolvedValue(ok({ bot, entries: [row(1)] }));
   harness.control.mockImplementation(
@@ -447,6 +457,61 @@ describe('AgentSession', () => {
     await settle();
     expect(inputs().at(-1)).toEqual({ kind: 'retracted', actionId: 'head-id' });
     live.release();
+  });
+
+  it('folds a cached snapshot before the network log, then replaces it', async () => {
+    const cached = {
+      version: 1,
+      sessionId: SESSION,
+      session,
+      bot,
+      entries: [row(1)],
+    };
+    cache.readCachedSessionLog.mockResolvedValue(cached);
+    const log = deferred<LogResult>();
+    harness.getLog.mockReturnValue(log.promise);
+
+    const live = AgentSession.acquire(SESSION);
+    await expect(live.hydrate()).resolves.toEqual({ session, bot });
+    expect(inputs()).toEqual([{ kind: 'snapshot', rows: [row(1)] }]);
+
+    AgentSession.ingest({ agentSessionId: SESSION, ...row(3) });
+    await settle();
+    log.resolve(logOf([row(1), row(2), row(3)]));
+    await live.load();
+
+    expect(inputs()).toEqual([
+      { kind: 'snapshot', rows: [row(1)] },
+      { kind: 'confirmed', row: row(3) },
+      { kind: 'snapshot', rows: [row(1), row(2), row(3)] },
+    ]);
+    expect(cache.writeCachedSessionLog).toHaveBeenCalledWith({
+      version: 1,
+      sessionId: SESSION,
+      session,
+      bot,
+      entries: [row(1), row(2), row(3)],
+    });
+    live.release();
+  });
+
+  it('writes the log and flushes the cache on the last release', async () => {
+    const live = AgentSession.acquire(SESSION);
+    await live.load();
+    cache.writeCachedSessionLog.mockClear();
+
+    AgentSession.ingest({ agentSessionId: SESSION, ...row(2) });
+    await settle();
+    live.release();
+
+    expect(cache.writeCachedSessionLog).toHaveBeenCalledWith({
+      version: 1,
+      sessionId: SESSION,
+      session,
+      bot,
+      entries: [row(1), row(2)],
+    });
+    expect(cache.flushCachedSessionLogs).toHaveBeenCalled();
   });
 
   it('re-runs a failed load on the next call only', async () => {

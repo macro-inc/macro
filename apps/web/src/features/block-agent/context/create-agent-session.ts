@@ -114,6 +114,7 @@ export function createAgentSession(
   const [list, setList] = createStore<FoldedMessage[]>([]);
   const [bot, setBot] = createSignal<SessionBot>();
   const [metadata, setMetadata] = createSignal<SessionMetadata>();
+  const [sessionRow, setSessionRow] = createSignal<AgentSessionResponse>();
 
   const upsert = (messages: FoldedMessage[]) =>
     batch(() => {
@@ -204,21 +205,40 @@ export function createAgentSession(
         setList(reconcile([]));
         setBot(undefined);
         setMetadata(undefined);
+        setSessionRow(undefined);
       });
+
+      const paint = async (record: {
+        session: AgentSessionResponse;
+        bot: SessionBot;
+      }) => {
+        const snapshot = await session.snapshot();
+        if (superseded()) return;
+        const next =
+          renameRefresh > renameRefreshAtStart &&
+          latestRename?.agentSessionId === session.id
+            ? { ...record.session, name: latestRename.name }
+            : record.session;
+        batch(() => {
+          setSessionRow(next);
+          setBot(record.bot);
+          setMetadata(snapshot.metadata);
+          replace(snapshot.messages);
+        });
+        mutate(next);
+      };
+
+      // Last-known frames from IDB, folded already. Paint now so a reopen
+      // does not wait on GET /log; the network snapshot below replaces it.
+      const cached = await session.hydrate();
+      if (cached && !superseded()) await paint(cached);
 
       const record = await session.load();
       if (superseded()) return record.session;
       // Read after every input pushed so far, and applied before any event
       // that arrives later: events between subscribe and here upserted into
       // the list, and this replaces the list with a view that includes them.
-      const snapshot = await session.snapshot();
-      if (superseded()) return record.session;
-
-      batch(() => {
-        setBot(record.bot);
-        setMetadata(snapshot.metadata);
-        replace(snapshot.messages);
-      });
+      await paint(record);
 
       return renameRefresh > renameRefreshAtStart &&
         latestRename?.agentSessionId === session.id
@@ -244,8 +264,12 @@ export function createAgentSession(
             agentSessionId: event.agentSessionId,
             name: session.value.name,
           };
+          const next = session.value;
+          setSessionRow((current) =>
+            current ? { ...current, name: next.name } : current
+          );
           mutate((current) =>
-            current ? { ...current, name: session.value.name } : current
+            current ? { ...current, name: next.name } : current
           );
         });
     })
@@ -267,14 +291,18 @@ export function createAgentSession(
         ) {
           return;
         }
+        setSessionRow((current) => (current ? session.value : current));
         mutate((current) => (current ? session.value : current));
       })();
     })
   );
 
-  // A first fetch would suspend; see `openedPending`.
+  // A first fetch would suspend; see `openedPending`. A cache hit sets
+  // `sessionRow` before the resource resolves, so a reopen can render.
   const session = () =>
-    openedPending && resource.state === 'pending' ? undefined : resource.latest;
+    openedPending && resource.state === 'pending' && sessionRow() === undefined
+      ? undefined
+      : (sessionRow() ?? resource.latest);
 
   return {
     session,
@@ -289,6 +317,7 @@ export function createAgentSession(
     retract: (actionId) => live()?.retract(actionId),
     applySnapshot: (snapshot) => {
       if (sessionId() !== snapshot.id) return;
+      setSessionRow(snapshot);
       mutate(snapshot);
     },
   };

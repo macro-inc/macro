@@ -1,4 +1,5 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { clearCachedSessionLogs } from '@core/agent-session/session-log-cache';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { syncLoginStorage } from '@core/util/cookies';
@@ -43,6 +44,7 @@ export async function clearLocalAuthSession() {
   // Queued mutations are user intent; never allow them to replay under a
   // subsequent account sharing this anonymous device cache scope.
   await clearRegisteredCaches();
+  await clearCachedSessionLogs();
 }
 
 export function useLogout() {
