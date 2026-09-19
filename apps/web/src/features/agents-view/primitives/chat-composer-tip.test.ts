@@ -1,60 +1,21 @@
-import { cleanup, renderHook } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createChatComposerTip } from './chat-composer-tip';
-
-beforeEach(() => vi.useFakeTimers());
-afterEach(() => {
-  cleanup();
-  vi.useRealTimers();
-});
+import { describe, expect, it } from 'vitest';
+import { chatComposerTips } from './chat-composer-tip';
 
 describe('Chat composer tips', () => {
+  it('covers connectors, skills, mentions and agents for a new conversation', () => {
+    const tips = chatComposerTips();
+    expect(tips[0]).toContain('Connections');
+    expect(tips[1]).toContain('skill');
+    expect(tips[2]).toContain('@');
+    expect(tips[3]).toContain('agent');
+    expect(tips).toHaveLength(4);
+  });
+
   it('omits the agent-selection tip inside a session', () => {
-    const { result: tip } = renderHook(() =>
-      createChatComposerTip(() => true, false)
-    );
-    const first = tip();
-    vi.advanceTimersByTime(6000);
-    expect(tip()).toContain('skill');
-    vi.advanceTimersByTime(6000);
-    expect(tip()).toContain('@');
-    vi.advanceTimersByTime(6000);
-    expect(tip()).toBe(first);
-  });
-
-  it('cycles through connectors, skills, mentions and agents, then repeats', () => {
-    const { result: tip } = renderHook(() => createChatComposerTip(() => true));
-    const first = tip();
-    expect(first).toContain('Connections');
-    vi.advanceTimersByTime(6000);
-    expect(tip()).toContain('skill');
-    vi.advanceTimersByTime(6000);
-    expect(tip()).toContain('@');
-    vi.advanceTimersByTime(6000);
-    expect(tip()).toContain('agent');
-    vi.advanceTimersByTime(6000);
-    expect(tip()).toBe(first);
-  });
-
-  it('pauses while writing and resumes when the draft is cleared', () => {
-    const [empty, setEmpty] = createSignal(true);
-    const { result: tip } = renderHook(() => createChatComposerTip(empty));
-    const first = tip();
-    setEmpty(false);
-    vi.advanceTimersByTime(18000);
-    expect(tip()).toBe(first);
-    setEmpty(true);
-    vi.advanceTimersByTime(6000);
-    expect(tip()).toContain('skill');
-  });
-
-  it('stops its timer when the composer is removed', () => {
-    const { cleanup: dispose } = renderHook(() =>
-      createChatComposerTip(() => true)
-    );
-    expect(vi.getTimerCount()).toBe(1);
-    dispose();
-    expect(vi.getTimerCount()).toBe(0);
+    const tips = chatComposerTips(false);
+    expect(tips).toHaveLength(3);
+    expect(tips.some((tip) => tip.includes('Choose an agent'))).toBe(false);
+    expect(tips[1]).toContain('skill');
+    expect(tips[2]).toContain('@');
   });
 });

@@ -10,16 +10,17 @@ import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideTo
 import { handleFileFolderDrop } from '@core/util/upload';
 import { $insertReferencedPaste } from '@macro-inc/lexical-core';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
-import { Button, ComposerSurface, SendButton } from '@ui';
+import { Button, ComposerSurface, SendButton, Typewriter } from '@ui';
 import {
   createEffect,
+  createMemo,
   createSignal,
   type JSX,
   onCleanup,
   onMount,
   Show,
 } from 'solid-js';
-import { createChatComposerTip } from '../primitives/chat-composer-tip';
+import { chatComposerTips } from '../primitives/chat-composer-tip';
 
 /** Shared input that starts on one line and grows with the draft. */
 export function ChatComposer(props: {
@@ -38,9 +39,9 @@ export function ChatComposer(props: {
   drawerOpen?: boolean;
   placeholder?: string;
 }) {
-  const tip = createChatComposerTip(
-    () => props.draft.trim().length === 0,
-    !props.session
+  // Stable identity: the typewriter restarts whenever this list changes.
+  const placeholderLines = createMemo(() =>
+    props.placeholder ? [props.placeholder] : chatComposerTips(!props.session)
   );
   const attachments = () => props.attachments ?? [];
   const hasContent = () => !!props.draft.trim() || attachments().length > 0;
@@ -209,10 +210,16 @@ export function ChatComposer(props: {
               >
                 <div class="max-h-60 min-w-0 flex-1 self-center group-data-[composer-compact=false]/composer:flex-none group-data-[composer-compact=false]/composer:self-stretch overflow-y-auto px-[9.375px]">
                   <MarkdownShell
-                    class="h-auto min-h-6 text-base leading-6 [&_[data-markdown-editable]]:min-h-6 [&_[data-markdown-editable]]:outline-none [&_[data-markdown-editable]>.md-p]:my-0 [&_[data-markdown-placeholder]]:max-w-full [&_[data-markdown-placeholder]>p]:m-0 [&_[data-markdown-placeholder]>p]:truncate"
+                    class="h-auto min-h-6 text-base leading-6 [&_[data-markdown-editable]]:min-h-6 [&_[data-markdown-editable]]:outline-none [&_[data-markdown-editable]>.md-p]:my-0 [&_[data-markdown-placeholder]]:max-w-full [&_[data-markdown-placeholder]>p]:m-0 [&_[data-markdown-placeholder]>p]:truncate [&_[data-markdown-editable]:focus~[data-markdown-placeholder]_[data-typewriter-caret]]:hidden"
                     config={editor}
                     initialValue={props.draft}
-                    placeholder={props.placeholder ?? tip()}
+                    placeholder={
+                      <Typewriter
+                        phrases={placeholderLines()}
+                        holdMs={2600}
+                        class="whitespace-nowrap"
+                      />
+                    }
                     refFn={(element) =>
                       element.setAttribute('aria-label', 'Message the agent')
                     }

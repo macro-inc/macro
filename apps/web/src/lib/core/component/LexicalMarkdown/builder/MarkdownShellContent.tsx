@@ -1,11 +1,11 @@
-import { Show } from 'solid-js';
+import { type JSX, Show } from 'solid-js';
 
 /** Fixed editor markup; Lexical owns the editable element's contents. */
 export function MarkdownShellContent(props: {
   connectRoot: (element: HTMLDivElement) => void;
   disabled: boolean;
   showPlaceholder: boolean;
-  placeholder: string;
+  placeholder: string | JSX.Element;
 }) {
   return (
     <>

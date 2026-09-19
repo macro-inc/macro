@@ -4,6 +4,7 @@ import type { EmailEntity } from '@entity';
 import type { EditorType } from '@macro-inc/lexical-core';
 import type { HistoryItem } from '@queries/history/history';
 import type { LexicalEditor, SerializedEditorState } from 'lexical';
+import type { JSX } from 'solid-js';
 import type { Store } from 'solid-js/store';
 import type { MentionBucketId } from '../component/menu/MentionsMenu/MentionsMenuController';
 import type { createLexicalWrapper } from '../context/LexicalWrapperContext';
@@ -129,7 +130,8 @@ export interface EditorControls {
  * Props of an Editor component.
  */
 export interface EditorComponentProps {
-  placeholder?: string;
+  /** Shown while the editor is empty; plain text or a rendered element. */
+  placeholder?: string | JSX.Element;
   /** Initialize with markdown text */
   initialValue?: string;
   /** Initialize with a serialized editor state. Takes precedence over initialValue. */

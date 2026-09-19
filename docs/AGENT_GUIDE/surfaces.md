@@ -123,9 +123,7 @@ dot remains visible. Click a row to preview it; `j`/`k` navigate and update the
 preview; alternate activation and Shift-click open a split.
 
 On desktop, before selecting a row, the main pane shows a centered single-line chat
-composer under a typewriter heading that starts with “What should we get done in
-Macro?” and cycles through the shared chat prompts (that first line is its
-accessible name). Attachment, text, model, and
+composer under “What should we get done in Macro?”. Attachment, text, model, and
 send controls share one row; longer prompts expand the input as needed.
 Home uses the shared app font and composer theme tokens; suggestion text and
 hover states use the same semantic colors as other app surfaces.
