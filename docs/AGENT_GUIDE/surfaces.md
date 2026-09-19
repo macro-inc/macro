@@ -130,7 +130,11 @@ hover states use the same semantic colors as other app surfaces.
 Type in “Type @ to reference / for skills”, use the attachment button for
 attachments and the model menu to choose a model, then press Enter or Send to
 create and open an AI chat. If chat creation fails, the submitted text and attachments
-are restored, including before a chat-limit paywall opens. The input stays 32px above the vertical center as suggestions load. Up to three cached AI
+are restored, including before a chat-limit paywall opens. With agents disabled,
+the input stays 32px above the vertical center as suggestions load. With agents
+enabled, the composer uses the same topbar offset and 24/64 padding as the
+Agents new-conversation page so the two inputs share a baseline; suggestions
+still load below it without moving the input. Up to three cached AI
 suggestions appear below the
 composer, using the existing fast/smart recommendation projections. Compact rows
 use one line: reason — Phosphor icon and item name, followed by Open, all at the same font size. Clicking a
