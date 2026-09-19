@@ -1064,18 +1064,28 @@ where
             && let (Some(actor_id), Some(message_sender_id)) = (actor.as_user(), message_sender_id)
             && actor_id != &message_sender_id
         {
-            Some(ReactionNotificationContext {
-                added,
-                emoji,
-                message_sender: reaction_message.sender,
-                thread_id: reaction_message.thread_id,
-                message_content: reaction_message.content,
-                metadata: self
-                    .repo
-                    .get_channel_metadata(channel_id, message_sender_id)
-                    .await
-                    .map_err(|e| ChannelMutationErr::Repo(e.into()))?,
-            })
+            match self
+                .repo
+                .get_channel_metadata(channel_id, message_sender_id)
+                .await
+            {
+                Ok(metadata) => Some(ReactionNotificationContext {
+                    added,
+                    emoji,
+                    message_sender: reaction_message.sender,
+                    thread_id: reaction_message.thread_id,
+                    message_content: reaction_message.content,
+                    metadata,
+                }),
+                Err(_) => {
+                    tracing::warn!(
+                        %channel_id,
+                        %message_id,
+                        "unable to build reaction notification context"
+                    );
+                    None
+                }
+            }
         } else {
             None
         };

@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::{
-    events::MessageChangedNotificationContext,
+    events::{MessageChangedNotificationContext, ReactionNotificationContext},
     models::{BotId, EntityMention, ParticipantRole, Sender},
     ports::{
         ChannelEventHandler, ChannelNotificationSender, ChannelRealtimePublisher,

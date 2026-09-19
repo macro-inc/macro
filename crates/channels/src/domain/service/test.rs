@@ -10,8 +10,8 @@ use crate::domain::{
         GetOrCreateDmRequest, MessageAttachment, MessagePageDirection, MutatedAttachment,
         MutatedMessage, NewChannelAttachment, ParticipantRole, PatchChannelRequest,
         PatchMessageRequest, PostMessageRequest, PostReactionRequest, ReactionAction,
-        ReferencedShareItem, ReferencedShareItemType, ResolvedChannelMessage, Sender, ThreadData,
-        ThreadReplyRow, TopLevelMessageRow,
+        ReactionMessageContext, ReferencedShareItem, ReferencedShareItemType,
+        ResolvedChannelMessage, Sender, ThreadData, ThreadReplyRow, TopLevelMessageRow,
     },
     ports::{
         ChannelEventDispatcher, ChannelMentionExtractor, ChannelReferenceSharePermissions,

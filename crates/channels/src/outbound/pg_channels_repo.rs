@@ -16,8 +16,8 @@ use crate::domain::{
         GetChannelsParams, GetThreadReplyRowsParams, LatestMessage, MessageAttachment,
         MessagePageDirection, MutatedAttachment, MutatedMessage, NameLookup, NewChannelAttachment,
         ParticipantRole, PatchChannelRequest, ReactionMessageContext, RecentChannelMessage,
-        ReferencedShareItemType, ResolvedChannelMessage, Sender, ThreadData, ThreadInfo,
-        ThreadReply, ThreadReplyRow, TopLevelMessageRow, UserName, fallback_user_name,
+        ReferencedShareItemType, ResolvedChannelMessage, ThreadData, ThreadInfo, ThreadReply,
+        ThreadReplyRow, TopLevelMessageRow, UserName, fallback_user_name,
     },
     ports::{ChannelRepo, TopLevelMessagesQueryResult},
 };
@@ -505,7 +505,7 @@ async fn get_reaction_message_context(
 
     row.map(|row| {
         Ok(ReactionMessageContext {
-            sender: Sender::parse_from_str(&row.sender_id)
+            sender: ChannelSender::parse_from_str(&row.sender_id)
                 .map(CowLike::into_owned)
                 .with_context(|| format!("invalid message sender_id {}", row.sender_id))?,
             thread_id: row.thread_id,
