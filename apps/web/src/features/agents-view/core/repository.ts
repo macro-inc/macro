@@ -88,6 +88,76 @@ export function sameRepository(left: string, right: string): boolean {
   return left.toLowerCase() === right.toLowerCase();
 }
 
+/** One repository the caller has used, and when that last happened. */
+export type RepositoryTouch = {
+  url: string;
+  /** Epoch millis; newer values win when the same repository is touched twice. */
+  at: number;
+};
+
+/**
+ * Record a use of `url` at `at`. A later timestamp replaces an earlier one
+ * for the same repository (any spelling); an older timestamp is ignored.
+ * Newest first.
+ */
+export function touchRepository(
+  recents: readonly RepositoryTouch[],
+  url: string,
+  at: number
+): RepositoryTouch[] {
+  const current = recents.find((recent) => sameRepository(recent.url, url));
+  if (current && current.at > at) return [...recents];
+  return recentRepositoryTouches([
+    { url, at },
+    ...recents.filter((recent) => !sameRepository(recent.url, url)),
+  ]);
+}
+
+function recentRepositoryTouches(
+  recents: readonly RepositoryTouch[]
+): RepositoryTouch[] {
+  return [...recents].toSorted((left, right) => right.at - left.at);
+}
+
+/** Newest-first urls from recorded uses. */
+export function recentRepositoryUrls(
+  recents: readonly RepositoryTouch[]
+): string[] {
+  return [...recents]
+    .toSorted((left, right) => right.at - left.at)
+    .map((recent) => recent.url);
+}
+
+/**
+ * Stored recents: the current `{ url, at }[]` shape, or the earlier newest-first
+ * `string[]` (assigned decreasing timestamps so that order is kept).
+ */
+export function parseRepositoryTouches(
+  stored: unknown,
+  now = Date.now()
+): RepositoryTouch[] {
+  if (!Array.isArray(stored)) return [];
+  return stored.reduce<RepositoryTouch[]>((touches, entry, index) => {
+    if (typeof entry === 'string') {
+      return touchRepository(touches, entry, now - index);
+    }
+    if (
+      !entry ||
+      typeof entry !== 'object' ||
+      typeof (entry as RepositoryTouch).url !== 'string' ||
+      typeof (entry as RepositoryTouch).at !== 'number' ||
+      !Number.isFinite((entry as RepositoryTouch).at)
+    ) {
+      return touches;
+    }
+    return touchRepository(
+      touches,
+      (entry as RepositoryTouch).url,
+      (entry as RepositoryTouch).at
+    );
+  }, []);
+}
+
 /**
  * The repositories to offer: recents first, in their own order, then every
  * other reachable repository as the harness sorted it. A recent the listing

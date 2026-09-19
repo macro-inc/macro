@@ -68,6 +68,19 @@ describe('RepositoryPicker', () => {
     ).toBeNull();
   });
 
+  it('lists several recents in the order they were last used', () => {
+    picker({
+      recentRepositories: [infra.url, macro.url],
+      repositories: [macro, infra],
+    });
+    openRepositories();
+    expect(optionNames()).toEqual([
+      'Choose automatically',
+      'macro-inc/infra',
+      'macro-inc/macro',
+    ]);
+  });
+
   it('filters as you type and picks the highlighted match on Enter', () => {
     const handlers = picker();
     openRepositories();

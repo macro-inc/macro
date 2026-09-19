@@ -4,9 +4,12 @@ import {
   filterRepositories,
   orderRepositories,
   parseRepositoryInput,
+  parseRepositoryTouches,
   type ReachableRepository,
+  recentRepositoryUrls,
   repositoryLabel,
   repositoryShortName,
+  touchRepository,
 } from './repository';
 
 describe('parseRepositoryInput', () => {
@@ -68,13 +71,44 @@ const scratch: ReachableRepository = {
   url: 'https://github.com/macro-inc/scratch',
 };
 
+describe('repository recency', () => {
+  it('keeps the newest use first and ignores an older spelling of the same repo', () => {
+    const first = touchRepository([], scratch.url, 10);
+    const second = touchRepository(first, infra.url, 20);
+    const older = touchRepository(second, scratch.url.toUpperCase(), 5);
+    expect(recentRepositoryUrls(older)).toEqual([infra.url, scratch.url]);
+    expect(
+      touchRepository(second, scratch.url, 30).map((touch) => touch.at)
+    ).toEqual([30, 20]);
+  });
+
+  it('restores the dated shape and the earlier newest-first url list', () => {
+    expect(
+      parseRepositoryTouches(
+        [
+          { url: scratch.url, at: 2 },
+          { url: infra.url, at: 8 },
+          { url: 'skip', at: Number.NaN },
+        ],
+        100
+      )
+    ).toEqual([
+      { url: infra.url, at: 8 },
+      { url: scratch.url, at: 2 },
+    ]);
+    expect(parseRepositoryTouches([scratch.url, infra.url], 100)).toEqual([
+      { url: scratch.url, at: 100 },
+      { url: infra.url, at: 99 },
+    ]);
+    expect(parseRepositoryTouches({ not: 'a list' })).toEqual([]);
+  });
+});
+
 describe('orderRepositories', () => {
   it('puts recents first, in their order, then the rest as listed', () => {
-    expect(orderRepositories([infra, macro, scratch], [scratch.url])).toEqual([
-      scratch,
-      infra,
-      macro,
-    ]);
+    expect(
+      orderRepositories([infra, macro, scratch], [scratch.url, macro.url])
+    ).toEqual([scratch, macro, infra]);
   });
 
   it('keeps a recent the listing no longer carries, and dedupes by spelling', () => {

@@ -49,7 +49,7 @@ export function NewChatPage(props: {
   const options = () => props.roster;
   const [agentId, setAgentId] = createSignal<string>();
   const [modelOverride, setModelOverride] = createSignal<string>();
-  // The last repository handed to a coder is where the next one starts.
+  // The repository used most recently is where the next coder starts.
   const [repoUrl, setRepoUrl] = createSignal<string | undefined>(
     repositories.urls()[0]
   );
