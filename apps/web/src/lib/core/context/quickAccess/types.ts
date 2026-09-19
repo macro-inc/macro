@@ -5,6 +5,7 @@ import type {
   ChannelEntity,
   ChatEntity,
   CrmCompanyEntity,
+  DatabaseEntity,
   DocumentEntity,
   EmailEntity,
   EntityData,
@@ -32,7 +33,8 @@ export type Bucket =
   | 'project'
   | 'email'
   | 'crm_company'
-  | 'agent_session';
+  | 'agent_session'
+  | 'database';
 
 export type EntityBucket = Exclude<Bucket, 'person'>;
 
@@ -50,6 +52,7 @@ const ALL_BUCKETS: Bucket[] = [
   'email',
   'crm_company',
   'agent_session',
+  'database',
 ];
 
 export type BucketCombination = 'all' | 'channels' | 'documents';
@@ -65,6 +68,7 @@ export const BUCKET_COMBINATIONS: Record<BucketCombination, Bucket[]> = {
     'skill',
     'chat',
     'project',
+    'database',
   ],
 };
 
@@ -135,6 +139,7 @@ export type BucketItemMap = {
   email: EntityItem<EmailEntity>;
   crm_company: EntityItem<CrmCompanyEntity>;
   agent_session: EntityItem<AgentSessionEntity>;
+  database: EntityItem<DatabaseEntity>;
   person: UserItem;
 };
 

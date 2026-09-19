@@ -47,6 +47,7 @@ postgres = [
 sqlite = ["dep:rusqlite", "dep:fallible-streaming-iterator", "outbound"]
 
 [dependencies]
+activity = { path = "../activity", default-features = false }
 ai_toolset = { path = "../ai_toolset", optional = true }
 anyhow = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
@@ -59,6 +60,8 @@ entity_mutation = { path = "../entity_mutation", optional = true }
 fallible-streaming-iterator = { version = "0.1", optional = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
 macro_env_var = { path = "../macro_env_var" }
+macro_event_broker = { path = "../macro_event_broker", default-features = false }
+macro_event_topics = { path = "../macro_event_topics" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid", optional = true }
 model-entity = { path = "../model-entity" }

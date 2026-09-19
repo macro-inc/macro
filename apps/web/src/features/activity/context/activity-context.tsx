@@ -1,3 +1,4 @@
+import { EntityIcon as CoreEntityIcon } from '@core/component/EntityIcon';
 import { useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { useAllProperties } from '@property/editor/hooks/useAllProperties';
@@ -8,7 +9,7 @@ import {
   firstPartyBotName,
   getBotDisplayName,
 } from '@queries/messages/message-sender';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import { useDatabaseDetailQuery } from '@queries/storage/databases';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import type { Client } from '@urql/core';
 import {
@@ -19,6 +20,7 @@ import {
   runWithOwner,
   useContext,
 } from 'solid-js';
+import type { ActivityDisplayEntityType } from '../core/event';
 
 /** Resolved display for one referenced entity: name, icon, and link target. */
 export type EntityDisplay = {
@@ -64,7 +66,7 @@ export type ActivityContext = {
   /** Name, icon, and link target for a referenced entity. */
   entityDisplay: (
     entityId: Accessor<string>,
-    entityType: Accessor<EntityType>
+    entityType: Accessor<ActivityDisplayEntityType>
   ) => EntityDisplay;
   /** The property definition behind a property-changed row, when known. */
   propertyDefinition: (
@@ -107,8 +109,13 @@ function appActivityContext(): ActivityContext {
       if (!list || list.isPending) return undefined;
       return getBotDisplayName(`bot|${id}`, undefined, list.data ?? []);
     },
-    entityDisplay: (entityId, entityType) =>
-      usePropertyEntityDisplay(entityId, entityType),
+    entityDisplay: (entityId, entityType) => {
+      const type = entityType();
+      if (type === 'DATABASE') {
+        return databaseEntityDisplay(entityId);
+      }
+      return usePropertyEntityDisplay(entityId, () => type);
+    },
     propertyDefinition: (propertyId) => {
       const definitions = useAllProperties();
       return () => {
@@ -116,5 +123,19 @@ function appActivityContext(): ActivityContext {
         return id ? definitions().find((def) => def.id === id) : undefined;
       };
     },
+  };
+}
+
+function databaseEntityDisplay(entityId: Accessor<string>): EntityDisplay {
+  const detail = useDatabaseDetailQuery(() => entityId());
+  return {
+    name: () => {
+      if (detail.isPending) return 'Loading...';
+      return detail.isSuccess ? detail.data.database.name : 'Database';
+    },
+    icon: () => <CoreEntityIcon targetType="database" size="xs" />,
+    isLoading: () => detail.isPending,
+    blockOrFileType: () => 'database',
+    linkParams: () => undefined,
   };
 }

@@ -403,6 +403,7 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
                     connection_gateway.as_ref().clone(),
                 ),
             ),
+            ai_tools::ToolDatabasesEventBroker::Real(macro_event_broker.clone()),
         ),
         import_tool_context: ToolImportToolContext::unwired(),
         chat_tool_context,

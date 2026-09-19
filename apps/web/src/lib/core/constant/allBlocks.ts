@@ -243,7 +243,8 @@ export type ItemLike = {
     | 'call'
     | 'crm_company'
     | 'reminder'
-    | 'calendar_event';
+    | 'calendar_event'
+    | 'database';
   fileType?: BasicDocumentFileType;
   subType?: SubType | BasicDocumentSubTypeProperty;
   name?: string;

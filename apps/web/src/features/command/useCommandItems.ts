@@ -331,7 +331,7 @@ const QUICK_ACCESS_BUCKETS_BY_CATEGORY: Partial<
   all: exclude('person'),
   channels: ['channel'],
   dms: ['dm'],
-  documents: ['note', 'document', 'snippet', 'project'],
+  documents: ['note', 'document', 'snippet', 'project', 'database'],
   tasks: ['task'],
   chats: ['chat'],
   projects: ['project'],

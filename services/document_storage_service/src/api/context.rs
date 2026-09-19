@@ -492,6 +492,7 @@ pub(crate) type DatabasesServiceType = DatabasesServiceImpl<
     RusqliteExecutor,
     GatewayTableEventPublisher,
     PgAccessDirectory,
+    DssEventBroker,
 >;
 
 /// Type alias for the databases router state.

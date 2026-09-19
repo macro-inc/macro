@@ -7,6 +7,7 @@ import SnippetIcon from '@phosphor/brackets-curly.svg';
 import CompanyIcon from '@phosphor/building-office.svg';
 import CalendarIcon from '@phosphor/calendar.svg';
 import AutomationIcon from '@phosphor/clock-clockwise.svg';
+import DatabaseIcon from '@phosphor/database.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import EnvelopeOpenIcon from '@phosphor/envelope-open.svg';
 import FileIcon from '@phosphor/file.svg';
@@ -92,6 +93,7 @@ const entityGlyphs: [
   ],
   ['company', { type: 'crm_company' }, CompanyIcon],
   ['contact', { type: 'crm_contact' }, ContactIcon],
+  ['database', { type: 'database' }, DatabaseIcon],
 ];
 
 afterEach(cleanup);

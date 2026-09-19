@@ -675,6 +675,12 @@ week and with no visible scrollbar. Under ~672px the four stats read as a two-co
 value, and chips shorten. Rows stay on one line at every width. On touch devices the list rests
 below the floating page title and above the bottom toolbar.
 
+Databases are activity entities too: creating, renaming, trashing, restoring, or permanently
+deleting one, and every write to its tables (grid edits, **Run SQL**, agent tools) lands on the
+acting user's feed as `You created/edited/deleted <database>`; the mention opens the database.
+Databases also appear in the Ctrl+K command menu under **All** and **Files**, ordered by
+creation time. Home's merged feed and the Recent view read Soup, which does not list databases.
+
 ## Home — `/app/component/home`
 
 Greeting, getting-started checklist, example prompt buttons (`Draft a document`,

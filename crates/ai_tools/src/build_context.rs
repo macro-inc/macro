@@ -426,6 +426,7 @@ pub async fn build_tool_service_context_from_env(
                     ),
                 ),
             ),
+            crate::tool_context::ToolDatabasesEventBroker::Real(macro_event_broker.clone()),
         ),
         import_tool_context: ToolImportToolContext::unwired(),
         chat_tool_context,

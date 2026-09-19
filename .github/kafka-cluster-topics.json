@@ -6,6 +6,7 @@
   "macro.calls",
   "macro.channels",
   "macro.chats",
+  "macro.databases",
   "macro.documents",
   "macro.email",
   "macro.example",

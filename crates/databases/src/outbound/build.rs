@@ -6,10 +6,11 @@
 //! So the wiring lives here once and the roots call it, rather than each
 //! repeating the constructor.
 //!
-//! The only thing a host chooses is where table-changed events go, which is
-//! genuinely per-host: a process with gateway credentials publishes, one
-//! without drops them.
+//! The only things a host chooses are where table-changed liveness pings go
+//! (a process with gateway credentials publishes, one without drops them) and
+//! which broker carries the durable `macro.databases` events.
 
+use macro_event_broker::MacroEventBroker;
 use sqlx::PgPool;
 
 use crate::domain::ports::TableEventPublisher;
@@ -36,13 +37,14 @@ macro_env_var::maybe_env_vars! {
 }
 
 /// The service as every host builds it.
-pub type PgDatabasesService<Events> = DatabasesServiceImpl<
+pub type PgDatabasesService<Events, Broker> = DatabasesServiceImpl<
     PgDatabasesRepo,
     PgDefinitionStore,
     MagicTableRegistry,
     RusqliteExecutor,
     Events,
     PgAccessDirectory,
+    Broker,
 >;
 
 /// Read one optional numeric override, falling back to `default`.
@@ -114,21 +116,24 @@ pub fn executor_limits_from_env() -> ExecutorLimits {
 }
 
 /// Build the databases service over `pool`, publishing table changes through
-/// `events`, with the SQL budget read from the environment.
-pub fn build_service<Events: TableEventPublisher>(
+/// `events` and domain events through `broker`, with the SQL budget read from
+/// the environment.
+pub fn build_service<Events: TableEventPublisher, Broker: MacroEventBroker>(
     pool: PgPool,
     events: Events,
-) -> PgDatabasesService<Events> {
-    build_service_with_limits(pool, events, executor_limits_from_env())
+    broker: Broker,
+) -> PgDatabasesService<Events, Broker> {
+    build_service_with_limits(pool, events, broker, executor_limits_from_env())
 }
 
 /// [`build_service`] with an explicit budget, for tests and benchmarks that
 /// need a budget the environment does not describe.
-pub fn build_service_with_limits<Events: TableEventPublisher>(
+pub fn build_service_with_limits<Events: TableEventPublisher, Broker: MacroEventBroker>(
     pool: PgPool,
     events: Events,
+    broker: Broker,
     limits: ExecutorLimits,
-) -> PgDatabasesService<Events> {
+) -> PgDatabasesService<Events, Broker> {
     DatabasesServiceImpl::new(
         PgDatabasesRepo::new(pool.clone()),
         PgDefinitionStore::new(pool.clone()),
@@ -136,5 +141,6 @@ pub fn build_service_with_limits<Events: TableEventPublisher>(
         RusqliteExecutor::new(limits),
         events,
         PgAccessDirectory::new(pool),
+        broker,
     )
 }

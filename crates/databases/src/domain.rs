@@ -1,7 +1,9 @@
 //! Domain layer: models, ports, catalog/materialization/translation logic,
 //! and the service implementation.
 
+pub mod activity;
 pub mod catalog;
+pub mod events;
 pub mod materialize;
 pub mod models;
 pub mod sugar;

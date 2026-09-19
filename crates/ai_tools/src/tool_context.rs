@@ -927,8 +927,32 @@ pub use databases::outbound::gateway_event_publisher::MaybeGatewayTableEventPubl
 /// The same port implementations the HTTP surface runs on: Postgres for
 /// storage and the embedded rusqlite sandbox for SQL, so an agent's SQL is
 /// scoped by the acting user's catalog exactly as the HTTP surface's is.
-pub type ToolDatabasesService =
-    databases::outbound::build::PgDatabasesService<ToolTableEventPublisher>;
+pub type ToolDatabasesService = databases::outbound::build::PgDatabasesService<
+    ToolTableEventPublisher,
+    ToolDatabasesEventBroker,
+>;
+
+/// Broker for `macro.databases` events across hosts that either do or do
+/// not have Kafka configured.
+#[derive(Clone)]
+pub enum ToolDatabasesEventBroker {
+    /// Publish database lifecycle and table-change events through Kafka.
+    Real(ToolEventBroker),
+    /// Drop database events in hosts that do not configure Kafka.
+    NoOp(NoopMacroEventBroker),
+}
+
+impl MacroEventBroker for ToolDatabasesEventBroker {
+    fn send_event<E: MacroEvent + ?Sized>(
+        &self,
+        event: &E,
+    ) -> Result<tokio::task::JoinHandle<Result<(), EventBrokerError>>, EventBrokerError> {
+        match self {
+            Self::Real(broker) => broker.send_event(event),
+            Self::NoOp(broker) => broker.send_event(event),
+        }
+    }
+}
 
 /// Type alias for the databases tool context.
 pub type ToolDatabasesToolContext =
@@ -938,14 +962,16 @@ pub type ToolDatabasesToolContext =
 ///
 /// The schema tools go through the same access receipts the HTTP API does, so
 /// this needs the entity access service as well as the pool; the publisher is
-/// what lets an agent's write reach open clients.
+/// what lets an agent's write reach open clients, and the broker is what puts
+/// it on the acting user's activity feed.
 pub fn build_databases_tool_context(
     pool: sqlx::PgPool,
     entity_access_service: Arc<ToolEntityAccessService>,
     events: ToolTableEventPublisher,
+    broker: ToolDatabasesEventBroker,
 ) -> ToolDatabasesToolContext {
     DatabasesToolContext::new(
-        databases::outbound::build_service(pool, events),
+        databases::outbound::build_service(pool, events, broker),
         entity_access_service,
     )
 }

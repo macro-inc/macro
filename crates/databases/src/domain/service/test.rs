@@ -10,6 +10,7 @@ use chrono::Utc;
 use entity_access::domain::models::{
     AccessLevel, Entity, EntityAccessReceipt, EntityPermission, EntityType, RequiredPermission,
 };
+use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
@@ -52,6 +53,8 @@ struct World {
     links: HashMap<ColumnId, Vec<(RowId, RowId)>>,
     grants: HashMap<String, Vec<(DatabaseId, AccessGrant)>>,
     published: Vec<(TableId, TableVersion)>,
+    /// Every `macro.databases` envelope the service handed the broker.
+    broker_events: Vec<serde_json::Value>,
     applied: Vec<RowChange>,
     /// Row limits `fetch_rows` was called with, newest last.
     fetch_row_limits: Vec<usize>,
@@ -558,8 +561,30 @@ impl AccessDirectory for FakeAccess {
     }
 }
 
-type Service =
-    DatabasesServiceImpl<FakeRepo, FakeDefs, FakeMagic, RusqliteExecutor, FakeEvents, FakeAccess>;
+#[derive(Clone)]
+struct RecordingBroker(Shared);
+
+impl MacroEventBroker for RecordingBroker {
+    fn send_event<E: MacroEvent + ?Sized>(
+        &self,
+        event: &E,
+    ) -> Result<tokio::task::JoinHandle<Result<(), EventBrokerError>>, EventBrokerError> {
+        let envelope =
+            serde_json::to_value(event.event()).map_err(EventBrokerError::Serialization)?;
+        self.0.lock().unwrap().broker_events.push(envelope);
+        Ok(tokio::spawn(async { Ok(()) }))
+    }
+}
+
+type Service = DatabasesServiceImpl<
+    FakeRepo,
+    FakeDefs,
+    FakeMagic,
+    RusqliteExecutor,
+    FakeEvents,
+    FakeAccess,
+    RecordingBroker,
+>;
 
 fn service(world: &Shared) -> Service {
     DatabasesServiceImpl::new(
@@ -569,7 +594,19 @@ fn service(world: &Shared) -> Service {
         RusqliteExecutor::new(ExecutorLimits::default()),
         FakeEvents(world.clone()),
         FakeAccess(world.clone()),
+        RecordingBroker(world.clone()),
     )
+}
+
+/// The `event_type` tags of every broker event so far, in publish order.
+fn broker_event_types(world: &Shared) -> Vec<String> {
+    world
+        .lock()
+        .unwrap()
+        .broker_events
+        .iter()
+        .map(|event| event["event_type"].as_str().unwrap_or_default().to_string())
+        .collect()
 }
 
 fn definition(
@@ -2115,4 +2152,84 @@ async fn add_column_options_respects_receipts() {
 
     // Nothing was written on the way to either refusal.
     assert_eq!(world.lock().unwrap().definitions.len(), 3);
+}
+
+#[tokio::test]
+async fn lifecycle_and_writes_publish_domain_events() {
+    let (world, svc, db, _table) = seeded().await;
+
+    // Seeding created the database and then shaped its table.
+    let seeding = broker_event_types(&world);
+    assert_eq!(seeding[0], "database.created");
+    assert!(
+        seeding[1..].iter().all(|t| t == "database.tables_changed"),
+        "{seeding:?}"
+    );
+    world.lock().unwrap().broker_events.clear();
+
+    svc.rename_database(
+        receipt::<EditAccessLevel>(db, OWNER, AccessLevel::Owner),
+        "Winter Offsite".into(),
+    )
+    .await
+    .unwrap();
+    exec(
+        &svc,
+        OWNER,
+        "UPDATE guests SET status = 'Declined' WHERE name = 'Sam'",
+    )
+    .await
+    .unwrap();
+    svc.trash_database(receipt::<OwnerAccessLevel>(db, OWNER, AccessLevel::Owner))
+        .await
+        .unwrap();
+    svc.restore_database(receipt::<OwnerAccessLevel>(db, OWNER, AccessLevel::Owner))
+        .await
+        .unwrap();
+    svc.delete_database_permanently(receipt::<OwnerAccessLevel>(db, OWNER, AccessLevel::Owner))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        broker_event_types(&world),
+        [
+            "database.renamed",
+            "database.tables_changed",
+            "database.trashed",
+            "database.restored",
+            "database.purged",
+        ]
+    );
+    let events = world.lock().unwrap().broker_events.clone();
+    let renamed = &events[0]["metadata"];
+    assert_eq!(renamed["database_id"], db.to_string());
+    assert_eq!(renamed["name"], "Winter Offsite");
+    assert_eq!(renamed["attribution"]["actor"], OWNER);
+    let changed = &events[1]["metadata"];
+    assert_eq!(changed["database_id"], db.to_string());
+    assert_eq!(changed["attribution"]["actor"], OWNER);
+    assert_eq!(changed["tables"].as_array().map(Vec::len), Some(1));
+    assert_eq!(events[4]["metadata"]["database_id"], db.to_string());
+}
+
+#[tokio::test]
+async fn no_op_lifecycle_calls_publish_nothing() {
+    let (world, svc, db, _table) = seeded().await;
+    svc.trash_database(receipt::<OwnerAccessLevel>(db, OWNER, AccessLevel::Owner))
+        .await
+        .unwrap();
+    world.lock().unwrap().broker_events.clear();
+
+    // Trashing twice and restoring what is not trashed change nothing, so
+    // nothing is announced.
+    svc.trash_database(receipt::<OwnerAccessLevel>(db, OWNER, AccessLevel::Owner))
+        .await
+        .unwrap();
+    svc.restore_database(receipt::<OwnerAccessLevel>(db, OWNER, AccessLevel::Owner))
+        .await
+        .unwrap();
+    svc.restore_database(receipt::<OwnerAccessLevel>(db, OWNER, AccessLevel::Owner))
+        .await
+        .unwrap();
+    assert_eq!(broker_event_types(&world), ["database.restored"]);
 }

@@ -617,6 +617,7 @@ async fn main() -> anyhow::Result<()> {
                     channels_connection_gateway.as_ref().clone(),
                 ),
             ),
+            ai_tools::ToolDatabasesEventBroker::Real(macro_event_broker.clone()),
         ),
         import_tool_context: import::inbound::toolset::ImportToolContext::wired(
             import_service.clone(),

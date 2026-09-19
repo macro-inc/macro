@@ -12,16 +12,23 @@ mod test;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+use activity::Actor;
 use chrono::Utc;
 use entity_access::domain::models::{
-    AccessLevel, EditAccessLevel, EntityAccessReceipt, EntityPermission, OwnerAccessLevel,
-    RequiredPermission, ViewAccessLevel,
+    AccessLevel, EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityPermission,
+    OwnerAccessLevel, RequiredPermission, ViewAccessLevel,
 };
+use macro_event_broker::MacroEventBroker;
 use models_properties::service::property_option::PropertyOptionValue;
 use models_properties::shared::DataType;
 use uuid::Uuid;
 
 use crate::domain::catalog::{self, JunctionKind, TableEntry};
+use crate::domain::events::{
+    self, DatabaseCreatedMetadata, DatabaseMacroEvent, DatabasePurgedMetadata,
+    DatabaseRenamedMetadata, DatabaseRestoredMetadata, DatabaseTablesChangedMetadata,
+    DatabaseTrashedMetadata, TableVersionChange,
+};
 use crate::domain::materialize;
 use crate::domain::models::{
     AccessGrant, AddColumnOptions, ApplyOutcome, Catalog, ColumnBinding, ColumnConfig,
@@ -49,14 +56,19 @@ const MAX_SQL_LEN: usize = 256 * 1024;
 const MAX_MATERIALIZED_ROWS: usize = 200_000;
 
 /// Concrete databases service backed by its ports.
+///
+/// `Events` is the best-effort liveness fan-out to open clients; `Broker`
+/// carries the durable domain events (`macro.databases`) other domains
+/// consume, activity among them.
 #[derive(Debug, Clone)]
-pub struct DatabasesServiceImpl<Repo, Defs, Magic, Exec, Events, Access> {
+pub struct DatabasesServiceImpl<Repo, Defs, Magic, Exec, Events, Access, Broker> {
     repo: Repo,
     definitions: Defs,
     magic: Magic,
     executor: Arc<Exec>,
     events: Events,
     access: Access,
+    broker: Broker,
 }
 
 fn infra<E: std::error::Error + Send + Sync + 'static>(e: E) -> QueryError {
@@ -94,6 +106,21 @@ fn receipt_grant<T: RequiredPermission>(
     match receipt.entity_permission() {
         EntityPermission::AccessLevel { access_level } => AccessGrant::from(*access_level),
         _ => floor,
+    }
+}
+
+/// Who a receipt says is acting, as domain events record it. Internal and
+/// unauthenticated receipts have nobody to attribute the write to.
+fn receipt_attribution<T: RequiredPermission>(
+    receipt: &EntityAccessReceipt<T>,
+) -> Option<events::Attribution> {
+    match receipt.auth() {
+        EntityAccessAuth::Authenticated(user) => Some(events::Attribution::user(user.clone())),
+        EntityAccessAuth::Bot(bot) => Some(events::Attribution {
+            actor: Actor::new_from_bot(bot.bot_id()),
+            on_behalf_of: bot.scope().acting_user_id().cloned(),
+        }),
+        EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => None,
     }
 }
 
@@ -194,8 +221,8 @@ struct Loaded {
     links: HashMap<ColumnId, HashMap<RowId, Vec<RowId>>>,
 }
 
-impl<Repo, Defs, Magic, Exec, Events, Access>
-    DatabasesServiceImpl<Repo, Defs, Magic, Exec, Events, Access>
+impl<Repo, Defs, Magic, Exec, Events, Access, Broker>
+    DatabasesServiceImpl<Repo, Defs, Magic, Exec, Events, Access, Broker>
 where
     Repo: DatabasesRepo,
     Defs: ColumnDefinitionStore,
@@ -203,6 +230,7 @@ where
     Exec: SqlExecutor,
     Events: TableEventPublisher,
     Access: AccessDirectory,
+    Broker: MacroEventBroker,
 {
     /// Create a databases service from its port implementations.
     pub fn new(
@@ -212,6 +240,7 @@ where
         executor: Exec,
         events: Events,
         access: Access,
+        broker: Broker,
     ) -> Self {
         Self {
             repo,
@@ -220,6 +249,15 @@ where
             executor: Arc::new(executor),
             events,
             access,
+            broker,
+        }
+    }
+
+    /// Publish one domain event. The write it describes already committed,
+    /// so a broker failure is logged rather than surfaced.
+    fn emit(&self, event: DatabaseMacroEvent) {
+        if let Err(error) = self.broker.send_event(&event) {
+            tracing::warn!(error = ?error, "failed to publish database event");
         }
     }
 
@@ -567,15 +605,26 @@ where
         }
     }
 
+    /// Announce a committed write: a liveness ping per table for open
+    /// clients, and one durable tables-changed event per database.
     async fn publish(
         &self,
+        attribution: Option<events::Attribution>,
         database_of: &HashMap<TableId, DatabaseId>,
         versions: &HashMap<TableId, TableVersion>,
     ) {
+        let mut changed_by_database: HashMap<DatabaseId, Vec<TableVersionChange>> = HashMap::new();
         for (table_id, version) in versions {
             let Some(database_id) = database_of.get(table_id) else {
                 continue;
             };
+            changed_by_database
+                .entry(*database_id)
+                .or_default()
+                .push(TableVersionChange {
+                    table_id: *table_id,
+                    version: *version,
+                });
             if let Err(error) = self
                 .events
                 .table_changed(*database_id, *table_id, *version)
@@ -584,6 +633,16 @@ where
                 // Liveness is best-effort: the write already committed.
                 tracing::warn!(error = ?error, %table_id, "failed to publish table change");
             }
+        }
+        for (database_id, mut tables) in changed_by_database {
+            tables.sort_by_key(|change| change.table_id);
+            self.emit(DatabaseMacroEvent::tables_changed(
+                DatabaseTablesChangedMetadata {
+                    database_id: database_id.to_string(),
+                    attribution: attribution.clone(),
+                    tables,
+                },
+            ));
         }
     }
 
@@ -669,8 +728,8 @@ where
     }
 }
 
-impl<Repo, Defs, Magic, Exec, Events, Access> DatabasesService
-    for DatabasesServiceImpl<Repo, Defs, Magic, Exec, Events, Access>
+impl<Repo, Defs, Magic, Exec, Events, Access, Broker> DatabasesService
+    for DatabasesServiceImpl<Repo, Defs, Magic, Exec, Events, Access, Broker>
 where
     Repo: DatabasesRepo,
     Defs: ColumnDefinitionStore,
@@ -678,6 +737,7 @@ where
     Exec: SqlExecutor,
     Events: TableEventPublisher,
     Access: AccessDirectory,
+    Broker: MacroEventBroker,
 {
     #[tracing::instrument(skip(self), err)]
     async fn create_database(&self, cmd: CreateDatabase) -> Result<Database, DatabaseError> {
@@ -685,10 +745,18 @@ where
             name: validate_name(&cmd.name)?,
             owner_id: cmd.owner_id,
         };
-        self.repo
+        let database = self
+            .repo
             .create_database(&cmd, STARTER_TABLE_NAME)
             .await
-            .map_err(repo_err)
+            .map_err(repo_err)?;
+        self.emit(DatabaseMacroEvent::created(DatabaseCreatedMetadata {
+            database_id: database.id.to_string(),
+            owner: cmd.owner_id,
+            name: database.name.clone(),
+            created_at: database.created_at,
+        }));
+        Ok(database)
     }
 
     #[tracing::instrument(skip(self, receipt), err)]
@@ -705,6 +773,11 @@ where
             .rename_database(database.id, &name)
             .await
             .map_err(repo_err)?;
+        self.emit(DatabaseMacroEvent::renamed(DatabaseRenamedMetadata {
+            database_id: database.id.to_string(),
+            attribution: receipt_attribution(&receipt),
+            name: name.clone(),
+        }));
         Ok(Database { name, ..database })
     }
 
@@ -720,7 +793,12 @@ where
         self.repo
             .trash_database(database.id, Utc::now())
             .await
-            .map_err(repo_err)
+            .map_err(repo_err)?;
+        self.emit(DatabaseMacroEvent::trashed(DatabaseTrashedMetadata {
+            database_id: database.id.to_string(),
+            attribution: receipt_attribution(&receipt),
+        }));
+        Ok(())
     }
 
     #[tracing::instrument(skip(self, receipt), err)]
@@ -735,7 +813,12 @@ where
         self.repo
             .restore_database(database.id)
             .await
-            .map_err(repo_err)
+            .map_err(repo_err)?;
+        self.emit(DatabaseMacroEvent::restored(DatabaseRestoredMetadata {
+            database_id: database.id.to_string(),
+            attribution: receipt_attribution(&receipt),
+        }));
+        Ok(())
     }
 
     #[tracing::instrument(skip(self, receipt), err)]
@@ -749,7 +832,11 @@ where
         self.repo
             .delete_database(database.id)
             .await
-            .map_err(repo_err)
+            .map_err(repo_err)?;
+        self.emit(DatabaseMacroEvent::purged(DatabasePurgedMetadata {
+            database_id: database.id.to_string(),
+        }));
+        Ok(())
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -951,8 +1038,12 @@ where
             .await
             .map_err(repo_err)?;
         if let Ok(versions) = self.repo.table_versions(&[cmd.table_id]).await {
-            self.publish(&HashMap::from([(cmd.table_id, database.id)]), &versions)
-                .await;
+            self.publish(
+                receipt_attribution(&receipt),
+                &HashMap::from([(cmd.table_id, database.id)]),
+                &versions,
+            )
+            .await;
         }
         Ok(column_id)
     }
@@ -1016,6 +1107,7 @@ where
                 .await
                 .map_err(repo_err)?;
             self.publish(
+                receipt_attribution(&receipt),
                 &HashMap::from([(cmd.table_id, database.id)]),
                 &HashMap::from([(cmd.table_id, version)]),
             )
@@ -1141,7 +1233,12 @@ where
             .iter()
             .map(|e| (e.table.id, e.table.database_id))
             .collect();
-        self.publish(&database_of, &new_versions).await;
+        self.publish(
+            Some(events::Attribution::user(viewer.user_id.clone())),
+            &database_of,
+            &new_versions,
+        )
+        .await;
 
         let read_tables: Vec<TableId> = deps
             .tables

@@ -1180,6 +1180,7 @@ async fn run() -> anyhow::Result<()> {
         databases::outbound::gateway_event_publisher::GatewayTableEventPublisher::new(
             conn_gateway_client.as_ref().clone(),
         ),
+        macro_event_broker.clone(),
     ));
 
     let collab_surface_service = CollabSurfaceServiceImpl::new(

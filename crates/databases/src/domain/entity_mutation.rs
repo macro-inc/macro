@@ -11,6 +11,7 @@ use entity_mutation::{
     DeleteEntityPermanently, EntityMutationEffect, EntityMutationErrorCode, RenameEntity,
     RestoreEntity, TrashEntity,
 };
+use macro_event_broker::MacroEventBroker;
 use model_entity::Entity;
 
 use super::{
@@ -35,8 +36,8 @@ impl From<DatabaseError> for EntityMutationErrorCode {
     }
 }
 
-impl<Repo, Defs, Magic, Exec, Events, Access> RenameEntity
-    for DatabasesServiceImpl<Repo, Defs, Magic, Exec, Events, Access>
+impl<Repo, Defs, Magic, Exec, Events, Access, Broker> RenameEntity
+    for DatabasesServiceImpl<Repo, Defs, Magic, Exec, Events, Access, Broker>
 where
     Repo: DatabasesRepo,
     Defs: ColumnDefinitionStore,
@@ -44,6 +45,7 @@ where
     Exec: SqlExecutor,
     Events: TableEventPublisher,
     Access: AccessDirectory,
+    Broker: MacroEventBroker,
 {
     type Receipt = EditAccessLevel;
 
@@ -58,8 +60,8 @@ where
     }
 }
 
-impl<Repo, Defs, Magic, Exec, Events, Access> TrashEntity
-    for DatabasesServiceImpl<Repo, Defs, Magic, Exec, Events, Access>
+impl<Repo, Defs, Magic, Exec, Events, Access, Broker> TrashEntity
+    for DatabasesServiceImpl<Repo, Defs, Magic, Exec, Events, Access, Broker>
 where
     Repo: DatabasesRepo,
     Defs: ColumnDefinitionStore,
@@ -67,6 +69,7 @@ where
     Exec: SqlExecutor,
     Events: TableEventPublisher,
     Access: AccessDirectory,
+    Broker: MacroEventBroker,
 {
     type Receipt = OwnerAccessLevel;
 
@@ -82,8 +85,8 @@ where
     }
 }
 
-impl<Repo, Defs, Magic, Exec, Events, Access> RestoreEntity
-    for DatabasesServiceImpl<Repo, Defs, Magic, Exec, Events, Access>
+impl<Repo, Defs, Magic, Exec, Events, Access, Broker> RestoreEntity
+    for DatabasesServiceImpl<Repo, Defs, Magic, Exec, Events, Access, Broker>
 where
     Repo: DatabasesRepo,
     Defs: ColumnDefinitionStore,
@@ -91,6 +94,7 @@ where
     Exec: SqlExecutor,
     Events: TableEventPublisher,
     Access: AccessDirectory,
+    Broker: MacroEventBroker,
 {
     type Receipt = OwnerAccessLevel;
 
@@ -104,8 +108,8 @@ where
     }
 }
 
-impl<Repo, Defs, Magic, Exec, Events, Access> DeleteEntityPermanently
-    for DatabasesServiceImpl<Repo, Defs, Magic, Exec, Events, Access>
+impl<Repo, Defs, Magic, Exec, Events, Access, Broker> DeleteEntityPermanently
+    for DatabasesServiceImpl<Repo, Defs, Magic, Exec, Events, Access, Broker>
 where
     Repo: DatabasesRepo,
     Defs: ColumnDefinitionStore,
@@ -113,6 +117,7 @@ where
     Exec: SqlExecutor,
     Events: TableEventPublisher,
     Access: AccessDirectory,
+    Broker: MacroEventBroker,
 {
     type Receipt = OwnerAccessLevel;
 

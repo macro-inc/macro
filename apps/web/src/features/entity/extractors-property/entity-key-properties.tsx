@@ -65,6 +65,9 @@ function getEntityType(entity: EntityData): EntityType {
     .with({ type: 'calendar_event' }, () => {
       throw new Error('calendar events do not support properties');
     })
+    .with({ type: 'database' }, () => {
+      throw new Error('databases do not support properties');
+    })
     .exhaustive();
 }
 

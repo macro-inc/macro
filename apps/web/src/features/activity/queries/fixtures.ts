@@ -110,3 +110,11 @@ export const unsupportedEntityEvent: ActivityEventFieldsFragment = {
   entityId: 'team-1',
   action: { __typename: 'GraphqlActivityCreated' },
 };
+
+export const databaseCreatedEvent: ActivityEventFieldsFragment = {
+  ...BASE,
+  id: 'evt-13',
+  entityType: 'DATABASE',
+  entityId: 'database-1',
+  action: { __typename: 'GraphqlActivityCreated' },
+};
