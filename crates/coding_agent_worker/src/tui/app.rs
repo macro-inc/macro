@@ -423,7 +423,9 @@ impl App {
         let apply = match setting {
             Setting::Workspace => ApplyConfig::Now,
             Setting::Name => ApplyConfig::NextPairing,
-            Setting::Agent | Setting::Scope => unreachable!("not edited as text"),
+            Setting::Agent | Setting::Scope | Setting::PermissionBypass => {
+                unreachable!("not edited as text")
+            }
         };
         self.save_config(apply).await;
     }
@@ -549,6 +551,11 @@ impl App {
                 }
                 Setting::Scope => {
                     self.form.toggle_scope(&self.config);
+                    self.save_config(ApplyConfig::NextPairing).await;
+                }
+                Setting::PermissionBypass => {
+                    self.form
+                        .set_permission_bypass(!self.config.identity.allow_permission_bypass);
                     self.save_config(ApplyConfig::NextPairing).await;
                 }
                 setting @ (Setting::Workspace | Setting::Name) => {

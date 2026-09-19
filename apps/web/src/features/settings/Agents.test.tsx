@@ -300,6 +300,7 @@ beforeEach(() => {
 });
 
 const MACROD_HARNESS = {
+  allow_permission_bypass: false,
   id: '3f1c9d2e-8a4b-4c5d-9e6f-1a2b3c4d5e6f',
   kind: 'macrod',
   name: 'Dev box',
@@ -714,6 +715,7 @@ describe('Agents', () => {
     await waitFor(() => {
       expect(agentMocks.update).toHaveBeenCalledWith({
         agentId: 'agent-1',
+        autoAcceptPermissions: true,
         avatarUrl: undefined,
         channelIds: ['channel-engineering'],
         channelScope: 'selected',
@@ -937,6 +939,7 @@ describe('Agents', () => {
 
     await waitFor(() => {
       expect(agentMocks.create).toHaveBeenCalledWith({
+        autoAcceptPermissions: true,
         avatarUrl: undefined,
         channelIds: [],
         channelScope: 'all',
@@ -1210,6 +1213,7 @@ describe('Agents', () => {
 
     await waitFor(() => {
       expect(agentMocks.create).toHaveBeenCalledWith({
+        autoAcceptPermissions: false,
         avatarUrl: undefined,
         channelIds: [],
         channelScope: 'all',
@@ -1514,3 +1518,85 @@ describe('Agents', () => {
     });
   });
 });
+
+it('requires prompts unless the harness operator permits bypass', async () => {
+  harnessMocks.query.data = [MACROD_HARNESS];
+  modelMocks.queries[`macrod:${MACROD_HARNESS.id}`] = successfulModels([
+    { id: 'claude-code', name: 'Claude Code' },
+  ]);
+  render(() => <Agents />);
+  fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+  const dialog = screen.getByRole('dialog');
+  fireEvent.change(within(dialog).getByLabelText('Harness'), {
+    target: { value: MACROD_HARNESS.id },
+  });
+  expect(within(dialog).getByLabelText('Always prompt')).toHaveProperty(
+    'checked',
+    true
+  );
+  expect(within(dialog).queryByLabelText('Always bypass')).toBeNull();
+});
+
+it('offers bypass only after harness consent and resets the choice on harness change', async () => {
+  harnessMocks.query.data = [
+    { ...MACROD_HARNESS, allow_permission_bypass: true },
+    { ...MACROD_HARNESS, id: 'prompt-only', name: 'Prompt only' },
+  ];
+  modelMocks.queries[`macrod:${MACROD_HARNESS.id}`] = successfulModels([
+    { id: 'claude-code', name: 'Claude Code' },
+  ]);
+  render(() => <Agents />);
+  fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+  const dialog = screen.getByRole('dialog');
+  fireEvent.change(within(dialog).getByLabelText('Harness'), {
+    target: { value: MACROD_HARNESS.id },
+  });
+  expect(within(dialog).getByLabelText('Always prompt')).toHaveProperty(
+    'checked',
+    true
+  );
+  fireEvent.click(within(dialog).getByLabelText('Always bypass'));
+  expect(within(dialog).getByLabelText('Always bypass')).toHaveProperty(
+    'checked',
+    true
+  );
+  fireEvent.change(within(dialog).getByLabelText('Harness'), {
+    target: { value: 'prompt-only' },
+  });
+  expect(within(dialog).getByLabelText('Always prompt')).toHaveProperty(
+    'checked',
+    true
+  );
+  expect(within(dialog).queryByLabelText('Always bypass')).toBeNull();
+});
+
+it.each(['in-memory', 'cursor', 'claude-cloud'])(
+  'hides permission choices and saves bypass for built-in %s',
+  async (harness) => {
+    cursorMocks.status.data.registered = true;
+    modelMocks.queries[`${harness}:`] = successfulModels([
+      { id: 'provider-default', name: 'Provider default' },
+    ]);
+    agentMocks.create.mockClear();
+    render(() => <Agents />);
+    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.input(within(dialog).getByLabelText('Name'), {
+      target: { value: 'Built-in agent' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Harness'), {
+      target: { value: harness },
+    });
+    expect(within(dialog).queryByText('Permission requests')).toBeNull();
+    expect(within(dialog).queryByLabelText('Always prompt')).toBeNull();
+    expect(within(dialog).queryByLabelText('Always bypass')).toBeNull();
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Create agent' })
+    );
+    await waitFor(() => {
+      expect(agentMocks.create).toHaveBeenCalledWith(
+        expect.objectContaining({ harness, autoAcceptPermissions: true })
+      );
+    });
+  }
+);

@@ -20,8 +20,10 @@
   shows the same three-dot working wave as the transcript in place of the
   leading icon; the row's accessible name appends `Starting` or `Working`.
   Sessions with a linked PR show
-  **View PR #<number> in GitHub** beneath the title; clicking it opens GitHub in
-  a new tab without opening the session. The leading icon reflects the PR status. Changing the composer mode does not filter the sidebar.
+  **View PR #<number> in GitHub** beneath the title; clicking it opens the synced
+  GitHub PR entity in a split (the same destination as the session header chip
+  and Magic Chip). Until GitHub has synced the entity it opens GitHub in a new
+  tab. Either click leaves the session unopened. The leading icon reflects the PR status. Changing the composer mode does not filter the sidebar.
   Selecting a row opens its own mode; Shift-click opens it in a new split.
 - The starting page has a compact composer that starts at one line and grows
   with longer prompts or Shift+Enter. Lists, quotes, headings, and other
@@ -34,7 +36,7 @@
   Saved and coding agents show their identity beside the current model. There is
   no Chat/Code switch or separate model button.
 - The agent dropdown includes every saved agent regardless of runtime, plus Cursor,
-  grouped in **Coding agents** and **Agents** sections. A **Models** section lists
+  grouped in **Models**, **Agents**, and **Coding agents** sections. **Models** lists
   Macro’s available models with readable names (for example, **Sonnet 5**) and
   provider icons aligned with the agent icons. The chat catalog offers Sonnet 5,
   Opus 5, and Haiku 4.5; older Sonnet and Opus versions are not offered.
@@ -326,12 +328,18 @@ clipboard, or use the paperclip **`Attach files`** button. Every file uploads to
 static file service and shows as a chip above the text (media thumbnails, document
 pills with a remove `×`); **Send** is disabled while an upload is pending. The agent
 receives each file as an ACP `resource_link` (a URL it can fetch) after the prompt text,
-and the sent prompt renders its files in the transcript (image thumbnails, video
-previews, file chips that open the file). A prompt may be files only, including the
+and the sent prompt renders its files in the transcript (image thumbnails and
+video previews that open the same lightbox as channel media; file chips that
+open the file). A prompt may be files only, including the
 first message in a new conversation. Uploading attachments survive switching the
 agent or opening repository settings; sending clears the attachment previews.
 Queued prompts
 list their attached file names under the text; editing a queued prompt keeps them.
+
+Cursor walkthrough files the run re-hosts appear in the transcript after the
+answer: screenshots as images, recordings as video players, and `.txt` / `.log`
+files as an inline `txt` code block (not a download link). Larger or non-UTF-8
+text stays a link.
 
 On mobile the composer (and any queued prompts above it) floats in the bottom
 accessory region above the dock — same placement as channel and AI chat — so it
@@ -391,7 +399,7 @@ Other participants can copy a link for people who already have access, but
 cannot grant access. Copying a link alone never changes permissions. New,
 unsaved session drafts do not offer sharing.
 
-Agent sessions in the `@` menu use the shared Quick Access feed, loaded when the app opens. Search matches session titles and persona names. The initial feed covers the 500 most recently updated accessible sessions; it does not load transcripts.
+Agent sessions in the `@` menu use the shared Quick Access feed, loaded when the app opens. Search matches session titles and agent names. The initial feed covers the 500 most recently updated accessible sessions; it does not load transcripts.
 
 ### Expanded session mentions
 
@@ -512,6 +520,35 @@ must stay hidden; subsequent live messages must still appear.
 - The stop button cancels only the **current** turn. The queue keeps draining: the next
   queued prompt starts a new turn. To fully quiesce a session, remove the queued
   entries, then stop.
+- **Permission prompts.** Everyone with **Edit** access to a session may approve or
+  reject its ACP permission requests, even when they did not create the session.
+  A pending request shows one `Approval needed` card above the composer, with
+  the command or affected file separate from the actions. The transcript does
+  not repeat the pending request.
+  `Allow once` and `Deny` answer immediately; `More options` contains remembered
+  choices with the agent's full rule text. Channel Magic Chips expose the same
+  approval card in place of their loading state, alongside existing questions.
+  Only authenticated users with **Edit** or **Owner** session access may answer;
+  bot, harness, and internal-service credentials cannot approve on their behalf.
+  Viewers and commenters see a waiting notice without
+  action buttons. Stopping a turn cancels open requests; answered requests show
+  a compact outcome such as `Allowed once` or `Denied` in the transcript.
+  Permission requests and questions both put the agent in a waiting state.
+  Several permissions may be pending alongside one question; answering one leaves
+  the others available. Controls disappear when their turn ends, is stopped, or
+  disconnects, and old transcript requests cannot answer a later turn's request.
+- **Harness bypass consent.** Settings → Harnesses → Connect a harness offers
+  `Allow bypassing permission requests`, off by default. Enabling it warns that
+  agents may run commands and edit files on the machine without approval.
+  Macrod Quickstart and Config also offer `Full Access`, off by
+  default. The choice applies at the next pairing: off disables bypass in the
+  approval dialog; on preselects bypass with a warning, and the approving user
+  can turn it off. Older daemons leave this choice to the approval dialog.
+- **Agent permission policy.** Settings → Agents → Runtime shows `Always prompt`
+  and `Always bypass` only for local macrod harnesses. Macrod defaults to prompts;
+  bypass requires both harness consent and the agent's explicit choice. Built-in
+  Macro, in-memory, Cursor, Codex, and Claude runtimes always bypass and have no
+  permission policy selector. The backend enforces these policies.
 
 Locally sent user messages in both AI implementations enter with a short upward
 slide and fade. History and remounted messages stay

@@ -1,22 +1,6 @@
-import { isCodexBotId } from '@core/constant/codexAgent';
-
-/**
- * Block-level state for the agent block, following the chat block's
- * `ChatInputProvider`/`useChatInputContext` convention: the provider owns the
- * session and its controllers, composer/container components consume them
- * from context, and the `ui/` leaves stay dumb — they only ever receive
- * derived props.
- *
- * The session itself is `createAgentSession`, the Solid face of the shared
- * `AgentSession` class: one machine per session, speculation inside it, so
- * everything about "what is the agent doing" is read off the fold's
- * `metadata.turn` and the messages' `pending` marks rather than kept here.
- */
+/** Feature-owned session state and its provider/consumer boundary. */
 
 import type { IssueResult } from '@core/agent-session/AgentSession';
-import { isCursorBotId } from '@core/constant/cursorAgent';
-import { useUserId } from '@core/context/user';
-import { useAgentSessionExternalUrlQuery } from '@queries/agent-session/session';
 import type {
   FoldedMessage,
   SessionMetadata,
@@ -27,27 +11,15 @@ import type {
   AgentSessionResponse,
   SessionBot,
 } from '@service-agent-harness/generated/schemas';
-import {
-  type Accessor,
-  createContext,
-  createEffect,
-  type ParentProps,
-  Suspense,
-  useContext,
-} from 'solid-js';
+import { type Accessor, createContext, useContext } from 'solid-js';
 import type { QuoteInsert } from '../ui';
-import { createAgentSession } from './create-agent-session';
-import {
-  createElicitationController,
-  type ElicitationController,
-} from './create-elicitation-controller';
-import {
-  createQueueController,
-  type QueueController,
-} from './create-queue-controller';
-import { resolveSessionId } from './resolve-session-id';
+import type { QueueController } from './create-queue-controller';
+import type { InteractionController } from './interaction';
 
 export type AgentSessionState = {
+  /** The viewer and display-name lookup supplied by production composition. */
+  userId: Accessor<string | undefined>;
+  displayName: (userId: string) => string;
   /**
    * The session this block shows, absent while a just-created one's `POST`
    * is still on the wire. See `pending-session.ts`.
@@ -94,8 +66,8 @@ export type AgentSessionState = {
    * the speculation in place. No-op with nothing queued.
    */
   sendNext: () => void;
-  /** The live question, and the action that answers it. */
-  elicitation: ElicitationController;
+  /** The live requests, and the action that answers each one. */
+  interactions: InteractionController;
   /**
    * The session's server-side action queue: prompts sent mid-turn wait
    * there and dispatch one per turn end. The server is the only truth —
@@ -111,158 +83,23 @@ export type AgentSessionState = {
   registerQuoteInsert: (insert: QuoteInsert | undefined) => void;
 };
 
-const AgentSessionCtx = createContext<AgentSessionState>();
-
-export function AgentSessionProvider(
-  props: ParentProps & {
-    /** The block's id: a session, or a placeholder for one being created. */
-    blockId: string;
-    /** The real id, once known — the block adopts it into the URL. */
-    onSessionId?: (sessionId: string) => void;
-  }
-) {
-  const { sessionId, pending, failed, error } = resolveSessionId(
-    () => props.blockId
-  );
-
-  createEffect(() => {
-    const id = sessionId();
-    if (id && id !== props.blockId) props.onSessionId?.(id);
-  });
-
-  const userId = useUserId();
-  const live = createAgentSession(sessionId, { userId });
-  const turn = () => live.metadata()?.turn ?? 'idle';
-  const served = createQueueController({
-    sessionId,
-    messages: live.messages,
-  });
-  // A row the user removes may be one `sendNext` already showed as sent;
-  // the fold has to forget it too, or it stays a bubble the log never fills.
-  const queue: QueueController = {
-    ...served,
-    remove: (actionId) => {
-      live.retract(actionId);
-      return served.remove(actionId);
-    },
-  };
-  const sendNext = () => {
-    const head = queue.entries()[0];
-    if (!head) return;
-    const action: AgentAction | undefined =
-      head.kind === 'prompt' && head.prompt != null
-        ? { type: 'prompt', prompt: head.prompt }
-        : head.kind === 'compact'
-          ? { type: 'compact' }
-          : undefined;
-    void live.issue({ type: 'stop' })?.then((result) => {
-      if (result.isErr()) live.retract(head.actionId);
-    });
-    if (action) live.expect(head.actionId, action);
-  };
-  // A question the connection that asked is gone cannot be answered; the
-  // fold keeps the part but the slot is dead.
-  const pendingElicitation = () =>
-    turn() === 'disconnected'
-      ? undefined
-      : (live.metadata()?.pendingElicitation ?? undefined);
-  const elicitation = createElicitationController({
-    pending: pendingElicitation,
-    canEdit: () => live.session()?.canEdit,
-    issue: live.issue,
-  });
-
-  // The transcript's "Reply to this" chip hands selected text to the
-  // composer through here. A plain variable, not a signal: it is only read
-  // at call time, never rendered from.
-  let quoteInsert: QuoteInsert | undefined;
-  const registerQuoteInsert = (insert: QuoteInsert | undefined) => {
-    quoteInsert = insert;
-  };
-  const quoteSelection: QuoteInsert = (text) => quoteInsert?.(text);
-
-  return (
-    <>
-      {/* Nested so a pending poll cannot take the block orchestrator's
-          <Suspense fallback={<LoadingBlock />}> and blank the transcript.
-          The poll component gates on `isSuccess` so it should not suspend;
-          this boundary is the backstop if a read of `query.data` ever does. */}
-      <Suspense fallback={null}>
-        <CloudExternalUrlPoll
-          sessionId={sessionId}
-          session={live.session}
-          applySnapshot={live.applySnapshot}
-        />
-      </Suspense>
-      <AgentSessionCtx.Provider
-        value={{
-          sessionId,
-          pending,
-          startupError: error,
-          session: live.session,
-          bot: live.bot,
-          metadata: live.metadata,
-          messages: live.messages,
-          // A create that failed leaves the block with nothing to load, which
-          // is the same dead end for the reader as a load that failed.
-          loadFailed: () => live.loadFailed() || failed(),
-          loadRetryable: live.loadFailed,
-          retryLoad: live.retry,
-          turn,
-          issue: live.issue,
-          sendNext,
-          elicitation,
-          queue,
-          quoteSelection,
-          registerQuoteInsert,
-        }}
-      >
-        {props.children}
-      </AgentSessionCtx.Provider>
-    </>
-  );
-}
-
-/**
- * Compensating read for a cloud session whose provider URL arrived after
- * the feed's snapshot. Lives in its own Suspense so the rest of the block
- * stays mounted while this query's first fetch is in flight.
- */
-function CloudExternalUrlPoll(props: {
-  sessionId: Accessor<string | undefined>;
-  session: Accessor<AgentSessionResponse | undefined>;
-  applySnapshot: (session: AgentSessionResponse) => void;
-}) {
-  // Only a loaded cloud session whose provider URL is still missing polls;
-  // everything else passes `undefined`, which disables the query.
-  const query = useAgentSessionExternalUrlQuery(() => {
-    const id = props.sessionId();
-    const session = props.session();
-    if (!id || !session || session.external?.url) return undefined;
-    return isCursorBotId(session.botId) ||
-      isCodexBotId(session.botId) ||
-      session.harness === 'claude-cloud'
-      ? id
-      : undefined;
-  });
-  createEffect(() => {
-    // `query.data` suspends while pending and throws once it errors
-    // (`useFavoritesData`). Gate on success so neither reaches the
-    // orchestrator Suspense / an error boundary.
-    if (!query.isSuccess) return;
-    const snapshot = query.data;
-    if (!snapshot?.external?.url) return;
-    props.applySnapshot(snapshot);
-  });
-  return null;
-}
+export const AgentSessionContext = createContext<AgentSessionState>();
 
 export function useAgentSession(): AgentSessionState {
-  const ctx = useContext(AgentSessionCtx);
+  const ctx = useContext(AgentSessionContext);
   if (!ctx) {
     throw new Error(
       'useAgentSession must be used within <AgentSessionProvider />'
     );
   }
   return ctx;
+}
+
+/**
+ * The session state when rendered inside a block, `undefined` when a
+ * transcript is shown on its own (the debug gallery, replay fixtures). For
+ * parts that act on the session when they can and read as inert otherwise.
+ */
+export function useOptionalAgentSession(): AgentSessionState | undefined {
+  return useContext(AgentSessionContext);
 }

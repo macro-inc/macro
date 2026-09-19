@@ -11,11 +11,9 @@ import {
   uploadInputAttachments,
 } from '@channel/Input';
 import { toast } from '@core/component/Toast/Toast';
-import { useUserId } from '@core/context/user';
-import { idToDisplayName } from '@core/user/util';
 import { uploadFile } from '@core/util/upload';
 import type { AgentAction } from '@service-agent-harness/generated/schemas';
-import { type Component, Show } from 'solid-js';
+import { type Component, For, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
 import { changingModel, hasPendingStop } from '../state/control-message';
 import {
@@ -27,6 +25,7 @@ import {
   QueuedPrompts,
 } from '../ui';
 import type { AgentModelSelectorProps } from '../ui/AgentModelSelector';
+import { PermissionRequest } from './PermissionRequest';
 import { promptActionOf } from './prompt-action';
 
 export function AgentComposer(props: {
@@ -41,7 +40,9 @@ export function AgentComposer(props: {
   const Input = props.input ?? AgentInput;
   const ModelSelector = props.modelSelector ?? AgentModelSelector;
   const {
-    elicitation,
+    displayName,
+    userId,
+    interactions,
     issue,
     loadFailed,
     messages,
@@ -52,7 +53,6 @@ export function AgentComposer(props: {
     turn,
     registerQuoteInsert,
   } = useAgentSession();
-  const userId = useUserId();
 
   // The fold speculates the action the moment it is issued, so success is
   // observed there; only a refusal needs saying here.
@@ -84,6 +84,10 @@ export function AgentComposer(props: {
     messages().some((message) => message.pending) &&
     !hasPendingStop(messages());
 
+  const pendingPermissions = () =>
+    interactions.pending().filter((request) => request.kind === 'permission');
+  const pendingElicitation = () =>
+    interactions.pending().some((request) => request.kind === 'elicitation');
   // Files dropped, pasted, or picked into the composer. Every one goes to
   // the static file service - documents too, not only media - because the
   // agent can only reach a file by a URL it can fetch. The chips and the
@@ -121,8 +125,7 @@ export function AgentComposer(props: {
         kind: entry.kind,
         prompt: entry.prompt ?? undefined,
         attachments: entry.attachments,
-        queuedBy:
-          actor && actor !== userId() ? idToDisplayName(actor) : undefined,
+        queuedBy: actor && actor !== userId() ? displayName(actor) : undefined,
       };
     });
 
@@ -144,15 +147,22 @@ export function AgentComposer(props: {
       <Show when={resuming()}>
         <ComposerNotice text="Waking the agent's sandbox…" active />
       </Show>
-      <Show when={turn() === 'blocked'}>
+      <Show when={pendingElicitation()}>
         <ComposerNotice
           text={
-            elicitation.canAnswer()
+            interactions.canAnswer()
               ? 'The agent is waiting for your answer above. Messages sent now are queued.'
               : 'The agent is waiting for an editor to answer above. Messages sent now are queued.'
           }
         />
       </Show>
+      <For each={pendingPermissions()}>
+        {(permission) => (
+          <div class="mb-2 min-w-0">
+            <PermissionRequest request={permission} />
+          </div>
+        )}
+      </For>
       <Input
         placeholder="Message the agent, @mention anything"
         autofocus={props.autofocus}

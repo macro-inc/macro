@@ -79,6 +79,10 @@ where
                 })?;
         }
         let defaults = self.inner.defaults.for_bot(request.bot_id);
+        let (model, harness) = match request.profile {
+            Some(profile) => (profile.model, profile.harness),
+            None => (defaults.model.clone(), defaults.harness.clone()),
+        };
         let session = self
             .inner
             .sessions
@@ -89,8 +93,8 @@ where
                 bot_id: request.bot_id,
                 thread_id: request.thread.as_ref().map(|thread| thread.thread_id),
                 originating_message_id: request.thread.as_ref().map(|thread| thread.message_id),
-                model: defaults.model.clone(),
-                harness: defaults.harness.clone(),
+                model,
+                harness,
                 repo_url: request.repo_url,
                 workspace: request.workspace,
                 sandbox_size: SandboxSize::Default,
@@ -306,9 +310,15 @@ where
                 return Err(into_session_error(error));
             }
         };
+        let permission_policy = self.inner.permission_policy_for(session.bot_id).await;
         self.inner
             .sessions
-            .attach_session(session.id, container.mcp_servers(mcp_servers))
+            .attach_session(
+                session.id,
+                container
+                    .mcp_servers(mcp_servers)
+                    .permission_policy(permission_policy),
+            )
             .await?;
 
         // Raw, through the session's own command worker: dispatch is where a
@@ -524,8 +534,14 @@ where
                 return Err(error);
             }
         };
+        let permission_policy = self.permission_policy_for(bot_id).await;
         self.sessions
-            .attach_session(session_id, container.mcp_servers(mcp_servers))
+            .attach_session(
+                session_id,
+                container
+                    .mcp_servers(mcp_servers)
+                    .permission_policy(permission_policy),
+            )
             .await?;
         // The first prompt goes through the same door as every later one:
         // queued raw, then dispatched - which is where it is composed with

@@ -116,7 +116,7 @@ pub(super) struct FoldState {
     /// How many turns have been opened, which is also the next [`TurnId`].
     pub(super) turns_opened: u32,
     /// Outstanding permission requests, by the id of the request that asked.
-    pub(super) pending_permissions: HashMap<RequestId, ToolUseId>,
+    pub(super) pending_permissions: HashMap<RequestId, ToolPath>,
     /// Outstanding `elicitation/create`s, by the id of the request that
     /// asked: where the question's part sits, so its answer can find it.
     /// Session-wide like [`Self::tool_positions`], since the part may have
@@ -177,9 +177,6 @@ pub(super) struct Turn {
     /// [`FoldedMessage`] cannot hold an empty part list - which is also what
     /// makes a turn the agent never answered derive no agent message at all.
     pub(super) agent: Option<usize>,
-    /// Where each permission sits in the agent message's parts, so outcomes
-    /// can find it.
-    pub(super) permission_positions: HashMap<ToolUseId, usize>,
     /// Where this turn's plan sits in the agent message's parts, so later
     /// plan updates can replace it.
     pub(super) plan_position: Option<usize>,
@@ -198,7 +195,7 @@ impl FoldState {
     pub(super) fn clear_pending(&mut self) {
         self.pending_initialize = None;
         self.pending_config_requests.clear();
-        self.pending_permissions.clear();
+        self.forget_interactions();
         self.pending_controls.clear();
         self.close_turn(None);
     }
@@ -251,7 +248,9 @@ impl FoldState {
                         // `control_from_runtime` never yields these: a prompt
                         // is folded below, and an elicitation answer is a
                         // response frame, correlated by the agent's id.
-                        AgentAction::Prompt(_) | AgentAction::RespondElicitation(_) => None,
+                        AgentAction::Prompt(_)
+                        | AgentAction::RespondElicitation(_)
+                        | AgentAction::RespondToPermission(_) => None,
                     });
                 }
                 // A user's prompt opens a turn - and may close the one
@@ -265,32 +264,19 @@ impl FoldState {
                         .map(StepChange::Message)
                         .collect();
                 }
-                StepChange::message(match &acp.0 {
-                    // The user's answer to a question or a permission
-                    // request. Each map holds only the ids of its own
-                    // requests, so trying the elicitations first is order,
-                    // not precedence.
-                    RawJsonRpcMessage::Response(Response::Result { id, result }) => {
-                        if let Some((changed, metadata)) =
-                            self.resolve_elicitation(id, Some(result), None)
-                        {
-                            return Self::message_and_metadata(changed, metadata);
-                        }
-                        self.resolve_permission(id, Some(result))
-                    }
-                    // An error response is this client refusing a request it
-                    // could not hold - a second question, an unknown mode -
-                    // or failing to answer a permission.
-                    RawJsonRpcMessage::Response(Response::Error { id, error }) => {
-                        if let Some((changed, metadata)) =
-                            self.resolve_elicitation(id, None, Some(&error.message))
-                        {
-                            return Self::message_and_metadata(changed, metadata);
-                        }
-                        self.resolve_permission(id, None)
-                    }
-                    // Handshake and configuration traffic: nothing to render.
+                let changed = match &acp.0 {
+                    // Both responses correlate by the agent's request id;
+                    // each decoder retains its own answer semantics.
+                    RawJsonRpcMessage::Response(Response::Result { id, result }) => self
+                        .resolve_elicitation(id, Some(result), None)
+                        .or_else(|| self.resolve_permission(id, Some(result))),
+                    RawJsonRpcMessage::Response(Response::Error { id, error }) => self
+                        .resolve_elicitation(id, None, Some(&error.message))
+                        .or_else(|| self.resolve_permission(id, None)),
                     RawJsonRpcMessage::Request(_) | RawJsonRpcMessage::Notification(_) => None,
+                };
+                changed.map_or_else(Vec::new, |(message, metadata)| {
+                    Self::message_and_metadata(message, metadata)
                 })
             }
 
@@ -334,9 +320,10 @@ impl FoldState {
                 RawJsonRpcMessage::Request(request)
                     if RequestPermissionRequest::matches_method(&request.method) =>
                 {
-                    StepChange::message(
-                        self.request_permission(&request.id, request.params.as_ref()),
-                    )
+                    match self.request_permission(&request.id, request.params.as_ref()) {
+                        Some((changed, metadata)) => Self::message_and_metadata(changed, metadata),
+                        None => Vec::new(),
+                    }
                 }
                 // The agent asking the user a question.
                 RawJsonRpcMessage::Request(request)
@@ -370,9 +357,7 @@ impl FoldState {
                     } else if control.is_some() {
                         StepChange::message(control)
                     } else {
-                        let mut changes = StepChange::message(self.end_turn(id, Some(result)));
-                        changes.extend(StepChange::metadata(self.turn_ended_clears_elicitation()));
-                        changes
+                        StepChange::message(self.end_turn(id, Some(result)))
                     }
                 }
                 RawJsonRpcMessage::Response(Response::Error { id, error }) => {
@@ -382,9 +367,7 @@ impl FoldState {
                     if self.pending_config_requests.remove(id) || control.is_some() {
                         StepChange::message(control)
                     } else {
-                        let mut changes = StepChange::message(self.fail_turn(id, &error.message));
-                        changes.extend(StepChange::metadata(self.turn_ended_clears_elicitation()));
-                        changes
+                        StepChange::message(self.fail_turn(id, &error.message))
                     }
                 }
                 RawJsonRpcMessage::Request(_) | RawJsonRpcMessage::Notification(_) => Vec::new(),
@@ -400,9 +383,8 @@ impl FoldState {
                 if matches!(event, SystemEvent::AcpReady) {
                     self.pending_initialize = None;
                     self.pending_config_requests.clear();
-                    self.pending_permissions.clear();
                     self.pending_controls.clear();
-                    changed |= self.forget_elicitations();
+                    changed |= self.forget_interactions();
                 }
                 let status = Some(event.as_str().to_owned());
                 if self.metadata.status != status {
@@ -504,11 +486,35 @@ impl FoldState {
         }
     }
 
+    /// Forget live requests at a connection boundary, preserving the transcript.
+    fn forget_interactions(&mut self) -> bool {
+        self.pending_permissions.clear();
+        self.pending_elicitations.clear();
+        self.completable_elicitations.clear();
+        let changed = !self.metadata.pending_interactions.is_empty();
+        self.metadata.pending_interactions.clear();
+        changed
+    }
+
     /// Recompute [`SessionMetadata::turn`] from the state, reporting whether
     /// it moved. Called once per push, after the step, because it is a
     /// projection of several things a step may touch at once.
     pub(super) fn refresh_turn_state(&mut self) -> bool {
-        let turn = if self.metadata.status.as_deref() == Some(SystemEvent::Disconnected.as_str()) {
+        // A live request belongs to one turn and connection. Its transcript
+        // part survives cancellation, but no surface may answer it afterwards.
+        let before = self.metadata.pending_interactions.len();
+        let live_turn = self
+            .turn
+            .as_ref()
+            .filter(|turn| !turn.stop_requested)
+            .map(|turn| turn.id.0);
+        let disconnected =
+            self.metadata.status.as_deref() == Some(SystemEvent::Disconnected.as_str());
+        self.metadata
+            .pending_interactions
+            .retain(|pending| !disconnected && Some(pending.turn()) == live_turn);
+        let interactions_changed = before != self.metadata.pending_interactions.len();
+        let turn = if disconnected {
             TurnState::Disconnected
         } else {
             match &self.turn {
@@ -517,13 +523,13 @@ impl FoldState {
                 // was waiting on their answer is owed the stop, not the
                 // question they just walked away from.
                 Some(turn) if turn.stop_requested => TurnState::Stopping,
-                Some(_) if self.metadata.pending_elicitation.is_some() => TurnState::Blocked,
+                Some(_) if !self.metadata.pending_interactions.is_empty() => TurnState::Blocked,
                 Some(turn) if turn.prompt_pending && turn.agent.is_none() => TurnState::Starting,
                 Some(_) => TurnState::Running,
             }
         };
         if self.metadata.turn == turn {
-            return false;
+            return interactions_changed;
         }
         self.metadata.turn = turn;
         true

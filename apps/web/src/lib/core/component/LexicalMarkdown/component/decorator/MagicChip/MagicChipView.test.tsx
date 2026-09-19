@@ -1,4 +1,6 @@
 /** @vitest-environment jsdom */
+import type { InteractionResponse } from '@app/features/block-agent/context/interaction';
+import type { PendingElicitation } from '@service-agent-fold/generated/types';
 import type { ElicitationAnswer } from '@service-agent-harness/generated/schemas';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
@@ -99,12 +101,86 @@ vi.mock('@core/component/AI/component/tool/email/DraftComposer', () => ({
 }));
 
 const respond = vi.fn<(answer: ElicitationAnswer) => Promise<boolean>>();
+const elicitationAnswer = {
+  respond: (response: InteractionResponse) =>
+    response.kind === 'elicitation'
+      ? respond(response.answer)
+      : Promise.resolve(false),
+};
 const onOpen = vi.fn();
 
 beforeEach(() => {
   respond.mockReset();
   respond.mockResolvedValue(true);
   onOpen.mockReset();
+});
+
+describe('MagicChipView permission requests', () => {
+  it.each([true, false])(
+    'replaces loading with an approval card for canAnswer=%s',
+    (canAnswer) => {
+      const answer = vi
+        .fn<(response: InteractionResponse) => Promise<boolean>>()
+        .mockResolvedValue(true);
+      const [presentation, setPresentation] =
+        createSignal<MagicChipPresentation>({
+          kind: 'asking',
+          markdown: '',
+          asking: {
+            request: {
+              kind: 'permission',
+              requestId: 0,
+              turn: 3,
+              toolCall: 'cmd',
+              options: [
+                {
+                  id: 'approve-command',
+                  kind: 'allow_once',
+                  name: 'Yes, proceed',
+                },
+                { id: 'reject-command', kind: 'reject_once', name: 'No' },
+              ],
+            },
+            canAnswer,
+            answering: false,
+            action: 'Run command',
+            detail: 'echo hi',
+          },
+        });
+      const view = render(() => (
+        <MagicChipView
+          agentSessionId="session"
+          presentation={presentation()}
+          answer={{ respond: answer }}
+        />
+      ));
+      expect(view.getByText('Approval needed')).toBeTruthy();
+      expect(view.getByText('echo hi')).toBeTruthy();
+      expect(
+        view.container.querySelector('[data-magic-chip-pending]')
+      ).toBeNull();
+      if (canAnswer) {
+        fireEvent.click(view.getByRole('button', { name: 'Allow once' }));
+        expect(answer).toHaveBeenCalledExactlyOnceWith({
+          kind: 'permission',
+          requestId: 0,
+          turn: 3,
+          answer: { kind: 'selected', optionId: 'approve-command' },
+        });
+      } else {
+        expect(view.queryByRole('button', { name: 'Allow once' })).toBeNull();
+        expect(view.queryByRole('button', { name: 'Deny' })).toBeNull();
+        expect(answer).not.toHaveBeenCalled();
+      }
+      setPresentation({
+        kind: 'answering',
+        markdown: 'Done.',
+        activity: { label: 'Writing response', busy: true },
+      });
+      expect(view.queryByText('Approval needed')).toBeNull();
+      expect(view.getByText('Done.')).toBeTruthy();
+    }
+  );
 });
 
 describe('Magic Chip inside an editor', () => {
@@ -314,7 +390,8 @@ function asking(canAnswer: boolean, markdown = ''): MagicChipPresentation {
     kind: 'asking',
     markdown,
     asking: {
-      question: {
+      request: {
+        kind: 'elicitation',
         requestId: 9,
         turn: 0,
         toolCall: 'toolu_evt',
@@ -332,6 +409,7 @@ function asking(canAnswer: boolean, markdown = ''): MagicChipPresentation {
         },
       },
       canAnswer,
+      answering: false,
     },
   };
 }
@@ -349,7 +427,7 @@ describe('MagicChipView reviewing a tool draft', () => {
       <MagicChipView
         agentSessionId="session"
         presentation={asking(true, 'Setting that up.')}
-        answer={{ respond }}
+        answer={elicitationAnswer}
         onOpen={onOpen}
       />
     ));
@@ -393,7 +471,7 @@ describe('MagicChipView reviewing a tool draft', () => {
       <MagicChipView
         agentSessionId="session"
         presentation={asking(true)}
-        answer={{ respond }}
+        answer={elicitationAnswer}
         onOpen={onOpen}
       />
     ));
@@ -422,7 +500,7 @@ describe('MagicChipView reviewing a tool draft', () => {
       <MagicChipView
         agentSessionId="session"
         presentation={asking(false)}
-        answer={{ respond }}
+        answer={elicitationAnswer}
         onOpen={onOpen}
       />
     ));
@@ -463,7 +541,7 @@ describe('MagicChipView reviewing a tool draft', () => {
       <MagicChipView
         agentSessionId="session"
         presentation={presentation()}
-        answer={{ respond }}
+        answer={elicitationAnswer}
         onOpen={onOpen}
       />
     ));
@@ -521,17 +599,15 @@ const colourForm = {
 };
 
 function askingQuestion(
-  request: Extract<
-    MagicChipPresentation,
-    { kind: 'asking' }
-  >['asking']['question']['request'],
+  request: PendingElicitation['request'],
   options: { canAnswer?: boolean; requestId?: number; markdown?: string } = {}
 ): MagicChipPresentation {
   return {
     kind: 'asking',
     markdown: options.markdown ?? '',
     asking: {
-      question: {
+      request: {
+        kind: 'elicitation',
         requestId: options.requestId ?? 0,
         turn: 0,
         toolCall: null,
@@ -539,6 +615,7 @@ function askingQuestion(
         request,
       },
       canAnswer: options.canAnswer ?? true,
+      answering: false,
     },
   };
 }
@@ -549,7 +626,7 @@ describe('MagicChipView asking a form', () => {
       <MagicChipView
         agentSessionId="session"
         presentation={askingQuestion(colourForm)}
-        answer={{ respond }}
+        answer={elicitationAnswer}
         onOpen={onOpen}
       />
     ));
@@ -593,7 +670,7 @@ describe('MagicChipView asking a form', () => {
       <MagicChipView
         agentSessionId="session"
         presentation={askingQuestion(colourForm)}
-        answer={{ respond }}
+        answer={elicitationAnswer}
       />
     ));
     fireEvent.input(view.getByPlaceholderText('Type your own answer'), {
@@ -614,7 +691,7 @@ describe('MagicChipView asking a form', () => {
       <MagicChipView
         agentSessionId="session"
         presentation={presentation()}
-        answer={{ respond }}
+        answer={elicitationAnswer}
       />
     ));
     fireEvent.click(view.getByRole('radio', { name: 'Blue' }));
@@ -636,7 +713,7 @@ describe('MagicChipView asking a form', () => {
       <MagicChipView
         agentSessionId="session"
         presentation={askingQuestion(colourForm, { canAnswer: false })}
-        answer={{ respond }}
+        answer={elicitationAnswer}
         onOpen={onOpen}
       />
     ));
@@ -660,7 +737,7 @@ describe('MagicChipView asking a form', () => {
           elicitationId: 'gh-1',
           url: 'https://agent.example.com/connect?e=gh-1',
         })}
-        answer={{ respond }}
+        answer={elicitationAnswer}
       />
     ));
     expect(view.getByText('agent.example.com')).toBeTruthy();
@@ -686,7 +763,7 @@ describe('MagicChipView asking a form', () => {
           mode: 'hologram',
           raw: {},
         })}
-        answer={{ respond }}
+        answer={elicitationAnswer}
       />
     ));
     expect(view.getByText(/cannot display a "hologram" request/)).toBeTruthy();

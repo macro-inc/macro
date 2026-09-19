@@ -1,7 +1,5 @@
 //! Opening, closing, and failing turns.
 
-use std::collections::HashMap;
-
 use crate::domain::error::FoldError;
 use crate::domain::model::{Author, FoldedMessage, MessagePart, StopReason, TurnId};
 use agent_client_protocol::RawJsonRpcParams;
@@ -136,7 +134,6 @@ impl FoldState {
             stop_requested: false,
             prompt_id: Some(prompt_id.clone()),
             agent: None,
-            permission_positions: HashMap::new(),
             plan_position: None,
             expects_reply: true,
         });
@@ -279,7 +276,6 @@ impl FoldState {
             stop_requested: false,
             prompt_id: None,
             agent: None,
-            permission_positions: HashMap::new(),
             plan_position: None,
             expects_reply: true,
         });

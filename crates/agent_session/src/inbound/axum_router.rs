@@ -309,6 +309,14 @@ impl IntoResponse for AgentSessionApiError {
             Self::Domain(error @ AgentSessionError::TooManyPreviewIds(_)) => {
                 (StatusCode::BAD_REQUEST, error.to_string()).into_response()
             }
+            // Somebody else answered first, or the agent moved on: nothing to
+            // answer anymore, and the transcript already shows how it went.
+            Self::Domain(error @ AgentSessionError::PermissionRequestNotFound(_)) => {
+                (StatusCode::CONFLICT, error.to_string()).into_response()
+            }
+            Self::Domain(error @ AgentSessionError::PermissionOptionUnknown(_)) => {
+                (StatusCode::UNPROCESSABLE_ENTITY, error.to_string()).into_response()
+            }
             Self::Domain(error) => {
                 if let AgentSessionError::InvalidName(message) = error {
                     return (StatusCode::BAD_REQUEST, Json(message)).into_response();
@@ -847,7 +855,7 @@ pub async fn control_agent_session_handler<
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
-    _access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
+    access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
     State(state): State<AgentSessionControlState<R, Access, Auth>>,
     caller: MacroAuthorizationExtractor<Auth, UserBotOrHarness>,
     Path(session_id): Path<Uuid>,
@@ -860,20 +868,25 @@ pub async fn control_agent_session_handler<
     )
     .await?;
 
-    let actor = caller
-        .authorization
-        .acting_user()
-        .map(|user| user.macro_user_id.clone());
+    let principal = match &caller.authorization {
+        UserBotOrHarnessAuthorization::User(_) => crate::domain::control::ControlPrincipal::User,
+        authorization => crate::domain::control::ControlPrincipal::Runtime(
+            authorization
+                .acting_user()
+                .map(|user| user.macro_user_id.clone()),
+        ),
+    };
 
     let accepted = state
         .recipient
         .control_event(
             AgentSessionId::new_from_uuid(session_id),
-            ControlEvent {
-                action: req.action,
-                action_id: req.action_id,
-                actor,
-            },
+            ControlEvent::authorized(
+                req.action,
+                req.action_id,
+                principal,
+                access.entity_access_receipt,
+            )?,
         )
         .await?;
 
@@ -1774,6 +1787,7 @@ pub async fn create_agent_session_handler<
         is_managed,
         owner_user_id,
         harness_id,
+        managed_profile,
         ..
     } = state
         .bots
@@ -1825,6 +1839,7 @@ pub async fn create_agent_session_handler<
         .opener
         .open_external_session(OpenExternalAgentSession {
             bot_id,
+            profile: managed_profile,
             workspace,
             repo_url: request.repo_url,
             owner,

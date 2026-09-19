@@ -14287,6 +14287,10 @@
           "mcp"
         ],
         "properties": {
+          "auto_accept_permissions": {
+            "type": ["boolean", "null"],
+            "description": "Whether the agent's sessions approve ACP permission requests without\nasking. `None` means always prompt. Bypass also requires the harness's opt-in."
+          },
           "bot": {
             "$ref": "#/components/schemas/Bot",
             "description": "The bot identity used for mentions and channel participation."
@@ -15861,6 +15865,10 @@
         "type": "object",
         "description": "Request to approve a pairing and register the harness.",
         "properties": {
+          "allow_permission_bypass": {
+            "type": "boolean",
+            "description": "Whether agents may bypass ACP permission requests on this harness."
+          },
           "name": {
             "type": ["string", "null"],
             "description": "Display name override. Defaults to the daemon's requested name."
@@ -18628,6 +18636,10 @@
           "channel_scope"
         ],
         "properties": {
+          "auto_accept_permissions": {
+            "type": ["boolean", "null"],
+            "description": "Whether the agent's sessions approve ACP permission requests without\nasking. Omit to always prompt."
+          },
           "avatar_url": {
             "type": ["string", "null"],
             "description": "Optional avatar URL or data URL."
@@ -19235,6 +19247,10 @@
         "description": "Request to open a pairing: the daemon asks for a code the user approves.\n\nThe daemon serializes this, so both derives are used.",
         "required": ["name"],
         "properties": {
+          "allow_permission_bypass": {
+            "type": ["boolean", "null"],
+            "description": "Daemon operator consent ceiling. Omitted by older clients; web approval decides."
+          },
           "host": {
             "type": ["string", "null"],
             "description": "Display-only description of the machine, e.g. `eric@macbook / darwin`."
@@ -23829,6 +23845,10 @@
           "connected"
         ],
         "properties": {
+          "allow_permission_bypass": {
+            "type": "boolean",
+            "description": "Whether agents may bypass ACP permission requests on this harness."
+          },
           "connected": {
             "type": "boolean",
             "description": "Whether the daemon currently holds a runtime connection."
@@ -25149,6 +25169,10 @@
           "host": {
             "type": ["string", "null"],
             "description": "Display-only description of the machine."
+          },
+          "requested_allow_permission_bypass": {
+            "type": ["boolean", "null"],
+            "description": "Daemon operator consent ceiling; false forbids bypass at approval."
           },
           "requested_name": {
             "type": "string",
@@ -30037,6 +30061,10 @@
           "channel_scope"
         ],
         "properties": {
+          "auto_accept_permissions": {
+            "type": ["boolean", "null"],
+            "description": "Whether the agent's sessions approve ACP permission requests without\nasking. Omit to always prompt."
+          },
           "avatar_url": {
             "type": ["string", "null"],
             "description": "Optional avatar URL or data URL."

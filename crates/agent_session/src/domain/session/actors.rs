@@ -37,7 +37,8 @@ use agent_fold::domain::model::TurnSignal;
 
 use super::telemetry::GenAiProjector;
 use super::{
-    CloseReason, Effect, HandshakeStatus, Input, RuntimeStatus, SessionMachine, StopReason,
+    CloseReason, Effect, HandshakeStatus, Input, PermissionPolicy, RuntimeStatus, SessionMachine,
+    StopReason,
 };
 
 /// How long the ACP handshake has to finish before the session is declared dead.
@@ -121,6 +122,7 @@ where
         acp_session_id: Option<SessionId>,
         workspace: String,
         mcp_servers: Vec<McpServer>,
+        permission_policy: PermissionPolicy,
         connector: Connector,
         logs: Logs,
         commands: mpsc::Receiver<SessionCommand>,
@@ -150,10 +152,14 @@ where
             handshake_seen,
             handshake,
             machine: match acp_session_id {
-                None => SessionMachine::new(id, workspace, mcp_servers.clone()),
-                Some(session_id) => {
-                    SessionMachine::resume(id, session_id, workspace, mcp_servers.clone())
-                }
+                None => SessionMachine::new(id, workspace, mcp_servers.clone(), permission_policy),
+                Some(session_id) => SessionMachine::resume(
+                    id,
+                    session_id,
+                    workspace,
+                    mcp_servers.clone(),
+                    permission_policy,
+                ),
             }
             .with_connection_context(macro_uuid::generate_uuid_v7()),
             logs,
@@ -170,6 +176,12 @@ where
             mcp_servers,
             tools_listed: false,
         }
+    }
+
+    /// Apply an explicit starting model before a new session becomes live.
+    pub(crate) fn with_initial_model(mut self, model: Option<String>) -> Self {
+        self.machine = self.machine.with_initial_model(model);
+        self
     }
 
     /// The session this actor's connection belongs to.

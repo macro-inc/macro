@@ -10,8 +10,10 @@ note: |-
   navigation helpers. It renders what views hand it: domain values from
   `core/`, resolved display (typed in `context/`), and event handlers. The
   one sanctioned `queries/` import is `property-value`, which parses
-  untyped wire JSON for property-changed rows.
+  untyped wire JSON for property-changed rows. In block-agent, `ui/` is
+  the presentation layer and `component/` is the composition layer.
 files:
+  - apps/web/src/features/block-agent/ui/**
   - apps/web/src/features/block-spreadsheet/components/**
   - apps/web/src/features/property/tags/components/**
   - apps/web/src/features/claude-connection/components/**
@@ -24,7 +26,7 @@ files:
 rule:
   any:
     - kind: string
-      regex: ^['"](@queries/|@urql|urql|@app/lib/urql|@core/util/useSplitNavigationHandler|(\.\./)+(primitives|views)/)
+      regex: ^['"](@queries/|@urql|urql|@app/lib/urql|@core/util/useSplitNavigationHandler|(\.\./)+(primitives|views|component)(/|['"]))
       any:
         - inside:
             kind: import_statement

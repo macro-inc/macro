@@ -19,10 +19,8 @@ import { blockHandleSignal } from '@core/signal/load';
 import { useSearchParams } from '@solidjs/router';
 import { EmptyStatePanel } from '@ui';
 import { createSignal, Show, useContext } from 'solid-js';
-import {
-  AgentSessionProvider,
-  useAgentSession,
-} from '../context/AgentSessionContext';
+import { AgentSessionProvider } from '../agent-session-provider';
+import { useAgentSession } from '../context/AgentSessionContext';
 import {
   ORIGIN_THREAD_DRAWER_ID,
   sessionOriginThread,

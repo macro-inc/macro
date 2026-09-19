@@ -9,6 +9,8 @@
  * transcript that let each message decide showed every one of them working.
  */
 
+import { useUserId } from '@core/context/user';
+import { idToDisplayName } from '@core/user/util';
 import { messageSendMotion } from '@core/util/message-send-motion';
 import type {
   FoldedMessage,
@@ -75,7 +77,9 @@ function AgentMessagePart(props: {
     .with({ kind: 'permission' }, (part) => <PermissionPart part={part} />)
     .with({ kind: 'plan' }, (part) => <PlanPart part={part} />)
     .with({ kind: 'control' }, (part) => <ControlPart part={part} />)
-    .with({ kind: 'elicitation' }, (part) => <ElicitationPart part={part} />)
+    .with({ kind: 'elicitation' }, (part) => (
+      <ElicitationPart part={part} turn={props.message.turn} />
+    ))
     .exhaustive();
 }
 
@@ -161,14 +165,41 @@ function workingLabel(message: FoldedMessage): string {
 }
 
 /**
+ * The display name of whoever sent a prompt, when that is somebody other
+ * than the viewer. A session is shared, so a prompt may be another
+ * participant's; one's own prompts (and unattributed ones) need no byline,
+ * matching the queued-prompt list in `AgentComposer`. Attribution waits
+ * until the viewer id is known — `useUserId` is undefined while user-info
+ * is still loading, and a missing viewer must not look like another person.
+ */
+function promptAuthorName(
+  author: FoldedMessage['author'],
+  viewerId: string | undefined
+): string | undefined {
+  if (
+    author.kind !== 'user' ||
+    author.userId === null ||
+    viewerId === undefined
+  )
+    return undefined;
+  return author.userId === viewerId
+    ? undefined
+    : idToDisplayName(author.userId);
+}
+
+/**
  * A prompt, in the chat block's user-bubble treatment
  * (`@core/component/AI/component/message/UserMessage.tsx`): right-aligned,
- * rounded, filled surface shared with production chat.
+ * rounded, filled surface shared with production chat. A prompt another
+ * participant sent carries their name above the bubble.
  */
 function UserMessage(props: { message: FoldedMessage }) {
+  const userId = useUserId();
+  const authorName = () => promptAuthorName(props.message.author, userId());
+
   return (
     <div
-      class="flex w-full transition-opacity"
+      class="flex w-full flex-col items-end gap-0.5 transition-opacity"
       // Still on the wire: the fold shows the prompt before the log confirms
       // it, and the confirmation clears this in place.
       classList={{ 'opacity-60': props.message.pending }}
@@ -181,6 +212,13 @@ function UserMessage(props: { message: FoldedMessage }) {
         )
       }
     >
+      <Show when={authorName()}>
+        {(name) => (
+          <div class="text-xs text-ink-extra-muted" data-testid="prompt-author">
+            {name()}
+          </div>
+        )}
+      </Show>
       <UserMessageBubble>
         <For each={props.message.parts}>
           {(part, index) => (

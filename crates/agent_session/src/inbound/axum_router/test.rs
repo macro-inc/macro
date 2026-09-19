@@ -425,6 +425,34 @@ async fn the_owner_opens_a_session_for_their_bot() {
 }
 
 #[tokio::test]
+async fn an_external_session_receives_the_saved_agent_profile() {
+    let opener = Arc::new(RecordingOpener::default());
+    let mut bots = OneBotDirectory::external_agent();
+    bots.facts.managed_profile = Some(crate::domain::ports::ManagedAgentProfile {
+        model: "gpt-5.6-luna".into(),
+        harness: harness_id::MACROD_HARNESS_SLUG.into(),
+        instructions: String::new(),
+        mcp_servers: crate::domain::model::AgentMcpServers::OwnerConnections,
+    });
+    let request = as_harness_for(
+        OWNER,
+        body(Some(BotId::TEST_A.as_uuid()), "/srv/agent", None),
+    );
+    let response = router_for(opener.clone(), bots)
+        .oneshot(request)
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let opened = opener.opened.lock().unwrap();
+    let profile = opened[0]
+        .profile
+        .as_ref()
+        .expect("saved profile is forwarded");
+    assert_eq!(profile.model, "gpt-5.6-luna");
+    assert_eq!(profile.harness, harness_id::MACROD_HARNESS_SLUG);
+}
+
+#[tokio::test]
 async fn a_stranger_may_not_open_sessions_for_someone_elses_bot() {
     let opener = Arc::new(RecordingOpener::default());
     let request = as_user(

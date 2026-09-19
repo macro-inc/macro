@@ -6,6 +6,10 @@ use agent_fold::domain::model::TurnSignal;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
 use agent_session::domain::model::{AgentMcpServers, AgentSessionId, MessageId, SandboxSize};
 use agent_session::domain::ports::ControlEvent;
+use agent_session::domain::session::PermissionPolicy;
+
+#[cfg(test)]
+mod test;
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -190,6 +194,71 @@ impl AgentKind {
     #[must_use]
     pub fn is_managed(self) -> bool {
         !matches!(self, Self::External)
+    }
+
+    /// How this kind's sessions answer permission requests without a registered
+    /// local harness.
+    ///
+    /// Managed runtimes act inside sandboxes this deployment owns (or, for
+    /// Cursor, never ask), so approving on arrival costs nothing. An external
+    /// runtime is somebody's own machine, where a bot approving its own tool
+    /// calls is exactly what a person should be asked about.
+    #[must_use]
+    pub fn default_permission_policy(self) -> PermissionPolicy {
+        match self {
+            Self::SandboxedCoder
+            | Self::Cursor
+            | Self::CodexCloud
+            | Self::ClaudeCloud
+            | Self::InMemory => PermissionPolicy::AutoAccept,
+            Self::External => PermissionPolicy::Prompt,
+        }
+    }
+}
+
+/// Stored facts used by the domain to choose a session permission policy.
+pub enum PermissionPolicyConfig {
+    /// A fixed system bot with no editable persona configuration.
+    Fixed(AgentKind),
+    /// An editable persona and its harness operator's limit.
+    Persona {
+        /// The runtime serving this persona.
+        kind: AgentKind,
+        /// A registered harness's opt-in. `None` denotes a built-in runtime.
+        harness_allows_bypass: Option<bool>,
+        /// The agent owner's choice for a local harness; absent means prompt.
+        auto_accept_permissions: Option<bool>,
+    },
+}
+
+impl PermissionPolicyConfig {
+    /// Apply local harness consent and agent choice, or the built-in policy.
+    #[must_use]
+    pub fn resolve(self) -> PermissionPolicy {
+        match self {
+            Self::Fixed(kind) => kind.default_permission_policy(),
+            Self::Persona {
+                kind,
+                harness_allows_bypass,
+                auto_accept_permissions,
+            } => match harness_allows_bypass {
+                Some(allowed) => resolve_permission_policy(allowed, auto_accept_permissions),
+                None => kind.default_permission_policy(),
+            },
+        }
+    }
+}
+
+/// Resolve a persona's choice within the harness operator's permission limit.
+#[must_use]
+pub fn resolve_permission_policy(
+    allow_bypass: bool,
+    auto_accept: Option<bool>,
+) -> PermissionPolicy {
+    if allow_bypass && auto_accept == Some(true) {
+        PermissionPolicy::AutoAccept
+    } else {
+        PermissionPolicy::Prompt
     }
 }
 
@@ -735,28 +804,5 @@ impl HarnessDefaults {
 impl From<SessionDefaults> for HarnessDefaults {
     fn from(default: SessionDefaults) -> Self {
         Self::new(default)
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::SessionRepository;
-
-    /// The URL survives verbatim - it is what a session's row carries, and
-    /// what the egress proxy re-reads - and one that names no repository is
-    /// refused rather than repaired. The shapes themselves are the parser's
-    /// own tests, in `agent_egress`.
-    #[test]
-    fn a_session_repository_keeps_the_url_it_was_read_from() {
-        let repository =
-            SessionRepository::parse("https://github.com/macro-inc/macro.git").expect("a repo");
-        assert_eq!(
-            repository.as_str(),
-            "https://github.com/macro-inc/macro.git"
-        );
-
-        for url in ["", "https://github.com/macro-inc", "not a url"] {
-            assert_eq!(SessionRepository::parse(url), None, "accepted {url}");
-        }
     }
 }

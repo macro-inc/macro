@@ -118,6 +118,8 @@ fn cycles() -> Job {
 
 fn build() -> Job {
     gated_web_job("Build")
+        // Match preview/deploy capacity for Vite's chunk-rendering memory peak.
+        .runs_on(runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG))
         .add_step(checkout("Checkout Repo", false))
         .add_step(steps::mount_web_cache_volume(false))
         .add_step(steps::setup_nix())

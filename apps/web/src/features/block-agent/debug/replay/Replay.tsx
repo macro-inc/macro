@@ -12,12 +12,10 @@
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import type { AgentSessionLogEntryDto } from '@service-agent-harness/generated/schemas';
 import { createSignal, onCleanup, Show } from 'solid-js';
+import { AgentSessionProvider } from '../../agent-session-provider';
 import { AgentComposer } from '../../component/AgentComposer';
 import { Transcript } from '../../component/Transcript';
-import {
-  AgentSessionProvider,
-  useAgentSession,
-} from '../../context/AgentSessionContext';
+import { useAgentSession } from '../../context/AgentSessionContext';
 import { sessionStatus } from '../../state/session-status';
 import { SessionStatusPill } from '../../ui';
 import { createReplayDriver, type ReplayDriver } from './driver';

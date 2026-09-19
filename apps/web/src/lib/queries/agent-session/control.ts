@@ -46,12 +46,18 @@ export function useAgentSessionControlMutation(
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async ({ sessionId, action }: AgentSessionControlVars) =>
-      await throwOnErr(() =>
-        agentHarnessServiceClient.control(sessionId, action)
-      ),
+      await throwOnErr(() => controlAgentSession(sessionId, action)),
     ...withCallbacks<ControlResponse, Error, AgentSessionControlVars, unknown>(
       {},
       callbacks
     ),
   }));
+}
+
+/** Send a session action while preserving the client's typed result. */
+export function controlAgentSession(
+  sessionId: string,
+  request: ControlRequest
+) {
+  return agentHarnessServiceClient.control(sessionId, request);
 }

@@ -13,7 +13,9 @@ note: |-
   `soup/collection/date-buckets` (a pure date-fns module, not the soup barrel)
   is the documented exception for feed labels that must match soup views.
   The shared @core/util/base64 codec is also pure and may be reused by email.
+  Block-agent names its rendering layers `ui/` and `component/`.
 files:
+  - apps/web/src/features/block-agent/core/**
   - apps/web/src/features/block-spreadsheet/core/**
   - apps/web/src/features/property/tags/core/**
   - apps/web/src/features/claude-connection/core/**
@@ -25,7 +27,7 @@ files:
   - apps/web/src/features/agent-changes/core/**
 rule:
   kind: string
-  regex: ^['"](solid-js|@urql|urql|@app/lib/urql|@queries/|@service-storage/|@core/|@property/|@components/|@ui|@entity/|(\.\./)+(queries|primitives|components|views)/|(\.\./)+context/)
+  regex: ^['"](solid-js|@urql|urql|@app/lib/urql|@queries/|@service-storage/|@core/|@property/|@components/|@ui|@entity/|(\.\./)+(queries|primitives|components|views|ui|component|context)(/|['"]))
   not:
     regex: ^['"]@core/util/base64['"]
   any:

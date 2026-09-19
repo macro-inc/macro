@@ -5,15 +5,13 @@ import {
   ChangesToggle,
   ReviewNotesDock,
 } from '@app/features/agent-changes/agent-changes';
+import { AgentSessionProvider } from '@app/features/block-agent/agent-session-provider';
 import { AgentComposer } from '@app/features/block-agent/component/AgentComposer';
 import { AgentPullRequestChip } from '@app/features/block-agent/component/AgentPullRequestChip';
 import { agentSessionTitle } from '@app/features/block-agent/component/AgentSplitHeader';
 import { AgentSidePanelSections } from '@app/features/block-agent/component/sidepanel/AgentSidePanelSections';
 import { Transcript } from '@app/features/block-agent/component/Transcript';
-import {
-  AgentSessionProvider,
-  useAgentSession,
-} from '@app/features/block-agent/context/AgentSessionContext';
+import { useAgentSession } from '@app/features/block-agent/context/AgentSessionContext';
 import {
   forgetPendingSession,
   pendingSession,

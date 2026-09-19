@@ -1,18 +1,20 @@
 /**
  * A file the user attached to their prompt. Images and videos render as the
- * channel composer's media thumbnails; anything else is a chip that opens
- * the file. The fold hands over a URL, never bytes, so this is a plain
- * fetch from the static file service.
+ * channel composer's media thumbnails and open the same lightbox; anything
+ * else is a chip that opens the file. The fold hands over a URL, never bytes,
+ * so this is a plain fetch from the static file service.
  */
 
 import { getAttachmentKindFromFile } from '@channel/Input/utils/file-helpers';
 import { MediaImage } from '@channel/Media/MediaImage';
 import { MediaVideo } from '@channel/Media/MediaVideo';
+import { MediaViewerDialog } from '@channel/Media/MediaViewerDialog';
+import type { MediaItem } from '@channel/Media/media-items';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { staticFileSizedUrl } from '@core/constant/servers';
 import type { MessagePart } from '@service-agent-fold/generated/types';
-import { Match, Switch } from 'solid-js';
+import { createSignal, Match, Show, Switch } from 'solid-js';
 
 type AttachmentPartData = Extract<MessagePart, { kind: 'attachment' }>;
 
@@ -40,14 +42,47 @@ function fileExtension(name: string): string | undefined {
   return extension;
 }
 
+/** Last path segment of a static-file URL — the lightbox download name. */
+function staticFileIdFromUri(uri: string): string {
+  try {
+    const last = new URL(uri).pathname.split('/').filter(Boolean).at(-1);
+    return last ?? uri;
+  } catch {
+    return uri;
+  }
+}
+
+function mediaItemFromAttachment(
+  part: AttachmentPartData
+): MediaItem | undefined {
+  const kind = attachmentMedium(part);
+  if (kind !== 'image' && kind !== 'video') return undefined;
+  return {
+    id: staticFileIdFromUri(part.uri),
+    src: kind === 'image' ? staticFileSizedUrl(part.uri, 'medium') : part.uri,
+    fullSrc: part.uri,
+    kind,
+  };
+}
+
 export function AttachmentPart(props: { part: AttachmentPartData }) {
   const medium = () => attachmentMedium(props.part);
+  const [viewerOpen, setViewerOpen] = createSignal(false);
+  const mediaItems = () => {
+    const item = mediaItemFromAttachment(props.part);
+    return item ? [item] : [];
+  };
+  const openViewer = () => setViewerOpen(true);
 
   return (
     <div class="ph-no-capture my-1 first:mt-0 last:mb-0" data-attachment-part>
       <Switch>
         <Match when={medium() === 'image'}>
-          <a href={props.part.uri} target="_blank" rel="noreferrer">
+          <button
+            type="button"
+            aria-label="Open image viewer"
+            onClick={openViewer}
+          >
             <MediaImage.Root>
               <MediaImage.Image
                 src={staticFileSizedUrl(props.part.uri, 'medium')}
@@ -56,10 +91,14 @@ export function AttachmentPart(props: { part: AttachmentPartData }) {
                 fallback={<MediaImage.Fallback square />}
               />
             </MediaImage.Root>
-          </a>
+          </button>
         </Match>
         <Match when={medium() === 'video'}>
-          <a href={props.part.uri} target="_blank" rel="noreferrer">
+          <button
+            type="button"
+            aria-label="Open video viewer"
+            onClick={openViewer}
+          >
             <MediaVideo.Root class="group max-h-64 overflow-hidden border border-edge bg-surface">
               <MediaVideo.Preview
                 src={props.part.uri}
@@ -67,7 +106,7 @@ export function AttachmentPart(props: { part: AttachmentPartData }) {
               />
               <MediaVideo.PlayOverlay />
             </MediaVideo.Root>
-          </a>
+          </button>
         </Match>
         <Match when={medium() === 'file'}>
           <a
@@ -88,6 +127,15 @@ export function AttachmentPart(props: { part: AttachmentPartData }) {
           </a>
         </Match>
       </Switch>
+      <Show when={mediaItems().length > 0}>
+        <MediaViewerDialog
+          items={mediaItems}
+          open={viewerOpen()}
+          onOpenChange={setViewerOpen}
+          currentIndex={() => 0}
+          onCurrentIndexChange={() => {}}
+        />
+      </Show>
     </div>
   );
 }
