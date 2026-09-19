@@ -56,6 +56,8 @@ pub struct NotificationRouterState<S, Auth> {
     pub inner: Arc<S>,
     /// the statically known list of notification typenames which can be blocked by the user
     pub blockable_notification_typenames: &'static HashSet<&'static str>,
+    /// Blockable notification types that require an explicit opt-in.
+    pub default_disabled_notification_typenames: &'static HashSet<&'static str>,
     /// The value which is used to verify the presigned url requests
     pub hmac_signing_key: Hmac<Sha256>,
     /// State used to authorize requests.
@@ -74,6 +76,7 @@ impl<S, Auth> Clone for NotificationRouterState<S, Auth> {
         Self {
             inner: Arc::clone(&self.inner),
             blockable_notification_typenames: self.blockable_notification_typenames,
+            default_disabled_notification_typenames: self.default_disabled_notification_typenames,
             hmac_signing_key: self.hmac_signing_key.clone(),
             authorization_state: self.authorization_state.clone(),
         }
@@ -85,12 +88,14 @@ impl<S: NotificationReader, Auth> NotificationRouterState<S, Auth> {
     pub fn new(
         val: S,
         blockable_notification_typenames: &'static HashSet<&'static str>,
+        default_disabled_notification_typenames: &'static HashSet<&'static str>,
         hmac_signing_key: Hmac<Sha256>,
         authorization_state: MacroAuthorizationState<Auth>,
     ) -> Self {
         NotificationRouterState {
             inner: Arc::new(val),
             blockable_notification_typenames,
+            default_disabled_notification_typenames,
             hmac_signing_key,
             authorization_state,
         }

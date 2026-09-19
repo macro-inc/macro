@@ -82,6 +82,22 @@ function createMentionNotification(
   });
 }
 
+function createReactionNotification(
+  id: string,
+  messageId: string,
+  createdAt: number
+): UnifiedNotification {
+  return createBaseNotification(id, createdAt, {
+    tag: 'channel_message_reaction',
+    content: {
+      messageId,
+      messageContent: `Message ${id}`,
+      emoji: '👍',
+      channelType: 'private',
+    },
+  });
+}
+
 function createDocCommentNotification(
   id: string,
   commentId: string,
@@ -254,6 +270,19 @@ describe('channel notification scoping', () => {
 });
 
 describe('stackNotifications', () => {
+  it('keeps reactions visible in their own stack', () => {
+    const reaction = createReactionNotification('reaction-1', 'message-1', 2);
+    const send = createNewMessageNotification('send-1', 'message-2', 1);
+
+    const stacks = stackNotifications([reaction, send]);
+
+    expect(stacks).toHaveLength(2);
+    expect(stacks[0]).toMatchObject({
+      type: 'channel_message_reaction',
+      notifications: [reaction],
+    });
+  });
+
   describe('basic stacking', () => {
     it('stacks multiple new messages into a single group', () => {
       const notifications = [

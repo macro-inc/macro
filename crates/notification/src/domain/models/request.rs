@@ -86,6 +86,7 @@ where
             build_apns: None,
             build_email: None,
             send_conn_gateway: false,
+            default_enabled: T::DEFAULT_ENABLED,
         }
     }
 }
@@ -111,6 +112,13 @@ pub struct SendNotificationRequest<'a, T, U> {
     pub(crate) build_email: Option<EmailCreateBundle>,
     /// connection gateway accepts arbitrary json so we just ask if its enabled or not
     pub(crate) send_conn_gateway: bool,
+    /// Whether recipients are opted in when no explicit type preference exists.
+    #[serde(default = "default_true")]
+    pub(crate) default_enabled: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
@@ -122,6 +130,7 @@ impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
             build_email,
             uuid_to_write,
             send_conn_gateway,
+            default_enabled,
         } = self;
 
         let sender = req.sender_id.clone().map(CowLike::into_owned);
@@ -152,6 +161,7 @@ impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
             build_apns,
             build_email,
             send_conn_gateway,
+            default_enabled,
         }
     }
 }

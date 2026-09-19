@@ -40,6 +40,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
             : 'commented on';
       })
       .with('channel_message_send', () => 'sent a message in')
+      .with('channel_message_reaction', () => 'reacted to your message in')
       .with('ai_response', () => 'AI responded')
       .with('channel_message_reply', () => 'replied in')
       .with('call_started', () => 'started a call')
@@ -104,6 +105,7 @@ export function getNotificationTargetName(
       )
       .with({ tag: 'channel_mention' }, () => undefined)
       .with({ tag: 'channel_message_send' }, () => undefined)
+      .with({ tag: 'channel_message_reaction' }, () => undefined)
       .with({ tag: 'ai_response' }, () => undefined)
       .with({ tag: 'channel_message_reply' }, () => undefined)
       .with({ tag: 'call_started' }, (m) => m.content.channel_name ?? undefined)
@@ -138,6 +140,10 @@ export function getNotificationContent(
     match(m)
       .with({ tag: 'channel_mention' }, (m) => m.content.messageContent)
       .with({ tag: 'channel_message_send' }, (m) => m.content.messageContent)
+      .with(
+        { tag: 'channel_message_reaction' },
+        (m) => `${m.content.emoji} · ${m.content.messageContent}`
+      )
       .with({ tag: 'ai_response' }, (m) => m.content.summary)
       .with({ tag: 'channel_message_reply' }, (m) => m.content.messageContent)
       .with({ tag: 'call_started' }, () => undefined)
@@ -223,6 +229,10 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       )
       .with(
         { tag: 'channel_message_send' },
+        (m) => m.content.channelType !== 'directMessage'
+      )
+      .with(
+        { tag: 'channel_message_reaction' },
         (m) => m.content.channelType !== 'directMessage'
       )
       .with(

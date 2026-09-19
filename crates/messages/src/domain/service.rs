@@ -386,6 +386,8 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             &message,
             MessageChange::ReactionChanged {
                 message: message.clone(),
+                emoji,
+                added: add,
             },
         )
         .await;

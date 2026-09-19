@@ -1,6 +1,6 @@
 #![recursion_limit = "256"]
 use crate::api::context::{ApiContext, AuthorizationService};
-use crate::api::user_notification::BLOCKABLE_NOTIFICATIONS;
+use crate::api::user_notification::{BLOCKABLE_NOTIFICATIONS, DEFAULT_DISABLED_NOTIFICATIONS};
 use ::notification::domain::models::email_notification_digest::ports::DigestBatch;
 use ::notification::domain::service::NotificationEgressService;
 use ::notification::inbound::notification_events_listener::NotificationEventsListener;
@@ -207,6 +207,7 @@ pub async fn main() -> anyhow::Result<()> {
     let ingress_state = ::notification::inbound::http::NotificationRouterState::new(
         reader_service,
         &BLOCKABLE_NOTIFICATIONS,
+        &DEFAULT_DISABLED_NOTIFICATIONS,
         hmac_key.clone(),
         authorization_state.clone(),
     );

@@ -153,6 +153,7 @@ pub trait NotificationReader: Send + Sync + 'static {
     fn get_disabled_notification_types(
         &self,
         user_id: MacroUserIdStr<'_>,
+        default_disabled_type_names: &'static HashSet<&'static str>,
     ) -> impl Future<Output = Result<Vec<DisabledNotificationType>, Report>> + Send;
 
     /// Disable a notification type for a user.
@@ -160,6 +161,7 @@ pub trait NotificationReader: Send + Sync + 'static {
         &self,
         user_id: MacroUserIdStr<'_>,
         type_name: &str,
+        default_enabled: bool,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
     /// Re-enable a notification type for a user.
@@ -167,6 +169,7 @@ pub trait NotificationReader: Send + Sync + 'static {
         &self,
         user_id: MacroUserIdStr<'_>,
         type_name: &str,
+        default_enabled: bool,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
@@ -305,13 +308,22 @@ where
         let notification_type = req.req.notification.tag.as_ref();
 
         // Fetch all filter data upfront
-        let (muted_users, unsubscribed_users, type_disabled_users) = tokio::try_join!(
+        let (muted_users, unsubscribed_users, type_preference_overrides) = tokio::try_join!(
             self.repository.get_muted_users(&recipient_ids),
             self.repository
                 .get_unsubscribed_users(&req.req.notification_entity.entity_id, &recipient_ids),
             self.repository
                 .get_users_with_type_disabled(notification_type, &recipient_ids),
         )?;
+        let type_disabled_users = if req.default_enabled {
+            type_preference_overrides
+        } else {
+            recipient_ids
+                .iter()
+                .filter(|user_id| !type_preference_overrides.contains(user_id))
+                .map(|user_id| (*user_id).clone().into_owned())
+                .collect()
+        };
 
         let (out, _excluded) =
             req.update_recipients(muted_users, unsubscribed_users, type_disabled_users);
@@ -932,10 +944,34 @@ where
     async fn get_disabled_notification_types(
         &self,
         user_id: MacroUserIdStr<'_>,
+        default_disabled_type_names: &'static HashSet<&'static str>,
     ) -> Result<Vec<DisabledNotificationType>, Report> {
-        self.repository
+        let owned_user_id = user_id.clone().into_owned();
+        let preference_overrides = self
+            .repository
             .get_disabled_notification_types(user_id)
-            .await
+            .await?;
+        let overridden_type_names: HashSet<_> = preference_overrides
+            .iter()
+            .map(|preference| preference.notification_event_type.clone())
+            .collect();
+        let mut disabled: Vec<_> = preference_overrides
+            .into_iter()
+            .filter(|preference| {
+                !default_disabled_type_names.contains(preference.notification_event_type.as_str())
+            })
+            .collect();
+        disabled.extend(
+            default_disabled_type_names
+                .iter()
+                .filter(|type_name| !overridden_type_names.contains(**type_name))
+                .map(|type_name| DisabledNotificationType {
+                    user_id: owned_user_id.clone(),
+                    notification_event_type: (*type_name).to_string(),
+                }),
+        );
+        disabled.sort_by(|a, b| a.notification_event_type.cmp(&b.notification_event_type));
+        Ok(disabled)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -943,10 +979,17 @@ where
         &self,
         user_id: MacroUserIdStr<'_>,
         type_name: &str,
+        default_enabled: bool,
     ) -> Result<(), Report> {
-        self.repository
-            .disable_notification_type(user_id, type_name)
-            .await
+        if default_enabled {
+            self.repository
+                .disable_notification_type(user_id, type_name)
+                .await
+        } else {
+            self.repository
+                .enable_notification_type(user_id, type_name)
+                .await
+        }
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -954,9 +997,16 @@ where
         &self,
         user_id: MacroUserIdStr<'_>,
         type_name: &str,
+        default_enabled: bool,
     ) -> Result<(), Report> {
-        self.repository
-            .enable_notification_type(user_id, type_name)
-            .await
+        if default_enabled {
+            self.repository
+                .enable_notification_type(user_id, type_name)
+                .await
+        } else {
+            self.repository
+                .disable_notification_type(user_id, type_name)
+                .await
+        }
     }
 }

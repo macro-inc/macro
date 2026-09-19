@@ -45,6 +45,8 @@ function channelThreadNotificationIds(
       if (key !== '' || (threadId == null && !activeThreadIds.has(key))) {
         ids.add(notification.id);
       }
+    } else if (metadata.tag === 'channel_message_reaction') {
+      ids.add(notification.id);
     } else if (
       metadata.tag === 'channel_message_send' ||
       metadata.tag === 'channel_message_reply'
