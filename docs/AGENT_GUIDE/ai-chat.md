@@ -322,8 +322,9 @@ clipboard, or use the paperclip **`Attach files`** button. Every file uploads to
 static file service and shows as a chip above the text (media thumbnails, document
 pills with a remove `×`); **Send** is disabled while an upload is pending. The agent
 receives each file as an ACP `resource_link` (a URL it can fetch) after the prompt text,
-and the sent prompt renders its files in the transcript (image thumbnails, video
-previews, file chips that open the file). A prompt may be files only, including the
+and the sent prompt renders its files in the transcript (image thumbnails and
+video previews that open the same lightbox as channel media; file chips that
+open the file). A prompt may be files only, including the
 first message in a new conversation. Uploading attachments survive switching the
 agent or opening repository settings; sending clears the attachment previews.
 Queued prompts
