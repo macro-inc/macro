@@ -5,7 +5,6 @@ import { useSessionTurn } from '@core/agent-session/use-session-turn';
 import type { AgentSessionEntity } from '@entity';
 import ChatIcon from '@phosphor/chat-circle.svg';
 import CodeIcon from '@phosphor/code.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
 import { useAgentSessionQuery } from '@queries/agent-session/session';
 import { useAgentsQuery } from '@queries/agents/agents';
 import { cn, pressHandlers } from '@ui';
@@ -101,7 +100,14 @@ function SessionListItem(props: Props) {
             </Show>
           }
         >
-          <SpinnerIcon class="motion-safe:animate-spin" />
+          <span
+            aria-hidden="true"
+            class="agent-working-wave flex size-4 items-center justify-center gap-[2px] text-ink-muted"
+          >
+            <span class="size-[3px] rounded-full bg-current" />
+            <span class="size-[3px] rounded-full bg-current" />
+            <span class="size-[3px] rounded-full bg-current" />
+          </span>
         </Show>
       </ViewSidebar.Icon>
       <span class="pointer-events-none relative min-w-0 flex-1">

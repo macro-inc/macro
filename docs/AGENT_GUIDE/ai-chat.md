@@ -17,8 +17,9 @@
   pull request is linked). Home and the Agents sidebar share these agent rows.
   Rows have no agent or runtime-status subtext. A session that is starting or
   whose turn is still running (the agent is working, writing code, or stopping)
-  shows a spinner in place of the leading icon; the row's accessible name
-  appends `Starting` or `Working`. Sessions with a linked PR show
+  shows the same three-dot working wave as the transcript in place of the
+  leading icon; the row's accessible name appends `Starting` or `Working`.
+  Sessions with a linked PR show
   **View PR #<number> in GitHub** beneath the title; clicking it opens GitHub in
   a new tab without opening the session. The leading icon reflects the PR status. Changing the composer mode does not filter the sidebar.
   Selecting a row opens its own mode; Shift-click opens it in a new split.
