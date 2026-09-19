@@ -3,6 +3,7 @@ import { $findMatchingParent } from '@lexical/utils';
 import type { LexicalNode } from 'lexical';
 
 export * from './document';
+export * from './editor-tree';
 export * from './languageSupport';
 export * from './media';
 export * from './mentions';
