@@ -1,6 +1,9 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
+import type { JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HomeChatStart } from './HomeChatStart';
+
+type ChildrenProps = { children?: JSX.Element };
 
 const mocks = vi.hoisted(() => ({
   agentsEnabled: true,
@@ -16,12 +19,12 @@ vi.mock('@app/components/view-shell', () => ({
     },
   }),
   ViewShell: {
-    TopBar: (props: { children?: unknown }) => (
+    TopBar: (props: ChildrenProps) => (
       <div data-testid="home-topbar">{props.children}</div>
     ),
   },
   ViewSidebar: {
-    Title: (props: { children?: unknown }) => <span>{props.children}</span>,
+    Title: (props: ChildrenProps) => <span>{props.children}</span>,
   },
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -29,14 +32,14 @@ vi.mock('@app/lib/analytics/posthog', () => ({
 }));
 vi.mock('@core/constant/featureFlags', () => ({ enableChatV3Agents: {} }));
 vi.mock('@core/component/AI/component/DragDrop', () => ({
-  DragDropWrapper: (props: { class?: string; children?: unknown }) => (
+  DragDropWrapper: (props: ChildrenProps & { class?: string }) => (
     <div data-testid="home-composer-frame" class={props.class}>
       {props.children}
     </div>
   ),
 }));
 vi.mock('@core/component/AI/context', () => ({
-  ChatInputProvider: (props: { children?: unknown }) => props.children,
+  ChatInputProvider: (props: ChildrenProps) => props.children,
 }));
 vi.mock('../../home/home-chat-input', () => ({
   HomeChatInput: () => <div data-testid="home-chat-input" />,
