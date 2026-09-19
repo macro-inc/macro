@@ -424,10 +424,14 @@ caret, the path, `+adds −dels`, and **Copy path**. Diffs render with Pierre; h
 line and click the accent **+** in the gutter (drag for a range) to leave a
 review note for the agent (`aria-label="Review note"`; `Cmd/Ctrl+Enter` adds,
 `Escape` cancels). Notes hang under their line as "queued for the agent" and a
-**N review notes queued · Send to agent** chip appears above the composer;
-sending posts one prompt listing every note by file and line and marks them
-"sent to agent". Notes never go to GitHub. Collapsed files and unsent notes
-persist per session in localStorage; a new capture expands all files.
+**N review notes queued · Send to agent** chip appears above the composer.
+The chip's count row expands (`aria-expanded`) to show each queued note's
+file, line, and text so the reviewer can read or edit them before sending;
+**Send to agent** then posts one prompt listing every non-empty note by file
+and line and marks them "sent to agent". Clicking a note's path opens that
+file in the Changes pane. Notes never go to GitHub. Collapsed files and
+unsent notes persist per session in localStorage; a new capture expands all
+files.
 
 While the pane is closed and a capture has files, a **Changes ready to
 review** card sits above the composer with **Review changes**, **Pull request

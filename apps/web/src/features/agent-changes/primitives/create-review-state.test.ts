@@ -122,11 +122,17 @@ describe('createReviewState', () => {
       review.addNote({ ...anchor, path: 'b.ts' }, 'Keep');
       expect(review.queued().map((note) => note.id)).toEqual(['n1', 'n2']);
 
+      review.updateNote('n1', 'Extract a helper, please');
+      expect(review.notes()[0]?.text).toBe('Extract a helper, please');
+
       review.removeNote('n2');
       const sent = review.markQueuedSent();
       expect(sent.map((note) => note.id)).toEqual(['n1']);
       expect(review.queued()).toEqual([]);
       expect(review.notes()[0]?.sentAt).toBe('T');
+      expect(review.notes()[0]?.text).toBe('Extract a helper, please');
+      review.updateNote('n1', 'ignored after send');
+      expect(review.notes()[0]?.text).toBe('Extract a helper, please');
       expect(review.markQueuedSent()).toEqual([]);
       dispose();
     });

@@ -4,7 +4,7 @@
  * Each renders nothing until a host has mounted the controller.
  */
 
-import { Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { ChangesReadyCard } from '../components/ChangesReadyCard';
 import { ChangesToggleButton } from '../components/ChangesToggleButton';
 import { ReviewNotesChip } from '../components/ReviewNotesChip';
@@ -58,14 +58,23 @@ export function ChangesHandoff() {
 
 export function ReviewNotesDock() {
   const controller = useOptionalAgentChanges();
+  const [expanded, setExpanded] = createSignal(false);
   if (!controller) return null;
-  const { review, context } = controller;
+  const { review, context, layout } = controller;
   return (
     <Show when={context.host.agent && review.queued().length > 0}>
       <ReviewNotesChip
-        count={review.queued().length}
+        notes={review.queued()}
+        expanded={expanded()}
         disabled={!context.host.agent?.canSend()}
+        onToggleExpanded={() => setExpanded((open) => !open)}
+        onUpdate={review.updateNote}
+        onRemove={review.removeNote}
         onSend={controller.sendQueuedNotes}
+        onOpenNote={(note) => {
+          layout.open();
+          review.activate(note.path);
+        }}
       />
     </Show>
   );

@@ -6,7 +6,7 @@
 import type { Accessor } from 'solid-js';
 import type { AgentChangesContext } from '../context/agent-changes-context';
 import type { DiffStyle, PaneLayout } from '../core/layout';
-import { formatNotesForAgent } from '../core/review-notes';
+import { formatNotesForAgent, sendableNotes } from '../core/review-notes';
 import { type ChangesModel, createChangesModel } from './create-changes-model';
 import {
   createPaneLayout,
@@ -88,7 +88,7 @@ export function createAgentChanges(options: {
     sendQueuedNotes: () => {
       const agent = host.agent;
       if (!agent) return;
-      const queued = review.queued();
+      const queued = sendableNotes(review.notes());
       if (queued.length === 0) return;
       if (!agent.canSend()) {
         host.notify('The agent cannot take a prompt right now.', 'failure');

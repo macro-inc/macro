@@ -41,6 +41,20 @@ export function queuedNotes(notes: readonly ReviewNote[]): ReviewNote[] {
   return notes.filter((note) => note.sentAt === undefined);
 }
 
+/** Queued notes that still have text, in the order the dump will use. */
+export function sendableNotes(notes: readonly ReviewNote[]): ReviewNote[] {
+  return orderNotes(queuedNotes(notes)).filter(
+    (note) => note.text.trim() !== ''
+  );
+}
+
+/** File then line, so the dock and the dump walk the diff the same way. */
+export function orderNotes(notes: readonly ReviewNote[]): ReviewNote[] {
+  return [...notes].sort(
+    (a, b) => a.path.localeCompare(b.path) || a.lineNumber - b.lineNumber
+  );
+}
+
 /** Notes on one file, in line order, queued first. */
 export function notesForFile(
   notes: readonly ReviewNote[],
@@ -51,7 +65,9 @@ export function notesForFile(
     .sort((a, b) => a.lineNumber - b.lineNumber);
 }
 
-function describeLines(note: ReviewNote): string {
+export function describeNoteLines(
+  note: Pick<ReviewNote, 'side' | 'lineNumber' | 'endLineNumber'>
+): string {
   const version = note.side === 'additions' ? 'new' : 'old';
   if (note.endLineNumber > note.lineNumber) {
     return `lines ${note.lineNumber}–${note.endLineNumber} (${version})`;
@@ -65,17 +81,15 @@ function describeLines(note: ReviewNote): string {
  * diff the way the reviewer did.
  */
 export function formatNotesForAgent(notes: readonly ReviewNote[]): string {
-  const ordered = [...notes].sort(
-    (a, b) => a.path.localeCompare(b.path) || a.lineNumber - b.lineNumber
-  );
+  const ordered = orderNotes(notes);
   if (ordered.length === 0) return '';
   if (ordered.length === 1) {
     const note = ordered[0]!;
-    return `Review note on \`${note.path}\`, ${describeLines(note)}:\n\n${note.text.trim()}`;
+    return `Review note on \`${note.path}\`, ${describeNoteLines(note)}:\n\n${note.text.trim()}`;
   }
   const items = ordered.map(
     (note, index) =>
-      `${index + 1}. \`${note.path}\`, ${describeLines(note)}: ${note.text.trim()}`
+      `${index + 1}. \`${note.path}\`, ${describeNoteLines(note)}: ${note.text.trim()}`
   );
   return `Please address these ${ordered.length} review notes on the current changes:\n\n${items.join('\n')}`;
 }
