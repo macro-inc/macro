@@ -1,10 +1,5 @@
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
-import {
-  isInBlock,
-  type PreviewState,
-  useBlockOwner,
-  useMaybeBlockName,
-} from '@core/block';
+import { isInBlock, type PreviewState, useMaybeBlockName } from '@core/block';
 import { useItemPreviewData } from '@core/component/ItemPreview';
 import { toast } from '@core/component/Toast/Toast';
 import { resolveBlockAlias, verifyBlockName } from '@core/constant/allBlocks';
@@ -189,7 +184,9 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
     NonNullable<DocumentCardDecoratorProps['previewComponent']> | undefined
   >(undefined);
 
-  const previewOwner = useBlockOwner() ?? getOwner();
+  // Cached previews outlive individual Lexical decorator instances, so attach
+  // them to the editor lifecycle rather than the decorator lifecycle.
+  const previewOwner = wrapper?.owner ?? getOwner();
 
   const registerPreviewElement = (
     nodeId: string,
