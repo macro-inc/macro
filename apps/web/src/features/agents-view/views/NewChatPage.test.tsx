@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   openSettings: vi.fn(),
   attachments: [] as InputAttachmentData[],
   recentIds: [] as string[],
+  recentUrls: [] as string[],
   repositories: [] as { url: string; defaultBranch?: string }[],
 }));
 vi.mock('@core/util/upload', () => ({ uploadFile: vi.fn() }));
@@ -36,7 +37,10 @@ vi.mock('@app/features/block-agent/context/recent-agent-selections', () => ({
   }),
 }));
 vi.mock('../primitives/recent-repositories', () => ({
-  createRecentRepositories: () => ({ urls: () => [], remember: vi.fn() }),
+  createRecentRepositories: () => ({
+    urls: () => mocks.recentUrls,
+    remember: vi.fn(),
+  }),
 }));
 vi.mock('../queries/reachable-repositories', () => ({
   createReachableRepositories: () => ({
@@ -164,6 +168,7 @@ describe('agent-led new conversation', () => {
   beforeEach(() => {
     mocks.attachments = [];
     mocks.recentIds = [MACRO_CODER_BOT_ID];
+    mocks.recentUrls = [];
     mocks.repositories = [
       { url: 'https://github.com/macro-inc/macro', defaultBranch: 'develop' },
     ];
@@ -244,7 +249,24 @@ describe('agent-led new conversation', () => {
       repoBranch: 'feature/home',
     });
   });
-  it('starts a typed repository on main and a listed one on its default branch', async () => {
+  it('starts a new conversation on Choose repository, not the last used one', async () => {
+    mocks.recentIds = [CURSOR_BOT_ID];
+    mocks.recentUrls = ['https://github.com/macro-inc/macro'];
+    const send = page();
+    expect(
+      screen.getByRole('button', { name: 'Repository' }).textContent
+    ).toContain('Choose repository');
+    expect(
+      screen.getByRole('button', { name: 'Repository' }).textContent
+    ).not.toContain('macro-inc/macro');
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith({
+      botId: CURSOR_BOT_ID,
+      prompt: 'Prompt',
+      repoUrl: undefined,
+    });
+  });
+  it('refuses an unlisted repository and starts a listed one on its default branch', async () => {
     const send = page();
     await selectAgent(/Cursor/);
     fireEvent.click(screen.getByRole('button', { name: 'Repository' }));
@@ -254,39 +276,29 @@ describe('agent-led new conversation', () => {
         target: { value: 'macro-inc/other' },
       }
     );
-    expect(
-      screen.queryByRole('option', { name: 'Choose automatically' })
-    ).toBeNull();
-    fireEvent.click(
-      screen.getByRole('option', { name: 'Use macro-inc/other' })
+    expect(screen.queryAllByRole('option')).toHaveLength(0);
+    expect(screen.getByText(/No repositories match/).textContent).toContain(
+      'macro-inc/other'
     );
+    fireEvent.input(
+      screen.getByRole('combobox', { name: 'Search repositories' }),
+      { target: { value: '' } }
+    );
+    fireEvent.click(screen.getByRole('option', { name: 'macro-inc/macro' }));
     expect(
       screen.getByRole('button', { name: 'Branch' }).textContent
-    ).toContain('main');
+    ).toContain('develop');
     fireEvent.click(screen.getByRole('button', { name: 'Branch' }));
     fireEvent.input(screen.getByRole('textbox', { name: 'Starting branch' }), {
-      target: { value: 'feature/other' },
+      target: { value: 'feature/home' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Use branch' }));
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenLastCalledWith({
       botId: CURSOR_BOT_ID,
       prompt: 'Prompt',
-      repoUrl: 'https://github.com/macro-inc/other',
-      repoBranch: 'feature/other',
-    });
-    // Another repository drops the chosen branch for its own default.
-    fireEvent.click(screen.getByRole('button', { name: 'Repository' }));
-    fireEvent.click(screen.getByRole('option', { name: 'macro-inc/macro' }));
-    expect(
-      screen.getByRole('button', { name: 'Branch' }).textContent
-    ).toContain('develop');
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-    expect(send).toHaveBeenLastCalledWith({
-      botId: CURSOR_BOT_ID,
-      prompt: 'Prompt',
       repoUrl: 'https://github.com/macro-inc/macro',
-      repoBranch: 'develop',
+      repoBranch: 'feature/home',
     });
   });
   it('uses a saved agent without sending a per-session model override', async () => {

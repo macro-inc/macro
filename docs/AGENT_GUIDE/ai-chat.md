@@ -63,13 +63,15 @@
   (**Choose repository** until one is picked) opens a searchable list:
   **Choose automatically**, then the repositories the signed-in user reaches
   through Macro's GitHub App (`GET /agent-repositories` on the agent harness),
-  recently used ones first. Typing filters the list; an unlisted GitHub
-  `owner/repo` or URL adds a **Use owner/repo** row. Arrow keys move the
-  highlight and Enter or a click picks it; there is no separate confirm
-  button. Someone who reaches no repository sees a hint with **Connect
-  GitHub**, which opens Settings → Connected. The last repository picked is
-  remembered per user in local storage and preselected next time. Once
-  selected, **Branch** shows the repository's default branch (`main` when it
+  recently used ones first. A new conversation always starts on **Choose
+  repository** (Automatic); the last used repository is not preselected.
+  Typing filters the list to those reachable repositories. Unlisted GitHub
+  URLs and recents the listing no longer carries are not offered. Arrow keys
+  move the highlight and Enter or a click picks it; there is no separate
+  confirm button. Someone who reaches no repository sees a hint with **Connect
+  GitHub**, which opens Settings → Connected. Listed recents are remembered
+  per user in local storage and offered first, without changing the Automatic
+  default. Once selected, **Branch** shows the repository's default branch (`main` when it
   has none) and opens a starting-branch field confirmed with **Use branch**;
   picking a different repository resets the branch to that repository's
   default. Omitting the branch on the create-session API likewise starts on

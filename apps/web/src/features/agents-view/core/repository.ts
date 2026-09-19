@@ -89,10 +89,10 @@ export function sameRepository(left: string, right: string): boolean {
 }
 
 /**
- * The repositories to offer: recents first, in their own order, then every
- * other reachable repository as the harness sorted it. A recent the listing
- * no longer carries stays offered - the service, not this list, decides what
- * a session may use, and it says so when it refuses.
+ * The repositories to offer: listed recents first, in their own order, then
+ * every other reachable repository as the harness sorted it. A recent the
+ * listing no longer carries is omitted — the picker only offers repositories
+ * the caller can actually hand a session.
  */
 export function orderRepositories(
   reachable: readonly ReachableRepository[],
@@ -107,11 +107,10 @@ export function orderRepositories(
     ordered.push(repository);
   };
   for (const url of recents) {
-    add(
-      reachable.find((repository) => sameRepository(repository.url, url)) ?? {
-        url,
-      }
+    const listed = reachable.find((repository) =>
+      sameRepository(repository.url, url)
     );
+    if (listed) add(listed);
   }
   for (const repository of reachable) add(repository);
   return ordered;
