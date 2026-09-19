@@ -1,11 +1,16 @@
-import { createComputed, createRoot, createSignal, onCleanup } from 'solid-js';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import {
   createMachine,
   DispatchCycleError,
   MAX_CHAINED_DISPATCHES,
   type MachineDef,
-} from './create-machine';
+  type MachineOptions,
+} from './index';
+
+// Importing the public core entry point must never load Solid.
+vi.mock('solid-js', () => {
+  throw new Error('The machine core must not import Solid');
+});
 
 type S = { t: 'a' } | { t: 'b'; n: number } | { t: 'c' };
 type E =
@@ -37,270 +42,367 @@ const def: MachineDef<S, E, C> = {
   c: { on: (_s, e) => (e.t === 'go-a' ? { state: { t: 'a' } } : undefined) },
 };
 
-const run = <T>(fn: (dispose: () => void) => T) => createRoot(fn);
+function create(options: Partial<MachineOptions<S, E, C>> = {}) {
+  const machine = createMachine<S, E, C>({
+    initial: { t: 'a' },
+    def,
+    ...options,
+  });
+  onTestFinished(machine.dispose);
+  return machine;
+}
 
 describe('createMachine', () => {
-  it('starts in the initial state and applies transitions', () =>
-    run((dispose) => {
-      const m = createMachine({ initial: { t: 'a' } as S, def });
-      expect(m.state()).toEqual({ t: 'a' });
-      m.dispatch({ t: 'go-b', n: 1 });
-      expect(m.state()).toEqual({ t: 'b', n: 1 });
-      dispose();
-    }));
+  it('runs without a Solid owner or a DOM', () => {
+    expect(typeof document).toBe('undefined');
+    const machine = create();
+    expect(machine.getState()).toEqual({ t: 'a' });
+    machine.dispatch({ t: 'go-b', n: 1 });
+    expect(machine.getState()).toEqual({ t: 'b', n: 1 });
+  });
 
-  it('reports ignored events to inspect and leaves state untouched', () =>
-    run((dispose) => {
-      const inspect = vi.fn();
-      const m = createMachine({ initial: { t: 'a' } as S, def, inspect });
-      m.dispatch({ t: 'noop' });
-      expect(m.state()).toEqual({ t: 'a' });
-      expect(inspect).toHaveBeenCalledWith(
-        { t: 'a' },
-        { t: 'noop' },
-        'ignored'
-      );
-      dispose();
-    }));
+  it('reports ignored events without notifying or restarting the scope', () => {
+    const inspect = vi.fn();
+    const cleanup = vi.fn();
+    const scope = vi.fn(() => cleanup);
+    const listener = vi.fn();
+    const machine = create({ inspect, scopes: { a: scope } });
+    const initial = machine.getState();
+    machine.subscribe(listener);
+    machine.dispatch({ t: 'noop' });
+    expect(inspect).toHaveBeenCalledWith(initial, { t: 'noop' }, 'ignored');
+    expect(machine.getState()).toBe(initial);
+    expect(listener).not.toHaveBeenCalled();
+    expect(scope).toHaveBeenCalledOnce();
+    expect(cleanup).not.toHaveBeenCalled();
+  });
 
-  it('executes commands in order after the state has changed', () =>
-    run((dispose) => {
-      const seen: Array<[C, S]> = [];
-      const m = createMachine<S, E, C>({
-        initial: { t: 'a' },
-        def,
-        execute: (cmd) => seen.push([cmd, m.state()]),
+  it('cleans up, enters, publishes, and executes commands in order', () => {
+    const order: string[] = [];
+    const machine = create({
+      def: {
+        ...def,
+        a: {
+          on: () => ({
+            state: { t: 'b', n: 7 },
+            commands: [
+              { t: 'cmd', n: 1 },
+              { t: 'cmd', n: 2 },
+            ],
+          }),
+        },
+      },
+      scopes: {
+        a: () => () => {
+          order.push(`leave ${machine.getState().t}`);
+        },
+        b: () => {
+          order.push('enter b');
+        },
+      },
+      execute: (cmd) => {
+        order.push(`command ${cmd.n} in ${machine.getState().t}`);
+      },
+    });
+    machine.subscribe((state) => order.push(`notify ${state.t}`));
+    machine.dispatch({ t: 'go-b', n: 7 });
+    expect(order).toEqual([
+      'leave a',
+      'enter b',
+      'notify b',
+      'command 1 in b',
+      'command 2 in b',
+    ]);
+  });
+
+  it('restarts scopes on same-tag transitions with a fresh payload', () => {
+    const log: string[] = [];
+    const machine = create({
+      initial: { t: 'b', n: 1 },
+      scopes: {
+        b: (state) => {
+          log.push(`enter ${state.n}`);
+          return () => {
+            log.push(`leave ${state.n}`);
+          };
+        },
+      },
+    });
+    machine.dispatch({ t: 'go-b', n: 2 });
+    machine.dispose();
+    expect(log).toEqual(['enter 1', 'leave 1', 'enter 2', 'leave 2']);
+  });
+
+  it('restarts even when an accepted transition returns the same object', () => {
+    const cleanup = vi.fn();
+    const scope = vi.fn(() => cleanup);
+    const machine = create({
+      def: { ...def, a: { on: (state) => ({ state }) } },
+      scopes: { a: scope },
+    });
+    const listener = vi.fn();
+    machine.subscribe(listener);
+    machine.dispatch({ t: 'noop' });
+    expect(scope).toHaveBeenCalledTimes(2);
+    expect(cleanup).toHaveBeenCalledOnce();
+    expect(listener).toHaveBeenCalledWith(machine.getState());
+  });
+
+  it('finishes the initial scope before draining its events', () => {
+    const order: string[] = [];
+    const machine = create({
+      scopes: {
+        a: (_state, dispatch) => {
+          dispatch({ t: 'go-b', n: 3 });
+          order.push('initial mounted');
+          return () => {
+            order.push('initial cleaned up');
+          };
+        },
+        b: () => {
+          order.push('b mounted');
+        },
+      },
+    });
+    expect(machine.getState()).toEqual({ t: 'b', n: 3 });
+    expect(order).toEqual([
+      'initial mounted',
+      'initial cleaned up',
+      'b mounted',
+    ]);
+  });
+
+  it('queues events from scopes until scope entry and commands finish', () => {
+    const order: string[] = [];
+    const machine = create({
+      scopes: {
+        b: (_state, dispatch) => {
+          dispatch({ t: 'go-c' });
+          order.push('b mounted');
+        },
+        c: () => {
+          order.push('c mounted');
+        },
+      },
+      execute: () => {
+        order.push(`command in ${machine.getState().t}`);
+      },
+    });
+    machine.dispatch({ t: 'go-b', n: 1 });
+    expect(order).toEqual([
+      'b mounted',
+      'command in b',
+      'c mounted',
+      'command in c',
+    ]);
+  });
+
+  it('queues events from commands', () => {
+    const machine = create({
+      execute: (cmd, dispatch) => {
+        if (cmd.n === 1) dispatch({ t: 'go-c' });
+      },
+    });
+    machine.dispatch({ t: 'go-b', n: 1 });
+    expect(machine.getState()).toEqual({ t: 'c' });
+  });
+
+  it('queues events from outgoing cleanups', () => {
+    const machine = create({
+      initial: { t: 'b', n: 1 },
+      scopes: {
+        b: (_state, dispatch) => () => dispatch({ t: 'go-a' }),
+      },
+    });
+    machine.dispatch({ t: 'go-c' });
+    expect(machine.getState()).toEqual({ t: 'a' });
+  });
+
+  it('finishes notifying all subscribers before processing their events', () => {
+    const order: string[] = [];
+    const machine = create();
+    machine.subscribe((state) => {
+      order.push(`first ${state.t}`);
+      if (state.t === 'b') machine.dispatch({ t: 'go-c' });
+    });
+    machine.subscribe((state) => {
+      order.push(`second ${state.t} reads ${machine.getState().t}`);
+    });
+    machine.dispatch({ t: 'go-b', n: 1 });
+    expect(order).toEqual([
+      'first b',
+      'second b reads b',
+      'first c',
+      'second c reads c',
+    ]);
+  });
+
+  it('subscribes to future transitions and stops on unsubscribe', () => {
+    const machine = create();
+    const listener = vi.fn();
+    const unsubscribe = machine.subscribe(listener);
+    expect(listener).not.toHaveBeenCalled();
+    machine.dispatch({ t: 'go-b', n: 4 });
+    unsubscribe();
+    unsubscribe();
+    machine.dispatch({ t: 'go-c' });
+    expect(listener).toHaveBeenCalledExactlyOnceWith({ t: 'b', n: 4 });
+  });
+
+  it('defers new subscribers and respects unsubscribe during notification', () => {
+    const machine = create();
+    const removed = vi.fn();
+    const added = vi.fn();
+    machine.subscribe(() => {
+      unsubscribe();
+      machine.subscribe(added);
+    });
+    const unsubscribe = machine.subscribe(removed);
+    machine.dispatch({ t: 'go-b', n: 1 });
+    expect(removed).not.toHaveBeenCalled();
+    expect(added).not.toHaveBeenCalled();
+    machine.dispatch({ t: 'go-c' });
+    expect(added).toHaveBeenCalledExactlyOnceWith({ t: 'c' });
+  });
+
+  it('disposes once and ignores cleanup, late, and queued dispatches', () => {
+    const cleanup = vi.fn();
+    const machine = create({
+      initial: { t: 'b', n: 1 },
+      scopes: {
+        b: (_state, dispatch) => () => {
+          cleanup();
+          dispatch({ t: 'go-c' });
+        },
+      },
+    });
+    const listener = vi.fn();
+    machine.subscribe(listener);
+    machine.dispose();
+    machine.dispose();
+    machine.subscribe(listener);
+    machine.dispatch({ t: 'go-c' });
+    expect(cleanup).toHaveBeenCalledOnce();
+    expect(listener).not.toHaveBeenCalled();
+    expect(machine.getState()).toEqual({ t: 'b', n: 1 });
+  });
+
+  it('cancels a timer when its state is left or its machine is disposed', () => {
+    vi.useFakeTimers();
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
+    const machine = create({
+      initial: { t: 'b', n: 1 },
+      scopes: {
+        b: (_state, dispatch) => {
+          const timer = setTimeout(() => dispatch({ t: 'go-c' }), 100);
+          return () => clearTimeout(timer);
+        },
+      },
+    });
+    machine.dispatch({ t: 'go-b', n: 2 });
+    expect(vi.getTimerCount()).toBe(1);
+    machine.dispose();
+    expect(vi.getTimerCount()).toBe(0);
+    vi.advanceTimersByTime(100);
+    expect(machine.getState()).toEqual({ t: 'b', n: 2 });
+  });
+
+  it('stops a transition if its outgoing cleanup disposes the machine', () => {
+    const entered = vi.fn();
+    const execute = vi.fn();
+    const machine = create({
+      scopes: {
+        a: () => () => machine.dispose(),
+        b: entered,
+      },
+      execute,
+    });
+    machine.dispatch({ t: 'go-b', n: 1 });
+    expect(machine.getState()).toEqual({ t: 'a' });
+    expect(entered).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('releases cleanup returned after a scope disposes the machine', () => {
+    const cleanup = vi.fn();
+    const execute = vi.fn();
+    const machine = create({
+      scopes: {
+        b: () => {
+          machine.dispose();
+          return cleanup;
+        },
+      },
+      execute,
+    });
+    machine.dispatch({ t: 'go-b', n: 1 });
+    expect(cleanup).toHaveBeenCalledOnce();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('stops notifications, commands, and queued events on subscriber disposal', () => {
+    const execute = vi.fn();
+    const nextListener = vi.fn();
+    const machine = create({ execute });
+    machine.subscribe(() => {
+      machine.dispatch({ t: 'go-c' });
+      machine.dispose();
+    });
+    machine.subscribe(nextListener);
+    machine.dispatch({ t: 'go-b', n: 1 });
+    expect(nextListener).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
+    expect(machine.getState()).toEqual({ t: 'b', n: 1 });
+  });
+
+  it('discards queued events after a command throws', () => {
+    const machine = create({
+      execute: (_cmd, dispatch) => {
+        dispatch({ t: 'go-c' });
+        throw new Error('command failed');
+      },
+    });
+    expect(() => machine.dispatch({ t: 'go-b', n: 1 })).toThrow(
+      'command failed'
+    );
+    machine.dispatch({ t: 'noop' });
+    expect(machine.getState()).toEqual({ t: 'b', n: 1 });
+  });
+
+  it('reports a dispatch cycle and cleans up when construction fails', () => {
+    type L = { t: 'x' } | { t: 'y' };
+    type LE = { t: 'flip' };
+    const loop: MachineDef<L, LE> = {
+      x: { on: () => ({ state: { t: 'y' } }) },
+      y: { on: () => ({ state: { t: 'x' } }) },
+    };
+    let entered = 0;
+    let cleanedUp = 0;
+    const scope = (_state: L, dispatch: (event: LE) => void) => {
+      entered++;
+      dispatch({ t: 'flip' });
+      return () => {
+        cleanedUp++;
+      };
+    };
+    let error: unknown;
+    try {
+      createMachine<L, LE>({
+        initial: { t: 'x' },
+        def: loop,
+        scopes: { x: scope, y: scope },
       });
-      m.dispatch({ t: 'go-b', n: 7 });
-      expect(seen).toEqual([
-        [
-          { t: 'cmd', n: 7 },
-          { t: 'b', n: 7 },
-        ],
-      ]);
-      dispose();
-    }));
-
-  describe('scopes', () => {
-    it('mounts on entry, disposes on exit, and exposes the returned value', () =>
-      run((dispose) => {
-        const log: string[] = [];
-        const m = createMachine<S, E, C, string>({
-          initial: { t: 'a' },
-          def,
-          scopes: {
-            b: (s) => {
-              log.push(`enter b ${s.n}`);
-              onCleanup(() => log.push(`leave b ${s.n}`));
-              return `value ${s.n}`;
-            },
-          },
-        });
-        expect(m.value()).toBeUndefined();
-        m.dispatch({ t: 'go-b', n: 1 });
-        expect(m.value()).toBe('value 1');
-        m.dispatch({ t: 'go-c' });
-        expect(m.value()).toBeUndefined();
-        expect(log).toEqual(['enter b 1', 'leave b 1']);
-        dispose();
-      }));
-
-    it('remounts on a self-transition with a new payload', () =>
-      run((dispose) => {
-        const log: string[] = [];
-        const m = createMachine<S, E, C, void>({
-          initial: { t: 'b', n: 1 },
-          def,
-          scopes: {
-            b: (s) => {
-              log.push(`enter ${s.n}`);
-              onCleanup(() => log.push(`leave ${s.n}`));
-            },
-          },
-        });
-        m.dispatch({ t: 'go-b', n: 2 });
-        expect(log).toEqual(['enter 1', 'leave 1', 'enter 2']);
-        dispose();
-      }));
-
-    it('runs the outgoing cleanup while state() still reads the old state', () =>
-      run((dispose) => {
-        let seenOnLeave: S | undefined;
-        const m = createMachine<S, E, C, void>({
-          initial: { t: 'b', n: 1 },
-          def,
-          scopes: {
-            b: () => {
-              onCleanup(() => {
-                seenOnLeave = m.state();
-              });
-            },
-          },
-        });
-        m.dispatch({ t: 'go-c' });
-        expect(seenOnLeave).toEqual({ t: 'b', n: 1 });
-        dispose();
-      }));
-
-    it('mounts the initial state scope and drains events it dispatches', () =>
-      run((dispose) => {
-        const m = createMachine<S, E, C, void>({
-          initial: { t: 'a' },
-          def,
-          scopes: {
-            a: (_s, dispatch) => {
-              dispatch({ t: 'go-b', n: 3 });
-            },
-          },
-        });
-        expect(m.state()).toEqual({ t: 'b', n: 3 });
-        dispose();
-      }));
-
-    it('disposes the current scope when the owner is disposed', () =>
-      run((dispose) => {
-        const left = vi.fn();
-        createMachine<S, E, C, void>({
-          initial: { t: 'b', n: 1 },
-          def,
-          scopes: { b: () => onCleanup(left) },
-        });
-        dispose();
-        expect(left).toHaveBeenCalledOnce();
-      }));
-
-    it('scope-internal reactivity is disposed with the scope', () =>
-      run((dispose) => {
-        const [sig, setSig] = createSignal(0);
-        const reads: number[] = [];
-        const m = createMachine<S, E, C, void>({
-          initial: { t: 'b', n: 1 },
-          def,
-          scopes: {
-            b: () => {
-              const stop = watch(sig, (v) => reads.push(v));
-              onCleanup(stop);
-            },
-          },
-        });
-        setSig(1);
-        m.dispatch({ t: 'go-c' });
-        setSig(2);
-        expect(reads).toEqual([0, 1]);
-        dispose();
-      }));
+    } catch (cause) {
+      error = cause;
+    }
+    expect(error).toBeInstanceOf(DispatchCycleError);
+    const trail = (error as DispatchCycleError).trail;
+    expect(trail.length).toBeGreaterThan(0);
+    expect(trail.length).toBeLessThanOrEqual(20);
+    expect(trail.every((event) => (event as LE).t === 'flip')).toBe(true);
+    expect(entered).toBe(MAX_CHAINED_DISPATCHES + 1);
+    expect(cleanedUp).toBe(entered);
   });
-
-  describe('dispatch serialization', () => {
-    it('queues a dispatch made from inside a scope until the transition completes', () =>
-      run((dispose) => {
-        const order: string[] = [];
-        const m = createMachine<S, E, C, void>({
-          initial: { t: 'a' },
-          def,
-          scopes: {
-            b: (_s, dispatch) => {
-              order.push('b mounted');
-              dispatch({ t: 'go-c' });
-              order.push('b scope done');
-            },
-            c: () => {
-              order.push('c mounted');
-            },
-          },
-        });
-        m.dispatch({ t: 'go-b', n: 1 });
-        expect(order).toEqual(['b mounted', 'b scope done', 'c mounted']);
-        expect(m.state()).toEqual({ t: 'c' });
-        dispose();
-      }));
-
-    it('queues a dispatch made from a command', () =>
-      run((dispose) => {
-        const m = createMachine<S, E, C>({
-          initial: { t: 'a' },
-          def,
-          execute: (cmd, dispatch) => {
-            if (cmd.n === 1) dispatch({ t: 'go-c' });
-          },
-        });
-        m.dispatch({ t: 'go-b', n: 1 });
-        expect(m.state()).toEqual({ t: 'c' });
-        dispose();
-      }));
-
-    it('queues a dispatch made from a cleanup', () =>
-      run((dispose) => {
-        const m = createMachine<S, E, C, void>({
-          initial: { t: 'b', n: 1 },
-          def,
-          scopes: {
-            b: (_s, dispatch) => {
-              onCleanup(() => dispatch({ t: 'go-a' }));
-            },
-          },
-        });
-        m.dispatch({ t: 'go-c' });
-        expect(m.state()).toEqual({ t: 'a' });
-        dispose();
-      }));
-
-    it('throws DispatchCycleError with a trail on a dispatch cycle', () =>
-      run((dispose) => {
-        type L = { t: 'x' } | { t: 'y' };
-        type LE = { t: 'flip' };
-        const loop: MachineDef<L, LE> = {
-          x: { on: () => ({ state: { t: 'y' } }) },
-          y: { on: () => ({ state: { t: 'x' } }) },
-        };
-        const build = () =>
-          createMachine<L, LE, never, void>({
-            initial: { t: 'x' },
-            def: loop,
-            scopes: {
-              x: (_s, dispatch) => dispatch({ t: 'flip' }),
-              y: (_s, dispatch) => dispatch({ t: 'flip' }),
-            },
-          });
-        expect(build).toThrow(DispatchCycleError);
-        try {
-          build();
-        } catch (err) {
-          const trail = (err as DispatchCycleError).trail;
-          expect(trail.length).toBeGreaterThan(0);
-          expect(trail.length).toBeLessThanOrEqual(20);
-          expect(trail.every((e) => (e as LE).t === 'flip')).toBe(true);
-        }
-        expect(MAX_CHAINED_DISPATCHES).toBe(1000);
-        dispose();
-      }));
-
-    it('is a no-op after the owner is disposed', () =>
-      run((dispose) => {
-        const m = createMachine({ initial: { t: 'a' } as S, def });
-        dispose();
-        m.dispatch({ t: 'go-b', n: 1 });
-        expect(m.state()).toEqual({ t: 'a' });
-        dispose();
-      }));
-  });
-
-  it('matches narrows to the current state or undefined', () =>
-    run((dispose) => {
-      const m = createMachine({ initial: { t: 'b', n: 4 } as S, def });
-      expect(m.matches('b')?.n).toBe(4);
-      expect(m.matches('a')).toBeUndefined();
-      dispose();
-    }));
 });
-
-function watch<T>(read: () => T, cb: (v: T) => void): () => void {
-  let active = true;
-  createComputed(() => {
-    const v = read();
-    if (active) cb(v);
-  });
-  return () => {
-    active = false;
-  };
-}

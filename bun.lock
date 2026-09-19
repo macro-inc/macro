@@ -284,17 +284,21 @@
     "packages/machine": {
       "name": "@macro-inc/machine",
       "version": "0.1.0",
-      "dependencies": {
-        "solid-js": "^1.9.7",
-      },
       "devDependencies": {
         "@biomejs/biome": "2.4.12",
         "@types/node": "^24.8.0",
         "jsdom": "^26.1.0",
+        "solid-js": "^1.9.7",
         "typescript": "^5.9.3",
         "vite-plugin-solid": "^2.11.8",
         "vitest": "5.0.1",
       },
+      "peerDependencies": {
+        "solid-js": "^1.9.7",
+      },
+      "optionalPeers": [
+        "solid-js",
+      ],
     },
     "packages/observability": {
       "name": "@macro-inc/observability",

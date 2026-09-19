@@ -1,4 +1,4 @@
-import type { MachineDef, Transition } from './create-machine';
+import type { MachineDef, Transition } from './types';
 
 /**
  * Pure helpers for exercising a `MachineDef` as values. No Solid, no owner,

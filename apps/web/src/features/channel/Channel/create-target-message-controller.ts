@@ -1,10 +1,10 @@
-import { createMachine } from '@macro-inc/machine';
+import { createSolidMachine } from '@macro-inc/machine/solid';
 import { queryClient } from '@queries/client';
 import {
   getMessageTimelineQueryKey,
   type MessageTimelineData,
 } from '@queries/messages/timeline';
-import { type Accessor, onCleanup, untrack } from 'solid-js';
+import { type Accessor, untrack } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
   activeTargetMessageId,
@@ -49,7 +49,7 @@ export type TargetMessageController = ReturnType<
 export function createTargetMessageController(
   options: CreateTargetMessageControllerOptions
 ) {
-  const machine = createMachine<State, Event, Command>({
+  const machine = createSolidMachine<State, Event, Command>({
     initial: initialState({
       messageId: options.initialTargetMessageId,
       replyId: options.initialTargetMessageReplyId,
@@ -62,7 +62,7 @@ export function createTargetMessageController(
           () => dispatch({ t: 'flash-elapsed' }),
           TARGETED_MESSAGE_FLASH_MS
         );
-        onCleanup(() => clearTimeout(timer));
+        return () => clearTimeout(timer);
       },
     },
 
