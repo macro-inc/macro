@@ -169,6 +169,8 @@ export type {
 export { Toolbar } from './components/Toolbar';
 export type { TooltipClassOptions } from './components/Tooltip';
 export { Tooltip, tooltipClasses } from './components/Tooltip';
+export type { TypewriterProps } from './components/Typewriter';
+export { Typewriter } from './components/Typewriter';
 export { UserMessageBubble } from './components/UserMessageBubble';
 export { cn } from './utils/classname';
 export type { CtrlJKMenuNavigationOptions } from './utils/menuKeyboardNavigation';

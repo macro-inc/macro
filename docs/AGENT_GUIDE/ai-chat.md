@@ -52,9 +52,14 @@
   including when it is the agent’s configured default; there is no separate default row.
   Disconnected Cursor offers **Connect Cursor**, opening Settings → Harness.
   The built-in sandbox and paired macrod runtimes are not offered here.
-- Selecting an agent changes the heading: **What should we work on?** for chat
-  agents and **What should we build?** for coding agents. The draft stays intact
-  when changing agents. **Create agent** stays pinned at the bottom of the dropdown
+- The heading is a typewriter: it types a line character by character with an
+  accent caret, holds it, quickly deletes it, and types the next line in a loop.
+  Chat agents cycle from **What should we work on?**, coding agents from
+  **What should we build?**; the heading's accessible name is always that first
+  line, so match on it rather than on the visible text. Selecting a different
+  kind of agent deletes the current line and starts the other set. With
+  `prefers-reduced-motion: reduce` the first line is shown as static text.
+  The draft stays intact when changing agents. **Create agent** stays pinned at the bottom of the dropdown
   while the agent and model lists scroll. It opens the roster on the selected kind's
   tab, where either kind can be created.
 - Selecting a coding agent reveals a repository drawer directly under the input

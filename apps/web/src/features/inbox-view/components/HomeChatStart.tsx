@@ -7,9 +7,17 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { ChatInputProvider } from '@core/component/AI/context';
 import { enableChatV3Agents } from '@core/constant/featureFlags';
+import { Typewriter } from '@ui';
 import { Show } from 'solid-js';
+import { CHAT_GREETINGS } from '../../agents-view/core/greetings';
 import { HomeRecommendedActions } from '../../home/components/home-recommended-actions';
 import { HomeChatInput } from '../../home/home-chat-input';
+
+/** Legacy Home opens with its own line, then cycles the shared prompts. */
+const HOME_GREETINGS: readonly string[] = [
+  'What should we get done in Macro?',
+  ...CHAT_GREETINGS,
+];
 
 /** Desktop Home's idle pane uses the single-line chat composer and send flow. */
 export function HomeChatStart() {
@@ -55,7 +63,7 @@ export function HomeChatStart() {
             <div class="self-end">
               <Show when={!agents().enabled}>
                 <h1 class="mb-6 min-h-0 min-w-0 self-end text-center text-2xl font-normal leading-[42px] text-ink">
-                  What should we get done in Macro?
+                  <Typewriter phrases={HOME_GREETINGS} />
                 </h1>
               </Show>
             </div>

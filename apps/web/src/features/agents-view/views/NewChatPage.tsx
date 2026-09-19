@@ -9,9 +9,11 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { uploadFile } from '@core/util/upload';
 import type { PromptAttachment } from '@service-agent-harness/generated/schemas';
+import { Typewriter } from '@ui';
 import { createMemo, createSignal } from 'solid-js';
 import { ChatComposer } from '../components/ChatComposer';
 import type { AgentKind } from '../core/agent-kind';
+import { greetingsFor } from '../core/greetings';
 import { defaultBranchFor } from '../core/repository';
 import { MACRO_PERSONA_ID, type RosterAgent } from '../core/roster';
 import { createRecentRepositories } from '../primitives/recent-repositories';
@@ -145,7 +147,7 @@ export function NewChatPage(props: {
       <div class="col">
         <div class="greeting">
           <h2>
-            {coding() ? 'What should we build?' : 'What should we work on?'}
+            <Typewriter phrases={greetingsFor(coding() ? 'coder' : 'agent')} />
           </h2>
         </div>
         <ChatComposer
