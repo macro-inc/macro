@@ -31,6 +31,8 @@ export function DriveLocationMenu(
         ...state.value(),
         location: props.location,
         scope: 'default',
+        search: '',
+        facets: {},
       } satisfies DriveState,
     },
   });
