@@ -34,9 +34,12 @@ import {
   sessionOriginThread,
 } from '../context/origin-thread';
 import { AgentPullRequestChip } from './AgentPullRequestChip';
-import { harnessTitle } from './compose-agent-session-options';
+import {
+  harnessTitle,
+  sessionRepositoryUrl,
+} from './compose-agent-session-options';
 
-export { harnessTitle };
+export { harnessTitle, sessionRepositoryUrl };
 
 /** Shared title precedence for standalone and workspace agent sessions. */
 export function agentSessionTitle(
@@ -130,14 +133,14 @@ export function AgentSplitHeader(props: {
     label: 'Open repository',
     icon: GitBranch,
     action: () => {
-      const url = props.session?.repoUrl;
+      const url = sessionRepositoryUrl(props.session);
       if (url) openExternalUrl(url);
     },
   };
   const ops = (): FileOperation[] => [
     { op: 'rename' },
     { op: 'delete' },
-    ...(props.session?.repoUrl ? [openRepository] : []),
+    ...(sessionRepositoryUrl(props.session) ? [openRepository] : []),
   ];
 
   return (
