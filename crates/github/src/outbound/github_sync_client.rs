@@ -20,6 +20,9 @@ const GITHUB_API_BASE_URL: &str = "https://api.github.com";
 const GITHUB_OAUTH_BASE_URL: &str = "https://github.com";
 const USER_INSTALLATIONS_PAGE_SIZE: u64 = 100;
 const BRANCH_PAGE_SIZE: u64 = 100;
+/// GitHub's listing maxes at 100 names per page. Five pages is enough for a
+/// picker and bounds how long we hold an installation token against a
+/// repository with thousands of stale branches.
 const BRANCH_PAGE_LIMIT: u64 = 5;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 
