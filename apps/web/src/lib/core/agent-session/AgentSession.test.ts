@@ -388,7 +388,7 @@ describe('AgentSession', () => {
     fold.pushSession.mockResolvedValueOnce([
       { kind: 'metadata', metadata: { turn: 'idle' } },
     ]);
-    AgentSession.ingest({ agentSessionId: SESSION, ...row(2) });
+    AgentSession.ingest({ agentSessionId: SESSION, entries: [row(2)] });
     await settle();
     expect(sessionTurn(SESSION)).toBe('idle');
     live.release();
