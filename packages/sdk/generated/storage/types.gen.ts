@@ -6804,6 +6804,14 @@ export type MessageChange = {
     type: 'message_deleted';
 } | {
     /**
+     * Whether the reaction was added (`true`) or removed (`false`).
+     */
+    added: boolean;
+    /**
+     * Emoji whose membership changed.
+     */
+    emoji: string;
+    /**
      * Persisted message.
      */
     message: Message;
