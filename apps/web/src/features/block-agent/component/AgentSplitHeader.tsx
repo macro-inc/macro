@@ -126,17 +126,18 @@ export function AgentSplitHeader(props: {
     },
   ];
 
-  const ops: FileOperation[] = [
+  const openRepository: FileOperation = {
+    label: 'Open repository',
+    icon: GitBranch,
+    action: () => {
+      const url = props.session?.repoUrl;
+      if (url) openExternalUrl(url);
+    },
+  };
+  const ops = (): FileOperation[] => [
     { op: 'rename' },
     { op: 'delete' },
-    {
-      label: 'Open repository',
-      icon: GitBranch,
-      action: () => {
-        const url = props.session?.repoUrl;
-        if (url) openExternalUrl(url);
-      },
-    },
+    ...(props.session?.repoUrl ? [openRepository] : []),
   ];
 
   return (
@@ -195,7 +196,7 @@ export function AgentSplitHeader(props: {
       <ResponsiveBlockToolbar
         tools={shareTools}
         menuTools={tools}
-        ops={entity() ? ops : []}
+        ops={entity() ? ops() : []}
         id={sessionId() ?? ''}
         itemType="agent_session"
         entity={entity()}

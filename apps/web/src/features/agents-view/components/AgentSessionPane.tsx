@@ -143,14 +143,18 @@ function SessionContent(props: { onDeleted: () => void }) {
                         ops={[
                           { op: 'rename' },
                           { op: 'delete' },
-                          {
-                            label: 'Open repository',
-                            icon: GitBranch,
-                            action: () => {
-                              const url = session()?.repoUrl;
-                              if (url) openExternalUrl(url);
-                            },
-                          },
+                          ...(session()?.repoUrl
+                            ? [
+                                {
+                                  label: 'Open repository',
+                                  icon: GitBranch,
+                                  action: () => {
+                                    const url = session()?.repoUrl;
+                                    if (url) openExternalUrl(url);
+                                  },
+                                },
+                              ]
+                            : []),
                         ]}
                         tools={[
                           {
