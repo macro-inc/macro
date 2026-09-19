@@ -228,6 +228,16 @@ pub trait GithubSyncClient: Send + Sync + 'static {
         &self,
         access_token: &str,
     ) -> impl Future<Output = Result<Vec<EnrichedGithubPullRequest>, GithubError>> + Send;
+
+    /// Branch names on one repository, as GitHub lists them.
+    ///
+    /// An empty repository has no branches and is an empty list, not an error.
+    fn list_repository_branches(
+        &self,
+        access_token: &str,
+        owner: &str,
+        repository: &str,
+    ) -> impl Future<Output = Result<Vec<String>, GithubError>> + Send;
 }
 
 /// Service interface for github sync operations (webhooks and sync app).
