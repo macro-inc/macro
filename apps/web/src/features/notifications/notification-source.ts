@@ -51,6 +51,7 @@ import {
 export const CHANNEL_EVENT_TYPES = [
   'channel_mention',
   'channel_message_send',
+  'channel_message_reaction',
   'channel_message_reply',
   'document_mention',
 ] as const;

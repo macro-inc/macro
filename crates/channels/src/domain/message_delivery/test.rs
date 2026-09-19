@@ -242,7 +242,11 @@ async fn deletions_reactions_and_typing_map_to_their_legacy_events() {
     let delivery = ChannelMessageDelivery::new(repo(), log.clone(), log.clone(), log.clone());
     for change in [
         MessageChange::MessageDeleted { message: message() },
-        MessageChange::ReactionChanged { message: message() },
+        MessageChange::ReactionChanged {
+            message: message(),
+            emoji: "👍".to_string(),
+            added: true,
+        },
         MessageChange::Typing {
             thread_id: Some(Uuid::from_u128(9)),
             active: false,
@@ -272,6 +276,34 @@ async fn deletions_reactions_and_typing_map_to_their_legacy_events() {
             .collect::<Vec<_>>(),
         ["message_deleted", "reaction_changed", "typing"]
     );
+}
+
+#[tokio::test]
+async fn added_reaction_carries_author_notification_context() {
+    let log = Log::default();
+    let delivery = ChannelMessageDelivery::new(repo(), log.clone(), log.clone(), log.clone());
+    let mut reaction = event(MessageChange::ReactionChanged {
+        message: message(),
+        emoji: "👍".to_string(),
+        added: true,
+    });
+    reaction.actor = MEMBER.to_owned();
+
+    delivery.publish(reaction).await.unwrap();
+
+    let events = log.events.lock().unwrap();
+    let [
+        ChannelEvent::ReactionChanged {
+            notification: Some(notification),
+            ..
+        },
+    ] = events.as_slice()
+    else {
+        panic!("expected reaction notification context, got {events:?}");
+    };
+    assert_eq!(notification.emoji, "👍");
+    assert_eq!(notification.message_content, "Message");
+    assert_eq!(notification.metadata.channel_name, "Test");
 }
 
 #[tokio::test]

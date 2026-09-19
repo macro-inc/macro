@@ -238,6 +238,10 @@ pub enum MessageChange {
     ReactionChanged {
         /// Persisted message.
         message: Message,
+        /// Emoji whose membership changed.
+        emoji: String,
+        /// Whether the reaction was added (`true`) or removed (`false`).
+        added: bool,
     },
     /// Thread resolution, placement, or deletion changed.
     ThreadUpdated {

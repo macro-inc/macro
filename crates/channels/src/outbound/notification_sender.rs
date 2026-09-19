@@ -7,9 +7,9 @@ use crate::domain::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_notifications::{
-    ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
-    ChannelReplyMetadata, CommonChannelMetadata, DocumentMentionMetadata,
-    NotificationDocumentSubType,
+    ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageReactionMetadata,
+    ChannelMessageSendMetadata, ChannelReplyMetadata, CommonChannelMetadata,
+    DocumentMentionMetadata, NotificationDocumentSubType,
 };
 use notification_hex::domain::{
     models::SendNotificationRequestBuilder, service::NotificationIngress,
@@ -286,6 +286,43 @@ where
                             },
                             sender_id: sender.as_user().cloned(),
                             recipient_ids,
+                        }
+                        .into_request()
+                        .with_apns()
+                        .with_conn_gateway(),
+                    )
+                    .await
+                    .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+            }
+            ChannelNotificationEffect::Reaction {
+                channel_id,
+                message_id,
+                thread_id,
+                message_content,
+                emoji,
+                sender_id,
+                metadata,
+                sender_profile_picture_url,
+                recipient_id,
+            } => {
+                self.ingress
+                    .send_notification(
+                        SendNotificationRequestBuilder {
+                            notification_entity: model_entity::EntityType::Channel
+                                .with_entity_string(channel_id.to_string()),
+                            secondary_notification_entity: secondary_channel_thread_entity(Some(
+                                thread_id.unwrap_or(message_id),
+                            )),
+                            notification: ChannelMessageReactionMetadata {
+                                message_id: message_id.to_string(),
+                                thread_id: thread_id.map(|id| id.to_string()),
+                                message_content,
+                                emoji,
+                                common: to_common_metadata(metadata),
+                                sender_profile_picture_url,
+                            },
+                            sender_id: Some(sender_id),
+                            recipient_ids: HashSet::from([recipient_id]),
                         }
                         .into_request()
                         .with_apns()

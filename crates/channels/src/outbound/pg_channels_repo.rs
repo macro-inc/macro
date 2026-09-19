@@ -15,9 +15,9 @@ use crate::domain::{
         CreateChannelRequest, CreateEntityMentionOptions, CreatedChannel, EntityMention,
         GetChannelsParams, GetThreadReplyRowsParams, LatestMessage, MessageAttachment,
         MessagePageDirection, MutatedAttachment, MutatedMessage, NameLookup, NewChannelAttachment,
-        ParticipantRole, PatchChannelRequest, RecentChannelMessage, ReferencedShareItemType,
-        ResolvedChannelMessage, ThreadData, ThreadInfo, ThreadReply, ThreadReplyRow,
-        TopLevelMessageRow, UserName, fallback_user_name,
+        ParticipantRole, PatchChannelRequest, ReactionMessageContext, RecentChannelMessage,
+        ReferencedShareItemType, ResolvedChannelMessage, Sender, ThreadData, ThreadInfo,
+        ThreadReply, ThreadReplyRow, TopLevelMessageRow, UserName, fallback_user_name,
     },
     ports::{ChannelRepo, TopLevelMessagesQueryResult},
 };
@@ -278,6 +278,12 @@ struct SenderIdRow {
     sender_id: String,
 }
 
+struct ReactionMessageContextRow {
+    sender_id: String,
+    thread_id: Option<Uuid>,
+    content: String,
+}
+
 #[derive(Debug, sqlx::FromRow)]
 struct ChannelIdRow {
     id: Uuid,
@@ -474,6 +480,37 @@ async fn get_message_owner(
         ChannelSender::parse_from_str(&row.sender_id)
             .map(CowLike::into_owned)
             .with_context(|| format!("invalid message sender_id {}", row.sender_id))
+    })
+    .transpose()
+}
+
+async fn get_reaction_message_context(
+    pool: &PgPool,
+    channel_id: Uuid,
+    message_id: Uuid,
+) -> anyhow::Result<Option<ReactionMessageContext>> {
+    let row = sqlx::query_as!(
+        ReactionMessageContextRow,
+        r#"
+        SELECT sender_id, thread_id, content
+        FROM comms_messages
+        WHERE id = $1 AND channel_id = $2 AND deleted_at IS NULL
+        "#,
+        message_id,
+        channel_id,
+    )
+    .fetch_optional(pool)
+    .await
+    .context("unable to get reaction message context")?;
+
+    row.map(|row| {
+        Ok(ReactionMessageContext {
+            sender: Sender::parse_from_str(&row.sender_id)
+                .map(CowLike::into_owned)
+                .with_context(|| format!("invalid message sender_id {}", row.sender_id))?,
+            thread_id: row.thread_id,
+            content: row.content,
+        })
     })
     .transpose()
 }
@@ -3614,6 +3651,14 @@ impl ChannelRepo for PgChannelsRepo {
         message_id: Uuid,
     ) -> Result<Option<ChannelSender<'static>>, Self::Err> {
         get_message_owner(&self.pool, channel_id, message_id).await
+    }
+
+    async fn get_reaction_message_context(
+        &self,
+        channel_id: Uuid,
+        message_id: Uuid,
+    ) -> Result<Option<ReactionMessageContext>, Self::Err> {
+        get_reaction_message_context(&self.pool, channel_id, message_id).await
     }
 
     async fn get_participants(

@@ -22,6 +22,23 @@ pub struct MessageChangedNotificationContext {
     pub has_attachments: bool,
 }
 
+/// Context needed to notify a channel message author about a reaction.
+#[derive(Debug, Clone)]
+pub struct ReactionNotificationContext {
+    /// Whether the reaction was added (`true`) or removed (`false`).
+    pub added: bool,
+    /// Emoji whose membership changed.
+    pub emoji: String,
+    /// Author of the reacted-to message.
+    pub message_sender: Sender,
+    /// Root thread id when the reacted-to message is a reply.
+    pub thread_id: Option<Uuid>,
+    /// Reacted-to message body.
+    pub message_content: String,
+    /// Channel display metadata.
+    pub metadata: ChannelMetadata,
+}
+
 /// Events emitted after durable channel state changes.
 #[derive(Debug, Clone)]
 pub enum ChannelEvent {
@@ -132,6 +149,8 @@ pub enum ChannelEvent {
         message_id: Uuid,
         /// Current grouped reaction state for the message.
         reactions: Vec<CountedReaction>,
+        /// Data used to decide and format an author notification.
+        notification: Option<ReactionNotificationContext>,
         /// Realtime recipients at mutation time.
         recipients: Vec<MacroUserIdStr<'static>>,
         /// Client mutation nonce echoed to realtime listeners.

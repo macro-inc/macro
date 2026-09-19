@@ -35,6 +35,12 @@ export function scopeThreadNotifications(
             (m) => m.content.messageId === messageId
           )
           .with(
+            { tag: 'channel_message_reaction' },
+            (m) =>
+              m.content.messageId === messageId ||
+              m.content.threadId === messageId
+          )
+          .with(
             { tag: 'channel_message_reply' },
             (m) => m.content.threadId === messageId
           )
@@ -49,6 +55,7 @@ const NOTIFICATION_CONTENT_FIELD: Partial<
 > = {
   channel_mention: 'messageContent',
   channel_message_send: 'messageContent',
+  channel_message_reaction: 'messageContent',
   channel_message_reply: 'messageContent',
   mentioned_in_document_comment: 'text',
   replied_to_document_comment_thread: 'text',

@@ -49,6 +49,11 @@ export const NOTIFICATION_EVENT_GROUPS: readonly NotificationEventGroup[] = [
         label: 'Thread replies',
         description: 'Replies in threads you are part of',
       },
+      {
+        type: 'channel_message_reaction',
+        label: 'Message reactions',
+        description: 'When someone reacts to one of your messages',
+      },
     ],
   },
   {

@@ -237,6 +237,17 @@ pub struct CountedReaction {
     pub users: Vec<String>,
 }
 
+/// Message details needed to notify its author about a new reaction.
+#[derive(Debug, Clone)]
+pub struct ReactionMessageContext {
+    /// Message author.
+    pub sender: Sender,
+    /// Root thread id when this message is a reply.
+    pub thread_id: Option<Uuid>,
+    /// Macro Markdown message body.
+    pub content: String,
+}
+
 /// An attachment on a message.
 #[derive(Debug, Clone)]
 pub struct MessageAttachment {

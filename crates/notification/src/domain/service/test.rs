@@ -40,6 +40,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use uuid::Uuid;
 
+static DEFAULT_DISABLED_TEST_TYPES: std::sync::LazyLock<HashSet<&'static str>> =
+    std::sync::LazyLock::new(|| HashSet::from(["default_off_test_notification"]));
+
 /// A test notification type.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct TestNotification {
@@ -54,6 +57,14 @@ enum TestNotifEvent {
 
 impl Notification for TestNotification {
     const TYPE_NAME: &'static str = "test_notification";
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct DefaultOffTestNotification;
+
+impl Notification for DefaultOffTestNotification {
+    const TYPE_NAME: &'static str = "default_off_test_notification";
+    const DEFAULT_ENABLED: bool = false;
 }
 
 impl NotificationExtIos for TestNotification {
@@ -1005,6 +1016,49 @@ async fn test_type_disabled_user_excluded() {
 }
 
 #[tokio::test]
+async fn default_off_notification_requires_preference_override() {
+    let user = test_user_id("opted-in@example.com");
+    let disabled_service =
+        NotificationIngressService::new(MockRepository::new(), MockQueue::new(), MockStateMachine);
+    let request = SendNotificationRequestBuilder {
+        notification_entity: EntityType::Document.with_entity_str("entity_1"),
+        secondary_notification_entity: None,
+        notification: DefaultOffTestNotification,
+        sender_id: None,
+        recipient_ids: HashSet::from([user.clone()]),
+    }
+    .into_request();
+    assert!(
+        disabled_service
+            .send_notification(request)
+            .await
+            .unwrap()
+            .is_none()
+    );
+
+    let enabled_service = NotificationIngressService::new(
+        MockRepository::new().with_type_disabled_user(user.clone()),
+        MockQueue::new(),
+        MockStateMachine,
+    );
+    let request = SendNotificationRequestBuilder {
+        notification_entity: EntityType::Document.with_entity_str("entity_1"),
+        secondary_notification_entity: None,
+        notification: DefaultOffTestNotification,
+        sender_id: None,
+        recipient_ids: HashSet::from([user]),
+    }
+    .into_request();
+    assert!(
+        enabled_service
+            .send_notification(request)
+            .await
+            .unwrap()
+            .is_some()
+    );
+}
+
+#[tokio::test]
 async fn test_queue_message_conn_gateway_only() {
     use std::sync::Arc;
 
@@ -1575,6 +1629,30 @@ async fn test_egress_conn_gateway_not_rate_limited() {
 // ============================================================================
 // Notification Reader Tests
 // ============================================================================
+
+#[tokio::test]
+async fn default_off_type_is_reported_disabled_without_an_override() {
+    let user = test_user_id("alice@example.com");
+    let service = NotificationReaderService {
+        repository: Arc::new(MockRepository::new()),
+        queue: Arc::new(MockQueue::new()),
+        sns_endpoint: MockSnsEndpoint,
+        platform_config: test_platform_config(),
+        realtime: crate::domain::ports::NoopNotificationRealtimePublisher,
+    };
+
+    let disabled = service
+        .get_disabled_notification_types(user.clone(), &DEFAULT_DISABLED_TEST_TYPES)
+        .await
+        .unwrap();
+
+    assert_eq!(disabled.len(), 1);
+    assert_eq!(disabled[0].user_id, user);
+    assert_eq!(
+        disabled[0].notification_event_type,
+        "default_off_test_notification"
+    );
+}
 
 #[tokio::test]
 async fn test_get_entity_notifications_batch_skips_invalid_tagged_metadata() {

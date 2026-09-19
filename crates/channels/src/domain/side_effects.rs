@@ -322,6 +322,27 @@ pub enum ChannelNotificationEffect {
         /// Users that should receive the notification.
         recipient_ids: HashSet<MacroUserIdStr<'static>>,
     },
+    /// A reaction was added to a user's message.
+    Reaction {
+        /// Channel containing the message.
+        channel_id: Uuid,
+        /// Reacted-to message id.
+        message_id: Uuid,
+        /// Root thread id when the message is a reply.
+        thread_id: Option<Uuid>,
+        /// Reacted-to message body.
+        message_content: String,
+        /// Emoji added by the reactor.
+        emoji: String,
+        /// User who added the reaction.
+        sender_id: MacroUserIdStr<'static>,
+        /// Channel display metadata.
+        metadata: ChannelMetadata,
+        /// Optional reactor profile picture URL.
+        sender_profile_picture_url: Option<String>,
+        /// Message author who should receive the notification.
+        recipient_id: MacroUserIdStr<'static>,
+    },
     /// Participants were invited to a channel.
     Invite {
         /// Channel receiving participants.
@@ -603,11 +624,12 @@ where
             }
             ChannelEvent::ReactionChanged {
                 channel_id,
+                actor,
                 message_id,
                 reactions,
+                notification,
                 recipients,
                 nonce,
-                ..
             } => {
                 self.publish_realtime(ChannelRealtimeEffect::Reaction {
                     recipients,
@@ -617,6 +639,31 @@ where
                     nonce,
                 })
                 .await;
+                if let Some(notification) = notification
+                    && notification.added
+                    && let (Some(sender_id), Some(recipient_id)) = (
+                        actor.as_user().cloned(),
+                        notification.message_sender.as_user().cloned(),
+                    )
+                    && sender_id != recipient_id
+                {
+                    let sender_profile_picture_url = self
+                        .context
+                        .get_sender_profile_picture_url(sender_id.clone())
+                        .await;
+                    self.send_notification(ChannelNotificationEffect::Reaction {
+                        channel_id,
+                        message_id,
+                        thread_id: notification.thread_id,
+                        message_content: notification.message_content,
+                        emoji: notification.emoji,
+                        sender_id,
+                        metadata: notification.metadata,
+                        sender_profile_picture_url,
+                        recipient_id,
+                    })
+                    .await;
+                }
             }
             ChannelEvent::TypingChanged {
                 channel_id,

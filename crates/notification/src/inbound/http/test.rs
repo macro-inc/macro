@@ -197,6 +197,7 @@ impl NotificationReader for AuthenticationTestService {
     fn get_disabled_notification_types(
         &self,
         user_id: MacroUserIdStr<'_>,
+        _default_disabled_type_names: &'static HashSet<&'static str>,
     ) -> impl Future<Output = Result<Vec<DisabledNotificationType>, Report>> + Send {
         async move {
             assert_eq!(user_id.to_string(), VALID_USER_ID);
@@ -208,6 +209,7 @@ impl NotificationReader for AuthenticationTestService {
         &self,
         _user_id: MacroUserIdStr<'_>,
         _type_name: &str,
+        _default_enabled: bool,
     ) -> impl Future<Output = Result<(), Report>> + Send {
         async { unreachable!("should not be called") }
     }
@@ -216,6 +218,7 @@ impl NotificationReader for AuthenticationTestService {
         &self,
         _user_id: MacroUserIdStr<'_>,
         _type_name: &str,
+        _default_enabled: bool,
     ) -> impl Future<Output = Result<(), Report>> + Send {
         async { unreachable!("should not be called") }
     }
@@ -223,6 +226,8 @@ impl NotificationReader for AuthenticationTestService {
 
 static BLOCKABLE: std::sync::LazyLock<HashSet<&'static str>> =
     std::sync::LazyLock::new(|| HashSet::from(["test_type"]));
+static DEFAULT_DISABLED: std::sync::LazyLock<HashSet<&'static str>> =
+    std::sync::LazyLock::new(HashSet::new);
 
 fn test_router() -> Router {
     let hmac_key = Hmac::<Sha256>::new_from_slice(b"test-key").unwrap();
@@ -230,6 +235,7 @@ fn test_router() -> Router {
     let state = NotificationRouterState::new(
         AuthenticationTestService,
         &BLOCKABLE,
+        &DEFAULT_DISABLED,
         hmac_key,
         authorization_state,
     );
@@ -681,6 +687,7 @@ impl NotificationReader for PresignedTestService {
     fn get_disabled_notification_types(
         &self,
         _user_id: MacroUserIdStr<'_>,
+        _default_disabled_type_names: &'static HashSet<&'static str>,
     ) -> impl Future<Output = Result<Vec<DisabledNotificationType>, Report>> + Send {
         async { unreachable!() }
     }
@@ -689,6 +696,7 @@ impl NotificationReader for PresignedTestService {
         &self,
         _user_id: MacroUserIdStr<'_>,
         _type_name: &str,
+        _default_enabled: bool,
     ) -> impl Future<Output = Result<(), Report>> + Send {
         async { Ok(()) }
     }
@@ -697,6 +705,7 @@ impl NotificationReader for PresignedTestService {
         &self,
         _user_id: MacroUserIdStr<'_>,
         _type_name: &str,
+        _default_enabled: bool,
     ) -> impl Future<Output = Result<(), Report>> + Send {
         async { unreachable!() }
     }
@@ -712,6 +721,7 @@ fn presigned_router() -> Router {
     let state = NotificationRouterState::new(
         PresignedTestService,
         &BLOCKABLE,
+        &DEFAULT_DISABLED,
         hmac_key,
         authorization_state,
     );

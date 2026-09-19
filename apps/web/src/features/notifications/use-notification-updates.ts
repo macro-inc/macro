@@ -74,6 +74,9 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
     .with({ tag: 'channel_message_send' }, () => {
       refreshChannel(notification);
     })
+    .with({ tag: 'channel_message_reaction' }, ({ content }) => {
+      refreshChannel(notification, content.threadId?.toString());
+    })
     .with({ tag: 'channel_message_reply' }, ({ content }) => {
       refreshChannel(notification, content.threadId?.toString());
     })

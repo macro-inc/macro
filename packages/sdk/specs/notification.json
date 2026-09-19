@@ -1387,6 +1387,40 @@
           }
         ]
       },
+      "ChannelMessageReactionMetadata": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CommonChannelMetadata"
+          },
+          {
+            "type": "object",
+            "required": ["messageId", "messageContent", "emoji"],
+            "properties": {
+              "emoji": {
+                "type": "string",
+                "description": "The emoji added by the reactor."
+              },
+              "messageContent": {
+                "type": "string",
+                "description": "The reacted-to message content."
+              },
+              "messageId": {
+                "type": "string",
+                "description": "The reacted-to message id."
+              },
+              "senderProfilePictureUrl": {
+                "type": ["string", "null"],
+                "description": "Optional reactor profile picture URL."
+              },
+              "threadId": {
+                "type": ["string", "null"],
+                "description": "The thread root id when the reacted-to message is a reply."
+              }
+            }
+          }
+        ],
+        "description": "Metadata for a reaction added to one of the recipient's channel messages."
+      },
       "ChannelMessageSendMetadata": {
         "allOf": [
           {
@@ -2562,6 +2596,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["agent_session_mentioned"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Someone reacted to one of the user's channel messages.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/ChannelMessageReactionMetadata",
+                "description": "Someone reacted to one of the user's channel messages."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["channel_message_reaction"]
               }
             }
           }

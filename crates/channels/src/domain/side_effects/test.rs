@@ -165,6 +165,99 @@ async fn picture_changes_refresh_all_participant_sessions_without_notifications(
 }
 
 #[tokio::test]
+async fn added_reaction_notifies_message_author() {
+    let realtime = FakeRealtime::default();
+    let notifications = FakeNotifications::default();
+    let service = ChannelSideEffectService::new(
+        FakeContext::default(),
+        realtime.clone(),
+        notifications.clone(),
+        FakeContacts::default(),
+    );
+    let channel_id = Uuid::new_v4();
+    let message_id = Uuid::new_v4();
+    let reactor = user("reactor@test.com");
+    let author = user("author@test.com");
+
+    service
+        .handle(ChannelEvent::ReactionChanged {
+            channel_id,
+            actor: Sender::new_from_user(reactor.clone()),
+            message_id,
+            reactions: Vec::new(),
+            notification: Some(ReactionNotificationContext {
+                added: true,
+                emoji: "👍".to_string(),
+                message_sender: Sender::new_from_user(author.clone()),
+                thread_id: None,
+                message_content: "Great idea".to_string(),
+                metadata: ChannelMetadata {
+                    channel_type: ChannelType::Public,
+                    channel_name: "general".to_string(),
+                },
+            }),
+            recipients: vec![reactor.clone(), author.clone()],
+            nonce: None,
+        })
+        .await;
+
+    assert!(matches!(
+        &realtime.effects.lock().unwrap()[..],
+        [ChannelRealtimeEffect::Reaction { channel_id: actual_channel_id, message_id: actual_message_id, .. }]
+            if *actual_channel_id == channel_id && *actual_message_id == message_id
+    ));
+    assert!(matches!(
+        &notifications.effects.lock().unwrap()[..],
+        [ChannelNotificationEffect::Reaction {
+            sender_id,
+            recipient_id,
+            emoji,
+            message_content,
+            ..
+        }] if sender_id == &reactor
+            && recipient_id == &author
+            && emoji == "👍"
+            && message_content == "Great idea"
+    ));
+}
+
+#[tokio::test]
+async fn removed_or_self_reactions_do_not_notify() {
+    let notifications = FakeNotifications::default();
+    let service = ChannelSideEffectService::new(
+        FakeContext::default(),
+        FakeRealtime::default(),
+        notifications.clone(),
+        FakeContacts::default(),
+    );
+    let user_id = user("author@test.com");
+
+    service
+        .handle(ChannelEvent::ReactionChanged {
+            channel_id: Uuid::new_v4(),
+            actor: Sender::new_from_user(user_id.clone()),
+            message_id: Uuid::new_v4(),
+            reactions: Vec::new(),
+            notification: Some(ReactionNotificationContext {
+                added: true,
+                emoji: "👍".to_string(),
+                message_sender: Sender::new_from_user(user_id.clone()),
+                thread_id: None,
+                message_content: "No notification".to_string(),
+                metadata: ChannelMetadata {
+                    channel_type: ChannelType::Public,
+                    channel_name: "general".to_string(),
+                },
+            }),
+            recipients: vec![user_id],
+            nonce: None,
+        })
+        .await;
+
+    assert!(notifications.effects.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn macro_ai_bot_profile_is_builtin_without_context_lookup() {
     let lookup_count = Arc::new(Mutex::new(0));
     let service = ChannelSideEffectService::new(
@@ -1829,6 +1922,7 @@ fn broker_events_skip_reaction_changes() {
         actor: Sender::new_from_user(user("alice@example.com")),
         message_id: Uuid::new_v4(),
         reactions: Vec::new(),
+        notification: None,
         recipients: Vec::new(),
         nonce: None,
     });
@@ -1947,6 +2041,7 @@ fn mention_broker_events_skip_unrelated_events() {
         actor: Sender::new_from_user(user("alice@example.com")),
         message_id: Uuid::new_v4(),
         reactions: Vec::new(),
+        notification: None,
         recipients: Vec::new(),
         nonce: None,
     });
