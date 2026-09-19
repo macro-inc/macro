@@ -38,7 +38,7 @@
 #[cfg(test)]
 mod test;
 
-use crate::domain::artifact::{ArtifactListing, CollectedArtifact, mime_type};
+use crate::domain::artifact::{ArtifactListing, CollectedArtifact, inline_text, mime_type};
 use crate::domain::error::SessionError;
 use crate::domain::event::CursorEvent;
 use crate::domain::journal::{CursorJournal, JournalEntry, JournalInput, ReplayMachine};
@@ -2006,6 +2006,7 @@ where
                 }
             };
             let mime_type = mime_type(listing.name(), fetched.content_type.as_deref());
+            let text = inline_text(listing.name(), &mime_type, &fetched.bytes);
             match self
                 .artifacts
                 .store(listing.name(), &mime_type, fetched.bytes)
@@ -2017,6 +2018,7 @@ where
                     mime_type,
                     uri,
                     size_bytes: listing.size_bytes,
+                    text,
                 }),
                 Err(error) => tracing::warn!(
                     artifact.path = %listing.path,

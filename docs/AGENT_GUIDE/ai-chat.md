@@ -329,6 +329,11 @@ agent or opening repository settings; sending clears the attachment previews.
 Queued prompts
 list their attached file names under the text; editing a queued prompt keeps them.
 
+Cursor walkthrough files the run re-hosts appear in the transcript after the
+answer: screenshots as images, recordings as video players, and `.txt` / `.log`
+files as an inline `txt` code block (not a download link). Larger or non-UTF-8
+text stays a link.
+
 On mobile the composer (and any queued prompts above it) floats in the bottom
 accessory region above the dock — same placement as channel and AI chat — so it
 stays tappable and clear of the home indicator. The box is full width; the text
