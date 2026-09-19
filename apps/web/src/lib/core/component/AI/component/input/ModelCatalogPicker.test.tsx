@@ -11,7 +11,7 @@ import {
 } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ModelCatalogPicker } from './ModelCatalogPicker';
+import { ModelCatalogMenu, ModelCatalogPicker } from './ModelCatalogPicker';
 import type { CatalogModelOption } from './modelCatalog';
 
 vi.mock('@ui', () => {
@@ -142,5 +142,47 @@ describe('ModelCatalogPicker search focus', () => {
         screen.getByRole('textbox', { name: 'Search models' })
       );
     });
+  });
+});
+
+describe('ModelCatalogMenu search focus', () => {
+  it('puts caret in the search field when autoFocusSearch mounts the catalog', async () => {
+    render(() => (
+      <ModelCatalogMenu
+        autoFocusSearch
+        value="auto"
+        options={OPTIONS}
+        onSelect={() => {}}
+      />
+    ));
+    const search = screen.getByRole('textbox', { name: 'Search models' });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(search);
+    });
+  });
+
+  it('reclaims search focus when the submenu trigger steals it', async () => {
+    render(() => (
+      <ModelCatalogMenu
+        autoFocusSearch
+        value="auto"
+        options={OPTIONS}
+        onSelect={() => {}}
+      />
+    ));
+    const search = screen.getByRole('textbox', { name: 'Search models' });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(search);
+    });
+
+    const thief = document.createElement('button');
+    document.body.append(thief);
+    thief.focus();
+    expect(document.activeElement).toBe(thief);
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(search);
+    });
+    thief.remove();
   });
 });
