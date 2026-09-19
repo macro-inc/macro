@@ -1,12 +1,11 @@
 import { createMachine } from '@macro-inc/machine';
-import {
-  type ChannelMessagesData,
-  getChannelMessagesQueryKey,
-} from '@queries/channel/channel-messages';
 import { queryClient } from '@queries/client';
+import {
+  getMessageTimelineQueryKey,
+  type MessageTimelineData,
+} from '@queries/messages/timeline';
 import { type Accessor, onCleanup, untrack } from 'solid-js';
 import { match } from 'ts-pattern';
-import type { ThreadListNavigation } from './ThreadList';
 import {
   activeTargetMessageId,
   activeTargetMessageReplyId,
@@ -33,14 +32,8 @@ type CreateTargetMessageControllerOptions = {
   initialTargetMessageId?: string | undefined;
   initialTargetMessageReplyId?: string | undefined;
   messageKeys: Accessor<string[]>;
-  navigation: Accessor<ThreadListNavigation | undefined>;
-  /**
-   * Whether the ThreadList has completed its initial scroll. Target
-   * positioning waits for this so a `goToMessage` that fires mid-initial-scroll
-   * isn't overridden by ThreadList's retry logic, which validates against the
-   * *original* scroll target.
-   */
-  didInitialScroll: Accessor<boolean>;
+  /** The list publishes its handle after initial layout and positioning. */
+  isReady: Accessor<boolean>;
 };
 
 export type TargetMessageController = ReturnType<
@@ -104,8 +97,7 @@ export function createTargetMessageController(
     const s = state();
     return (
       s.t === 'targeting' &&
-      options.navigation() !== undefined &&
-      options.didInitialScroll() &&
+      options.isReady() &&
       options.messageKeys().includes(s.target.messageId)
     );
   };
@@ -147,9 +139,15 @@ export function restoreDefaultChannelPaginationAfterTargetLoad(
 ) {
   if (!loadAroundMessageId) return false;
 
-  const aroundKey = getChannelMessagesQueryKey(channelId, loadAroundMessageId);
-  const defaultKey = getChannelMessagesQueryKey(channelId, null);
-  const aroundData = queryClient.getQueryData<ChannelMessagesData>(aroundKey);
+  const aroundKey = getMessageTimelineQueryKey(
+    { type: 'channel', id: channelId },
+    loadAroundMessageId
+  );
+  const defaultKey = getMessageTimelineQueryKey(
+    { type: 'channel', id: channelId },
+    null
+  );
+  const aroundData = queryClient.getQueryData<MessageTimelineData>(aroundKey);
   if (!aroundData) return false;
 
   queryClient.setQueryData(defaultKey, aroundData);
@@ -165,8 +163,11 @@ export function restoreDefaultChannelPaginationAfterTargetLoad(
  * centered on an old target — remove it so the query fetches from the bottom.
  */
 export function clearStaleRestoredChannelData(channelId: string) {
-  const defaultKey = getChannelMessagesQueryKey(channelId, null);
-  const cached = queryClient.getQueryData<ChannelMessagesData>(defaultKey);
+  const defaultKey = getMessageTimelineQueryKey(
+    { type: 'channel', id: channelId },
+    null
+  );
+  const cached = queryClient.getQueryData<MessageTimelineData>(defaultKey);
   if (!cached?.pages.length) return;
 
   // Check both the page cursor AND pageParams[0]. After fetchPreviousPage,

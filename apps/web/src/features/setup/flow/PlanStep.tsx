@@ -1,3 +1,4 @@
+import { InviteOfferPanel } from '@app/features/gtm-invite/InviteOfferPanel';
 import {
   PLAN_FEATURES,
   PLANS,
@@ -7,6 +8,7 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import ArrowRight from '@phosphor/arrow-right.svg';
 import Check from '@phosphor/check.svg';
 import { useUserInfoQuery } from '@queries/auth/user-info';
+import type { GtmInviteOffer } from '@service-auth/generated/schemas/gtmInviteOffer';
 import { useSearchParams } from '@solidjs/router';
 import { Button, cn } from '@ui';
 import { createSignal, Index, onCleanup, onMount, Show } from 'solid-js';
@@ -19,9 +21,13 @@ const LICENSE_POLL_INTERVAL_MS = 1_000;
 
 /** Free vs paid. The last step: free/skip finishes immediately; premium
  * round-trips through Stripe checkout (the flow stays incomplete, so both
- * checkout legs land back here) and finishes once payment is confirmed. */
+ * checkout legs land back here) and finishes once payment is confirmed.
+ * An account that signed up through a GTM invite link sees its free-month
+ * offer in place of the picker; checkout applies the promotion server-side. */
 export function PlanStep(props: {
   finishing: boolean;
+  /** The promotion an invite-link signup holds, once known. */
+  inviteOffer?: GtmInviteOffer | null;
   onFree: (planSkipped: boolean) => void;
   onStartCheckout: (tier: Exclude<PlanTier, 'free'>) => void;
   onPremiumPaid: () => void;
@@ -99,83 +105,117 @@ export function PlanStep(props: {
         </div>
       }
     >
-      <div class="flex flex-col gap-6">
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Index each={PLANS}>
-            {(plan) => (
-              <button
-                type="button"
-                onClick={() => setSelected(plan().tier)}
-                class={cn(
-                  'flex flex-col gap-4 rounded-xl border p-5 text-left transition-colors cursor-default',
-                  selected() === plan().tier
-                    ? 'border-ink/40 ring-1 ring-ink/20'
-                    : 'border-edge hover:border-edge-muted'
-                )}
-              >
-                <div class="flex items-center justify-between">
-                  <span class="text-sm font-semibold text-ink">
-                    {plan().name}
-                  </span>
-                  <span
-                    class={cn(
-                      'flex items-center justify-center size-4 rounded-full border',
-                      selected() === plan().tier
-                        ? 'border-ink bg-ink text-surface'
-                        : 'border-edge'
-                    )}
-                  >
-                    <Show when={selected() === plan().tier}>
-                      <Check class="size-3" />
-                    </Show>
-                  </span>
-                </div>
-                <div class="flex items-baseline gap-1">
-                  <span class="text-2xl font-semibold tracking-tight text-ink">
-                    ${plan().price}
-                  </span>
-                  <span class="text-xs text-ink-muted">
-                    {plan().price === 0 ? 'forever' : 'per user / month'}
-                  </span>
-                </div>
-                <ul class="flex flex-col gap-2">
-                  <Index each={PLAN_FEATURES}>
-                    {(feature) => (
-                      <li class="flex items-center justify-between gap-2 text-xs">
-                        <span class="text-ink-muted">{feature().label}</span>
-                        <span class="text-ink font-medium">
-                          {feature().values[plan().tier]}
-                        </span>
-                      </li>
-                    )}
-                  </Index>
-                </ul>
-              </button>
-            )}
-          </Index>
-        </div>
-
-        <div class="flex flex-col gap-3">
-          <Button
-            variant="cta"
-            size="xl"
-            disabled={props.finishing}
-            onClick={finish}
-          >
-            {props.finishing
-              ? selected() === 'free'
-                ? 'Setting up your workspace…'
-                : 'Heading to checkout…'
-              : `Continue with ${selected() === 'free' ? 'Free' : 'Premium'}`}
-            <ArrowRight class="size-5" />
-          </Button>
-          <SkipButton
-            label="Decide later"
-            disabled={props.finishing}
-            onClick={() => props.onFree(true)}
+      <Show
+        when={props.inviteOffer}
+        fallback={
+          <PlanPicker
+            finishing={props.finishing}
+            selected={selected()}
+            onSelect={setSelected}
+            onFinish={finish}
+            onDecideLater={() => props.onFree(true)}
           />
-        </div>
-      </div>
+        }
+      >
+        {(offer) => (
+          <InviteOfferPanel
+            offer={offer()}
+            finishing={props.finishing}
+            onStartCheckout={() => props.onStartCheckout('premium')}
+            onContinueFree={() => props.onFree(false)}
+          />
+        )}
+      </Show>
     </Show>
+  );
+}
+
+/** The regular free/premium picker. */
+function PlanPicker(props: {
+  finishing: boolean;
+  selected: PlanTier;
+  onSelect: (tier: PlanTier) => void;
+  onFinish: () => void;
+  onDecideLater: () => void;
+}) {
+  const selected = () => props.selected;
+  return (
+    <div class="flex flex-col gap-6">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Index each={PLANS}>
+          {(plan) => (
+            <button
+              type="button"
+              onClick={() => props.onSelect(plan().tier)}
+              class={cn(
+                'flex flex-col gap-4 rounded-xl border p-5 text-left transition-colors cursor-default',
+                selected() === plan().tier
+                  ? 'border-ink/40 ring-1 ring-ink/20'
+                  : 'border-edge hover:border-edge-muted'
+              )}
+            >
+              <div class="flex items-center justify-between">
+                <span class="text-sm font-semibold text-ink">
+                  {plan().name}
+                </span>
+                <span
+                  class={cn(
+                    'flex items-center justify-center size-4 rounded-full border',
+                    selected() === plan().tier
+                      ? 'border-ink bg-ink text-surface'
+                      : 'border-edge'
+                  )}
+                >
+                  <Show when={selected() === plan().tier}>
+                    <Check class="size-3" />
+                  </Show>
+                </span>
+              </div>
+              <div class="flex items-baseline gap-1">
+                <span class="text-2xl font-semibold tracking-tight text-ink">
+                  ${plan().price}
+                </span>
+                <span class="text-xs text-ink-muted">
+                  {plan().price === 0 ? 'forever' : 'per user / month'}
+                </span>
+              </div>
+              <ul class="flex flex-col gap-2">
+                <Index each={PLAN_FEATURES}>
+                  {(feature) => (
+                    <li class="flex items-center justify-between gap-2 text-xs">
+                      <span class="text-ink-muted">{feature().label}</span>
+                      <span class="text-ink font-medium">
+                        {feature().values[plan().tier]}
+                      </span>
+                    </li>
+                  )}
+                </Index>
+              </ul>
+            </button>
+          )}
+        </Index>
+      </div>
+
+      <div class="flex flex-col gap-3">
+        <Button
+          variant="cta"
+          size="xl"
+          disabled={props.finishing}
+          onClick={() => props.onFinish()}
+        >
+          {props.finishing
+            ? selected() === 'free'
+              ? 'Setting up your workspace…'
+              : 'Heading to checkout…'
+            : `Continue with ${selected() === 'free' ? 'Free' : 'Premium'}`}
+          <ArrowRight class="size-5" />
+        </Button>
+        <SkipButton
+          label="Decide later"
+          disabled={props.finishing}
+          onClick={() => props.onDecideLater()}
+        />
+      </div>
+    </div>
   );
 }

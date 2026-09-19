@@ -24,6 +24,77 @@ const enginePort = {
 } as unknown as MessagePort;
 
 describe('coordinator runtime protocol', () => {
+  it('validates the staged startup handshake and rejects the old ungated protocol', () => {
+    const progress = {
+      ...version,
+      kind: 'engine-startup',
+      ownerEpoch: 1,
+      phase: 'loading-assets',
+      databaseAction: 'open-existing',
+      timeoutMs: 300_000,
+    };
+    expect(validateCoordinatorToTabEnvelope(progress).ok).toBe(true);
+    expect(
+      validateCoordinatorToTabEnvelope({
+        ...progress,
+        phase: 'opening-database',
+      }).ok
+    ).toBe(true);
+    for (const invalid of [
+      { phase: 'unknown' },
+      { timeoutMs: 0 },
+      { timeoutMs: Infinity },
+      { databaseAction: 'forget' },
+      { coordinatorVersion: 2 },
+    ]) {
+      expect(
+        validateCoordinatorToTabEnvelope({ ...progress, ...invalid }).ok
+      ).toBe(false);
+    }
+    const prepared = {
+      ...version,
+      kind: 'engine-assets-ready',
+      tabId: 'tab',
+      ownerEpoch: 1,
+    };
+    expect(validateEngineToCoordinatorEnvelope(prepared).ok).toBe(true);
+    expect(
+      validateEngineToCoordinatorEnvelope({ ...prepared, extra: true }).ok
+    ).toBe(false);
+    const grant = { ...version, kind: 'open-engine', ownerEpoch: 1 };
+    expect(validateCoordinatorToEngineEnvelope(grant).ok).toBe(true);
+    expect(
+      validateCoordinatorToEngineEnvelope({ ...grant, coordinatorVersion: 2 })
+        .ok
+    ).toBe(false);
+  });
+
+  it('validates bounded reconciliation evidence without changing exact requests', () => {
+    const request = {
+      filters: {},
+      sortMethod: 'UPDATED_AT',
+      sortDirection: 'DESC',
+      limit: 20,
+    };
+    const valid = (baseline?: unknown) =>
+      isCacheRequest({
+        id: 1,
+        kind: 'entity-filter',
+        request: { ...request, baseline },
+      });
+    const entry = {
+      key: 'GraphqlSoupDocument:one',
+      sortTimestamp: '2026-01-01T00:00:00.123456Z',
+    };
+    expect(valid()).toBe(true);
+    expect(valid([])).toBe(true);
+    expect(valid([entry])).toBe(true);
+    expect(valid(Array(5001).fill(entry))).toBe(false);
+    expect(valid([{ ...entry, key: 'not-a-normalized-key' }])).toBe(false);
+    expect(valid([{ ...entry, sortTimestamp: 123 }])).toBe(false);
+    expect(valid([{ ...entry, unexpected: true }])).toBe(false);
+  });
+
   it('validates cache RPCs and rejects unknown fields or kinds', () => {
     expect(isCacheRequest({ id: 0, kind: 'clear' })).toBe(true);
     expect(isCacheRequest({ id: 1, kind: 'current-revision' })).toBe(true);
@@ -264,6 +335,7 @@ describe('coordinator runtime protocol', () => {
     },
     { ...version, kind: 'engine-replaced', ownerEpoch: 2 },
     { ...version, kind: 'protocol-error', error: 'bad envelope' },
+    { ...version, kind: 'terminal-error', error: 'recovery exhausted' },
   ])('accepts coordinator-to-tab envelope $kind', (message) => {
     expect(validateCoordinatorToTabEnvelope(message).ok).toBe(true);
   });

@@ -22,7 +22,10 @@ export type History<T extends object> = {
    * (e.g. captured per-entry state) before navigating away.
    */
   replaceCurrent: (next: T) => void;
-  remove: (predicate: (item: T) => boolean) => T | null;
+  remove: (
+    predicate: (item: T) => boolean,
+    canActivate?: (item: T) => boolean
+  ) => T | null;
 };
 
 const inc = (x: number) => x + 1;
@@ -112,7 +115,10 @@ export function createHistory<T extends object>(): History<T> {
     return items()[index()];
   };
 
-  const remove = (predicate: (item: T) => boolean) => {
+  const remove = (
+    predicate: (item: T) => boolean,
+    canActivate?: (item: T) => boolean
+  ) => {
     const prevItems = items();
     const prevIndex = index();
 
@@ -142,6 +148,8 @@ export function createHistory<T extends object>(): History<T> {
       newIndex = nextItems.length - 1;
     }
 
+    const next = nextItems[newIndex];
+    if (next && canActivate?.(next) === false) return null;
     batch(() => {
       setItems(nextItems);
       setIndex(newIndex);

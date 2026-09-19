@@ -20,6 +20,7 @@ const LOCAL_E2E_RESET_SQL: &str = include_str!("../../seed/local_e2e/reset.sql")
 const LOCAL_E2E_USERS_JSON: &str = include_str!("../../seed/local_e2e/users.json");
 const LOCAL_E2E_CHANNEL_MESSAGES_SQL: &str =
     include_str!("../../seed/local_e2e/channel_messages.sql");
+const LOCAL_E2E_ACTIVITY_SQL: &str = include_str!("../../seed/local_e2e/activity.sql");
 
 #[derive(Debug, Deserialize)]
 struct LocalE2eManifest {
@@ -565,6 +566,11 @@ async fn local_e2e_smoke(ctx: &SeedCliContext) -> anyhow::Result<()> {
     tracing::info!("seeding 5,000 local e2e messages per channel");
     ctx.db
         .execute_sql_script(LOCAL_E2E_CHANNEL_MESSAGES_SQL)
+        .await?;
+
+    tracing::info!("seeding local e2e activity events");
+    ctx.db
+        .execute_sql_if_table_exists("public.activity_events", LOCAL_E2E_ACTIVITY_SQL)
         .await?;
 
     println!("Local e2e smoke seed data ready for {local_e2e_user_id}");

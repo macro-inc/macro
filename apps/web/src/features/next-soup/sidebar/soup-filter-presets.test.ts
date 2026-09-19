@@ -182,7 +182,9 @@ describe('inbox view presets', () => {
 
     // Referencing `calf` lifts the nil-id exclusion; only events with a
     // not-done notification come back.
-    expect(ast.calf).toEqual({ l: { nd: false } });
+    expect(ast.calf).toEqual({
+      '|': [{ l: { ns: 'unseen' } }, { l: { ns: 'seen' } }],
+    });
   });
 
   it('keeps calendar events nil-scoped when the calendar flag is off', () => {

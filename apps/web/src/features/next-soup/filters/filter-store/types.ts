@@ -51,6 +51,8 @@ export type ArrayFieldFilters = {
   channelThreadId?: string[];
   channelThreadRootSenderId?: string[];
   channelThreadParticipantId?: string[];
+  agentSessionId?: string[];
+  agentSessionOwnerId?: string[];
   chatId?: string[];
   chatOwnerId?: string[];
   chatProjectId?: string[];
@@ -104,6 +106,7 @@ export type ScalarFieldFilters = {
   calendarEventDone?: boolean;
   // Reminders are off by default in Soup; a view must opt in.
   includeReminders?: boolean;
+  includeAgentSessions?: boolean;
   reminderCompleted?: boolean;
   /** Whether the reminder has come due. Resolved against the server clock, so
    *  it stays out of the query cache key. */

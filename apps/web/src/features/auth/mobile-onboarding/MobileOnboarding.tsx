@@ -1,5 +1,4 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { useIsAuthenticated } from '@core/context/user';
 import LogoIcon from '@icon/macro-logo.svg';
 import { useNavigate } from '@solidjs/router';
@@ -68,20 +67,6 @@ export function MobileOnboarding() {
 
   return (
     <div class="relative flex size-full overflow-hidden px-4 pt-[calc(var(--safe-top)+2rem)] pb-[calc(var(--safe-bottom)+2rem)]">
-      <div class="inset-0 absolute text-edge bg-surface opacity-10 -z-1">
-        <PcNoiseGrid
-          cellSize={30}
-          warp={0}
-          crunch={0.2}
-          freq={0.001}
-          size={[0, 0.3]}
-          rounding={0}
-          fill={0}
-          stroke={1}
-          speed={[0.017, 0.209]}
-        />
-      </div>
-
       <Surface depth={1} class="flex flex-col mt-(--mobile-content-inset-top)">
         <div class="flex shrink-0 items-center justify-center pt-8 pb-4">
           <LogoIcon class="size-16 text-ink" />

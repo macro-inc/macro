@@ -76,9 +76,11 @@ INSERT INTO public.comms_channels ("id", "channel_type", "owner_id", "created_at
 VALUES ('33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'private', 'macro|user-1@test.com', '2023-01-07 10:00:00', '2023-01-07 10:00:00'),
        ('33333333-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'private', 'macro|user-2@test.com', '2023-01-07 11:00:00', '2023-01-07 11:00:00');
 
-INSERT INTO public.comms_messages ("id", "channel_id", "thread_id", "sender_id", "content", "created_at", "updated_at")
+-- Replica mode skips the trigger that derives the parent columns from channel_id,
+-- so this fixture sets them itself.
+INSERT INTO public.comms_messages ("id", "channel_id", "parent_entity_type", "parent_entity_id", "thread_id", "sender_id", "content", "created_at", "updated_at")
 -- thread-M is a root message in channel-X that user-1 was mentioned in.
-VALUES ('99999999-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa', NULL, 'macro|user-2@test.com', 'hey @user-1', '2024-06-01 10:06:00+00', '2024-06-01 10:06:00+00');
+VALUES ('99999999-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'channel', '33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa', NULL, 'macro|user-2@test.com', 'hey @user-1', '2024-06-01 10:06:00+00', '2024-06-01 10:06:00+00');
 
 INSERT INTO public.comms_channel_participants ("channel_id", "role", "user_id", "joined_at", "left_at")
 VALUES ('33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'member', 'macro|user-1@test.com', '2023-01-07 10:00:00', NULL),
@@ -100,12 +102,12 @@ VALUES ('44444444-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '55555555-aaaa-aaaa-aaaa-aaaaaaa
        -- Notified at T14 but the thread lives in user-2's inbox: must never surface.
        ('44444444-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '55555555-bbbb-bbbb-bbbb-bbbbbbbbbbbb', TRUE, TRUE, '2024-06-01 09:00:00+00', '2024-06-01 09:00:00+00', '2024-06-01 09:00:00+00');
 
-INSERT INTO public.calendar_events ("id", "owner_id", "source_link_id", "ical_uid", "title", "starts_at", "ends_at", "canonical_source_kind", "canonical_source_updated_at")
-VALUES ('66666666-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'macro|user-1@test.com', '55555555-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'e1@test', 'Event E1', '2024-06-02 10:00:00+00', '2024-06-02 11:00:00+00', 'google', '2024-06-01 09:00:00+00'),
+INSERT INTO public.calendar_events ("id", "owner_id", "source_link_id", "ical_uid", "title", "starts_at", "ends_at", "canonical_source_kind")
+VALUES ('66666666-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'macro|user-1@test.com', '55555555-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'e1@test', 'Event E1', '2024-06-02 10:00:00+00', '2024-06-02 11:00:00+00', 'google'),
        -- Notified at T15 but owned by user-2 with no delegation: must never surface.
-       ('66666666-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'macro|user-2@test.com', '55555555-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'e2@test', 'Event E2', '2024-06-02 10:00:00+00', '2024-06-02 11:00:00+00', 'google', '2024-06-01 09:00:00+00'),
+       ('66666666-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'macro|user-2@test.com', '55555555-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'e2@test', 'Event E2', '2024-06-02 10:00:00+00', '2024-06-02 11:00:00+00', 'google'),
        -- user-2's event on the inbox delegated to user-1: visible through the delegation.
-       ('66666666-cccc-cccc-cccc-cccccccccccc', 'macro|user-2@test.com', '55555555-cccc-cccc-cccc-cccccccccccc', 'e3@test', 'Event E3', '2024-06-02 12:00:00+00', '2024-06-02 13:00:00+00', 'google', '2024-06-01 09:00:00+00');
+       ('66666666-cccc-cccc-cccc-cccccccccccc', 'macro|user-2@test.com', '55555555-cccc-cccc-cccc-cccccccccccc', 'e3@test', 'Event E3', '2024-06-02 12:00:00+00', '2024-06-02 13:00:00+00', 'google');
 
 INSERT INTO public.foreign_entity ("id", "foreign_entity_id", "foreign_entity_source", "metadata", "stored_for_id", "stored_for_auth_entity", "created_at", "updated_at")
 VALUES ('77777777-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'org/repo#1', 'github_pull_request', '{}', 'macro|user-1@test.com', 'user', '2024-06-01 09:00:00+00', '2024-06-01 09:00:00+00'),
@@ -180,30 +182,30 @@ VALUES
 -- than fail the page on the cast.
 ('0190a000-0000-7000-8000-000000000021', 'channel_invite', 'not-a-uuid', 'channel', 'test', '2024-06-01 10:21:00', '{}', 'macro|user-2@test.com', NULL, NULL);
 
-INSERT INTO public.user_notification ("user_id", "notification_id", "created_at", "sent", "seen_at", "deleted_at", "done", "is_important_v0")
+INSERT INTO public.user_notification ("user_id", "notification_id", "created_at", "sent", "seen_at", "deleted_at", "state", "is_important_v0")
 VALUES
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000001', '2024-06-01 10:01:00', TRUE, '2024-06-01 10:01:30', NULL, TRUE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000009', '2024-06-01 10:09:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-2@test.com', '0190a000-0000-7000-8000-000000000030', '2024-06-01 10:30:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000008', '2024-06-01 10:08:00', TRUE, '2024-06-01 10:08:30', NULL, TRUE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000007', '2024-06-01 10:07:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000006', '2024-06-01 10:06:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000000', '2024-06-01 10:00:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000005', '2024-06-01 10:05:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000004', '2024-06-01 10:04:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000003', '2024-06-01 10:03:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000002', '2024-06-01 10:02:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000010', '2024-06-01 10:10:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000011', '2024-06-01 10:11:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000012', '2024-06-01 10:12:00', TRUE, NULL, '2024-06-01 10:12:30', FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000013', '2024-06-01 10:13:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000014', '2024-06-01 10:14:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000015', '2024-06-01 10:15:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000016', '2024-06-01 10:16:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000017', '2024-06-01 10:17:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000018', '2024-06-01 10:18:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000019', '2024-06-01 10:19:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000020', '2024-06-01 10:20:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000021', '2024-06-01 10:21:00', TRUE, NULL, NULL, FALSE, FALSE);
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000001', '2024-06-01 10:01:00', TRUE, '2024-06-01 10:01:30', NULL, 'done', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000009', '2024-06-01 10:09:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-2@test.com', '0190a000-0000-7000-8000-000000000030', '2024-06-01 10:30:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000008', '2024-06-01 10:08:00', TRUE, '2024-06-01 10:08:30', NULL, 'done', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000007', '2024-06-01 10:07:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000006', '2024-06-01 10:06:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000000', '2024-06-01 10:00:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000005', '2024-06-01 10:05:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000004', '2024-06-01 10:04:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000003', '2024-06-01 10:03:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000002', '2024-06-01 10:02:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000010', '2024-06-01 10:10:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000011', '2024-06-01 10:11:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000012', '2024-06-01 10:12:00', TRUE, NULL, '2024-06-01 10:12:30', 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000013', '2024-06-01 10:13:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000014', '2024-06-01 10:14:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000015', '2024-06-01 10:15:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000016', '2024-06-01 10:16:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000017', '2024-06-01 10:17:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000018', '2024-06-01 10:18:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000019', '2024-06-01 10:19:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000020', '2024-06-01 10:20:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000021', '2024-06-01 10:21:00', TRUE, NULL, NULL, 'unseen', FALSE);
 
 SET session_replication_role = 'origin';

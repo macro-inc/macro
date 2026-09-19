@@ -32,8 +32,10 @@ use std::collections::VecDeque;
 /// The one capability folding needs from storage, named by this crate in its
 /// own vocabulary - see the module docs.
 pub trait LogRepo {
-    /// A session's log rows, oldest first. A session with no log returns an
-    /// empty queue.
+    /// Effective ACP history in deterministic log order, beginning at the
+    /// initialization preceding the latest successful load (or the beginning
+    /// if none succeeded). Failed/incomplete load frames remain in this window;
+    /// the fold stages and discards them. A session with no log returns an empty queue.
     fn list_by_session(
         &self,
         session: AgentSessionId,
@@ -74,6 +76,17 @@ pub trait FoldSession {
 pub trait FoldMachine {
     /// Advance the machine by one log entry, reporting every change it
     /// implied in order - empty for a frame that changes nothing.
+    ///
+    /// One machine consumes one session in log order. Forward `initialize`,
+    /// `acp_ready`, and `disconnected` to delimit request-correlation epochs;
+    /// the session owner must reject frames from superseded connections before
+    /// appending them. Load candidates stay invisible until their matching
+    /// response decodes as `LoadSessionResponse`, when `MessagesReplaced`
+    /// replaces all prior messages. Failed/abandoned attempts quarantine late
+    /// notifications across handshake markers until a valid load/open response
+    /// or a dispatched prompt establishes live traffic.
+    /// An incomplete candidate remains available for subsequent streaming,
+    /// while batch readers see only the previous committed projection.
     fn push(&mut self, log: AgentSessionLog) -> Vec<FoldEvent<'_>>;
 }
 

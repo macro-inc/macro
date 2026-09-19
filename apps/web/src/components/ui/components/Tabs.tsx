@@ -7,7 +7,7 @@ import { cn } from '../utils/classname';
 
 export type TabItem = {
   value: string;
-  label: string | JSX.Element;
+  label: string | (() => JSX.Element);
 };
 
 export type TabsProps = {
@@ -69,7 +69,7 @@ export const Tabs = (props: TabsProps) => {
                 local.labelClass
               )}
             >
-              {item.label}
+              {typeof item.label === 'function' ? item.label() : item.label}
             </KSegmentedControl.ItemLabel>
           </KSegmentedControl.Item>
         )}

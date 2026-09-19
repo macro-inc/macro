@@ -8,10 +8,75 @@ use crate::domain::model::{
 };
 use crate::domain::test::util::Frame;
 use agent_client_protocol::schema::v1::ToolKind;
-use serde_json::json;
+use serde_json::{Value, json};
 
 fn native(name: &str) -> ToolName {
     ToolName::native(name)
+}
+
+// --- Claude Code (@agentclientprotocol/claude-agent-acp) ---
+
+/// `AskUserQuestion` through `elicitation/create`: the `question_N_custom`
+/// companion carries the shared marker; without one its name and title say.
+#[test]
+fn claude_code_recognizes_its_custom_answer_companion() {
+    let reader = Harness::ClaudeCode.reader();
+    let marked = json!({"type": "string", "title": "Other", "description": "Type your own answer instead of choosing an option above (optional).", "_meta": {"_askUserQuestionCustomAnswer": {"questionId": "question_0", "isCustomAnswer": true}}});
+    assert_eq!(
+        reader.custom_answer_for("question_0_custom", &marked),
+        Some("question_0".to_owned())
+    );
+    let unset = json!({"type": "string", "title": "Other", "_meta": {"_askUserQuestionCustomAnswer": {"questionId": "question_0", "isCustomAnswer": false}}});
+    assert_eq!(reader.custom_answer_for("question_0_custom", &unset), None);
+    let bare = json!({"type": "string", "title": "Other"});
+    assert_eq!(
+        reader.custom_answer_for("question_0_custom", &bare),
+        Some("question_0".to_owned())
+    );
+    let select =
+        json!({"type": "string", "title": "Other", "oneOf": [{"const": "a", "title": "a"}]});
+    assert_eq!(
+        reader.custom_answer_for("question_0_custom", &select),
+        None,
+        "a select titled Other is a question, not a companion"
+    );
+    let retitled = json!({"type": "string", "title": "Notes"});
+    assert_eq!(
+        reader.custom_answer_for("question_0_custom", &retitled),
+        None
+    );
+    assert_eq!(reader.custom_answer_for("_custom", &bare), None);
+}
+
+/// The adapter reports the answer it settled on through the asking tool's
+/// `toolResponse`, keyed by question text.
+#[test]
+fn claude_code_reports_the_answer_it_took_on_the_tool_frame() {
+    let reader = Harness::ClaudeCode.reader();
+    let reported = Frame::new().meta(json!({"claudeCode": {"toolName": "AskUserQuestion", "toolResponse": {"questions": [], "answers": {"What is the best colour?": "blue"}}}}));
+    assert_eq!(
+        reader.reported_elicitation_answer(&reported.view()),
+        Some(json!({"What is the best colour?": "blue"}))
+    );
+    let streaming = Frame::new().meta(json!({"claudeCode": {"toolName": "AskUserQuestion"}}));
+    assert_eq!(reader.reported_elicitation_answer(&streaming.view()), None);
+    let other_tool = Frame::new()
+        .meta(json!({"claudeCode": {"toolName": "Bash", "toolResponse": {"stdout": "x"}}}));
+    assert_eq!(reader.reported_elicitation_answer(&other_tool.view()), None);
+}
+
+/// The neutral reading knows the shared marker and nothing else: no
+/// namespace, no naming convention.
+#[test]
+fn the_generic_reader_knows_only_the_shared_marker() {
+    let reader = Harness::Unknown.reader();
+    let shared = json!({"type": "string", "title": "Other", "_meta": {"_askUserQuestionCustomAnswer": {"questionId": "q", "isCustomAnswer": true}}});
+    assert_eq!(reader.custom_answer_for("x", &shared), Some("q".to_owned()));
+    let bare = json!({"type": "string", "title": "Other"});
+    assert_eq!(reader.custom_answer_for("q_custom", &bare), None);
+    assert_eq!(reader.custom_answer_for("q__other", &bare), None);
+    let codex = json!({"type": "string", "title": "Other", "_meta": {"codex": {"questionId": "q", "isOtherAnswer": true}}});
+    assert_eq!(reader.custom_answer_for("q__other", &codex), None);
 }
 
 // --- Codex (@agentclientprotocol/codex-acp, legacy collaboration mode) ---
@@ -107,6 +172,51 @@ fn codex_is_sniffed_from_either_of_its_meta_signals() {
     assert_eq!(Harness::sniff(&flagged.view()), Some(Harness::Codex));
     let unflagged = Frame::new().meta(json!({"is_mcp_tool_call": false}));
     assert_eq!(Harness::sniff(&unflagged.view()), None);
+}
+
+/// `request_user_input` through `elicitation/create`: the `__other`
+/// companion carries Codex's own marker, and is recognized by it first, by
+/// the shared marker second, and by its name and title last.
+#[test]
+fn codex_recognizes_its_other_answer_companion() {
+    let reader = Harness::Codex.reader();
+    let marked = json!({"type": "string", "title": "Other", "_meta": {"codex": {"questionId": "target", "isOtherAnswer": true, "isSecret": false}}});
+    assert_eq!(
+        reader.custom_answer_for("target__other", &marked),
+        Some("target".to_owned())
+    );
+    // The marker names the question; the property's own name need not.
+    assert_eq!(
+        reader.custom_answer_for("anything", &marked),
+        Some("target".to_owned())
+    );
+    let select = json!({"type": "string", "title": "Target", "oneOf": [{"const": "a", "title": "a"}], "_meta": {"codex": {"isOther": true, "isSecret": false}}});
+    assert_eq!(
+        reader.custom_answer_for("target", &select),
+        None,
+        "the select itself is not a companion"
+    );
+    let shared = json!({"type": "string", "title": "Other", "_meta": {"_askUserQuestionCustomAnswer": {"questionId": "q", "isCustomAnswer": true}}});
+    assert_eq!(
+        reader.custom_answer_for("q__other", &shared),
+        Some("q".to_owned())
+    );
+    let bare = json!({"type": "string", "title": "Other"});
+    assert_eq!(
+        reader.custom_answer_for("target__other", &bare),
+        Some("target".to_owned()),
+        "a recording that lost its _meta still collapses by name"
+    );
+    assert_eq!(
+        reader.custom_answer_for("target_custom", &bare),
+        None,
+        "Claude Code's suffix is not Codex's"
+    );
+    assert_eq!(
+        reader.reported_elicitation_answer(&Frame::new().view()),
+        None,
+        "Codex sends no tool call for a question, so nothing reports back"
+    );
 }
 
 // --- Cursor (cursor_cloud_agents) ---
@@ -260,6 +370,8 @@ fn cursor_task_result_unfolds_the_childs_transcript() {
                     kind: "other".to_owned(),
                     output: None,
                     input: None,
+                    result: None,
+                    error: None,
                 },
             },
         ]
@@ -274,6 +386,263 @@ fn cursor_task_result_unfolds_the_childs_transcript() {
 
     // The opening frame carries no result and so no transcript.
     assert_eq!(reader.subagent_transcript(&Frame::new().view()), vec![]);
+}
+
+/// Every MCP call goes through Cursor's `mcp` dispatcher, whose arguments
+/// say which server and tool; the reader names the call for those and hands
+/// on the tool's own arguments without the dispatcher's.
+#[test]
+fn cursor_names_mcp_calls_from_the_dispatchers_arguments() {
+    let reader = Harness::Cursor.reader();
+    let dispatched = Frame::new().title("mcp").raw_input(json!({
+        "name": "macro-ReadContent",
+        "toolCallId": "call-1 fc_1",
+        "providerIdentifier": "macro",
+        "toolName": "ReadContent",
+        "serverIdentifier": "macro",
+        "args": {"documentId": "4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e46"}
+    }));
+    assert_eq!(
+        reader.reported_tool_name(&dispatched.view()),
+        Some(ToolName::Mcp {
+            server: "macro".to_owned(),
+            tool: "ReadContent".to_owned()
+        })
+    );
+    assert_eq!(
+        reader.tool_input(&dispatched.view()),
+        Some(json!({"documentId": "4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e46"}))
+    );
+
+    // The announcement carries no arguments: nothing to name it by yet.
+    let announced = Frame::new().title("mcp");
+    assert_eq!(reader.reported_tool_name(&announced.view()), None);
+    assert_eq!(reader.tool_input(&announced.view()), None);
+
+    // A tool that takes nothing, as recorded: the dispatcher's keys alone,
+    // and only `providerIdentifier` in an older recording.
+    let bare = Frame::new().title("mcp").raw_input(json!({
+        "name": "cursor-cloud-get-message-queue",
+        "toolCallId": "call-2 fc_2",
+        "providerIdentifier": "cursor-cloud",
+        "toolName": "get-message-queue"
+    }));
+    assert_eq!(
+        reader.reported_tool_name(&bare.view()),
+        Some(ToolName::Mcp {
+            server: "cursor-cloud".to_owned(),
+            tool: "get-message-queue".to_owned()
+        })
+    );
+    assert_eq!(reader.tool_input(&bare.view()), Some(json!({})));
+
+    // Any other tool's arguments are its own already, and its title is its
+    // name - `get_mcp_tools` names a tool too, but is not the dispatcher.
+    let listing = Frame::new().title("get_mcp_tools").raw_input(
+        json!({"server": "cursor-cloud", "toolName": "get-message-queue", "toolCallId": "c"}),
+    );
+    assert_eq!(reader.reported_tool_name(&listing.view()), None);
+    assert_eq!(
+        reader.tool_input(&listing.view()),
+        Some(json!({"server": "cursor-cloud", "toolName": "get-message-queue", "toolCallId": "c"}))
+    );
+    let shell = Frame::new()
+        .title("run_terminal_cmd")
+        .raw_input(json!({"command": "ls"}));
+    assert_eq!(reader.reported_tool_name(&shell.view()), None);
+    assert_eq!(
+        reader.tool_input(&shell.view()),
+        Some(json!({"command": "ls"}))
+    );
+}
+
+/// A call's `rawOutput` is Cursor's result under `result`; for an MCP call
+/// that is MCP's `CallToolResult` in Cursor's spelling, and the reader
+/// unwraps it to what the tool returned.
+#[test]
+fn cursor_unwraps_mcp_results_from_its_envelope() {
+    let reader = Harness::Cursor.reader();
+
+    // Structured content wins, as in the standard envelope.
+    let structured = json!({"result": {"success": {
+        "content": [{"text": {"text": "Cursor Cloud message queue (0 queued).\n{\"hasQueuedMessages\": false}"}}],
+        "structuredContent": {"hasQueuedMessages": false, "queuedMessageCount": 0}
+    }}});
+    assert_eq!(
+        reader.unwrap_tool_output(&structured),
+        (
+            json!({"hasQueuedMessages": false, "queuedMessageCount": 0}),
+            None
+        )
+    );
+
+    // Else the text, parsed when it is JSON, as text when it is not.
+    let json_text = json!({"result": {"success": {
+        "content": [{"text": {"text": "{\"content\":{\"text\":\"Q3 plan\"},\"comments\":[]}"}}]
+    }}});
+    assert_eq!(
+        reader.unwrap_tool_output(&json_text),
+        (
+            json!({"content": {"text": "Q3 plan"}, "comments": []}),
+            None
+        )
+    );
+    let prose = json!({"result": {"success": {
+        "content": [{"text": {"text": "first"}}, {"image": {"data": "…"}}, {"text": {"text": "second"}}]
+    }}});
+    assert_eq!(
+        reader.unwrap_tool_output(&prose),
+        (json!("first\nsecond"), None)
+    );
+
+    // Content as one string - how `get_mcp_tools` reports its catalog.
+    let catalog =
+        json!({"result": {"success": {"content": "{\"mode\": \"catalog\", \"servers\": []}"}}});
+    assert_eq!(
+        reader.unwrap_tool_output(&catalog),
+        (json!({"mode": "catalog", "servers": []}), None)
+    );
+
+    // A result that marks itself an error is one, and still a result.
+    let marked = json!({"result": {"success": {
+        "content": [{"text": {"text": "no such document"}}], "isError": true
+    }}});
+    assert_eq!(
+        reader.unwrap_tool_output(&marked),
+        (
+            json!("no such document"),
+            Some("no such document".to_owned())
+        )
+    );
+
+    // The dispatcher's own failures, each as its text.
+    let error =
+        json!({"result": {"error": {"error": "MCP tool \"x\" not found on server \"y\"."}}});
+    assert_eq!(
+        reader.unwrap_tool_output(&error),
+        (
+            Value::Null,
+            Some("MCP tool \"x\" not found on server \"y\".".to_owned())
+        )
+    );
+    let rejected =
+        json!({"result": {"rejected": {"reason": "user declined", "isReadonly": false}}});
+    assert_eq!(
+        reader.unwrap_tool_output(&rejected),
+        (Value::Null, Some("user declined".to_owned()))
+    );
+    let denied = json!({"result": {"permissionDenied": {"error": "not allowed"}}});
+    assert_eq!(
+        reader.unwrap_tool_output(&denied),
+        (Value::Null, Some("not allowed".to_owned()))
+    );
+    let missing = json!({"result": {"toolNotFound": {"name": "x", "availableTools": ["y"]}}});
+    assert_eq!(
+        reader.unwrap_tool_output(&missing),
+        (
+            Value::Null,
+            Some("{\"name\":\"x\",\"availableTools\":[\"y\"]}".to_owned())
+        )
+    );
+
+    // A native tool's payload is not MCP's and comes through as Cursor wrote
+    // it; a shell failure is both the result and, as text, the error.
+    let path = json!({"result": {"success": {"path": "/workspace/README.md"}}});
+    assert_eq!(
+        reader.unwrap_tool_output(&path),
+        (json!({"path": "/workspace/README.md"}), None)
+    );
+    let failure =
+        json!({"result": {"failure": {"stderr": "No module named 'sympy'\n", "exitCode": 1}}});
+    assert_eq!(
+        reader.unwrap_tool_output(&failure),
+        (
+            json!({"stderr": "No module named 'sympy'\n", "exitCode": 1}),
+            Some("No module named 'sympy'\n".to_owned())
+        )
+    );
+
+    // Not Cursor's envelope at all: the neutral reading.
+    let standard =
+        json!({"content": [{"type": "text", "text": "{\"ok\":true}"}], "isError": false});
+    assert_eq!(
+        reader.unwrap_tool_output(&standard),
+        (json!({"ok": true}), None)
+    );
+    assert_eq!(
+        reader.unwrap_tool_output(&json!({"result": {}})),
+        (json!({"result": {}}), None)
+    );
+}
+
+/// A child's `mcpToolCall` step is read the same way as a top-level call.
+#[test]
+fn cursor_child_mcp_calls_are_named_and_unwrapped() {
+    let reader = Harness::Cursor.reader();
+    let frame = Frame::new().raw_output(json!({"result": {"success": {
+        "agentId": "bc-child",
+        "conversationSteps": [
+            {"toolCall": {
+                "toolCallId": "call_m",
+                "mcpToolCall": {
+                    "args": {
+                        "name": "macro-ReadContent",
+                        "toolCallId": "call_m",
+                        "providerIdentifier": "macro",
+                        "toolName": "ReadContent",
+                        "serverIdentifier": "macro",
+                        "args": {"documentId": "4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e46"}
+                    },
+                    "result": {"success": {
+                        "content": [{"text": {"text": "{\"content\":{\"text\":\"Q3 plan\"}}"}}]
+                    }}
+                }
+            }},
+            {"toolCall": {
+                "toolCallId": "call_n",
+                "mcpToolCall": {
+                    "args": {"toolName": "deploy", "serverIdentifier": "ops", "toolCallId": "call_n"},
+                    "result": {"rejected": {"reason": "user declined"}}
+                }
+            }},
+            {"assistantMessage": {"text": "Done."}}
+        ]
+    }}}));
+    assert_eq!(
+        reader.subagent_transcript(&frame.view()),
+        vec![
+            MessagePart::ToolUse {
+                id: ToolUseId("call_m".to_owned()),
+                name: ToolName::Mcp {
+                    server: "macro".to_owned(),
+                    tool: "ReadContent".to_owned()
+                },
+                status: ToolStatus::Completed,
+                detail: ToolDetail::Other {
+                    kind: "other".to_owned(),
+                    output: None,
+                    input: Some(json!({"documentId": "4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e46"})),
+                    result: Some(json!({"content": {"text": "Q3 plan"}})),
+                    error: None,
+                },
+            },
+            MessagePart::ToolUse {
+                id: ToolUseId("call_n".to_owned()),
+                name: ToolName::Mcp {
+                    server: "ops".to_owned(),
+                    tool: "deploy".to_owned()
+                },
+                status: ToolStatus::Failed,
+                detail: ToolDetail::Other {
+                    kind: "other".to_owned(),
+                    output: None,
+                    input: Some(json!({})),
+                    result: None,
+                    error: Some("user declined".to_owned()),
+                },
+            },
+        ]
+    );
 }
 
 // --- Hermes (hermes-agent) ---

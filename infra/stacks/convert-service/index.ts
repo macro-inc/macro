@@ -77,7 +77,6 @@ const convertService = new ConvertService('convert-service', {
   platform: { family: 'linux', architecture: 'amd64' },
   serviceContainerPort: 8080,
   healthCheckPath: '/health',
-  isPrivate: false,
   ecsClusterArn: cloudStorageClusterArn,
   cloudStorageClusterName,
 });

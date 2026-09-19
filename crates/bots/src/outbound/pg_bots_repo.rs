@@ -5,10 +5,11 @@ mod tests;
 
 use crate::domain::{
     models::{
-        Agent, AgentChannelScope, AuthenticatedBot, Bot, BotChannel, BotChannelType, BotId,
-        BotKind, BotOwner, BotToken, BotTokenCandidate, CreateAgentRequest, CreateBotRequest,
-        CreateBotTokenRequest, CreateChannelScopedBotRequest, HarnessId, HarnessOwner,
-        PatchBotRequest, UpdateAgentRequest,
+        Agent, AgentChannelScope, AgentMcpServer, AgentMcpServers, AuthenticatedBot, Bot,
+        BotChannel, BotChannelType, BotId, BotKind, BotOwner, BotProfile, BotToken,
+        BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
+        CreateChannelScopedBotRequest, HarnessFacts, HarnessId, HarnessOwner, PatchBotRequest,
+        UpdateAgentRequest,
     },
     ports::BotRepo,
 };
@@ -17,6 +18,7 @@ use bot_token::{HashedBotToken, hash_token};
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 /// Postgres implementation of [`BotRepo`].
@@ -112,6 +114,10 @@ struct AgentRow {
     default_model: String,
     channel_scope: String,
     channel_ids: Vec<Uuid>,
+    mcp_scope: String,
+    mcp_app_slugs: Vec<String>,
+    mcp_server_names: Vec<String>,
+    auto_accept_permissions: Option<bool>,
 }
 
 impl TryFrom<AgentRow> for Agent {
@@ -122,6 +128,19 @@ impl TryFrom<AgentRow> for Agent {
             .channel_scope
             .parse::<AgentChannelScope>()
             .map_err(anyhow::Error::msg)?;
+        if row.mcp_app_slugs.len() != row.mcp_server_names.len() {
+            anyhow::bail!("agent {} mcp server columns disagree in length", row.id);
+        }
+        let mcp_servers = row
+            .mcp_app_slugs
+            .into_iter()
+            .zip(row.mcp_server_names)
+            .map(|(app_slug, server_name)| AgentMcpServer {
+                app_slug,
+                server_name,
+            })
+            .collect();
+        let mcp = AgentMcpServers::from_columns(&row.mcp_scope, mcp_servers)?;
         let bot = BotRow {
             id: row.id,
             kind: row.kind,
@@ -147,6 +166,8 @@ impl TryFrom<AgentRow> for Agent {
             default_model: row.default_model,
             channel_scope,
             channel_ids: row.channel_ids,
+            mcp,
+            auto_accept_permissions: row.auto_accept_permissions,
         })
     }
 }
@@ -254,6 +275,33 @@ fn map_token_row(row: BotTokenRow) -> BotToken {
     row.into()
 }
 
+/// Writes an agent's selected MCP servers inside the caller's transaction.
+async fn insert_mcp_servers(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    bot_id: BotId,
+    servers: &[AgentMcpServer],
+) -> Result<(), anyhow::Error> {
+    if servers.is_empty() {
+        return Ok(());
+    }
+    let slugs: Vec<&str> = servers.iter().map(|s| s.app_slug.as_str()).collect();
+    let names: Vec<&str> = servers.iter().map(|s| s.server_name.as_str()).collect();
+    sqlx::query!(
+        r#"
+        INSERT INTO agent_mcp_servers (bot_id, app_slug, server_name)
+        SELECT $1, slug, name
+        FROM UNNEST($2::text[], $3::text[]) AS t(slug, name)
+        "#,
+        bot_id.as_uuid(),
+        &slugs as &[&str],
+        &names as &[&str],
+    )
+    .execute(&mut **tx)
+    .await
+    .context("failed to write the agent's MCP servers")?;
+    Ok(())
+}
+
 impl BotRepo for PgBotsRepo {
     type Err = anyhow::Error;
 
@@ -310,9 +358,9 @@ impl BotRepo for PgBotsRepo {
         sqlx::query!(
             r#"
             INSERT INTO agent_configs (
-                bot_id, instructions, harness, harness_id, default_model, channel_scope
+                bot_id, instructions, harness, harness_id, default_model, channel_scope, mcp_scope, auto_accept_permissions
             )
-            VALUES ($1, $2, $3, $4, $5, $6)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             "#,
             bot_id.as_uuid(),
             &req.instructions,
@@ -320,10 +368,14 @@ impl BotRepo for PgBotsRepo {
             req.harness_id.map(HarnessId::as_uuid),
             &req.default_model,
             req.channel_scope.as_str(),
+            req.mcp.scope_str(),
+            req.auto_accept_permissions,
         )
         .execute(&mut *tx)
         .await
         .context("failed to create agent config")?;
+
+        insert_mcp_servers(&mut tx, bot_id, req.mcp.servers()).await?;
 
         if !req.channel_ids.is_empty() {
             let bot_principal = principal_id(bot_id);
@@ -352,7 +404,9 @@ impl BotRepo for PgBotsRepo {
             harness_id: req.harness_id,
             default_model: req.default_model,
             channel_scope: req.channel_scope,
+            auto_accept_permissions: req.auto_accept_permissions,
             channel_ids: req.channel_ids,
+            mcp: req.mcp,
         })
     }
 
@@ -422,6 +476,8 @@ impl BotRepo for PgBotsRepo {
                 harness_id = $4,
                 default_model = $5,
                 channel_scope = $6,
+                mcp_scope = $7,
+                auto_accept_permissions = $8,
                 updated_at = now()
             WHERE bot_id = $1
             "#,
@@ -431,10 +487,23 @@ impl BotRepo for PgBotsRepo {
             req.harness_id.map(HarnessId::as_uuid),
             &req.default_model,
             req.channel_scope.as_str(),
+            req.mcp.scope_str(),
+            req.auto_accept_permissions,
         )
         .execute(&mut *tx)
         .await
         .context("failed to update agent config")?;
+
+        // Replaced wholesale in the same transaction as the channels, so a
+        // reader never sees half of the old set and half of the new.
+        sqlx::query!(
+            "DELETE FROM agent_mcp_servers WHERE bot_id = $1",
+            bot_id.as_uuid(),
+        )
+        .execute(&mut *tx)
+        .await
+        .context("failed to clear the agent's previous MCP servers")?;
+        insert_mcp_servers(&mut tx, bot_id, req.mcp.servers()).await?;
 
         let bot_principal = principal_id(bot_id);
         sqlx::query!(
@@ -481,6 +550,8 @@ impl BotRepo for PgBotsRepo {
             default_model: req.default_model,
             channel_scope: req.channel_scope,
             channel_ids: req.channel_ids,
+            mcp: req.mcp,
+            auto_accept_permissions: req.auto_accept_permissions,
         }))
     }
 
@@ -510,13 +581,27 @@ impl BotRepo for PgBotsRepo {
                 a.harness_id,
                 a.default_model,
                 a.channel_scope,
+                a.auto_accept_permissions,
                 ARRAY(
                     SELECT p.channel_id
                     FROM comms_channel_participants p
                     WHERE p.user_id = 'bot|' || b.id::text
                       AND p.left_at IS NULL
                     ORDER BY p.channel_id
-                ) AS "channel_ids!"
+                ) AS "channel_ids!",
+                a.mcp_scope,
+                ARRAY(
+                    SELECT m.app_slug
+                    FROM agent_mcp_servers m
+                    WHERE m.bot_id = b.id
+                    ORDER BY m.app_slug
+                ) AS "mcp_app_slugs!",
+                ARRAY(
+                    SELECT m.server_name
+                    FROM agent_mcp_servers m
+                    WHERE m.bot_id = b.id
+                    ORDER BY m.app_slug
+                ) AS "mcp_server_names!"
             FROM bots b
             INNER JOIN agent_configs a ON a.bot_id = b.id
             WHERE b.kind = 'owned'
@@ -525,6 +610,19 @@ impl BotRepo for PgBotsRepo {
                 b.owner_user_id = $1
                 OR b.team_id IN (
                     SELECT team_id FROM team_user WHERE user_id = $1
+                )
+                OR (
+                    a.channel_scope = 'selected'
+                    AND EXISTS (
+                        SELECT 1
+                        FROM comms_channel_participants bot_p
+                        INNER JOIN comms_channel_participants user_p
+                          ON user_p.channel_id = bot_p.channel_id
+                         AND user_p.user_id = $1
+                         AND user_p.left_at IS NULL
+                        WHERE bot_p.user_id = 'bot|' || b.id::text
+                          AND bot_p.left_at IS NULL
+                    )
                 )
               )
             ORDER BY b.created_at ASC, b.id ASC
@@ -777,6 +875,66 @@ impl BotRepo for PgBotsRepo {
         row.map(map_bot_row).transpose()
     }
 
+    async fn get_bot_profiles(
+        &self,
+        bot_ids: &[BotId],
+    ) -> Result<HashMap<BotId, BotProfile>, Self::Err> {
+        if bot_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let mut profiles = bot_ids
+            .iter()
+            .filter_map(|id| {
+                bot_id::system_bot(*id).map(|bot| {
+                    (
+                        *id,
+                        BotProfile {
+                            id: *id,
+                            name: bot.name.to_owned(),
+                            avatar_url: None,
+                        },
+                    )
+                })
+            })
+            .collect::<HashMap<_, _>>();
+        let ids = bot_ids
+            .iter()
+            .filter(|id| !bot_id::is_system_bot(**id))
+            .map(|id| id.as_uuid())
+            .collect::<Vec<_>>();
+        if ids.is_empty() {
+            return Ok(profiles);
+        }
+
+        // Include soft-deleted bots so historical sessions retain their bot
+        // identity and avatar.
+        let rows = sqlx::query!(
+            r#"
+            SELECT id, name, avatar_url
+            FROM bots
+            WHERE id = ANY($1)
+            "#,
+            &ids,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("failed to get bot profiles")?;
+
+        profiles.extend(rows.into_iter().map(|row| {
+            let id = BotId::new_from_uuid(row.id);
+            (
+                id,
+                BotProfile {
+                    id,
+                    name: row.name,
+                    avatar_url: row.avatar_url,
+                },
+            )
+        }));
+        Ok(profiles)
+    }
+
     async fn get_agent(&self, bot_id: BotId) -> Result<Option<Agent>, Self::Err> {
         let row = sqlx::query_as!(
             AgentRow,
@@ -800,13 +958,27 @@ impl BotRepo for PgBotsRepo {
                 a.harness_id,
                 a.default_model,
                 a.channel_scope,
+                a.auto_accept_permissions,
                 ARRAY(
                     SELECT p.channel_id
                     FROM comms_channel_participants p
                     WHERE p.user_id = 'bot|' || b.id::text
                       AND p.left_at IS NULL
                     ORDER BY p.channel_id
-                ) AS "channel_ids!"
+                ) AS "channel_ids!",
+                a.mcp_scope,
+                ARRAY(
+                    SELECT m.app_slug
+                    FROM agent_mcp_servers m
+                    WHERE m.bot_id = b.id
+                    ORDER BY m.app_slug
+                ) AS "mcp_app_slugs!",
+                ARRAY(
+                    SELECT m.server_name
+                    FROM agent_mcp_servers m
+                    WHERE m.bot_id = b.id
+                    ORDER BY m.app_slug
+                ) AS "mcp_server_names!"
             FROM bots b
             INNER JOIN agent_configs a ON a.bot_id = b.id
             WHERE b.id = $1
@@ -822,13 +994,13 @@ impl BotRepo for PgBotsRepo {
         row.map(Agent::try_from).transpose()
     }
 
-    async fn get_harness_owner(
+    async fn get_harness_facts(
         &self,
         harness_id: HarnessId,
-    ) -> Result<Option<HarnessOwner>, Self::Err> {
+    ) -> Result<Option<HarnessFacts>, Self::Err> {
         let row = sqlx::query!(
             r#"
-            SELECT owner_user_id, team_id
+            SELECT owner_user_id, team_id, allow_permission_bypass
             FROM harnesses
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -839,8 +1011,14 @@ impl BotRepo for PgBotsRepo {
         .context("failed to fetch harness owner")?;
 
         row.map(|row| match (row.owner_user_id, row.team_id) {
-            (Some(user_id), None) => Ok(HarnessOwner::User { user_id }),
-            (None, Some(team_id)) => Ok(HarnessOwner::Team { team_id }),
+            (Some(user_id), None) => Ok(HarnessFacts {
+                owner: HarnessOwner::User { user_id },
+                allow_permission_bypass: row.allow_permission_bypass,
+            }),
+            (None, Some(team_id)) => Ok(HarnessFacts {
+                owner: HarnessOwner::Team { team_id },
+                allow_permission_bypass: row.allow_permission_bypass,
+            }),
             // Unreachable: harnesses_owner_check enforces exactly one owner.
             _ => Err(anyhow::anyhow!("harness {harness_id} violates owner xor")),
         })
@@ -892,6 +1070,34 @@ impl BotRepo for PgBotsRepo {
         .context("failed to check bot channel membership")?;
 
         Ok(is_active)
+    }
+
+    async fn user_shares_channel_with_bot(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+    ) -> Result<bool, Self::Err> {
+        let shares = sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1
+                FROM comms_channel_participants bot_p
+                INNER JOIN comms_channel_participants user_p
+                  ON user_p.channel_id = bot_p.channel_id
+                 AND user_p.user_id = $2
+                 AND user_p.left_at IS NULL
+                WHERE bot_p.user_id = $1
+                  AND bot_p.left_at IS NULL
+            ) AS "shares!"
+            "#,
+            principal_id(bot_id),
+            caller.as_ref(),
+        )
+        .fetch_one(&self.pool)
+        .await
+        .context("failed to check whether the user shares a channel with the bot")?;
+
+        Ok(shares)
     }
 
     async fn user_can_administer_team(

@@ -121,6 +121,17 @@ export function createLayoutUrlSync(
 
     const nextState = managerUrlState();
     const pathChanged = nextState.segments.join('/') !== pairs().join('/');
+    const currentQuery = new URLSearchParams(environment.search());
+    // Action links can mount before settings has selected its requested tab.
+    // Preserve their query until the wrapper has canonicalized that tab.
+    if (
+      pathChanged &&
+      pairs()[0] === 'settings' &&
+      ((pairs()[1] === 'harness' && currentQuery.get('pair')) ||
+        (pairs()[1] === 'agents' && currentQuery.get('createAgent') === 'true'))
+    ) {
+      return;
+    }
     const nextPairs = decodePairs(nextState.segments);
     const affectedSplit = getUrlSyncAffectedSplit(
       splitManager,
@@ -133,9 +144,7 @@ export function createLayoutUrlSync(
     // Preserve unrelated query/hash state for query-only updates. Path
     // changes retain the existing split-navigation behavior of clearing
     // content-specific location state.
-    const query = pathChanged
-      ? new URLSearchParams()
-      : new URLSearchParams(environment.search());
+    const query = pathChanged ? new URLSearchParams() : currentQuery;
     if (nextState.preview) {
       query.set(PREVIEW_QUERY_PARAM, nextState.preview);
     } else {

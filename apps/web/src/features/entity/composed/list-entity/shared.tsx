@@ -29,6 +29,8 @@ export interface BaseListEntityProps<E extends EntityData = EntityData> {
   highlighted?: boolean;
   hovered?: boolean;
   hideContentHits?: boolean;
+  /** Opt-in by the data-owning view; keep nonessential setup off initial render. */
+  deferInteractions?: boolean;
   /** Hide the multi-select checkbox (e.g. read-only embeds outside soup). */
   hideCheckbox?: boolean;
   onChecked?: (checked: boolean, shiftKey: boolean) => void;

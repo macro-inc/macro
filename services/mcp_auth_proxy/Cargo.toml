@@ -37,4 +37,5 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
+macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
 tokio = { workspace = true }

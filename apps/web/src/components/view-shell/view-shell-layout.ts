@@ -9,14 +9,16 @@ export type AsideLayout = {
   min: number;
   max: number;
   /**
-   * Whether automatic container resizing should preserve `width`.
+   * Whether automatic container resizing should preserve the user-resized
+   * width (or `width` before resizing).
    * Set to false with a main `preferredWidth` to let the aside yield first.
    */
   preserveDuringResize?: boolean;
 };
 
+/** Shared starting size for every workspace navigation sidebar. */
 export const DEFAULT_ASIDE_LAYOUT: AsideLayout = {
-  width: 288,
+  width: 256,
   min: 224,
   max: 360,
 };

@@ -3,11 +3,12 @@ use logger::Logger;
 use macro_bundle_updater_plugin::domain::{
     asset_service::BundleAssetResolver, bundle_routes::BundleRoutes,
 };
-use macro_bundle_updater_plugin::inbound::plugin::retry_waiting_for_wifi;
 #[cfg(feature = "auto_apply_update")]
-use macro_bundle_updater_plugin::inbound::plugin::{
-    allow_update_reload_retry, apply_completed_update_from, start_update_check,
-};
+use macro_bundle_updater_plugin::inbound::plugin::apply_completed_update_from;
+#[cfg(mobile)]
+use macro_bundle_updater_plugin::inbound::plugin::retry_waiting_for_wifi;
+#[cfg(all(mobile, feature = "auto_apply_update"))]
+use macro_bundle_updater_plugin::inbound::plugin::{allow_update_reload_retry, start_update_check};
 use macro_bundle_updater_plugin::outbound::fs::FileSystem;
 use navigation_plugin::scheme::MacroScheme;
 use navigation_plugin::{MacroNavigationPlugin, NavigatePayload};
@@ -51,8 +52,8 @@ impl AppEnvironment {
 
     fn auth_service_url(self) -> &'static str {
         match self {
-            Self::Development => "https://auth-service-dev.macro.com/",
-            Self::Production => "https://auth-service.macro.com/",
+            Self::Development => "https://dev-gateway.macro.com/auth/",
+            Self::Production => "https://gateway.macro.com/auth/",
         }
     }
 
@@ -257,6 +258,7 @@ pub fn run() {
             graphql_cache_plugin::commands::graphql_cache_read,
             graphql_cache_plugin::commands::graphql_cache_read_records_by_keys,
             graphql_cache_plugin::commands::graphql_cache_search,
+            graphql_cache_plugin::commands::graphql_cache_entity_filter,
             graphql_cache_plugin::commands::graphql_cache_write,
             graphql_cache_plugin::commands::graphql_cache_hydrate,
             graphql_cache_plugin::commands::graphql_cache_enqueue_optimistic_mutation,
@@ -317,7 +319,15 @@ pub fn run() {
                     });
                 }
             }
-            RunEvent::Resumed => {
+            // Tao 0.37 delivers mobile foreground transitions per window, not
+            // through the top-level event-loop Resumed event or focus changes.
+            #[cfg(mobile)]
+            RunEvent::WindowEvent {
+                label,
+                event: tauri::WindowEvent::Resumed,
+                ..
+            } => {
+                tracing::debug!(window_label = %label, "mobile window resumed");
                 let app = app_handle.clone();
                 tauri::async_runtime::spawn(async move {
                     if let Err(e) = retry_waiting_for_wifi(&app).await {

@@ -18,8 +18,12 @@ use non_empty::NonEmpty;
 use serde::Serialize;
 use specta::Type;
 
+/// Questions the agent asks the user, and their answers.
+mod elicitation;
 /// Per-push change reports.
 mod event;
+/// Requests currently awaiting a user response.
+mod interaction;
 /// Session-level metadata.
 mod metadata;
 /// The parts a message is made of.
@@ -28,6 +32,10 @@ mod part;
 mod permission;
 /// The agent's plan.
 mod plan;
+/// Plain text derived from renderable messages for search.
+mod search;
+/// Turn-level facts derived from the fold.
+mod signal;
 /// Delegated agents.
 mod subagent;
 /// Tool calls.
@@ -35,11 +43,18 @@ mod tool;
 /// Macro user tools.
 mod user_tool;
 
+pub use elicitation::{
+    AnsweredChoice, AnsweredField, AnsweredValue, ElicitationOption, ElicitationOutcome,
+    ElicitationProperty, ElicitationPropertySchema, ElicitationRequest, ElicitationRequestId,
+    ElicitationSchema, PendingElicitation,
+};
 pub use event::{FoldEvent, OwnedFoldEvent};
-pub use metadata::{AvailableCommand, Harness, ModelOption, SessionMetadata};
+pub use interaction::{PendingInteraction, PendingPermission};
+pub use metadata::{AvailableCommand, Harness, ModelOption, SessionMetadata, TurnState};
 pub use part::{Control, ControlOutcome, MessagePart, StopReason};
 pub use permission::{PermissionOption, PermissionOptionKind, PermissionOutcome};
 pub use plan::{PlanEntry, PlanEntryPriority, PlanEntryStatus};
+pub use signal::TurnSignal;
 pub use subagent::{SubagentResult, ToolStats};
 pub use tool::{AnsiText, FileDiff, ToolDetail, ToolName, ToolStatus};
 pub use user_tool::UserToolOutcome;
@@ -62,6 +77,33 @@ pub struct TurnId(pub u32);
 #[serde(transparent)]
 #[specta(transparent)]
 pub struct ToolUseId(pub String);
+
+/// The JSON-RPC id of a request the agent made, as the agent wrote it.
+///
+/// Kept in the agent's own shape - a number stays a number - because an
+/// answer has to echo it exactly; `"7"` does not answer `7`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Type)]
+#[serde(untagged)]
+pub enum AgentRequestId {
+    /// A numeric id. Exported as a plain TypeScript number: agents count
+    /// requests from zero, nowhere near where an `i64` stops round-tripping.
+    Number(#[specta(type = i32)] i64),
+    /// A string id.
+    Str(String),
+}
+
+impl From<&agent_client_protocol::schema::v1::RequestId> for AgentRequestId {
+    fn from(id: &agent_client_protocol::schema::v1::RequestId) -> Self {
+        use agent_client_protocol::schema::v1::RequestId;
+        match id {
+            RequestId::Number(number) => Self::Number(*number),
+            RequestId::Str(text) => Self::Str(text.clone()),
+            // Requests carry an id by definition; a null one is a protocol
+            // violation the fold renders rather than rejects.
+            RequestId::Null => Self::Str(id.to_string()),
+        }
+    }
+}
 
 /// The natural key of a [`FoldedMessage`] within its session.
 ///
@@ -176,6 +218,10 @@ pub struct FoldedMessage {
     /// `None` while a turn is still in flight, or when the session died
     /// without a response to the prompt.
     pub stop: Option<StopReason>,
+    /// Derived from a frame this client issued that the log has not yet
+    /// confirmed: a prompt on the wire, a stop just pressed. Cleared when the
+    /// confirmed frame folds in its place. Always false on the server's fold.
+    pub pending: bool,
 }
 
 impl FoldedMessage {

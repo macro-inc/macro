@@ -66,9 +66,39 @@ impl ConnectionRepo for UnusedRepo {
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_saturated_connection_reports_slow_without_cancelling_the_send() {
+async fn a_connection_with_capacity_takes_the_message() {
     let manager = ConnectionManager::new(UnusedRepo);
     let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
+    let forwarder = tokio::spawn(std::future::pending::<()>());
+    manager.connections.insert(
+        "connection".to_owned(),
+        Connection {
+            sender,
+            abort_handle: forwarder.abort_handle(),
+        },
+    );
+
+    manager
+        .send_message(
+            "connection",
+            Message::new("test".to_owned(), "first".to_owned()),
+        )
+        .await
+        .unwrap();
+
+    assert!(receiver.recv().await.is_some(), "the message must arrive");
+    assert!(
+        manager.connections.get("connection").is_some(),
+        "a healthy connection must be kept"
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_saturated_connection_is_dropped_rather_than_waited_on() {
+    let manager = ConnectionManager::new(UnusedRepo);
+    // Held for the whole test: dropping it would close the channel, which is
+    // the already-handled case. This one stays open, full, and never read.
+    let (sender, _receiver) = tokio::sync::mpsc::channel(1);
     sender
         .send(OutgoingMessage::Message(Message::new(
             "test".to_owned(),
@@ -85,21 +115,58 @@ async fn a_saturated_connection_reports_slow_without_cancelling_the_send() {
         },
     );
 
-    let send = tokio::spawn({
-        let manager = manager.clone();
-        async move {
-            manager
-                .send_message(
-                    "connection",
-                    Message::new("test".to_owned(), "second".to_owned()),
-                )
-                .await
-        }
-    });
-    tokio::task::yield_now().await;
-    tokio::time::advance(SLOW_WEBSOCKET_OPERATION_THRESHOLD).await;
-    assert!(!send.is_finished(), "telemetry must not cancel the send");
+    // Time only moves here when something awaits it, so a zero elapsed is
+    // what "the publisher never waits" looks like.
+    let started = tokio::time::Instant::now();
+    let result = manager
+        .send_message(
+            "connection",
+            Message::new("test".to_owned(), "second".to_owned()),
+        )
+        .await;
 
-    receiver.recv().await.unwrap();
-    send.await.unwrap().unwrap();
+    assert_eq!(
+        started.elapsed(),
+        std::time::Duration::ZERO,
+        "a publisher must never wait on a consumer"
+    );
+    assert!(result.is_err(), "a full queue must refuse the message");
+    assert!(
+        manager.connections.get("connection").is_none(),
+        "the saturated connection must be dropped"
+    );
+    assert!(
+        forwarder.await.unwrap_err().is_cancelled(),
+        "its forwarder must be aborted"
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn removing_a_connection_twice_does_not_wrap_the_count() {
+    let manager = ConnectionManager::new(UnusedRepo);
+    let (sender, _receiver) = tokio::sync::mpsc::channel(1);
+    let forwarder = tokio::spawn(std::future::pending::<()>());
+    manager.connections.insert(
+        "connection".to_owned(),
+        Connection {
+            sender,
+            abort_handle: forwarder.abort_handle(),
+        },
+    );
+    manager
+        .connection_count
+        .store(1, std::sync::atomic::Ordering::SeqCst);
+
+    // A refused send removes it, then the socket handler removes it again
+    // when it notices the forwarder has ended.
+    manager.remove_connection("connection").await.unwrap();
+    manager.remove_connection("connection").await.unwrap();
+
+    assert_eq!(
+        manager
+            .connection_count
+            .load(std::sync::atomic::Ordering::SeqCst),
+        0,
+        "only the removal that took the entry may decrement the count"
+    );
 }

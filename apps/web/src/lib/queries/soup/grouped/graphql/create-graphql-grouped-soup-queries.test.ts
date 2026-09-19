@@ -45,7 +45,18 @@ vi.mock('@service-storage/graphql-soup', () => ({
   mapGraphqlGroupedSoupPage: mapGraphqlGroupedSoupPageMock,
 }));
 
+vi.mock('@queries/client', async () => {
+  const { QueryClient } = await import('@tanstack/solid-query');
+  return { queryClient: new QueryClient() };
+});
+
+import { queryClient } from '@queries/client';
+import { getActiveGraphqlSoupRevalidations } from '@queries/soup/graphql/active-queries';
 import { createGraphqlGroupedSoupAstItemsQuery } from '@queries/soup/graphql/grouped-items';
+import {
+  createGraphqlSoupDeletion,
+  GRAPHQL_SOUP_DELETE_MUTATION_KEY,
+} from '@queries/soup/graphql/optimistic-deletions';
 import {
   groupedSoupInputKey,
   groupedSoupLogicalViewKey,
@@ -142,6 +153,7 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  queryClient.clear();
   vi.clearAllMocks();
 });
 
@@ -188,6 +200,71 @@ function setup() {
 }
 
 describe('createGraphqlGroupedSoupQueries', () => {
+  it('registers the parent and every loaded continuation for durable replay', async () => {
+    const { fake, grouped } = setup();
+    expect(
+      getActiveGraphqlSoupRevalidations().map((query) => query.variables)
+    ).toEqual([fake.executions[0].variables]);
+    fake.executions[0].next(page([group('a', ['a-1'], 'next')], [item('a-1')]));
+    const a = grouped.map().get('a')!;
+    const next = a.fetchNextPage();
+    fake.executions[1].next(page([group('a', ['a-2'], 'more')], [item('a-2')]));
+    await next;
+    const more = a.fetchNextPage();
+    fake.executions[2].next(page([group('a', ['a-3'], null)], [item('a-3')]));
+    await more;
+    expect(
+      getActiveGraphqlSoupRevalidations().map((query) => query.variables)
+    ).toEqual(fake.executions.map((execution) => execution.variables));
+    grouped.resetToInitialPage();
+    expect(
+      getActiveGraphqlSoupRevalidations().map((query) => query.variables)
+    ).toEqual([fake.executions[0].variables]);
+    disposals.pop()?.();
+    expect(getActiveGraphqlSoupRevalidations()).toEqual([]);
+  });
+
+  it('hides pending deletes from both initial and continuation pages without changing pagination', async () => {
+    const { fake, grouped } = setup();
+    fake.executions[0].next(page([group('a', ['a-1'], 'next')], [item('a-1')]));
+    const a = grouped.map().get('a')!;
+    const next = a.fetchNextPage();
+    fake.executions[1].next(
+      page([group('a', ['a-2', 'keep'], 'more')], [item('a-2'), item('keep')])
+    );
+    await next;
+    let finish!: () => void;
+    const mutation = queryClient
+      .getMutationCache()
+      .build(queryClient, {
+        mutationKey: GRAPHQL_SOUP_DELETE_MUTATION_KEY,
+        onMutate: () => ({
+          graphqlDeletion: createGraphqlSoupDeletion(['a-1', 'a-2']),
+        }),
+        onSettled: (_data, _error, _vars, context) =>
+          context?.graphqlDeletion.release(),
+        mutationFn: () =>
+          new Promise<void>((resolve) => {
+            finish = resolve;
+          }),
+      })
+      .execute(undefined);
+    await vi.waitFor(() => expect(entityIds(a)).toEqual(['keep']));
+    expect(grouped.map().get('a')).toBe(a);
+    expect(a.hasNextPage()).toBe(true);
+    expect(fake.executions).toHaveLength(2);
+    // Refreshes arriving before the deletes settle must stay filtered too.
+    fake.executions[0].next(
+      page([group('a', ['a-1', 'new'], 'next')], [item('a-1'), item('new')])
+    );
+    expect(entityIds(a)).toEqual(['new', 'keep']);
+    finish();
+    await mutation;
+    await vi.waitFor(() =>
+      expect(entityIds(a)).toEqual(['a-1', 'new', 'a-2', 'keep'])
+    );
+  });
+
   it('uses only the parent initial subscription and reacts to parent group moves', () => {
     const { fake, grouped } = setup();
 

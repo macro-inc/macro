@@ -47,9 +47,10 @@ pub async fn get_team_share_handler<
     Ok(Json(response))
 }
 
-/// Sets the team-share state of a document. Sharing grants the document
-/// owner's team Edit access; unsharing removes the team's access. Requires
-/// Edit access on the document.
+/// Sets explicit team sharing. Requires a verified acting identity matching
+/// the persisted document owner, not merely effective Edit or Owner access.
+/// Initial enable defaults to Edit; repeated enable preserves the chosen level.
+/// Clear removes only the managed direct grant, not inherited team access.
 #[utoipa::path(
     tag = "document",
     put,
@@ -61,9 +62,10 @@ pub async fn get_team_share_handler<
     request_body = SetDocumentTeamShareRequest,
     responses(
         (status = 200, body = DocumentTeamShareResponse),
-        (status = 400, body = model_error_response::ErrorResponse),
-        (status = 401, body = model_error_response::ErrorResponse),
+        (status = 400, description = "Owner has no team", body = model_error_response::ErrorResponse),
+        (status = 401, description = "Acting identity is absent or is not the actual owner", body = model_error_response::ErrorResponse),
         (status = 404, body = model_error_response::ErrorResponse),
+        (status = 409, description = "Sharing facts changed or an untracked grant conflicts", body = model_error_response::ErrorResponse),
         (status = 500, body = model_error_response::ErrorResponse),
     )
 )]

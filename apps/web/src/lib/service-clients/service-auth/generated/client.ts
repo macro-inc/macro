@@ -6,8 +6,14 @@
  */
 import type {
   AppleLoginRequest,
+  CodexConfigRequest,
+  CodexConnectionStatus,
+  CodexEnvironment,
+  CodexLoginPoll,
+  CodexLoginStart,
   CreateAccountMergeRequest,
   CreateCheckoutSessionV2Request,
+  CreateGtmInviteLinkRequest,
   CreateInProgressLinkResponse,
   CreatePortalSessionRequest,
   CreateTeamRequest,
@@ -27,6 +33,10 @@ import type {
   GetUserLinkExistsParams,
   GithubLinkStatusResponse,
   GmailLinkStatusResponse,
+  GtmInviteLink,
+  GtmInviteLinkList,
+  GtmInviteOffer,
+  GtmInviteOfferStatus,
   InitGithubLinkParams,
   InitGithubLinkResponse,
   InitGmailLinkParams,
@@ -34,6 +44,7 @@ import type {
   InitOutlookLinkParams,
   InitOutlookLinkResponse,
   InviteToTeamRequest,
+  ListGtmInviteLinksParams,
   MacroApiTokenParams,
   MacroApiTokenResponse,
   PasswordlessCallbackParams,
@@ -49,10 +60,12 @@ import type {
   Permission,
   PostGetNamesRequestBody,
   ProfilePictures,
+  PublicGtmInviteLink,
   PutCursorApiKeyRequest,
   PutCursorDefaultModelRequest,
   PutProfilePictureParams,
   PutUserNameParams,
+  RedeemGtmInviteLinkRequest,
   ResendFusionauthVerifyUserEmailRequest,
   SendInviteBody,
   SendMobileWelcomeEmailRequest,
@@ -72,6 +85,247 @@ import type {
   UserQuota,
   UserTokensResponse,
 } from './schemas';
+
+export type getCodexConnectionResponse200 = {
+  data: CodexConnectionStatus;
+  status: 200;
+};
+
+export type getCodexConnectionResponseSuccess =
+  getCodexConnectionResponse200 & {
+    headers: Headers;
+  };
+
+export type getCodexConnectionResponse = getCodexConnectionResponseSuccess;
+
+export const getGetCodexConnectionUrl = () => {
+  return `/codex`;
+};
+
+export const getCodexConnection = async (
+  options?: RequestInit
+): Promise<getCodexConnectionResponse> => {
+  const res = await fetch(getGetCodexConnectionUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getCodexConnectionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getCodexConnectionResponse;
+};
+
+export type disconnectCodexResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type disconnectCodexResponseSuccess = disconnectCodexResponse204 & {
+  headers: Headers;
+};
+
+export type disconnectCodexResponse = disconnectCodexResponseSuccess;
+
+export const getDisconnectCodexUrl = () => {
+  return `/codex`;
+};
+
+export const disconnectCodex = async (
+  options?: RequestInit
+): Promise<disconnectCodexResponse> => {
+  const res = await fetch(getDisconnectCodexUrl(), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: disconnectCodexResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as disconnectCodexResponse;
+};
+
+export type configureCodexResponse200 = {
+  data: CodexConnectionStatus;
+  status: 200;
+};
+
+export type configureCodexResponseSuccess = configureCodexResponse200 & {
+  headers: Headers;
+};
+
+export type configureCodexResponse = configureCodexResponseSuccess;
+
+export const getConfigureCodexUrl = () => {
+  return `/codex/config`;
+};
+
+export const configureCodex = async (
+  codexConfigRequest: CodexConfigRequest,
+  options?: RequestInit
+): Promise<configureCodexResponse> => {
+  const res = await fetch(getConfigureCodexUrl(), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(codexConfigRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: configureCodexResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as configureCodexResponse;
+};
+
+export type listCodexEnvironmentsResponse200 = {
+  data: CodexEnvironment[];
+  status: 200;
+};
+
+export type listCodexEnvironmentsResponseSuccess =
+  listCodexEnvironmentsResponse200 & {
+    headers: Headers;
+  };
+
+export type listCodexEnvironmentsResponse =
+  listCodexEnvironmentsResponseSuccess;
+
+export const getListCodexEnvironmentsUrl = () => {
+  return `/codex/environments`;
+};
+
+export const listCodexEnvironments = async (
+  options?: RequestInit
+): Promise<listCodexEnvironmentsResponse> => {
+  const res = await fetch(getListCodexEnvironmentsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listCodexEnvironmentsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listCodexEnvironmentsResponse;
+};
+
+export type startCodexLoginResponse200 = {
+  data: CodexLoginStart;
+  status: 200;
+};
+
+export type startCodexLoginResponseSuccess = startCodexLoginResponse200 & {
+  headers: Headers;
+};
+
+export type startCodexLoginResponse = startCodexLoginResponseSuccess;
+
+export const getStartCodexLoginUrl = () => {
+  return `/codex/login`;
+};
+
+export const startCodexLogin = async (
+  options?: RequestInit
+): Promise<startCodexLoginResponse> => {
+  const res = await fetch(getStartCodexLoginUrl(), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: startCodexLoginResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as startCodexLoginResponse;
+};
+
+export type pollCodexLoginResponse200 = {
+  data: CodexLoginPoll;
+  status: 200;
+};
+
+export type pollCodexLoginResponseSuccess = pollCodexLoginResponse200 & {
+  headers: Headers;
+};
+
+export type pollCodexLoginResponse = pollCodexLoginResponseSuccess;
+
+export const getPollCodexLoginUrl = (attemptId: string) => {
+  return `/codex/login/${attemptId}`;
+};
+
+export const pollCodexLogin = async (
+  attemptId: string,
+  options?: RequestInit
+): Promise<pollCodexLoginResponse> => {
+  const res = await fetch(getPollCodexLoginUrl(attemptId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: pollCodexLoginResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as pollCodexLoginResponse;
+};
+
+export type cancelCodexLoginResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type cancelCodexLoginResponseSuccess = cancelCodexLoginResponse204 & {
+  headers: Headers;
+};
+
+export type cancelCodexLoginResponse = cancelCodexLoginResponseSuccess;
+
+export const getCancelCodexLoginUrl = (attemptId: string) => {
+  return `/codex/login/${attemptId}`;
+};
+
+export const cancelCodexLogin = async (
+  attemptId: string,
+  options?: RequestInit
+): Promise<cancelCodexLoginResponse> => {
+  const res = await fetch(getCancelCodexLoginUrl(attemptId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: cancelCodexLoginResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as cancelCodexLoginResponse;
+};
 
 /**
  * Never returns the key, or any part of it. There is no screen that needs one,
@@ -677,6 +931,440 @@ export const enrichGithubPullRequests = async (
     status: res.status,
     headers: res.headers,
   } as enrichGithubPullRequestsResponse;
+};
+
+/**
+ * @summary Lists invite links, newest first. Macro staff only.
+ */
+export type listGtmInviteLinksResponse200 = {
+  data: GtmInviteLinkList;
+  status: 200;
+};
+
+export type listGtmInviteLinksResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type listGtmInviteLinksResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type listGtmInviteLinksResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type listGtmInviteLinksResponseSuccess =
+  listGtmInviteLinksResponse200 & {
+    headers: Headers;
+  };
+export type listGtmInviteLinksResponseError = (
+  | listGtmInviteLinksResponse401
+  | listGtmInviteLinksResponse403
+  | listGtmInviteLinksResponse500
+) & {
+  headers: Headers;
+};
+
+export type listGtmInviteLinksResponse =
+  | listGtmInviteLinksResponseSuccess
+  | listGtmInviteLinksResponseError;
+
+export const getListGtmInviteLinksUrl = (params?: ListGtmInviteLinksParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/gtm-invite/links?${stringifiedParams}`
+    : `/gtm-invite/links`;
+};
+
+export const listGtmInviteLinks = async (
+  params?: ListGtmInviteLinksParams,
+  options?: RequestInit
+): Promise<listGtmInviteLinksResponse> => {
+  const res = await fetch(getListGtmInviteLinksUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listGtmInviteLinksResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listGtmInviteLinksResponse;
+};
+
+/**
+ * @summary Creates an invite link. Macro staff only.
+ */
+export type createGtmInviteLinkResponse200 = {
+  data: GtmInviteLink;
+  status: 200;
+};
+
+export type createGtmInviteLinkResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type createGtmInviteLinkResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type createGtmInviteLinkResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type createGtmInviteLinkResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type createGtmInviteLinkResponseSuccess =
+  createGtmInviteLinkResponse200 & {
+    headers: Headers;
+  };
+export type createGtmInviteLinkResponseError = (
+  | createGtmInviteLinkResponse400
+  | createGtmInviteLinkResponse401
+  | createGtmInviteLinkResponse403
+  | createGtmInviteLinkResponse500
+) & {
+  headers: Headers;
+};
+
+export type createGtmInviteLinkResponse =
+  | createGtmInviteLinkResponseSuccess
+  | createGtmInviteLinkResponseError;
+
+export const getCreateGtmInviteLinkUrl = () => {
+  return `/gtm-invite/links`;
+};
+
+export const createGtmInviteLink = async (
+  createGtmInviteLinkRequest: CreateGtmInviteLinkRequest,
+  options?: RequestInit
+): Promise<createGtmInviteLinkResponse> => {
+  const res = await fetch(getCreateGtmInviteLinkUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createGtmInviteLinkRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createGtmInviteLinkResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createGtmInviteLinkResponse;
+};
+
+/**
+ * @summary Revokes an invite link nobody has signed up through. Macro staff only.
+ */
+export type revokeGtmInviteLinkResponse200 = {
+  data: GtmInviteLink;
+  status: 200;
+};
+
+export type revokeGtmInviteLinkResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type revokeGtmInviteLinkResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type revokeGtmInviteLinkResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type revokeGtmInviteLinkResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type revokeGtmInviteLinkResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type revokeGtmInviteLinkResponseSuccess =
+  revokeGtmInviteLinkResponse200 & {
+    headers: Headers;
+  };
+export type revokeGtmInviteLinkResponseError = (
+  | revokeGtmInviteLinkResponse400
+  | revokeGtmInviteLinkResponse401
+  | revokeGtmInviteLinkResponse403
+  | revokeGtmInviteLinkResponse404
+  | revokeGtmInviteLinkResponse500
+) & {
+  headers: Headers;
+};
+
+export type revokeGtmInviteLinkResponse =
+  | revokeGtmInviteLinkResponseSuccess
+  | revokeGtmInviteLinkResponseError;
+
+export const getRevokeGtmInviteLinkUrl = (id: string) => {
+  return `/gtm-invite/links/${id}`;
+};
+
+export const revokeGtmInviteLink = async (
+  id: string,
+  options?: RequestInit
+): Promise<revokeGtmInviteLinkResponse> => {
+  const res = await fetch(getRevokeGtmInviteLinkUrl(id), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: revokeGtmInviteLinkResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as revokeGtmInviteLinkResponse;
+};
+
+/**
+ * @summary The promotion the signed-in user's account holds from an invite link, if
+they redeemed one and have not started a paid subscription yet.
+ */
+export type getGtmInviteOfferResponse200 = {
+  data: GtmInviteOfferStatus;
+  status: 200;
+};
+
+export type getGtmInviteOfferResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getGtmInviteOfferResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getGtmInviteOfferResponseSuccess = getGtmInviteOfferResponse200 & {
+  headers: Headers;
+};
+export type getGtmInviteOfferResponseError = (
+  | getGtmInviteOfferResponse401
+  | getGtmInviteOfferResponse500
+) & {
+  headers: Headers;
+};
+
+export type getGtmInviteOfferResponse =
+  | getGtmInviteOfferResponseSuccess
+  | getGtmInviteOfferResponseError;
+
+export const getGetGtmInviteOfferUrl = () => {
+  return `/gtm-invite/offer`;
+};
+
+export const getGtmInviteOffer = async (
+  options?: RequestInit
+): Promise<getGtmInviteOfferResponse> => {
+  const res = await fetch(getGetGtmInviteOfferUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getGtmInviteOfferResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getGtmInviteOfferResponse;
+};
+
+/**
+ * Unauthenticated: the recipient has no account yet. Only the first name and
+whether the link is still usable are exposed.
+ * @summary Resolves an invite link for the public welcome page and counts the open.
+ */
+export type resolveGtmInviteLinkResponse200 = {
+  data: PublicGtmInviteLink;
+  status: 200;
+};
+
+export type resolveGtmInviteLinkResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type resolveGtmInviteLinkResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type resolveGtmInviteLinkResponse429 = {
+  data: void;
+  status: 429;
+};
+
+export type resolveGtmInviteLinkResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type resolveGtmInviteLinkResponseSuccess =
+  resolveGtmInviteLinkResponse200 & {
+    headers: Headers;
+  };
+export type resolveGtmInviteLinkResponseError = (
+  | resolveGtmInviteLinkResponse400
+  | resolveGtmInviteLinkResponse404
+  | resolveGtmInviteLinkResponse429
+  | resolveGtmInviteLinkResponse500
+) & {
+  headers: Headers;
+};
+
+export type resolveGtmInviteLinkResponse =
+  | resolveGtmInviteLinkResponseSuccess
+  | resolveGtmInviteLinkResponseError;
+
+export const getResolveGtmInviteLinkUrl = (token: string) => {
+  return `/gtm-invite/public/${token}`;
+};
+
+export const resolveGtmInviteLink = async (
+  token: string,
+  options?: RequestInit
+): Promise<resolveGtmInviteLinkResponse> => {
+  const res = await fetch(getResolveGtmInviteLinkUrl(token), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: resolveGtmInviteLinkResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as resolveGtmInviteLinkResponse;
+};
+
+/**
+ * @summary Attributes the signed-in user's account to the invite link they opened and
+grants them its offer. Idempotent for the same account.
+ */
+export type redeemGtmInviteLinkResponse200 = {
+  data: GtmInviteOffer;
+  status: 200;
+};
+
+export type redeemGtmInviteLinkResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type redeemGtmInviteLinkResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type redeemGtmInviteLinkResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type redeemGtmInviteLinkResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type redeemGtmInviteLinkResponse410 = {
+  data: ErrorResponse;
+  status: 410;
+};
+
+export type redeemGtmInviteLinkResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type redeemGtmInviteLinkResponseSuccess =
+  redeemGtmInviteLinkResponse200 & {
+    headers: Headers;
+  };
+export type redeemGtmInviteLinkResponseError = (
+  | redeemGtmInviteLinkResponse400
+  | redeemGtmInviteLinkResponse401
+  | redeemGtmInviteLinkResponse404
+  | redeemGtmInviteLinkResponse409
+  | redeemGtmInviteLinkResponse410
+  | redeemGtmInviteLinkResponse500
+) & {
+  headers: Headers;
+};
+
+export type redeemGtmInviteLinkResponse =
+  | redeemGtmInviteLinkResponseSuccess
+  | redeemGtmInviteLinkResponseError;
+
+export const getRedeemGtmInviteLinkUrl = () => {
+  return `/gtm-invite/redeem`;
+};
+
+export const redeemGtmInviteLink = async (
+  redeemGtmInviteLinkRequest: RedeemGtmInviteLinkRequest,
+  options?: RequestInit
+): Promise<redeemGtmInviteLinkResponse> => {
+  const res = await fetch(getRedeemGtmInviteLinkUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(redeemGtmInviteLinkRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: redeemGtmInviteLinkResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as redeemGtmInviteLinkResponse;
 };
 
 /**

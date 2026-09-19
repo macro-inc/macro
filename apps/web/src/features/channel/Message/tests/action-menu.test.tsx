@@ -2,11 +2,11 @@
  * @vitest-environment jsdom
  */
 
+import type { MessageData } from '@core/messages/types';
 import { fireEvent, render } from '@solidjs/testing-library';
 import { describe, expect, it, vi } from 'vitest';
 import { ActionMenu } from '../ActionMenu';
 import { Root } from '../Root';
-import type { MessageData } from '../types';
 
 const message: MessageData = {
   id: 'message-1',
@@ -41,6 +41,7 @@ describe('ActionMenu', () => {
     expect(
       container.querySelector('[data-message-hover-actions]')
     ).not.toBeNull();
+    expect(container.querySelector('[data-slot="toolbar"]')).not.toBeNull();
 
     fireEvent.pointerLeave(root!);
 

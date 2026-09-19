@@ -34,9 +34,34 @@ const MODELS = {
     { provider: 'cerebras', model: 'gpt-oss-120b' },
     { provider: 'anthropic', model: 'claude-haiku-4-5' },
   ],
+  // The fast path's single model: whole doc in, `runCode` out, no supervisor.
+  // Mirrors the chain the backend EditDocument tool sends for `fast: true`.
+  // Benched on a real inline request (10k-token prompt, one runCode step):
+  // 3.8 Flash 1.5-5 s with no thinking tokens, 3.7 Flash 3.8-5.4 s (~450
+  // thinking tokens even at `low`), 3.5 Flash Lite 0.8-1.1 s with identical
+  // code on three requests. 3.8 leads for headroom on harder edits; Haiku is
+  // the provider-error fallback.
+  fast: [
+    { provider: 'google', model: 'gemini-3.8-flash' },
+    { provider: 'anthropic', model: 'claude-haiku-4-5' },
+  ],
 } as const;
 
-export type AiEditResult = 'ok' | 'failed' | 'cancelled';
+/**
+ * `supervised` runs the full interpreter → supervisor → coders pipeline.
+ * `fast` gives one model the whole document and lets it edit directly; a few
+ * seconds instead of tens, at the cost of the supervisor's review loop. Meant
+ * for small, well-scoped inline edits.
+ */
+export type AiEditMode = 'supervised' | 'fast';
+
+export type AiEditResult =
+  | { kind: 'ok' }
+  | { kind: 'failed' }
+  | { kind: 'cancelled' }
+  /** The worker stopped to ask for something only the user can supply. No
+   *  edits were made; `message` says what to add to the request. */
+  | { kind: 'blocked'; message: string };
 
 // In-flight edits by document id. Aborting the fetch cancels the session
 // server-side too: the worker threads the request signal into runEditSession
@@ -75,6 +100,8 @@ export function cancelAiEdit(documentId: string): void {
 export async function requestAiEdit(args: {
   documentId: string;
   prompt: string;
+  /** Defaults to the worker's `supervised` pipeline. */
+  mode?: AiEditMode;
   onOps?: (ops: DocumentOp[]) => void;
 }): Promise<AiEditResult> {
   const controller = new AbortController();
@@ -90,6 +117,7 @@ export async function requestAiEdit(args: {
   span.setAttr('http.method', 'POST');
   span.setAttr('http.url', `${AI_EDITING_WORKER_HOST}/edit`);
   span.setAttr('document.id', args.documentId);
+  span.setAttr('edit.mode', args.mode ?? 'supervised');
   try {
     const token = await getDocumentPermissionToken(args.documentId);
     const headers: Record<string, string> = {
@@ -104,6 +132,7 @@ export async function requestAiEdit(args: {
         documentId: args.documentId,
         prompt: args.prompt,
         models: MODELS,
+        mode: args.mode,
         interpret: false,
         propagate: args.onOps === undefined ? undefined : false,
       }),
@@ -119,21 +148,26 @@ export async function requestAiEdit(args: {
         message,
         stack: new Error(message).stack,
       });
-      return 'failed';
+      return { kind: 'failed' };
     }
-    if (args.onOps) {
-      const { ops } = (await res.json()) as { ops: DocumentOp[] };
-      args.onOps(ops);
+    const { ops, clarification } = (await res.json()) as {
+      ops: DocumentOp[];
+      clarification?: string;
+    };
+    if (clarification !== undefined) {
+      span.setAttr('edit.blocked', true);
+      return { kind: 'blocked', message: clarification };
     }
-    return 'ok';
+    args.onOps?.(ops);
+    return { kind: 'ok' };
   } catch (e) {
     if (controller.signal.aborted) {
       span.setAttr('http.aborted', true);
-      return 'cancelled';
+      return { kind: 'cancelled' };
     }
     console.error('ai edit request failed', e);
     span.error(e);
-    return 'failed';
+    return { kind: 'failed' };
   } finally {
     span.end();
     if (editControllers.get(args.documentId) === controller) {
@@ -143,18 +177,20 @@ export async function requestAiEdit(args: {
   }
 }
 
+/** Toast for a result that did not apply the edit; a user cancel stays silent. */
+export function toastAiEditResult(result: AiEditResult): void {
+  if (result.kind === 'failed') toast.failure('AI edit failed');
+  if (result.kind === 'blocked') toast.failure(result.message);
+}
+
 /**
- * `requestAiEdit` wrapper that toasts `'AI edit failed'` on failure (a user
- * cancel stays silent). The caller supplies a `finally` callback for any
- * post-edit cleanup (e.g. clearing a loading signal).
+ * `requestAiEdit` wrapper that toasts on failure or a request for more detail
+ * (a user cancel stays silent). The caller supplies a `finally` callback for
+ * any post-edit cleanup (e.g. clearing a loading signal).
  */
 export function requestAiEditWithToast(
   args: { documentId: string; prompt: string },
   onSettled: () => void
 ): void {
-  requestAiEdit(args)
-    .then((result) => {
-      if (result === 'failed') toast.failure('AI edit failed');
-    })
-    .finally(onSettled);
+  requestAiEdit(args).then(toastAiEditResult).finally(onSettled);
 }

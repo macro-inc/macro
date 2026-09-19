@@ -38,6 +38,12 @@ import {
   onCleanup,
 } from 'solid-js';
 
+import { registerGraphqlSoupRevalidations } from '../../graphql/active-queries';
+import {
+  usePendingGraphqlSoupDeleteIds,
+  withoutPendingSoupEntities,
+} from '../../graphql/optimistic-deletions';
+
 export type GroupQueryData = {
   entities: EntityData[];
 };
@@ -107,6 +113,7 @@ export function createGraphqlGroupedSoupQueries(
   resetToInitialPage: () => void;
 } {
   const instructionsIdQuery = useInstructionsMdIdQuery();
+  const pendingDeleteIds = usePendingGraphqlSoupDeleteIds();
 
   const mapItems = (
     items: SoupAstItemsGroupedPage['items'],
@@ -186,7 +193,7 @@ export function createGraphqlGroupedSoupQueries(
             GroupSoupQuery,
             GroupSoupQueryVariables,
             string,
-            GroupQueryData
+            GroupQueryData & { pageParams: readonly string[] }
           >(() => {
             const config = getConfig();
             return {
@@ -204,7 +211,8 @@ export function createGraphqlGroupedSoupQueries(
               },
               getNextPageParam: (lastPage) =>
                 groupPage(lastPage, config.group)?.group.nextCursor,
-              select: ({ pages }) => ({
+              select: ({ pages, pageParams }) => ({
+                pageParams,
                 entities: pages.flatMap((page) => {
                   const selected = groupPage(page, config.group);
                   return selected
@@ -221,6 +229,27 @@ export function createGraphqlGroupedSoupQueries(
               keepPreviousData: false,
             };
           });
+
+          onCleanup(
+            registerGraphqlSoupRevalidations(() => {
+              if (!query.isEnabled) return [];
+              const config = getConfig();
+              const cursors = new Set([
+                firstCursor,
+                ...(query.data?.pageParams ?? []),
+              ]);
+              return [...cursors].map((cursor) => ({
+                document: GroupSoupDocument,
+                variables: {
+                  input: makeGraphqlGroupedSoupContinuationInput({
+                    groupBy: config.field,
+                    groupKey: config.key,
+                    cursor,
+                  }),
+                },
+              }));
+            })
+          );
 
           createComputed(() => {
             if (!activated()) return;
@@ -282,8 +311,14 @@ export function createGraphqlGroupedSoupQueries(
         const initial = initialData();
         if (!initial) return;
         const continued = getContinuation()?.query.data;
-        if (!continued) return initial;
-        return { entities: [...initial.entities, ...continued.entities] };
+        const combined = continued
+          ? { entities: [...initial.entities, ...continued.entities] }
+          : initial;
+        const entities = withoutPendingSoupEntities(
+          combined.entities,
+          pendingDeleteIds()
+        );
+        return entities === combined.entities ? combined : { entities };
       });
 
       const trackFirstPage = (action: Promise<unknown>): Promise<void> => {

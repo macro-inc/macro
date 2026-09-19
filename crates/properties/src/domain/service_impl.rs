@@ -1,6 +1,7 @@
 //! Service implementation for properties.
 
 mod helpers;
+mod options;
 mod task_properties;
 
 use std::collections::{HashMap, HashSet};
@@ -41,8 +42,9 @@ use super::metadata;
 use super::model::{
     EditReceipt, EntityOptionUpdateOutcome, EntityPropertyInfo, EntityPropertyOptionSelection,
     EntityPropertyOptionUpdate, PropertyAccessReceiptExt, PropertyDefinitionOwner,
-    PropertyTargetKey, ResolvedPropertySubject, TagPromotionOutcome, TagRemapOutcome, TagScope,
-    TagSet, UpdatePropertyOptionOutcome, ViewReceipt,
+    PropertyOptionReplaceOutcome, PropertyOptionReplacePlan, PropertyTargetKey,
+    ResolvedPropertySubject, TagPromotionOutcome, TagRemapOutcome, TagScope, TagSet,
+    UpdatePropertyOptionOutcome, ViewReceipt,
 };
 use super::ports::{NotificationService, PermissionService, PropertiesRepo};
 use super::service::{PropertiesService, TeamReceipt, team_id_from_receipt};
@@ -70,11 +72,13 @@ fn published_event_actors(access: &EditReceipt) -> PublishedEventActors {
                 on_behalf_of: Some(acting_user.clone()),
                 actor_user_id: None,
             },
-            BotReceiptScope::Team { .. } => PublishedEventActors {
-                actor: None,
-                on_behalf_of: None,
-                actor_user_id: None,
-            },
+            BotReceiptScope::Team { .. } | BotReceiptScope::Channel { .. } => {
+                PublishedEventActors {
+                    actor: None,
+                    on_behalf_of: None,
+                    actor_user_id: None,
+                }
+            }
         },
         EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => PublishedEventActors {
             actor: None,
@@ -295,9 +299,9 @@ where
                         .and_then(|document_id| document_sub_types.get(&document_id))
                         .map_or(EntityType::Document, |sub_type| match sub_type {
                             DocumentSubType::Task => EntityType::Task,
-                            DocumentSubType::Snippet | DocumentSubType::Skill => {
-                                EntityType::Document
-                            }
+                            DocumentSubType::Snippet
+                            | DocumentSubType::Skill
+                            | DocumentSubType::InitiativeDescription => EntityType::Document,
                         }),
                     other => super::model::storage_entity_type(other).ok_or_else(|| {
                         PropertiesErr::Validation(format!(
@@ -1227,35 +1231,9 @@ where
         property_definition_id: Uuid,
         request: &AddPropertyOptionRequest,
     ) -> Result<PropertyOption, PropertiesErr> {
-        let definition = self
-            .owned_modifiable_definition(
-                property_definition_id,
-                user_id,
-                team_id_from_receipt(team),
-            )
+        let (display_order, option_value, color) = self
+            .prepare_property_option(user_id, team, property_definition_id, request)
             .await?;
-
-        request
-            .validate()
-            .map_err(|e| PropertiesErr::Validation(e.to_string()))?;
-        request
-            .validate_compatibility(&definition.data_type)
-            .map_err(|e| PropertiesErr::Validation(e.to_string()))?;
-
-        let (display_order, option_value, color) = match request {
-            AddPropertyOptionRequest::SelectString { option } => (
-                option.display_order,
-                PropertyOptionValue::String(option.value.clone()),
-                option.color.clone(),
-            ),
-            AddPropertyOptionRequest::SelectNumber { option } => (
-                option.display_order,
-                PropertyOptionValue::Number(option.value),
-                None,
-            ),
-        };
-
-        validate_option_color(&definition.data_type, color.as_deref(), color.as_deref())?;
 
         let option = self
             .repository
@@ -1272,6 +1250,35 @@ where
         self.publish_property_event(Self::property_option_created_event(&option, user_id));
 
         Ok(option)
+    }
+
+    async fn get_or_create_property_option(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        team: Option<&TeamReceipt>,
+        property_definition_id: Uuid,
+        request: &AddPropertyOptionRequest,
+    ) -> Result<PropertyOption, PropertiesErr> {
+        let (display_order, option_value, color) = self
+            .prepare_property_option(user_id, team, property_definition_id, request)
+            .await?;
+        let result = self
+            .repository
+            .get_or_create_property_option(
+                property_definition_id,
+                display_order,
+                option_value,
+                color,
+            )
+            .await
+            .map_err(anyhow::Error::from)?;
+        if result.created {
+            self.publish_property_event(Self::property_option_created_event(
+                &result.option,
+                user_id,
+            ));
+        }
+        Ok(result.option)
     }
 
     #[tracing::instrument(skip(self, team, request), fields(request = ?request), err)]
@@ -1343,6 +1350,79 @@ where
             UpdatePropertyOptionOutcome::NotFound => Err(PropertiesErr::OptionNotFound),
             UpdatePropertyOptionOutcome::DuplicateValue => Err(PropertiesErr::DuplicateOptionValue),
         }
+    }
+
+    #[tracing::instrument(skip(self, team, plan), err)]
+    async fn replace_property_options(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        team: Option<&TeamReceipt>,
+        property_definition_id: Uuid,
+        plan: PropertyOptionReplacePlan,
+    ) -> Result<Vec<PropertyOption>, PropertiesErr> {
+        let definition = self
+            .owned_modifiable_definition(
+                property_definition_id,
+                user_id,
+                team_id_from_receipt(team),
+            )
+            .await?;
+        if definition.data_type != DataType::SelectString {
+            return Err(PropertiesErr::Validation(
+                "option replacement is only supported for string select properties".to_string(),
+            ));
+        }
+        let values = plan
+            .rewrite
+            .iter()
+            .map(|rewrite| &rewrite.value)
+            .chain(plan.insert.iter().map(|insert| &insert.value));
+        for value in values {
+            match value {
+                PropertyOptionValue::String(text) if !text.trim().is_empty() => {}
+                _ => {
+                    return Err(PropertiesErr::Validation(
+                        "option values must be non-empty strings".to_string(),
+                    ));
+                }
+            }
+        }
+
+        let before = self
+            .repository
+            .get_property_options(property_definition_id)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        let after = match self
+            .repository
+            .replace_property_options(property_definition_id, &plan)
+            .await
+            .map_err(anyhow::Error::from)?
+        {
+            PropertyOptionReplaceOutcome::Replaced(options) => options,
+            PropertyOptionReplaceOutcome::OptionNotFound => {
+                return Err(PropertiesErr::OptionNotFound);
+            }
+            PropertyOptionReplaceOutcome::DuplicateValue => {
+                return Err(PropertiesErr::DuplicateOptionValue);
+            }
+        };
+
+        for option in before.iter().filter(|o| plan.delete.contains(&o.id)) {
+            self.publish_property_event(Self::property_option_deleted_event(option, user_id));
+        }
+        for option in &after {
+            let event = if plan.rewrite.iter().any(|r| r.option_id == option.id) {
+                Self::property_option_updated_event(option, user_id)
+            } else if before.iter().any(|o| o.id == option.id) {
+                continue;
+            } else {
+                Self::property_option_created_event(option, user_id)
+            };
+            self.publish_property_event(event);
+        }
+        Ok(after)
     }
 
     #[tracing::instrument(skip(self, team), err)]

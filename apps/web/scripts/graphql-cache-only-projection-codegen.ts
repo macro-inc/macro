@@ -285,8 +285,21 @@ function renderSelectionSet(
   return branches.length === 1 ? branches[0] : `(${branches.join(' | ')})`;
 }
 
-/** Generates narrow result types containing only fields not marked `@cacheOnly`. */
-export const plugin: PluginFunction = (schema, documents) => {
+/** Explicit consumers of the cache-only result projection. */
+export type CacheOnlyProjectionConfig = {
+  /** Operation names needing a result type with `@cacheOnly` fields removed. */
+  cacheOnlyResultOperations?: readonly string[];
+};
+
+/** Generates opted-in result types containing only fields not marked `@cacheOnly`. */
+export const plugin: PluginFunction<CacheOnlyProjectionConfig> = (
+  schema,
+  documents,
+  config
+) => {
+  // A nested @cacheOnly field does not imply that callers need a projection.
+  // Expanding every such operation duplicates large fragment/union structures.
+  const requestedOperations = new Set(config.cacheOnlyResultOperations ?? []);
   const definitions: DefinitionNode[] = documents.flatMap(
     ({ document }) => document?.definitions ?? []
   );
@@ -301,7 +314,12 @@ export const plugin: PluginFunction = (schema, documents) => {
   const output: string[] = [];
   for (const definition of definitions) {
     if (definition.kind !== 'OperationDefinition' || !definition.name) continue;
-    if (!selectionSetHasCacheOnly(definition.selectionSet, fragments)) continue;
+    if (!requestedOperations.delete(definition.name.value)) continue;
+    if (!selectionSetHasCacheOnly(definition.selectionSet, fragments)) {
+      throw new Error(
+        `cache-only result operation ${definition.name.value} has no @cacheOnly fields`
+      );
+    }
     const projection = renderSelectionSet(
       schema,
       operationRoot(schema, definition),
@@ -315,6 +333,11 @@ export const plugin: PluginFunction = (schema, documents) => {
     );
     output.push(
       `export type ${definition.name.value}Result = ${projection ?? 'void'};`
+    );
+  }
+  if (requestedOperations.size > 0) {
+    throw new Error(
+      `unknown cache-only result operations: ${[...requestedOperations].join(', ')}`
     );
   }
   return output.join('\n\n');

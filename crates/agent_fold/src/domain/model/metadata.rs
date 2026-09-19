@@ -3,6 +3,9 @@
 use serde::Serialize;
 use specta::Type;
 
+use super::PendingInteraction;
+use super::elicitation::PendingElicitation;
+
 /// Which ACP agent produced a session's log.
 ///
 /// ACP names none of a harness's conventions - which `_meta` keys it writes,
@@ -40,7 +43,9 @@ pub enum Harness {
 
 /// Session-level state derived from the log, latest-wins and carried whole.
 /// Fields start absent and fill in as the log reveals them.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Type)]
+///
+/// `PartialEq` only: a pending form's numeric bounds are `f64`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionMetadata {
     /// The agent that produced the log. See [`Harness`].
@@ -59,6 +64,47 @@ pub struct SessionMetadata {
     /// The last system event's wire name (`"acp_ready"`, `"disconnected"`),
     /// `None` until the runtime reports one.
     pub status: Option<String>,
+    /// Requests the user can answer on the current turn and connection.
+    /// Multiple permissions may coexist with the one allowed elicitation.
+    /// History remains in the transcript after these live requests clear.
+    pub pending_interactions: Vec<PendingInteraction>,
+    /// Where the newest turn stands, as one value. Readers used to derive it
+    /// from the transcript's tail, the status, and their own record of what
+    /// they had posted; this is that derivation done once, in the fold.
+    pub turn: TurnState,
+}
+
+impl SessionMetadata {
+    /// The one elicitation the session can currently answer, if any.
+    #[must_use]
+    pub fn pending_elicitation(&self) -> Option<&PendingElicitation> {
+        self.pending_interactions
+            .iter()
+            .find_map(|pending| match pending {
+                PendingInteraction::Elicitation(question) => Some(question),
+                PendingInteraction::Permission(_) => None,
+            })
+    }
+}
+
+/// Where the newest turn stands.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum TurnState {
+    /// No turn is open.
+    #[default]
+    Idle,
+    /// A prompt this client issued is on the wire, unconfirmed, and the agent
+    /// has produced nothing. Only a speculative fold reports this.
+    Starting,
+    /// A turn is open and the agent is working.
+    Running,
+    /// A stop was issued against the open turn and no stop reason has arrived.
+    Stopping,
+    /// The open turn is waiting on a permission or elicitation response.
+    Blocked,
+    /// The runtime reported `disconnected`; whatever was open is not moving.
+    Disconnected,
 }
 
 /// One slash command the harness advertises.
@@ -88,4 +134,9 @@ pub struct ModelOption {
     pub name: String,
     /// Descriptive copy - pricing, context size, and the like.
     pub description: Option<String>,
+    /// The heading the runtime listed this model under, when it grouped its
+    /// options (ACP's `SessionConfigSelectGroup.name`). `None` for a runtime
+    /// that offered a flat list; the flattened order still follows the
+    /// runtime's, group by group.
+    pub group: Option<String>,
 }

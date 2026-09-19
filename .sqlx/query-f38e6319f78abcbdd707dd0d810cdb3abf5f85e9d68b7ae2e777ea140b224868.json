@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE property_options AS option\n            SET\n                number_value = rewrite.number_value,\n                string_value = rewrite.string_value,\n                display_order = rewrite.display_order,\n                updated_at = NOW()\n            FROM UNNEST($2::uuid[], $3::float8[], $4::text[], $5::int4[])\n                AS rewrite(id, number_value, string_value, display_order)\n            WHERE option.property_definition_id = $1 AND option.id = rewrite.id\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "Float8Array",
+        "TextArray",
+        "Int4Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f38e6319f78abcbdd707dd0d810cdb3abf5f85e9d68b7ae2e777ea140b224868"
+}

@@ -9,6 +9,28 @@ use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_dedicated_worker);
 
+mod mail_projection;
+
+#[wasm_bindgen_test]
+fn build_info_reports_compiled_versions_without_opening_storage() {
+    let info: serde_json::Value =
+        serde_wasm_bindgen::from_value(cache_build_info().unwrap()).unwrap();
+    assert_eq!(info["packageVersion"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(info["schemaHash"], schema_hash());
+    assert_eq!(
+        info["schemaCompatibilityEpoch"],
+        cache_core::codec::CACHE_SCHEMA_COMPATIBILITY_EPOCH
+    );
+    assert_eq!(
+        info["formatVersion"],
+        cache_core::codec::CACHE_FORMAT_VERSION
+    );
+    assert_eq!(
+        info["storageSchemaVersion"],
+        cache_turso::STORAGE_SCHEMA_VERSION
+    );
+}
+
 const QUERY: &str = r#"query Soup($input: SoupInput!) {
     user {
         id
@@ -67,9 +89,11 @@ const SOUP_WITH_PROJECTION_QUERY: &str = r#"query SoupWithProjection($input: Sou
         soup(input: $input) {
             nextCursor
             items {
+                properties { id propertyDefinitionId value { __typename ... on GraphqlSelectOptionPropertyValue { optionIds } } }
                 __typename
                 id
                 cacheProjection @cacheOnly
+                notifications { id entityId entityType state }
                 displayName
                 ... on GraphqlSoupDocument {
                     ownerId
@@ -90,9 +114,11 @@ const SOUP_BACKFILL_WITH_PROJECTION_QUERY: &str = r#"query SoupBackfill($input: 
         soup(input: $input) {
             nextCursor
             items {
+                properties { id propertyDefinitionId value { __typename ... on GraphqlSelectOptionPropertyValue { optionIds } } }
                 __typename
                 id
                 cacheProjection @cacheOnly
+                notifications { id entityId entityType state }
                 displayName
                 ... on GraphqlSoupDocument {
                     ownerId
@@ -112,9 +138,11 @@ const SOUP_UPDATES_WITH_PROJECTION_SUBSCRIPTION: &str = r#"subscription SoupUpda
         __typename
         ... on SoupUpdated {
             item {
+                properties { id propertyDefinitionId value { __typename ... on GraphqlSelectOptionPropertyValue { optionIds } } }
                 __typename
                 id
                 cacheProjection @cacheOnly
+                notifications { id entityId entityType state }
                 displayName
                 ... on GraphqlSoupDocument {
                     ownerId
@@ -184,6 +212,7 @@ async fn resolved(promise: js_sys::Promise) -> JsValue {
 fn empty_js_write_result() -> JsWriteResult {
     JsWriteResult {
         revision: "0".to_string(),
+        revision_advanced: false,
         changed: Vec::new(),
         affected_ops: Vec::new(),
         reset: false,
@@ -358,6 +387,12 @@ fn projected_document_item_with_facts(
     serde_json::json!({
         "__typename": "GraphqlSoupDocument",
         "id": document_id,
+        "notifications": [],
+        "properties": if status_option_ids.is_empty() { serde_json::json!([]) } else { serde_json::json!([{
+            "id": format!("status:{document_id}"),
+            "propertyDefinitionId": "00000001-0000-0000-0000-000000000002",
+            "value": {"__typename":"GraphqlSelectOptionPropertyValue", "optionIds": status_option_ids},
+        }]) },
         "cacheProjection": v3_document_supplement(
             document_id,
             is_email_attachment,
@@ -904,6 +939,59 @@ async fn soup_updated_v3_supplements_advance_revision_and_recompute_documents_pr
     assert_eq!(selected["revision"], "2");
     assert_eq!(selected["records"][0]["record"]["id"], ORDINARY);
 
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn server_baseline_reconciliation_survives_notification_stubs_and_deletions() {
+    const SCOPE: &str = "cache-wasm-server-baseline-reconciliation";
+    const A: &str = "00000000-0000-0000-0000-000000000001";
+    const B: &str = "00000000-0000-0000-0000-000000000002";
+    const STUB: &str = "00000000-0000-0000-0000-000000000003";
+    let key = |id| format!("GraphqlSoupDocument:{id}");
+    let engine = fresh_engine(SCOPE).await;
+    resolved(engine.write_query(
+        write_context(None),
+        QUERY.into(),
+        Some("Soup".into()),
+        js(serde_json::json!({"input": {"initial": {"limit": 100}}})),
+        js(
+            serde_json::json!({"user": {"id": "macro|user@example.com", "soup": {
+                "nextCursor": null, "items": [{"__typename": "GraphqlSoupDocument", "id": STUB}]
+            }}}),
+        ),
+        None,
+    ))
+    .await;
+    resolved(engine.write_query(
+        write_context(None), SOUP_UPDATES_WITH_PROJECTION_SUBSCRIPTION.into(),
+        Some("SoupUpdatesWithProjection".into()), js(serde_json::json!({})),
+        js(serde_json::json!({"soupUpdates": [
+            {"__typename": "SoupUpdated", "item": projected_document_item(A, "macro|user@example.com", false, None, 10)},
+            {"__typename": "SoupUpdated", "item": projected_document_item(B, "macro|user@example.com", false, None, 30)}
+        ]})), None,
+    )).await;
+    let mut request = documents_preset_filter(
+        serde_json::json!({"literal": {"owner": "macro|user@example.com"}}),
+    );
+    request["limit"] = serde_json::json!(1);
+    let exact: serde_json::Value =
+        from_js(resolved(engine.entity_filter(js(request.clone()))).await);
+    assert_eq!(exact["kind"], "incomplete");
+    request["baseline"] = serde_json::json!([
+        {"key": key(A), "sortTimestamp": "2025-01-01T00:00:00.000010Z"},
+        {"key": key(STUB), "sortTimestamp": "2025-01-01T00:00:00.000020Z"}
+    ]);
+    let result: serde_json::Value =
+        from_js(resolved(engine.entity_filter(js(request.clone()))).await);
+    assert_eq!(
+        result,
+        serde_json::json!({"kind": "reconciled", "revision": "2", "keys": [key(B), key(STUB), key(A)], "retainedKeys": [key(STUB)], "optimistic": false})
+    );
+    resolved(engine.delete_keys(vec![key(A), key(STUB)])).await;
+    let deleted: serde_json::Value = from_js(resolved(engine.entity_filter(js(request))).await);
+    assert_eq!(deleted["keys"], serde_json::json!([key(B)]));
+    assert_eq!(deleted["retainedKeys"], serde_json::json!([]));
     close_and_destroy(&engine, SCOPE).await;
 }
 
@@ -1786,6 +1874,68 @@ async fn storage_reset_errors_latch_and_block_hot_read_write_and_control_methods
     assert_reset_required(engine.bound_identity()).await;
 
     resolved(engine.physical_reset()).await;
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn mail_page_errors_preserve_reset_latching_and_recovery() {
+    const SCOPE: &str = "cache-wasm-mail-page-reset-latch";
+    let engine = fresh_engine(SCOPE).await;
+    let mut request = exact_document_filter("00000000-0000-0000-0000-000000000000");
+    request["filters"]
+        .as_object_mut()
+        .unwrap()
+        .remove("emailFilter");
+    request["mail"] = serde_json::json!({"view":"ALL"});
+
+    // Validation errors must not poison a healthy cache.
+    let mut invalid = request.clone();
+    invalid["limit"] = serde_json::json!(0);
+    let error = JsFuture::from(engine.entity_filter(js(invalid)))
+        .await
+        .expect_err("invalid limit");
+    assert!(
+        !js_sys::Reflect::get(&error, &JsValue::from_str(RESET_REQUIRED_MARKER))
+            .unwrap()
+            .is_truthy()
+    );
+    assert!(!engine.state.lock().await.reset_required);
+
+    // The first read hydrates identity through EngineError rather than reading
+    // the Mail catalog directly. It must preserve the same reset marker.
+    engine.arm_storage_fault(TestStorageFault::GetBatch).await;
+    assert_reset_required(engine.entity_filter(js(request.clone()))).await;
+    assert_reset_required(engine.bound_identity()).await;
+    resolved(engine.physical_reset()).await;
+
+    for fault in [
+        TestStorageFault::GetBatch,
+        TestStorageFault::ReconcilePredicateIndex,
+        TestStorageFault::LoadProjectionStates,
+        TestStorageFault::LoadOptimisticProjections,
+    ] {
+        resolved(engine.write_query(
+            write_context(None),
+            "query MailCatalog { user { id emailLinks { id } } }".into(),
+            Some("MailCatalog".into()),
+            js(serde_json::json!({})),
+            js(serde_json::json!({"user":{"id":"mail-viewer","emailLinks":[]}})),
+            Some("mail-viewer".into()),
+        ))
+        .await;
+        let page: serde_json::Value =
+            from_js(resolved(engine.entity_filter(js(request.clone()))).await);
+        assert_eq!(page["kind"], "mail-page");
+
+        engine.arm_storage_fault(fault).await;
+        assert_reset_required(engine.entity_filter(js(request.clone()))).await;
+        assert_reset_required(engine.bound_identity()).await;
+        assert_reset_required(engine.clear()).await;
+        resolved(engine.physical_reset()).await;
+        let page: serde_json::Value =
+            from_js(resolved(engine.entity_filter(js(request.clone()))).await);
+        assert_eq!(page["kind"], "incomplete");
+    }
     close_and_destroy(&engine, SCOPE).await;
 }
 

@@ -1,6 +1,9 @@
 import type { FoldedMessage } from '@service-agent-fold/generated/types';
 import { describe, expect, it } from 'vitest';
-import { deriveMagicChipPresentation } from './presentation';
+import {
+  deriveMagicChipPresentation,
+  presentationStatus,
+} from './presentation';
 
 const response = (overrides: Partial<FoldedMessage> = {}): FoldedMessage => ({
   agentSessionId: 'session',
@@ -9,6 +12,7 @@ const response = (overrides: Partial<FoldedMessage> = {}): FoldedMessage => ({
   author: { kind: 'agent' },
   parts: [{ kind: 'thought', text: 'Inspecting the repository' }],
   stop: null,
+  pending: false,
   ...overrides,
 });
 
@@ -198,6 +202,7 @@ describe('deriveMagicChipPresentation', () => {
             },
             {
               kind: 'permission',
+              requestId: 'perm-1',
               toolCall: 'tool',
               options: [],
               outcome: { kind },
@@ -212,6 +217,46 @@ describe('deriveMagicChipPresentation', () => {
       });
     }
   );
+
+  it('prioritizes an unanswered question over a running tool', () => {
+    const presentation = deriveMagicChipPresentation({
+      persistedStatus: 'acp_ready',
+      response: response({
+        parts: [
+          {
+            kind: 'elicitation' as const,
+            requestId: 0,
+            toolCall: 'tool',
+            message: 'Which approach?',
+            request: {
+              kind: 'form',
+              schema: {
+                title: null,
+                description: null,
+                properties: [],
+                required: [],
+              },
+            },
+            outcome: { kind: 'pending' },
+            reported: null,
+            toolOutcome: null,
+          },
+          {
+            kind: 'tool_use',
+            id: 'other',
+            name: { kind: 'native', name: 'Read' },
+            status: 'running',
+            detail: { kind: 'read', paths: [] },
+          },
+        ],
+      }),
+    });
+
+    expect(presentation).toMatchObject({
+      kind: 'working',
+      activity: { label: 'Waiting for your input', busy: false },
+    });
+  });
 
   it('shows the answer as it is written, before the turn ends', () => {
     const presentation = deriveMagicChipPresentation({
@@ -280,6 +325,30 @@ describe('deriveMagicChipPresentation', () => {
     });
   });
 
+  it("shows the runtime's reason under a failed turn", () => {
+    const presentation = deriveMagicChipPresentation({
+      persistedStatus: 'acp_ready',
+      response: response({
+        parts: [],
+        stop: {
+          kind: 'failed',
+          message:
+            "Cursor can't access macro-inc/macro. Connect the repository to Cursor's GitHub app, then prompt again.",
+        },
+      }),
+    });
+
+    expect(presentation).toEqual({
+      kind: 'working',
+      activity: {
+        label: "Agent couldn't answer",
+        detail:
+          "Cursor can't access macro-inc/macro. Connect the repository to Cursor's GitHub app, then prompt again.",
+        busy: false,
+      },
+    });
+  });
+
   it('settles into final markdown without completion chrome', () => {
     const presentation = deriveMagicChipPresentation({
       persistedStatus: 'booting',
@@ -290,5 +359,165 @@ describe('deriveMagicChipPresentation', () => {
     });
 
     expect(presentation).toEqual({ kind: 'settled', markdown: '**Fixed.**' });
+  });
+
+  describe('a question the agent is waiting on', () => {
+    const asking = {
+      request: {
+        kind: 'elicitation' as const,
+        requestId: 9,
+        turn: 0,
+        toolCall: 'toolu_evt',
+        message: 'Create calendar event?',
+        request: {
+          kind: 'user_tool' as const,
+          tool: 'CreateCalendarEvent',
+          draft: { title: 'Q3 sync' },
+          schema: {
+            title: null,
+            description: null,
+            properties: [],
+            required: [],
+          },
+        },
+      },
+      canAnswer: true,
+      answering: false,
+    };
+
+    it('outranks whatever else the open turn is doing, keeping the answer so far', () => {
+      const presentation = deriveMagicChipPresentation({
+        persistedStatus: 'acp_ready',
+        asking,
+        response: response({
+          parts: [
+            { kind: 'text', text: 'Setting that up.' },
+            {
+              kind: 'tool_use',
+              id: 'tool',
+              name: { kind: 'native', name: 'ListCalendars' },
+              status: 'running',
+              detail: { kind: 'macro', input: {}, output: null, error: null },
+            },
+          ],
+        }),
+      });
+      expect(presentation).toEqual({
+        kind: 'asking',
+        markdown: 'Setting that up.',
+        asking,
+      });
+    });
+
+    it('is offered even before the agent has written anything', () => {
+      expect(
+        deriveMagicChipPresentation({ persistedStatus: 'acp_ready', asking })
+      ).toEqual({ kind: 'asking', markdown: '', asking });
+    });
+
+    it('never outranks a settled answer', () => {
+      expect(
+        deriveMagicChipPresentation({
+          persistedStatus: 'acp_ready',
+          asking,
+          response: response({
+            parts: [{ kind: 'text', text: 'Done.' }],
+            stop: { kind: 'end_turn' },
+          }),
+        })
+      ).toEqual({ kind: 'settled', markdown: 'Done.' });
+    });
+  });
+});
+
+describe('the latest passage', () => {
+  const twoPassages = [
+    { kind: 'text' as const, text: 'Let me check the tests.' },
+    {
+      kind: 'tool_use' as const,
+      id: 'ran',
+      name: { kind: 'native' as const, name: 'Terminal' },
+      status: 'completed' as const,
+      detail: {
+        kind: 'terminal' as const,
+        command: 'cargo test',
+        output: 'ok',
+        exitCode: 0,
+      },
+    },
+    { kind: 'text' as const, text: 'They pass.' },
+  ];
+
+  it('shows only what the agent says now, not what it said before a tool ran', () => {
+    expect(
+      deriveMagicChipPresentation({
+        persistedStatus: 'acp_ready',
+        response: response({ parts: twoPassages }),
+      })
+    ).toEqual({
+      kind: 'answering',
+      markdown: 'They pass.',
+      activity: { label: 'Writing response', busy: false },
+    });
+  });
+
+  it('settles on the final passage', () => {
+    expect(
+      deriveMagicChipPresentation({
+        persistedStatus: 'acp_ready',
+        response: response({
+          parts: twoPassages,
+          stop: { kind: 'end_turn' },
+        }),
+      })
+    ).toEqual({ kind: 'settled', markdown: 'They pass.' });
+  });
+});
+
+describe('presentationStatus', () => {
+  const activity = {
+    label: 'Running command',
+    detail: 'cargo test',
+    busy: true,
+  };
+  const question = {
+    request: {
+      kind: 'elicitation' as const,
+      requestId: 1,
+      turn: 0,
+      toolCall: null,
+      message: 'Which?',
+      request: { kind: 'unrecognized' as const, mode: 'x', raw: {} },
+    },
+  };
+
+  it('reads the activity while the agent works or writes', () => {
+    expect(presentationStatus({ kind: 'working', activity })).toBe(activity);
+    expect(
+      presentationStatus({ kind: 'answering', markdown: 'Hi', activity })
+    ).toBe(activity);
+  });
+
+  it('names who a question waits on', () => {
+    expect(
+      presentationStatus({
+        kind: 'asking',
+        markdown: '',
+        asking: { ...question, canAnswer: true, answering: false },
+      })
+    ).toEqual({ label: 'Waiting for you', busy: false });
+    expect(
+      presentationStatus({
+        kind: 'asking',
+        markdown: '',
+        asking: { ...question, canAnswer: false, answering: false },
+      })
+    ).toEqual({ label: 'Waiting for an editor', busy: false });
+  });
+
+  it('reads Done once settled', () => {
+    expect(presentationStatus({ kind: 'settled', markdown: 'Fixed.' })).toEqual(
+      { label: 'Done', busy: false }
+    );
   });
 });

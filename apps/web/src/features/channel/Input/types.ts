@@ -10,6 +10,8 @@ export type InputAttachmentData = {
   id: string;
   name: string;
   kind: InputAttachmentKind;
+  /** Preserve the stored entity kind when editing an existing attachment. */
+  entityType?: string;
   iconType?: EntityIconSelector;
   pending?: boolean;
   /** Preview URL used while uploading or until the final media source has loaded. */
@@ -18,6 +20,10 @@ export type InputAttachmentData = {
   width?: number;
   /** Image/video height in pixels (set after upload). */
   height?: number;
+  /** The uploaded file's media type, as the browser reported it. */
+  mimeType?: string;
+  /** The uploaded file's size in bytes. */
+  size?: number;
 };
 
 export type InputPersistenceKey = PersistenceKey;

@@ -1,5 +1,8 @@
 #![cfg(not(target_arch = "wasm32"))]
 
+#[path = "predicate/reconciliation.rs"]
+mod reconciliation;
+
 use cache_core::{
     engine::{BeginOptimisticWrite, Engine},
     predicate::{

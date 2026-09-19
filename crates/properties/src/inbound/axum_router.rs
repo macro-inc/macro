@@ -13,6 +13,7 @@ mod test;
 pub mod definitions;
 pub mod entities;
 pub mod extract;
+mod managed;
 pub mod options;
 pub mod tags;
 
@@ -37,6 +38,7 @@ pub struct PropertiesRouterState<S, A, Auth> {
     properties_service: Arc<S>,
     entity_access_service: Arc<A>,
     authorization_state: MacroAuthorizationState<Auth>,
+    managed_team_definitions: Arc<[String]>,
 }
 
 impl<S, A, Auth> Clone for PropertiesRouterState<S, A, Auth> {
@@ -45,6 +47,7 @@ impl<S, A, Auth> Clone for PropertiesRouterState<S, A, Auth> {
             properties_service: self.properties_service.clone(),
             entity_access_service: self.entity_access_service.clone(),
             authorization_state: self.authorization_state.clone(),
+            managed_team_definitions: self.managed_team_definitions.clone(),
         }
     }
 }
@@ -60,7 +63,23 @@ impl<S: PropertiesService, A: EntityAccessService, Auth> PropertiesRouterState<S
             properties_service,
             entity_access_service,
             authorization_state,
+            managed_team_definitions: Arc::from([]),
         }
+    }
+
+    /// Team definitions the generic endpoints must not write, by display name.
+    pub fn with_managed_team_definitions(
+        mut self,
+        names: impl IntoIterator<Item = String>,
+    ) -> Self {
+        self.managed_team_definitions = names.into_iter().collect();
+        self
+    }
+
+    fn is_managed_team_definition_name(&self, display_name: &str) -> bool {
+        self.managed_team_definitions
+            .iter()
+            .any(|name| name == display_name)
     }
 }
 
@@ -96,7 +115,8 @@ pub fn properties_err_status(e: &PropertiesErr) -> StatusCode {
         PropertiesErr::PermissionDenied
         | PropertiesErr::SystemPropertyNotModifiable
         | PropertiesErr::RequiredProperty
-        | PropertiesErr::TeamMembershipRequired => StatusCode::FORBIDDEN,
+        | PropertiesErr::TeamMembershipRequired
+        | PropertiesErr::ManagedDefinition => StatusCode::FORBIDDEN,
         PropertiesErr::Repo(_) | PropertiesErr::PermissionServiceNotConfigured => {
             StatusCode::INTERNAL_SERVER_ERROR
         }

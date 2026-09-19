@@ -10,7 +10,14 @@
 //! - `toolResponse` - the tool's own result object, richer than the text
 //!   blocks `rawOutput` later carries. For `Agent` it is an
 //!   [`AgentResponse`]: the subagent's answer, id, model, timings, token
-//!   count and per-tool statistics.
+//!   count and per-tool statistics. For `AskUserQuestion` it carries
+//!   `answers`, the answer the adapter settled on per question.
+//!
+//! `AskUserQuestion` is asked through `elicitation/create` (adapter ≥ 0.64,
+//! gated on the client advertising `elicitation.form`): one form per call,
+//! `toolCallId` naming the tool call, and per question a `question_N` select
+//! plus a `question_N_custom` free-text companion marked with the shared
+//! [`generic::MARKER`]. Custom text wins over the choice when both are sent.
 
 use agent_client_protocol::schema::v1::{ContentBlock, Meta};
 use lazy_regex::regex_is_match;
@@ -22,6 +29,9 @@ use crate::domain::model::{SubagentResult, ToolName, ToolStats, ToolUseId};
 
 /// The `_meta` namespace Claude Code writes under.
 pub const NAMESPACE: &str = "claudeCode";
+
+/// What the adapter appends to a question's name for its "Other" companion.
+const CUSTOM_ANSWER_SUFFIX: &str = "_custom";
 
 /// Reader for Claude Code's conventions.
 pub struct ClaudeCode;
@@ -166,6 +176,17 @@ impl HarnessReader for ClaudeCode {
             }),
             None => generic::subagent_result(frame),
         }
+    }
+
+    fn custom_answer_for(&self, name: &str, property: &Value) -> Option<String> {
+        generic::custom_answer_for(name, property)
+            .or_else(|| generic::custom_answer_by_suffix(name, property, CUSTOM_ANSWER_SUFFIX))
+    }
+
+    /// `_meta.claudeCode.toolResponse.answers`: an object keyed by question
+    /// text, holding the answer the adapter took for each.
+    fn reported_elicitation_answer(&self, frame: &ToolFrame<'_>) -> Option<Value> {
+        meta_of(frame.meta).tool_response?.get("answers").cloned()
     }
 }
 

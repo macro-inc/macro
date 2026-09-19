@@ -7,6 +7,7 @@ import {
 } from '@core/constant/featureFlags';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
 import { catchToResult, throwOnErr } from '@core/util/result';
+import { Telemetry } from '@macro-inc/observability';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { emailClient } from '@service-email/client';
 import type {
@@ -16,6 +17,11 @@ import type {
   UpsertScheduledResponse,
 } from '@service-email/generated/schemas';
 import {
+  markGraphqlEmailThreadSeen,
+  markGraphqlEmailThreadUnread,
+} from '@service-storage/graphql-email-read-state';
+import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import {
   type InfiniteData,
   useInfiniteQuery,
   useMutation,
@@ -24,6 +30,10 @@ import { err, ok } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { optimisticUpdateSoupEntity, refetchSoupEntity } from '../soup/cache';
+import {
+  getActiveGraphqlSoupRevalidations,
+  refreshActiveGraphqlSoupQueries,
+} from '../soup/graphql/active-queries';
 import { invalidateAllSoup } from '../soup/normalized-cache';
 import { type UndoHandle, useUndoableMutation } from '../undo';
 import { type MutationCallbacks, withCallbacks } from '../utils';
@@ -268,6 +278,7 @@ type MarkThreadAsSeenParams = {
  * email view anyway - only the soup/list view needs it.
  */
 function threadSeenOnMutate(params: MarkThreadAsSeenParams): void {
+  if (isFeatureEnabled(enableGraphqlSoup)) return;
   optimisticUpdateSoupEntity({
     tag: 'emailThread',
     data: { id: params.threadId, isRead: true },
@@ -283,6 +294,16 @@ export function useMarkThreadAsSeenMutation(
 ) {
   return useMutation(() => ({
     mutationFn: async (params: MarkThreadAsSeenParams) => {
+      if (isFeatureEnabled(enableGraphqlSoup)) {
+        const disposition = await markGraphqlEmailThreadSeen(
+          getGraphqlSoupClient(),
+          params.threadId,
+          getActiveGraphqlSoupRevalidations()
+        );
+        if (disposition === 'committed')
+          await refreshActiveGraphqlSoupQueries();
+        return;
+      }
       await throwOnErr(() =>
         emailClient.markThreadAsSeen(
           { thread_id: params.threadId },
@@ -339,6 +360,7 @@ async function fetchUnreadLabelId(linkId?: string): Promise<string> {
  * threadSeenOnMutate.
  */
 function threadUnreadOnMutate(params: MarkThreadAsUnreadParams): void {
+  if (isFeatureEnabled(enableGraphqlSoup)) return;
   optimisticUpdateSoupEntity({
     tag: 'emailThread',
     data: { id: params.threadId, isRead: false },
@@ -355,6 +377,16 @@ export function useMarkThreadAsUnreadMutation(
 ) {
   return useMutation(() => ({
     mutationFn: async (params: MarkThreadAsUnreadParams) => {
+      if (isFeatureEnabled(enableGraphqlSoup)) {
+        const disposition = await markGraphqlEmailThreadUnread(
+          getGraphqlSoupClient(),
+          params.threadId,
+          getActiveGraphqlSoupRevalidations()
+        );
+        if (disposition === 'committed')
+          await refreshActiveGraphqlSoupQueries();
+        return;
+      }
       const labelId = await fetchUnreadLabelId(params.linkId);
       await throwOnErr(() =>
         emailClient.updateThreadLabel({
@@ -561,21 +593,35 @@ export function useSendMessageMutation(
     ...withCallbacks<SendMessageResponse, Error, SendMessageParams>(
       {
         onSuccess: (data, vars) => {
-          analytics.track('email_message_sent');
-          const threadID = data.message.thread_db_id;
-          if (threadID) {
-            queryClient.invalidateQueries({
-              queryKey: emailKeys.threadMessages(threadID).queryKey,
-            });
-            // Refresh the thread's soup item so inbox views stop showing it
-            // as a draft once the message is sent.
-            if (!vars.skipSoupRefetch) {
-              refetchSoupEntity(threadID, 'emailThread');
-            }
+          try {
+            analytics.track('email_message_sent');
+          } catch (error) {
+            Telemetry.error(error);
           }
-          queryClient.invalidateQueries({
-            queryKey: emailKeys.previews._def,
-          });
+          try {
+            const threadID = data.message.thread_db_id;
+            if (threadID) {
+              void queryClient
+                .invalidateQueries({
+                  queryKey: emailKeys.threadMessages(threadID).queryKey,
+                })
+                .catch(Telemetry.error);
+              // Refresh the thread's soup item so inbox views stop showing it
+              // as a draft once the message is sent.
+              if (!vars.skipSoupRefetch) {
+                void refetchSoupEntity(threadID, 'emailThread').catch(
+                  Telemetry.error
+                );
+              }
+            }
+            void queryClient
+              .invalidateQueries({
+                queryKey: emailKeys.previews._def,
+              })
+              .catch(Telemetry.error);
+          } catch (error) {
+            Telemetry.error(error);
+          }
         },
       },
       callbacks
@@ -653,9 +699,15 @@ export function useUnscheduleMessageMutation(
     ...withCallbacks<void, Error, UnscheduleMessageParams>(
       {
         onSuccess: () => {
-          queryClient.invalidateQueries({
-            queryKey: emailKeys.previews._def,
-          });
+          try {
+            void queryClient
+              .invalidateQueries({
+                queryKey: emailKeys.previews._def,
+              })
+              .catch(Telemetry.error);
+          } catch (error) {
+            Telemetry.error(error);
+          }
         },
       },
       callbacks

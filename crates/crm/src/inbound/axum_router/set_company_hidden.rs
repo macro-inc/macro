@@ -52,9 +52,14 @@ pub struct SetCompanyHiddenRequest {
     ),
 )]
 #[tracing::instrument(skip_all, err, fields(company_id = %company_id, hidden = req.hidden))]
-pub async fn handler<C: CrmService, Eas: EntityAccessService, Auth: MacroAuthorizationService>(
+pub async fn handler<
+    C: CrmService,
+    St,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
     access: CrmCompanyAccessLevelExtractor<EditAccessLevel, Eas, Auth>,
-    State(state): State<CrmRouterState<C, Eas, Auth>>,
+    State(state): State<CrmRouterState<C, St, Eas, Auth>>,
     Path(company_id): Path<Uuid>,
     Json(req): Json<SetCompanyHiddenRequest>,
 ) -> Result<StatusCode, CrmError> {

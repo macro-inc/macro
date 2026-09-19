@@ -6,8 +6,8 @@
 //! server-side field rename becomes a compile error on this side instead of a
 //! runtime surprise on someone's laptop.
 
+pub(crate) mod acp_probe;
 pub mod agent_session;
-pub mod credentials;
 pub mod link;
 pub mod pairing;
 pub mod stream;

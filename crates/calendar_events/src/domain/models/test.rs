@@ -148,6 +148,7 @@ fn default_reminders_stay_out_of_serialized_projections() {
         owner_id: "macro|projection@example.com".to_string(),
         ical_uid: "projection@example.com".to_string(),
         calendar_id: None,
+        sources: Vec::new(),
         title: "Projection".to_string(),
         description: None,
         location: None,
@@ -184,6 +185,7 @@ fn default_reminders_stay_out_of_serialized_projections() {
     assert!(serialized.get("creatorEmail").is_none());
     assert!(serialized.get("creatorName").is_none());
     assert!(serialized.get("eventType").is_none());
+    assert!(serialized.get("sources").is_none());
     let legacy: CalendarEvent = serde_json::from_value(serialized).unwrap();
     assert_eq!(legacy.reminders, EventReminders::default());
     assert_eq!(legacy.event_type, EventType::Default);

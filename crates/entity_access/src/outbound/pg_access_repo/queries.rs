@@ -15,6 +15,11 @@ use macro_user_id::{
 use model_entity::EntityType;
 use sqlx::{Pool, Postgres};
 
+#[cfg(feature = "explain_binary")]
+use crate::domain::models::{AccessGrant, AccessLevel};
+#[cfg(feature = "explain_binary")]
+use models_entity_access_management::EntityAccessSourceType;
+
 pub mod agent_session_access;
 pub mod call_access;
 pub mod call_channel;
@@ -26,6 +31,7 @@ pub mod crm_company_access;
 pub mod crm_contact_access;
 pub mod document_access;
 pub mod foreign_entity_access;
+pub mod initiative_access;
 pub mod project_access;
 pub mod team_access;
 pub mod thread_access;
@@ -43,7 +49,7 @@ pub struct SourceIds(pub Vec<String>);
 #[cfg_attr(
     not(test),
     cached(
-        time = 30,
+        time = 10,
         result = true,
         key = "String",
         convert = r#"{format!("{}", user_id.map(AsRef::as_ref).unwrap_or(""))}"#,
@@ -83,7 +89,7 @@ pub async fn get_user_source_ids(
 #[cfg_attr(
     not(test),
     cached(
-        time = 30,
+        time = 10,
         result = true,
         key = "String",
         convert = r#"{format!("{}:{}", bot_id, team_id)}"#,
@@ -136,7 +142,7 @@ pub async fn get_team_scope_source_ids(
 #[cfg_attr(
     not(test),
     cached(
-        time = 30,
+        time = 10,
         result = true,
         key = "String",
         convert = r#"{format!("{}:{}", entity_type.as_ref(), entity_id)}"#
@@ -230,5 +236,47 @@ pub(in crate::outbound::pg_access_repo) async fn get_entity_users(
         .into_iter()
         .collect::<std::collections::HashSet<_>>()
         .into_iter()
+        .collect())
+}
+
+#[cfg(feature = "explain_binary")]
+#[tracing::instrument(skip(pool, source_ids), err)]
+pub async fn list_entity_access_grants(
+    pool: &Pool<Postgres>,
+    entity_id: &uuid::Uuid,
+    entity_type: EntityType,
+    source_ids: &SourceIds,
+) -> Result<Vec<AccessGrant>, sqlx::Error> {
+    if source_ids.0.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let rows = sqlx::query!(
+        r#"
+        SELECT
+            source_type AS "source_type!: EntityAccessSourceType",
+            source_id,
+            access_level AS "access_level!: AccessLevel",
+            granted_from_project_id
+        FROM entity_access
+        WHERE entity_id = $1
+          AND entity_type = $2
+          AND source_id = ANY($3)
+        "#,
+        entity_id,
+        entity_type.as_ref(),
+        &source_ids.0,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| AccessGrant::EntityAccess {
+            source_type: row.source_type,
+            source_id: row.source_id,
+            access_level: row.access_level,
+            granted_from_project_id: row.granted_from_project_id,
+        })
         .collect())
 }

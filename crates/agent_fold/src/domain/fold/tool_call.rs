@@ -23,6 +23,16 @@ impl FoldState {
         let id = ToolUseId(call.tool_call_id.0.to_string());
         let reader = self.reader();
         let frame = ToolFrame::of_call(&call);
+
+        // A question already asked on this call's behalf - its
+        // `elicitation/create` is a request the agent sends directly, and can
+        // overtake the `tool_call` notification on the wire - takes the call
+        // in now, the way an open call is absorbed when the question follows
+        // it. Either order shows one row.
+        if let Some(changed) = self.absorb_late_tool_call(&id, &frame) {
+            return Some(changed);
+        }
+
         let name = harness::tool_name(reader, &frame);
 
         // Whose shape the call is in is decided here, once; a patch finds the
@@ -92,6 +102,14 @@ impl FoldState {
             return None;
         };
         let message = at.message;
+
+        // A call a question absorbed (see `request_elicitation`) is patched
+        // as the question: the only thing a later update can add is the
+        // harness's own reading of the answer.
+        if matches!(self.part_at_mut(&at), Some(MessagePart::Elicitation { .. })) {
+            return self.patch_absorbed_elicitation(&at, &ToolFrame::of_update(&update));
+        }
+
         let Some(MessagePart::ToolUse {
             name,
             status,
@@ -165,11 +183,31 @@ pub(super) fn tool_detail(reader: &dyn HarnessReader, frame: &ToolFrame<'_>) -> 
         ToolKind::Think => ToolDetail::Think {
             output: frame.content_text(),
         },
-        other => ToolDetail::Other {
-            kind: tool_kind_name(other).to_owned(),
-            output: frame.content_text(),
-            input: frame.raw_input.cloned(),
-        },
+        other => {
+            let (result, error) = tool_output(reader, frame);
+            ToolDetail::Other {
+                kind: tool_kind_name(other).to_owned(),
+                output: frame.content_text(),
+                input: reader.tool_input(frame),
+                result,
+                error,
+            }
+        }
+    }
+}
+
+/// A frame's `rawOutput` as the tool's own result and the wrapper's error,
+/// through the harness's reading. `(None, None)` when the frame carries no
+/// output; a result the wrapper reports as empty is `None` too, so a reader
+/// never shows a `null` response for a call that reported nothing.
+fn tool_output(
+    reader: &dyn HarnessReader,
+    frame: &ToolFrame<'_>,
+) -> (Option<serde_json::Value>, Option<String>) {
+    match frame.raw_output.map(|raw| reader.unwrap_tool_output(raw)) {
+        None => (None, None),
+        Some((serde_json::Value::Null, error)) => (None, error),
+        Some((value, error)) => (Some(value), error),
     }
 }
 
@@ -181,7 +219,7 @@ pub(super) fn macro_detail(reader: &dyn HarnessReader, frame: &ToolFrame<'_>) ->
         Some((value, error)) => (Some(value), error),
     };
     ToolDetail::Macro {
-        input: frame.raw_input.cloned().unwrap_or(serde_json::Value::Null),
+        input: reader.tool_input(frame).unwrap_or(serde_json::Value::Null),
         output,
         error,
     }
@@ -198,7 +236,7 @@ pub(super) fn user_tool_detail(
     frame: &ToolFrame<'_>,
 ) -> ToolDetail {
     ToolDetail::UserTool {
-        input: frame.raw_input.cloned().unwrap_or(serde_json::Value::Null),
+        input: reader.tool_input(frame).unwrap_or(serde_json::Value::Null),
         outcome: frame.raw_output.map_or(UserToolOutcome::Pending, |raw| {
             harness::user_tool_outcome(reader, tool, raw)
         }),
@@ -222,8 +260,8 @@ pub(super) fn patch_macro_detail(
             output,
             error,
         } => {
-            if let Some(found) = frame.raw_input {
-                *input = found.clone();
+            if let Some(found) = reader.tool_input(frame) {
+                *input = found;
             }
             if let Some(raw) = frame.raw_output {
                 let (value, failure) = reader.unwrap_tool_output(raw);
@@ -232,8 +270,8 @@ pub(super) fn patch_macro_detail(
             }
         }
         ToolDetail::UserTool { input, outcome } => {
-            if let Some(found) = frame.raw_input {
-                *input = found.clone();
+            if let Some(found) = reader.tool_input(frame) {
+                *input = found;
             }
             if let Some(raw) = frame.raw_output {
                 // The detail says this is a user tool, so the name's short
@@ -307,12 +345,25 @@ pub(super) fn patch_detail(
                 *output = Some(found);
             }
         }
-        ToolDetail::Other { input, output, .. } => {
-            if let Some(found) = frame.raw_input {
-                *input = Some(found.clone());
+        ToolDetail::Other {
+            input,
+            output,
+            result,
+            error,
+            ..
+        } => {
+            if let Some(found) = reader.tool_input(frame) {
+                *input = Some(found);
             }
             if let Some(found) = frame.content_text() {
                 *output = Some(found);
+            }
+            // A harness sends the result whole each time, so both replace:
+            // an update that carries the outcome carries all of it.
+            if frame.raw_output.is_some() {
+                let (found, failure) = tool_output(reader, frame);
+                *result = found;
+                *error = failure;
             }
         }
         // Patched by `patch_macro_detail` / `patch_subagent_detail`, which

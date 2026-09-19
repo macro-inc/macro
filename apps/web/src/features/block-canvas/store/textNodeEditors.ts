@@ -1,12 +1,9 @@
-import { createBlockStore } from '@core/block';
 import type { LexicalEditor } from 'lexical';
-
-const textNodeEditorsStore = createBlockStore<Record<string, LexicalEditor>>(
-  {}
-);
+import { useCanvasDocument } from '../context/canvas-document-context';
 
 export function useTextNodeEditors() {
-  const [textNodeEditors, setTextNodeEditors] = textNodeEditorsStore;
+  const [textNodeEditors, setTextNodeEditors] =
+    useCanvasDocument().state.stores.textNodeEditors;
 
   return {
     getEditor: (nodeId: string) => textNodeEditors[nodeId],

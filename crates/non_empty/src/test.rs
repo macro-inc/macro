@@ -129,3 +129,11 @@ fn test_last_mut_needs_no_option() {
     *vec.last_mut() = 20;
     assert_eq!(vec.inner(), &vec![10, 20]);
 }
+
+#[test]
+fn insert_grows_in_place() {
+    let mut list = NonEmpty::one("b");
+    list.insert(0, "a");
+    list.push("c");
+    assert_eq!(list.inner(), &vec!["a", "b", "c"]);
+}

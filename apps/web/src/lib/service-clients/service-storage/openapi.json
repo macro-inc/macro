@@ -1314,7 +1314,7 @@
       "patch": {
         "tags": ["call::inbound::axum_router"],
         "summary": "Handler for `PATCH /call/record/{call_id}`.",
-        "description": "Edits a call record — currently supports updating the record's share\npermissions. Access is validated via channel membership",
+        "description": "Edits a call record: link/channel share permissions, display name, and\nteam sharing. Edit access (channel membership) is required for the request.\n`sharePermission.teamShareAccessLevel` only accepts `view` or `null`; while\nthe call is live it sets the pending share-with-team toggle, and once the\ncall is archived it is additionally authorized against the call's creator.",
         "operationId": "edit_call_record",
         "parameters": [
           {
@@ -1342,6 +1342,16 @@
           "204": {
             "description": "Call record updated"
           },
+          "400": {
+            "description": "Invalid team-share level, contradictory inputs, or the creator has no team",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "401": {
             "description": "",
             "content": {
@@ -1352,8 +1362,28 @@
               }
             }
           },
+          "403": {
+            "description": "Team sharing of an archived call may only be changed by its creator",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
             "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Team-sharing facts changed, or the call was archived mid-request; reload and retry",
             "content": {
               "application/json": {
                 "schema": {
@@ -1379,7 +1409,7 @@
       "post": {
         "tags": ["call::inbound::axum_router"],
         "summary": "Handler for `POST /call/record/{call_id}/share-with-team/toggle`.",
-        "description": "Toggles the `share_with_team` flag on the active call. Returns the new\nvalue as the JSON body.",
+        "description": "Flips the live call's share-with-team toggle and returns the new value as\nthe JSON body. The toggle is applied as canonical team sharing (View for\nthe creator's team) when the call is archived; archived calls answer 409\nand are edited through `PATCH /call/record/{call_id}` instead.",
         "operationId": "toggle_share_with_team",
         "parameters": [
           {
@@ -1395,7 +1425,7 @@
         ],
         "responses": {
           "200": {
-            "description": "New value of share_with_team after toggle",
+            "description": "New value of the share-with-team toggle",
             "content": {
               "application/json": {
                 "schema": {
@@ -1416,6 +1446,16 @@
           },
           "404": {
             "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The call is no longer active",
             "content": {
               "application/json": {
                 "schema": {
@@ -3637,6 +3677,115 @@
         }
       }
     },
+    "/channels/{channel_id}/messages/catch-up": {
+      "get": {
+        "tags": ["channels::inbound::axum_router"],
+        "summary": "Handler for `GET /channels/{channel_id}/messages/catch-up`.",
+        "operationId": "get_channel_messages_catch_up",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "Exclusive RFC3339 lower bound. Messages at this instant are omitted.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size (1-100, default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Base64 encoded cursor value for older messages",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "previous_cursor",
+            "in": "query",
+            "description": "Base64 encoded cursor value for newer messages",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiChannelMessagesPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/{channel_id}/messages/{message_id}/context": {
       "get": {
         "tags": ["channels::inbound::axum_router"],
@@ -4047,6 +4196,90 @@
         "responses": {
           "200": {
             "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}/profile_picture": {
+      "put": {
+        "tags": ["channels::inbound::axum_router::profile_picture"],
+        "summary": "Set a channel or group chat profile picture. Requires channel admin or owner access.",
+        "operationId": "set_channel_picture",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetChannelPictureRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Picture updated"
           },
           "400": {
             "description": "",
@@ -5908,6 +6141,115 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/stages": {
+      "put": {
+        "tags": ["crm::inbound::axum_router::stages"],
+        "summary": "Replace the team's deal stages; requires `edit_stages_role` (403 otherwise).",
+        "operationId": "put_crm_team_stages",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceCrmStagesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmStagesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["crm::inbound::axum_router::stages"],
+        "summary": "Reset the team's deal stages to the defaults; gated like `PUT /crm/stages`.",
+        "operationId": "reset_crm_team_stages",
+        "responses": {
+          "204": {
+            "description": ""
           },
           "401": {
             "description": "",
@@ -8123,7 +8465,7 @@
       },
       "put": {
         "tags": ["document"],
-        "summary": "Sets the team-share state of a document. Sharing grants the document\nowner's team Edit access; unsharing removes the team's access. Requires\nEdit access on the document.",
+        "summary": "Sets explicit team sharing. Requires a verified acting identity matching\nthe persisted document owner, not merely effective Edit or Owner access.\nInitial enable defaults to Edit; repeated enable preserves the chosen level.\nClear removes only the managed direct grant, not inherited team access.",
         "operationId": "set_document_team_share",
         "parameters": [
           {
@@ -8158,7 +8500,7 @@
             }
           },
           "400": {
-            "description": "",
+            "description": "Owner has no team",
             "content": {
               "application/json": {
                 "schema": {
@@ -8168,7 +8510,7 @@
             }
           },
           "401": {
-            "description": "",
+            "description": "Acting identity is absent or is not the actual owner",
             "content": {
               "application/json": {
                 "schema": {
@@ -8179,6 +8521,16 @@
           },
           "404": {
             "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sharing facts changed or an untracked grant conflicts",
             "content": {
               "application/json": {
                 "schema": {
@@ -8383,6 +8735,58 @@
         "tags": ["favorites"],
         "summary": "List the caller's favorites.",
         "operationId": "list_favorites",
+        "parameters": [
+          {
+            "name": "entityType",
+            "in": "query",
+            "description": "Restrict to favorites whose entity is one of these types.",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "description": "The type of an entity in Macro",
+                "enum": [
+                  "user",
+                  "chat",
+                  "channel",
+                  "channel_message",
+                  "document",
+                  "project",
+                  "email_thread",
+                  "calendar_event",
+                  "team",
+                  "call",
+                  "foreign_entity",
+                  "static_file",
+                  "crm_company",
+                  "crm_contact",
+                  "reminder",
+                  "skill",
+                  "agent_session",
+                  "scheduled_action",
+                  "initiative"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "entityId",
+            "in": "query",
+            "description": "Restrict to favorites whose entity is one of these ids.",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -8574,7 +8978,9 @@
                 "crm_contact",
                 "reminder",
                 "skill",
-                "agent_session"
+                "agent_session",
+                "scheduled_action",
+                "initiative"
               ]
             }
           },
@@ -8595,6 +9001,86 @@
               "application/json": {
                 "schema": {
                   "default": null
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/foreign_entity/by_source/{source}/{foreign_entity_id}": {
+      "get": {
+        "tags": ["foreign_entity"],
+        "summary": "Get a visible foreign entity by the identifier its source system assigned.",
+        "description": "`foreign_entity_id` is a wildcard path segment: sources store slashes inside\nthe identifier, for example `owner/repo/pull/12`.\n\nAuthorization matches the by-id route. Internal service callers see every\nrecord; an authenticated user sees a record only when they have view access\nto it, and records they cannot view are reported as `404` so the route never\nreveals that a mapping exists. Bot tokens are not accepted here — they use\nthe by-id route, which mints a bot-scoped receipt.",
+        "operationId": "get_foreign_entity_by_source",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "path",
+            "description": "Foreign entity source, e.g. github_pull_request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "foreign_entity_id",
+            "in": "path",
+            "description": "Identifier assigned by the source system; may contain slashes",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForeignEntity"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -9503,6 +9989,517 @@
         }
       }
     },
+    "/initiatives": {
+      "get": {
+        "tags": ["initiative"],
+        "summary": "List initiatives the caller can view.",
+        "operationId": "list_initiatives",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitiativeList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["initiative"],
+        "summary": "Create an initiative owned by the caller.",
+        "operationId": "create_initiative",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInitiativeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitiativeDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Name exceeds the maximum length",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/initiatives/{initiative_id}": {
+      "get": {
+        "tags": ["initiative"],
+        "summary": "Fetch one initiative the caller can view.",
+        "operationId": "get_initiative",
+        "parameters": [
+          {
+            "name": "initiative_id",
+            "in": "path",
+            "description": "Initiative identifier.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitiativeDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["initiative"],
+        "summary": "Delete the initiative the caller owns.",
+        "operationId": "delete_initiative",
+        "parameters": [
+          {
+            "name": "initiative_id",
+            "in": "path",
+            "description": "Initiative identifier.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericSuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["initiative"],
+        "summary": "Update fields the caller can edit.",
+        "operationId": "update_initiative",
+        "parameters": [
+          {
+            "name": "initiative_id",
+            "in": "path",
+            "description": "Initiative identifier.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateInitiativeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitiativeDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Name exceeds the maximum length",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/initiatives/{initiative_id}/tasks": {
+      "put": {
+        "tags": ["initiative"],
+        "summary": "Assign tasks the caller can edit.",
+        "operationId": "assign_initiative_tasks",
+        "parameters": [
+          {
+            "name": "initiative_id",
+            "in": "path",
+            "description": "Initiative identifier.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignTasksRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssignTasksResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/initiatives/{initiative_id}/tasks/{task_id}": {
+      "delete": {
+        "tags": ["initiative"],
+        "summary": "Unassign one task the caller can edit.",
+        "operationId": "unassign_initiative_task",
+        "parameters": [
+          {
+            "name": "initiative_id",
+            "in": "path",
+            "description": "Initiative identifier.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "task_id",
+            "in": "path",
+            "description": "Task identifier.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericSuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/instructions": {
       "get": {
         "tags": ["instructions::get_instructions"],
@@ -9861,6 +10858,622 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/messages/{parent_type}/{parent_id}": {
+      "get": {
+        "tags": ["messages::inbound::axum_router"],
+        "summary": "Read a bounded timeline with lazy thread previews.",
+        "operationId": "message_timeline",
+        "parameters": [
+          {
+            "name": "parent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "selection",
+            "in": "query",
+            "description": "Serialized MessageTimelineQuery; absent selects the latest roots.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessagePage"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["messages::inbound::axum_router"],
+        "summary": "Create a root message or reply.",
+        "operationId": "entity_message_create",
+        "parameters": [
+          {
+            "name": "parent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostMessage"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/messages/{parent_type}/{parent_id}/items/{id}": {
+      "get": {
+        "tags": ["messages::inbound::axum_router"],
+        "summary": "Resolve a message within its parent.",
+        "operationId": "entity_message_get_message",
+        "parameters": [
+          {
+            "name": "parent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["messages::inbound::axum_router"],
+        "summary": "Tombstone one message while preserving replies.",
+        "operationId": "entity_message_delete_message",
+        "parameters": [
+          {
+            "name": "parent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "nonce",
+            "in": "query",
+            "description": "Client nonce.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["messages::inbound::axum_router"],
+        "summary": "Edit an owned message.",
+        "operationId": "entity_message_edit",
+        "parameters": [
+          {
+            "name": "parent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MessagePatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/messages/{parent_type}/{parent_id}/items/{id}/reactions": {
+      "post": {
+        "tags": ["messages::inbound::axum_router"],
+        "summary": "Change the caller's reaction.",
+        "operationId": "entity_message_react",
+        "parameters": [
+          {
+            "name": "parent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReactionInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/messages/{parent_type}/{parent_id}/legacy/{legacy_id}": {
+      "get": {
+        "tags": ["messages::inbound::axum_router"],
+        "summary": "Resolve an old link under current parent permissions.",
+        "operationId": "entity_message_legacy",
+        "parameters": [
+          {
+            "name": "parent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "legacy_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "thread",
+            "in": "query",
+            "description": "Resolve a thread id instead of a comment id.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/messages/{parent_type}/{parent_id}/references": {
+      "get": {
+        "tags": ["messages::inbound::axum_router"],
+        "summary": "Read source channel threads mentioning this document under both parents' permissions.",
+        "operationId": "entity_message_references",
+        "parameters": [
+          {
+            "name": "parent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of roots.",
+            "required": false,
+            "schema": {
+              "type": ["integer", "null"],
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "created_at",
+            "in": "query",
+            "description": "Last root's creation timestamp.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"],
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "cursor_id",
+            "in": "query",
+            "description": "Last root's UUID.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"],
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReferencedThreadPage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/messages/{parent_type}/{parent_id}/threads/{id}": {
+      "get": {
+        "tags": ["messages::inbound::axum_router"],
+        "summary": "Open a specific discussion from a link or annotation.",
+        "operationId": "entity_message_get_thread",
+        "parameters": [
+          {
+            "name": "parent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageThread"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["messages::inbound::axum_router"],
+        "summary": "Explicitly remove a discussion.",
+        "operationId": "entity_message_delete_thread",
+        "parameters": [
+          {
+            "name": "parent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "nonce",
+            "in": "query",
+            "description": "Client nonce.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadState"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["messages::inbound::axum_router"],
+        "summary": "Update a discussion's lifecycle and placement.",
+        "operationId": "entity_message_patch_thread",
+        "parameters": [
+          {
+            "name": "parent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ThreadPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadState"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/messages/{parent_type}/{parent_id}/typing": {
+      "post": {
+        "tags": ["messages::inbound::axum_router"],
+        "summary": "Broadcast typing within an authorized discussion.",
+        "operationId": "entity_message_typing",
+        "parameters": [
+          {
+            "name": "parent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TypingInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
           }
         }
       }
@@ -10958,40 +12571,52 @@
           {
             "name": "entityType",
             "in": "query",
-            "description": "Restrict to reminders attached to this entity type. Requires `entityId`.",
+            "description": "Restrict to reminders attached to an entity of these types.",
             "required": false,
             "schema": {
-              "type": "string",
-              "description": "The type of an entity in Macro",
-              "enum": [
-                "user",
-                "chat",
-                "channel",
-                "channel_message",
-                "document",
-                "project",
-                "email_thread",
-                "calendar_event",
-                "team",
-                "call",
-                "foreign_entity",
-                "static_file",
-                "crm_company",
-                "crm_contact",
-                "reminder",
-                "skill",
-                "agent_session"
-              ]
-            }
+              "type": "array",
+              "items": {
+                "type": "string",
+                "description": "The type of an entity in Macro",
+                "enum": [
+                  "user",
+                  "chat",
+                  "channel",
+                  "channel_message",
+                  "document",
+                  "project",
+                  "email_thread",
+                  "calendar_event",
+                  "team",
+                  "call",
+                  "foreign_entity",
+                  "static_file",
+                  "crm_company",
+                  "crm_contact",
+                  "reminder",
+                  "skill",
+                  "agent_session",
+                  "scheduled_action",
+                  "initiative"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
           },
           {
             "name": "entityId",
             "in": "query",
-            "description": "Restrict to reminders attached to this entity id. Requires `entityType`.",
+            "description": "Restrict to reminders attached to these entity ids.",
             "required": false,
             "schema": {
-              "type": "string"
-            }
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true
           },
           {
             "name": "includeCompleted",
@@ -12609,7 +14234,9 @@
                   "crm_contact",
                   "reminder",
                   "skill",
-                  "agent_session"
+                  "agent_session",
+                  "scheduled_action",
+                  "initiative"
                 ]
               }
             ],
@@ -12656,9 +14283,14 @@
           "harness",
           "default_model",
           "channel_scope",
-          "channel_ids"
+          "channel_ids",
+          "mcp"
         ],
         "properties": {
+          "auto_accept_permissions": {
+            "type": ["boolean", "null"],
+            "description": "Whether the agent's sessions approve ACP permission requests without\nasking. `None` means always prompt. Bypass also requires the harness's opt-in."
+          },
           "bot": {
             "$ref": "#/components/schemas/Bot",
             "description": "The bot identity used for mentions and channel participation."
@@ -12697,13 +14329,250 @@
           "instructions": {
             "type": "string",
             "description": "Instructions supplied to the agent at the start of a conversation."
+          },
+          "mcp": {
+            "$ref": "#/components/schemas/AgentMcpServers",
+            "description": "Which MCP servers sessions of this agent are handed."
           }
         }
+      },
+      "AgentActionId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "Identifies one accepted [`AgentAction`] end to end: returned by the\ncontrol endpoint, written as the JSON-RPC request id on the action's wire\nframe, and read back off that frame as `request_id` on the folded message\nit derives.\n\nA v7 uuid, so ids sort by mint time. Minted by the server at accept time,\nor by a client that speculated the action and named it in the control\nrequest - either way the server is the only writer of runtime-bound\nframes, so a uuid-shaped request id remains the whole ownership test. The\nmachine's own handshake request ids (`agent_session:{session}:{n}`) are\nnot uuids and stay `None`."
       },
       "AgentChannelScope": {
         "type": "string",
         "description": "Whether an agent is available everywhere or only in selected channels.",
         "enum": ["all", "selected"]
+      },
+      "AgentMcpServer": {
+        "type": "object",
+        "description": "One Pipedream app an agent lists under [`AgentMcpServers::Selected`].\n\nOnly the catalog identity is stored. Whether a given person has connected\nthe app is theirs, resolved at call time by the egress proxy, never here.",
+        "required": ["app_slug", "server_name"],
+        "properties": {
+          "app_slug": {
+            "type": "string",
+            "description": "Pipedream app slug, e.g. `linear`."
+          },
+          "server_name": {
+            "type": "string",
+            "description": "Display name, e.g. `Linear`."
+          }
+        }
+      },
+      "AgentMcpServers": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Whatever apps the person running the session has connected.",
+            "required": ["scope"],
+            "properties": {
+              "scope": {
+                "type": "string",
+                "enum": ["owner_connections"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Exactly these apps, connected or not.",
+            "required": ["servers", "scope"],
+            "properties": {
+              "scope": {
+                "type": "string",
+                "enum": ["selected"]
+              },
+              "servers": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/AgentMcpServer"
+                },
+                "description": "The apps, in the order the agent's author picked them."
+              }
+            }
+          }
+        ],
+        "description": "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
+      },
+      "AgentSessionFilters": {
+        "type": "object",
+        "description": "Filters for agent sessions.",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Agent session ids to filter by. Empty to include all accessible sessions."
+          },
+          "include": {
+            "type": "boolean",
+            "description": "Opt this query into agent sessions at all. Agent sessions are off by\ndefault — see [`crate::ast::agent_session::AgentSessionLiteral::Include`].\nAsking for specific `ids` or `owners` also opts in."
+          },
+          "owners": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Filter by session owner. Examples: ['macro|user1@user.com']. Empty to\ninclude every owner."
+          }
+        }
+      },
+      "AgentSessionLifecycleEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A session was created.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["agent_session.opened"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/SessionOpenedMetadata",
+                "description": "A session was created."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A prompt was delivered to the runtime.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["agent_session.turn_started"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/TurnStartedMetadata",
+                "description": "A prompt was delivered to the runtime."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The runtime answered a turn.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["agent_session.turn_ended"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/TurnEndedMetadata",
+                "description": "The runtime answered a turn."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A turn ended with nothing queued behind it.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["agent_session.settled"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/SessionSettledMetadata",
+                "description": "A turn ended with nothing queued behind it."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The agent is blocked on a question to its owner.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["agent_session.waiting_for_input"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/WaitingForInputMetadata",
+                "description": "The agent is blocked on a question to its owner."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The question was answered or withdrawn.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["agent_session.input_received"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/InputReceivedMetadata",
+                "description": "The question was answered or withdrawn."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A prompt named other users who can open the session.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["agent_session.mentioned"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/SessionMentionedMetadata",
+                "description": "A prompt named other users who can open the session."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The session's live actor is gone.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["agent_session.stopped"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/SessionStoppedMetadata",
+                "description": "The session's live actor is gone."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The session was renamed.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["agent_session.renamed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/SessionRenamedMetadata",
+                "description": "The session was renamed."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The session was deleted.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["agent_session.deleted"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/SessionDeletedMetadata",
+                "description": "The session was deleted."
+              }
+            }
+          }
+        ],
+        "description": "Events publishable to [`MacroAgentSessionLifecycleTopic`].\n\nThe serde tag and [`AgentSessionLifecycleEventName`] spell the same wire\nnames: subscribers filter on them, so they are API. The\n`event_names_match_the_wire` test holds the two in step. Exhaustive on\npurpose: a consumer's match should break when a variant is added."
       },
       "Anchor": {
         "oneOf": [
@@ -13635,6 +15504,9 @@
         "type": "object",
         "description": "Wire-format entity filter AST accepted by soup AST endpoints.",
         "properties": {
+          "asf": {
+            "description": "Filters applied to agent sessions (wire key `asf`). Like reminders,\nempty/omitted returns **no** agent sessions: they are opt-in, so the\ncaller must send `inc`, an id, or an owner to get any."
+          },
           "calf": {
             "description": "filters applied to canonical calendar events"
           },
@@ -13993,6 +15865,10 @@
         "type": "object",
         "description": "Request to approve a pairing and register the harness.",
         "properties": {
+          "allow_permission_bypass": {
+            "type": "boolean",
+            "description": "Whether agents may bypass ACP permission requests on this harness."
+          },
           "name": {
             "type": ["string", "null"],
             "description": "Display name override. Defaults to the daemon's requested name."
@@ -14003,6 +15879,127 @@
             "description": "Owning team. Omit for a private, user-owned harness."
           }
         }
+      },
+      "AssignTaskStatus": {
+        "type": "string",
+        "description": "Status written onto one assign result.",
+        "enum": [
+          "assigned",
+          "moved",
+          "notATask",
+          "notFound",
+          "skippedNoPermission"
+        ]
+      },
+      "AssignTasksRequest": {
+        "type": "object",
+        "description": "Assign-tasks HTTP body.",
+        "required": ["taskIds"],
+        "properties": {
+          "taskIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Task ids to assign, in request order."
+          }
+        }
+      },
+      "AssignTasksResponse": {
+        "type": "object",
+        "description": "Assign-tasks HTTP response.",
+        "required": ["results"],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssignTasksResult"
+            },
+            "description": "Outcomes in request order after dedupe."
+          }
+        }
+      },
+      "AssignTasksResult": {
+        "type": "object",
+        "description": "Per-task outcome of an assign call.",
+        "required": ["taskId", "status"],
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/AssignTaskStatus",
+            "description": "What happened to the task."
+          },
+          "taskId": {
+            "type": "string",
+            "description": "Task id this outcome describes."
+          }
+        }
+      },
+      "AttachmentChange": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Keep current attachments.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["preserve"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Replace all attachments.",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["replace"]
+              },
+              "value": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/NewAttachment"
+                },
+                "description": "Replace all attachments."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Remove stored attachment identities and append new references.",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["delta"]
+              },
+              "value": {
+                "type": "object",
+                "description": "Remove stored attachment identities and append new references.",
+                "required": ["remove", "add"],
+                "properties": {
+                  "add": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/NewAttachment"
+                    },
+                    "description": "New attachments to append."
+                  },
+                  "remove": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "description": "Existing attachment UUIDs to remove."
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "description": "Attachment changes interpreted by the common command boundary."
       },
       "AttendeeResponseStatus": {
         "type": "string",
@@ -14129,6 +16126,17 @@
               "type": {
                 "type": "string",
                 "enum": ["skill"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The description document of an initiative",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["initiative_description"]
               }
             }
           }
@@ -14300,6 +16308,21 @@
         ],
         "description": "Bot owner."
       },
+      "BotSenderProfile": {
+        "type": "object",
+        "description": "Public bot profile attached to bot-authored messages.",
+        "required": ["name"],
+        "properties": {
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Bot avatar URL."
+          },
+          "name": {
+            "type": "string",
+            "description": "Bot display name."
+          }
+        }
+      },
       "BotToken": {
         "type": "object",
         "description": "Bot token metadata.",
@@ -14424,7 +16447,7 @@
       },
       "CalendarEvent": {
         "type": "object",
-        "description": "A stable, first-class Macro calendar event entity.",
+        "description": "A stable, first-class Macro calendar event entity.\n\nContent fields hold the canonical source's values: the account's primary\ncalendar copy when one is synced, else the freshest remaining copy.",
         "required": [
           "id",
           "ownerId",
@@ -14501,7 +16524,7 @@
           },
           "isReadOnly": {
             "type": "boolean",
-            "description": "Whether the current user can edit the canonical source."
+            "description": "Whether the canonical source's calendar prohibits editing it."
           },
           "location": {
             "type": ["string", "null"],
@@ -14535,6 +16558,13 @@
             "format": "int32",
             "description": "Provider/iCalendar sequence number.",
             "minimum": 0
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CalendarEventSourceContent"
+            },
+            "description": "Content of every active copy of this event, canonical first: the\nprimary calendar's copy, then the freshest. A client picks the copy\nwhose calendar it is showing and falls back to the first. Populated\nonly on the read path, so stored projections omit it."
           },
           "status": {
             "$ref": "#/components/schemas/EventStatus",
@@ -14604,6 +16634,66 @@
               "type": "string"
             },
             "description": "Event statuses such as `confirmed`, `tentative`, or `cancelled`."
+          }
+        }
+      },
+      "CalendarEventSourceContent": {
+        "type": "object",
+        "description": "The content one provider copy of an event carries.\n\nGoogle keeps these fields per calendar copy: a shared calendar's copy of a\nmember's event can have its own title, type, reminders, and access role.\nThe entity holds its canonical source's values. Every other copy's values\nare read from here so a client can show the copy that belongs to the\ncalendar being viewed.",
+        "required": [
+          "calendarId",
+          "title",
+          "eventType",
+          "visibility",
+          "transparency",
+          "isReadOnly",
+          "reminders"
+        ],
+        "properties": {
+          "calendarId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Calendar this copy lives on."
+          },
+          "creatorEmail": {
+            "type": ["string", "null"],
+            "description": "Provider-reported creator email."
+          },
+          "creatorName": {
+            "type": ["string", "null"],
+            "description": "Provider-reported creator display name."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional event body."
+          },
+          "eventType": {
+            "$ref": "#/components/schemas/EventType",
+            "description": "Provider event type."
+          },
+          "isReadOnly": {
+            "type": "boolean",
+            "description": "Whether the calendar's access role prohibits editing this copy."
+          },
+          "location": {
+            "type": ["string", "null"],
+            "description": "Optional physical or virtual location label."
+          },
+          "reminders": {
+            "$ref": "#/components/schemas/EventReminders",
+            "description": "Reminder configuration of this copy."
+          },
+          "title": {
+            "type": "string",
+            "description": "Display title."
+          },
+          "transparency": {
+            "$ref": "#/components/schemas/EventTransparency",
+            "description": "Availability behavior."
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/EventVisibility",
+            "description": "Event visibility."
           }
         }
       },
@@ -14957,7 +17047,7 @@
           },
           "shareWithTeam": {
             "type": "boolean",
-            "description": "Whether the call is shared with the creator's team."
+            "description": "Whether the call is shared with the creator's team. While the call is\nlive this is the pending toggle applied at archive; afterwards it\nmirrors `team_share_access_level`."
           },
           "startedAt": {
             "type": "string",
@@ -14978,6 +17068,17 @@
           "summary": {
             "type": ["string", "null"],
             "description": "AI-generated summary of the call. Only set on archived `call_records`\nonce summarization has run; active calls always return `None`."
+          },
+          "teamShareAccessLevel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "The canonical access level granted to the creator's team, or `None`\nwhen the call is not shared with the team. Calls only ever grant\n`View`, and only once archived: while the call is live this is `None`\nand `share_with_team` carries the pending toggle."
+              }
+            ]
           },
           "transcript": {
             "type": "array",
@@ -15605,6 +17706,11 @@
             "format": "date-time",
             "description": "When set, only return top-level messages created at or after this timestamp."
           },
+          "created_after_exclusive": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When set, only return top-level messages created strictly after this timestamp."
+          },
           "created_before": {
             "type": ["string", "null"],
             "format": "date-time",
@@ -15908,6 +18014,11 @@
           "channel_type": {
             "$ref": "#/components/schemas/ChannelType",
             "description": "Channel type."
+          },
+          "profile_picture_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Static image file used as the channel's profile picture, when accessible."
           }
         }
       },
@@ -16362,7 +18473,9 @@
                   "crm_contact",
                   "reminder",
                   "skill",
-                  "agent_session"
+                  "agent_session",
+                  "scheduled_action",
+                  "initiative"
                 ]
               }
             ],
@@ -16493,6 +18606,24 @@
           }
         }
       },
+      "CountedReaction": {
+        "type": "object",
+        "description": "Reaction emoji and the users who added it.",
+        "required": ["emoji", "users"],
+        "properties": {
+          "emoji": {
+            "type": "string",
+            "description": "Emoji being reacted with."
+          },
+          "users": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "User identifiers."
+          }
+        }
+      },
       "CreateAgentRequest": {
         "type": "object",
         "description": "Request to create a persisted AI agent.",
@@ -16505,6 +18636,10 @@
           "channel_scope"
         ],
         "properties": {
+          "auto_accept_permissions": {
+            "type": ["boolean", "null"],
+            "description": "Whether the agent's sessions approve ACP permission requests without\nasking. Omit to always prompt."
+          },
           "avatar_url": {
             "type": ["string", "null"],
             "description": "Optional avatar URL or data URL."
@@ -16551,6 +18686,10 @@
           "instructions": {
             "type": "string",
             "description": "Instructions supplied to the agent at the start of a conversation."
+          },
+          "mcp": {
+            "$ref": "#/components/schemas/AgentMcpServers",
+            "description": "Which MCP servers sessions of this agent are handed."
           },
           "name": {
             "type": "string",
@@ -17025,6 +19164,32 @@
           }
         }
       },
+      "CreateInitiativeRequest": {
+        "type": "object",
+        "description": "Create-initiative HTTP body.",
+        "required": ["name"],
+        "properties": {
+          "description": {
+            "type": ["string", "null"],
+            "description": "Initial markdown for the description document. Not stored on the initiative; later\nedits happen in the document editor."
+          },
+          "memberIds": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional member user ids. Invalid ids fail at the service boundary."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "shareWithTeam": {
+            "type": ["boolean", "null"],
+            "description": "When true, share with the owner's team at create time."
+          }
+        }
+      },
       "CreateInstructionsDocumentResponse": {
         "type": "object",
         "required": ["documentId"],
@@ -17082,6 +19247,10 @@
         "description": "Request to open a pairing: the daemon asks for a code the user approves.\n\nThe daemon serializes this, so both derives are used.",
         "required": ["name"],
         "properties": {
+          "allow_permission_bypass": {
+            "type": ["boolean", "null"],
+            "description": "Daemon operator consent ceiling. Omitted by older clients; web approval decides."
+          },
           "host": {
             "type": ["string", "null"],
             "description": "Display-only description of the machine, e.g. `eric@macbook / darwin`."
@@ -17170,7 +19339,9 @@
                   "crm_contact",
                   "reminder",
                   "skill",
-                  "agent_session"
+                  "agent_session",
+                  "scheduled_action",
+                  "initiative"
                 ]
               }
             ],
@@ -17830,6 +20001,57 @@
         "description": "Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.",
         "enum": ["admin", "owner"]
       },
+      "CrmStageInput": {
+        "type": "object",
+        "description": "One stage in a `PUT /crm/stages` body.",
+        "required": ["label"],
+        "properties": {
+          "id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Existing stage to keep; omit to add one."
+          },
+          "label": {
+            "type": "string",
+            "description": "Label after the update; non-blank and unique within the set."
+          }
+        }
+      },
+      "CrmStageResponse": {
+        "type": "object",
+        "description": "One stage of the team's custom pipeline.",
+        "required": ["id", "label"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Property option id companies carry as their stage value."
+          },
+          "label": {
+            "type": "string",
+            "description": "Label."
+          }
+        }
+      },
+      "CrmStagesResponse": {
+        "type": "object",
+        "description": "The team's custom stage set.",
+        "required": ["definition_id", "stages"],
+        "properties": {
+          "definition_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Team-scoped stage definition id."
+          },
+          "stages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CrmStageResponse"
+            },
+            "description": "Stages in pipeline order."
+          }
+        }
+      },
       "CrmTeamSettingsResponse": {
         "type": "object",
         "description": "The team's CRM configuration (everything on `team_crm_settings`\nexcept the `crm_enabled` killswitch, which is managed via\n`PATCH /team/crm` on the auth service).",
@@ -17837,6 +20059,7 @@
           "edit_stages_role",
           "move_closed_deals_role",
           "delete_records_role",
+          "legacy_stage_ids",
           "team_views"
         ],
         "properties": {
@@ -17859,6 +20082,18 @@
           "edit_stages_role": {
             "$ref": "#/components/schemas/CrmPermissionRole",
             "description": "Who can change the deal stage set in CRM settings."
+          },
+          "legacy_stage_ids": {
+            "type": "object",
+            "description": "System stage option id to team stage option id for seeded stages.",
+            "additionalProperties": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "propertyNames": {
+              "type": "string",
+              "format": "uuid"
+            }
           },
           "move_closed_deals_role": {
             "$ref": "#/components/schemas/CrmPermissionRole",
@@ -18118,6 +20353,11 @@
             }
           }
         ]
+      },
+      "DescriptionDocumentId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "Id of the markdown document that holds an initiative's description."
       },
       "DocumentBasic": {
         "type": "object",
@@ -18449,6 +20689,10 @@
           }
         }
       },
+      "DocumentId": {
+        "type": "string",
+        "description": "A validated document identifier. Historical document ids need not be UUIDs."
+      },
       "DocumentInteractionMetadata": {
         "type": "object",
         "description": "Metadata for [`DocumentTopicEvent::Interaction`].",
@@ -18772,6 +21016,17 @@
                 "enum": ["skill"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "The description document of an initiative",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["initiative_description"]
+              }
+            }
           }
         ],
         "description": "The sub type of a document preview with associated properties.\nTask-related properties are encoded within the variant to ensure valid states."
@@ -18918,8 +21173,8 @@
       },
       "DocumentSubType": {
         "type": "string",
-        "description": "The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.",
-        "enum": ["task", "snippet", "skill"]
+        "description": "The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.\n\nWire, database, and `Display` spellings are all `snake_case` so a\nmulti-word variant serializes identically in every system.",
+        "enum": ["task", "snippet", "skill", "initiative_description"]
       },
       "DocumentSyncContentUpdatedMetadata": {
         "type": "object",
@@ -18962,7 +21217,7 @@
         "properties": {
           "sharedWithTeam": {
             "type": "boolean",
-            "description": "Whether the document is currently shared with the owner's team."
+            "description": "Whether explicit team sharing is enabled; inherited team access does not count."
           },
           "teamId": {
             "type": ["string", "null"],
@@ -19203,7 +21458,7 @@
       },
       "EditCallRecordRequest": {
         "type": "object",
-        "description": "Edit call request",
+        "description": "Edit call request, as supplied by inbound callers.",
         "properties": {
           "customName": {
             "type": ["string", "null"],
@@ -19216,13 +21471,13 @@
               },
               {
                 "$ref": "#/components/schemas/UpdateSharePermissionRequestV2",
-                "description": "Updated share permissions."
+                "description": "Updated share permissions. `teamShareAccessLevel` shares the call with\nthe creator's team and only accepts `view` or `null` (revoke). While\nthe call is live it sets the pending share-with-team toggle, which is\napplied when the call is archived; afterwards only the call's creator\nmay change it."
               }
             ]
           },
           "shareWithTeam": {
             "type": ["boolean", "null"],
-            "description": "If `Some(true)`, grant the creator's team View access on the call.\nIf `Some(false)`, revoke the creator's team's access. `None` is a no-op.\nThe team is resolved from the call's `created_by`, not the acting user."
+            "description": "Deprecated alias for `sharePermission.teamShareAccessLevel`:\n`Some(true)` behaves like `\"view\"`, `Some(false)` like `null`, and\n`None` is a no-op. Supplying both with disagreeing values is rejected.\nThe team is resolved from the call's `created_by`, not the acting user."
           }
         }
       },
@@ -19495,6 +21750,10 @@
             },
             "description": "Only include emails that have at least one of these labels. Supports both Gmail system labels (e.g. \"INBOX\", \"CATEGORY_PROMOTIONS\") and user-created labels (e.g. \"github\"). Empty to not filter by included labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter."
           },
+          "is_read": {
+            "type": ["boolean", "null"],
+            "description": "Filter by the email thread's read flag, independently of notification state."
+          },
           "link_ids": {
             "type": "array",
             "items": {
@@ -19572,7 +21831,9 @@
                   "crm_contact",
                   "reminder",
                   "skill",
-                  "agent_session"
+                  "agent_session",
+                  "scheduled_action",
+                  "initiative"
                 ]
               }
             ],
@@ -19584,6 +21845,10 @@
         "type": "object",
         "description": "a bundle of all of the filters for each entity type",
         "properties": {
+          "agent_session_filters": {
+            "$ref": "#/components/schemas/AgentSessionFilters",
+            "description": "the bundled [AgentSessionFilters]"
+          },
           "calendar_event_filters": {
             "$ref": "#/components/schemas/CalendarEventFilters",
             "description": "the bundled [CalendarEventFilters]"
@@ -19979,7 +22244,9 @@
                   "crm_contact",
                   "reminder",
                   "skill",
-                  "agent_session"
+                  "agent_session",
+                  "scheduled_action",
+                  "initiative"
                 ]
               }
             ],
@@ -20027,7 +22294,9 @@
                   "crm_contact",
                   "reminder",
                   "skill",
-                  "agent_session"
+                  "agent_session",
+                  "scheduled_action",
+                  "initiative"
                 ]
               }
             ],
@@ -20098,6 +22367,7 @@
           "docx",
           "pdf",
           "md",
+          "spreadsheet",
           "canvas",
           "coffee",
           "cson",
@@ -21575,6 +23845,10 @@
           "connected"
         ],
         "properties": {
+          "allow_permission_bypass": {
+            "type": "boolean",
+            "description": "Whether agents may bypass ACP permission requests on this harness."
+          },
           "connected": {
             "type": "boolean",
             "description": "Whether the daemon currently holds a runtime connection."
@@ -21782,6 +24056,180 @@
       "HighlightType": {
         "type": "integer",
         "enum": [1, 2, 3]
+      },
+      "ImportedAuthor": {
+        "type": "object",
+        "description": "Display attribution for a comment imported from an external document.",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Original author text; never interpreted as an authenticated principal."
+          }
+        }
+      },
+      "InFlightTurnSummary": {
+        "type": "object",
+        "description": "A turn the runtime never answered: the session stopped underneath it.",
+        "required": ["turn", "action_id"],
+        "properties": {
+          "action_id": {
+            "$ref": "#/components/schemas/AgentActionId",
+            "description": "The action that opened the turn."
+          },
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "User who prompted it, absent when a bot acted on nobody's behalf."
+              }
+            ]
+          },
+          "announcement_message_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The magic-chip message posted for this turn, when one was."
+          },
+          "turn": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Position in the session's log.",
+            "minimum": 0
+          }
+        }
+      },
+      "InitiativeDetail": {
+        "type": "object",
+        "description": "Full initiative returned to a caller, including members, tasks, and share state.",
+        "required": [
+          "id",
+          "name",
+          "descriptionDocumentId",
+          "ownerId",
+          "memberIds",
+          "taskIds",
+          "sharePermission",
+          "userAccessLevel",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the initiative was created."
+          },
+          "descriptionDocumentId": {
+            "$ref": "#/components/schemas/DescriptionDocumentId",
+            "description": "The markdown document holding the description; open it in the editor."
+          },
+          "id": {
+            "$ref": "#/components/schemas/InitiativeId",
+            "description": "Opaque identifier."
+          },
+          "memberIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MacroUserIdStr"
+            },
+            "description": "Member user ids. The owner is never stored here."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "ownerId": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "Owner of the initiative."
+          },
+          "sharePermission": {
+            "$ref": "#/components/schemas/SharePermissionV2",
+            "description": "Current share permission."
+          },
+          "taskIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Task ids currently assigned to the initiative."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the initiative was last updated."
+          },
+          "userAccessLevel": {
+            "$ref": "#/components/schemas/AccessLevel",
+            "description": "Caller's access level on this initiative."
+          }
+        }
+      },
+      "InitiativeId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "Opaque identifier for an initiative. Minted as UUIDv7 in application code."
+      },
+      "InitiativeList": {
+        "type": "object",
+        "description": "Accessible-initiative list.",
+        "required": ["initiatives"],
+        "properties": {
+          "initiatives": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InitiativeSummary"
+            },
+            "description": "Initiatives the caller can view."
+          }
+        }
+      },
+      "InitiativeSummary": {
+        "type": "object",
+        "description": "List-row view of an initiative.",
+        "required": ["id", "name", "descriptionDocumentId", "updatedAt"],
+        "properties": {
+          "descriptionDocumentId": {
+            "$ref": "#/components/schemas/DescriptionDocumentId",
+            "description": "The markdown document holding the description; open it in the editor."
+          },
+          "id": {
+            "$ref": "#/components/schemas/InitiativeId",
+            "description": "Opaque identifier."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the initiative was last updated."
+          }
+        }
+      },
+      "InputReceivedMetadata": {
+        "type": "object",
+        "description": "The pending question was answered or withdrawn.",
+        "required": ["identity", "turn", "action_id"],
+        "properties": {
+          "action_id": {
+            "$ref": "#/components/schemas/AgentActionId",
+            "description": "The action that opened the turn."
+          },
+          "identity": {
+            "$ref": "#/components/schemas/SessionIdentity",
+            "description": "The session."
+          },
+          "turn": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The turn that was asking.",
+            "minimum": 0
+          }
+        }
       },
       "InteractionReason": {
         "type": "string",
@@ -21999,6 +24447,576 @@
           }
         }
       },
+      "Message": {
+        "type": "object",
+        "description": "Shared message representation for channel timelines and entity discussions.",
+        "required": [
+          "id",
+          "parent",
+          "sender_id",
+          "mentions",
+          "content",
+          "created_at",
+          "updated_at",
+          "attachments",
+          "reactions"
+        ],
+        "properties": {
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MessageAttachment"
+            },
+            "description": "Attached entities."
+          },
+          "bot_profile": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BotSenderProfile",
+                "description": "Public bot name and avatar for rendering shared message authors."
+              }
+            ]
+          },
+          "content": {
+            "type": "string",
+            "description": "Macro Markdown body."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation time."
+          },
+          "deleted_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Message tombstone, independent of thread deletion."
+          },
+          "edited_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Last content edit, if any."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Message UUID."
+          },
+          "imported_author": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ImportedAuthor",
+                "description": "Original external author, when imported."
+              }
+            ]
+          },
+          "mentions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SimpleMention"
+            },
+            "description": "Tracked mentions, retained when a caller changes attachments only."
+          },
+          "parent": {
+            "$ref": "#/components/schemas/MessageParent",
+            "description": "Entity that owns this conversation."
+          },
+          "reactions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CountedReaction"
+            },
+            "description": "Aggregated reactions."
+          },
+          "sender_id": {
+            "type": "string",
+            "description": "Authenticated actor or owner of imported content."
+          },
+          "thread_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Root message UUID for replies; absent on roots."
+          },
+          "triggered_by": {
+            "type": ["string", "null"],
+            "description": "User who triggered a bot-authored message."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last persisted update."
+          }
+        }
+      },
+      "MessageAttachment": {
+        "type": "object",
+        "description": "An entity attached to a message.",
+        "required": ["id", "entity_type", "entity_id", "created_at"],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the attachment was added."
+          },
+          "entity_id": {
+            "type": "string",
+            "description": "Attached entity identifier."
+          },
+          "entity_type": {
+            "type": "string",
+            "description": "Attached entity type."
+          },
+          "height": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Optional media height."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Attachment UUID."
+          },
+          "width": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Optional media width."
+          }
+        }
+      },
+      "MessageChange": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A message was posted.",
+            "required": ["notification_policy", "message", "mentions", "type"],
+            "properties": {
+              "mentions": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SimpleMention"
+                },
+                "description": "Mentions included in this post."
+              },
+              "message": {
+                "$ref": "#/components/schemas/Message",
+                "description": "Persisted message."
+              },
+              "notification_policy": {
+                "$ref": "#/components/schemas/PostMessageNotificationPolicy",
+                "description": "Trusted notification policy carried with the committed change."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["posted"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Message content and references were edited.",
+            "required": [
+              "notification_policy",
+              "message",
+              "mentions",
+              "previous_attachments",
+              "type"
+            ],
+            "properties": {
+              "mentions": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SimpleMention"
+                },
+                "description": "Complete replacement mention set."
+              },
+              "message": {
+                "$ref": "#/components/schemas/Message",
+                "description": "Persisted replacement message."
+              },
+              "notification_policy": {
+                "$ref": "#/components/schemas/PatchMessageNotificationPolicy",
+                "description": "Trusted notification policy for the edited content."
+              },
+              "previous_attachments": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/MessageAttachment"
+                },
+                "description": "Attachment identities before the edit, for channel change delivery."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["edited"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "One message was tombstoned; its thread may remain live.",
+            "required": ["message", "type"],
+            "properties": {
+              "message": {
+                "$ref": "#/components/schemas/Message",
+                "description": "Persisted tombstone."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["message_deleted"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The authenticated actor added or removed a reaction.",
+            "required": ["message", "type"],
+            "properties": {
+              "message": {
+                "$ref": "#/components/schemas/Message",
+                "description": "Persisted message."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["reaction_changed"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Thread resolution, placement, or deletion changed.",
+            "required": ["state", "type"],
+            "properties": {
+              "state": {
+                "$ref": "#/components/schemas/ThreadState",
+                "description": "Persisted thread state."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["thread_updated"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Transient typing indication.",
+            "required": ["active", "type"],
+            "properties": {
+              "active": {
+                "type": "boolean",
+                "description": "Whether the user is currently typing."
+              },
+              "thread_id": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "Root being replied to, or no root for the parent composer."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["typing"]
+              }
+            }
+          }
+        ],
+        "description": "Kind of message change; notification policy only runs for posted messages."
+      },
+      "MessageCursor": {
+        "type": "object",
+        "description": "Cursor for a chronological parent timeline.",
+        "required": ["created_at", "id"],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last root creation time."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Last root UUID, used to break timestamp ties."
+          }
+        }
+      },
+      "MessageDirection": {
+        "type": "string",
+        "description": "Direction through a parent timeline, retaining channel cursor semantics.",
+        "enum": ["older", "newer"]
+      },
+      "MessageEvent": {
+        "type": "object",
+        "description": "A committed message or thread change sent to delivery adapters.",
+        "required": ["parent", "actor", "change"],
+        "properties": {
+          "actor": {
+            "type": "string",
+            "description": "User or bot who initiated the operation."
+          },
+          "change": {
+            "$ref": "#/components/schemas/MessageChange",
+            "description": "Persisted change."
+          },
+          "nonce": {
+            "type": ["string", "null"],
+            "description": "Mutation nonce for optimistic reconciliation."
+          },
+          "parent": {
+            "$ref": "#/components/schemas/MessageParent",
+            "description": "Changed parent, used for subscriptions and cache invalidation."
+          }
+        }
+      },
+      "MessageListItem": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Message",
+            "description": "The same canonical message returned by item reads and writes."
+          },
+          {
+            "type": "object",
+            "required": ["state", "thread"],
+            "properties": {
+              "state": {
+                "$ref": "#/components/schemas/ThreadState",
+                "description": "Thread metadata, independent of the first message's lifecycle."
+              },
+              "thread": {
+                "$ref": "#/components/schemas/MessageThreadPreview",
+                "description": "Bounded reply preview; full replies load on expansion."
+              }
+            }
+          }
+        ],
+        "description": "Root message with its small thread preview, independent of its parent type."
+      },
+      "MessagePage": {
+        "type": "object",
+        "description": "Bidirectional, bounded timeline page, ordered newest root first.",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MessageListItem"
+            },
+            "description": "Root messages with bounded previews."
+          },
+          "next_cursor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MessageCursor",
+                "description": "Continue to older roots."
+              }
+            ]
+          },
+          "previous_cursor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MessageCursor",
+                "description": "Continue to newer roots."
+              }
+            ]
+          }
+        }
+      },
+      "MessageParent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A channel, including direct messages.",
+            "required": ["id", "type"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "A channel, including direct messages."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["channel"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A document, including tasks and PDFs.",
+            "required": ["id", "type"],
+            "properties": {
+              "id": {
+                "$ref": "#/components/schemas/DocumentId",
+                "description": "A document, including tasks and PDFs."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["document"]
+              }
+            }
+          }
+        ],
+        "description": "The entity whose permissions and lifecycle govern a message."
+      },
+      "MessagePatch": {
+        "type": "object",
+        "description": "Partial updates share the same authorship, reference, and delivery rules as edits.",
+        "properties": {
+          "attachments": {
+            "$ref": "#/components/schemas/AttachmentChange",
+            "description": "Attachment change, without adapter-side message reads."
+          },
+          "content": {
+            "type": ["string", "null"],
+            "description": "Replacement body; absent preserves current content."
+          },
+          "mentions": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/SimpleMention"
+            },
+            "description": "Replacement authored mentions; absent preserves current mentions."
+          },
+          "nonce": {
+            "type": ["string", "null"],
+            "description": "Client mutation nonce."
+          }
+        }
+      },
+      "MessageThread": {
+        "type": "object",
+        "description": "A discussion with its root and ordered replies, including root tombstones.",
+        "required": ["state", "root", "replies"],
+        "properties": {
+          "replies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            },
+            "description": "Replies in display order."
+          },
+          "root": {
+            "$ref": "#/components/schemas/Message",
+            "description": "Root message, which may be a tombstone."
+          },
+          "state": {
+            "$ref": "#/components/schemas/ThreadState",
+            "description": "Shared thread lifecycle and anchor state."
+          }
+        }
+      },
+      "MessageThreadPreview": {
+        "type": "object",
+        "description": "Thread counts and its oldest three live replies.",
+        "required": ["reply_count", "preview"],
+        "properties": {
+          "latest_reply_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Creation time of the latest live reply."
+          },
+          "preview": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            },
+            "description": "Bounded preview using the canonical message shape."
+          },
+          "reply_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total live reply count."
+          }
+        }
+      },
+      "MessageTimelineQuery": {
+        "type": "object",
+        "description": "Root selection shared by channel timelines and document discussions.",
+        "properties": {
+          "activity_after": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Include roots or live replies created at or after this time."
+          },
+          "activity_before": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Include roots or live replies created before this time."
+          },
+          "anchored": {
+            "type": ["boolean", "null"],
+            "description": "Select anchored or unanchored roots; absent includes both."
+          },
+          "around": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Center on the root containing this message."
+          },
+          "cursor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MessageCursor",
+                "description": "Stable creation-time and UUID cursor."
+              }
+            ]
+          },
+          "direction": {
+            "$ref": "#/components/schemas/MessageDirection",
+            "description": "Which side of the cursor to fetch."
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Restrict roots to this set, for selected source threads."
+          },
+          "include_deleted_threads": {
+            "type": "boolean",
+            "description": "Include whole-thread tombstones when reconciling persisted document marks."
+          },
+          "limit": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Page size, clamped by the application to 1..=100.",
+            "minimum": 0
+          }
+        }
+      },
+      "NewAttachment": {
+        "type": "object",
+        "description": "An attachment to add to a message.",
+        "required": ["entity_type", "entity_id"],
+        "properties": {
+          "entity_id": {
+            "type": "string",
+            "description": "Attached entity identifier."
+          },
+          "entity_type": {
+            "type": "string",
+            "description": "Attached entity type."
+          },
+          "height": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Optional media height."
+          },
+          "width": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Optional media width."
+          }
+        }
+      },
       "NewChannelAttachment": {
         "type": "object",
         "description": "New attachment to add to a channel message.",
@@ -22024,19 +25042,110 @@
           }
         }
       },
+      "NewThreadAnchor": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Attach a discussion to a stable Markdown mark.",
+            "required": ["mark_id", "type"],
+            "properties": {
+              "mark_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Serialized mark identifier."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["markdown"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Attach an independently existing highlight on this document.",
+            "required": ["anchor_id", "type"],
+            "properties": {
+              "anchor_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Highlight annotation identifier."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["pdf_highlight"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Atomically create a placeable annotation with the root message.",
+            "required": [
+              "anchor_id",
+              "page",
+              "x_pct",
+              "y_pct",
+              "width_pct",
+              "height_pct",
+              "type"
+            ],
+            "properties": {
+              "anchor_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Client-generated annotation identifier used by optimistic rendering."
+              },
+              "height_pct": {
+                "type": "number",
+                "format": "double",
+                "description": "Height as a fraction of the page height."
+              },
+              "page": {
+                "type": "integer",
+                "format": "int32",
+                "description": "PDF page number."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["pdf_placeable"]
+              },
+              "width_pct": {
+                "type": "number",
+                "format": "double",
+                "description": "Width as a fraction of the page width."
+              },
+              "x_pct": {
+                "type": "number",
+                "format": "double",
+                "description": "Horizontal position as a fraction of the page width."
+              },
+              "y_pct": {
+                "type": "number",
+                "format": "double",
+                "description": "Vertical position as a fraction of the page height."
+              }
+            }
+          }
+        ],
+        "description": "Location supplied when creating a document discussion."
+      },
       "NotificationFilters": {
         "type": "object",
-        "description": "Notification state filters for channel message queries.",
+        "description": "Notification-level filters that apply to an entity type.",
         "properties": {
-          "done": {
-            "type": ["boolean", "null"],
-            "description": "Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications."
-          },
-          "seen": {
-            "type": ["boolean", "null"],
-            "description": "Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications."
+          "states": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationState"
+            },
+            "description": "Include entities with a non-deleted notification in any of these exact states.\nEmpty means no notification restriction. Active means `[unseen, seen]`."
           }
-        }
+        },
+        "additionalProperties": false
+      },
+      "NotificationState": {
+        "type": "string",
+        "description": "The mutually exclusive lifecycle states of a user's notification.",
+        "enum": ["unseen", "seen", "done"]
       },
       "PairingDetails": {
         "type": "object",
@@ -22060,6 +25169,10 @@
           "host": {
             "type": ["string", "null"],
             "description": "Display-only description of the machine."
+          },
+          "requested_allow_permission_bypass": {
+            "type": ["boolean", "null"],
+            "description": "Daemon operator consent ceiling; false forbids bypass at approval."
           },
           "requested_name": {
             "type": "string",
@@ -22164,6 +25277,11 @@
             "description": "Sets whether the channel is a team channel.\n\n`true` converts a non-team channel to a team channel, while `false`\nconverts a team channel to a private channel."
           }
         }
+      },
+      "PatchMessageNotificationPolicy": {
+        "type": "string",
+        "description": "Internal notification behavior for a patched channel message.",
+        "enum": ["Default", "NotifyAsPostedMessage"]
       },
       "PatchMessageRequest": {
         "type": "object",
@@ -22485,6 +25603,10 @@
             "type": "integer",
             "format": "int32"
           },
+          "rootId": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
           "text": {
             "type": "string"
           },
@@ -22617,7 +25739,6 @@
           "uuid",
           "documentId",
           "owner",
-          "threadId",
           "page",
           "originalPage",
           "originalIndex",
@@ -22654,6 +25775,10 @@
             "type": "integer",
             "format": "int32"
           },
+          "rootId": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
           "rotation": {
             "type": "number",
             "format": "double"
@@ -22662,7 +25787,7 @@
             "type": "boolean"
           },
           "threadId": {
-            "type": "integer",
+            "type": ["integer", "null"],
             "format": "int64"
           },
           "uuid": {
@@ -22876,6 +26001,56 @@
           }
         ],
         "description": "Request body for grouped soup queries with AST filters."
+      },
+      "PostMessage": {
+        "type": "object",
+        "description": "Create a root or reply. Thread state may only be supplied on a root.",
+        "required": ["content"],
+        "properties": {
+          "anchor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NewThreadAnchor",
+                "description": "Optional document location for a new discussion."
+              }
+            ]
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NewAttachment"
+            },
+            "description": "Initial attachments."
+          },
+          "content": {
+            "type": "string",
+            "description": "Macro Markdown body."
+          },
+          "mentions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SimpleMention"
+            },
+            "description": "Mentions tracked by the editor."
+          },
+          "nonce": {
+            "type": ["string", "null"],
+            "description": "Client nonce for optimistic reconciliation."
+          },
+          "thread_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Root to reply to, if this is a reply."
+          }
+        }
+      },
+      "PostMessageNotificationPolicy": {
+        "type": "string",
+        "description": "Internal notification behavior for a posted channel message.",
+        "enum": ["Default", "MentionsOnly", "Silent"]
       },
       "PostMessageRequest": {
         "type": "object",
@@ -23525,6 +26700,25 @@
         "description": "Reaction mutation action.",
         "enum": ["Add", "Remove"]
       },
+      "ReactionInput": {
+        "type": "object",
+        "description": "Reaction mutation for the authenticated user.",
+        "required": ["emoji", "add"],
+        "properties": {
+          "add": {
+            "type": "boolean",
+            "description": "Add when true, remove when false."
+          },
+          "emoji": {
+            "type": "string",
+            "description": "Emoji."
+          },
+          "nonce": {
+            "type": ["string", "null"],
+            "description": "Client nonce."
+          }
+        }
+      },
       "RecentlyDeletedResponseData": {
         "type": "object",
         "required": ["items"],
@@ -23535,6 +26729,55 @@
               "$ref": "#/components/schemas/Item"
             },
             "description": "The items returned from the call"
+          }
+        }
+      },
+      "ReferencedThread": {
+        "type": "object",
+        "description": "A source channel thread that mentions the requested document.",
+        "required": ["parent", "root_id", "can_reply"],
+        "properties": {
+          "can_reply": {
+            "type": "boolean",
+            "description": "Whether this viewer currently has permission to reply in the source channel."
+          },
+          "channel_name": {
+            "type": ["string", "null"],
+            "description": "Source channel's current display name, returned only after access checks."
+          },
+          "parent": {
+            "$ref": "#/components/schemas/MessageParent",
+            "description": "Source parent used by the common message reader and mutations."
+          },
+          "root_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Source root identity; discovery does not copy its message content."
+          }
+        }
+      },
+      "ReferencedThreadPage": {
+        "type": "object",
+        "description": "Authorized source threads, deduplicated by root.",
+        "required": ["threads"],
+        "properties": {
+          "next_cursor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MessageCursor",
+                "description": "Last visible root; no private thread identifiers are exposed through cursors."
+              }
+            ]
+          },
+          "threads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReferencedThread"
+            },
+            "description": "Accessible channel discussions mentioning the document."
           }
         }
       },
@@ -23598,7 +26841,9 @@
                   "crm_contact",
                   "reminder",
                   "skill",
-                  "agent_session"
+                  "agent_session",
+                  "scheduled_action",
+                  "initiative"
                 ]
               }
             ],
@@ -23762,6 +27007,20 @@
           }
         }
       },
+      "ReplaceCrmStagesRequest": {
+        "type": "object",
+        "description": "Request body for `PUT /crm/stages`: the whole stage set in order.",
+        "required": ["stages"],
+        "properties": {
+          "stages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CrmStageInput"
+            },
+            "description": "Stages first to last."
+          }
+        }
+      },
       "RequestedHarnessScope": {
         "type": "string",
         "description": "The ownership scope a daemon's config asks for.\n\nAdvisory, not binding: the approving user confirms it in the dialog, which\narrives preselected to this. Approval is what actually sets ownership.",
@@ -23853,6 +27112,191 @@
           "presignedUrl": {
             "type": ["string", "null"],
             "description": "If the document is an editable file, we provide a presigned url to save the updated file to."
+          }
+        }
+      },
+      "SessionDeletedMetadata": {
+        "type": "object",
+        "description": "The session was deleted.",
+        "required": ["identity"],
+        "properties": {
+          "identity": {
+            "$ref": "#/components/schemas/SessionIdentity",
+            "description": "The session as it was."
+          }
+        }
+      },
+      "SessionIdentity": {
+        "type": "object",
+        "description": "Who and what a session is; carried by every lifecycle event so a\nconsumer never has to look the session up.",
+        "required": [
+          "session_id",
+          "session_name",
+          "bot_id",
+          "bot_name",
+          "owner_id"
+        ],
+        "properties": {
+          "audience": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MacroUserIdStr"
+            },
+            "description": "Everyone with a stake in what happens next: the owner plus every user\nwho has prompted or answered this session. Resolved by the emitter so\na consumer fanning out never has to read the session's log."
+          },
+          "bot_id": {
+            "$ref": "#/components/schemas/BotId",
+            "description": "Bot the session runs for."
+          },
+          "bot_name": {
+            "type": "string",
+            "description": "The bot's display name at the time of the event."
+          },
+          "origin": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ThreadOrigin",
+                "description": "Thread the session was opened from, when it was."
+              }
+            ]
+          },
+          "owner_id": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "User who owns the session."
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The session."
+          },
+          "session_name": {
+            "type": "string",
+            "description": "User-facing session name at the time of the event."
+          }
+        }
+      },
+      "SessionMentionedMetadata": {
+        "type": "object",
+        "description": "A prompt named other users who can open the session. Published when the\nprompt is accepted, not when it is answered: \"come look at this\" should\nnot wait for the turn.",
+        "required": ["identity", "action_id", "mentioned"],
+        "properties": {
+          "action_id": {
+            "$ref": "#/components/schemas/AgentActionId",
+            "description": "The action carrying the prompt."
+          },
+          "identity": {
+            "$ref": "#/components/schemas/SessionIdentity",
+            "description": "The session."
+          },
+          "mentioned": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MacroUserIdStr"
+            },
+            "description": "The users named, already narrowed to those who can open the session\nand never including the author."
+          },
+          "mentioned_by": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "Who wrote the prompt, absent when a bot acted on nobody's behalf."
+              }
+            ]
+          }
+        }
+      },
+      "SessionOpenedMetadata": {
+        "type": "object",
+        "description": "A session was created.",
+        "required": ["identity", "model", "harness"],
+        "properties": {
+          "harness": {
+            "type": "string",
+            "description": "Harness slug the session runs on."
+          },
+          "identity": {
+            "$ref": "#/components/schemas/SessionIdentity",
+            "description": "The session."
+          },
+          "model": {
+            "type": "string",
+            "description": "Model slug the session runs with."
+          }
+        }
+      },
+      "SessionRenamedMetadata": {
+        "type": "object",
+        "description": "The session was renamed; `identity` carries the new name.",
+        "required": ["identity"],
+        "properties": {
+          "identity": {
+            "$ref": "#/components/schemas/SessionIdentity",
+            "description": "The session, with its new name."
+          }
+        }
+      },
+      "SessionSettledMetadata": {
+        "type": "object",
+        "description": "A turn ended and nothing is queued: the agent has stopped working.",
+        "required": ["identity"],
+        "properties": {
+          "identity": {
+            "$ref": "#/components/schemas/SessionIdentity",
+            "description": "The session."
+          },
+          "last_turn": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TurnSummary",
+                "description": "The turn that just ended, when the emitter still had its record."
+              }
+            ]
+          }
+        }
+      },
+      "SessionStoppedMetadata": {
+        "type": "object",
+        "description": "The session's live actor is gone: idle teardown, transport loss, or crash.",
+        "required": ["identity", "reason"],
+        "properties": {
+          "identity": {
+            "$ref": "#/components/schemas/SessionIdentity",
+            "description": "The session."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why it stopped, as the session machine reported it."
+          },
+          "turn_in_flight": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InFlightTurnSummary",
+                "description": "The turn that was running when it stopped, if any."
+              }
+            ]
+          }
+        }
+      },
+      "SetChannelPictureRequest": {
+        "type": "object",
+        "description": "Replace a channel's picture, or remove it by sending a null file id.",
+        "properties": {
+          "profile_picture_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Static image file id; null restores the default channel icon."
           }
         }
       },
@@ -24120,6 +27564,17 @@
           "owner": {
             "type": "string",
             "description": "The owner of the item"
+          },
+          "teamShareAccessLevel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "The explicit access level granted to the owner's team, or `null` when disabled."
+              }
+            ]
           }
         }
       },
@@ -24141,18 +27596,93 @@
       },
       "SimpleMention": {
         "type": "object",
-        "description": "Simple entity mention attached to a message.",
+        "description": "A mention tracked in a message body.",
         "required": ["entity_type", "entity_id"],
         "properties": {
           "entity_id": {
             "type": "string",
-            "description": "Mentioned entity id."
+            "description": "Mentioned entity identifier."
           },
           "entity_type": {
             "type": "string",
             "description": "Mentioned entity type."
           }
         }
+      },
+      "SoupAgentSession_SoupPropertiesField": {
+        "allOf": [
+          {
+            "type": "object",
+            "description": "Property fields that can be flattened into property-bearing Soup items.",
+            "required": ["properties"],
+            "properties": {
+              "properties": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Properties attached to the entity."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "ownerId",
+              "botId",
+              "status",
+              "createdAt",
+              "updatedAt"
+            ],
+            "properties": {
+              "botId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The bot running this session"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "The time the session was created"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The agent session uuid"
+              },
+              "name": {
+                "type": "string",
+                "description": "The user-facing name of the session"
+              },
+              "ownerId": {
+                "type": "string",
+                "description": "Who the session belongs to"
+              },
+              "status": {
+                "type": "string",
+                "description": "The session's last known status.\n\n`no_messages` until the first system event arrives, `disconnected` if\nthe connection dropped without a clean close, otherwise the wire name\nof the most recent system event (for example `session/end`)."
+              },
+              "threadId": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "The channel thread the session was opened from, when any"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "The time the session was last modified"
+              },
+              "viewedAt": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "The time the session was last viewed by the requesting user"
+              }
+            }
+          }
+        ],
+        "description": "An agent session as displayed in Soup.\n\nMirrors [`crate::chat::SoupChat`]: an agent session is the coding-agent\ncounterpart of a chat, so it carries the same identity, ownership, and\nrecency fields plus the session's last known status."
       },
       "SoupApiItem": {
         "allOf": [
@@ -24675,6 +28205,10 @@
                 "type": "boolean",
                 "description": "Whether the chat is persistent or not"
               },
+              "model": {
+                "type": ["string", "null"],
+                "description": "The last model selected for a sent message (`provider/model` id)."
+              },
               "name": {
                 "type": "string",
                 "description": "The name of the chat"
@@ -24895,6 +28429,17 @@
                 "enum": ["skill"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "The description document of an initiative",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["initiative_description"]
+              }
+            }
           }
         ],
         "description": "Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task."
@@ -25018,6 +28563,7 @@
           "isRead",
           "isDraft",
           "isImportant",
+          "isSignal",
           "sortTs",
           "createdAt",
           "updatedAt"
@@ -25048,6 +28594,10 @@
           "isRead": {
             "type": "boolean",
             "description": "Whether the thread has been read."
+          },
+          "isSignal": {
+            "type": "boolean",
+            "description": "The denormalized `email_threads.is_signal` importance classification —\nthe same flag the soup Importance filter evaluates, distinct from\n`is_important` (Gmail's IMPORTANT label)."
           },
           "name": {
             "type": ["string", "null"],
@@ -25365,6 +28915,21 @@
                 "enum": ["reminder"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Agent session item.",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupAgentSession_SoupPropertiesField",
+                "description": "Agent session item."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["agentSession"]
+              }
+            }
           }
         ],
         "description": "A single item in the Soup feed."
@@ -25645,7 +29210,9 @@
                   "crm_contact",
                   "reminder",
                   "skill",
-                  "agent_session"
+                  "agent_session",
+                  "scheduled_action",
+                  "initiative"
                 ]
               }
             ],
@@ -26030,6 +29597,103 @@
           }
         }
       },
+      "ThreadAnchor": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Stable Lexical mark identity, independent of transient node keys.",
+            "required": ["mark_id", "type"],
+            "properties": {
+              "mark_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Mark UUID serialized in the document."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["markdown"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An independently existing PDF highlight.",
+            "required": ["anchor_id", "type"],
+            "properties": {
+              "anchor_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Highlight annotation UUID."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["pdf_highlight"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A comment-only placeable PDF annotation.",
+            "required": ["anchor_id", "type"],
+            "properties": {
+              "anchor_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Placeable annotation UUID."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["pdf_placeable"]
+              }
+            }
+          }
+        ],
+        "description": "A thread's location within its document. Geometry remains annotation-owned."
+      },
+      "ThreadOrigin": {
+        "type": "object",
+        "description": "The thread a session was opened from, when it was.",
+        "required": ["parent", "thread_id", "originating_message_id"],
+        "properties": {
+          "channel_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Channel the thread lives in, for channel parents only. Kept beside\n`parent` for consumers written when every origin was a channel."
+          },
+          "originating_message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The message whose mention opened the session."
+          },
+          "parent": {
+            "$ref": "#/components/schemas/MessageParent",
+            "description": "Entity owning the thread: the channel or document it was posted in."
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Root message of the thread."
+          }
+        }
+      },
+      "ThreadPatch": {
+        "type": "object",
+        "description": "Partial changes to the lifecycle and placement of a document discussion.",
+        "properties": {
+          "detach_anchor": {
+            "type": "boolean",
+            "description": "Move a Markdown discussion to the document when its marked text is removed."
+          },
+          "nonce": {
+            "type": ["string", "null"],
+            "description": "Client nonce for the shared thread update event."
+          },
+          "resolved": {
+            "type": ["boolean", "null"],
+            "description": "Resolve or reopen the discussion; absent preserves its state."
+          }
+        }
+      },
       "ThreadResponse": {
         "type": "object",
         "required": ["data"],
@@ -26039,6 +29703,58 @@
             "items": {
               "$ref": "#/components/schemas/CommentThread"
             }
+          }
+        }
+      },
+      "ThreadState": {
+        "type": "object",
+        "description": "State belonging to a whole thread, keyed by its root message.",
+        "required": [
+          "root_id",
+          "user_id",
+          "resolved",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "anchor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ThreadAnchor",
+                "description": "No anchor means a discussion on the entire parent. Deleted Markdown\nthreads retain their mark identity so closed documents can reconcile it."
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation time of the discussion."
+          },
+          "deleted_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Explicit deletion of the entire thread, distinct from root deletion."
+          },
+          "resolved": {
+            "type": "boolean",
+            "description": "Whether this discussion has been resolved."
+          },
+          "root_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Root message UUID; there is no separate thread identity."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last state change."
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User who owns this discussion, including imported discussions."
           }
         }
       },
@@ -26095,6 +29811,136 @@
             "type": ["string", "null"],
             "format": "date-time",
             "description": "Wall-clock when the transcriber's STT stream first received audio\nfor this participant. The server takes the earliest non-null value\nacross all participants and uses it to overwrite the\n`egress_started`-derived `recording_started_at`, which is too early\n(it stamps egress bootstrap, not first audio frame)."
+          }
+        }
+      },
+      "TurnEndedMetadata": {
+        "type": "object",
+        "description": "The runtime answered a turn. Another prompt may follow at once; see\n[`SessionSettledMetadata`] for \"nothing left to do\".",
+        "required": [
+          "identity",
+          "turn",
+          "action_id",
+          "stop_reason",
+          "queued_remaining"
+        ],
+        "properties": {
+          "action_id": {
+            "$ref": "#/components/schemas/AgentActionId",
+            "description": "The action that opened the turn."
+          },
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "User who prompted it, absent when a bot acted on nobody's behalf."
+              }
+            ]
+          },
+          "announcement_message_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The magic-chip message posted for this turn, when one was."
+          },
+          "identity": {
+            "$ref": "#/components/schemas/SessionIdentity",
+            "description": "The session."
+          },
+          "queued_remaining": {
+            "type": "integer",
+            "description": "Prompts still waiting behind this turn.",
+            "minimum": 0
+          },
+          "stop_reason": {
+            "type": "string",
+            "description": "The ACP stop reason, or `\"error\"` when the runtime refused the prompt."
+          },
+          "turn": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Position in the session's log.",
+            "minimum": 0
+          }
+        }
+      },
+      "TurnStartedMetadata": {
+        "type": "object",
+        "description": "A prompt was delivered to the runtime.",
+        "required": ["identity", "turn", "action_id"],
+        "properties": {
+          "action_id": {
+            "$ref": "#/components/schemas/AgentActionId",
+            "description": "The action that opened the turn."
+          },
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "User who prompted it, absent when a bot acted on nobody's behalf."
+              }
+            ]
+          },
+          "announcement_message_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The magic-chip message posted for this turn, when one was."
+          },
+          "identity": {
+            "$ref": "#/components/schemas/SessionIdentity",
+            "description": "The session."
+          },
+          "turn": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Position in the session's log.",
+            "minimum": 0
+          }
+        }
+      },
+      "TurnSummary": {
+        "type": "object",
+        "description": "A turn the runtime answered.",
+        "required": ["turn", "action_id", "stop_reason"],
+        "properties": {
+          "action_id": {
+            "$ref": "#/components/schemas/AgentActionId",
+            "description": "The action that opened the turn."
+          },
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "User who prompted it, absent when a bot acted on nobody's behalf."
+              }
+            ]
+          },
+          "announcement_message_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The magic-chip message posted for this turn, when one was."
+          },
+          "excerpt": {
+            "type": ["string", "null"],
+            "description": "The agent's last text in the turn, whole; what the magic chip shows\nonce the turn ends. `None` when the turn produced no prose."
+          },
+          "stop_reason": {
+            "type": "string",
+            "description": "The ACP stop reason, or `\"error\"` when the runtime refused the prompt."
+          },
+          "turn": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Position in the session's log.",
+            "minimum": 0
           }
         }
       },
@@ -26165,6 +30011,26 @@
         "description": "Typing indicator action.",
         "enum": ["start", "stop"]
       },
+      "TypingInput": {
+        "type": "object",
+        "description": "Transient typing update.",
+        "required": ["active"],
+        "properties": {
+          "active": {
+            "type": "boolean",
+            "description": "Whether the caller is typing."
+          },
+          "nonce": {
+            "type": ["string", "null"],
+            "description": "Client mutation nonce."
+          },
+          "thread_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Root being replied to, absent for the parent composer."
+          }
+        }
+      },
       "UnthreadedPdfUuidRequest": {
         "oneOf": [
           {
@@ -26195,6 +30061,10 @@
           "channel_scope"
         ],
         "properties": {
+          "auto_accept_permissions": {
+            "type": ["boolean", "null"],
+            "description": "Whether the agent's sessions approve ACP permission requests without\nasking. Omit to always prompt."
+          },
           "avatar_url": {
             "type": ["string", "null"],
             "description": "Optional avatar URL or data URL."
@@ -26241,6 +30111,10 @@
           "instructions": {
             "type": "string",
             "description": "Instructions supplied to the agent at the start of a conversation."
+          },
+          "mcp": {
+            "$ref": "#/components/schemas/AgentMcpServers",
+            "description": "Which MCP servers sessions of this agent are handed."
           },
           "name": {
             "type": "string",
@@ -26332,6 +30206,34 @@
           }
         }
       },
+      "UpdateInitiativeRequest": {
+        "type": "object",
+        "description": "Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`\npresent is a full replace. The description is edited in its document, not here.",
+        "properties": {
+          "memberIds": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Full replacement member list when present."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Replacement name."
+          },
+          "sharePermission": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UpdateSharePermissionRequestV2",
+                "description": "Share permission patch. Only the owner may send this field."
+              }
+            ]
+          }
+        }
+      },
       "UpdateOperation": {
         "type": "string",
         "enum": ["add", "remove", "replace"]
@@ -26387,6 +30289,17 @@
               {
                 "$ref": "#/components/schemas/AccessLevel",
                 "description": "The link access level. Omit to leave unchanged or pass `null` to reset it to the default\nlevel when a link share exists."
+              }
+            ]
+          },
+          "teamShareAccessLevel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "The explicit team access level. Omit to leave unchanged or pass `null` to disable team\nsharing. Only the actual owner may change this setting; `owner` is not an allowed level."
               }
             ]
           }
@@ -26673,6 +30586,36 @@
           }
         }
       },
+      "WaitingForInputMetadata": {
+        "type": "object",
+        "description": "The agent asked its owner a question and is blocked on the answer.",
+        "required": ["identity", "turn", "action_id", "question"],
+        "properties": {
+          "action_id": {
+            "$ref": "#/components/schemas/AgentActionId",
+            "description": "The action that opened the turn."
+          },
+          "announcement_message_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The magic-chip message posted for this turn, when one was."
+          },
+          "identity": {
+            "$ref": "#/components/schemas/SessionIdentity",
+            "description": "The session."
+          },
+          "question": {
+            "type": "string",
+            "description": "The question, as the agent phrased it."
+          },
+          "turn": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The turn asking.",
+            "minimum": 0
+          }
+        }
+      },
       "Webhook": {
         "type": "object",
         "description": "Webhook row returned by application APIs.\n\nClients deserialize this, so both derives are used.",
@@ -26757,6 +30700,10 @@
           {
             "$ref": "#/components/schemas/ChannelTopicEvent",
             "description": "Channel and message events from the `macro.channels` topic."
+          },
+          {
+            "$ref": "#/components/schemas/AgentSessionLifecycleEvent",
+            "description": "Agent session lifecycle events from the `macro.agent_session_lifecycle`\ntopic."
           }
         ],
         "description": "Any entity event deliverable to a webhook endpoint.\n\nSerialized bodies carry an `event_type` tag naming the event (for example\n`document.created` or `channel.message_posted`) and a `metadata` object\nwith the event payload. Endpoint validation additionally sends a\n`WebhookValidationTestEvent`, which is not part of this union."

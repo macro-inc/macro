@@ -5,11 +5,11 @@
 //!
 //! - **egress**: a `@cursor` session runs on cursor.com, not in the compose
 //!   network, and the MCP servers the harness hands it point at
-//!   `EGRESS_BASE_URL`. In-network that URL is
+//!   `AgentHarnessEgressUrl`. In-network that URL is
 //!   `http://agent-harness-service:8102`, which means nothing to Cursor's VM —
-//!   so the tunnel targets the instance's published egress port and
-//!   `EGRESS_BASE_URL` resolves to the minted `https://….trycloudflare.com`
-//!   hostname instead.
+//!   so the tunnel targets the instance's published egress port and sets
+//!   `OVERRIDE_AGENT_HARNESS_EGRESS_URL` to the minted
+//!   `https://….trycloudflare.com` hostname instead.
 //! - **app**: the single-origin reverse proxy (Caddy), so the whole running
 //!   product can be shared with someone who is not on this machine. The proxy
 //!   — not the Vite dev server — is the only target that works remotely: the

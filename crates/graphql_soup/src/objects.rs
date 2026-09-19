@@ -1,5 +1,3 @@
-use std::marker::PhantomData;
-
 use async_graphql::{
     Context, ID, InputValueError, InputValueResult, Interface, Json, Object, ObjectType,
     OutputType, Scalar, ScalarType, SimpleObject, Union, Value as GraphqlValue,
@@ -13,6 +11,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use models_pagination::PaginatedOpaqueCursor;
 use models_soup::{
+    agent_session::SoupAgentSession,
     calendar_event::SoupCalendarEvent,
     call_record::{SoupCallRecord, SoupCallRecordParticipant},
     chat::SoupChat,
@@ -34,7 +33,6 @@ use soup::domain::models::{
     EnrichedSoupItem, SoupProjectionHydration, SoupPropertiesField, grouping::NestedSoupGroups,
 };
 use soup_filter_projection::{encode_cache_projection_supplement, project_soup_cache_supplement};
-use soup_realtime::domain::models::Patch;
 use uuid::Uuid;
 
 use crate::loaders::SoupItemDataLoader;
@@ -91,6 +89,19 @@ pub trait SoupEntityEdges: ObjectType + Clone + Send + Sync + 'static {
 
     /// Construct the email-thread-specific edge object.
     fn email_thread_edges(email_thread_id: Uuid) -> Self::EmailThreadEdges;
+
+    /// Resolve the encoded server-only Mail projection supplement.
+    fn resolve_email_cache_projection(
+        &self,
+        ctx: &Context<'_>,
+        email_thread_id: Uuid,
+    ) -> impl Future<Output = async_graphql::Result<Option<String>>> + Send;
+
+    /// Additional fields attached only to agent-session entities.
+    type AgentSessionEdges: ObjectType + Clone + Send + Sync + 'static;
+
+    /// Construct the agent-session-specific edge object.
+    fn agent_session_edges(bot_id: Uuid) -> Self::AgentSessionEdges;
 
     /// Resolve properties assigned to this entity.
     fn resolve_properties(
@@ -262,6 +273,7 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
             // Calendar events carry no frecency slot; scores never target them.
             Self::CalendarEvent(_) => {}
             Self::Reminder(entity) => entity.2 = score,
+            Self::AgentSession(entity) => entity.2 = score,
         }
         self
     }
@@ -279,7 +291,8 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
             | Self::CalendarEvent(_)
             | Self::CrmCompany(_)
             | Self::ForeignEntity(_)
-            | Self::Reminder(_) => {}
+            | Self::Reminder(_)
+            | Self::AgentSession(_) => {}
         }
         self
     }
@@ -396,6 +409,8 @@ pub enum GraphqlSoupEntity<E: SoupEntityEdges> {
     ForeignEntity(GraphqlSoupForeignEntity<E>),
     /// Reminder entity.
     Reminder(GraphqlSoupReminder<E>),
+    /// Agent session entity.
+    AgentSession(GraphqlSoupAgentSession<E>),
 }
 
 impl<E> GraphqlSoupEntity<E>
@@ -420,6 +435,7 @@ where
                 GraphqlSoupEntityType::ForeignEntity => GraphqlSoupForeignEntity::<E>::type_name(),
                 GraphqlSoupEntityType::CalendarEvent => GraphqlSoupCalendarEvent::<E>::type_name(),
                 GraphqlSoupEntityType::Reminder => GraphqlSoupReminder::<E>::type_name(),
+                GraphqlSoupEntityType::AgentSession => GraphqlSoupAgentSession::<E>::type_name(),
             }
             .into_owned(),
         )
@@ -524,6 +540,12 @@ where
                     model_entity::EntityType::Reminder.with_entity_string(item.id.to_string()),
                 );
                 Self::Reminder(GraphqlSoupReminder(item, edges, None))
+            }
+            SoupItem::AgentSession(item) => {
+                let edges = E::from_entity(
+                    model_entity::EntityType::AgentSession.with_entity_string(item.id.to_string()),
+                );
+                Self::AgentSession(GraphqlSoupAgentSession(item, edges, None))
             }
         }
     }
@@ -767,6 +789,13 @@ pub struct GraphqlSkillSubType {
     nothing: bool,
 }
 
+/// represents the initiative description subtype fields
+#[derive(SimpleObject)]
+pub struct GraphqlInitiativeDescriptionSubType {
+    /// this object has nothing as a field but we need at least 1 field
+    nothing: bool,
+}
+
 /// GraphQL representation of the soup document sub type.
 #[derive(Union)]
 pub enum GraphqlSoupDocumentSubType {
@@ -776,6 +805,8 @@ pub enum GraphqlSoupDocumentSubType {
     Snippet(GraphqlSnippetSubType),
     /// the sub type is a skill
     Skill(GraphqlSkillSubType),
+    /// the sub type is an initiative description
+    InitiativeDescription(GraphqlInitiativeDescriptionSubType),
 }
 
 impl GraphqlSoupDocumentSubType {
@@ -789,6 +820,9 @@ impl GraphqlSoupDocumentSubType {
                 Self::Snippet(GraphqlSnippetSubType { nothing: false })
             }
             SoupDocumentSubType::Skill {} => Self::Skill(GraphqlSkillSubType { nothing: false }),
+            SoupDocumentSubType::InitiativeDescription {} => {
+                Self::InitiativeDescription(GraphqlInitiativeDescriptionSubType { nothing: false })
+            }
         }
     }
 }
@@ -842,6 +876,11 @@ where
         &self.0.name
     }
 
+    /// The last model selected for a sent message (`provider/model` id).
+    async fn model(&self) -> Option<&str> {
+        self.0.model.as_deref()
+    }
+
     /// The identifier of the owner.
     async fn owner_id(&self) -> String {
         self.0.owner_id.as_ref().to_owned()
@@ -875,6 +914,110 @@ where
     /// The deleted timestamp in RFC 3339 format.
     async fn deleted_at(&self) -> Option<String> {
         self.0.deleted_at.map(|ts| ts.to_rfc3339())
+    }
+
+    #[graphql(flatten)]
+    /// The edges.
+    async fn edges(&self) -> E {
+        self.1.clone()
+    }
+
+    /// The viewer's frecency score for this entity, when loaded.
+    async fn frecency_score(&self) -> Option<f64> {
+        self.2
+    }
+}
+
+/// GraphQL agent session entity.
+pub struct GraphqlSoupAgentSession<E: SoupEntityEdges>(SoupAgentSession<()>, E, Option<f64>);
+
+/// GraphQL representation of the soup agent session.
+#[Object(name = "GraphqlSoupAgentSession")]
+impl<E> GraphqlSoupAgentSession<E>
+where
+    E: SoupEntityEdges,
+{
+    /// The unique identifier.
+    async fn id(&self) -> ID {
+        ID(self.0.id.to_string())
+    }
+
+    /// Canonical entity kind.
+    async fn entity_type(&self) -> GraphqlSoupEntityType {
+        GraphqlSoupEntityType::AgentSession
+    }
+
+    /// Server-only projection facts are unavailable for agent sessions.
+    async fn cache_projection(&self) -> Option<SoupCacheProjection> {
+        None
+    }
+
+    /// User-visible display name.
+    async fn display_name(&self) -> Option<String> {
+        Some(self.0.name.clone())
+    }
+
+    /// Common agent session metadata.
+    ///
+    /// `parent` is absent: a session is reachable through the channel thread
+    /// it was opened from, but it is not contained by it the way a chat is
+    /// contained by its project.
+    async fn metadata(&self) -> GraphqlEntityMetadata {
+        GraphqlEntityMetadata {
+            owner_id: Some(self.0.owner_id.as_ref().to_owned()),
+            parent: None,
+            created_at: Some(self.0.created_at.to_rfc3339()),
+            updated_at: Some(self.0.updated_at.to_rfc3339()),
+            viewed_at: self.0.viewed_at.map(|ts| ts.to_rfc3339()),
+            deleted_at: None,
+        }
+    }
+
+    /// The name.
+    async fn name(&self) -> &str {
+        &self.0.name
+    }
+
+    /// The identifier of the owner.
+    async fn owner_id(&self) -> String {
+        self.0.owner_id.as_ref().to_owned()
+    }
+
+    /// The bot running this session.
+    async fn bot_id(&self) -> ID {
+        ID(self.0.bot_id.to_string())
+    }
+
+    #[graphql(flatten)]
+    /// Fields hydrated through the bot domain.
+    async fn agent_session_edges(&self) -> E::AgentSessionEdges {
+        E::agent_session_edges(self.0.bot_id)
+    }
+
+    /// The channel thread the session was opened from, when any.
+    async fn thread_id(&self) -> Option<ID> {
+        self.0.thread_id.map(|id| ID(id.to_string()))
+    }
+
+    /// The session's last known status: `no_messages`, `disconnected`, or the
+    /// wire name of the most recent system event (for example `session/end`).
+    async fn status(&self) -> &str {
+        &self.0.status
+    }
+
+    /// The created timestamp in RFC 3339 format.
+    async fn created_at(&self) -> String {
+        self.0.created_at.to_rfc3339()
+    }
+
+    /// The updated timestamp in RFC 3339 format.
+    async fn updated_at(&self) -> String {
+        self.0.updated_at.to_rfc3339()
+    }
+
+    /// The viewed timestamp in RFC 3339 format.
+    async fn viewed_at(&self) -> Option<String> {
+        self.0.viewed_at.map(|ts| ts.to_rfc3339())
     }
 
     #[graphql(flatten)]
@@ -1068,9 +1211,16 @@ where
         GraphqlSoupEntityType::EmailThread
     }
 
-    /// Opaque cache projection metadata, unavailable for this entity variant.
-    async fn cache_projection(&self) -> Option<SoupCacheProjection> {
-        None
+    /// Opaque server-only facts used by the offline Mail projection.
+    async fn cache_projection(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<SoupCacheProjection>> {
+        Ok(self
+            .1
+            .resolve_email_cache_projection(ctx, self.0.thread.id)
+            .await?
+            .map(SoupCacheProjection))
     }
 
     /// User-visible display name.
@@ -1148,6 +1298,13 @@ where
     /// Whether the thread is marked important.
     async fn is_important(&self) -> bool {
         self.0.thread.is_important
+    }
+
+    /// The denormalized `email_threads.is_signal` importance classification —
+    /// the same flag the soup Importance filter evaluates, distinct from
+    /// `is_important` (Gmail's IMPORTANT label).
+    async fn is_signal(&self) -> bool {
+        self.0.thread.is_signal
     }
 
     /// The identifier of the project.
@@ -2219,6 +2376,7 @@ impl_common_interface_edges!(
     GraphqlSoupCrmCompany,
     GraphqlSoupForeignEntity,
     GraphqlSoupReminder,
+    GraphqlSoupAgentSession,
 );
 
 /// Realtime Soup patch represented as exactly one update or cache deletion.
@@ -2231,12 +2389,10 @@ pub enum SoupPatch<E: SoupEntityEdges> {
 }
 
 impl<E: SoupEntityEdges> SoupPatch<E> {
-    /// Construct an update patch that hydrates the current Soup item for the viewer.
-    pub fn updated(user_id: MacroUserIdStr<'static>, entity: Entity<'static>) -> Self {
+    /// Construct an update only after its viewer-scoped item has been hydrated.
+    pub fn updated(item: SoupProjectionHydration) -> Self {
         Self::Updated(SoupUpdated {
-            entity,
-            user_id,
-            phantom: PhantomData,
+            item: Box::new(GraphqlSoupEntity::new_with_projection(item)),
         })
     }
 
@@ -2255,38 +2411,55 @@ impl<E: SoupEntityEdges> SoupPatch<E> {
         )))
     }
 
-    /// Construct a GraphQL patch for one recipient-targeted realtime patch.
-    pub fn new(
+    /// Hydrate an updated entity through the existing viewer-scoped Soup service.
+    /// Missing items are logged and omitted; service failures remain errors.
+    /// Neither outcome is interpreted as a deletion.
+    pub async fn hydrate_updated(
         user_id: MacroUserIdStr<'static>,
-        patch: Patch<model_entity::Entity<'static>>,
-    ) -> async_graphql::Result<Self> {
-        match patch {
-            Patch::Updated(entity) => Ok(Self::updated(user_id, entity)),
-            Patch::Deleted(entity) => Self::deleted(entity),
+        entity: Entity<'static>,
+        loader: Option<&SoupItemDataLoader>,
+    ) -> async_graphql::Result<Option<Self>> {
+        let loader = loader.ok_or_else(|| {
+            async_graphql::Error::new("SoupItemDataLoader is required to hydrate Soup updates")
+        })?;
+        let item = loader
+            .load_one((user_id.clone(), entity.clone()))
+            .await
+            .inspect_err(|error| {
+                tracing::error!(
+                    error = ?error,
+                    user_id = %user_id,
+                    entity_type = %entity.entity_type,
+                    entity_id = %entity.entity_id,
+                    "failed to hydrate Soup update"
+                );
+            })?;
+        match item {
+            Some(item) => Ok(Some(Self::updated(item))),
+            None => {
+                tracing::warn!(
+                    user_id = %user_id,
+                    entity_type = %entity.entity_type,
+                    entity_id = %entity.entity_id,
+                    "Soup update hydration returned no visible item; omitting update"
+                );
+                Ok(None)
+            }
         }
     }
 }
 
-/// Created or updated Soup entity whose current data is hydrated when selected.
+/// Created or updated Soup entity with its current viewer-scoped data already hydrated.
 pub struct SoupUpdated<E: SoupEntityEdges> {
-    /// Canonical entity to hydrate.
-    entity: Entity<'static>,
-    /// User whose visibility scope must be used to hydrate the item.
-    user_id: MacroUserIdStr<'static>,
-    /// Associates the update with its composed Soup edge object.
-    phantom: PhantomData<E>,
+    /// Canonical hydrated entity, never a nullable lookup result.
+    item: Box<GraphqlSoupEntity<E>>,
 }
 
 /// GraphQL representation of a created or updated Soup entity.
 #[Object]
 impl<E: SoupEntityEdges> SoupUpdated<E> {
-    /// Hydrate the current Soup entity.
-    async fn item(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<GraphqlSoupEntity<E>>> {
-        let loader = ctx.data::<SoupItemDataLoader>()?;
-        let key = (self.user_id.clone(), self.entity.clone());
-        Ok(loader
-            .load_one(key)
-            .await?
-            .map(GraphqlSoupEntity::new_with_projection))
+    /// The hydrated entity for this update.
+    async fn item(&self) -> &GraphqlSoupEntity<E> {
+        &self.item
     }
 }

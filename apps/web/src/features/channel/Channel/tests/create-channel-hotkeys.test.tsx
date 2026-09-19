@@ -3,7 +3,7 @@ import {
   useHotKeyRoot,
   useHotkeyDOMScope,
 } from '@core/hotkey/hotkeys';
-import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
+import type { MessageListItem } from '@service-storage/messages';
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, onMount, Show } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
@@ -42,8 +42,8 @@ function TestMessageEditor(props: { onSave: () => void }) {
 }
 
 function ChannelEditHarness(props: {
-  onSave: ReturnType<typeof vi.fn>;
-  onReply: ReturnType<typeof vi.fn>;
+  onSave: () => void;
+  onReply: () => void;
 }) {
   useHotKeyRoot();
 
@@ -58,9 +58,9 @@ function ChannelEditHarness(props: {
       selectPrevious: vi.fn(),
       selectNext: vi.fn(),
     },
-    navigation: () => undefined,
+    scrollToMessage: () => false,
     messageById: () =>
-      new Map([[originalMessage.id, originalMessage as ApiChannelMessage]]),
+      new Map([[originalMessage.id, originalMessage as MessageListItem]]),
     getMessageActions: () => ({
       onEdit: () => {
         setIsEditing(true);

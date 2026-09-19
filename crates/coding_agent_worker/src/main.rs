@@ -1,4 +1,4 @@
-//! The coding agent daemon: serve a registered harness's agent sessions from
+//! The agent harness daemon: serve a registered harness's agent sessions from
 //! this machine.
 //!
 //! `macrod` is one process and one command: the serving core (SSE listener,
@@ -9,12 +9,11 @@
 //!
 //! A first run starts unpaired: the panel offers pairing (press `p`), the
 //! user approves the printed code in the web app, and the minted harness
-//! credential is persisted next to the config. Once paired, each
-//! `agent_trigger.new` delivery opens a session over the harness service's
-//! API, dials its runtime gateway, spawns the configured harness in ACP mode,
-//! bridges its stdio to the websocket, and forwards the mention as the first
-//! prompt; `agent_trigger.existing` deliveries forward follow-up messages,
-//! redialing first when the bridge is gone.
+//! credential is embedded in the sensitive `macrod.toml`. Once paired, the
+//! daemon connects to the runtime gateway and bridges the configured ACP
+//! harness, making model discovery available before any agents exist. Each
+//! `agent_trigger.new` delivery opens a session and forwards the first prompt;
+//! `agent_trigger.existing` deliveries forward follow-up messages.
 
 mod config;
 mod daemon;
@@ -26,7 +25,6 @@ mod trigger;
 mod tui;
 
 use clap::Parser;
-use std::path::PathBuf;
 use std::process::ExitCode;
 
 use crate::daemon::absolute_config_path;
@@ -37,9 +35,9 @@ use crate::daemon::absolute_config_path;
 #[derive(Parser)]
 #[command(name = "macrod", version)]
 struct Args {
-    /// Path to the daemon's TOML config.
-    #[arg(long, default_value = "macro.toml")]
-    config: PathBuf,
+    /// Internal browser helper, isolated so terminal browsers cannot claim the TUI's stdin.
+    #[arg(long, hide = true)]
+    open_url: Option<String>,
 }
 
 #[tokio::main]
@@ -50,9 +48,18 @@ async fn main() -> ExitCode {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
     let args = Args::parse();
+    if let Some(url) = args.open_url {
+        return match webbrowser::open(&url) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("could not open browser: {error}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     // The daemon chdirs into the workspace, so the config path must stop
     // being relative before anything re-reads or rewrites it.
-    let config_path = absolute_config_path(&args.config);
+    let config_path = absolute_config_path(std::path::Path::new("macrod.toml"));
 
     // The TUI owns the terminal, so its logs go to a ring buffer it renders.
     let logs = tui::LogBuffer::install();

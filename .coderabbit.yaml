@@ -51,6 +51,7 @@ reviews:
         Rust review guidelines (from project conventions):
         - New crates must have `#![deny(missing_docs)]` in `lib.rs`.
         - Only look for and report semantic bugs that the typesystem will not catch. This includes incomplete integration, incorrect environment variables, or any other logic error that will compile as valid rust.
+        - Cross-check database usage changes against migrations in the same PR. Migrations deploy BEFORE services: flag any migration that breaks pre-PR service code, even if the new Rust code compiles. In particular, dropping a column/table in the same PR that removes its usage is unsafe; usage removal must be fully deployed first (see docs/DATABASE_DEVELOPMENT.md, "Safe database schema changes").
 
     - path: "crates/**/*_db_client/**"
       instructions: |
@@ -83,6 +84,9 @@ reviews:
     - path: "**/*.sql"
       instructions: |
         SQL review guidelines:
+        - Explicitly check migration/service compatibility across the entire PR. Database migrations deploy BEFORE service changes, so migrations must work with currently deployed (pre-PR) code, not just the updated code.
+        - Flag as a deployment-safety bug any column/table drop in the same PR that removes its service usage. Require usage removal first, confirmation that it is fully deployed to all consumers, then a separate cleanup PR; merging the usage-removal PR is not sufficient.
+        - Also flag column/table renames, incompatible type changes, and new constraints or required columns that break existing reads/writes. Require staged, backward-compatible changes as described in docs/DATABASE_DEVELOPMENT.md ("Safe database schema changes"). Do not flag combined schema/service PRs solely for combining changes when the migration remains compatible with deployed code.
         - Verify migrations are idempotent where possible (use IF NOT EXISTS, etc.).
         - Check index strategy — composite indexes should match common query patterns.
         - Confirm camelCased column names are handled correctly in Rust SQLx queries.
@@ -247,6 +251,7 @@ knowledge_base:
       - "**/CLAUDE.md"
       - "**/AGENTS.md"
       - "docs/STYLE_GUIDE.md"
+      - "docs/DATABASE_DEVELOPMENT.md"
       - "**/.cursor/rules/*.mdc"
       - "**/.cursor/commands/*.md"
 

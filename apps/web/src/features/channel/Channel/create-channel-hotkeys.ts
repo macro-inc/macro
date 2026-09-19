@@ -1,6 +1,6 @@
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
+import type { MessageListItem } from '@service-storage/messages';
 import type { Accessor } from 'solid-js';
 import type { MessageActions, MessageData } from '../Message';
 import { getMessageReplyPreviewTexts } from '../Message/browser-selection';
@@ -10,8 +10,8 @@ import type { ThreadListNavigation } from './ThreadList';
 
 type CreateChannelHotkeysOptions = {
   selection: MessageSelection;
-  navigation: Accessor<ThreadListNavigation | undefined>;
-  messageById: Accessor<Map<string, ApiChannelMessage>>;
+  scrollToMessage: ThreadListNavigation['scrollToMessage'];
+  messageById: Accessor<Map<string, MessageListItem>>;
   getMessageActions: (message: MessageData) => MessageActions | undefined;
   userId: Accessor<string | undefined>;
   isInputEmpty: Accessor<boolean>;
@@ -74,8 +74,7 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
     keyDownHandler: () => {
       const id = options.selection.selectPrevious();
       if (id) {
-        options.navigation()?.markUserIntent('up');
-        options.navigation()?.scrollToId(id, { align: 'nearest' });
+        options.scrollToMessage(id, { align: 'auto', userIntent: 'up' });
       }
       return true;
     },
@@ -89,8 +88,7 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
     keyDownHandler: () => {
       const id = options.selection.selectNext();
       if (id) {
-        options.navigation()?.markUserIntent('down');
-        options.navigation()?.scrollToId(id, { align: 'nearest' });
+        options.scrollToMessage(id, { align: 'auto', userIntent: 'down' });
       } else {
         inputEl?.querySelector<HTMLElement>('[contenteditable]')?.focus();
       }
@@ -104,7 +102,6 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
     description: 'Go to latest message',
     keyDownHandler: () => {
       options.selection.clear();
-      options.navigation()?.markUserIntent('down');
       options.onGoToBottom();
       return true;
     },
@@ -201,8 +198,7 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
     keyDownHandler: () => {
       const id = options.selection.selectPrevious();
       if (id) {
-        options.navigation()?.markUserIntent('up');
-        options.navigation()?.scrollToId(id, { align: 'nearest' });
+        options.scrollToMessage(id, { align: 'auto', userIntent: 'up' });
         messageListEl?.focus();
       }
       return true;

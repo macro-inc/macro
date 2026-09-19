@@ -18,7 +18,7 @@ use channels::domain::{
         ChannelMessageDeletedMetadata, ChannelMessagePatchedMetadata, ChannelMessagePostedMetadata,
         ChannelParticipantAddedMetadata, ChannelParticipantRemovedMetadata, ChannelUpdatedMetadata,
     },
-    models::{ChannelType, SimpleMention},
+    models::ChannelType,
 };
 use chrono::{DateTime, Utc};
 use documents::domain::events::{
@@ -31,6 +31,7 @@ use entity_access::domain::models::{
     RequiredPermission, TeamRole, UserTeamInfo,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+use messages::domain::models::SimpleMention;
 use serde_json::Value;
 use std::{
     collections::BTreeMap,
@@ -1327,8 +1328,6 @@ fn agent_trigger_new_event() -> Event<agent_trigger::domain::broker_events::Agen
     use agent_trigger::domain::broker_events::{
         AgentBotMentionedEvent, AgentTriggerTopicEvent, NewAgentSessionEvent,
     };
-    use channels::domain::broker_events::ChannelMessagePostedMetadata;
-    use channels::domain::models::ChannelType;
 
     Event::new(AgentTriggerTopicEvent::New(
         NewAgentSessionEvent::TopLevelMentioned(AgentBotMentionedEvent {
@@ -1349,19 +1348,43 @@ fn agent_trigger_new_event() -> Event<agent_trigger::domain::broker_events::Agen
     ))
 }
 
+fn agent_trigger_document_event()
+-> Event<agent_trigger::domain::broker_events::AgentTriggerTopicEvent> {
+    use agent_trigger::domain::broker_events::{
+        AgentMentionedEvent, AgentTriggerTopicEvent, NewAgentSessionEvent,
+    };
+
+    Event::new(AgentTriggerTopicEvent::New(
+        NewAgentSessionEvent::Mentioned(AgentMentionedEvent {
+            bot_id: bot_id::BotId::new_from_uuid(uuid::Uuid::from_u128(0xB07)),
+            message: messages::domain::events::MessagePostedMetadata {
+                parent: messages::domain::models::MessageParent::parse("document", "doc-1")
+                    .unwrap(),
+                message_id: uuid::Uuid::from_u128(2),
+                thread_id: None,
+                root_id: uuid::Uuid::from_u128(2),
+                sender: sender("macro|asker@example.com"),
+                triggered_by: None,
+                content: "summarize this".to_owned(),
+                mentions: vec![],
+                attachments: vec![],
+                created_at: timestamp(),
+            },
+        }),
+    ))
+}
+
 fn agent_trigger_existing_event()
 -> Event<agent_trigger::domain::broker_events::AgentTriggerTopicEvent> {
     use agent_trigger::domain::broker_events::{
         AgentTriggerTopicEvent, ChannelEventMetadata, ExistingAgentSessionEvent,
     };
-    use channels::domain::broker_events::ChannelMessagePostedMetadata;
-    use channels::domain::models::ChannelType;
 
     Event::new(AgentTriggerTopicEvent::Existing(
         ExistingAgentSessionEvent::Channel(ChannelEventMetadata {
             bot_id: bot_id::BotId::new_from_uuid(uuid::Uuid::from_u128(0xB07)),
             session_id: agent_session::domain::model::AgentSessionId::TEST_A,
-            kind: agent_trigger::domain::broker_events::ChannelKind::MentionThread,
+            kind: agent_trigger::domain::broker_events::ThreadMessageKind::MentionThread,
             message: ChannelMessagePostedMetadata {
                 channel_id: uuid::Uuid::from_u128(1),
                 message_id: uuid::Uuid::from_u128(2),
@@ -1378,11 +1401,30 @@ fn agent_trigger_existing_event()
     ))
 }
 
-/// A follow-up on a session that exists asks the session, not the channel:
-/// the session carries its own grants, so whatever channel a later message
-/// landed in is incidental.
+/// A document trigger is gated by who may read the document.
 #[tokio::test]
-async fn an_existing_session_trigger_is_gated_by_the_session() {
+async fn a_document_trigger_is_gated_by_its_document() {
+    let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
+    let repository = MockRepository::new(
+        vec![PERSONAL_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)],
+    );
+    let service = service(access.clone(), repository.clone(), MockEnqueuer::default());
+
+    service
+        .ingest_agent_trigger_event(agent_trigger_document_event())
+        .await
+        .expect("document agent trigger events are ingested");
+
+    assert_eq!(
+        lock(&access.calls).as_slice(),
+        &[("doc-1".to_owned(), EntityType::Document)],
+    );
+}
+
+/// An existing session does not grant a webhook access to a new message parent.
+#[tokio::test]
+async fn an_existing_session_trigger_is_gated_by_its_message_parent() {
     let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
     let repository = MockRepository::new(
         vec![PERSONAL_WORKSPACE_ID.to_string()],
@@ -1397,10 +1439,7 @@ async fn an_existing_session_trigger_is_gated_by_the_session() {
 
     assert_eq!(
         lock(&access.calls).as_slice(),
-        &[(
-            agent_session::domain::model::AgentSessionId::TEST_A.to_string(),
-            EntityType::AgentSession
-        )],
+        &[(uuid::Uuid::from_u128(1).to_string(), EntityType::Channel)],
     );
 }
 
@@ -1454,5 +1493,233 @@ async fn agent_trigger_events_are_scoped_by_the_channel_but_named_by_the_bot() {
     assert_eq!(
         normalized.broker_envelope,
         serde_json::to_value(&event).expect("a serializable envelope"),
+    );
+}
+
+fn agent_session_lifecycle_event(
+    event: fn(
+        agent_session::domain::events::SessionIdentity,
+    ) -> agent_session::domain::events::AgentSessionLifecycleEvent,
+) -> Event<agent_session::domain::events::AgentSessionLifecycleEvent> {
+    use agent_session::domain::events::{SessionIdentity, ThreadOrigin};
+    use macro_user_id::cowlike::CowLike as _;
+
+    Event::new(event(SessionIdentity {
+        session_id: agent_session::domain::model::AgentSessionId::TEST_A,
+        session_name: "Fix the flaky test".to_owned(),
+        bot_id: bot_id::BotId::new_from_uuid(uuid::Uuid::from_u128(0xB07)),
+        bot_name: "Macro Coder".to_owned(),
+        owner_id: macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|asker@example.com")
+            .expect("valid user id")
+            .into_owned(),
+        origin: Some(ThreadOrigin::new(
+            messages::domain::models::MessageParent::Channel(uuid::Uuid::from_u128(1)),
+            uuid::Uuid::from_u128(2),
+            uuid::Uuid::from_u128(3),
+        )),
+        audience: Vec::new(),
+    }))
+}
+
+/// A lifecycle fact is about one session: the session is the entity, the
+/// ordering key, and whose grants gate it - not the bot, unlike a trigger.
+#[tokio::test]
+async fn agent_session_lifecycle_events_are_scoped_and_named_by_the_session() {
+    use agent_session::domain::events::{
+        AgentSessionLifecycleEvent, SessionSettledMetadata, TurnSummary,
+    };
+
+    let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
+    let repository = MockRepository::new(
+        vec![PERSONAL_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)],
+    );
+    let enqueuer = MockEnqueuer::default();
+    let service = service(access.clone(), repository.clone(), enqueuer.clone());
+    let event = agent_session_lifecycle_event(|identity| {
+        AgentSessionLifecycleEvent::Settled(SessionSettledMetadata {
+            identity,
+            last_turn: Some(TurnSummary {
+                turn: agent_fold::domain::model::TurnId(0),
+                action_id: agent_runtime_protocol::domain::action::AgentActionId::mint(),
+                actor: None,
+                announcement_message_id: None,
+                stop_reason: "end_turn".to_owned(),
+                excerpt: Some("Done.".to_owned()),
+            }),
+        })
+    });
+    let session_id = agent_session::domain::model::AgentSessionId::TEST_A.to_string();
+
+    service
+        .ingest_agent_session_lifecycle_event(event.clone())
+        .await
+        .expect("lifecycle events are ingested");
+
+    assert_eq!(
+        lock(&access.calls).as_slice(),
+        &[(session_id.clone(), EntityType::AgentSession)],
+    );
+    let repository_state = lock(&repository.state);
+    assert_eq!(repository_state.match_calls.len(), 1);
+    assert_eq!(repository_state.match_calls[0].entity_id, session_id);
+    assert_eq!(
+        repository_state.match_calls[0].event_name,
+        "agent_session.settled"
+    );
+    drop(repository_state);
+
+    let enqueuer_state = lock(&enqueuer.state);
+    assert_eq!(enqueuer_state.attempted_messages.len(), 1);
+    let normalized = &enqueuer_state.attempted_messages[0].event;
+    assert_eq!(normalized.event_name, "agent_session.settled");
+    assert_eq!(normalized.entity_type, "agent_session");
+    assert_eq!(normalized.entity_id, session_id);
+    assert_eq!(normalized.ordering_key, session_id);
+    assert_eq!(
+        normalized.broker_envelope,
+        serde_json::to_value(&event).expect("a serializable envelope"),
+    );
+}
+
+#[tokio::test]
+async fn every_agent_session_lifecycle_variant_is_named_by_its_wire_tag() {
+    use agent_session::domain::events::{
+        AgentSessionLifecycleEvent, SessionDeletedMetadata, WaitingForInputMetadata,
+    };
+
+    let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
+    let repository = MockRepository::new(
+        vec![PERSONAL_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)],
+    );
+    let service = service(access, repository.clone(), MockEnqueuer::default());
+
+    service
+        .ingest_agent_session_lifecycle_event(agent_session_lifecycle_event(|identity| {
+            AgentSessionLifecycleEvent::WaitingForInput(WaitingForInputMetadata {
+                identity,
+                turn: agent_fold::domain::model::TurnId(1),
+                action_id: agent_runtime_protocol::domain::action::AgentActionId::mint(),
+                announcement_message_id: None,
+                question: "Which approach?".to_owned(),
+            })
+        }))
+        .await
+        .expect("lifecycle events are ingested");
+    service
+        .ingest_agent_session_lifecycle_event(agent_session_lifecycle_event(|identity| {
+            AgentSessionLifecycleEvent::Deleted(SessionDeletedMetadata { identity })
+        }))
+        .await
+        .expect("lifecycle events are ingested");
+
+    let names: Vec<String> = lock(&repository.state)
+        .match_calls
+        .iter()
+        .map(|call| call.event_name.clone())
+        .collect();
+    assert_eq!(
+        names,
+        ["agent_session.waiting_for_input", "agent_session.deleted"]
+    );
+}
+
+/// A deleted session has no access rows left to ask, so its audience comes
+/// from the event: the owner, plus the channel it was opened from.
+#[tokio::test]
+async fn a_deleted_session_is_delivered_to_its_owner_and_origin_channel() {
+    use agent_session::domain::events::{AgentSessionLifecycleEvent, SessionDeletedMetadata};
+
+    let access = MockAccessService::with_users(vec![user_id("macro|teammate@example.com")]);
+    let repository = MockRepository::new(
+        vec![PERSONAL_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)],
+    );
+    let enqueuer = MockEnqueuer::default();
+    let service = service(access.clone(), repository.clone(), enqueuer.clone());
+
+    service
+        .ingest_agent_session_lifecycle_event(agent_session_lifecycle_event(|identity| {
+            AgentSessionLifecycleEvent::Deleted(SessionDeletedMetadata { identity })
+        }))
+        .await
+        .expect("lifecycle events are ingested");
+
+    // The session is never asked about; the origin channel is.
+    assert_eq!(
+        lock(&access.calls).as_slice(),
+        &[(uuid::Uuid::from_u128(1).to_string(), EntityType::Channel)],
+    );
+    let repository_state = lock(&repository.state);
+    assert_eq!(repository_state.match_calls.len(), 1);
+    assert_eq!(
+        repository_state.match_calls[0].event_name,
+        "agent_session.deleted"
+    );
+    assert_eq!(
+        repository_state.workspace_calls.last().map(Vec::len),
+        Some(2),
+        "the owner and the channel's member both resolve to workspaces"
+    );
+}
+
+#[tokio::test]
+async fn a_deleted_session_without_an_origin_is_its_owners_alone() {
+    use agent_session::domain::events::{AgentSessionLifecycleEvent, SessionDeletedMetadata};
+
+    let access = MockAccessService::with_users(vec![user_id("macro|teammate@example.com")]);
+    let repository = MockRepository::new(
+        vec![PERSONAL_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)],
+    );
+    let service = service(access.clone(), repository.clone(), MockEnqueuer::default());
+
+    let mut event = agent_session_lifecycle_event(|identity| {
+        AgentSessionLifecycleEvent::Deleted(SessionDeletedMetadata { identity })
+    });
+    if let AgentSessionLifecycleEvent::Deleted(deleted) = &mut event.event {
+        deleted.identity.origin = None;
+    }
+
+    service
+        .ingest_agent_session_lifecycle_event(event)
+        .await
+        .expect("lifecycle events are ingested");
+
+    assert!(lock(&access.calls).is_empty(), "nothing is looked up");
+    assert_eq!(
+        lock(&repository.state).workspace_calls.last().map(Vec::len),
+        Some(1)
+    );
+}
+
+/// The live stream mirrors the persisted fan-out: a departed session's owner
+/// keeps ownership, so the stream audience is the union of the owner's
+/// workspace and the origin parent, not the parent alone.
+#[test]
+fn a_deleted_session_streams_to_both_its_owner_and_origin_parent() {
+    use crate::domain::ingestion::stream::agent_session_lifecycle_stream_candidate;
+    use crate::domain::stream::StreamAudience;
+    use agent_session::domain::events::{AgentSessionLifecycleEvent, SessionDeletedMetadata};
+
+    let event = agent_session_lifecycle_event(|identity| {
+        AgentSessionLifecycleEvent::Deleted(SessionDeletedMetadata { identity })
+    });
+
+    let candidate =
+        agent_session_lifecycle_stream_candidate(&event).expect("a deleted session streams");
+
+    assert_eq!(
+        candidate.audience,
+        StreamAudience::Any(vec![
+            StreamAudience::Workspace {
+                workspace_id: "macro|asker@example.com".to_owned(),
+            },
+            StreamAudience::Entity {
+                entity_id: uuid::Uuid::from_u128(1).to_string(),
+                entity_type: EntityType::Channel,
+            },
+        ]),
     );
 }

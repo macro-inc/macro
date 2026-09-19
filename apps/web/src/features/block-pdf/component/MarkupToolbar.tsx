@@ -1,14 +1,5 @@
 import { useOwnedCommentPlaceableSelector } from '@block-pdf/signal/permissions';
-import {
-  activePlaceableIdSignal,
-  placeableModeSignal,
-} from '@block-pdf/signal/placeables';
 import { isThreadPlaceable } from '@block-pdf/store/comments/freeComments';
-import {
-  useCanComment,
-  useCanEdit,
-  useIsDocumentOwner,
-} from '@core/signal/permissions';
 import ChatTeardrop from '@phosphor/chat-teardrop.svg';
 import Signature from '@phosphor/signature.svg';
 import Textbox from '@phosphor/textbox.svg';
@@ -16,17 +7,18 @@ import Trash from '@phosphor/trash-simple.svg';
 import Cancel from '@phosphor/x.svg';
 import { Button } from '@ui';
 import { createMemo, Show } from 'solid-js';
-import { placeableIdMap, useDeletePlaceable } from '../store/placeables';
+import { usePdfDocument } from '../context/pdf-document-context';
+import { useDeletePlaceable, usePlaceableIdMap } from '../store/placeables';
 import { PayloadMode } from '../type/placeables';
 
 export function MarkupToolbar() {
-  const canEdit = useCanEdit();
-  const canComment = useCanComment();
-  const isDocumentOwner = useIsDocumentOwner();
-
-  const [mode, setMode] = placeableModeSignal;
-
-  const activePlaceableId = activePlaceableIdSignal.get;
+  const pdf = usePdfDocument();
+  const canEdit = pdf.permissions.canEdit;
+  const canComment = pdf.permissions.canComment;
+  const isDocumentOwner = pdf.permissions.isOwner;
+  const [mode, setMode] = pdf.state.signals.placeableMode;
+  const [activePlaceableId] = pdf.state.signals.activePlaceableId;
+  const placeableIdMap = usePlaceableIdMap();
   const deletePlaceable = useDeletePlaceable();
   const showCancel = () => mode() !== PayloadMode.NoMode;
   const ownedCommentSelector = useOwnedCommentPlaceableSelector();

@@ -54,6 +54,7 @@ import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
 import {
   Button,
+  ConfirmDialog,
   cn,
   Dialog,
   Panel,
@@ -1559,95 +1560,40 @@ function TeamManagement(props: {
         </Panel>
       </Dialog>
 
-      <Dialog
+      <ConfirmDialog
         open={!!showRemoveModal()}
-        onOpenChange={() => setShowRemoveModal(null)}
-      >
-        <Panel depth={2} class="max-h-[75vh] text-ink rounded-xl">
-          <Panel.Header class="px-2 gap-1">
-            <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
-              <XIcon />
-            </Dialog.CloseButton>
-            <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
-              Remove Member
-            </Dialog.Title>
-          </Panel.Header>
-          <Panel.Body class="p-3 flex flex-col gap-3">
-            <p>
-              Are you sure you want to remove{' '}
-              <Show when={showRemoveModal()}>
-                {(member) => <MemberName memberId={member().user_id} />}
-              </Show>{' '}
-              from the team?
-            </p>
-            <div class="flex justify-end gap-1 pt-2">
-              <Button
-                variant="ghost"
-                class="rounded-xs"
-                disabled={removeUserMutation.isPending}
-                onClick={() => setShowRemoveModal(null)}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="danger"
-                class="rounded-xs"
-                disabled={removeUserMutation.isPending}
-                onClick={handleRemoveMember}
-              >
-                <Show when={removeUserMutation.isPending} fallback="Remove">
-                  <SpinnerIcon class="size-4 animate-spin" />
-                </Show>
-              </Button>
-            </div>
-          </Panel.Body>
-        </Panel>
-      </Dialog>
-
-      <Dialog
+        onOpenChange={(open) => !open && setShowRemoveModal(null)}
+        title="Remove Member"
+        tone="danger"
+        confirmLabel="Remove"
+        pending={removeUserMutation.isPending}
+        onConfirm={handleRemoveMember}
+        body={
+          <>
+            Are you sure you want to remove{' '}
+            <Show when={showRemoveModal()}>
+              {(member) => <MemberName memberId={member().user_id} />}
+            </Show>{' '}
+            from the team?
+          </>
+        }
+      />
+      <ConfirmDialog
         open={!!showCancelInviteModal()}
-        onOpenChange={() => setShowCancelInviteModal(null)}
-      >
-        <Panel depth={2} class="max-h-[75vh] text-ink rounded-xl">
-          <Panel.Header class="px-2 gap-1">
-            <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
-              <XIcon />
-            </Dialog.CloseButton>
-            <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
-              Cancel Invitation
-            </Dialog.Title>
-          </Panel.Header>
-          <Panel.Body class="p-3 flex flex-col gap-3">
-            <p>
-              Are you sure you want to cancel the invitation for{' '}
-              <span class="font-medium">{showCancelInviteModal()?.email}</span>?
-            </p>
-            <div class="flex justify-end gap-1 pt-2">
-              <Button
-                variant="ghost"
-                class="rounded-xs"
-                disabled={deleteInviteMutation.isPending}
-                onClick={() => setShowCancelInviteModal(null)}
-              >
-                Keep
-              </Button>
-              <Button
-                variant="danger"
-                class="rounded-xs"
-                disabled={deleteInviteMutation.isPending}
-                onClick={handleCancelInvite}
-              >
-                <Show
-                  when={deleteInviteMutation.isPending}
-                  fallback="Cancel Invite"
-                >
-                  <SpinnerIcon class="size-4 animate-spin" />
-                </Show>
-              </Button>
-            </div>
-          </Panel.Body>
-        </Panel>
-      </Dialog>
+        onOpenChange={(open) => !open && setShowCancelInviteModal(null)}
+        title="Cancel Invitation"
+        tone="danger"
+        confirmLabel="Cancel Invite"
+        cancelLabel="Keep"
+        pending={deleteInviteMutation.isPending}
+        onConfirm={handleCancelInvite}
+        body={
+          <>
+            Are you sure you want to cancel the invitation for{' '}
+            <span class="font-medium">{showCancelInviteModal()?.email}</span>?
+          </>
+        }
+      />
 
       <Dialog open={showInviteModal()} onOpenChange={handleInviteModalClose}>
         <Panel depth={2} class="max-h-[75vh] text-ink rounded-xl">

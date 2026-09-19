@@ -62,6 +62,7 @@ describe('legacyThemeToVNextTokens', () => {
     expect(defaults).toMatchObject({
       surface: 'var(--layer-surface)',
       panel: 'var(--color-surface-1)',
+      input: 'transparent',
       warning: 'var(--color-amber)',
       message: 'var(--color-surface-1)',
     });

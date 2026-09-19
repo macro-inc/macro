@@ -1,39 +1,77 @@
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
+import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { singleLineMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import type { ReplyTargetDecoratorProps } from '@macro-inc/lexical-core';
+import { useBotsQuery } from '@queries/bots/bots';
 import { useChannelBotsQuery } from '@queries/channel/channel-bots';
-import { getBotDisplayName } from '@queries/channel/message-sender';
+import { getBotDisplayName } from '@queries/messages/message-sender';
+import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { createCallback } from '@solid-primitives/rootless';
 import { openDocument } from '../core/BlockLink';
 
 /** Single-line channel reply reference rendered by a ReplyTargetNode. */
 export function ReplyTarget(props: ReplyTargetDecoratorProps) {
-  const channelBots = useChannelBotsQuery(() => props.channelId);
+  const currentBlockId = useMaybeBlockId();
+  const currentBlockName = useMaybeBlockName();
+  const channelBots = useChannelBotsQuery(() =>
+    props.parent.type === 'channel' ? props.parent.id : ''
+  );
+  const bots = useBotsQuery();
+  const document = useDocumentMetadataQuery(() =>
+    props.parent.type === 'document' ? props.parent.id : ''
+  );
   const senderName = () =>
-    getBotDisplayName(props.senderId, undefined, channelBots.data) ||
+    getBotDisplayName(
+      props.senderId,
+      undefined,
+      props.parent.type === 'channel'
+        ? channelBots.isSuccess
+          ? channelBots.data
+          : []
+        : bots.isSuccess
+          ? bots.data
+          : []
+    ) ||
     getDisplayName(tryMacroId(props.senderId), {}) ||
     props.senderId;
+
+  const targetReady = () =>
+    props.parent.type === 'channel' ||
+    (document.isSuccess && !!document.data.fileType);
 
   const openTarget = createCallback((event: MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
+    const channel = props.parent.type === 'channel';
+    const fileType = channel
+      ? 'channel'
+      : document.isSuccess
+        ? document.data.fileType
+        : undefined;
+    if (!fileType) return;
     openDocument(
-      'channel',
-      props.channelId,
-      {
-        [CHANNEL_PARAMS.message]: props.targetMessageId,
-        [CHANNEL_PARAMS.thread]: props.targetThreadId,
-      },
-      openInNewSplitForMention(event.shiftKey, true)
+      fileType,
+      props.parent.id,
+      channel
+        ? {
+            [CHANNEL_PARAMS.message]: props.targetMessageId,
+            [CHANNEL_PARAMS.thread]: props.targetThreadId,
+          }
+        : { comment_id: props.targetMessageId },
+      openInNewSplitForMention(
+        event.shiftKey,
+        currentBlockName !== fileType || currentBlockId !== props.parent.id
+      )
     );
   });
 
   return (
     <button
       type="button"
+      disabled={!targetReady()}
       class="group/reply-target flex w-full min-w-0 items-center gap-1 py-1 text-left text-xs text-ink-muted rounded-md hover:bg-hover"
       aria-label={`Replying to ${senderName()}: ${props.displayText}`}
       data-reply-target-target-message-id={props.targetMessageId}

@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT provider, external_id, external_name, external_url, last_run_id\n            FROM external_agent_session\n            WHERE agent_session_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "provider",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "external_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "external_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "external_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "last_run_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "2eb18e3f867722e5a6e3e25c6952c642da1055b3de09e3dbc843b5102849f488"
+}

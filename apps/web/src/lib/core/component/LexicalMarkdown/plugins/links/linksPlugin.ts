@@ -82,27 +82,45 @@ function getAutoLinkifier(mode: AutoLinkMatchMode) {
   }
 }
 
-/*
- * Basic URL cleaning.
+const ALLOWED_LINK_PROTOCOLS = new Set(['http:', 'https:', 'mailto:']);
+const URL_SCHEME_PATTERN = /^([a-z][a-z\d+.-]*):/i;
+
+/**
+ * Normalize user-entered links and reject protocols that links must not open.
+ * Bare hosts retain the existing behavior of defaulting to HTTPS.
  */
-function cleanURL(input: string) {
-  let url = input.trim();
+export function normalizeLinkUrl(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
 
-  if (!url.match(/^[a-zA-Z]+:\/\//)) {
-    url = 'https://' + url;
-  }
+  // The URL parser ignores ASCII tabs and newlines in protocols. Use the same
+  // view when detecting a scheme so values such as `java\nscript:` cannot be
+  // mistaken for a bare host and rewritten as HTTPS.
+  const schemeProbe = trimmed.replace(/[\t\n\r]/g, '');
+  const schemeMatch = URL_SCHEME_PATTERN.exec(schemeProbe);
+  const scheme = schemeMatch?.[1]?.toLowerCase();
+  const remainder = schemeMatch ? schemeProbe.slice(schemeMatch[0].length) : '';
+  const isHostWithPort =
+    scheme !== undefined &&
+    (scheme === 'localhost' || scheme.includes('.')) &&
+    /^\d+(?:[/?#]|$)/.test(remainder);
+  const candidate = scheme && !isHostWithPort ? trimmed : `https://${trimmed}`;
 
-  const [basePath, ...queryParts] = url.split(/([#?])/);
+  try {
+    const parsed = new URL(candidate);
+    if (!ALLOWED_LINK_PROTOCOLS.has(parsed.protocol)) return null;
 
-  const encodedBase = basePath
-    .split('/')
-    .map((segment) => (segment.includes(':') ? segment : encodeURI(segment)))
-    .join('/');
+    if (parsed.protocol === 'mailto:') return trimmed;
 
-  if (queryParts.length) {
+    const [basePath, ...queryParts] = candidate.split(/([#?])/);
+    const encodedBase = basePath
+      .split('/')
+      .map((segment) => (segment.includes(':') ? segment : encodeURI(segment)))
+      .join('/');
     return encodedBase + queryParts.join('');
+  } catch {
+    return null;
   }
-  return encodedBase;
 }
 
 /**
@@ -174,9 +192,11 @@ export function findNextAutoLinkMatch(
   const match = linkifier.match(text);
   if (!match) return null;
   const firstMatch = match[0];
-  if (firstMatch.schema === '') {
-    firstMatch.url = cleanURL(firstMatch.raw);
-  }
+  const url = normalizeLinkUrl(
+    firstMatch.schema === '' ? firstMatch.raw : firstMatch.url
+  );
+  if (!url) return null;
+  firstMatch.url = url;
   return firstMatch;
 }
 
@@ -509,10 +529,12 @@ function registerLinksPlugin(editor: LexicalEditor, props: LinkPluginProps) {
         const clipboardText = e.clipboardData?.getData('text/plain');
         if (!clipboardText || !strictLinkifier.matchAtStart(clipboardText))
           return false;
+        const url = normalizeLinkUrl(clipboardText);
+        if (!url) return false;
         const selection = $getSelection();
         if (!$isRangeSelection(selection) || selection.isCollapsed())
           return false;
-        $toggleLink(clipboardText);
+        $toggleLink(url);
         return true;
       },
       COMMAND_PRIORITY_NORMAL
@@ -534,8 +556,8 @@ function registerLinksPlugin(editor: LexicalEditor, props: LinkPluginProps) {
       UPDATE_LINK_URL_COMMAND,
       (payload) => {
         if (payload === null) return false;
-        if (!fuzzyLinkifier.test(payload)) return false;
-        const url = cleanURL(payload);
+        const url = normalizeLinkUrl(payload);
+        if (!url) return false;
 
         const selection = $getSelection();
         if (!$isRangeSelection(selection)) return false;
@@ -561,10 +583,8 @@ function registerLinksPlugin(editor: LexicalEditor, props: LinkPluginProps) {
         if (payload.url === undefined || payload.linkText === undefined) {
           return false;
         }
-        const url = cleanURL(payload.url);
-        if (!strictLinkifier.test(url)) {
-          return false;
-        }
+        const url = normalizeLinkUrl(payload.url);
+        if (!url) return false;
 
         const selection = $getSelection();
         if (!$isRangeSelection(selection)) return false;
@@ -613,7 +633,8 @@ function registerLinksPlugin(editor: LexicalEditor, props: LinkPluginProps) {
     editor.registerCommand(
       INSERT_LINK_COMMAND,
       (payload) => {
-        const url = cleanURL(payload.url);
+        const url = normalizeLinkUrl(payload.url);
+        if (!url) return false;
         const linkNode = $createLinkNode(url);
         linkNode.append($createTextNode(payload.linkText));
         $insertNodes([linkNode]);

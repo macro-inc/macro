@@ -35,6 +35,7 @@ import { queryClient } from '../client';
 import { registerActiveGraphqlSoupQuery } from './graphql/active-queries';
 import { createGraphqlGroupedSoupAstItemsQuery } from './graphql/grouped-items';
 import { createGraphqlSoupAstItemsQuery } from './graphql/items';
+import { soupPageTimestamp } from './page-timestamp';
 import {
   createSoupRequestSignal,
   SOUP_NETWORK_QUERY_OPTIONS,
@@ -71,6 +72,8 @@ interface SoupItemsQueryOptions {
     groupBy?: GroupByField;
     groupKey?: string;
     itemFilter?: (item: SoupApiItem) => boolean;
+    /** Gates optimistic cache inserts only — fetched rows never run through it. */
+    insertFilter?: (item: SoupApiItem) => boolean;
   };
   showSupportedForeignEntities?: boolean;
   /** Resets view-owned GraphQL state before a mutation-driven network refresh. */
@@ -96,10 +99,15 @@ export type SoupAstItemsFlatPage = {
   kind: 'flat';
   items: SoupApiItem[];
   nextCursor: string | null;
+  oldestFetchedTimestamp?: number;
 };
 
 export type SoupAstItemsData = {
+  /** Local Mail results cover synchronized metadata, not the entire mailbox. */
+  cachedMail?: boolean;
   entities: EntityData[];
+  /** Descending page coverage, independent of optimistic/local row membership. */
+  oldestFetchedTimestamp?: number;
   groups: GroupMeta[] | undefined;
   /** Raw API item pool. Only present when query is grouped. */
   itemsById?: SoupAstItemsGroupedPage['items'];
@@ -223,6 +231,10 @@ const useRestSoupAstItemsQuery = (
           kind: 'flat',
           items: response.items,
           nextCursor: response.next_cursor ?? null,
+          oldestFetchedTimestamp: soupPageTimestamp(
+            response.items.map(mapApiSoupItemToEntity),
+            params.sort_method
+          ),
         };
       },
       initialPageParam: null as string | null,
@@ -278,7 +290,17 @@ const useRestSoupAstItemsQuery = (
           );
         });
 
-        return { entities, groups: undefined };
+        const pageTimestamps = data.pages.flatMap((page) =>
+          page.kind === 'flat' && page.oldestFetchedTimestamp !== undefined
+            ? [page.oldestFetchedTimestamp]
+            : []
+        );
+        return {
+          entities,
+          groups: undefined,
+          oldestFetchedTimestamp:
+            pageTimestamps.length > 0 ? Math.min(...pageTimestamps) : undefined,
+        };
       },
       enabled: options?.().enabled,
       // Do not spin through background retries while the explicit load-error

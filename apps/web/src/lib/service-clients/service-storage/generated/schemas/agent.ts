@@ -4,15 +4,19 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { AgentAutoAcceptPermissions } from './agentAutoAcceptPermissions';
 import type { AgentChannelScope } from './agentChannelScope';
 import type { AgentHarnessId } from './agentHarnessId';
+import type { AgentMcpServers } from './agentMcpServers';
 import type { Bot } from './bot';
 
 /**
  * A persisted user- or team-owned AI agent.
  */
 export interface Agent {
+  /** Whether the agent's sessions approve ACP permission requests without
+asking. `None` means always prompt. Bypass also requires the harness's opt-in. */
+  auto_accept_permissions?: AgentAutoAcceptPermissions;
   /** The bot identity used for mentions and channel participation. */
   bot: Bot;
   /** Selected channel ids. Empty for a global agent. */
@@ -26,4 +30,6 @@ export interface Agent {
   harness_id?: AgentHarnessId;
   /** Instructions supplied to the agent at the start of a conversation. */
   instructions: string;
+  /** Which MCP servers sessions of this agent are handed. */
+  mcp: AgentMcpServers;
 }

@@ -59,7 +59,6 @@ const searchProcessingService = new SearchProcessingService(
     vpc,
     platform: { family: 'linux', architecture: 'amd64' },
     serviceContainerPort: 8080,
-    isPrivate: false,
     healthCheckPath: '/health',
     containerEnvVars: [
       { name: 'ENVIRONMENT', value: stack },

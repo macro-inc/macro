@@ -1,5 +1,5 @@
 import { createSoupState } from '@app/features/next-soup/create-soup-state';
-import { AnimatedEmailIcon } from '@icon/wide-email';
+import EmailIcon from '@phosphor/envelope.svg';
 import { createEffect, createSignal } from 'solid-js';
 import { MockAppChrome } from '../components/MockAppChrome';
 import { ClickCallout, HotkeyCallout } from '../components-lib';
@@ -40,7 +40,7 @@ function SidebarNavContent(props: LessonContentProps) {
           <div class="h-px flex-1 bg-edge-muted" />
         </div>
         <ClickCallout
-          icon={AnimatedEmailIcon}
+          icon={EmailIcon}
           label="in the sidebar"
           completed={done()}
         />

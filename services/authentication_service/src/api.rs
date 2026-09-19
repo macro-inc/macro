@@ -15,6 +15,7 @@ use utoipa_swagger_ui::SwaggerUi;
 pub(crate) mod context;
 
 // Routes
+mod codex;
 mod cursor_api_key;
 #[allow(unused_imports)]
 mod email;
@@ -44,6 +45,13 @@ mod middleware;
 pub(crate) mod swagger;
 mod utils;
 
+#[cfg(test)]
+mod test;
+
+/// Path prefix the shared gateway ALB forwards unmodified. Dual-mounted
+/// alongside `/` so the dedicated ALB keeps working during cutover.
+const GATEWAY_PATH_PREFIX: &str = "/auth";
+
 pub async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<()> {
     let cors = macro_cors::cors_layer_with_headers(vec![HeaderName::from_static(
         MACRO_REFRESH_TOKEN_HEADER,
@@ -57,8 +65,10 @@ pub async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<(
         // The health router is attached here so we don't attach the logging middleware to it
         .merge(health::router())
         .layer(cors)
-        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
         .layer(CompressionLayer::new());
+    // Swagger sits outside the dual-mount. Nested under `/auth`, the absolute
+    // `/api-doc/openapi.json` URL in the UI would 404 on the gateway.
+    let app = mount_at_root_and_prefix(app).merge(swagger_ui());
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
         .await
@@ -77,6 +87,21 @@ pub async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<(
     .context("error starting service")
 }
 
+fn mount_at_root_and_prefix(inner: Router) -> Router {
+    Router::new()
+        .merge(inner.clone())
+        .nest(GATEWAY_PATH_PREFIX, inner)
+}
+
+fn swagger_ui() -> Router {
+    Router::new()
+        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
+        .merge(
+            SwaggerUi::new("/auth/docs")
+                .url("/auth/api-doc/openapi.json", swagger::ApiDoc::openapi()),
+        )
+}
+
 fn api_router(state: ApiContext) -> Router<ApiContext> {
     Router::new()
         .merge(native_app_service::inbound::native_app_router(
@@ -93,6 +118,7 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
         .nest("/user", user::router())
         .nest("/link", link::router())
         .nest("/cursor-api-key", cursor_api_key::router())
+        .nest("/codex", codex::router())
         .nest("/github_pull_requests", github_pull_requests::router())
         .nest(
             "/team",
@@ -109,6 +135,16 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
             referral::inbound::axum_router::referral_router(
                 referral::inbound::axum_router::ReferralRouterState {
                     service: state.referral_service.clone(),
+                    rate_limiter: state.rate_limit_service.clone(),
+                    authorization_state: state.authorization_state.clone(),
+                },
+            ),
+        )
+        .nest(
+            "/gtm-invite",
+            gtm_invite::inbound::axum_router::gtm_invite_router(
+                gtm_invite::inbound::axum_router::GtmInviteRouterState {
+                    service: state.gtm_invite_service.clone(),
                     rate_limiter: state.rate_limit_service.clone(),
                     authorization_state: state.authorization_state.clone(),
                 },

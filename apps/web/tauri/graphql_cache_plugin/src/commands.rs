@@ -12,8 +12,9 @@
 use crate::engine::{
     AffectedOperationsResultWire, ClaimedMutationWire, CommitOptimisticWriteResultWire,
     DeferOptimisticWriteResultWire, EngineHandle, EnqueueOptimisticMutationResultWire,
-    MutationUpsertKindWire, ReadResultWire, RecordSelectionResultWire,
-    RollbackOptimisticWriteResultWire, WriteRegistration, WriteRequest, WriteResultWire,
+    EntityFilterRequest, EntityFilterResult, MutationUpsertKindWire, ReadResultWire,
+    RecordSelectionResultWire, RollbackOptimisticWriteResultWire, WriteRegistration, WriteRequest,
+    WriteResultWire,
 };
 use crate::{
     CacheState, InitializedCache, emit_cache_changed, emit_mutation_settled, emit_ops_affected,
@@ -127,6 +128,15 @@ pub async fn graphql_cache_search(
     request: SearchRequest,
 ) -> Result<SearchPage, String> {
     engine_handle(&state)?.search(request).await
+}
+
+/// Evaluates Soup filters over native projections, including cached Mail pages.
+#[tauri::command]
+pub async fn graphql_cache_entity_filter(
+    state: State<'_, CacheState>,
+    request: EntityFilterRequest,
+) -> Result<EntityFilterResult, String> {
+    engine_handle(&state)?.entity_filter(request).await
 }
 
 /// Active-query registration installed by a network write.

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM \"UserHistory\" WHERE \"itemId\" = $1 AND \"itemType\" = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cb3ae1a75cee34cedf4791143f9e34b97b5b8593933790ef8544147b4ae4a55d"
+}

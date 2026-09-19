@@ -4,6 +4,12 @@ How `block-channel` / `features/channel` is wired, as a template for giving `blo
 real state (live updates, send path, scroll, input). All paths relative to `apps/web/src`
 unless absolute. Line numbers are as of commit `254b60f339`.
 
+These are historical design notes, not a current implementation inventory.
+Section 5 and the scroll recommendation below were refreshed against `17a1dc1848`.
+The agent now has a live reconciled feed, wired composer, and shared TanStack
+ThreadList; the remaining proposed factories/API names below describe the earlier
+design exploration and must be checked against current code before reuse.
+
 ---
 
 ## 1. Block entry & composition
@@ -184,7 +190,7 @@ and each `*InTargetCaches` helper applies the change to all three cache families
   `lookup` closure so only changed rows re-render. Resource resolves once; the store keeps updating.
 - `agent-session-stream.ts`: the buffering seam. `beginAgentSessionStream(channelId)`
   **before** the fetch, buffer frames, `followAgentSession` aligns buffer against snapshot
-  (`dropOverlap`, :328 — longest buffered-prefix that is a suffix of the fetched log), one
+   (Rust `LogIngestion` reconciles durable snapshot/live row overlap), one
   machine per session shared across split views, refcounted release.
   Also `subscribeAgentSessionLog(sessionId, sink)` (:90) for raw-frame consumers.
 - `agent-session-placeholders.ts`: synthesizes a placeholder comms row when the fold derives
@@ -195,37 +201,34 @@ and each `*InTargetCaches` helper applies the change to all three cache families
 
 ## 5. Scroll & list (summary)
 
-- **Virtualization**: `virtua/solid` (`Virtualizer` in `Channel/ThreadList.tsx:712`), not a
-  hand-rolled list. `itemSize={96}` estimate, `bufferSize={500}`, `shift` prop flips during
-  top-pagination so existing items keep their offsets, `keepMounted` pins the target thread's
-  row during nested navigation, `cache={snapshot.virtualCache}` restores measured sizes.
-- **ThreadList contract**: renders from `keys: Accessor<string[]>` + row render prop; emits
-  `onNavigationReady(ThreadListNavigation)` (scrollTo/scrollToId/scrollToBottom/scrollToElementInItem/markUserIntent, :38–61)
-  and `onScrollStateChange(ThreadListScrollState)` ({didInitialScroll, isNearBottom, distanceFromTop/Bottom,...}, :63–70).
-- **Initial scroll** is a small state machine: preposition to bottom before measurement
-  (:538), retry via `onScrollEnd` (:553), RAF fallbacks for "nothing moved". Everything else
-  (target scrolls, pagination) is gated on `didInitialScroll`.
-- **pinToBottom** (:328): after scroll-to-bottom, re-pin every frame for 1s + ResizeObserver,
-  aborted by wheel-up/touch-drag — absorbs late-settling content (images, growing agent output).
-  **This is the piece a streaming agent transcript wants most.**
-- **Pagination triggers**: `onScrollNearTop/Bottom` fire only with `scrollIntent.isUserInteracting()`
-  (:662) so virtualizer-resize scrolls can't fetch pages.
-- **Sticky scroll**: `createStickyScrollEffect` (§3) — follow only if appended-at-bottom && near true bottom.
-- **Scroll snapshots**: `onScrollSnapshotChange` emits `{scrollOffset, virtualCache, isNearBottom}`
-  on every scroll; Channel keeps the latest in a signal; entry-state captor persists it; on
-  restore, `isNearBottom` snapshots collapse to "scroll to bottom" (ThreadList.tsx:520–529).
-- **Target navigation**: adapter resolves id → Channel `goToMessage` → controller sets
-  `loadAroundMessageId` (new query window) + pending scroll ids → effect scrolls when key
-  present → row calls `positionTarget`/`onTargetMessageScrolled` to finish → 1s flash then clear.
-- `ScrollToBottomOverlay` reads `threadListScrollState`; `handleScrollToBottom` (Channel.tsx:545)
-  resets the query to the default bottom window if `hasPreviousPage` (mid-history slice).
+- **Virtualization**: `@tanstack/solid-virtual` in `Channel/ThreadList.tsx`, with
+  `anchorTo: 'end'`, a 96px estimate, six-row overscan, and measured variable heights.
+  Solid `Key` owns rows by message ID rather than virtual-range index.
+- **Contract**: `keys: Accessor<string[]>`, a row render prop, `onReady(navigation)`
+  (scrollToLatest/scrollToMessage/scrollToElement), and `onScroll(state, snapshot)`.
+  `initialPosition` supports latest, element, and restore; `targetId` keeps a
+  navigation target mounted. `onReady` can return cleanup.
+- **Initial layout**: `createScrollLifecycle` waits for a nonempty measured list;
+  the initial offset seeds the latest range even when data arrives asynchronously.
+- **Following**: core end anchoring handles measured streaming growth and
+  `followOnAppend` follows new keys only near the end (50px). No one-second agent
+  settle loop or independent growth observer is needed.
+- **Mobile**: numeric `insets` participate in measurements and navigation; viewport
+  and floating-inset changes preserve the pin only when previously near the end.
+  Short lists bottom-align within these insets.
+- **Snapshots**: `{scrollOffset, measurements, isNearBottom}`; channel persists them,
+  but the agent transcript currently opens at latest rather than restoring history.
+- **Chrome**: `CustomScrollbar` and `ScrollToBottomOverlay`; the overlay requires
+  explicit downward scrolling while more than one viewport from the bottom.
+- **Agent reuse**: `component/Transcript.tsx` renders this same ThreadList with
+  session/turn/author keys, shared message width, and `ReplyToSelection`. Do not
+  reintroduce the former Virtua implementation or duplicate the list machinery.
 
 ---
 
 ## 6. Input wiring
 
-- Component stack: `TaskModeChannelInput` (message face + task composer morph,
-  `Input/TaskModeChannelInput.tsx`) → `ChannelInput` (`Input/ChannelInput.tsx`, lexical
+- Component stack: `ChannelInput` (`Input/ChannelInput.tsx`, lexical
   markdown editor + mentions tracker + attachment tracker + typing tracker + hotkeys) →
   `Input` primitives.
 - **Contract**: `InputSnapshot = { value, mentions, attachments }` (`Input/types.ts:52`);
@@ -264,41 +267,32 @@ messages in a `Scroll` (component/Block.tsx), `AgentInput` with an unwired `onSe
    and exposes a small handle (`goToLatest`, `getStateSnapshot`, maybe `goToTurn`).
 2. **The factory decomposition.** Build the stateful surface as `create*` factories with
    accessor-in/accessor-out interfaces, composed in the root:
-   - `createAgentSessionFeed` — the analog of `createFoldedMessages` + `createMessageIndex`:
-     resource that fetches the log, opens the fold machine, follows live frames, and exposes a
-     reconciled *ordered* store of folded messages (the block needs an ordered list, not the
-     channel's `(sessionId, turn, author)` lookup — that shape exists in
-     `agent-session-stream.ts`'s sink; keep `reconcile()` so streaming appends don't remount rows).
-     Reuse `beginAgentSessionStream`/`followAgentSession` (or `subscribeAgentSessionLog`) —
-     the buffering seam and one-machine-per-session refcounting are already solved there;
-     do NOT refetch-per-frame.
-   - `createSessionStatusController` — session status / turn-in-flight / streaming signals
-     (derive from the feed's frames; this is our analog of `threadListScrollState` + typing).
-   - `createPermissionPrompts` — pending permission requests as a store keyed by request id,
-     with `respond(id, outcome)`; model it on `createDeleteMessageConfirmation` (a factory that
-     owns pending state *and* returns the UI component) if prompts render as a dialog, or on
-     `threadManager` if they render inline per-message.
-   - `createComposerController` — the busy/enabled state machine: analog of
-     `channelInputSnapshot`/`channelInputHandle` signals + `onSend` in Channel.tsx:623. Own
-     `isSending`/`isTurnRunning`, gate `onSend`, and implement **restore-on-error** exactly as
-     Channel does (restore snapshot only if input is still empty).
+   - `createAgentSession` (`context/create-agent-session.ts`) — the Solid face of the
+     shared `AgentSession` class (`lib/core/agent-session/AgentSession.ts`): the class owns
+     the fold machine, the realtime subscription, the REST calls, and *speculation*; the
+     wrapper owns a reconciled ordered store and applies fold events to it. One instance per
+     session id, refcounted across the block, the agents view, and the magic chip.
+   - There is no status or composer controller. "What is the agent doing" is the fold's
+     `metadata.turn` discriminant (`idle | starting | running | stopping | blocked |
+     disconnected`), and "is this message still on the wire" is `message.pending`. The
+     composer reads both and keeps no state.
+   - `createElicitationController` — the live question and the one POST that answers it.
+   - `createQueueController` — the server-side action queue, baselined once per socket.
 3. **Late-bound handles as signals** for anything the child publishes upward (input handle,
    scroll navigation), with `awaitCondition` in the adapter if orchestrator methods need them.
-4. **Optimistic send with nonce-style dedup.** When sending a prompt: append an optimistic
-   user-turn row to the feed store immediately, key it by a client id, and adopt/replace when
-   the corresponding frame (or server ack) arrives — the exact pattern of
-   `optimisticInsertChannelMessage` + `adoptAgentSessionPlaceholder`. The channel's prompt-echo
-   problem (`hide-duplicate-prompts.ts`, flagged as a stopgap in Channel.tsx:241–250) is the
-   cautionary tale: decide the dedup key (client nonce in the frame?) up front.
-5. **Scroll**: at minimum `createStickyScrollEffect`'s exact rule (follow only when appended
-   at bottom && near bottom) + a `pinToBottom`-style settle loop, since agent output grows
-   after append. If transcripts get long, adopt `ThreadList` itself — it's channel-flavored but
-   its props are generic (`keys`, render prop, navigation/scroll-state callbacks); virtua is
-   the right tool for a multi-thousand-row session. Persist `{scrollOffset, virtualCache, isNearBottom}`
-   in the entry-state captor like the adapter does.
+4. **Optimistic send (implemented, in the fold).** `AgentSession.issue` speculates the
+   action into the machine before the POST: the machine forks its confirmed state, folds the
+   frame the harness will log (built by the same `AgentAction::to_runtime`), and marks the
+   derived messages `pending`. The confirmed row promotes it in place by action id (by
+   content for a stop), a foreign row rebases the suffix behind it, a failed POST retracts
+   it. Nothing is predicted about the runtime's answer: a pending stop reads as `stopping`,
+   never as a closed turn. See `crates/agent_fold/src/domain/speculation.rs`.
+5. **Scroll (implemented)**: reuse `ThreadList` directly, as described in section 5.
+   If history restoration is later added, use its `measurements` snapshot contract,
+   not the retired Virtua cache or a second pinning loop.
 6. **Entry-state captor** (`splitPanel.handle.registerEntryStateCaptor`) for scroll position +
    composer-adjacent state so split history restore doesn't reset the view.
-7. **Input**: reuse `ChannelInput` (not `TaskModeChannelInput`) or keep `AgentInput` but adopt
+7. **Input**: reuse `ChannelInput` or keep `AgentInput` but adopt
    the `InputSnapshot`/`InputHandle` contract, `persistenceKey` draft persistence
    (`makeInputValuePersistenceKey`-style, keyed by session id), and the send/restore flow.
 8. **WS routing**: nothing new needed — `SyncProvider` already routes `agent_session_log`

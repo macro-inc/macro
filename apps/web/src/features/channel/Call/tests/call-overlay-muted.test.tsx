@@ -59,7 +59,11 @@ vi.mock('../TrackView', () => ({
 }));
 
 vi.mock('../use-toggle-share-with-team', () => ({
-  useToggleShareWithTeam: () => () => undefined,
+  useActiveCallTeamShare: () => ({
+    toggle: () => Promise.resolve(),
+    canToggle: () => true,
+    isPending: () => false,
+  }),
 }));
 
 type MockTrackPublication = {

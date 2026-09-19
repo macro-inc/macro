@@ -1,14 +1,16 @@
 import { usePreference } from '@app/preferences/use-preference';
+import { useMaybeBlockAliasedName } from '@core/block';
 import { Resize, ResizeZoneContext } from '@core/component/Resize/Resize';
+import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import SidePanelIcon from '@icon/square-half-filled.svg';
 import { Accordion } from '@kobalte/core/accordion';
 import ArrowLeft from '@phosphor/arrow-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import InfoIcon from '@phosphor/info.svg';
+import SidePanelIcon from '@phosphor/sidebar-simple.svg';
 import { Button, Panel, Scroll } from '@ui';
 import { cn } from '@ui/utils/classname';
 import {
@@ -29,6 +31,7 @@ import {
 } from 'solid-js';
 import { HeaderIsland } from '../split-layout/components/HeaderIsland';
 import { SplitHeaderRight } from '../split-layout/components/SplitHeader';
+import { useSplitPanel } from '../split-layout/layoutUtils';
 import {
   SidePanelContext,
   type SidePanelContextType,
@@ -63,38 +66,25 @@ function createWideOpenState(
 }
 
 /**
- * Layout root for a block that opts in to a right-side panel.
- *
- * Wraps `props.children` in a horizontal Resize.Zone with a main panel
- * (the children) and a side panel that hosts any `<SidePanel.Section>`
- * descendants registered via context.
- *
- * Two rendering modes based on available width:
- *   - Wide (>= NARROW_THRESHOLD_PX, non-mobile): side panel renders as a
- *     resizable split next to the main content. Defaults to open unless
- *     `defaultOpen` is false.
- *   - Narrow (mobile or narrower than threshold): side panel renders as a
- *     full-screen overlay covering the main content. Defaults to closed;
- *     the main content stays mounted underneath.
- *
- * The side panel is suppressed entirely when no sections are registered.
- *
- * Pass `persistKey` to remember the wide-mode open state across visits (see
- * `createWideOpenState`); without it the panel returns to `defaultOpen` every
- * time the block mounts.
- *
- * Sections are rendered as a Kobalte Accordion in JSX-declared order.
+ * Owns side-panel state so controls and chrome can sit outside the horizontal
+ * Layout row while still operating on the same panel.
  */
-function Layout(
+function Root(
   props: ParentProps<{ defaultOpen?: boolean; persistKey?: string }>
 ) {
+  const splitPanel = useSplitPanel();
+  const content = splitPanel?.handle.content();
+  const persistKey =
+    props.persistKey ??
+    useMaybeBlockAliasedName() ??
+    (content?.type === 'component' ? content.id : content?.type);
   const [sections, setSections] = createSignal<SidePanelSectionEntry[]>([]);
   const [openIds, setOpenIds] = createSignal<string[]>([]);
   // Independent open state per mode so wide and narrow can have different
   // defaults (and the user's preference in one mode doesn't bleed into the
   // other after a resize).
   const [isWideOpen, setIsWideOpen] = createWideOpenState(
-    props.persistKey,
+    persistKey,
     props.defaultOpen ?? true
   );
   const [isNarrowOpen, setIsNarrowOpen] = createSignal(false);
@@ -130,6 +120,19 @@ function Layout(
   };
 
   const hasSections = createMemo(() => sections().length > 0);
+  if (splitPanel?.splitHotkeyScope) {
+    registerHotkey({
+      hotkey: ']',
+      scopeId: splitPanel.splitHotkeyScope,
+      hotkeyToken: TOKENS.block.toggleSidePanel,
+      description: 'Toggle Side Panel',
+      keyDownHandler: () => {
+        if (!hasSections()) return false;
+        toggle();
+        return true;
+      },
+    });
+  }
 
   const ctx: SidePanelContextType = {
     register,
@@ -140,26 +143,73 @@ function Layout(
     setIsOpen,
     toggle,
     isNarrow,
+    setIsNarrow,
     setOpenSectionIds: setOpenIds,
     openSectionIds: openIds,
   };
 
   return (
     <SidePanelContext.Provider value={ctx}>
-      <SidePanelHeaderToggle />
-      <Resize.Zone direction="horizontal" gutter={0} resizable={false}>
-        <SidePanelLayoutInner
-          sections={sections}
-          openIds={openIds}
-          setOpenIds={setOpenIds}
-          isOpen={isOpen}
-          setIsOpen={setIsOpen}
-          setIsNarrow={setIsNarrow}
-        >
-          {props.children}
-        </SidePanelLayoutInner>
-      </Resize.Zone>
+      {props.children}
     </SidePanelContext.Provider>
+  );
+}
+
+/**
+ * Horizontal content row for a block that opts in to a right-side panel.
+ *
+ * The side panel renders beside the main content in wide layouts and as an
+ * overlay in narrow layouts. Sections declared as descendants register with
+ * the nearest `<SidePanel.Root>`. For backwards compatibility, Layout creates
+ * its own Root when one is not already present.
+ */
+function Layout(
+  props: ParentProps<{
+    defaultOpen?: boolean;
+    persistKey?: string;
+    headerToggle?: boolean;
+  }>
+) {
+  const parentContext = useContext(SidePanelContext);
+
+  const Panels = () => {
+    const ctx = useContext(SidePanelContext);
+    if (!ctx) {
+      throw new Error('<SidePanel.Layout> must be inside <SidePanel.Root>');
+    }
+
+    return (
+      <>
+        <Show when={props.headerToggle ?? true}>
+          <SidePanelHeaderToggle />
+        </Show>
+        <Resize.Zone direction="horizontal" gutter={0} resizable={false}>
+          <SidePanelLayoutInner
+            sections={ctx.sections}
+            openIds={ctx.openSectionIds}
+            setOpenIds={ctx.setOpenSectionIds}
+            isOpen={ctx.isOpen}
+            setIsOpen={ctx.setIsOpen}
+            setIsNarrow={ctx.setIsNarrow}
+          >
+            {props.children}
+          </SidePanelLayoutInner>
+        </Resize.Zone>
+      </>
+    );
+  };
+
+  return (
+    <Show
+      when={parentContext}
+      fallback={
+        <Root defaultOpen={props.defaultOpen} persistKey={props.persistKey}>
+          <Panels />
+        </Root>
+      }
+    >
+      <Panels />
+    </Show>
   );
 }
 
@@ -206,7 +256,7 @@ function SidePanelLayoutInner(
           maxSize={SIDE_MAX_PX}
           index={1}
         >
-          <div class={'relative size-full z-split-panel-chrome'}>
+          <div class="relative flex size-full min-h-0 flex-col z-split-panel-chrome">
             <SidePanelOutlet
               sections={props.sections}
               openIds={props.openIds}
@@ -249,50 +299,71 @@ function SidePanelLayoutInner(
   );
 }
 
-function SidePanelHeaderToggle() {
+function Toggle() {
   const ctx = useContext(SidePanelContext);
-  if (!ctx) return null;
-
-  const ToggleButton = () => (
-    <Button
-      depth={2}
-      variant="outline"
-      size="icon-sm"
-      class={cn(
-        !isTouchDevice() && 'bg-surface',
-        isTouchDevice() &&
-          'border-transparent! hover:bg-transparent! active:bg-transparent! focus-visible:bg-transparent! active:text-accent',
-        isTouchDevice() && ctx.isOpen() && 'text-accent'
-      )}
-      tooltip={ctx.isOpen() ? 'Hide Side Panel' : 'Show Side Panel'}
-      hotkey={TOKENS.block.toggleSidePanel}
-      onClick={() => ctx.toggle()}
-    >
-      <Show
-        when={ctx.isNarrow()}
-        fallback={<SidePanelIcon class={cn(ctx.isOpen() && 'text-accent')} />}
-      >
-        <InfoIcon
-          class={cn('size-4', !isMobile() && ctx.isOpen() && 'text-accent')}
-        />
-      </Show>
-    </Button>
-  );
+  if (!ctx) {
+    throw new Error('<SidePanel.Toggle> must be inside <SidePanel.Root>');
+  }
 
   return (
     <Show when={ctx.hasSections()}>
-      <SplitHeaderRight>
-        <div class="order-last flex items-center">
-          <HeaderIsland
-            class={cn(
-              'size-10 justify-center !px-0',
-              ctx.isOpen() && 'text-accent'
-            )}
-          >
-            <ToggleButton />
-          </HeaderIsland>
-        </div>
-      </SplitHeaderRight>
+      <Button
+        depth={2}
+        variant={isTouchDevice() ? 'ghost' : 'outline'}
+        size="icon-sm"
+        class={cn(
+          !isTouchDevice() && 'bg-surface',
+          isTouchDevice() &&
+            'rounded-full border-0 hover:bg-transparent! active:bg-transparent! focus-visible:bg-transparent! active:text-accent',
+          isTouchDevice() && ctx.isOpen() && 'text-accent'
+        )}
+        tooltip={ctx.isOpen() ? 'Hide Side Panel' : 'Show Side Panel'}
+        hotkey={TOKENS.block.toggleSidePanel}
+        onClick={() => ctx.toggle()}
+      >
+        <Show
+          when={ctx.isNarrow()}
+          fallback={<SidePanelIcon class={cn(ctx.isOpen() && 'text-accent')} />}
+        >
+          <InfoIcon
+            class={cn('size-4', !isMobile() && ctx.isOpen() && 'text-accent')}
+          />
+        </Show>
+      </Button>
+    </Show>
+  );
+}
+
+function SidePanelHeaderToggle() {
+  const panel = useSplitPanel();
+  const ctx = useContext(SidePanelContext);
+  if (!ctx) {
+    throw new Error('<SidePanelHeaderToggle> must be inside <SidePanel.Root>');
+  }
+
+  return (
+    <Show when={ctx.hasSections()}>
+      <Show when={!isTouchDevice() && !panel?.isInlinePreview}>
+        <SplitHeaderRight>
+          <div class="order-[1001] flex shrink-0 items-center">
+            <Toggle />
+          </div>
+        </SplitHeaderRight>
+      </Show>
+      <Show when={isTouchDevice() || panel?.isInlinePreview}>
+        <SplitHeaderRight>
+          <div class="order-last flex items-center">
+            <HeaderIsland
+              class={cn(
+                'size-10 justify-center !px-0',
+                ctx.isOpen() && 'text-accent'
+              )}
+            >
+              <Toggle />
+            </HeaderIsland>
+          </div>
+        </SplitHeaderRight>
+      </Show>
     </Show>
   );
 }
@@ -328,13 +399,13 @@ function SidePanelOutlet(props: {
 }
 
 /**
- * A collapsible section that registers itself with the nearest SidePanel.Layout.
+ * A collapsible section that registers itself with the nearest SidePanel.Root.
  *
  * The section component returns null in place; its children are rendered
  * inside the side panel's Accordion. Children evaluate lazily when the
  * panel renders the section, so they only mount when the panel is visible.
  *
- * Must be a descendant of `<SidePanel.Layout>`.
+ * Must be a descendant of `<SidePanel.Root>`. A standalone Layout creates one.
  */
 function Section(
   props: ParentProps<{
@@ -353,7 +424,7 @@ function Section(
 ) {
   const ctx = useContext(SidePanelContext);
   if (!ctx) {
-    throw new Error('<SidePanel.Section> must be inside <SidePanel.Layout>');
+    throw new Error('<SidePanel.Section> must be inside <SidePanel.Root>');
   }
 
   onMount(() => {
@@ -525,7 +596,9 @@ function Card(props: ParentProps) {
 }
 
 export const SidePanel = {
+  Root,
   Layout,
+  Toggle,
   Section,
   Grid,
   Row,

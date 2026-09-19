@@ -20,8 +20,8 @@ export const lapisTheme: ThemeV3 = {
       'color-mix(in srgb, var(--color-content-0) 51%, var(--color-content-4))',
     'content-3': 'oklch(0.62 0.012 250deg)',
     'content-4': 'oklch(70.26% 0.0412 250)',
-    edge: 'oklch(93% 0.01 250 / 0)',
-    'edge-muted': 'oklch(95% 0.008 250 / 0)',
+    edge: 'oklch(0.9 0.01 250deg)',
+    'edge-muted': 'oklch(0.91 0.008 250deg)',
     accent: 'oklch(67.41% 0.1964 255)',
     red: 'oklch(56.77% 0.2102 27.67)',
     orange: 'oklch(72.22% 0.1679 47.6)',
@@ -62,6 +62,7 @@ export const lapisTheme: ThemeV3 = {
     success: 'var(--color-green)',
     warning: 'var(--color-yellow)',
     failure: 'var(--color-red)',
-    chrome: 'var(--color-surface-4)',
+    chrome:
+      'color-mix(in oklch, var(--color-surface-3) 98%, var(--color-content-0))',
   },
 };

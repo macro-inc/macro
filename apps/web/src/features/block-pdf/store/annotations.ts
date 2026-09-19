@@ -1,16 +1,16 @@
-import { pdfModificationDataStore } from '@block-pdf/signal/document';
-import { serverModificationDataSignal } from '@block-pdf/signal/save';
 import type { IModificationData } from '@block-pdf/type/coParse';
 import type { IPlaceable } from '@block-pdf/type/placeables';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { batch, untrack } from 'solid-js';
 import { reconcile } from 'solid-js/store';
+import { usePdfDocument } from '../context/pdf-document-context';
 import { annotationsToPlaceables } from './placeables';
 
 export const useLoadAnnotations = () => {
-  const setPdfModificationData = pdfModificationDataStore.set;
-
-  const serverModificationData = serverModificationDataSignal.get;
+  const pdfDocument = usePdfDocument();
+  const [, setModificationData] = pdfDocument.state.stores.modificationData;
+  const [serverModificationData] =
+    pdfDocument.state.signals.serverModificationData;
   const hasServerModificationData = () => serverModificationData() != null;
 
   // const getPageHighlightMap = (highlights: IHighlight[]): HighlightUuidMap => {
@@ -27,13 +27,16 @@ export const useLoadAnnotations = () => {
   //   return hmap;
   // };
 
-  return async (pdf: PDFDocumentProxy, modificationData: IModificationData) => {
+  return async (
+    documentProxy: PDFDocumentProxy,
+    modificationData: IModificationData
+  ) => {
     // clearHighlightStore();
 
     if (hasServerModificationData()) {
       batch(() => {
         // setHighlightStore(reconcile(modificationData.highlights));
-        setPdfModificationData(
+        setModificationData(
           'placeables',
           reconcile(untrack(() => modificationData.placeables))
         );
@@ -41,12 +44,12 @@ export const useLoadAnnotations = () => {
       return;
     }
 
-    setPdfModificationData('placeables', reconcile([]));
+    setModificationData('placeables', reconcile([]));
     // const allHighlights: [number, HighlightUuidMap][] = [];
     const allPlaceables: IPlaceable[] = [];
-    for (let pageIndex = 0; pageIndex < pdf.numPages; pageIndex++) {
+    for (let pageIndex = 0; pageIndex < documentProxy.numPages; pageIndex++) {
       try {
-        const page = await pdf.getPage(pageIndex + 1);
+        const page = await documentProxy.getPage(pageIndex + 1);
 
         const pageViewport = page.getViewport({ scale: 1 });
         const [annotations, _textContent] = await Promise.all([
@@ -83,7 +86,7 @@ export const useLoadAnnotations = () => {
       // for (const [pageIndex, highlightsOnPage] of allHighlights) {
       //   setHighlightStore(pageIndex, highlightsOnPage);
       // }
-      setPdfModificationData('placeables', reconcile(allPlaceables));
+      setModificationData('placeables', reconcile(allPlaceables));
     });
   };
 };

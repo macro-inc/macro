@@ -25,7 +25,8 @@ fn normalize_link_share_access_level(
     link_share.map(|_| link_share_access_level_or_default(link_share_access_level))
 }
 
-/// Creates a new share permission
+/// Creates a new share permission with explicit team sharing disabled.
+/// Team sharing requires entity context and synchronized grants, so any supplied team level is ignored.
 #[tracing::instrument(skip(transaction))]
 pub async fn create_share_permission(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
@@ -61,6 +62,7 @@ pub async fn create_share_permission(
         id,
         link_share,
         link_share_access_level,
+        team_share_access_level: None,
         owner: String::new(), // Owner is not stored on the share permission row.
         channel_share_permissions: share_permission.channel_share_permissions.clone(),
     })

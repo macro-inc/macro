@@ -22,8 +22,9 @@ use uuid::Uuid;
 
 use super::model::{
     EditReceipt, EntityPropertiesKey, EntityPropertyInfo, EntityPropertyMutationSnapshot,
-    EntityPropertyOptionSelection, EntityPropertyOptionUpdate, GetOrCreateTagDefinitionResult,
-    PropertyDefinitionOwner, TagPromotionOutcome, TagRemapOutcome, TaskAssignedNotification,
+    EntityPropertyOptionSelection, EntityPropertyOptionUpdate, GetOrCreatePropertyOptionResult,
+    GetOrCreateTagDefinitionResult, PropertyDefinitionOwner, PropertyOptionReplaceOutcome,
+    PropertyOptionReplacePlan, TagPromotionOutcome, TagRemapOutcome, TaskAssignedNotification,
     UpdatePropertyOptionOutcome, ViewReceipt,
 };
 
@@ -120,6 +121,16 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         color: Option<String>,
     ) -> impl Future<Output = Result<PropertyOption, Self::Err>> + Send;
 
+    /// Resolve by exact value, inserting if absent. Concurrent calls return the
+    /// same option; an existing option's color and display order are preserved.
+    fn get_or_create_property_option(
+        &self,
+        property_definition_id: Uuid,
+        display_order: i32,
+        value: PropertyOptionValue,
+        color: Option<String>,
+    ) -> impl Future<Output = Result<GetOrCreatePropertyOptionResult, Self::Err>> + Send;
+
     /// Update a property option's value, color, and display order in place.
     /// The option id is preserved, so every entity referencing it reflects the
     /// change with no per-entity rewrite.
@@ -130,6 +141,15 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         color: Option<String>,
         display_order: i32,
     ) -> impl Future<Output = Result<UpdatePropertyOptionOutcome, Self::Err>> + Send;
+
+    /// Apply a whole-set option change in one transaction: deletes (stripping
+    /// ids from entity values), in-place rewrites, then inserts. Rewrites go
+    /// through temporary values so a set of options can trade values.
+    fn replace_property_options(
+        &self,
+        property_definition_id: Uuid,
+        plan: &PropertyOptionReplacePlan,
+    ) -> impl Future<Output = Result<PropertyOptionReplaceOutcome, Self::Err>> + Send;
 
     /// Delete a property option and strip its id from every entity value that
     /// references it, atomically. Returns `true` if the option was deleted,

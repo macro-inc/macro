@@ -3,9 +3,13 @@
 //! An action can be accepted and queued before there is any way to express it
 //! as ACP, since that needs the [`SessionId`] the handshake produces.
 
+use std::collections::BTreeMap;
+
 use agent_client_protocol::schema::v1::{
-    CancelNotification, ClientRequest, PromptRequest, RequestId, SessionId,
-    SetSessionConfigOptionRequest,
+    CancelNotification, ClientRequest, ContentBlock, CreateElicitationResponse,
+    ElicitationAcceptAction, ElicitationAction, ElicitationContentValue as AcpContentValue,
+    PromptRequest, RequestId, RequestPermissionOutcome, RequestPermissionResponse, ResourceLink,
+    SelectedPermissionOutcome, SessionId, SetSessionConfigOptionRequest,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
 use macro_uuid::Uuid;
@@ -24,11 +28,12 @@ pub const MODEL_CONFIG_ID: &str = "model";
 /// frame, and read back off that frame as `request_id` on the folded message
 /// it derives.
 ///
-/// Minted only by the server at accept time, as a v7 uuid so ids sort by mint
-/// time. On the wire and in JSON it is the bare uuid, and a uuid-shaped
-/// request id is the whole ownership test: the server is the only writer of
-/// runtime-bound frames. The machine's own handshake request ids
-/// (`agent_session:{session}:{n}`) are not uuids and stay `None`.
+/// A v7 uuid, so ids sort by mint time. Minted by the server at accept time,
+/// or by a client that speculated the action and named it in the control
+/// request - either way the server is the only writer of runtime-bound
+/// frames, so a uuid-shaped request id remains the whole ownership test. The
+/// machine's own handshake request ids (`agent_session:{session}:{n}`) are
+/// not uuids and stay `None`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
@@ -89,6 +94,81 @@ pub enum ActionError {
     Acp(String),
 }
 
+/// A file the prompt refers to, by where the agent can fetch it.
+///
+/// Mirrors ACP's `resource_link` content block, which every agent must
+/// accept: bytes never ride the prompt, only a URI (a static file service URL
+/// in practice) with enough metadata for a client to render a chip and for
+/// the agent to decide whether to fetch it. Keeping the wire shape ACP-native
+/// means the harness translates without resolving anything, and the fold
+/// reads the same fields back off the logged frame.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct PromptAttachment {
+    /// Where the agent can fetch the file.
+    pub uri: String,
+    /// Display name, typically the original file name.
+    pub name: String,
+    /// The file's media type, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mime_type: Option<String>,
+    /// Size in bytes, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size: Option<i64>,
+}
+
+impl PromptAttachment {
+    /// An attachment at `uri` shown as `name`.
+    pub fn new(uri: impl Into<String>, name: impl Into<String>) -> Self {
+        Self {
+            uri: uri.into(),
+            name: name.into(),
+            mime_type: None,
+            size: None,
+        }
+    }
+
+    /// Record the file's media type.
+    #[must_use]
+    pub fn mime_type(mut self, mime_type: impl Into<String>) -> Self {
+        self.mime_type = Some(mime_type.into());
+        self
+    }
+
+    /// Record the file's size in bytes.
+    #[must_use]
+    pub fn size(mut self, size: i64) -> Self {
+        self.size = Some(size);
+        self
+    }
+
+    /// The ACP content block this attachment travels as.
+    #[must_use]
+    pub fn to_content_block(&self) -> ContentBlock {
+        ContentBlock::ResourceLink(
+            ResourceLink::new(self.name.clone(), self.uri.clone())
+                .mime_type(self.mime_type.clone())
+                .size(self.size),
+        )
+    }
+
+    /// Read an attachment back off a prompt's content block. `None` for the
+    /// text and any block this side never sends.
+    #[must_use]
+    pub fn from_content_block(block: &ContentBlock) -> Option<Self> {
+        let ContentBlock::ResourceLink(link) = block else {
+            return None;
+        };
+        Some(Self {
+            uri: link.uri.clone(),
+            name: link.name.clone(),
+            mime_type: link.mime_type.clone(),
+            size: link.size,
+        })
+    }
+}
+
 /// Ask the agent to work on something.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
@@ -96,6 +176,10 @@ pub enum ActionError {
 pub struct AgentPromptAction {
     /// What to tell the agent.
     pub prompt: String,
+    /// Files the prompt refers to, in the order the user attached them.
+    /// Delivered after the text as one `resource_link` block each.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<PromptAttachment>,
     /// Raw user text used for a visible session name when `prompt` is enriched.
     #[serde(skip)]
     name_source: Option<String>,
@@ -144,8 +228,170 @@ impl AgentSetModelAction {
     }
 }
 
+/// The JSON-RPC id of an agent's `elicitation/create` request, carried whole
+/// so the answer echoes exactly what the agent sent.
+///
+/// Agents pick these, not us: Claude Code counts from `0`, others use
+/// strings. `null` is not a legal id for a request that expects a response,
+/// so it is not representable here.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, specta::Type)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[serde(untagged)]
+pub enum ElicitationRequestId {
+    /// A numeric JSON-RPC id. Specta refuses `i64` (it does not fit a JS
+    /// number); agents count their requests from zero, so `i32` is the
+    /// honest TypeScript face.
+    Number(#[specta(type = i32)] i64),
+    /// A string JSON-RPC id.
+    Str(String),
+}
+
+impl ElicitationRequestId {
+    /// The id as the agent sent it. `None` for `null`, which cannot be
+    /// answered.
+    #[must_use]
+    pub fn from_request_id(id: &RequestId) -> Option<Self> {
+        match id {
+            RequestId::Number(number) => Some(Self::Number(*number)),
+            RequestId::Str(id) => Some(Self::Str(id.clone())),
+            RequestId::Null => None,
+        }
+    }
+
+    /// The same id as the transport's request id type.
+    #[must_use]
+    pub fn to_request_id(&self) -> RequestId {
+        match self {
+            Self::Number(number) => RequestId::Number(*number),
+            Self::Str(id) => RequestId::Str(id.clone()),
+        }
+    }
+}
+
+impl std::fmt::Display for ElicitationRequestId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Number(number) => write!(f, "{number}"),
+            Self::Str(id) => f.write_str(id),
+        }
+    }
+}
+
+/// A value ACP accepts in an elicitation answer.
+///
+/// Mirrors ACP's `ElicitationContentValue` so that the contract a caller
+/// answers against is the closed union ACP will accept, rather than arbitrary
+/// JSON narrowed on the way out. An object, a null, or a mixed array is
+/// refused when the request is deserialized - where the caller learns of it -
+/// instead of at send time, when the elicitation slot has already been
+/// released.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[serde(untagged)]
+pub enum ElicitationContentValue {
+    /// A string, and the shape a whole draft rides in as JSON text.
+    Text(String),
+    /// A yes/no.
+    Boolean(bool),
+    /// A whole number.
+    Integer(i64),
+    /// A number that is not whole.
+    Number(f64),
+    /// A multi-select's chosen values.
+    Strings(Vec<String>),
+}
+
+impl From<&ElicitationContentValue> for AcpContentValue {
+    fn from(value: &ElicitationContentValue) -> Self {
+        match value {
+            ElicitationContentValue::Text(text) => Self::String(text.clone()),
+            ElicitationContentValue::Boolean(flag) => Self::Boolean(*flag),
+            ElicitationContentValue::Integer(number) => Self::Integer(*number),
+            ElicitationContentValue::Number(number) => Self::Number(*number),
+            ElicitationContentValue::Strings(values) => Self::StringArray(values.clone()),
+        }
+    }
+}
+
+/// What the user decided about an elicitation. Mirrors ACP's three actions;
+/// there is no `Other` because we never originate an action we do not know.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[serde(tag = "action", rename_all = "snake_case")]
+pub enum ElicitationAnswer {
+    /// The user submitted the form, or consented to open the URL.
+    Accept {
+        /// Form: the submitted values keyed by property. URL: omitted.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        content: Option<BTreeMap<String, ElicitationContentValue>>,
+    },
+    /// The user explicitly said no.
+    Decline,
+    /// The user dismissed the request without choosing.
+    Cancel,
+}
+
+/// Answer an elicitation the agent is waiting on.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct AgentRespondElicitationAction {
+    /// The agent's `elicitation/create` request id - not an
+    /// [`AgentActionId`], because the agent minted it.
+    pub request_id: ElicitationRequestId,
+    /// The decision.
+    #[serde(flatten)]
+    pub answer: ElicitationAnswer,
+}
+
+/// A user's answer to the agent's `session/request_permission`.
+///
+/// Unlike every other action this is not a new request but the reply to one
+/// the agent made, so it carries the agent's own request id rather than
+/// receiving a server-minted one.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct AgentPermissionAction {
+    /// The agent's JSON-RPC request id, echoed verbatim from the folded
+    /// permission part. A string or a number on the wire; agents mint both,
+    /// and `7` does not answer `"7"`.
+    #[cfg_attr(feature = "utoipa", schema(value_type = serde_json::Value))]
+    pub request_id: RequestId,
+    /// What the user decided.
+    pub answer: PermissionAnswer,
+}
+
+/// The decision carried by an [`AgentPermissionAction`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum PermissionAnswer {
+    /// One of the options the agent offered was chosen.
+    Selected {
+        /// The chosen option's id, as the agent listed it.
+        #[serde(rename = "optionId")]
+        option_id: String,
+    },
+    /// The request was dismissed without choosing.
+    Cancelled,
+}
+
+impl PermissionAnswer {
+    /// The ACP outcome this answer resolves the request with.
+    #[must_use]
+    pub fn to_acp(&self) -> RequestPermissionOutcome {
+        match self {
+            Self::Selected { option_id } => RequestPermissionOutcome::Selected(
+                SelectedPermissionOutcome::new(option_id.clone()),
+            ),
+            Self::Cancelled => RequestPermissionOutcome::Cancelled,
+        }
+    }
+}
+
 /// One thing a caller wants an agent to do.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, strum::AsRefStr)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, strum::AsRefStr)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[serde(tag = "type", rename_all = "camelCase")]
 #[strum(serialize_all = "snake_case")]
@@ -158,13 +404,31 @@ pub enum AgentAction {
     Compact,
     /// Interrupt whatever the agent is doing.
     Stop,
+    /// Answer an `elicitation/create` the agent sent.
+    ///
+    /// The one action whose wire form is a JSON-RPC *response* rather than a
+    /// request or notification: the agent asked, we answer on its id. The
+    /// minted [`AgentActionId`] therefore never reaches the wire for this
+    /// action; the fold correlates on the agent's id instead.
+    RespondElicitation(AgentRespondElicitationAction),
+    /// Answer a permission request the agent is waiting on.
+    RespondToPermission(AgentPermissionAction),
 }
 
 impl AgentAction {
     /// Ask the agent to work on a text prompt.
     pub fn prompt(prompt: impl Into<String>) -> Self {
+        Self::prompt_with_attachments(prompt, Vec::new())
+    }
+
+    /// Ask the agent to work on a text prompt that refers to `attachments`.
+    pub fn prompt_with_attachments(
+        prompt: impl Into<String>,
+        attachments: Vec<PromptAttachment>,
+    ) -> Self {
         Self::Prompt(AgentPromptAction {
             prompt: prompt.into(),
+            attachments,
             name_source: None,
         })
     }
@@ -174,6 +438,14 @@ impl AgentAction {
         Self::SetModel(AgentSetModelAction {
             model: model.into(),
         })
+    }
+
+    /// Answer the elicitation the agent asked with `request_id`.
+    pub fn respond_elicitation(
+        request_id: ElicitationRequestId,
+        answer: ElicitationAnswer,
+    ) -> Self {
+        Self::RespondElicitation(AgentRespondElicitationAction { request_id, answer })
     }
 
     /// Recognize a control action from its translated runtime frame.
@@ -186,24 +458,23 @@ impl AgentAction {
             return Some(Self::SetModel(action));
         }
 
-        let ToRuntimeMessage::Acp(AcpMessage(frame)) = message;
+        let ToRuntimeMessage::Acp(AcpMessage(frame)) = message else {
+            return None;
+        };
         match frame {
             RawJsonRpcMessage::Request(request)
                 if PromptRequest::matches_method(&request.method) =>
             {
                 let params = request.params.clone()?.into_value();
                 let request: PromptRequest = serde_json::from_value(params).ok()?;
-                let text = request
-                    .prompt
-                    .into_iter()
-                    .filter_map(|content| match content {
-                        agent_client_protocol::schema::v1::ContentBlock::Text(text) => {
-                            Some(text.text)
-                        }
-                        _ => None,
-                    })
-                    .collect::<String>();
-                (text.trim() == COMPACT_COMMAND).then_some(Self::Compact)
+                // The compaction control travels as text and nothing else.
+                // A prompt that also carries a resource link is a real prompt
+                // with a file attached, and reading it as the control would
+                // drop that file on the way to the agent.
+                let [ContentBlock::Text(text)] = request.prompt.as_slice() else {
+                    return None;
+                };
+                (text.text.trim() == COMPACT_COMMAND).then_some(Self::Compact)
             }
             RawJsonRpcMessage::Notification(notification)
                 if CancelNotification::matches_method(&notification.method) =>
@@ -223,7 +494,12 @@ impl AgentAction {
     pub fn occupies_turn(&self) -> bool {
         match self {
             Self::Prompt(_) | Self::Compact => true,
-            Self::SetModel(_) | Self::Stop => false,
+            // An elicitation answer is the running turn's own business: the
+            // agent is blocked on it mid-turn, so it must ride alongside.
+            Self::SetModel(_)
+            | Self::Stop
+            | Self::RespondElicitation(_)
+            | Self::RespondToPermission(_) => false,
         }
     }
 
@@ -235,8 +511,24 @@ impl AgentAction {
     ) -> Result<ToRuntimeMessage, ActionError> {
         match self {
             Self::Prompt(action) => {
-                let payload =
-                    PromptRequest::new(session_id.clone(), vec![action.prompt.clone().into()]);
+                // Text first, then one link per attachment: agents read the
+                // prompt in order, and the text is what the links are about.
+                // A file-only send carries no text block at all: an empty one
+                // reads as an empty prompt to some runtimes, and the fold
+                // drops it, so sending one would make the wire and the
+                // transcript disagree.
+                let text =
+                    (!action.prompt.is_empty()).then(|| ContentBlock::from(action.prompt.clone()));
+                let blocks = text
+                    .into_iter()
+                    .chain(
+                        action
+                            .attachments
+                            .iter()
+                            .map(PromptAttachment::to_content_block),
+                    )
+                    .collect();
+                let payload = PromptRequest::new(session_id.clone(), blocks);
                 let params = serde_json::to_value(&payload)
                     .map_err(|error| ActionError::Acp(error.to_string()))?;
                 let frame =
@@ -279,6 +571,63 @@ impl AgentAction {
                     .map_err(|error| ActionError::Acp(error.to_string()))?;
                 Ok(ToRuntimeMessage::Acp(AcpMessage(frame)))
             }
+            // A response to the agent's own request: `request_id` is the
+            // minted action id and is deliberately unused - the frame must
+            // carry the id the agent asked with, or nothing answers it.
+            Self::RespondElicitation(action) => {
+                let response = action.to_acp_response();
+                let result = serde_json::to_value(&response)
+                    .map_err(|error| ActionError::Acp(error.to_string()))?;
+                let frame =
+                    RawJsonRpcMessage::response(action.request_id.to_request_id(), Ok(result));
+                Ok(ToRuntimeMessage::Acp(AcpMessage(frame)))
+            }
+            // A response to the agent's own request, so both `session_id` and
+            // the minted `request_id` are unused: the frame carries the id the
+            // agent chose. The session machine validates the answer against
+            // the request it is holding open before translating it.
+            Self::RespondToPermission(action) => Ok(permission_response(
+                action.request_id.clone(),
+                action.answer.to_acp(),
+            )?),
         }
     }
+}
+
+impl AgentRespondElicitationAction {
+    /// The ACP response body for this answer.
+    ///
+    /// Total: every value the type can hold is one ACP accepts, so answering
+    /// cannot fail here. That matters because the session machine releases the
+    /// elicitation slot before this runs - a failure would leave the agent
+    /// blocked on a request nothing can answer any more.
+    #[must_use]
+    pub fn to_acp_response(&self) -> CreateElicitationResponse {
+        let action = match &self.answer {
+            ElicitationAnswer::Accept { content } => {
+                let content = content.as_ref().map(|content| {
+                    content
+                        .iter()
+                        .map(|(key, value)| (key.clone(), AcpContentValue::from(value)))
+                        .collect::<BTreeMap<_, _>>()
+                });
+                ElicitationAction::Accept(ElicitationAcceptAction::new().content(content))
+            }
+            ElicitationAnswer::Decline => ElicitationAction::Decline,
+            ElicitationAnswer::Cancel => ElicitationAction::Cancel,
+        };
+        CreateElicitationResponse::new(action)
+    }
+}
+
+/// The ACP frame answering permission request `request_id` with `outcome`.
+pub fn permission_response(
+    request_id: RequestId,
+    outcome: RequestPermissionOutcome,
+) -> Result<ToRuntimeMessage, ActionError> {
+    let result = serde_json::to_value(RequestPermissionResponse::new(outcome))
+        .map_err(|error| ActionError::Acp(error.to_string()))?;
+    Ok(ToRuntimeMessage::Acp(AcpMessage(
+        RawJsonRpcMessage::response(request_id, Ok(result)),
+    )))
 }

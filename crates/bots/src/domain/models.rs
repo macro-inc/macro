@@ -152,6 +152,17 @@ pub struct Bot {
     pub has_agent: bool,
 }
 
+/// Minimal bot identity used when another domain presents a bot reference.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BotProfile {
+    /// Bot id.
+    pub id: BotId,
+    /// Display name.
+    pub name: String,
+    /// Optional avatar URL.
+    pub avatar_url: Option<String>,
+}
+
 impl Bot {
     /// The [`Bot`] view of a first-party bot.
     ///
@@ -206,6 +217,65 @@ impl AgentChannelScope {
     }
 }
 
+/// Which Pipedream MCP servers an agent's sessions are handed.
+///
+/// One value for the whole choice, so a selection can never travel without
+/// its scope or a scope without its selection. Serialized with a `scope` tag,
+/// which the generated TypeScript sees as a discriminated union.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(tag = "scope", rename_all = "snake_case")]
+pub enum AgentMcpServers {
+    /// Whatever apps the person running the session has connected.
+    #[default]
+    OwnerConnections,
+    /// Exactly these apps, connected or not.
+    Selected {
+        /// The apps, in the order the agent's author picked them.
+        servers: Vec<AgentMcpServer>,
+    },
+}
+
+impl AgentMcpServers {
+    /// Storage representation of the scope.
+    pub fn scope_str(&self) -> &'static str {
+        match self {
+            Self::OwnerConnections => "owner_connections",
+            Self::Selected { .. } => "selected",
+        }
+    }
+
+    /// The selected servers, empty under [`Self::OwnerConnections`].
+    pub fn servers(&self) -> &[AgentMcpServer] {
+        match self {
+            Self::OwnerConnections => &[],
+            Self::Selected { servers } => servers,
+        }
+    }
+
+    /// Rebuilds the value from its two stored columns.
+    pub fn from_columns(scope: &str, servers: Vec<AgentMcpServer>) -> anyhow::Result<Self> {
+        match scope {
+            "owner_connections" => Ok(Self::OwnerConnections),
+            "selected" => Ok(Self::Selected { servers }),
+            other => anyhow::bail!("unknown mcp scope {other:?}"),
+        }
+    }
+}
+
+/// One Pipedream app an agent lists under [`AgentMcpServers::Selected`].
+///
+/// Only the catalog identity is stored. Whether a given person has connected
+/// the app is theirs, resolved at call time by the egress proxy, never here.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct AgentMcpServer {
+    /// Pipedream app slug, e.g. `linear`.
+    pub app_slug: String,
+    /// Display name, e.g. `Linear`.
+    pub server_name: String,
+}
+
 /// A persisted user- or team-owned AI agent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -224,6 +294,11 @@ pub struct Agent {
     pub channel_scope: AgentChannelScope,
     /// Selected channel ids. Empty for a global agent.
     pub channel_ids: Vec<Uuid>,
+    /// Which MCP servers sessions of this agent are handed.
+    pub mcp: AgentMcpServers,
+    /// Whether the agent's sessions approve ACP permission requests without
+    /// asking. `None` means always prompt. Bypass also requires the harness's opt-in.
+    pub auto_accept_permissions: Option<bool>,
 }
 
 /// Request to create a persisted AI agent.
@@ -255,6 +330,13 @@ pub struct CreateAgentRequest {
     /// Selected channels. Must be non-empty only for `selected` scope.
     #[serde(default)]
     pub channel_ids: Vec<Uuid>,
+    /// Which MCP servers sessions of this agent are handed.
+    #[serde(default)]
+    pub mcp: AgentMcpServers,
+    /// Whether the agent's sessions approve ACP permission requests without
+    /// asking. Omit to always prompt.
+    #[serde(default)]
+    pub auto_accept_permissions: Option<bool>,
 }
 
 /// Request to replace the editable configuration of a persisted AI agent.
@@ -286,6 +368,13 @@ pub struct UpdateAgentRequest {
     /// Selected channels. Must be non-empty only for `selected` scope.
     #[serde(default)]
     pub channel_ids: Vec<Uuid>,
+    /// Which MCP servers sessions of this agent are handed.
+    #[serde(default)]
+    pub mcp: AgentMcpServers,
+    /// Whether the agent's sessions approve ACP permission requests without
+    /// asking. Omit to always prompt.
+    #[serde(default)]
+    pub auto_accept_permissions: Option<bool>,
 }
 
 /// Channel containing a bot.
@@ -463,4 +552,12 @@ pub struct ChannelWebhookRequest {
 pub struct ChannelWebhookResponse {
     /// Created message id.
     pub message_id: String,
+}
+
+/// Facts about a registered harness used to validate a persona.
+pub struct HarnessFacts {
+    /// Who may use the harness.
+    pub owner: HarnessOwner,
+    /// Whether the harness operator permits unattended tool approvals.
+    pub allow_permission_bypass: bool,
 }

@@ -12,6 +12,8 @@
 //! - A tool call whose opening frame carried no useful fields gets them from
 //!   later patches. Until then it renders as a bare tool row.
 //! - A permission request with no answer is outstanding.
+//! - A question the agent asked with no answer is outstanding too - in the
+//!   transcript forever, on the metadata only while its turn is open.
 //!
 //! What is left over - a patch for a tool call that was never opened, an
 //! update variant this fold does not model - is logged through [`FoldError`]
@@ -51,8 +53,12 @@
 
 use std::borrow::Cow;
 
+use agent_client_protocol::schema::v1::SessionId;
+
 use crate::domain::log::{AgentSessionId, AgentSessionLog};
-use crate::domain::model::{FoldEvent, FoldedMessage, SessionMetadata, TurnId};
+use crate::domain::model::{
+    ElicitationRequestId, FoldEvent, FoldedMessage, SessionMetadata, TurnId,
+};
 use crate::domain::ports::{FoldMachine, FoldSession, LogRepo};
 
 /// Config-option and session-info bookkeeping.
@@ -63,10 +69,14 @@ mod content;
 mod control;
 /// ACP-to-vocabulary conversions shared by the handlers.
 mod convert;
+/// Questions the agent asks the user, their answers, and their completion.
+mod elicitation;
 /// Permission requests and their answers.
 mod permission;
 /// The agent's plan (todo list).
 mod plan;
+/// Transactional generic ACP history replacement.
+mod replay;
 /// The fold's state and the per-frame dispatch.
 mod state;
 /// Delegated agents and the calls nested under them.
@@ -111,9 +121,14 @@ fn fold_machine(log: impl IntoIterator<Item = AgentSessionLog>) -> FoldMachineIm
 /// Frames must be pushed in log order. A machine only ever grows, so a caller
 /// tracking a live session keeps one per session and pushes for as long as
 /// the session lasts.
-#[derive(Debug, Default)]
+///
+/// `Clone` is what makes speculation possible: a
+/// [`SpeculativeFold`](crate::domain::speculation::SpeculativeFold) forks the
+/// confirmed machine and folds unconfirmed frames onto the copy.
+#[derive(Debug, Clone, Default)]
 pub struct FoldMachineImpl {
     state: FoldState,
+    replay: replay::Replay,
 }
 
 impl FoldMachineImpl {
@@ -123,7 +138,94 @@ impl FoldMachineImpl {
         Self::default()
     }
 
-    /// Every message derived so far, oldest first.
+    /// Fold a frame this client caused but the log has not confirmed. Every
+    /// message it touches is marked [`FoldedMessage::pending`] until the
+    /// confirmed frame is folded in its place - the ones it mints, and the
+    /// ones it only resolves: an elicitation answer lands on the part the
+    /// question already occupies in a message the log confirmed long ago.
+    ///
+    /// Bypasses the replay gate on purpose. That gate stages runtime-bound
+    /// frames while the connection is down or a load is in flight, because a
+    /// *logged* frame in that window may belong to a session that will never
+    /// answer. A speculated frame is not logged traffic: it is what this
+    /// client just asked for, and the whole point is to show it while the
+    /// runtime is still booting - exactly when the gate would swallow it.
+    pub fn push_speculative(&mut self, log: AgentSessionLog) -> Vec<FoldEvent<'_>> {
+        self.state.speculative = true;
+        let changes = self.state.step(log);
+        self.state.speculative = false;
+        for change in &changes {
+            if let StepChange::Message(changed) = change
+                && let Some(message) = self.state.messages.get_mut(changed.message)
+            {
+                message.pending = true;
+            }
+        }
+        self.report(changes)
+    }
+
+    /// Turn a step's changes into events, refreshing the turn state first.
+    fn report(&mut self, mut changes: Vec<StepChange>) -> Vec<FoldEvent<'_>> {
+        // The turn state is a projection of everything the step touched, so
+        // it is refreshed once per push rather than by every handler.
+        if self.state.refresh_turn_state()
+            && !changes
+                .iter()
+                .any(|change| matches!(change, StepChange::Metadata))
+        {
+            changes.push(StepChange::Metadata);
+        }
+        changes
+            .into_iter()
+            .filter_map(|change| match change {
+                StepChange::Message(changed) => {
+                    self.state
+                        .messages
+                        .get(changed.message)
+                        .map(|message| match changed.kind {
+                            Change::New => FoldEvent::NewMessage(Cow::Borrowed(message)),
+                            Change::Updated => FoldEvent::MessageUpdate(Cow::Borrowed(message)),
+                        })
+                }
+                StepChange::Metadata => Some(FoldEvent::MetadataUpdated(Cow::Borrowed(
+                    &self.state.metadata,
+                ))),
+            })
+            .collect()
+    }
+
+    /// The ACP session id the runtime answers to, once the log has shown it:
+    /// the `session/new` or `session/load` that opened it, or any prompt
+    /// addressed to it. What a synthesized frame has to name so the replay
+    /// gate does not treat it as another session's traffic.
+    #[must_use]
+    pub fn acp_session_id(&self) -> Option<&SessionId> {
+        self.state.acp_session.as_ref()
+    }
+
+    /// Whether the open turn has already been asked to stop. A cancel is a
+    /// notification carrying no action id, so this is the only way to ask
+    /// whether a stop is already reflected here.
+    #[must_use]
+    pub fn stop_requested(&self) -> bool {
+        self.state
+            .turn
+            .as_ref()
+            .is_some_and(|turn| turn.stop_requested)
+    }
+
+    /// Whether the question the agent asked under `request_id` has resolved.
+    /// An answer rides on the agent's own request id, so a folded answer
+    /// leaves no message under the answerer's action id - the question's
+    /// outcome is what records that it landed.
+    #[must_use]
+    pub fn elicitation_answered(&self, request_id: &ElicitationRequestId) -> bool {
+        self.state.elicitation_answered(request_id)
+    }
+
+    /// Every committed message, oldest first. A pending load is invisible here.
+    /// The candidate remains in the machine so snapshot catch-up can continue
+    /// through its eventual success or failure on the live stream.
     ///
     /// Includes the open turn's agent message, still being appended to. There
     /// is nothing to finalize: a message is complete the moment no further
@@ -155,24 +257,18 @@ impl FoldMachineImpl {
 
 impl FoldMachine for FoldMachineImpl {
     fn push(&mut self, log: AgentSessionLog) -> Vec<FoldEvent<'_>> {
-        let changes = self.state.step(log);
-        changes
-            .into_iter()
-            .filter_map(|change| match change {
-                StepChange::Message(changed) => {
-                    self.state
-                        .messages
-                        .get(changed.message)
-                        .map(|message| match changed.kind {
-                            Change::New => FoldEvent::NewMessage(Cow::Borrowed(message)),
-                            Change::Updated => FoldEvent::MessageUpdate(Cow::Borrowed(message)),
-                        })
-                }
-                StepChange::Metadata => Some(FoldEvent::MetadataUpdated(Cow::Borrowed(
-                    &self.state.metadata,
-                ))),
-            })
-            .collect()
+        let changes = match self.replay.step(&mut self.state, log) {
+            replay::Outcome::Changes(changes) => changes,
+            replay::Outcome::Staged => return Vec::new(),
+            replay::Outcome::Replaced => {
+                self.state.refresh_turn_state();
+                return vec![
+                    FoldEvent::MessagesReplaced(Cow::Borrowed(&self.state.messages)),
+                    FoldEvent::MetadataUpdated(Cow::Borrowed(&self.state.metadata)),
+                ];
+            }
+        };
+        self.report(changes)
     }
 }
 

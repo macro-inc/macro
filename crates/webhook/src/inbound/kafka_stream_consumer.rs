@@ -3,8 +3,8 @@
 use crate::domain::ingestion::{
     WebhookEventIngestionError,
     stream::{
-        agent_trigger_stream_candidate, channel_stream_candidate, document_stream_candidate,
-        webhook_stream_candidate,
+        agent_session_lifecycle_stream_candidate, agent_trigger_stream_candidate,
+        channel_stream_candidate, document_stream_candidate, webhook_stream_candidate,
     },
 };
 use crate::domain::stream::StreamCandidateEvent;
@@ -72,6 +72,9 @@ fn candidate_from(
         }
         DeclaredMacroEvent::AgentSessionMacroEvent(event) => {
             agent_trigger_stream_candidate(event.event()).map(Some)
+        }
+        DeclaredMacroEvent::AgentSessionLifecycleMacroEvent(event) => {
+            agent_session_lifecycle_stream_candidate(event.event()).map(Some)
         }
     }
 }

@@ -18,6 +18,9 @@ pub enum FoldEvent<'a> {
     NewMessage(Cow<'a, FoldedMessage>),
     /// A message the machine had already reported, whose content changed.
     MessageUpdate(Cow<'a, FoldedMessage>),
+    /// A successful load atomically replaced the entire conversation. Consumers
+    /// must remove old messages, including when this list is empty.
+    MessagesReplaced(Cow<'a, [FoldedMessage]>),
     /// The metadata changed - restating identical metadata reports nothing.
     MetadataUpdated(Cow<'a, SessionMetadata>),
 }
@@ -32,7 +35,7 @@ impl FoldEvent<'_> {
     pub fn message(&self) -> Option<&FoldedMessage> {
         match self {
             Self::NewMessage(message) | Self::MessageUpdate(message) => Some(message.as_ref()),
-            Self::MetadataUpdated(_) => None,
+            Self::MetadataUpdated(_) | Self::MessagesReplaced(_) => None,
         }
     }
 
@@ -43,6 +46,9 @@ impl FoldEvent<'_> {
             Self::NewMessage(message) => FoldEvent::NewMessage(Cow::Owned(message.into_owned())),
             Self::MessageUpdate(message) => {
                 FoldEvent::MessageUpdate(Cow::Owned(message.into_owned()))
+            }
+            Self::MessagesReplaced(messages) => {
+                FoldEvent::MessagesReplaced(Cow::Owned(messages.into_owned()))
             }
             Self::MetadataUpdated(metadata) => {
                 FoldEvent::MetadataUpdated(Cow::Owned(metadata.into_owned()))

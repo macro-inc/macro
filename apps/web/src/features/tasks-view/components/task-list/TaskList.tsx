@@ -1,9 +1,4 @@
-import {
-  createListController,
-  type ListActivation,
-  listOwnedSlotName,
-  useListInteractions,
-} from '@app/components/list';
+import { type ListActivation, useListInteractions } from '@app/components/list';
 import {
   resolveEntityActionViewContext,
   toEntityActionListState,
@@ -13,8 +8,8 @@ import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils'
 import {
   MaybeSoupEntityActionDrawerManager,
   SoupEntityContextMenu,
-  useSoupListNavigationHotkeys,
 } from '@app/features/soup';
+import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { makePersistedState } from '@app/lib/persistence';
 import {
   addUnique,
@@ -22,11 +17,7 @@ import {
   toggleValue,
 } from '@app/lib/signals/store-array-updaters';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
-import {
-  useSplitPanelOrThrow,
-  withSplitPanelOwner,
-} from '@components/app/split-layout/layoutUtils';
-import { useUserId } from '@core/context/user';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   type EntityData,
@@ -42,9 +33,8 @@ import CheckIcon from '@phosphor/check.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
-import { useTagsQuery } from '@queries/properties/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
-import { Button, cn, Surface } from '@ui';
+import { Button, cn } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -61,11 +51,11 @@ import {
   DEFAULT_TASKS_LIST_STATE,
   type TasksListStateSnapshot,
 } from '../../persistence';
+import type { TasksDataSourceItem } from '../../queries/use-tasks-query';
 import {
-  type TasksDataSourceItem,
-  useTasksDataSource,
-} from '../../queries/use-tasks-query';
-import { useTasksView } from '../../tasks-view-context';
+  type TasksListActivationMetadata,
+  useTasksView,
+} from '../../tasks-view-context';
 import { TaskGroupHeader } from './TaskGroupHeader';
 import { TaskListEntity } from './TaskListEntity';
 import { TaskListHeader } from './TaskListHeader';
@@ -93,15 +83,24 @@ const getStatusProperty = (task: TaskEntityWithProperties) => {
   }
 };
 
-type TasksListActivationMetadata = {
-  event?: MouseEvent;
-  newSplit?: boolean;
+export type TaskListProps = {
+  /** The focusable list root, for callers that hand keyboard focus back. */
+  ref?: (element: HTMLDivElement) => void;
 };
 
-export function TaskList() {
+export function TaskList(props: TaskListProps) {
   const panel = useSplitPanelOrThrow();
-  const { state, setState } = useTasksView();
-  const userId = useUserId();
+  const {
+    state,
+    setState,
+    source,
+    list,
+    registerListActivationHandler,
+    openTask,
+  } = useTasksView();
+  const forceEmptyState = useDebugSetting(
+    DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
+  );
   const isGroupExpanded = (groupId: string) =>
     !state.collapsedGroupIds.includes(groupId);
   const setGroupExpanded = (groupId: string, expanded: boolean) =>
@@ -111,16 +110,6 @@ export function TaskList() {
     );
   const toggleGroup = (groupId: string) =>
     setState('collapsedGroupIds', toggleValue(groupId));
-
-  const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () => {
-    const tagsQuery = useTagsQuery();
-
-    return useTasksDataSource(state, {
-      userId,
-      tagSets: () => tagsQuery.data ?? [],
-      isGroupExpanded,
-    });
-  });
 
   function openEntity(
     entity: EntityData,
@@ -173,39 +162,19 @@ export function TaskList() {
     const newSplit =
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
 
-    openEntity(sourceRow.entity, {
-      openInNewSplit: newSplit,
-      replacePreview: metadata?.event?.altKey === true && !newSplit,
-    });
+    if (
+      !newSplit &&
+      openTask(
+        { id: sourceRow.entity.id, fallbackName: sourceRow.entity.name },
+        { event: metadata?.event }
+      )
+    )
+      return;
+
+    openEntity(sourceRow.entity, { openInNewSplit: newSplit });
   }
 
-  const list = withSplitPanelOwner(listOwnedSlotName('controller'), () =>
-    createListController<TasksDataSourceItem, TasksListActivationMetadata>({
-      items: source.items,
-      getKey: (row) => row.id,
-      selection: {
-        getKey: (row) => (row.kind === 'entity' ? row.entity.id : row.id),
-      },
-      isNavigable: (row) => row.kind !== 'section-header',
-      isSelectable: (row) => row.kind === 'entity',
-      onActivate,
-    })
-  );
-
-  withSplitPanelOwner(listOwnedSlotName('navigation-hotkeys'), () => {
-    useSoupListNavigationHotkeys({
-      splitHotkeyScope: panel.splitHotkeyScope,
-      viewId: 'tasks',
-      dataSource: source,
-      controller: list,
-      handle: panel.handle,
-      openEntityInSplit: (task, options) => {
-        openEntity(task, {
-          mergeHistory: options.mergeHistory,
-        });
-      },
-    });
-  });
+  registerListActivationHandler(onActivate);
 
   const entityActionViewContext = () =>
     resolveEntityActionViewContext({
@@ -226,7 +195,9 @@ export function TaskList() {
     const current = readListState();
     const value = typeof next === 'function' ? next(current) : next;
 
-    if (value.focusKey !== current.focusKey) {
+    // The view-owned controller survives inline detail navigation. Restore
+    // persisted focus only on a cold mount that has no live focus to preserve.
+    if (current.focusKey === undefined && value.focusKey !== undefined) {
       list.focus.restore(value.focusKey, { reason: 'restore' });
     }
 
@@ -309,13 +280,6 @@ export function TaskList() {
     enabled: panel.isPanelActive,
     navigation: {
       onNavigate: (event) => {
-        const row = event.result?.item;
-        if (row?.kind === 'entity' && panel.handle.isControllerSplit()) {
-          openEntity(row.entity, {
-            mergeHistory: true,
-          });
-        }
-
         if (event.kind !== 'move' || event.direction !== 1) return;
         if (source.isLoadingMore() || !source.hasMore()) {
           return;
@@ -373,7 +337,6 @@ export function TaskList() {
     activeTab = nextTab;
     listInteractions.selection.clear();
     list.focus.clear({ reason: 'programmatic' });
-    panel.handle.resetPreview();
     setPersistedListState((current) => ({ ...current, scrollOffset: 0 }));
   });
 
@@ -387,10 +350,6 @@ export function TaskList() {
     });
     if (restored) return;
     if (isTouchDevice()) return;
-    if (panel.handle.isControllerSplit()) {
-      panel.handle.resetPreview();
-      return;
-    }
 
     list.focus.first({
       isNavigable: (row) => row.kind === 'entity',
@@ -419,15 +378,17 @@ export function TaskList() {
 
   return (
     <MaybeSoupEntityActionDrawerManager>
-      <Surface
-        depth={2}
-        ref={setGrid}
+      <div
+        ref={(element: HTMLDivElement) => {
+          setGrid(element);
+          props.ref?.(element);
+        }}
         role="grid"
         aria-label="Tasks"
         aria-multiselectable="true"
         aria-activedescendant={list.focus.key()}
         tabIndex={0}
-        class="@container/u-list flex min-h-0 min-w-0 flex-col rounded-2xl p-2 outline-none"
+        class="@container/u-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none"
       >
         <ListLayoutProvider ref={grid}>
           <ResponsiveTaskListHeader />
@@ -439,13 +400,13 @@ export function TaskList() {
             triggerBehavior="spring-back"
           >
             <Switch>
-              <Match when={source.isLoading()}>
+              <Match when={!forceEmptyState() && source.isLoading()}>
                 <div class="grid min-h-0 flex-1 place-items-center text-ink-muted">
                   <SpinnerIcon class="size-5 animate-spin" />
                 </div>
               </Match>
 
-              <Match when={source.error()}>
+              <Match when={!forceEmptyState() && source.error()}>
                 <div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-sm text-ink-muted">
                   <span>Tasks couldn’t be loaded.</span>
                   <Button
@@ -459,10 +420,10 @@ export function TaskList() {
                 </div>
               </Match>
 
-              <Match when={visibleRows().length === 0}>
+              <Match when={forceEmptyState() || visibleRows().length === 0}>
                 <div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-sm text-ink-muted">
                   <span>{emptyMessage()}</span>
-                  <Show when={source.hasMore()}>
+                  <Show when={!forceEmptyState() && source.hasMore()}>
                     <Button
                       variant="outline"
                       size="sm"
@@ -704,7 +665,7 @@ export function TaskList() {
             />
           </Show>
         </ListLayoutProvider>
-      </Surface>
+      </div>
     </MaybeSoupEntityActionDrawerManager>
   );
 }

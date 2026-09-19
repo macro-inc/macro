@@ -4,6 +4,24 @@ use std::{
 };
 
 use axum::{Router, http::Request};
+
+#[test]
+fn notification_state_query_parameters_are_exact_and_support_unions() {
+    use crate::domain::models::NotificationState::{Done, Seen, Unseen};
+    use axum::extract::Query;
+    for (uri, expected) in [
+        ("/", None),
+        ("/?states=", Some(vec![])),
+        ("/?states=unseen,seen", Some(vec![Unseen, Seen])),
+        ("/?states=done", Some(vec![Done])),
+    ] {
+        let Query(params) = Query::<super::Params>::try_from_uri(&uri.parse().unwrap()).unwrap();
+        assert_eq!(params.states, expected);
+    }
+    assert!(
+        Query::<super::Params>::try_from_uri(&"/?states=seen,invalid".parse().unwrap()).is_err()
+    );
+}
 use hmac::{Hmac, Mac};
 use http_body_util::BodyExt;
 use macro_authorization::{

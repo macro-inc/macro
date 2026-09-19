@@ -15,6 +15,7 @@ run-local.fish
 **/dist
 **/test-results
 **/playwright-report
+**/.playwright-mcp/
 **/coverage
 !packages/sdk/src/coverage/
 !packages/sdk/src/coverage/**
@@ -22,6 +23,10 @@ run-local.fish
 **/.cache
 **/.vite
 **/build
+# `**/build` is for JS build output. This is a Rust source module that happens
+# to be named `build`, and the rule was silently dropping new files added to it
+# (a new `test.rs` there is ignored, and `git status` stays clean about it).
+!/tooling/xtask/crates/xtask_local/src/local/build/
 **/*.tsbuildinfo
 **/*.log
 **/result
@@ -41,8 +46,9 @@ infra/local/generated/
 # crates/cursor_acp/fixtures/real/ before committing one.
 /recordings/
 
-# Per-developer macrod daemon config and the state files it writes next to
-# it (the credentials file holds this machine's harness bearer token).
-/macro.toml
-/macro.credentials.json
-/macro.webhook-state.json
+# Per-developer macrod config contains this machine's harness bearer token.
+/macrod.toml
+/macrod.webhook-state.json
+
+# Owner-bound subscription OAuth credentials for the internal Claude demo.
+/.claude-cloud/

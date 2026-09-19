@@ -8,6 +8,7 @@ import type { CreateAgentSessionRequestBotId } from './createAgentSessionRequest
 import type { CreateAgentSessionRequestInstructions } from './createAgentSessionRequestInstructions';
 import type { CreateAgentSessionRequestOwner } from './createAgentSessionRequestOwner';
 import type { CreateAgentSessionRequestPrompt } from './createAgentSessionRequestPrompt';
+import type { CreateAgentSessionRequestRepoBranch } from './createAgentSessionRequestRepoBranch';
 import type { CreateAgentSessionRequestRepoUrl } from './createAgentSessionRequestRepoUrl';
 import type { CreateAgentSessionRequestThread } from './createAgentSessionRequestThread';
 import type { CreateAgentSessionRequestWorkspace } from './createAgentSessionRequestWorkspace';
@@ -18,19 +19,21 @@ import type { CreateAgentSessionRequestWorkspace } from './createAgentSessionReq
 Carries two shapes, told apart by `workspace`. Naming one asks for an
 external session: the runtime is the bot operator's, so the caller has to
 say which bot and which directory, and must own that bot. Omitting it asks
-for a managed session, whose sandbox this deployment provisions from its
-own configuration - which is why the fields describing someone else's
-runtime must be omitted along with it rather than quietly ignored. Mixing
-the two is refused rather than guessed at, so that no request can reach the
-managed path carrying a bot the caller was never entitled to name.
+for a managed session, whose runtime this deployment provisions. A managed
+request may select an authorized persisted persona with `botId`; omitting
+it uses the deployment's default coding persona. Fields describing someone
+else's runtime must still be omitted rather than quietly ignored. Mixing
+the two shapes is refused rather than guessed at.
 
 Clients serialize this, so both derives are used.
  */
 export interface CreateAgentSessionRequest {
-  /** Bot the session runs for. Bot callers may omit it (their own identity
-is used) and must not name another bot; user callers must supply a
-bot they own. External sessions only: a managed session runs as the
-bot its deployment is configured for. */
+  /** Bot the session runs for. On a managed request this optionally selects
+a persisted persona the user owns, may use through team membership, or
+can `@` mention in a shared channel; omitting it uses the deployment's
+default coding persona. On an external request, bot callers may omit it
+(their own identity is used) and must not name another bot; user callers
+must supply a bot they own. */
   botId?: CreateAgentSessionRequestBotId;
   /** Instructions the session's runtime works under, for its whole life.
 
@@ -51,8 +54,13 @@ bot's say-so. */
 only - an external runtime sends its own first prompt through the
 control endpoint. Omitted, the session opens idle. */
   prompt?: CreateAgentSessionRequestPrompt;
-  /** Repository nominally checked out at `workspace`. Informational and
-optional: having it cloned there is the runtime operator's job. */
+  /** Starting branch for a managed coding session's selected repository.
+Omitted, the session starts on the repository's default branch. */
+  repoBranch?: CreateAgentSessionRequestRepoBranch;
+  /** Explicit GitHub repository for a managed Cursor session, as one of the
+urls `GET /agent-repositories` lists for the caller. Access is checked
+for the session owner. For external sessions this is informational:
+cloning it is the runtime operator's job. */
   repoUrl?: CreateAgentSessionRequestRepoUrl;
   thread?: CreateAgentSessionRequestThread;
   /** Absolute directory the bot's harness runs in on its runtime. Present

@@ -1,5 +1,7 @@
 //! Small SQL helpers for `SharePermission` and `ChannelSharePermission` rows.
 
+pub mod team_share;
+
 use anyhow::Context;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_permissions::share_permission::access_level::AccessLevel;
@@ -117,6 +119,18 @@ where
                     SELECT share_permission_id FROM call_records WHERE id = $1
                 ) t
                 LIMIT 1
+                "#,
+                item_id,
+            )
+            .fetch_one(executor)
+            .await?
+        }
+        "initiative" => {
+            let item_id = macro_uuid::string_to_uuid(item_id)?;
+            sqlx::query_scalar!(
+                r#"
+                SELECT share_permission_id as "share_permission_id!"
+                FROM initiative WHERE id = $1::uuid
                 "#,
                 item_id,
             )

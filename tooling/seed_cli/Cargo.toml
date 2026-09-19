@@ -41,6 +41,7 @@ serde_json = { workspace = true }
 properties = { path = "../../crates/properties", default-features = false, features = ["outbound"] }
 roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false }
 sha2 = { workspace = true }
+share_permission_db_utils = { path = "../../crates/share_permission_db_utils" }
 sqlx = { workspace = true }
 sync_service_client = { path = "../../crates/sync_service_client" }
 system_properties = { path = "../../crates/system_properties" }

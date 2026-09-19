@@ -6,12 +6,21 @@ publish = false
 
 [dependencies]
 async-graphql = { workspace = true, features = ["dataloader"] }
+entity_mutation = { path = "../entity_mutation" }
 favorites = { path = "../favorites", default-features = false, features = [
   "ports",
 ] }
+graphql_common = { path = "../graphql_common" }
+graphql_entity_mutation = { path = "../graphql_entity_mutation" }
+graphql_soup = { path = "../graphql_soup" }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
 rootcause = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+chrono = { workspace = true }
+graphql_permission = { path = "../graphql_permission" }
+uuid = { workspace = true }

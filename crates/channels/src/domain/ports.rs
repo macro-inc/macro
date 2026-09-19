@@ -10,8 +10,8 @@ use crate::domain::models::{
     MessageAttachment, MessagePageDirection, MutatedAttachment, MutatedMessage,
     NewChannelAttachment, PatchChannelRequest, PatchMessageRequest, PostMessageRequest,
     PostMessageResponse, PostReactionRequest, PostTypingRequest, ReferencedShareItem,
-    RemoveParticipantsRequest, ResolvedChannelMessage, Sender, SimpleMention, ThreadData,
-    ThreadReply, ThreadReplyRow, TopLevelMessageRow,
+    RemoveParticipantsRequest, ResolvedChannelMessage, Sender, ThreadData, ThreadReply,
+    ThreadReplyRow, TopLevelMessageRow,
 };
 #[cfg(feature = "list")]
 use crate::domain::models::{
@@ -31,9 +31,14 @@ use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
 use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::models::SimpleMention;
 use models_pagination::{CreatedAt, Query};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
+
+/// Verified channel administration access required to change a channel picture.
+pub type ChannelPictureAccess =
+    EntityAccessReceipt<entity_access::domain::models::AdminParticipantRole>;
 
 /// Repository for channel list persistence and query data.
 #[cfg(feature = "list")]
@@ -124,6 +129,12 @@ pub trait ChannelAttachmentRepo: Send + Sync + 'static {
 /// Repository for channel persistence and query data.
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
 pub trait ChannelRepo: Send + Sync + 'static {
+    /// Replace or remove the channel's static-file picture reference.
+    fn set_channel_picture(
+        &self,
+        channel_id: Uuid,
+        picture_id: Option<Uuid>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
     /// Error type for repo operations.
     type Err: Into<anyhow::Error> + Send;
 
@@ -529,6 +540,12 @@ pub trait ChannelRepo: Send + Sync + 'static {
 
 /// Service for channel reads and mutations.
 pub trait ChannelService: Send + Sync + 'static {
+    /// Set a channel picture using verified channel administration access.
+    fn set_channel_picture(
+        &self,
+        access: ChannelPictureAccess,
+        picture_id: Option<Uuid>,
+    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send;
     /// Fetch a page of channel messages with thread previews, reactions, and attachments.
     ///
     /// `notification_user_id` is used only when `filters.notification_filters` is non-empty.
@@ -672,7 +689,18 @@ pub trait ChannelService: Send + Sync + 'static {
     /// `owner`; ownership and permissions are unchanged.
     fn create_system_channel(
         &self,
+        owner: MacroUserIdStr<'static>,
+        req: CreateChannelRequest,
+    ) -> impl Future<Output = Result<CreateChannelResponse, ChannelMutationErr>> + Send {
+        self.create_channel_on_behalf(owner, bot_id::MACRO_SYSTEM_BOT_ID, req)
+    }
+
+    /// Create a channel owned by `owner` with Created attributed to `actor`
+    /// acting for that owner. Ownership and permissions stay with `owner`.
+    fn create_channel_on_behalf(
+        &self,
         _owner: MacroUserIdStr<'static>,
+        _actor: BotId,
         _req: CreateChannelRequest,
     ) -> impl Future<Output = Result<CreateChannelResponse, ChannelMutationErr>> + Send {
         async move {
@@ -762,10 +790,12 @@ pub trait ChannelService: Send + Sync + 'static {
     }
 
     /// Patch a channel.
+    ///
+    /// Name-only updates are allowed for any member receipt. Converting a
+    /// channel or changing auto-join still requires channel admin access.
     fn patch_channel(
         &self,
-        _actor: Sender,
-        _channel_id: Uuid,
+        _access: EntityAccessReceipt<MemberParticipantRole>,
         _req: PatchChannelRequest,
     ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
         async move {
@@ -1105,6 +1135,26 @@ pub trait ChannelEventDispatcher: Send + Sync + 'static {
     fn dispatch(&self, event: ChannelEvent);
 }
 
+/// Metadata needed to authorize an uploaded channel picture.
+#[derive(Debug, Clone)]
+pub struct ChannelPictureFile {
+    /// User who uploaded the file.
+    pub owner_id: String,
+    /// Whether the file's upload has completed.
+    pub is_uploaded: bool,
+    /// Declared MIME type of the file.
+    pub content_type: String,
+}
+
+/// Fetches static-file facts; the channel service decides whether they permit use.
+pub trait ChannelPictureFiles: Send + Sync + 'static {
+    /// Look up a candidate picture, returning `None` when it does not exist.
+    fn get_picture_file(
+        &self,
+        file_id: Uuid,
+    ) -> impl Future<Output = anyhow::Result<Option<ChannelPictureFile>>> + Send;
+}
+
 /// Allows a boxed dispatcher to be used wherever a `ChannelEventDispatcher` is
 /// expected, so callers (e.g. the AI toolset) can inject a side-effect-wired
 /// dispatcher behind a uniform type.
@@ -1131,9 +1181,10 @@ pub trait ChannelReferenceSharePermissions: Send + Sync + 'static {
     /// Error type for reference share-permission operations.
     type Err: Into<anyhow::Error> + Send;
 
-    /// Update channel share permissions for referenced items that `actor` can view.
+    /// Update channel share permissions according to the referenced entity's policy.
     ///
     /// Implementations must not grant access for an item the actor cannot already view.
+    /// Agent sessions require ownership and grant edit access; other references grant view.
     fn update_channel_share_permissions_for_referenced_items(
         &self,
         actor: MacroUserIdStr<'static>,
@@ -1156,6 +1207,47 @@ pub trait ChannelMentionExtractor: Send + Sync + 'static {
         &self,
         content: &str,
     ) -> impl Future<Output = Result<Vec<SimpleMention>, Self::Err>> + Send;
+}
+
+/// Channel message writes expressed in the existing channel request shapes.
+///
+/// Implemented over the shared message commands, so every channel writer
+/// (HTTP, tools, webhooks, built-in bots) shares one persistence and delivery
+/// path with document discussions.
+#[async_trait::async_trait]
+pub trait ChannelMessageCommands: Send + Sync + 'static {
+    /// Post through the common message policy.
+    async fn post_message(
+        &self,
+        access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        req: PostMessageRequest,
+    ) -> Result<PostMessageResponse, ChannelMutationErr>;
+    /// Apply partial message changes.
+    async fn patch_message(
+        &self,
+        access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        message_id: Uuid,
+        req: PatchMessageRequest,
+    ) -> Result<(), ChannelMutationErr>;
+    /// Delete under common authorship rules.
+    async fn delete_message(
+        &self,
+        access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        message_id: Uuid,
+        query: DeleteMessageQuery,
+    ) -> Result<(), ChannelMutationErr>;
+    /// Change the verified actor's reaction.
+    async fn post_reaction(
+        &self,
+        access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        req: PostReactionRequest,
+    ) -> Result<(), ChannelMutationErr>;
+    /// Broadcast the verified actor's typing state.
+    async fn post_typing(
+        &self,
+        access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        req: PostTypingRequest,
+    ) -> Result<(), ChannelMutationErr>;
 }
 
 /// Errors that can occur while mutating channels.

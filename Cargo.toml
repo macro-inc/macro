@@ -3,7 +3,7 @@ resolver = "2"
 
 members = [
   "crates/activity",
-  "crates/agent", "crates/agent_egress", "crates/agent_fold",
+  "crates/agent", "crates/agent_changes", "crates/agent_egress", "crates/agent_fold",
   "crates/agent_harness",
   "crates/agent_inmem",
   "crates/agent_runtime_protocol", "crates/agent_session",
@@ -21,19 +21,27 @@ members = [
   "crates/client/cache-wasm",
   "crates/client/turso-opfs",
   "crates/coding_agent_worker",
+  "crates/codex_cloud_agents",
+  "crates/codex_connection",
   "crates/collab_surface",
   "crates/complete_graph",
   "crates/cowlike",
   "crates/crm",
   "crates/cursor_api_key",
   "crates/cursor_cloud_agents",
+  "crates/claude_cloud_agents",
   "crates/embedding",
   "crates/email_api_client",
   "crates/entity_mutation",
+  "crates/entity_registry/entity_registry",
+  "crates/entity_registry/entity_registry_db_utils",
+  "crates/entity_registry/shared_entity_registry",
   "crates/favorites",
   "crates/foreign_entity",
+  "crates/genai_telemetry",
   "crates/generic_email_domains",
   "crates/gmail_client",
+  "crates/google_token",
   "crates/graphql_activity",
   "crates/graphql_channel",
   "crates/graphql_common",
@@ -45,10 +53,12 @@ members = [
   "crates/graphql_properties",
   "crates/graphql_soup",
   "crates/graphql_soup_filter_input",
+  "crates/gtm_invite",
   "crates/harness_id",
   "crates/harness_token",
   "crates/harnesses",
   "crates/import",
+  "crates/initiative",
   "crates/item_filter_index",
   "crates/integration_tests/local_e2e",
   "crates/loops_client",
@@ -60,7 +70,11 @@ members = [
   "crates/macro_sync_service_jwt",
   "crates/maybe_send",
   "crates/memory",
+  "crates/messages",
+  "crates/model_owner",
   "crates/mcp_select",
+  "crates/mcp_toolset",
+  "crates/notification_state",
   "crates/pipedream_mcp",
   "crates/onboarding",
   "crates/predicate_index",
@@ -83,6 +97,7 @@ members = [
   "services/agent_trigger_service",
   "services/ai_projections_refresh_handler",
   "services/authentication_service",
+  "services/calendar_service",
   "services/call_recording_preview_handler",
   "services/connection_gateway",
   "services/contacts_service",
@@ -139,7 +154,10 @@ apollo-parser = "0.8"
 # main but not yet in a tagged release):
 # https://github.com/agentclientprotocol/rust-sdk/pull/294
 # Swap back to a plain version once upstream cuts a release containing it.
-agent-client-protocol = { git = "https://github.com/agentclientprotocol/rust-sdk", rev = "8769d16d10e0c9fa7e662ee18424a4313b06ea88" }
+agent-client-protocol = { git = "https://github.com/agentclientprotocol/rust-sdk", rev = "8769d16d10e0c9fa7e662ee18424a4313b06ea88", features = [
+  "unstable_elicitation",
+] }
+arboard = { version = "3.6.1", default-features = false, features = ["wayland-data-control"] }
 askama = "0.14"
 async-graphql = "7.2.1"
 async-lock = "3"
@@ -264,6 +282,7 @@ reqwest = { version = "0.13", default-features = false, features = [
   "rustls",
 ] }
 rmcp = "1.6.0"
+sse-stream = "0.2"
 rootcause = { version = "0.12", features = ["compat-anyhow1"] }
 rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] }
 rootcause-tracing = "0.12.1"
@@ -276,6 +295,7 @@ serde_json = { version = "1.0.132" }
 serde_repr = "0.1"
 serde_with = { version = "3.12.0", features = ["base64"] }
 serde_yaml = "0.9"
+shell-words = "1.1.1"
 specta = { version = "=2.0.0-rc.25", features = ["derive"] }
 specta-serde = "=0.0.12"
 specta-typescript = "=0.0.12"
@@ -287,6 +307,7 @@ sqlx = { version = "0.8.6", features = [
   "uuid",
 ] }
 sqlx-core = { version = "0.8.6" }
+sse-core = { version = "0.2.3", default-features = false, features = ["std"] }
 strum = { version = "0.27.1", features = ["derive"] }
 tempfile = "3"
 thiserror = "2.0.0"
@@ -311,6 +332,7 @@ tracing = "0.1.44"
 tracing-opentelemetry = "0.32.1"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }
 tracing-tree = "0.4.0"
+tui-input = { version = "0.14.0", default-features = false }
 # Pin the official upstream revision used by the browser cache. Cache writes use
 # deferred transactions so browser WASM does not initialize Turso's temp database.
 turso_core = { git = "https://github.com/tursodatabase/turso", rev = "79163249538197d01dec5ea7f65519454ed792e2", default-features = false }
@@ -334,6 +356,7 @@ wasm-bindgen-futures = "0.4"
 wasm-bindgen-test = "0.3"
 web-sys = "0.3"
 web-time = "1.1.0"
+webbrowser = { version = "=1.2.2", features = ["hardened"] }
 worker = "0.8.1"
 # this is pinned to match axum 0.7.9 dependency requirements
 async-stripe = { version = "0.41", default-features = false, features = [
@@ -359,6 +382,7 @@ url = "2.5.0"
 zip = "=2.4.2"
 ammonia = "4.1.4"
 html-escape = "0.2"
+subtle = "2.6.1"
 
 # Retain Rust DWARF for local cache profiling while keeping release-level LLVM
 # optimization. wasm-pack's custom profile metadata prevents the final

@@ -6,6 +6,10 @@
 //! wasm — wasm futures aren't
 //! `Send`.
 
+use crate::predicate::reconciliation::{
+    PredicateBaselineEntry, PredicateMembership, PredicateReconciliation, predicate_membership,
+    reconcile_predicate_baseline,
+};
 use crate::predicate::{
     OptimisticShadowReconciliation, OptimisticUpsertReconciliation, PredicateIndexStorage,
     PredicateQueryResult, ProjectionMutation, ProjectionState, StagedOptimisticProjection,
@@ -302,6 +306,41 @@ impl InMemoryStorage {
         self.records.is_empty()
     }
 
+    fn rebase_projections(&mut self, keys: &[PredicateRecordKey]) {
+        let sources = self
+            .mutations
+            .iter()
+            .map(|(id, row)| {
+                (
+                    *id,
+                    crate::queue::decode_optimistic_source(&row.optimistic.optimistic_data_json)
+                        .expect("valid queued source"),
+                )
+            })
+            .collect::<Vec<_>>();
+        let layers = sources
+            .iter()
+            .map(
+                |(owner, source)| crate::predicate::ProjectionMutationLayer {
+                    owner: *owner,
+                    mutations: &source.projection_mutations,
+                },
+            )
+            .collect::<Vec<_>>();
+        for key in keys {
+            self.optimistic_projections.remove(key);
+            if let Some(shadow) = crate::predicate::compose_effective_optimistic_projection(
+                key,
+                self.projections.get(key),
+                &layers,
+            )
+            .expect("valid projection layers")
+            {
+                self.optimistic_projections.insert(key.clone(), shadow);
+            }
+        }
+    }
+
     /// Number of normalized-record get calls (test diagnostics).
     pub fn record_get_count(&self) -> usize {
         self.record_get_count.load(Ordering::Relaxed)
@@ -348,7 +387,12 @@ impl Storage for InMemoryStorage {
         projections: Vec<ProjectionMutation>,
     ) -> Result<(), Self::Error> {
         self.put_batch(entries).await?;
+        let keys = projections
+            .iter()
+            .map(|mutation| mutation.record_key().clone())
+            .collect::<Vec<_>>();
         apply_in_memory_projection_mutations(&mut self.projections, projections);
+        self.rebase_projections(&keys);
         Ok(())
     }
 
@@ -738,16 +782,86 @@ impl Storage for InMemoryStorage {
 }
 
 impl PredicateIndexStorage for InMemoryStorage {
+    async fn reconcile_predicate_index(
+        &self,
+        query: &predicate_index::ValidatedIndexQuery,
+        baseline: &[PredicateBaselineEntry],
+    ) -> Result<PredicateReconciliation, Self::Error> {
+        let present = |key: &PredicateRecordKey| {
+            self.records
+                .contains_key(&EntityKey(key.as_str().to_owned().into()))
+        };
+        let membership = |key: &PredicateRecordKey| {
+            predicate_membership(
+                query,
+                self.projections.get(key),
+                self.optimistic_projections.get(key),
+                present(key),
+            )
+        };
+        let keys: HashSet<_> = self
+            .projections
+            .keys()
+            .chain(self.optimistic_projections.keys())
+            .collect();
+        let documents = keys
+            .into_iter()
+            .filter_map(|key| {
+                if !matches!(membership(key), PredicateMembership::Match(_)) {
+                    return None;
+                }
+                match self.optimistic_projections.get(key) {
+                    Some(projection) => match &projection.state {
+                        predicate_index::OptimisticProjectionState::Complete(document) => {
+                            Some(document.clone())
+                        }
+                        _ => None,
+                    },
+                    None => match self.projections.get(key) {
+                        Some(ProjectionState::Complete(document)) => Some(document.clone()),
+                        _ => None,
+                    },
+                }
+            })
+            .collect::<Vec<_>>();
+        Ok(reconcile_predicate_baseline(
+            query,
+            baseline,
+            baseline.iter().map(|entry| membership(&entry.record_key)),
+            evaluate_reference(query, &documents),
+            self.optimistic_projections.iter().any(|(key, shadow)| {
+                query.includes_scope(shadow.state.profile(), shadow.state.partition())
+                    || self.projections.get(key).is_some_and(|authority| {
+                        query.includes_scope(authority.profile(), authority.partition())
+                    })
+            }),
+        ))
+    }
+
     async fn delete_batch_with_projections(
         &mut self,
         keys: &[EntityKey<'static>],
         projection_keys: &[PredicateRecordKey],
     ) -> Result<(), Self::Error> {
+        self.delete_batch_with_projection_changes(
+            keys,
+            projection_keys
+                .iter()
+                .cloned()
+                .map(ProjectionMutation::Delete)
+                .collect(),
+        )
+        .await
+    }
+
+    async fn delete_batch_with_projection_changes(
+        &mut self,
+        keys: &[EntityKey<'static>],
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), Self::Error> {
         self.delete_batch(keys).await?;
-        for key in projection_keys {
-            self.projections.remove(key);
-        }
-        Ok(())
+        self.put_batch_with_projections(Vec::new(), projections)
+            .await
     }
 
     async fn query_predicate_index(

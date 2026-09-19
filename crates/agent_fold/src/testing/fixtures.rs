@@ -47,3 +47,9 @@ pub const SUBAGENT_CURSOR: &str = include_str!("../../fixtures/real/subagent_cur
 /// streamed.
 pub const SUBAGENT_MACRO_INMEM: &str =
     include_str!("../../fixtures/real/subagent_macro_inmem.jsonl");
+
+/// A real Claude Code turn where `AskUserQuestion` asks a single-select
+/// question through `elicitation/create`, the client answers with both the
+/// choice and a custom text, and the adapter reports the custom text won.
+pub const ELICITATION_CLAUDE_SINGLE_SELECT: &str =
+    include_str!("../../fixtures/real/elicitation_claude_single_select.jsonl");

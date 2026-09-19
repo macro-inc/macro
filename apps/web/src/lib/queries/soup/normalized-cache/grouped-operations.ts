@@ -126,6 +126,17 @@ export function syncGroupedParents(entityId: string, entity: SoupApiItem) {
         continue;
       }
 
+      // The insert gate only decides admission of rows the page doesn't hold
+      // yet — rows already admitted keep the full membership sync.
+      if (
+        meta.insertFilter &&
+        !meta.insertFilter(entity) &&
+        !(entityId in page.items)
+      ) {
+        pages.push(page);
+        continue;
+      }
+
       const next = syncMembership(
         page,
         entityId,
@@ -172,6 +183,16 @@ export function syncGroupQueries(entityId: string, entity: SoupApiItem) {
 
     const meta = getSoupQueryMeta(query.meta);
     if (!meta.groupBy || meta.groupKey == null) continue;
+
+    // The insert gate only decides admission of rows the query doesn't hold
+    // yet — rows already admitted keep the full membership sync.
+    if (
+      meta.insertFilter &&
+      !meta.insertFilter(entity) &&
+      !prev.pages.some((page) => page.group.itemIds.includes(entityId))
+    ) {
+      continue;
+    }
 
     const filter = meta.itemFilter;
     const nextGroupKeys =
@@ -294,6 +315,7 @@ export function insertGroupQueries(
     const meta = getSoupQueryMeta(query.meta);
     const filter = meta.itemFilter;
     if (filter && !filter(item)) continue;
+    if (meta.insertFilter && !meta.insertFilter(item)) continue;
 
     if (!meta.groupBy || meta.groupKey == null) continue;
 

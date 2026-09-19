@@ -6,6 +6,7 @@
  */
 import type { EmailFiltersCalendarOnly } from './emailFiltersCalendarOnly';
 import type { EmailFiltersImportance } from './emailFiltersImportance';
+import type { EmailFiltersIsRead } from './emailFiltersIsRead';
 import type { NotificationFilters } from './notificationFilters';
 import type { SharedEmailFilter } from './sharedEmailFilter';
 
@@ -47,6 +48,8 @@ Note: SPAM and TRASH emails are not indexed in OpenSearch, so they are already e
   /** Only include emails that have at least one of these labels. Supports both Gmail system labels (e.g. "INBOX", "CATEGORY_PROMOTIONS") and user-created labels (e.g. "github"). Empty to not filter by included labels.
 Note: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter. */
   include_labels?: string[];
+  /** Filter by the email thread's read flag, independently of notification state. */
+  is_read?: EmailFiltersIsRead;
   /** Restrict to specific inboxes by email_links.id. Empty means "any inbox the
 caller can access" (soup expands to the full set at the router edge). */
   link_ids?: string[];

@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
     content: vi.fn(() => ({ id: 'other' })),
     isControllerSplit: vi.fn(() => true),
     referredFrom: vi.fn(() => undefined),
+    resetPreview: vi.fn(),
   },
   executeMarkEntitiesDone: vi.fn(async () => [] as string[]),
   executeMarkEntitiesUndone: vi.fn(async () => {}),
@@ -68,7 +69,10 @@ vi.mock('@app/features/next-soup/utils', () => ({
   restoreSoupFocus: vi.fn(),
 }));
 
-import { makeMarkDoneAction } from './make-mark-done-action';
+import {
+  canExecuteMarkDoneOnView,
+  makeMarkDoneAction,
+} from './make-mark-done-action';
 
 const currentEntity = {
   type: 'email',
@@ -115,11 +119,25 @@ function createAction() {
   }));
 }
 
+describe('canExecuteMarkDoneOnView', () => {
+  it('allows mark done on every thread-listing mail tab', () => {
+    for (const tab of ['important', 'noise', 'calendar', 'shared', 'all']) {
+      expect(canExecuteMarkDoneOnView('mail', tab)).toBe(true);
+    }
+  });
+
+  it('keeps mark done off tabs whose rows are not triaged', () => {
+    expect(canExecuteMarkDoneOnView('mail', 'drafts')).toBe(false);
+    expect(canExecuteMarkDoneOnView('mail', 'sent')).toBe(false);
+  });
+});
+
 describe('makeMarkDoneAction', () => {
   beforeEach(() => {
     mocks.controller.content.mockReturnValue({ id: 'other' });
     mocks.controller.isControllerSplit.mockReturnValue(true);
     mocks.controller.referredFrom.mockReturnValue(undefined);
+    mocks.controller.resetPreview.mockClear();
     mocks.executeMarkEntitiesDone.mockClear();
     mocks.executeMarkEntitiesDone.mockResolvedValue([]);
     mocks.executeMarkEntitiesUndone.mockClear();
@@ -161,6 +179,37 @@ describe('makeMarkDoneAction', () => {
     await action.executeWithSoup([currentEntity], soup);
 
     expect(mocks.openEntityInSplitFromUnifiedList).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it('uses an explicit navigation handler instead of the split Controller', async () => {
+    const { soup } = createSoup();
+    const onNavigate = vi.fn();
+    const { action, dispose } = createAction();
+
+    await action.executeWithSoup([currentEntity], soup, onNavigate);
+
+    expect(onNavigate).toHaveBeenCalledWith({
+      actionId: 'mark-done',
+      entity: nextEntity,
+    });
+    expect(mocks.openEntityInSplitFromUnifiedList).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it('passes no target to the navigation handler when no item remains', async () => {
+    const { soup, focusSet } = createSoup();
+    soup.navigate.peekOffset = vi.fn(() => undefined);
+    const onNavigate = vi.fn();
+    const { action, dispose } = createAction();
+
+    await action.executeWithSoup([currentEntity], soup, onNavigate);
+
+    expect(focusSet).toHaveBeenCalledWith(undefined);
+    expect(onNavigate).toHaveBeenCalledWith({
+      actionId: 'mark-done',
+      entity: undefined,
+    });
     dispose();
   });
 

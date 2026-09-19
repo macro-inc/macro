@@ -2,13 +2,17 @@
 
 use std::str::FromStr;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use specta::Type;
 
 use super::ToolUseId;
+use super::elicitation::{
+    AnsweredField, ElicitationOutcome, ElicitationRequest, ElicitationRequestId,
+};
 use super::permission::{PermissionOption, PermissionOutcome};
 use super::plan::PlanEntry;
 use super::tool::{ToolDetail, ToolName, ToolStatus};
+use super::user_tool::UserToolOutcome;
 
 /// A unit of renderable content.
 #[derive(Debug, Clone, PartialEq, Serialize, Type)]
@@ -18,6 +22,25 @@ pub enum MessagePart {
     Text {
         /// The prose.
         text: String,
+    },
+    /// A file the user attached to their prompt, by where it can be fetched.
+    ///
+    /// Read off the prompt's `resource_link` blocks - the only shape this
+    /// side sends files in, since bytes never ride the log. Rendering decides
+    /// from `mime_type` whether that is a thumbnail or a chip.
+    Attachment {
+        /// Where the file can be fetched - a static file service URL.
+        uri: String,
+        /// Display name, typically the original file name.
+        name: String,
+        /// The file's media type, when the sender knew it.
+        #[serde(rename = "mimeType")]
+        mime_type: Option<String>,
+        /// Size in bytes, when the sender knew it. A double on the wire:
+        /// specta refuses 64-bit integers, and no file this renders is
+        /// anywhere near the precision limit.
+        #[specta(type = Option<f64>)]
+        size: Option<i64>,
     },
     /// The agent's reasoning, which a reader may want to hide by default.
     Thought {
@@ -37,6 +60,9 @@ pub enum MessagePart {
     },
     /// The agent asking to proceed.
     Permission {
+        /// The agent request id an approval must echo.
+        #[serde(rename = "requestId")]
+        request_id: super::AgentRequestId,
         /// The tool call permission was requested for.
         #[serde(rename = "toolCall")]
         tool_call: ToolUseId,
@@ -56,6 +82,43 @@ pub enum MessagePart {
     Plan {
         /// The tasks, in the order the agent listed them.
         entries: Vec<PlanEntry>,
+    },
+    /// The agent asking the user a question.
+    ///
+    /// When the question was asked on behalf of a tool call this fold had
+    /// already opened (Claude Code's `AskUserQuestion`), this part *replaces*
+    /// that tool's part in place: the question is the call, and rendering
+    /// both would show one thing twice.
+    Elicitation {
+        /// The agent's `elicitation/create` request id - what an answer must
+        /// echo.
+        #[serde(rename = "requestId")]
+        request_id: ElicitationRequestId,
+        /// The tool call the question belongs to, when the agent said.
+        #[serde(rename = "toolCall")]
+        tool_call: Option<ToolUseId>,
+        /// What the agent is asking, in prose.
+        message: String,
+        /// The form or URL.
+        request: ElicitationRequest,
+        /// How it has resolved so far.
+        outcome: ElicitationOutcome,
+        /// The harness's own reading of the answer, when it reported one
+        /// after the response went back (Claude Code echoes the chosen
+        /// option through its tool result). Absent otherwise.
+        ///
+        /// Shaped like [`ElicitationOutcome::Accepted`]'s answers so a reader
+        /// renders one vocabulary either way, though a harness keys these by
+        /// question prose rather than by property, so each `name` is that
+        /// prose rather than a schema property.
+        reported: Option<Vec<AnsweredField>>,
+        /// For a user tool's review ([`ElicitationRequest::UserTool`]): how
+        /// the tool itself ended once the user answered - run with the
+        /// reviewed draft, rejected, or failed - read from the absorbed
+        /// call's later updates. Absent until the tool reports, and for
+        /// every other kind of question.
+        #[serde(rename = "toolOutcome")]
+        tool_outcome: Option<UserToolOutcome>,
     },
 }
 
@@ -125,7 +188,7 @@ pub enum ControlOutcome {
 /// anything unmodelled falls through to [`Self::Other`], so parsing never
 /// fails. [`Self::Failed`] is the exception - no wire string produces it,
 /// because it is what a turn that got no `stopReason` at all stopped for.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum StopReason {
     /// The agent finished its turn.

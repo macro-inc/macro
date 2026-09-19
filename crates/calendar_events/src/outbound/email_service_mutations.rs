@@ -176,7 +176,11 @@ fn create_body(
 }
 
 /// Wire body for an event patch, matching `UpdateCalendarEventRequest`.
-fn update_body(patch: &CalendarEventPatch, scope: &CalendarUpdateScope) -> serde_json::Value {
+fn update_body(
+    calendar_id: Option<Uuid>,
+    patch: &CalendarEventPatch,
+    scope: &CalendarUpdateScope,
+) -> serde_json::Value {
     let (scope_name, recurrence_id) = match scope {
         CalendarUpdateScope::All => ("all", None),
         CalendarUpdateScope::ThisEvent { recurrence_id } => {
@@ -184,6 +188,7 @@ fn update_body(patch: &CalendarEventPatch, scope: &CalendarUpdateScope) -> serde
         }
     };
     serde_json::json!({
+        "calendarId": calendar_id,
         "title": patch.title,
         "description": patch.description,
         "location": patch.location,
@@ -218,8 +223,11 @@ fn attendees_body(
 }
 
 /// Wire query for a deletion scope, matching `DeleteCalendarEventQuery`.
-fn delete_query(scope: &CalendarDeletionScope) -> Vec<(&'static str, String)> {
-    match scope {
+fn delete_query(
+    calendar_id: Option<Uuid>,
+    scope: &CalendarDeletionScope,
+) -> Vec<(&'static str, String)> {
+    let mut query = match scope {
         CalendarDeletionScope::All => vec![("scope", "all".to_string())],
         CalendarDeletionScope::ThisEvent { recurrence_id } => vec![
             ("scope", "this_event".to_string()),
@@ -229,17 +237,27 @@ fn delete_query(scope: &CalendarDeletionScope) -> Vec<(&'static str, String)> {
             ("scope", "this_and_following".to_string()),
             ("recurrenceId", recurrence_id.clone()),
         ],
+    };
+    if let Some(calendar_id) = calendar_id {
+        query.push(("calendarId", calendar_id.to_string()));
     }
+    query
 }
 
 /// Wire body for an RSVP, matching `RsvpCalendarEventRequest`.
-fn rsvp_body(response: AttendeeResponseStatus, scope: &CalendarRsvpScope) -> serde_json::Value {
+fn rsvp_body(
+    calendar_id: Option<Uuid>,
+    response: AttendeeResponseStatus,
+    scope: &CalendarRsvpScope,
+) -> serde_json::Value {
     match scope {
         CalendarRsvpScope::All => serde_json::json!({
+            "calendarId": calendar_id,
             "response": response,
             "scope": "all",
         }),
         CalendarRsvpScope::ThisEvent { recurrence_id } => serde_json::json!({
+            "calendarId": calendar_id,
             "response": response,
             "scope": "this_event",
             "recurrenceId": recurrence_id,
@@ -285,6 +303,7 @@ impl CalendarMutationService for EmailServiceCalendarMutations {
         &self,
         requester_id: &str,
         event_id: Uuid,
+        calendar_id: Option<Uuid>,
         patch: CalendarEventPatch,
         scope: CalendarUpdateScope,
     ) -> Result<CalendarEvent, CalendarMutationError> {
@@ -294,7 +313,7 @@ impl CalendarMutationService for EmailServiceCalendarMutations {
                 &format!("/calendar/events/{event_id}"),
                 requester_id,
             )
-            .json(&update_body(&patch, &scope)),
+            .json(&update_body(calendar_id, &patch, &scope)),
         )
         .await
     }
@@ -304,6 +323,7 @@ impl CalendarMutationService for EmailServiceCalendarMutations {
         &self,
         requester_id: &str,
         event_id: Uuid,
+        calendar_id: Option<Uuid>,
         scope: CalendarDeletionScope,
     ) -> Result<(), CalendarMutationError> {
         self.send(
@@ -312,7 +332,7 @@ impl CalendarMutationService for EmailServiceCalendarMutations {
                 &format!("/calendar/events/{event_id}"),
                 requester_id,
             )
-            .query(&delete_query(&scope)),
+            .query(&delete_query(calendar_id, &scope)),
         )
         .await
         .map(|_| ())
@@ -323,6 +343,7 @@ impl CalendarMutationService for EmailServiceCalendarMutations {
         &self,
         requester_id: &str,
         event_id: Uuid,
+        calendar_id: Option<Uuid>,
         response: AttendeeResponseStatus,
         scope: CalendarRsvpScope,
     ) -> Result<CalendarEvent, CalendarMutationError> {
@@ -332,7 +353,7 @@ impl CalendarMutationService for EmailServiceCalendarMutations {
                 &format!("/calendar/events/{event_id}/rsvp"),
                 requester_id,
             )
-            .json(&rsvp_body(response, &scope)),
+            .json(&rsvp_body(calendar_id, response, &scope)),
         )
         .await
     }

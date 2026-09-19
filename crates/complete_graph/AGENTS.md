@@ -81,6 +81,17 @@ therefore also requires adding it to the interface and its SDL contract test.
 Expensive fields remain lazy because GraphQL only invokes resolvers selected by
 a query.
 
+## 4. Soup patches contain hydrated updates or explicit deletions
+
+`SoupUpdated.item` is non-nullable. Use `SoupPatch::hydrate_updated` for updated
+entities and `SoupPatch::deleted` for explicit deletions. The subscription adapter
+coalesces realtime patches by entity type and ID (last operation wins), preserving
+last-occurrence order. Mutation adapters map their own domain effects directly;
+they must not depend on realtime patch types. Poll hydration futures concurrently
+so the DataLoader can batch them. Missing items are logged and omitted, never inferred
+to be deleted. Hydration service errors remain GraphQL errors. Do not reintroduce
+lazy nullable item lookup inside the update.
+
 ## Regenerating the SDL
 
 After schema changes:

@@ -291,16 +291,16 @@ VALUES
   ('dd000005-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'test', 'aa000001-ffff-ffff-ffff-ffffffffffff', 'project', 'test', '{}'::jsonb, 'macro|user-2@test.com'),
   ('dd000006-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'test', 'aa000003-ffff-ffff-ffff-ffffffffffff', 'project', 'test', '{}'::jsonb, 'macro|user-2@test.com');
 
-INSERT INTO public."user_notification" ("user_id", "notification_id", "created_at", "seen_at", "done")
+INSERT INTO public."user_notification" ("user_id", "notification_id", "created_at", "seen_at", "state")
 VALUES
   -- not done + unread
-  ('macro|user-1@test.com', 'dd000001-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2024-03-09 10:00:00', NULL, false),
-  ('macro|user-1@test.com', 'dd000003-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2024-03-09 10:01:00', NULL, false),
-  ('macro|user-1@test.com', 'dd000005-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2024-03-09 10:02:00', NULL, false),
+  ('macro|user-1@test.com', 'dd000001-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2024-03-09 10:00:00', NULL, 'unseen'),
+  ('macro|user-1@test.com', 'dd000003-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2024-03-09 10:01:00', NULL, 'unseen'),
+  ('macro|user-1@test.com', 'dd000005-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2024-03-09 10:02:00', NULL, 'unseen'),
   -- done + seen
-  ('macro|user-1@test.com', 'dd000002-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2024-03-09 10:03:00', '2024-03-09 11:00:00', true),
-  ('macro|user-1@test.com', 'dd000004-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2024-03-09 10:04:00', '2024-03-09 11:01:00', true),
-  ('macro|user-1@test.com', 'dd000006-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2024-03-09 10:05:00', '2024-03-09 11:02:00', true);
+  ('macro|user-1@test.com', 'dd000002-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2024-03-09 10:03:00', '2024-03-09 11:00:00', 'done'),
+  ('macro|user-1@test.com', 'dd000004-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2024-03-09 10:04:00', '2024-03-09 11:01:00', 'done'),
+  ('macro|user-1@test.com', 'dd000006-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2024-03-09 10:05:00', '2024-03-09 11:02:00', 'done');
 
 ---------------------------------
 -- FRECENCY RECORDS

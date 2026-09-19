@@ -166,7 +166,7 @@ const ValueDropdownContent = (props: { filter: ConsolidatedFilter }) => {
     props.filter.values().some((v) => v.id === id);
 
   return (
-    <Dropdown.Content class="shadow-menu">
+    <Dropdown.Content>
       <Dropdown.Group>
         <For each={props.filter.availableOptions}>
           {(option) => {

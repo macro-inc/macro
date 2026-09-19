@@ -15,10 +15,11 @@ use agent_session::domain::model::{AgentSessionId, SandboxSize};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
 use crate::domain::error::{HarnessError, Result};
-use crate::domain::model::SpawnContainer;
+use crate::domain::model::{AgentKind, SessionBlocker, SpawnContainer};
 use crate::domain::ports::ContainerManager;
 use crate::domain::sandbox::{SandboxResizeEffect, create_only_resize_effect, resize_effect};
 use crate::testing::helpers::agent::FakeAgent;
+use macro_user_id::user_id::MacroUserIdStr;
 
 /// A container connection driven by hand.
 ///
@@ -196,6 +197,7 @@ impl TransportReceiver<ToServerMessage> for ContainerReceiver {
 #[derive(Clone, Default)]
 pub struct MockContainerManager {
     containers: Arc<Mutex<HashMap<AgentSessionId, ContainerMock>>>,
+    blocker: Arc<Mutex<Option<SessionBlocker>>>,
     spawn_error: Arc<Mutex<Option<String>>>,
     spawn_sizes: Arc<Mutex<Vec<SandboxSize>>>,
     resizes: Arc<Mutex<Vec<(AgentSessionId, SandboxSize)>>>,
@@ -227,6 +229,15 @@ impl MockContainerManager {
     #[must_use]
     pub fn spawned(&self) -> usize {
         self.lock().len()
+    }
+
+    /// Answer every preflight with `blocker` from now on: the owner is not
+    /// set up for this provider.
+    pub fn block_with(&self, blocker: SessionBlocker) {
+        *self
+            .blocker
+            .lock()
+            .expect("blocker lock should not be poisoned") = Some(blocker);
     }
 
     /// Make the next sandbox spawn fail with `message`.
@@ -282,7 +293,22 @@ impl MockContainerManager {
 impl ContainerManager for MockContainerManager {
     type Transport = ContainerMock;
 
-    async fn spawn(&self, command: SpawnContainer) -> Result<ContainerMock, HarnessError> {
+    async fn preflight(
+        &self,
+        _kind: AgentKind,
+        _owner: &MacroUserIdStr<'_>,
+    ) -> Result<Option<SessionBlocker>> {
+        Ok(*self
+            .blocker
+            .lock()
+            .expect("blocker lock should not be poisoned"))
+    }
+
+    async fn spawn(
+        &self,
+        command: SpawnContainer,
+    ) -> Result<agent_session::domain::connection::RuntimeAttachment<ContainerMock>, HarnessError>
+    {
         if let Some(message) = self
             .spawn_error
             .lock()
@@ -297,7 +323,9 @@ impl ContainerManager for MockContainerManager {
             .push(command.size);
         let container = ContainerMock::default();
         self.lock().insert(command.session_id, container.clone());
-        Ok(container)
+        Ok(agent_session::domain::connection::RuntimeAttachment::solo(
+            container,
+        ))
     }
 
     fn resize_effect(&self, from: SandboxSize, to: SandboxSize) -> SandboxResizeEffect {
@@ -326,7 +354,11 @@ impl ContainerManager for MockContainerManager {
         Ok(())
     }
 
-    async fn resume(&self, session: AgentSessionId) -> Result<ContainerMock, HarnessError> {
+    async fn resume(
+        &self,
+        session: AgentSessionId,
+    ) -> Result<agent_session::domain::connection::RuntimeAttachment<ContainerMock>, HarnessError>
+    {
         self.resumes.fetch_add(1, Ordering::Relaxed);
         let mut containers = self.lock();
         if !containers.contains_key(&session) {
@@ -336,7 +368,9 @@ impl ContainerManager for MockContainerManager {
         }
         let container = ContainerMock::default();
         containers.insert(session, container.clone());
-        Ok(container)
+        Ok(agent_session::domain::connection::RuntimeAttachment::solo(
+            container,
+        ))
     }
 
     /// The fixed token every mock container "holds", for sessions that were

@@ -535,12 +535,17 @@ fn test_router(
         macro_authorization::NoBotAuthorizer,
         macro_authorization::NoUserApiKeyAuthorizer,
     );
-    let state: CrmRouterState<FakeCrmService, FakeEntityAccessService, TestAuthorizationService> =
-        CrmRouterState {
-            service: Arc::new(crm_service.clone()),
-            entity_access_service: Arc::new(entity_access.clone()),
-            authorization_state: MacroAuthorizationState::new(Arc::new(authorization_service)),
-        };
+    let state: CrmRouterState<
+        FakeCrmService,
+        (),
+        FakeEntityAccessService,
+        TestAuthorizationService,
+    > = CrmRouterState {
+        service: Arc::new(crm_service.clone()),
+        stage_service: Arc::new(()),
+        entity_access_service: Arc::new(entity_access.clone()),
+        authorization_state: MacroAuthorizationState::new(Arc::new(authorization_service)),
+    };
     let router = Router::new()
         .route("/companies/{company_id}", get(company_handler))
         .route("/company-without-id/{other_id}", get(company_handler))

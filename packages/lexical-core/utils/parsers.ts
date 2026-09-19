@@ -59,11 +59,43 @@ export function parseDocumentMentions(text: string): string {
   );
 }
 
+export function parseAgentSessionMentions(text: string): string {
+  return text.replace(
+    /<m-agent-session-mention>(.*?)<\/m-agent-session-mention>/g,
+    (_, json) => {
+      try {
+        const data = JSON.parse(json);
+        return typeof data.label === 'string'
+          ? data.label
+          : typeof data.id === 'string'
+            ? data.id
+            : '';
+      } catch {
+        return '';
+      }
+    }
+  );
+}
+
 export function parsePullRequestMentions(text: string): string {
   return text.replace(/<m-pr-mention>(.*?)<\/m-pr-mention>/g, (_, json) => {
     try {
       const data = JSON.parse(json);
       return data.label || data.id || '';
+    } catch {
+      return '';
+    }
+  });
+}
+
+/** `<m-connect-app>` chips read as their call to action. */
+export function parseConnectApps(text: string): string {
+  return text.replace(/<m-connect-app>(.*?)<\/m-connect-app>/g, (_, json) => {
+    try {
+      const data = JSON.parse(json);
+      return typeof data.name === 'string' && data.name
+        ? `Connect ${data.name}`
+        : '';
     } catch {
       return '';
     }
@@ -193,7 +225,9 @@ export function markdownToPlainText(markdown: string): string {
     parseGroupMentions,
     parseDocumentMentions,
     parsePullRequestMentions,
+    parseAgentSessionMentions,
     parseTagMentions,
+    parseConnectApps,
     parseSnapshots,
     parseDocumentCards,
     parseLinks,
@@ -338,6 +372,11 @@ export function markdownToEmbeddingText(markdown: string): string {
   text = flattenEmailThreadEmbeds(text);
 
   // Leaf tags.
+  text = replaceJsonTag(text, 'm-agent-session-mention', (data) =>
+    data.id
+      ? `[${data.label || 'Agent session'}](agent_session:${data.id})`
+      : data.label || ''
+  );
   text = replaceJsonTag(text, 'm-document-mention', documentRefToEmbeddingText);
   text = replaceJsonTag(text, 'm-document-card', documentRefToEmbeddingText);
   text = replaceJsonTag(text, 'm-pr-mention', (data) =>
@@ -382,6 +421,9 @@ export function markdownToEmbeddingText(markdown: string): string {
     data.name ? `#${data.name}` : ''
   );
   text = replaceJsonTag(text, 'm-theme-mention', (data) => data.name || '');
+  text = replaceJsonTag(text, 'm-connect-app', (data) =>
+    data.name ? `Connect ${data.name}` : ''
+  );
   text = replaceJsonTag(text, 'm-await', (data) => data.text || '');
   text = replaceJsonTag(
     text,

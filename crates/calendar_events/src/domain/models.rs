@@ -527,7 +527,45 @@ impl EventReminders {
     }
 }
 
+/// The content one provider copy of an event carries.
+///
+/// Google keeps these fields per calendar copy: a shared calendar's copy of a
+/// member's event can have its own title, type, reminders, and access role.
+/// The entity holds its canonical source's values. Every other copy's values
+/// are read from here so a client can show the copy that belongs to the
+/// calendar being viewed.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarEventSourceContent {
+    /// Calendar this copy lives on.
+    pub calendar_id: Uuid,
+    /// Display title.
+    pub title: String,
+    /// Optional event body.
+    pub description: Option<String>,
+    /// Optional physical or virtual location label.
+    pub location: Option<String>,
+    /// Provider event type.
+    pub event_type: EventType,
+    /// Event visibility.
+    pub visibility: EventVisibility,
+    /// Availability behavior.
+    pub transparency: EventTransparency,
+    /// Whether the calendar's access role prohibits editing this copy.
+    pub is_read_only: bool,
+    /// Reminder configuration of this copy.
+    pub reminders: EventReminders,
+    /// Provider-reported creator email.
+    pub creator_email: Option<String>,
+    /// Provider-reported creator display name.
+    pub creator_name: Option<String>,
+}
+
 /// A stable, first-class Macro calendar event entity.
+///
+/// Content fields hold the canonical source's values: the account's primary
+/// calendar copy when one is synced, else the freshest remaining copy.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
@@ -542,6 +580,12 @@ pub struct CalendarEvent {
     /// projections stored before calendars were attributed.
     #[serde(default)]
     pub calendar_id: Option<Uuid>,
+    /// Content of every active copy of this event, canonical first: the
+    /// primary calendar's copy, then the freshest. A client picks the copy
+    /// whose calendar it is showing and falls back to the first. Populated
+    /// only on the read path, so stored projections omit it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sources: Vec<CalendarEventSourceContent>,
     /// Display title.
     pub title: String,
     /// Optional event body.
@@ -584,7 +628,7 @@ pub struct CalendarEvent {
     pub conference_provider: Option<ConferenceProvider>,
     /// Provider/iCalendar sequence number.
     pub sequence: u32,
-    /// Whether the current user can edit the canonical source.
+    /// Whether the canonical source's calendar prohibits editing it.
     pub is_read_only: bool,
     /// Attendees, keyed by email during persistence.
     pub attendees: Vec<CalendarAttendee>,
@@ -623,6 +667,72 @@ pub struct CalendarEventOverride {
     /// auto-decline an out-of-office event performs — arrives here rather than
     /// on the master.
     pub attendees: Option<Vec<CalendarAttendee>>,
+}
+
+impl CalendarEventOverride {
+    /// The content this exception replaces on its occurrence.
+    pub fn content(&self) -> OccurrenceContent<'_> {
+        OccurrenceContent {
+            title: self.title.as_deref(),
+            description: self.description.as_deref(),
+            location: self.location.as_deref(),
+            status: self.status,
+        }
+    }
+
+    /// Overlay this exception on its series event so the event reads as the
+    /// overridden occurrence: the exception's content, its time, and its own
+    /// attendee list when it carries one.
+    pub fn apply_to(&self, event: &mut CalendarEvent) {
+        event.apply_occurrence_content(self.content());
+        event.time = self.time.clone();
+        if let Some(attendees) = &self.attendees {
+            event.attendees = attendees.clone();
+        }
+    }
+}
+
+/// The content an exception replaces on one occurrence of a series. A field
+/// left `None` inherits the series value.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct OccurrenceContent<'a> {
+    /// Replacement title.
+    pub title: Option<&'a str>,
+    /// Replacement description.
+    pub description: Option<&'a str>,
+    /// Replacement location.
+    pub location: Option<&'a str>,
+    /// Replacement status.
+    pub status: Option<EventStatus>,
+}
+
+impl CalendarEvent {
+    /// Read this series event as one occurrence: the exception's content
+    /// replaces the series content on the entity and on every calendar copy,
+    /// so a client showing any copy sees the occurrence's own text.
+    pub fn apply_occurrence_content(&mut self, content: OccurrenceContent<'_>) {
+        if let Some(title) = content.title {
+            self.title = title.to_string();
+            for source in &mut self.sources {
+                source.title = title.to_string();
+            }
+        }
+        if let Some(description) = content.description {
+            self.description = Some(description.to_string());
+            for source in &mut self.sources {
+                source.description = Some(description.to_string());
+            }
+        }
+        if let Some(location) = content.location {
+            self.location = Some(location.to_string());
+            for source in &mut self.sources {
+                source.location = Some(location.to_string());
+            }
+        }
+        if let Some(status) = content.status {
+            self.status = status;
+        }
+    }
 }
 
 /// A start-only value used to identify an overridden occurrence.
@@ -1023,9 +1133,10 @@ pub struct CalendarLinkTokenIdentity {
 pub struct CalendarEventMutationTarget {
     /// Macro entity identifier.
     pub event_id: Uuid,
-    /// Whether the canonical source prohibits mutation.
+    /// Whether the addressed copy's calendar prohibits mutation.
     pub is_read_only: bool,
-    /// Google event identifier of the best-ranked provider source.
+    /// Google event identifier of the addressed provider copy: the one on
+    /// the requested calendar, else the canonical source.
     pub provider_event_id: String,
     /// Recurring master identifier when the stored source is an instance.
     pub provider_recurring_event_id: Option<String>,
@@ -1090,6 +1201,10 @@ pub struct VisibleCalendar {
     /// Whether this is one of Google's shared system calendars (holidays,
     /// birthdays) the account subscribes to rather than one a person maintains.
     pub is_subscription: bool,
+    /// A persistent sync failure isolated to this calendar, surfaced so the
+    /// settings row can badge it. `None` while the calendar is syncing
+    /// normally or a failure has not yet crossed the persistence threshold.
+    pub sync_error: Option<String>,
     /// Default reminders applied to events that keep `useDefault`.
     pub default_reminders: Vec<EventReminderOverride>,
 }
@@ -1153,6 +1268,11 @@ pub struct StoredGoogleCalendar {
 /// chronically resets their sync tokens, turning every poll into a full
 /// snapshot; a daily cadence keeps them fresh without that churn.
 pub const SYSTEM_CALENDAR_SYNC_INTERVAL: chrono::Duration = chrono::Duration::hours(24);
+
+/// Consecutive isolated sync failures a calendar must accumulate before its
+/// error surfaces to the user. A one-off transient failure clears on the next
+/// successful poll, so only a persistent failure earns a settings-row badge.
+pub const CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD: i32 = 3;
 
 /// Whether a provider calendar is one of Google's shared system calendars
 /// (`en.usa#holiday@group.v.calendar.google.com` and friends) rather than a

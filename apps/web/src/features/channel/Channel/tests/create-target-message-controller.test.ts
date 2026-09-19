@@ -6,15 +6,18 @@ vi.mock('@service-storage/client', () => ({
   storageServiceClient: {},
 }));
 
+vi.mock('@queries/messages/subscription', () => ({
+  useMessageSubscription: () => {},
+}));
+
 import {
-  type ChannelMessagesData,
-  getChannelMessagesQueryKey,
-} from '@queries/channel/channel-messages';
+  getMessageTimelineQueryKey,
+  type MessageTimelineData,
+} from '@queries/messages/timeline';
 import {
   createTargetMessageController,
   TARGETED_MESSAGE_FLASH_MS,
 } from '../create-target-message-controller';
-import type { ThreadListNavigation } from '../ThreadList';
 
 afterEach(() => {
   queryClient.clear();
@@ -22,27 +25,23 @@ afterEach(() => {
 });
 
 const CHANNEL = 'ch1';
-const NAVIGATION = {} as ThreadListNavigation;
 
 function mount(init?: { targetMessageId?: string; targetReplyId?: string }) {
   return createRoot((dispose) => {
     const [keys, setKeys] = createSignal<string[]>([]);
-    const [navigation, setNavigation] = createSignal<ThreadListNavigation>();
-    const [didInitialScroll, setDidInitialScroll] = createSignal(false);
+    const [isReady, setIsReady] = createSignal(false);
 
     const controller = createTargetMessageController({
       channelId: () => CHANNEL,
       initialTargetMessageId: init?.targetMessageId,
       initialTargetMessageReplyId: init?.targetReplyId,
       messageKeys: keys,
-      navigation,
-      didInitialScroll,
+      isReady,
     });
 
     const ready = (loaded: string[]) => {
       setKeys(loaded);
-      setNavigation(NAVIGATION);
-      setDidInitialScroll(true);
+      setIsReady(true);
     };
 
     return { controller, ready, setKeys, dispose };
@@ -61,8 +60,7 @@ describe('construction', () => {
           initialTargetMessageId: 'm1',
           initialTargetMessageReplyId: 'r1',
           messageKeys: boom,
-          navigation: boom,
-          didInitialScroll: boom,
+          isReady: boom,
         })
       ).not.toThrow();
       dispose();
@@ -160,14 +158,20 @@ describe('readiness', () => {
 });
 
 describe('pagination restore', () => {
-  const aroundData: ChannelMessagesData = {
+  const aroundData: MessageTimelineData = {
     pageParams: [null],
-    pages: [{ items: [], next_cursor: 'next', previous_cursor: 'prev' }],
+    pages: [
+      {
+        items: [],
+        next_cursor: { id: 'next', created_at: '2024-01-01T00:00:00Z' },
+        previous_cursor: { id: 'prev', created_at: '2024-01-01T00:00:00Z' },
+      },
+    ],
   };
 
   it('promotes the around-query to the default query on the scroll ack and clears the anchor', () => {
     queryClient.setQueryData(
-      getChannelMessagesQueryKey(CHANNEL, 'm1'),
+      getMessageTimelineQueryKey({ type: 'channel', id: CHANNEL }, 'm1'),
       aroundData
     );
     const { controller, ready, dispose } = mount({ targetMessageId: 'm1' });
@@ -176,10 +180,14 @@ describe('pagination restore', () => {
 
     controller.completePendingScroll('m1');
     expect(
-      queryClient.getQueryData(getChannelMessagesQueryKey(CHANNEL, null))
+      queryClient.getQueryData(
+        getMessageTimelineQueryKey({ type: 'channel', id: CHANNEL }, null)
+      )
     ).toEqual(aroundData);
     expect(
-      queryClient.getQueryData(getChannelMessagesQueryKey(CHANNEL, 'm1'))
+      queryClient.getQueryData(
+        getMessageTimelineQueryKey({ type: 'channel', id: CHANNEL }, 'm1')
+      )
     ).toBeUndefined();
     expect(controller.loadAroundMessageId()).toBeUndefined();
     dispose();

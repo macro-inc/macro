@@ -8,6 +8,9 @@ use item_filters::ast::{
 #[cfg(any(feature = "list", feature = "outbound"))]
 use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::models::{
+    PatchMessageNotificationPolicy, PostMessageNotificationPolicy, SimpleMention,
+};
 use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
 #[cfg(feature = "list")]
 use models_pagination::{Query, SimpleSortMethod};
@@ -59,6 +62,9 @@ pub struct ChannelMessageFilters {
     /// When set, only return top-level messages created at or after this timestamp.
     #[serde(default)]
     pub created_after: Option<DateTime<Utc>>,
+    /// When set, only return top-level messages created strictly after this timestamp.
+    #[serde(default)]
+    pub created_after_exclusive: Option<DateTime<Utc>>,
     /// When set, only return top-level messages created before this timestamp.
     #[serde(default)]
     pub created_before: Option<DateTime<Utc>>,
@@ -81,26 +87,8 @@ pub struct ChannelMessageFilters {
     pub notification_filters: NotificationFilters,
 }
 
-/// Notification state filters for channel message queries.
-#[derive(Debug, Clone, Copy, Default, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-pub struct NotificationFilters {
-    /// Filter by notification done state. `Some(true)` selects done
-    /// notifications; `Some(false)` selects not-done notifications.
-    #[serde(default)]
-    pub done: Option<bool>,
-    /// Filter by notification seen state. `Some(true)` selects seen
-    /// notifications; `Some(false)` selects not-seen notifications.
-    #[serde(default)]
-    pub seen: Option<bool>,
-}
-
-impl NotificationFilters {
-    /// Returns true when no notification constraints are requested.
-    pub fn is_empty(&self) -> bool {
-        self.done.is_none() && self.seen.is_none()
-    }
-}
+/// Notification state filters shared with all other item types.
+pub use item_filters::NotificationFilters;
 
 /// Where a channel message sits in the channel/thread model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -791,29 +779,11 @@ pub struct NewChannelAttachment {
     pub height: Option<i32>,
 }
 
-/// Simple entity mention attached to a message.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub struct SimpleMention {
-    /// Mentioned entity type.
-    pub entity_type: String,
-    /// Mentioned entity id.
-    pub entity_id: String,
-}
-
-impl SimpleMention {
-    /// Construct a tracked mention of a Macro user.
-    pub fn user(user_id: &MacroUserIdStr<'_>) -> Self {
-        Self {
-            entity_type: "user".to_string(),
-            entity_id: user_id.as_ref().to_string(),
-        }
-    }
-}
-
 /// Shareable entity type referenced by a channel message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ReferencedShareItemType {
+    /// Agent session entity.
+    AgentSession,
     /// Document entity.
     Document,
     /// Chat entity.
@@ -830,6 +800,7 @@ impl ReferencedShareItemType {
     /// Parse a raw entity type from the transport/storage representation.
     pub fn from_raw(raw: &str) -> Option<Self> {
         match raw {
+            "agent_session" => Some(Self::AgentSession),
             "document" => Some(Self::Document),
             "chat" => Some(Self::Chat),
             "project" => Some(Self::Project),
@@ -842,6 +813,7 @@ impl ReferencedShareItemType {
     /// Return the storage representation of this item type.
     pub fn as_str(self) -> &'static str {
         match self {
+            Self::AgentSession => "agent_session",
             Self::Document => "document",
             Self::Chat => "chat",
             Self::Project => "project",
@@ -899,28 +871,6 @@ impl ReferencedShareItem {
     pub fn entity_type(&self) -> ReferencedShareItemType {
         self.entity_type
     }
-}
-
-/// Internal notification behavior for a posted channel message.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum PostMessageNotificationPolicy {
-    /// Apply the normal channel notification rules.
-    #[default]
-    Default,
-    /// Notify tracked mentions without reply, channel-message, or channel-invite notifications.
-    MentionsOnly,
-    /// Do not send notifications for this post. Realtime/search side effects still run.
-    Silent,
-}
-
-/// Internal notification behavior for a patched channel message.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum PatchMessageNotificationPolicy {
-    /// Apply the normal edit behavior: realtime/search only, no notifications.
-    #[default]
-    Default,
-    /// Notify as though the patched message content had just been posted.
-    NotifyAsPostedMessage,
 }
 
 /// Request to send a channel message.
@@ -1132,6 +1082,8 @@ pub enum ChannelPreview {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct ChannelPreviewData {
+    /// Static image file used as the channel's profile picture, when accessible.
+    pub profile_picture_id: Option<Uuid>,
     /// Channel id.
     pub channel_id: String,
     /// Resolved channel display name.
@@ -1388,6 +1340,8 @@ impl SortOn<SimpleSortMethod> for ChannelWithLatest {
 /// Raw preview row returned from the repository.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChannelPreviewRow {
+    /// Static image file used as the channel's profile picture.
+    pub profile_picture_id: Option<Uuid>,
     /// Channel info.
     pub info: ChannelInfo,
     /// Whether the viewer can access the channel.

@@ -6,8 +6,6 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import {
-  defaultNameTransform,
-  getCachedItemPreview,
   type ItemEntity,
   isAccessiblePreviewItem,
   useItemPreview,
@@ -76,6 +74,7 @@ function favoritePreviewEntity(favorite: Favorite): ItemEntity | undefined {
     case 'email_thread':
       return { id: favorite.entityId, type: 'email' };
     case 'document':
+    case 'agent_session':
     case 'chat':
     case 'project':
     case 'call':
@@ -86,27 +85,8 @@ function favoritePreviewEntity(favorite: Favorite): ItemEntity | undefined {
   }
 }
 
-/**
- * Non-reactive display name for a favorite, read from the preview cache.
- * Previews are the app-wide name pipeline: viewer-relative for DM channels
- * and written to by optimistic renames, so favorites need no rename
- * special-casing (the favorites API deliberately returns no name). Falls
- * back to the entity-kind label for previews not yet cached and kinds
- * previews don't cover.
- *
- * Inside components prefer `useFavoriteDisplayName`, which subscribes to the
- * preview instead of only reading whatever happens to be cached.
- */
+/** Entity-kind fallback used until a favorite's preview resolves. */
 export function favoriteDisplayName(favorite: Favorite): string {
-  const entity = favoritePreviewEntity(favorite);
-  const cached = entity && getCachedItemPreview(entity.id);
-  if (cached) {
-    // The transform `useItemPreview` applies, so both paths agree.
-    const preview = defaultNameTransform(cached);
-    if (isAccessiblePreviewItem(preview) && preview.name.trim()) {
-      return preview.name;
-    }
-  }
   return (
     getIconConfig(favoriteIconType(favorite) ?? 'default').prettyName ||
     'Untitled'

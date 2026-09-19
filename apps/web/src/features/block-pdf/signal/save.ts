@@ -1,35 +1,24 @@
-import type { IModificationDataOnServer } from '@block-pdf/type/coParse';
-import { createBlockSignal, useBlockId } from '@core/block';
 import { ENABLE_PDF_MODIFICATION_DATA_AUTOSAVE } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { refetchHistory } from '@queries/history/history';
 import { storageServiceClient } from '@service-storage/client';
 import { createMemo } from 'solid-js';
-import { highlightStore } from '../store/highlight';
-import { useTableOfContentsValue } from '../store/tableOfContents';
+import { usePdfDocument } from '../context/pdf-document-context';
 import {
   getSaveModificationData,
   hashModificationData,
   hashModificationDataSync,
 } from '../util/buildModificationData';
-import { pdfModificationDataStore, pdfViewLocation } from './document';
-import { useGetRootViewer } from './pdfViewer';
-import { useCanEditModificationData } from './permissions';
 
-export const numOperations = createBlockSignal(0);
-const savingCountSignal = createBlockSignal(0);
-export const isSaving = createBlockSignal(false);
-export const modificationDataSaveRequired = createBlockSignal(false);
-export const serverModificationDataSignal =
-  createBlockSignal<IModificationDataOnServer>();
 export function useDoEdit() {
-  const setNumOperations = numOperations.set;
+  const [, setNumOperations] = usePdfDocument().state.signals.numOperations;
   return () => setNumOperations((prev) => prev + 1);
 }
 
 const useSaveWrapper = () => {
-  const setIsSaving = isSaving.set;
-  const [savingCount, setSaveCount] = savingCountSignal;
+  const { isSaving, savingCount } = usePdfDocument().state.signals;
+  const [, setIsSaving] = isSaving;
+  const [getSavingCount, setSavingCount] = savingCount;
 
   return (save: () => Promise<void>, shouldSave: () => boolean) => {
     return async () => {
@@ -38,14 +27,14 @@ const useSaveWrapper = () => {
         if (!shouldSave()) return;
         saving = true;
         setIsSaving(true);
-        setSaveCount((prev) => prev + 1);
+        setSavingCount((prev) => prev + 1);
         await save();
       } catch (e) {
         console.error('Error saving PDF', e);
       } finally {
         if (saving) {
-          const count = savingCount() - 1;
-          setSaveCount(count);
+          const count = getSavingCount() - 1;
+          setSavingCount(count);
           if (count === 0) {
             setIsSaving(false);
           }
@@ -56,8 +45,9 @@ const useSaveWrapper = () => {
 };
 
 export function useHasModificationData() {
-  const highlightStoreValue = highlightStore.get;
-  const pdfModificationValue = pdfModificationDataStore.get;
+  const { highlights, modificationData } = usePdfDocument().state.stores;
+  const [highlightStoreValue] = highlights;
+  const [pdfModificationValue] = modificationData;
 
   return () =>
     Object.keys(highlightStoreValue).length > 0 ||
@@ -65,12 +55,11 @@ export function useHasModificationData() {
 }
 
 export function useSaveModificationData() {
+  const pdf = usePdfDocument();
   const saveWrapper = useSaveWrapper();
-  const pdfModificationValue = pdfModificationDataStore.get;
-  const tableOfContentsValue = useTableOfContentsValue();
-  const documentId = useBlockId();
-  const serverModificationData = serverModificationDataSignal.get;
-  const canSave = useCanEditModificationData();
+  const [pdfModificationValue] = pdf.state.stores.modificationData;
+  const [tableOfContents] = pdf.state.stores.tableOfContents;
+  const [serverModificationData] = pdf.state.signals.serverModificationData;
 
   const serverModificationDataHash = createMemo(() => {
     const modificationData_ = serverModificationData();
@@ -84,18 +73,18 @@ export function useSaveModificationData() {
     const placeables = pdfModificationValue.placeables ?? [];
     const { modificationData } = getSaveModificationData({
       placeables,
-      TOCItems: tableOfContentsValue().items,
+      TOCItems: tableOfContents.items,
       pinnedTerms: [],
     });
     const sha = hashModificationDataSync(modificationData);
-    return canSave() && serverModificationDataHash() !== sha;
+    return pdf.permissions.canEdit() && serverModificationDataHash() !== sha;
   };
 
   const save = async () => {
     const placeables = pdfModificationValue.placeables ?? [];
     const { modificationData } = getSaveModificationData({
       placeables,
-      TOCItems: tableOfContentsValue().items,
+      TOCItems: tableOfContents.items,
       pinnedTerms: [],
     });
 
@@ -104,7 +93,7 @@ export function useSaveModificationData() {
     const sha = await hashModificationData(modificationData);
     serverSaves.push(
       storageServiceClient.pdfSave({
-        documentId,
+        documentId: pdf.documentId(),
         modificationData,
         sha,
       })
@@ -120,10 +109,11 @@ export function useSaveModificationData() {
 }
 
 export function usePdfSaveLocation() {
+  const pdf = usePdfDocument();
   const saveWrapper = useSaveWrapper();
-  const viewer = useGetRootViewer();
-  const [prevLocationHash, setPrevLocationHash] = pdfViewLocation;
-  const documentId = useBlockId();
+  const [viewer] = pdf.state.signals.rootViewer;
+  const [prevLocationHash, setPrevLocationHash] =
+    pdf.state.signals.viewLocation;
   const userId = useUserId();
 
   const shouldSave = () => {
@@ -139,11 +129,11 @@ export function usePdfSaveLocation() {
     setPrevLocationHash(location);
     if (location == null) {
       await storageServiceClient.deleteDocumentViewLocation({
-        documentId,
+        documentId: pdf.documentId(),
       });
     } else {
       await storageServiceClient.upsertDocumentViewLocation({
-        documentId,
+        documentId: pdf.documentId(),
         location,
       });
     }

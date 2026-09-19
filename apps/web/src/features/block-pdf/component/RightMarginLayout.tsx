@@ -1,35 +1,26 @@
-import { selectingCommentThreadSignal } from '@block-pdf/signal/click';
-import { useOwnedCommentSelector } from '@block-pdf/signal/permissions';
 import {
   GUTTER_MARGIN,
   MIN_RIGHT_COLUMN_WIDTH,
-  viewerThreeColumnLayout,
 } from '@block-pdf/signal/viewerThreeColumnLayout';
-import {
-  threadHeightStore,
-  threadsOnPagePositionStore,
-} from '@block-pdf/store/comments/commentLayout';
 import {
   useCreateComment,
   useDeleteComment,
   useUpdateComment,
 } from '@block-pdf/store/comments/commentOperations';
-import {
-  activeCommentThreadSignal,
-  useGetCommentById,
-  useIsActiveThreadSelector,
-} from '@block-pdf/store/comments/commentStore';
-import { useBlockId, useIsNestedBlock } from '@core/block';
+import type { CommentId, ThreadId } from '@core/comments/commentType';
 import {
   baseCommentTheme,
   CommentsContext,
   type CommentsContextType,
   Thread,
 } from '@core/comments/Thread';
-import { useCanComment, useIsDocumentOwner } from '@core/signal/permissions';
+import { useUserId } from '@core/context/user';
 import { createMemo, createSelector, For } from 'solid-js';
+import { usePdfDocument } from '../context/pdf-document-context';
 
 export function RightMarginLayout(props: { pageNumber: number }) {
+  const [viewerThreeColumnLayout] =
+    usePdfDocument().state.signals.viewerThreeColumnLayout;
   const styles = createMemo(() => {
     const { centerWidth, marginWidth, rightWidth } = viewerThreeColumnLayout();
     if (!centerWidth) return {};
@@ -57,35 +48,33 @@ export function RightMarginLayout(props: { pageNumber: number }) {
 }
 
 const useCommentsContext = (): CommentsContextType => {
-  const isNestedBlock = useIsNestedBlock();
-
-  const setActiveThread = activeCommentThreadSignal.set;
-  const setThreadHeight = threadHeightStore.set;
+  const pdf = usePdfDocument();
+  const { signals, stores, derived } = pdf.state;
+  const setActiveThread = signals.activeCommentThread[1];
+  const setThreadHeight = stores.threadHeight[1];
 
   const createComment = useCreateComment();
   const updateComment = useUpdateComment();
   const deleteComment = useDeleteComment();
 
-  const ownedCommentSelector = useOwnedCommentSelector();
-
-  const documentId = useBlockId();
-  const isDocumentOwner = useIsDocumentOwner();
-  const hasPermissions = useCanComment();
-  const canComment = () => {
-    if (isNestedBlock) return false;
-    return hasPermissions();
+  const userId = useUserId();
+  const ownedComment = (id: CommentId) => {
+    const currentUserId = userId();
+    return (
+      currentUserId != null &&
+      derived.commentMap()?.get(id)?.owner === currentUserId
+    );
   };
-
-  const getCommentById = useGetCommentById();
+  const getCommentById = (id: CommentId) => derived.commentMap()?.get(id);
 
   const commentsContext: CommentsContextType = {
     setActiveThread,
     setThreadHeight,
-    canComment,
-    isDocumentOwner,
+    canComment: () => !pdf.isNested() && pdf.permissions.canComment(),
+    isDocumentOwner: pdf.permissions.isOwner,
     getCommentById,
-    documentId,
-    ownedComment: ownedCommentSelector,
+    documentId: pdf.documentId(),
+    ownedComment,
     commentOperations: {
       createComment,
       deleteComment,
@@ -99,17 +88,19 @@ const useCommentsContext = (): CommentsContextType => {
 };
 
 function CommentsAndSuggestions(props: { pageNumber: number }) {
+  const { signals, stores } = usePdfDocument().state;
   const threadsOnPage = createMemo(
-    () => threadsOnPagePositionStore.get[props.pageNumber] ?? []
+    () => stores.threadsOnPagePosition[0][props.pageNumber] ?? []
   );
 
-  const isActiveThreadSelector = useIsActiveThreadSelector();
-  const setActiveThreadId = activeCommentThreadSignal.set;
+  const [activeCommentThread, setActiveThreadId] = signals.activeCommentThread;
+  const isActiveThreadSelector = createSelector(activeCommentThread);
 
-  const [selectedThreadId, setSelectedThreadId] = selectingCommentThreadSignal;
+  const [selectedThreadId, setSelectedThreadId] =
+    signals.selectingCommentThread;
   const isSelectingThreadSelector = createSelector(selectedThreadId);
 
-  const commentTheme = (threadId: number | null) => {
+  const commentTheme = (threadId: ThreadId | null) => {
     const isSelecting = isSelectingThreadSelector(threadId);
     let theme = {
       ...baseCommentTheme,
@@ -121,7 +112,7 @@ function CommentsAndSuggestions(props: { pageNumber: number }) {
     return theme;
   };
 
-  const handleThreadMouseDown = (threadId: number) => (e: MouseEvent) => {
+  const handleThreadMouseDown = (threadId: ThreadId) => (e: MouseEvent) => {
     e.stopPropagation();
     setSelectedThreadId(threadId);
 

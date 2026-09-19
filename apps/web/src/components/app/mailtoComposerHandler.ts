@@ -1,5 +1,5 @@
+import { parseMailto } from '@app/features/email-compose/core/mailto';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { parseMailto } from '@block-email/util/mailto';
 import { registerExternalUrlInterceptor } from '@core/util/url';
 
 /**

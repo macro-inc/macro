@@ -23,6 +23,7 @@ import {
 import type { BlockMethodsFor } from './blockMethodRegistry';
 import { LoadingBlock } from './component/LoadingBlock';
 import { blocks as BLOCK_REGISTRY } from './constant/allBlocks';
+import { createContentInstanceRegistry } from './contentInstanceRegistry';
 import { BlockEffectRunner } from './internal/BlockEffectRunner';
 import { BlockLoader } from './internal/BlockLoader';
 import type { Source } from './source';
@@ -92,6 +93,7 @@ type BlockInstance = {
   type: BlockName;
   id: string;
   element: () => JSXElement;
+  isMounted: () => boolean;
   nested?: NestedState<any>;
   handle: OwnedBlockHandle<any>;
 };
@@ -104,7 +106,7 @@ type CreateBlockOptions<Name extends BlockName = BlockName> = {
   aliasContext?: BlockAliasContext;
 };
 
-type UnmanagedBlockInstance = Omit<BlockInstance, 'handle'>;
+type UnmanagedBlockInstance = Omit<BlockInstance, 'handle' | 'isMounted'>;
 
 /**
  * Creates an unmanaged block instance
@@ -309,6 +311,9 @@ type CreateBlockInstanceFn = (
 ) => BlockInstance;
 
 export type BlockOrchestrator = {
+  contentInstances: ReturnType<typeof createContentInstanceRegistry>;
+  /** Whether a managed block is currently mounted in any surface. */
+  isBlockMounted: (type: BlockName, id: string) => boolean;
   /** Get a publicly accessible handle to a block instance */
   getBlockHandle: GetBlockHandleFn;
   /**
@@ -411,7 +416,7 @@ export function createBlockOrchestrator(): BlockOrchestrator {
     opts?: CreateBlockOptions
   ): BlockInstance {
     const key = keyOf(type, id);
-    let existing = instances.get(key);
+    const existing = instances.get(key);
     if (existing) return existing;
 
     const ownedHandle = registerBlock(type, id);
@@ -435,11 +440,29 @@ export function createBlockOrchestrator(): BlockOrchestrator {
       },
     });
 
+    let mounted = false;
+    const mountOnce = () => {
+      if (mounted) {
+        return (
+          <div class="flex size-full items-center justify-center text-sm text-ink-muted">
+            Content already open.
+          </div>
+        );
+      }
+
+      mounted = true;
+      onCleanup(() => {
+        mounted = false;
+      });
+      return element();
+    };
+
     const instance: BlockInstance = {
       key,
       type,
       id,
-      element,
+      element: mountOnce,
+      isMounted: () => mounted,
       nested: opts?.nested,
       handle: ownedHandle,
     };
@@ -468,6 +491,9 @@ export function createBlockOrchestrator(): BlockOrchestrator {
   }
 
   return {
+    contentInstances: createContentInstanceRegistry(),
+    isBlockMounted: (type, id) =>
+      instances.get(keyOf(type, id))?.isMounted() ?? false,
     getBlockHandle,
     createBlockInstance: createManagedBlockInstance,
     rekeyBlockInstance,

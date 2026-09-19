@@ -1,3 +1,4 @@
+import { createCollapsedSidebarSectionsStorage } from '@app/components/view-shell';
 import { normalizeFacetSelection } from '@app/features/soup';
 import type {
   MakePersistedStateOptions,
@@ -7,7 +8,6 @@ import {
   createEntryPersistenceStorage,
   type EntryPersistenceHandle,
 } from '@components/app/split-layout/entry-persistence';
-import { createUserScopedStorage } from '@core/util/userScopedStorage';
 import type { Accessor } from 'solid-js';
 import { z } from 'zod';
 import { DEFAULT_TASK_FACET_SELECTION } from './filters/task-facets';
@@ -52,24 +52,15 @@ const tasksEntryStateSchemaWithDefaults = z.object({
 
 type TasksEntryState = z.infer<typeof tasksEntryStateSchemaWithDefaults>;
 
-const DEFAULT_TASKS_ENTRY_STATE: TasksEntryState =
-  tasksEntryStateSchemaWithDefaults.parse({});
-const tasksEntryStateSchema = tasksEntryStateSchemaWithDefaults.catch(
-  DEFAULT_TASKS_ENTRY_STATE
-);
-
-const tasksPreferencesSchemaWithDefaults = z.object({
-  version: z.literal(1).default(1),
-  collapsedSidebarSectionIds: z.array(z.string()).default([]),
-});
-
-type TasksPreferences = z.infer<typeof tasksPreferencesSchemaWithDefaults>;
-
-const DEFAULT_TASKS_PREFERENCES: TasksPreferences =
-  tasksPreferencesSchemaWithDefaults.parse({});
-const tasksPreferencesSchema = tasksPreferencesSchemaWithDefaults.catch(
-  DEFAULT_TASKS_PREFERENCES
-);
+const DEFAULT_TASKS_ENTRY_STATE = {
+  version: 1,
+  tab: 'my-tasks',
+  search: '',
+  groupBy: 'priority',
+  sort: [{ id: 'updated_at' }],
+  facets: normalizeFacetSelection(DEFAULT_TASK_FACET_SELECTION),
+  collapsedGroupIds: [],
+} satisfies TasksEntryState;
 
 const tasksListStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
@@ -79,11 +70,11 @@ const tasksListStateSchemaWithDefaults = z.object({
 
 type TasksListEntryState = z.infer<typeof tasksListStateSchemaWithDefaults>;
 
-const DEFAULT_TASKS_LIST_ENTRY_STATE: TasksListEntryState =
-  tasksListStateSchemaWithDefaults.parse({});
-const tasksListStateSchema = tasksListStateSchemaWithDefaults.catch(
-  DEFAULT_TASKS_LIST_ENTRY_STATE
-);
+const DEFAULT_TASKS_LIST_ENTRY_STATE = {
+  version: 1,
+  focusKey: undefined,
+  scrollOffset: 0,
+} satisfies TasksListEntryState;
 
 export type TasksListStateSnapshot = {
   focusKey: TasksListEntryState['focusKey'];
@@ -91,8 +82,8 @@ export type TasksListStateSnapshot = {
 };
 
 export const DEFAULT_TASKS_LIST_STATE: TasksListStateSnapshot = {
-  focusKey: DEFAULT_TASKS_LIST_ENTRY_STATE.focusKey,
-  scrollOffset: DEFAULT_TASKS_LIST_ENTRY_STATE.scrollOffset,
+  focusKey: undefined,
+  scrollOffset: 0,
 };
 
 function selectEntryState(state: TasksViewState): TasksEntryState {
@@ -117,7 +108,8 @@ function createTasksEntryStorage(options: {
     restore: (current, stored) => {
       if (!options.restore) return undefined;
 
-      const restored = tasksEntryStateSchema.parse(stored);
+      const result = tasksEntryStateSchemaWithDefaults.safeParse(stored);
+      const restored = result.success ? result.data : DEFAULT_TASKS_ENTRY_STATE;
       return {
         ...current,
         tab: restored.tab,
@@ -139,7 +131,10 @@ export function createTasksListEntryStorage(
     handle,
     key: TASKS_LIST_ENTRY_STATE_KEY,
     restore: (current, stored) => {
-      const restored = tasksListStateSchema.parse(stored);
+      const result = tasksListStateSchemaWithDefaults.safeParse(stored);
+      const restored = result.success
+        ? result.data
+        : DEFAULT_TASKS_LIST_ENTRY_STATE;
 
       return {
         ...current,
@@ -155,58 +150,6 @@ export function createTasksListEntryStorage(
   });
 }
 
-const preferencesStorage = createUserScopedStorage(
-  'macro:tasks:preferences:v1'
-);
-
-function createTasksPreferencesStorage(options: {
-  userId: Accessor<string | undefined>;
-  restore: boolean;
-}): PersistenceStorage<TasksViewState> {
-  let previous: string | undefined;
-
-  const serialize = (state: TasksViewState): string =>
-    JSON.stringify({
-      version: 1,
-      collapsedSidebarSectionIds: [...state.collapsedSidebarSectionIds],
-    } satisfies TasksPreferences);
-
-  return {
-    restore: (current) => {
-      if (!options.restore) return undefined;
-
-      const userId = options.userId();
-      if (!userId) return undefined;
-
-      const raw = preferencesStorage.read(userId);
-      if (raw === null) return undefined;
-
-      try {
-        const parsed = tasksPreferencesSchema.parse(JSON.parse(raw));
-        return {
-          ...current,
-          collapsedSidebarSectionIds: [...parsed.collapsedSidebarSectionIds],
-        };
-      } catch {
-        return undefined;
-      }
-    },
-    initialize: (current) => {
-      previous = serialize(current);
-    },
-    write: (current) => {
-      const userId = options.userId();
-      if (!userId) return;
-
-      const serialized = serialize(current);
-      if (serialized === previous) return;
-
-      previous = serialized;
-      preferencesStorage.write(userId, serialized);
-    },
-  };
-}
-
 export type CreateTasksViewPersistenceOptions = {
   handle: EntryPersistenceHandle;
   userId: Accessor<string | undefined>;
@@ -220,7 +163,8 @@ export function createTasksViewPersistence(
 ): MakePersistedStateOptions<TasksViewState> {
   return {
     storages: [
-      createTasksPreferencesStorage({
+      createCollapsedSidebarSectionsStorage({
+        key: 'macro:tasks:preferences:v1',
         userId: options.userId,
         restore: options.restorePreferences ?? true,
       }),

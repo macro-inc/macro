@@ -211,6 +211,7 @@ pub async fn create_property_definition<
 ) -> Result<(StatusCode, Json<PropertyDefinition>), CreatePropertyDefinitionErr> {
     let user = user.authorization.user.macro_user_id;
     tracing::info!(scope = ?request.scope, "creating property definition");
+    state.reject_managed_create(request.scope, &request.display_name)?;
 
     // The owner is derived in the service from the authenticated caller and
     // their team receipt - clients never supply owner ids.
@@ -334,10 +335,14 @@ pub async fn delete_property_definition<
 ) -> Result<Response, DeletePropertyDefinitionError> {
     let user = user.authorization.user.macro_user_id;
     tracing::info!("deleting property definition");
+    let team = team.entity_access_receipt.as_ref();
+    state
+        .reject_managed_definition(property_uuid, &user, team)
+        .await?;
 
     state
         .properties_service
-        .delete_property_definition(property_uuid, &user, team.entity_access_receipt.as_ref())
+        .delete_property_definition(property_uuid, &user, team)
         .await?;
 
     tracing::info!("successfully deleted property definition");

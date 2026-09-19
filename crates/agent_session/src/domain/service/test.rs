@@ -4,8 +4,11 @@ use crate::domain::model::{
     DEFAULT_AGENT_SESSION_NAME, Message, ReplicaAddress, SessionBot, SessionManager,
 };
 use crate::domain::ports::NoOpRealtime;
-use crate::domain::session::HandshakeStatus;
-use crate::testing::{InMemoryAgentSessionRepo, RecordingRealtime, test_agent_session};
+use crate::domain::ports::{NoOpTurnObserver, NoopLifecyclePublisher};
+use crate::domain::session::{HandshakeStatus, PermissionPolicy};
+use crate::testing::{
+    InMemoryAgentSessionRepo, RecordingLifecyclePublisher, RecordingRealtime, test_agent_session,
+};
 use agent_fold::domain::fold::fold;
 use agent_fold::domain::service::FoldedMessageService;
 use agent_fold::testing::{TURN, parse_log_as, test_session};
@@ -42,10 +45,109 @@ fn fixture() -> Fixture {
             repo.clone(),
             FoldedMessageService::new(repo.clone()),
             NoOpRealtime,
+            NoOpAgentSessionNameGenerator,
+            Arc::new(NoOpTurnObserver),
+            Arc::new(NoopLifecyclePublisher),
+            ReplicaId::mint(),
         ),
         repo,
         session,
     }
+}
+
+#[tokio::test]
+async fn previews_hydrate_bot_identity_only_for_accessible_sessions() {
+    let fx = fixture();
+    let session = fx.repo.get(fx.session).await.unwrap();
+    let previews = fx
+        .service
+        .preview_sessions(&session.owner_id, vec![fx.session, fx.session])
+        .await
+        .unwrap();
+    assert_eq!(previews.len(), 1);
+    let AgentSessionPreview::Access(data) = &previews[0] else {
+        panic!("expected access")
+    };
+    assert_eq!(data.bot.as_ref().unwrap().name, "Test Agent");
+    let other =
+        macro_user_id::user_id::MacroUserIdStr::try_from_email("other@example.com").unwrap();
+    assert_eq!(
+        fx.service
+            .preview_sessions(&other, vec![fx.session])
+            .await
+            .unwrap(),
+        vec![AgentSessionPreview::NoAccess(fx.session)]
+    );
+}
+
+/// A viewer answers for one document-born session.
+struct GrantingViewAccess(AgentSessionId);
+
+impl crate::domain::ports::SessionViewAccess for GrantingViewAccess {
+    fn can_view<'a>(
+        &'a self,
+        _viewer: &'a macro_user_id::user_id::MacroUserIdStr<'static>,
+        session: AgentSessionId,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<bool>> + Send + 'a>> {
+        Box::pin(async move { Ok(session == self.0) })
+    }
+}
+
+#[tokio::test]
+async fn previews_resolve_inherited_document_access_through_the_view_port() {
+    let fx = fixture();
+    let mut document_session = test_agent_session(AgentSessionId::new());
+    document_session.thread_parent =
+        Some(messages::domain::models::MessageParent::parse("document", "doc-1").unwrap());
+    let mut channel_session = test_agent_session(AgentSessionId::new());
+    channel_session.thread_parent = Some(messages::domain::models::MessageParent::Channel(
+        Uuid::from_u128(9),
+    ));
+    fx.repo.insert_session(document_session.clone());
+    fx.repo.insert_session(channel_session.clone());
+    let collaborator =
+        macro_user_id::user_id::MacroUserIdStr::try_from_email("collaborator@example.com").unwrap();
+    let ids = vec![document_session.id, channel_session.id, fx.session];
+
+    // Without a view port, only materialized grants count.
+    let mut previews = fx
+        .service
+        .preview_sessions(&collaborator, ids.clone())
+        .await
+        .unwrap();
+    previews.sort_by_key(|preview| preview.id().as_uuid());
+    assert!(
+        previews
+            .iter()
+            .all(|preview| matches!(preview, AgentSessionPreview::NoAccess(_)))
+    );
+
+    // With one, the document-born session is asked about and the rest are not.
+    let service = fx
+        .service
+        .clone()
+        .with_view_access(Arc::new(GrantingViewAccess(document_session.id)));
+    let previews = service.preview_sessions(&collaborator, ids).await.unwrap();
+    let access: Vec<_> = previews
+        .iter()
+        .filter_map(|preview| match preview {
+            AgentSessionPreview::Access(data) => Some(data.id),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(access, vec![document_session.id]);
+    let channel_service = fx
+        .service
+        .clone()
+        .with_view_access(Arc::new(GrantingViewAccess(channel_session.id)));
+    assert_eq!(
+        channel_service
+            .preview_sessions(&collaborator, vec![channel_session.id])
+            .await
+            .unwrap(),
+        vec![AgentSessionPreview::NoAccess(channel_session.id)],
+        "channel grants are rows; the view port is never consulted for them"
+    );
 }
 
 #[tokio::test]
@@ -145,10 +247,22 @@ struct BlockingPromptLogs {
     entered: Arc<Notify>,
     release: Arc<Notify>,
     hang_disconnect: bool,
+    fail_restore_log: Option<RestoreLogFailure>,
+}
+
+#[derive(Clone, Copy)]
+enum RestoreLogFailure {
+    InitializeRequest,
+    InitializeResponse,
+    LoadResponse,
 }
 
 impl AgentSessionLogWriter for BlockingPromptLogs {
-    async fn append(&mut self, log: AgentSessionLog) -> Result<()> {
+    async fn append_with_boundary(
+        &mut self,
+        log: AgentSessionLog,
+        _boundary: Option<crate::domain::model::HistoryBoundary>,
+    ) -> Result<Appended> {
         let is_prompt = matches!(
             &log.content,
             Message::ToRuntime(ToRuntimeMessage::Acp(AcpMessage(
@@ -159,8 +273,10 @@ impl AgentSessionLogWriter for BlockingPromptLogs {
             self.entered.notify_one();
             self.release.notified().await;
         }
-        AgentSessionLogRepo::create(&self.repo, log).await?;
-        Ok(())
+        Ok(Appended {
+            log_id: AgentSessionLogRepo::create(&self.repo, log).await?.id,
+            signals: Vec::new(),
+        })
     }
 }
 
@@ -196,6 +312,10 @@ async fn manual_rename_trims_persists_and_publishes() {
         repo.clone(),
         FoldedMessageService::new(repo.clone()),
         realtime.clone(),
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
     );
 
     service
@@ -227,6 +347,10 @@ async fn manual_rename_rejects_blank_and_overlong_names() {
         repo.clone(),
         FoldedMessageService::new(repo),
         RenameRealtime::default(),
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
     );
 
     assert!(matches!(
@@ -256,6 +380,10 @@ async fn manual_rename_rejects_access_for_another_entity_type() {
         repo.clone(),
         FoldedMessageService::new(repo),
         RenameRealtime::default(),
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
     );
     let wrong_access = EntityAccessReceipt::<OwnerAccessLevel>::dangerously_assert_internal_user(
         &session.as_uuid().to_string(),
@@ -276,28 +404,32 @@ async fn background_naming_persists_then_publishes_the_generated_name() {
     let session = test_session();
     repo.insert_session(test_agent_session(session));
     let realtime = RenameRealtime::default();
+    let lifecycle = RecordingLifecyclePublisher::new();
 
     spawn_initial_agent_session_rename(
         repo.clone(),
         realtime.clone(),
+        Arc::new(lifecycle.clone()),
         FixedNameGenerator,
         session,
         "fix the flaky tests".to_owned(),
     );
-    for _ in 0..20 {
-        if !realtime
-            .0
-            .lock()
-            .expect("rename store is not poisoned")
-            .is_empty()
-        {
-            break;
-        }
-        tokio::task::yield_now().await;
-    }
+    // The lifecycle event is published last, so its arrival means the
+    // rename and its realtime push are done too.
+    lifecycle.wait_for_published(1).await;
 
     let stored = repo.get(session).await.expect("get session");
     assert_eq!(stored.name, "Fix Flaky Tests");
+    assert!(
+        matches!(
+            lifecycle.published().as_slice(),
+            [AgentSessionLifecycleEvent::Renamed(renamed)]
+                if renamed.identity.session_id == session
+                    && renamed.identity.session_name == "Fix Flaky Tests"
+        ),
+        "renamed is published with the new name: {:?}",
+        lifecycle.published()
+    );
     assert_eq!(
         realtime
             .0
@@ -323,6 +455,7 @@ async fn background_naming_does_not_overwrite_a_manual_name() {
     spawn_initial_agent_session_rename(
         repo.clone(),
         realtime.clone(),
+        Arc::new(NoopLifecyclePublisher),
         FixedNameGenerator,
         session,
         "fix the flaky tests".to_owned(),
@@ -353,8 +486,24 @@ impl AgentSessionRepo for BlockingPromptLogs {
         self.repo.get(id).await
     }
 
+    async fn preview(
+        &self,
+        viewer: &MacroUserIdStr<'static>,
+        ids: &[AgentSessionId],
+    ) -> Result<Vec<crate::domain::model::SessionPreviewCandidate>> {
+        self.repo.preview(viewer, ids).await
+    }
+
     async fn session_bot(&self, id: BotId) -> Result<SessionBot> {
         self.repo.session_bot(id).await
+    }
+
+    async fn recent_for_owner(
+        &self,
+        owner: &MacroUserIdStr<'_>,
+        limit: std::num::NonZeroUsize,
+    ) -> Result<Vec<crate::domain::model::AgentSession>> {
+        self.repo.recent_for_owner(owner, limit).await
     }
 
     async fn find_by_egress_token_hash(
@@ -364,12 +513,12 @@ impl AgentSessionRepo for BlockingPromptLogs {
         self.repo.find_by_egress_token_hash(egress_token_hash).await
     }
 
-    async fn find_for_channel(
+    async fn find_for_thread(
         &self,
         thread_id: Option<Uuid>,
         bot_id: Option<BotId>,
-    ) -> Result<ChannelSession> {
-        self.repo.find_for_channel(thread_id, bot_id).await
+    ) -> Result<ThreadSession> {
+        self.repo.find_for_thread(thread_id, bot_id).await
     }
 
     async fn find_all_for_thread(&self, thread_id: Uuid) -> Result<Vec<AgentSession>> {
@@ -382,6 +531,14 @@ impl AgentSessionRepo for BlockingPromptLogs {
         acp_session_id: SessionId,
     ) -> Result<()> {
         self.repo.set_acp_session_id(id, acp_session_id).await
+    }
+
+    async fn set_egress_token_hash(&self, id: AgentSessionId, hash: &str) -> Result<()> {
+        self.repo.set_egress_token_hash(id, hash).await
+    }
+
+    async fn set_repo_url(&self, id: AgentSessionId, repo_url: Option<String>) -> Result<()> {
+        self.repo.set_repo_url(id, repo_url).await
     }
 
     async fn set_model(&self, id: AgentSessionId, model: &str) -> Result<()> {
@@ -438,12 +595,52 @@ impl SessionOwnership for BlockingPromptLogs {
 }
 
 impl AgentSessionLogRepo for BlockingPromptLogs {
+    async fn create_fenced_with_boundary(
+        &self,
+        log: AgentSessionLog,
+        claim: &SessionClaim,
+        boundary: Option<crate::domain::model::HistoryBoundary>,
+    ) -> Result<StoredAgentSessionLog> {
+        let fail = match self.fail_restore_log {
+            Some(RestoreLogFailure::InitializeRequest) => matches!(&log.content,
+                Message::ToRuntime(ToRuntimeMessage::Acp(AcpMessage(agent_client_protocol::RawJsonRpcMessage::Request(request))))
+                if request.method.as_ref() == "initialize"),
+            Some(RestoreLogFailure::InitializeResponse) => {
+                boundary.is_none()
+                    && matches!(
+                        &log.content,
+                        Message::ToServer(ToServerMessage::Acp(AcpMessage(
+                            agent_client_protocol::RawJsonRpcMessage::Response(_)
+                        )))
+                    )
+            }
+            Some(RestoreLogFailure::LoadResponse) => boundary.is_some(),
+            None => false,
+        };
+        if fail {
+            return Err(AgentSessionError::Handshake(
+                "injected restore log failure".into(),
+            ));
+        }
+        self.repo
+            .create_fenced_with_boundary(log, claim, boundary)
+            .await
+    }
+
     async fn create_fenced(
         &self,
         log: AgentSessionLog,
         claim: &SessionClaim,
     ) -> Result<StoredAgentSessionLog> {
         self.repo.create_fenced(log, claim).await
+    }
+
+    async fn create_batch_fenced(
+        &self,
+        entries: Vec<StoredAgentSessionLog>,
+        claim: &SessionClaim,
+    ) -> Result<Vec<StoredAgentSessionLog>> {
+        self.repo.create_batch_fenced(entries, claim).await
     }
 
     async fn create(&self, log: AgentSessionLog) -> Result<StoredAgentSessionLog> {
@@ -465,6 +662,13 @@ impl AgentSessionLogRepo for BlockingPromptLogs {
         agent_session_id: AgentSessionId,
     ) -> Result<Vec<StoredAgentSessionLog>> {
         AgentSessionLogRepo::list_by_session(&self.repo, agent_session_id).await
+    }
+
+    async fn participants(
+        &self,
+        agent_session_id: AgentSessionId,
+    ) -> Result<Vec<MacroUserIdStr<'static>>> {
+        AgentSessionLogRepo::participants(&self.repo, agent_session_id).await
     }
 }
 
@@ -492,7 +696,7 @@ impl TransportReceiver<ToServerMessage> for PendingReceiver {
 async fn open_test_session(
     inbound: &mpsc::Sender<ToServerMessage>,
     outbound: &mut mpsc::Receiver<ToRuntimeMessage>,
-    session: AgentSessionId,
+    _session: AgentSessionId,
 ) {
     inbound
         .send(ToServerMessage::Event {
@@ -500,13 +704,16 @@ async fn open_test_session(
         })
         .await
         .unwrap();
-    let _initialize = outbound.recv().await.expect("initialize request");
+    let ToRuntimeMessage::Acp(AcpMessage(agent_client_protocol::RawJsonRpcMessage::Request(
+        initialize,
+    ))) = outbound.recv().await.expect("initialize request")
+    else {
+        panic!("expected initialize")
+    };
     inbound
         .send(ToServerMessage::Acp(AcpMessage(
             agent_client_protocol::RawJsonRpcMessage::response(
-                agent_client_protocol::schema::v1::RequestId::Str(format!(
-                    "agent_session:{session}:0"
-                )),
+                initialize.id,
                 Ok(serde_json::to_value(
                     agent_client_protocol::schema::v1::InitializeResponse::new(PROTOCOL_VERSION),
                 )
@@ -515,13 +722,15 @@ async fn open_test_session(
         )))
         .await
         .unwrap();
-    let _open = outbound.recv().await.expect("session/new request");
+    let ToRuntimeMessage::Acp(AcpMessage(agent_client_protocol::RawJsonRpcMessage::Request(open))) =
+        outbound.recv().await.expect("session/new request")
+    else {
+        panic!("expected session/new")
+    };
     inbound
         .send(ToServerMessage::Acp(AcpMessage(
             agent_client_protocol::RawJsonRpcMessage::response(
-                agent_client_protocol::schema::v1::RequestId::Str(format!(
-                    "agent_session:{session}:1"
-                )),
+                open.id,
                 Ok(serde_json::to_value(
                     agent_client_protocol::schema::v1::NewSessionResponse::new("acp-1"),
                 )
@@ -648,6 +857,10 @@ async fn a_second_replica_cannot_attach_a_session_with_a_live_manager() {
         fx.repo.clone(),
         FoldedMessageService::new(fx.repo.clone()),
         NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
     );
     let result = second_replica
         .attach_session(fx.session, RuntimeAttachment::solo(PendingTransport))
@@ -704,6 +917,7 @@ async fn cancellation_does_not_drop_an_effect_batch_after_machine_mutation() {
         entered: entered.clone(),
         release: release.clone(),
         hang_disconnect: false,
+        fail_restore_log: None,
     };
     let (outbound_tx, mut outbound_rx) = mpsc::channel(8);
     let (inbound_tx, inbound_rx) = mpsc::channel(8);
@@ -714,6 +928,7 @@ async fn cancellation_does_not_drop_an_effect_batch_after_machine_mutation() {
         None,
         "/workspace".to_owned(),
         Vec::new(),
+        PermissionPolicy::AutoAccept,
         RecordingTransport {
             outbound: outbound_tx,
             inbound: inbound_rx,
@@ -722,6 +937,7 @@ async fn cancellation_does_not_drop_an_effect_batch_after_machine_mutation() {
         command_rx,
         handshake,
         Arc::new(crate::domain::ports::NoOpTurnObserver),
+        Arc::new(crate::domain::ports::NoOpToolCatalog),
     );
     let active = Arc::new(ActiveSessions::new());
     let cancellation = CancellationToken::new();
@@ -783,6 +999,7 @@ async fn live_inbound_logs_do_not_reuse_the_expired_handshake_deadline() {
         entered: entered.clone(),
         release: release.clone(),
         hang_disconnect: false,
+        fail_restore_log: None,
     };
     let (outbound_tx, mut outbound_rx) = mpsc::channel(8);
     let (inbound_tx, inbound_rx) = mpsc::channel(8);
@@ -793,6 +1010,7 @@ async fn live_inbound_logs_do_not_reuse_the_expired_handshake_deadline() {
         None,
         "/workspace".to_owned(),
         Vec::new(),
+        PermissionPolicy::AutoAccept,
         RecordingTransport {
             outbound: outbound_tx,
             inbound: inbound_rx,
@@ -801,6 +1019,7 @@ async fn live_inbound_logs_do_not_reuse_the_expired_handshake_deadline() {
         command_rx,
         handshake,
         Arc::new(crate::domain::ports::NoOpTurnObserver),
+        Arc::new(crate::domain::ports::NoOpToolCatalog),
     );
     let active = Arc::new(ActiveSessions::new());
     let cancellation = CancellationToken::new();
@@ -939,6 +1158,10 @@ async fn marking_disconnected_persists_and_publishes_the_event() {
         repo.clone(),
         FoldedMessageService::new(repo.clone()),
         realtime.clone(),
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
     );
 
     service
@@ -974,9 +1197,17 @@ async fn marking_disconnected_is_bounded_when_persistence_hangs() {
         entered: Arc::new(Notify::new()),
         release: Arc::new(Notify::new()),
         hang_disconnect: true,
+        fail_restore_log: None,
     };
-    let service =
-        AgentSessionServiceImpl::new(hanging, FoldedMessageService::new(repo), NoOpRealtime);
+    let service = AgentSessionServiceImpl::new(
+        hanging,
+        FoldedMessageService::new(repo),
+        NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
+    );
     let disconnect = tokio::spawn(async move { service.mark_disconnected(session).await });
     tokio::task::yield_now().await;
     tokio::time::advance(SESSION_PERSIST_TIMEOUT).await;
@@ -1036,13 +1267,24 @@ async fn a_connections_frames_are_published_to_its_channel() {
             .expect("append succeeds");
     }
 
+    AgentSessionLogWriter::flush(&mut logs)
+        .await
+        .expect("flush succeeds");
     let published = realtime.published();
-    assert_eq!(published.len(), log.len(), "one event per frame, no more");
     assert!(
         published
             .iter()
             .all(|event| event.agent_session_id == test_session()),
         "every event names the session"
+    );
+    let published: Vec<StoredAgentSessionLog> = published
+        .into_iter()
+        .flat_map(|event| event.entries)
+        .collect();
+    assert_eq!(
+        published.len(),
+        log.len(),
+        "every frame goes out exactly once"
     );
     let stored = AgentSessionLogRepo::list_by_session(&repo, test_session())
         .await
@@ -1050,7 +1292,7 @@ async fn a_connections_frames_are_published_to_its_channel() {
     assert_eq!(
         published
             .iter()
-            .map(|event| event.entry.created_at)
+            .map(|event| event.created_at)
             .collect::<Vec<_>>(),
         stored
             .iter()
@@ -1069,7 +1311,7 @@ async fn a_connections_frames_are_published_to_its_channel() {
     assert_eq!(
         published
             .into_iter()
-            .map(|event| frame(event.entry.entry))
+            .map(|event| frame(event.entry))
             .collect::<Vec<_>>(),
         log.into_iter().map(frame).collect::<Vec<_>>(),
         "the frames go out as they were logged"
@@ -1148,6 +1390,10 @@ async fn session_log_returns_the_sessions_frames_in_order() {
         store.clone(),
         FoldedMessageService::new(store.clone()),
         NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
     );
 
     let log = service
@@ -1161,6 +1407,10 @@ async fn session_log_returns_the_sessions_frames_in_order() {
         "every frame is served, none folded away"
     );
     assert!(!log.bot.name.is_empty(), "the response names the agent");
+    assert!(
+        !log.bot.handle.is_empty(),
+        "the response includes the agent's handle"
+    );
 
     // The order is the contract: folding is a left fold from the first frame,
     // so a reordered log derives different turn numbering.
@@ -1212,4 +1462,897 @@ async fn appending_a_config_response_projects_the_model() {
         .await
         .expect("get session");
     assert_eq!(session.model, "sonnet", "the rejected change moved nothing");
+}
+
+#[tokio::test]
+async fn shared_transport_copies_durable_initialization_before_load() {
+    use crate::domain::session::Input;
+    use agent_client_protocol::RawJsonRpcMessage;
+    use agent_client_protocol::schema::v1::{AgentCapabilities, InitializeResponse};
+    let repo = InMemoryAgentSessionRepo::new();
+    let first = AgentSessionId::new();
+    let second = AgentSessionId::new();
+    for id in [first, second] {
+        repo.insert_session(test_agent_session(id));
+    }
+    let (handshake, _) = watch::channel(HandshakeStatus::Pending);
+    let (send, mut received) = mpsc::channel(8);
+    let (_inbound, inbound) = mpsc::channel(8);
+    let (_commands, commands) = mpsc::channel(8);
+    let claim = claim_for_test(&repo, first).await;
+    let mut actor = SessionActor::new(
+        first,
+        Some("first-acp".into()),
+        "/workspace".into(),
+        vec![],
+        PermissionPolicy::Prompt,
+        RecordingTransport {
+            outbound: send,
+            inbound,
+        },
+        LiveSessionLogWriter::fenced(repo.clone(), NoOpRealtime, claim),
+        commands,
+        handshake.clone(),
+        Arc::new(crate::domain::ports::NoOpTurnObserver),
+        Arc::new(crate::domain::ports::NoOpToolCatalog),
+    );
+    actor
+        .dispatch(Input::Inbound(ToServerMessage::Event {
+            event: SystemEvent::AcpReady,
+        }))
+        .await;
+    let init_request = received.recv().await.unwrap();
+    let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(init))) = &init_request else {
+        panic!("initialize request")
+    };
+    let init_response = ToServerMessage::Acp(AcpMessage(RawJsonRpcMessage::response(
+        init.id.clone(),
+        Ok(serde_json::to_value(
+            InitializeResponse::new(PROTOCOL_VERSION)
+                .agent_capabilities(AgentCapabilities::new().load_session(true)),
+        )
+        .unwrap()),
+    )));
+    actor.dispatch(Input::Inbound(init_response.clone())).await;
+    let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(load))) =
+        received.recv().await.unwrap()
+    else {
+        panic!("load request")
+    };
+    actor
+        .dispatch(Input::Inbound(ToServerMessage::Acp(AcpMessage(
+            RawJsonRpcMessage::response(load.id, Ok(serde_json::json!({}))),
+        ))))
+        .await;
+    let first_history = AgentSessionLogRepo::list_by_session(&repo, first)
+        .await
+        .unwrap();
+    assert_eq!(first_history.len(), 4);
+
+    // A late-bound second session uses the retained actual handshake, with local row IDs.
+    let (send, mut received) = mpsc::channel(8);
+    let (_inbound, inbound) = mpsc::channel(8);
+    let (_commands, commands) = mpsc::channel(8);
+    let claim = claim_for_test(&repo, second).await;
+    let mut actor = SessionActor::new(
+        second,
+        Some("second-acp".into()),
+        "/workspace".into(),
+        vec![],
+        PermissionPolicy::Prompt,
+        RecordingTransport {
+            outbound: send,
+            inbound,
+        },
+        LiveSessionLogWriter::fenced(repo.clone(), NoOpRealtime, claim),
+        commands,
+        handshake,
+        Arc::new(crate::domain::ports::NoOpTurnObserver),
+        Arc::new(crate::domain::ports::NoOpToolCatalog),
+    );
+    let ready = actor.next_input().await;
+    assert!(matches!(ready, Input::SharedReady { .. }));
+    actor.dispatch(ready).await;
+    let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(load))) =
+        received.recv().await.unwrap()
+    else {
+        panic!("load request")
+    };
+    assert_eq!(load.method.as_ref(), "session/load");
+    actor
+        .dispatch(Input::Inbound(ToServerMessage::Acp(AcpMessage(
+            RawJsonRpcMessage::response(load.id, Ok(serde_json::json!({}))),
+        ))))
+        .await;
+    let history = AgentSessionLogRepo::list_by_session(&repo, second)
+        .await
+        .unwrap();
+    assert_eq!(history.len(), 4);
+    assert_ne!(history[0].id, first_history[0].id);
+    assert!(
+        history
+            .iter()
+            .all(|row| row.entry.agent_session_id == second)
+    );
+    assert_eq!(
+        serde_json::to_value(&history[0].entry.content).unwrap(),
+        serde_json::to_value(Message::ToRuntime(init_request)).unwrap()
+    );
+    assert_eq!(
+        serde_json::to_value(&history[1].entry.content).unwrap(),
+        serde_json::to_value(Message::ToServer(init_response)).unwrap()
+    );
+}
+
+#[tokio::test]
+async fn shared_initialization_append_failure_stops_before_sending_queued_prompt() {
+    for failure in [
+        RestoreLogFailure::InitializeRequest,
+        RestoreLogFailure::InitializeResponse,
+    ] {
+        assert_restore_persistence_failure_does_not_send_prompt(failure).await;
+    }
+}
+
+#[tokio::test]
+async fn successful_load_response_append_failure_stops_before_sending_queued_prompt() {
+    assert_restore_persistence_failure_does_not_send_prompt(RestoreLogFailure::LoadResponse).await;
+}
+
+async fn assert_restore_persistence_failure_does_not_send_prompt(failure: RestoreLogFailure) {
+    use crate::domain::model::HistoryBoundary;
+    use crate::domain::session::actors::Stepped;
+    use crate::domain::session::{InitializationContext, Input, SessionRestoreSupport};
+    use agent_client_protocol::{
+        RawJsonRpcMessage,
+        schema::v1::{AgentCapabilities, InitializeResponse, RequestId},
+    };
+
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = AgentSessionId::new();
+    repo.insert_session(test_agent_session(session));
+    let claim = claim_for_test(&repo, session).await;
+    // A prior committed boundary must survive both failure paths.
+    repo.create_fenced(any_event(session), &claim)
+        .await
+        .unwrap();
+    let previous = repo
+        .create_fenced(any_event(session), &claim)
+        .await
+        .unwrap();
+    repo.create_fenced_with_boundary(
+        any_event(session),
+        &claim,
+        Some(HistoryBoundary {
+            initialization_log_id: previous.id,
+        }),
+    )
+    .await
+    .unwrap();
+    let logs = BlockingPromptLogs {
+        repo: repo.clone(),
+        entered: Arc::new(Notify::new()),
+        release: Arc::new(Notify::new()),
+        hang_disconnect: false,
+        fail_restore_log: Some(failure),
+    };
+    let (handshake, _) = watch::channel(HandshakeStatus::Pending);
+    let (send, mut received) = mpsc::channel(8);
+    let (_inbound, inbound) = mpsc::channel(8);
+    let (commands, command_rx) = mpsc::channel(8);
+    let mut actor = SessionActor::new(
+        session,
+        Some("restored-acp".into()),
+        "/workspace".into(),
+        vec![],
+        PermissionPolicy::Prompt,
+        RecordingTransport {
+            outbound: send,
+            inbound,
+        },
+        LiveSessionLogWriter::fenced(logs, NoOpRealtime, claim),
+        command_rx,
+        handshake.clone(),
+        Arc::new(crate::domain::ports::NoOpTurnObserver),
+        Arc::new(crate::domain::ports::NoOpToolCatalog),
+    );
+    let (completed, completion) = oneshot::channel();
+    commands
+        .send(SessionCommand {
+            user_id: None,
+            action: AgentAction::prompt("must remain unsent"),
+            action_id: AgentActionId::mint(),
+            completed,
+            span: tracing::Span::none(),
+            enqueued_at: tokio::time::Instant::now(),
+        })
+        .await
+        .unwrap();
+    let queued = actor.next_input().await;
+    assert!(matches!(queued, Input::Command { .. }));
+    assert_eq!(actor.dispatch(queued).await, Stepped::Continue);
+    assert!(received.try_recv().is_err());
+
+    let init_id = RequestId::Str("shared-transport-initialization".into());
+    handshake
+        .send(HandshakeStatus::ReadyWithContext {
+            restore: SessionRestoreSupport {
+                resume: false,
+                load: true,
+            },
+            context: Arc::new(InitializationContext {
+                request: ToRuntimeMessage::Acp(AcpMessage(
+                    RawJsonRpcMessage::request(
+                        "initialize".to_owned(),
+                        serde_json::json!({"protocolVersion": 1}),
+                        init_id.clone(),
+                    )
+                    .unwrap(),
+                )),
+                response: ToServerMessage::Acp(AcpMessage(RawJsonRpcMessage::response(
+                    init_id,
+                    Ok(serde_json::to_value(
+                        InitializeResponse::new(PROTOCOL_VERSION)
+                            .agent_capabilities(AgentCapabilities::new().load_session(true)),
+                    )
+                    .unwrap()),
+                ))),
+            }),
+        })
+        .unwrap();
+    let ready = actor.next_input().await;
+    assert!(matches!(ready, Input::SharedReady { .. }));
+    let step = actor.dispatch(ready).await;
+    let mut failed_response_id = None;
+    if matches!(failure, RestoreLogFailure::LoadResponse) {
+        assert_eq!(step, Stepped::Continue);
+        let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(load))) =
+            received.try_recv().unwrap()
+        else {
+            panic!("load request")
+        };
+        assert_eq!(load.method.as_ref(), "session/load");
+        failed_response_id = Some(load.id.clone());
+        assert!(matches!(
+            actor
+                .dispatch(Input::Inbound(ToServerMessage::Acp(AcpMessage(
+                    RawJsonRpcMessage::response(load.id, Ok(serde_json::json!({}))),
+                ))))
+                .await,
+            Stepped::Stopped(_)
+        ));
+    } else {
+        assert!(
+            matches!(step, Stepped::Stopped(_)),
+            "initialization failure stops before load"
+        );
+    }
+    assert!(
+        received.try_recv().is_err(),
+        "no queued prompt reached the transport"
+    );
+    let result = tokio::time::timeout(std::time::Duration::from_secs(1), completion)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(result.is_err(), "queued prompt must not report delivery");
+    let history = AgentSessionLogRepo::list_by_session(&repo, session)
+        .await
+        .unwrap();
+    assert_eq!(
+        history[0].id, previous.id,
+        "prior boundary remains selected"
+    );
+    assert!(
+        history.iter().all(|row| !matches!(&row.entry.content,
+        Message::ToRuntime(ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))))
+        if request.method.as_ref() == "session/prompt")),
+        "queued prompt was not appended"
+    );
+    if let Some(failed_id) = failed_response_id {
+        assert!(history.iter().all(|row| !matches!(&row.entry.content,
+            Message::ToServer(ToServerMessage::Acp(AcpMessage(frame))) if frame.response_id() == Some(&failed_id))),
+            "failed load response append must not be durable");
+    }
+    assert!(matches!(
+        history.last().unwrap().entry.content,
+        Message::ToServer(ToServerMessage::Event {
+            event: SystemEvent::Disconnected
+        })
+    ));
+}
+
+/// The actor's GenAI projection, end to end: a prompt delivered through the
+/// actor opens an `invoke_agent` span under the command that carried it, and
+/// the runtime's answer closes it with what the agent said.
+#[tokio::test]
+async fn a_prompt_turn_is_traced_as_an_agent_span_under_its_command() {
+    use genai_telemetry::attr;
+    use opentelemetry::trace::{TraceContextExt as _, TracerProvider as _};
+    use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider};
+    use tracing_opentelemetry::OpenTelemetrySpanExt as _;
+    use tracing_subscriber::layer::SubscriberExt as _;
+
+    let exporter = InMemorySpanExporter::default();
+    let provider = SdkTracerProvider::builder()
+        .with_simple_exporter(exporter.clone())
+        .build();
+    let layer = tracing_opentelemetry::layer().with_tracer(provider.tracer("test"));
+    let _guard = tracing::subscriber::set_default(tracing_subscriber::registry().with(layer));
+    tracing::callsite::rebuild_interest_cache();
+
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    let release = Arc::new(Notify::new());
+    let logs = BlockingPromptLogs {
+        repo: repo.clone(),
+        entered: Arc::new(Notify::new()),
+        release: release.clone(),
+        hang_disconnect: false,
+        fail_restore_log: None,
+    };
+    let (outbound_tx, mut outbound_rx) = mpsc::channel(8);
+    let (inbound_tx, inbound_rx) = mpsc::channel(8);
+    let (commands, command_rx) = mpsc::channel(8);
+    let (handshake, _) = watch::channel(HandshakeStatus::Pending);
+    let actor = SessionActor::new(
+        session,
+        None,
+        "/workspace".to_owned(),
+        Vec::new(),
+        crate::domain::session::PermissionPolicy::AutoAccept,
+        RecordingTransport {
+            outbound: outbound_tx,
+            inbound: inbound_rx,
+        },
+        logs,
+        command_rx,
+        handshake,
+        Arc::new(crate::domain::ports::NoOpTurnObserver),
+        Arc::new(crate::domain::ports::NoOpToolCatalog),
+    );
+    let active = Arc::new(ActiveSessions::new());
+    let cancellation = CancellationToken::new();
+    let (stopped_tx, _) = watch::channel(false);
+    let claim = claim_for_test(&repo, session).await;
+    let task = tokio::spawn(
+        run_session(
+            actor,
+            Arc::downgrade(&active),
+            Arc::new(()),
+            stopped_tx,
+            cancellation.clone(),
+            repo.clone(),
+            claim,
+            Arc::new(crate::domain::ports::NoOpTurnObserver),
+        )
+        .with_current_subscriber(),
+    );
+    open_test_session(&inbound_tx, &mut outbound_rx, session).await;
+
+    release.notify_one();
+    let command_span = tracing::info_span!("agent.session.command");
+    let command_id = command_span.context().span().span_context().span_id();
+    let action_id = AgentActionId::mint();
+    let (completed, result) = oneshot::channel();
+    commands
+        .send(SessionCommand {
+            user_id: None,
+            action: AgentAction::prompt("what time is it?"),
+            action_id,
+            completed,
+            span: command_span,
+            enqueued_at: tokio::time::Instant::now(),
+        })
+        .await
+        .unwrap();
+    let prompt = outbound_rx.recv().await.expect("prompt is dispatched");
+    assert!(matches!(
+        &prompt,
+        ToRuntimeMessage::Acp(AcpMessage(
+            agent_client_protocol::RawJsonRpcMessage::Request(request)
+        )) if request.method.as_ref() == "session/prompt"
+    ));
+    result.await.unwrap().expect("delivery completes");
+
+    let update = agent_client_protocol::RawJsonRpcMessage::notification(
+        "session/update".to_owned(),
+        serde_json::json!({
+            "sessionId": "acp-1",
+            "update": {
+                "sessionUpdate": "agent_message_chunk",
+                "content": { "type": "text", "text": "It is noon." }
+            }
+        }),
+    )
+    .unwrap();
+    inbound_tx
+        .send(ToServerMessage::Acp(AcpMessage(update)))
+        .await
+        .unwrap();
+    inbound_tx
+        .send(ToServerMessage::Acp(AcpMessage(
+            agent_client_protocol::RawJsonRpcMessage::response(
+                action_id.to_request_id(),
+                Ok(serde_json::json!({ "stopReason": "end_turn" })),
+            ),
+        )))
+        .await
+        .unwrap();
+    // The transport closing stops the actor, which flushes anything open.
+    drop(inbound_tx);
+    task.await.unwrap();
+
+    provider.force_flush().expect("flush");
+    let spans = exporter.get_finished_spans().expect("finished spans");
+    let agent: Vec<_> = spans
+        .iter()
+        .filter(|span| span.name == "invoke_agent")
+        .collect();
+    assert_eq!(agent.len(), 1, "one prompt, one agent span: {spans:#?}");
+    assert_eq!(agent[0].parent_span_id, command_id);
+    let attribute = |key: &str| {
+        agent[0]
+            .attributes
+            .iter()
+            .find(|kv| kv.key.as_str() == key)
+            .map(|kv| kv.value.to_string())
+    };
+    assert_eq!(
+        attribute(attr::CONVERSATION_ID).as_deref(),
+        Some(session.to_string().as_str())
+    );
+    assert_eq!(
+        attribute(attr::RESPONSE_FINISH_REASONS).as_deref(),
+        Some(r#"["stop"]"#)
+    );
+    let output = attribute(attr::OUTPUT_MESSAGES).expect("output recorded");
+    assert!(output.contains("It is noon."), "{output}");
+    let input = attribute(attr::INPUT_MESSAGES).expect("input recorded");
+    assert!(input.contains("what time is it?"), "{input}");
+}
+
+mod initial_model;
+mod owner_binding;
+
+/// The live writer's fold says what each appended frame meant for the turn;
+/// history it catches up on says nothing.
+mod fold_signals {
+    use super::*;
+    use crate::domain::ports::AgentSessionLogWriter as _;
+    use agent_fold::domain::model::{StopReason as FoldStop, TurnSignal};
+    use agent_fold::testing::parse_log_as;
+    use agent_runtime_protocol::domain::schema::v0::SystemEvent;
+
+    #[tokio::test]
+    async fn appending_a_turn_signals_its_end_once_with_its_last_text() {
+        let repo = InMemoryAgentSessionRepo::new();
+        let session = test_session();
+        repo.insert_session(test_agent_session(session));
+        let mut logs = LiveSessionLogWriter::new(repo.clone(), NoOpRealtime);
+
+        let mut signals = Vec::new();
+        for frame in parse_log_as(session, TURN) {
+            signals.extend(logs.append(frame).await.expect("append succeeds").signals);
+        }
+
+        assert!(
+            matches!(
+                signals.as_slice(),
+                [TurnSignal::TurnEnded { stop: FoldStop::EndTurn, last_text: Some(text), .. }]
+                    if !text.is_empty()
+            ),
+            "{signals:#?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_writer_catching_up_on_a_stored_turn_signals_nothing_for_it() {
+        let repo = InMemoryAgentSessionRepo::new();
+        let session = test_session();
+        repo.insert_session(test_agent_session(session));
+        let mut first = LiveSessionLogWriter::new(repo.clone(), NoOpRealtime);
+        for frame in parse_log_as(session, TURN) {
+            first.append(frame).await.expect("append succeeds");
+        }
+
+        // A reconnect: a fresh writer over the same stored log. Its first
+        // frame is the runtime coming back, not a turn ending.
+        let mut second = LiveSessionLogWriter::new(repo.clone(), NoOpRealtime);
+        let appended = second
+            .append(AgentSessionLog {
+                agent_session_id: session,
+                user_id: None,
+                content: Message::ToServer(ToServerMessage::Event {
+                    event: SystemEvent::AcpReady,
+                }),
+            })
+            .await
+            .expect("append succeeds");
+
+        assert!(appended.signals.is_empty(), "{:#?}", appended.signals);
+    }
+}
+
+// Batching: streamed output is stored at once but pushed to viewers in runs
+// - one publish per flush - while anything they must see now goes through
+// immediately.
+
+/// A streamed ACP notification: the frame kind that is the bulk of every
+/// session and the whole of a `session/load` replay.
+fn streamed_frame(text: &str) -> AgentSessionLog {
+    AgentSessionLog {
+        agent_session_id: test_session(),
+        user_id: None,
+        content: Message::ToServer(ToServerMessage::Acp(AcpMessage(
+            agent_client_protocol::RawJsonRpcMessage::notification(
+                "session/update".to_owned(),
+                serde_json::json!({
+                    "sessionId": "acp-1",
+                    "update": {
+                        "sessionUpdate": "agent_thought_chunk",
+                        "content": { "type": "text", "text": text }
+                    }
+                }),
+            )
+            .unwrap(),
+        ))),
+    }
+}
+
+/// Streamed frames are durable at once but published only on flush, all
+/// together, in log order, as one event.
+#[tokio::test]
+async fn streamed_frames_are_stored_at_once_and_published_on_flush() {
+    let repo = InMemoryAgentSessionRepo::new();
+    repo.insert_session(test_agent_session(test_session()));
+    let realtime = RecordingRealtime::new();
+    let mut logs = streaming_connection(repo.clone(), realtime.clone());
+
+    let mut appended = Vec::new();
+    for text in ["one", "two", "three"] {
+        appended.push(
+            AgentSessionLogWriter::append(&mut logs, streamed_frame(text))
+                .await
+                .expect("append succeeds")
+                .log_id,
+        );
+    }
+
+    let stored = AgentSessionLogRepo::list_by_session(&repo, test_session())
+        .await
+        .unwrap();
+    assert_eq!(
+        stored.iter().map(|row| row.id).collect::<Vec<_>>(),
+        appended,
+        "every frame is durable before its append returns"
+    );
+    assert!(
+        realtime.published().is_empty(),
+        "nothing is published before the flush"
+    );
+    assert!(
+        logs.flush_deadline().is_some(),
+        "a pending frame gives the actor a deadline to flush by"
+    );
+
+    AgentSessionLogWriter::flush(&mut logs)
+        .await
+        .expect("flush succeeds");
+
+    let published = realtime.published();
+    assert_eq!(published.len(), 1, "one flush is one publish");
+    assert_eq!(
+        published[0]
+            .entries
+            .iter()
+            .map(|row| row.id)
+            .collect::<Vec<_>>(),
+        appended,
+        "the publish carries the stored frames in log order"
+    );
+    assert!(
+        logs.flush_deadline().is_none(),
+        "nothing pending needs no wake-up"
+    );
+}
+
+/// A frame headed to the runtime pushes everything pending through with
+/// itself, so a viewer never sees a prompt before the output it followed.
+#[tokio::test]
+async fn frames_headed_to_the_runtime_flush_pending_frames_through() {
+    let repo = InMemoryAgentSessionRepo::new();
+    repo.insert_session(test_agent_session(test_session()));
+    let realtime = RecordingRealtime::new();
+    let mut logs = streaming_connection(repo.clone(), realtime.clone());
+
+    AgentSessionLogWriter::append(&mut logs, streamed_frame("pending"))
+        .await
+        .unwrap();
+    let prompt = parse_log_as(test_session(), TURN)
+        .into_iter()
+        .find(|entry| matches!(entry.content, Message::ToRuntime(_)))
+        .expect("the fixture turn prompts the runtime");
+    let prompt_id = AgentSessionLogWriter::append(&mut logs, prompt)
+        .await
+        .unwrap()
+        .log_id;
+
+    let published = realtime.published();
+    assert_eq!(published.len(), 1, "flushed through as one publish");
+    assert_eq!(published[0].entries.len(), 2);
+    assert_eq!(published[0].entries[1].id, prompt_id);
+    assert!(logs.flush_deadline().is_none());
+}
+
+/// System events move the composer's idea of whether the agent is working,
+/// so they go out at once, with whatever was pending ahead of them.
+#[tokio::test]
+async fn system_events_flush_pending_frames_through() {
+    let repo = InMemoryAgentSessionRepo::new();
+    repo.insert_session(test_agent_session(test_session()));
+    let realtime = RecordingRealtime::new();
+    let mut logs = streaming_connection(repo.clone(), realtime.clone());
+
+    AgentSessionLogWriter::append(&mut logs, streamed_frame("pending"))
+        .await
+        .unwrap();
+    AgentSessionLogWriter::append(
+        &mut logs,
+        AgentSessionLog {
+            agent_session_id: test_session(),
+            user_id: None,
+            content: Message::ToServer(ToServerMessage::Event {
+                event: SystemEvent::AcpReady,
+            }),
+        },
+    )
+    .await
+    .unwrap();
+
+    let published = realtime.published();
+    assert_eq!(published.len(), 1);
+    assert_eq!(published[0].entries.len(), 2);
+    assert!(logs.flush_deadline().is_none());
+}
+
+/// Enough pending frames flush themselves, bounding one publish.
+#[tokio::test]
+async fn a_full_pending_run_flushes_itself() {
+    let repo = InMemoryAgentSessionRepo::new();
+    repo.insert_session(test_agent_session(test_session()));
+    let realtime = RecordingRealtime::new();
+    let mut logs = streaming_connection(repo.clone(), realtime.clone());
+
+    for index in 0..MAX_PENDING_LOG_FRAMES {
+        AgentSessionLogWriter::append(&mut logs, streamed_frame(&index.to_string()))
+            .await
+            .unwrap();
+    }
+
+    let published = realtime.published();
+    assert_eq!(published.len(), 1);
+    assert_eq!(published[0].entries.len(), MAX_PENDING_LOG_FRAMES);
+    assert!(logs.flush_deadline().is_none());
+}
+
+// Batched writes: a fenced connection holds streamed notifications back and
+// lands them in one insert, while anything the store projects or the
+// runtime acts on writes the buffer out first and lands at once.
+
+async fn fenced_connection(
+    realtime: RecordingRealtime,
+) -> (
+    InMemoryAgentSessionRepo,
+    LiveSessionLogWriter<InMemoryAgentSessionRepo, RecordingRealtime>,
+) {
+    let repo = InMemoryAgentSessionRepo::new();
+    repo.insert_session(test_agent_session(test_session()));
+    let claim = claim_for_test(&repo, test_session()).await;
+    let logs = LiveSessionLogWriter::fenced(repo.clone(), realtime, claim);
+    (repo, logs)
+}
+
+/// Under a claim, streamed notifications wait for the flush: nothing is
+/// stored or published until then, and the flush lands them all at once, in
+/// order, under the ids the appends already handed out.
+#[tokio::test]
+async fn a_fenced_connection_buffers_streamed_frames_until_it_flushes() {
+    let realtime = RecordingRealtime::new();
+    let (repo, mut logs) = fenced_connection(realtime.clone()).await;
+
+    let mut appended = Vec::new();
+    for text in ["one", "two", "three"] {
+        appended.push(
+            AgentSessionLogWriter::append(&mut logs, streamed_frame(text))
+                .await
+                .expect("append succeeds")
+                .log_id,
+        );
+    }
+
+    assert!(
+        AgentSessionLogRepo::list_by_session(&repo, test_session())
+            .await
+            .unwrap()
+            .is_empty(),
+        "buffered frames are not yet durable"
+    );
+    assert!(realtime.published().is_empty());
+    assert!(logs.flush_deadline().is_some());
+
+    AgentSessionLogWriter::flush(&mut logs)
+        .await
+        .expect("flush succeeds");
+
+    let stored = AgentSessionLogRepo::list_by_session(&repo, test_session())
+        .await
+        .unwrap();
+    assert_eq!(
+        stored.iter().map(|row| row.id).collect::<Vec<_>>(),
+        appended,
+        "the flush stores every frame in append order under the id its append returned"
+    );
+    assert!(
+        stored
+            .windows(2)
+            .all(|pair| pair[0].created_at < pair[1].created_at),
+        "a batch orders strictly by time, as readers expect"
+    );
+    let published = realtime.published();
+    assert_eq!(published.len(), 1, "one flush is one publish");
+    assert_eq!(
+        published[0]
+            .entries
+            .iter()
+            .map(|row| row.id)
+            .collect::<Vec<_>>(),
+        appended
+    );
+    assert!(logs.flush_deadline().is_none());
+}
+
+/// A frame headed to the runtime writes the buffer out ahead of itself and
+/// is durable before `append` returns, so history never lacks a message the
+/// agent received and never reorders around it.
+#[tokio::test]
+async fn frames_headed_to_the_runtime_write_the_buffer_out_first() {
+    let realtime = RecordingRealtime::new();
+    let (repo, mut logs) = fenced_connection(realtime.clone()).await;
+
+    let buffered = AgentSessionLogWriter::append(&mut logs, streamed_frame("buffered"))
+        .await
+        .unwrap()
+        .log_id;
+    let prompt = parse_log_as(test_session(), TURN)
+        .into_iter()
+        .find(|entry| matches!(entry.content, Message::ToRuntime(_)))
+        .expect("the fixture turn prompts the runtime");
+    let prompt_id = AgentSessionLogWriter::append(&mut logs, prompt)
+        .await
+        .unwrap()
+        .log_id;
+
+    let stored = AgentSessionLogRepo::list_by_session(&repo, test_session())
+        .await
+        .unwrap();
+    assert_eq!(
+        stored.iter().map(|row| row.id).collect::<Vec<_>>(),
+        vec![buffered, prompt_id],
+        "both durable, buffered frame first"
+    );
+    assert_eq!(realtime.published().len(), 1, "and pushed as one publish");
+    assert!(logs.flush_deadline().is_none());
+}
+
+/// A successful load's boundary selects history at its own row, so the
+/// frames buffered before it must already be rows when it lands.
+#[tokio::test]
+async fn a_load_boundary_lands_after_the_frames_buffered_before_it() {
+    let realtime = RecordingRealtime::new();
+    let (repo, mut logs) = fenced_connection(realtime.clone()).await;
+
+    let initialize = AgentSessionLog {
+        agent_session_id: test_session(),
+        user_id: None,
+        content: Message::ToRuntime(ToRuntimeMessage::Acp(AcpMessage(
+            agent_client_protocol::RawJsonRpcMessage::request(
+                "initialize".to_owned(),
+                serde_json::json!({}),
+                agent_client_protocol::schema::v1::RequestId::Str("init".into()),
+            )
+            .unwrap(),
+        ))),
+    };
+    let initialization_log_id = AgentSessionLogWriter::append(&mut logs, initialize)
+        .await
+        .unwrap()
+        .log_id;
+    let replayed = AgentSessionLogWriter::append(&mut logs, streamed_frame("replayed"))
+        .await
+        .unwrap()
+        .log_id;
+    let load_response = AgentSessionLog {
+        agent_session_id: test_session(),
+        user_id: None,
+        content: Message::ToServer(ToServerMessage::Acp(AcpMessage(
+            agent_client_protocol::RawJsonRpcMessage::response(
+                agent_client_protocol::schema::v1::RequestId::Str("load".into()),
+                Ok(serde_json::json!({})),
+            ),
+        ))),
+    };
+    let response_id = AgentSessionLogWriter::append_with_boundary(
+        &mut logs,
+        load_response,
+        Some(crate::domain::model::HistoryBoundary {
+            initialization_log_id,
+        }),
+    )
+    .await
+    .unwrap()
+    .log_id;
+
+    let history = AgentSessionLogRepo::list_by_session(&repo, test_session())
+        .await
+        .unwrap();
+    assert_eq!(
+        history.iter().map(|row| row.id).collect::<Vec<_>>(),
+        vec![initialization_log_id, replayed, response_id],
+        "history starts at the initialization and keeps append order"
+    );
+}
+
+/// A full buffer flushes itself, bounding what a crash could lose and what
+/// one insert has to write.
+#[tokio::test]
+async fn a_full_buffer_writes_itself_out() {
+    let realtime = RecordingRealtime::new();
+    let (repo, mut logs) = fenced_connection(realtime.clone()).await;
+
+    for index in 0..MAX_PENDING_LOG_FRAMES {
+        AgentSessionLogWriter::append(&mut logs, streamed_frame(&index.to_string()))
+            .await
+            .unwrap();
+    }
+
+    let stored = AgentSessionLogRepo::list_by_session(&repo, test_session())
+        .await
+        .unwrap();
+    assert_eq!(stored.len(), MAX_PENDING_LOG_FRAMES);
+    let published = realtime.published();
+    assert_eq!(published.len(), 1);
+    assert_eq!(published[0].entries.len(), MAX_PENDING_LOG_FRAMES);
+    assert!(logs.flush_deadline().is_none());
+}
+
+/// The fold hands out turn ids over the whole log, so it must count frames
+/// that are only buffered too, and a flushed turn reads back complete and in
+/// order.
+#[tokio::test]
+async fn a_fenced_turn_flushes_complete_and_in_order() {
+    let realtime = RecordingRealtime::new();
+    let (repo, mut logs) = fenced_connection(realtime.clone()).await;
+
+    let log = parse_log_as(test_session(), TURN);
+    for entry in log.clone() {
+        AgentSessionLogWriter::append(&mut logs, entry)
+            .await
+            .unwrap();
+    }
+    AgentSessionLogWriter::flush(&mut logs).await.unwrap();
+
+    let stored = AgentSessionLogRepo::list_by_session(&repo, test_session())
+        .await
+        .unwrap();
+    assert_eq!(
+        stored
+            .into_iter()
+            .map(|row| serde_json::to_value(row.entry.content).unwrap())
+            .collect::<Vec<_>>(),
+        log.into_iter()
+            .map(|entry| serde_json::to_value(entry.content).unwrap())
+            .collect::<Vec<_>>(),
+    );
 }

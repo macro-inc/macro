@@ -43,6 +43,7 @@ const params: CreateAgentParams = {
   harness: 'in-memory',
   name: 'Bug fixer',
   instructions: 'Fix bugs.',
+  mcp: { scope: 'owner_connections' },
 };
 
 function agent(channelIds: string[]): Agent {
@@ -62,6 +63,7 @@ function agent(channelIds: string[]): Agent {
     default_model: 'claude-sonnet-4-5',
     channel_scope: 'selected',
     channel_ids: channelIds,
+    mcp: { scope: 'owner_connections' },
   };
 }
 

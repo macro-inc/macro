@@ -4,6 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { ChannelPreviewDataProfilePictureId } from './channelPreviewDataProfilePictureId';
 import type { ChannelType } from './channelType';
 
 /**
@@ -16,4 +18,6 @@ export interface ChannelPreviewData {
   channel_name: string;
   /** Channel type. */
   channel_type: ChannelType;
+  /** Static image file used as the channel's profile picture, when accessible. */
+  profile_picture_id?: ChannelPreviewDataProfilePictureId;
 }

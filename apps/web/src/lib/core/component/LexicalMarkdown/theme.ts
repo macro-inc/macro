@@ -45,6 +45,8 @@ export const theme: EditorThemeClasses = {
     code: 'bg-code-buffer font-mono rounded-xs md-inline-code p-0.5',
     strikethrough: 'md-strike',
     underline: 'md-underline',
+    subscript: 'md-subscript',
+    superscript: 'md-superscript',
     highlight: 'text-accent font-semibold',
   },
   paragraph: `${VERTICAL_GAP} md-p text-[1em]`,
@@ -248,3 +250,11 @@ export const twoLineClampMarkdownTheme = createTheme({
   // span participates in normal inline text flow and clamping is counted correctly.
   searchMatch: 'search-match inline!',
 });
+
+export const inlineWrappingMarkdownTheme = createTheme(
+  {
+    root: 'md inline pr-[2px] cursor-default',
+    paragraph: 'md-p text-[1em] inline',
+  },
+  twoLineClampMarkdownTheme
+);

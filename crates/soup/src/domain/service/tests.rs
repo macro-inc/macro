@@ -231,6 +231,7 @@ fn call_record(
         channel_name: None,
         custom_name: None,
         summary: None,
+        team_share_access_level: None,
         share_with_team: false,
         is_active: true,
         status: None,
@@ -368,9 +369,7 @@ fn foreign_entity_matches_literal(entity: &ForeignEntity, literal: &ForeignEntit
         // "me" and notification done/seen resolution happen in the repository (against the
         // metadata participant list and the notification tables); the fake cannot resolve them,
         // so fail closed.
-        ForeignEntityLiteral::IncludesMe
-        | ForeignEntityLiteral::NotificationDone(_)
-        | ForeignEntityLiteral::NotificationSeen(_) => false,
+        ForeignEntityLiteral::IncludesMe | ForeignEntityLiteral::NotificationState(_) => false,
     }
 }
 
@@ -3381,8 +3380,7 @@ async fn notified_soup_hydrates_channels_and_emails_with_the_request_tree() {
     let filters = EntityFilters {
         channel_filters: item_filters::ChannelFilters {
             notification_filters: item_filters::NotificationFilters {
-                done: Some(false),
-                ..Default::default()
+                states: item_filters::NotificationState::ACTIVE.to_vec(),
             },
             ..Default::default()
         },
@@ -3414,7 +3412,7 @@ async fn notified_soup_hydrates_channels_and_emails_with_the_request_tree() {
     assert_eq!(channel_filters.len(), 1);
     assert!(channel_filters[0].contains("ChannelId"));
     assert!(channel_filters[0].contains(&channel.to_string()));
-    assert!(channel_filters[0].contains("NotificationDone"));
+    assert!(channel_filters[0].contains("NotificationState"));
 
     let thread_filters = comms_service.thread_filters();
     assert_eq!(thread_filters.len(), 1);

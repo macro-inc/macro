@@ -23,8 +23,8 @@ use sqlx::Row;
 use crate::domain::content::{DocumentContent, DocumentContentState};
 use crate::domain::models::{
     BranchNameContext, Comment, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
-    DocumentTeamShare, EditDocumentRepoArgs, EmailImportRepoOutcome, ImportEmailAttachmentRepoArgs,
-    TeamTaskMetadata, Thread,
+    DocumentError, DocumentTeamShare, EditDocumentRepoArgs, EmailImportRepoOutcome,
+    ImportEmailAttachmentRepoArgs, TeamTaskMetadata, Thread,
 };
 use crate::domain::ports::DocumentRepo;
 
@@ -43,7 +43,7 @@ impl PgDocumentRepo {
     async fn reused_email_document(
         &self,
         document_id: String,
-    ) -> Result<EmailImportRepoOutcome, sqlx::Error> {
+    ) -> Result<EmailImportRepoOutcome, DocumentError> {
         let metadata = self.get_document_metadata(&document_id).await?;
         Ok(EmailImportRepoOutcome::Reused(metadata))
     }
@@ -51,7 +51,7 @@ impl PgDocumentRepo {
     async fn reused_linked_email_attachment(
         &self,
         email_attachment_id: uuid::Uuid,
-    ) -> Result<EmailImportRepoOutcome, sqlx::Error> {
+    ) -> Result<EmailImportRepoOutcome, DocumentError> {
         let existing_id =
             create::find_document_id_for_email_attachment(&self.pool, email_attachment_id)
                 .await?
@@ -76,7 +76,7 @@ impl PgDocumentRepo {
         &self,
         document_id: &str,
         email_attachment_id: uuid::Uuid,
-    ) -> Result<EmailImportRepoOutcome, sqlx::Error> {
+    ) -> Result<EmailImportRepoOutcome, DocumentError> {
         let mut transaction = self.pool.begin().await?;
         match create::link_document_email(&mut transaction, document_id, email_attachment_id).await
         {
@@ -89,7 +89,7 @@ impl PgDocumentRepo {
                 self.reused_linked_email_attachment(email_attachment_id)
                     .await
             }
-            Err(e) => Err(e),
+            Err(e) => Err(e.into()),
         }
     }
 }
@@ -107,6 +107,12 @@ async fn update_document_modified(pool: &PgPool, document_id: &str) -> Result<()
     .await?;
 
     Ok(())
+}
+
+fn registry_protocol_error(
+    error: rootcause::Report<entity_registry_db_utils::EntityRegistryError>,
+) -> sqlx::Error {
+    sqlx::Error::Protocol(error.to_string())
 }
 
 impl DocumentRepo for PgDocumentRepo {
@@ -295,7 +301,6 @@ impl DocumentRepo for PgDocumentRepo {
     async fn soft_delete_document(&self, document_id: &str) -> Result<(), Self::Err> {
         let mut transaction = self.pool.begin().await?;
 
-        // Delete pins
         sqlx::query!(
             r#"
             DELETE FROM "Pin" WHERE "pinnedItemId" = $1 AND "pinnedItemType" = $2
@@ -306,7 +311,6 @@ impl DocumentRepo for PgDocumentRepo {
         .execute(&mut *transaction)
         .await?;
 
-        // Delete from history
         sqlx::query!(
             r#"
             DELETE FROM "UserHistory" WHERE "itemId" = $1 AND "itemType" = $2
@@ -317,7 +321,6 @@ impl DocumentRepo for PgDocumentRepo {
         .execute(&mut *transaction)
         .await?;
 
-        // Soft delete the document
         sqlx::query!(
             r#"
             UPDATE "Document"
@@ -328,6 +331,12 @@ impl DocumentRepo for PgDocumentRepo {
         )
         .execute(&mut *transaction)
         .await?;
+
+        if let Ok(id) = macro_uuid::string_to_uuid(document_id) {
+            entity_registry_db_utils::mark_deleted(&mut transaction, id, chrono::Utc::now())
+                .await
+                .map_err(registry_protocol_error)?;
+        }
 
         transaction.commit().await?;
         Ok(())
@@ -471,7 +480,7 @@ impl DocumentRepo for PgDocumentRepo {
         &self,
         args: CreateDocumentRepoArgs,
         share_permission: SharePermissionV2,
-    ) -> Result<DocumentMetadata, Self::Err> {
+    ) -> Result<DocumentMetadata, DocumentError> {
         let mut transaction = self.pool.begin().await?;
         let metadata =
             create::insert_new_document(&mut transaction, args, &share_permission).await?;
@@ -484,11 +493,13 @@ impl DocumentRepo for PgDocumentRepo {
         &self,
         args: ImportEmailAttachmentRepoArgs,
         share_permission: SharePermissionV2,
-    ) -> Result<EmailImportRepoOutcome, Self::Err> {
+    ) -> Result<EmailImportRepoOutcome, DocumentError> {
         let ImportEmailAttachmentRepoArgs {
             email_attachment_id,
-            create,
+            mut create,
         } = args;
+        // Imports do not carry task-creation consent, including reuse paths.
+        create.share_with_team = false;
 
         // Unlocked reuse: attachment already linked, or a live email doc with
         // this sha already exists. The advisory lock is only required when a
@@ -539,7 +550,7 @@ impl DocumentRepo for PgDocumentRepo {
                     .reused_linked_email_attachment(email_attachment_id)
                     .await;
             }
-            Err(e) => return Err(e),
+            Err(e) => return Err(e.into()),
         }
 
         transaction.commit().await?;
@@ -547,8 +558,33 @@ impl DocumentRepo for PgDocumentRepo {
     }
 
     #[tracing::instrument(err, skip(self, args))]
-    async fn edit_document(&self, args: EditDocumentRepoArgs) -> Result<(), Self::Err> {
+    async fn edit_document(&self, args: EditDocumentRepoArgs) -> Result<(), DocumentError> {
+        use share_permission_db_utils::team_share;
+
         let mut transaction = self.pool.begin().await?;
+        if let Some(command) = &args.team_share {
+            if command.expected().entity.entity_type != EntityType::Document
+                || command.expected().entity.entity_id != args.document_id
+                || args
+                    .share_permission
+                    .as_ref()
+                    .and_then(|p| p.team_share_access_level)
+                    != Some(command.target().map(|grant| grant.level.into()))
+            {
+                return Err(DocumentError::BadRequest(
+                    "team-share command does not match edit".to_string(),
+                ));
+            }
+            team_share::apply(&mut transaction, command)
+                .await
+                .map_err(share::map_team_share_error)?;
+        } else if args
+            .share_permission
+            .as_ref()
+            .is_some_and(|p| p.team_share_access_level.is_some())
+        {
+            return Err(DocumentError::Unauthorized);
+        }
 
         use crate::domain::models::FileTypeUpdate;
         let file_type_db = args.file_type.map(|update| match update {
@@ -627,10 +663,16 @@ impl DocumentRepo for PgDocumentRepo {
 
     #[tracing::instrument(err, skip(self))]
     async fn delete_document_by_id(&self, document_id: &str) -> Result<(), Self::Err> {
-        sqlx::query!(r#"DELETE FROM "Document" WHERE id = $1"#, document_id,)
-            .execute(&self.pool)
+        let mut transaction = self.pool.begin().await?;
+        sqlx::query!(r#"DELETE FROM "Document" WHERE id = $1"#, document_id)
+            .execute(&mut *transaction)
             .await?;
-
+        if let Ok(id) = macro_uuid::string_to_uuid(document_id) {
+            entity_registry_db_utils::delete_entity(&mut transaction, id)
+                .await
+                .map_err(registry_protocol_error)?;
+        }
+        transaction.commit().await?;
         Ok(())
     }
 
@@ -844,26 +886,25 @@ impl DocumentRepo for PgDocumentRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn share_with_team(
+    async fn get_team_share_facts(
         &self,
-        team_id: &uuid::Uuid,
         document_id: &str,
-    ) -> Result<(), Self::Err> {
-        share::share_with_team(&self.pool, team_id, document_id).await
+    ) -> Result<models_permissions::share_permission::team_share::TeamShareFacts, DocumentError>
+    {
+        share::get_team_share_facts(&self.pool, document_id).await
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn get_team_share(&self, document_id: &str) -> Result<DocumentTeamShare, Self::Err> {
+    async fn get_team_share(&self, document_id: &str) -> Result<DocumentTeamShare, DocumentError> {
         share::get_team_share(&self.pool, document_id).await
     }
 
     #[tracing::instrument(err, skip(self))]
     async fn set_team_share(
         &self,
-        document_id: &str,
-        share: bool,
-    ) -> Result<DocumentTeamShare, Self::Err> {
-        share::set_team_share(&self.pool, document_id, share).await
+        command: models_permissions::share_permission::team_share::AuthorizedTeamShareCommand,
+    ) -> Result<DocumentTeamShare, DocumentError> {
+        share::set_team_share(&self.pool, command).await
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -1081,10 +1122,8 @@ impl DocumentRepo for PgDocumentRepo {
             create::allocate_team_task_number(&mut transaction, team_id, &document_id).await?;
         }
 
-        // Create share permission
         create::set_share_permission(&mut transaction, &document_id, &share_permission).await?;
 
-        // Insert user entity access (Owner level)
         entity_access_db_utils::insert_entity_access_row(
             &mut transaction,
             &document_id,
@@ -1095,7 +1134,17 @@ impl DocumentRepo for PgDocumentRepo {
         )
         .await?;
 
-        // Insert user history
+        entity_registry_db_utils::insert_entity(
+            &mut transaction,
+            entity_registry_db_utils::NewEntityRecord::new(
+                document_id,
+                entity_registry_db_utils::RegisteredEntityType::Document,
+                model_owner::Owner::User(user_id.clone()),
+            ),
+        )
+        .await
+        .map_err(registry_protocol_error)?;
+
         let now = chrono::Utc::now();
         create::insert_history(&mut transaction, &document_id, &user_id, &now).await?;
 

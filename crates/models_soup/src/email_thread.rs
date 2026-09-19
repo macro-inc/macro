@@ -136,6 +136,10 @@ pub struct SoupEmailThreadPreview {
     pub is_draft: bool,
     /// Whether the thread is marked important.
     pub is_important: bool,
+    /// The denormalized `email_threads.is_signal` importance classification —
+    /// the same flag the soup Importance filter evaluates, distinct from
+    /// `is_important` (Gmail's IMPORTANT label).
+    pub is_signal: bool,
     /// Thread display name or subject.
     pub name: Option<String>,
     /// Thread snippet.

@@ -20,6 +20,7 @@
 
 use filter_ast::Expr;
 use item_filters::ast::EntityFilterAst;
+use item_filters::ast::agent_session::AgentSessionLiteral;
 use item_filters::ast::calendar_event::CalendarEventLiteral;
 use item_filters::ast::foreign_entity::ForeignEntityLiteral;
 use item_filters::ast::properties::{PropertyEntityType, properties_filter_matches_propertyless};
@@ -35,8 +36,8 @@ use crate::outbound::pg_soup_repo::candidate_gates::{
     includes_projects, project_gate, uuid_guarded,
 };
 use crate::outbound::pg_soup_repo::expanded::dynamic::{
-    build_notification_done_clause, build_notification_seen_clause, build_properties_filter,
-    calendar_event_filter_is_impossible, properties_filter_can_apply_to,
+    build_notification_state_clause, build_properties_filter, calendar_event_filter_is_impossible,
+    properties_filter_can_apply_to,
 };
 use crate::outbound::pg_soup_repo::type_err;
 
@@ -60,11 +61,8 @@ fn build_calendar_event_filter(tree: Option<&Expr<CalendarEventLiteral>>) -> Str
         filter_ast::ExprFrame::Literal(CalendarEventLiteral::Id(id)) => {
             format!("event.id = '{id}'")
         }
-        filter_ast::ExprFrame::Literal(CalendarEventLiteral::NotificationDone(done)) => {
-            build_notification_done_clause("event.id", "calendar_event", done)
-        }
-        filter_ast::ExprFrame::Literal(CalendarEventLiteral::NotificationSeen(seen)) => {
-            build_notification_seen_clause("event.id", "calendar_event", seen)
+        filter_ast::ExprFrame::Literal(CalendarEventLiteral::NotificationState(state)) => {
+            build_notification_state_clause("event.id", "calendar_event", state)
         }
         filter_ast::ExprFrame::Literal(_) => "FALSE".to_string(),
     });
@@ -106,19 +104,15 @@ fn calendar_event_gate(filter: Option<&EntityFilterAst>) -> String {
 /// tree folds in its own crate, which hydration applies in full; the
 /// notification-state conjuncts it implies are pre-applied here.
 fn foreign_entity_gate(filter: Option<&EntityFilterAst>) -> String {
-    let implied =
-        implied_conjuncts_sql(
-            filter.and_then(|f| f.foreign_entity_filter.as_deref()),
-            |literal| match literal {
-                ForeignEntityLiteral::NotificationDone(done) => Some(
-                    build_notification_done_clause("fe.id", "foreign_entity", *done),
-                ),
-                ForeignEntityLiteral::NotificationSeen(seen) => Some(
-                    build_notification_seen_clause("fe.id", "foreign_entity", *seen),
-                ),
-                _ => None,
-            },
-        );
+    let implied = implied_conjuncts_sql(
+        filter.and_then(|f| f.foreign_entity_filter.as_deref()),
+        |literal| match literal {
+            ForeignEntityLiteral::NotificationState(state) => Some(
+                build_notification_state_clause("fe.id", "foreign_entity", *state),
+            ),
+            _ => None,
+        },
+    );
     uuid_guarded(
         ID_SQL,
         format!(
@@ -148,6 +142,32 @@ fn reminder_gate() -> String {
             )"#
         ),
     )
+}
+
+/// Agent sessions are authorized through `entity_access`, whose sources are
+/// the same user / channel / team ids the query's `user_source_ids` CTE
+/// already collects - the predicate the agent-session leg's own queries use.
+fn agent_session_gate() -> String {
+    uuid_guarded(
+        ID_SQL,
+        format!(
+            r#"EXISTS (
+                SELECT 1 FROM entity_access ea
+                WHERE ea.entity_id = {ID_SQL}::uuid
+                AND ea.entity_type = 'agent_session'
+                AND ea.source_id IN (SELECT source_id FROM user_source_ids)
+            )"#
+        ),
+    )
+}
+
+/// Agent sessions are off unless the request opts in, exactly as the
+/// agent-session leg decides it for the other feeds: an explicit `Include`,
+/// or naming ids/owners.
+fn includes_agent_sessions(filter: Option<&EntityFilterAst>) -> bool {
+    filter
+        .and_then(|f| f.agent_session_filter.as_deref())
+        .is_some_and(|tree: &Expr<AgentSessionLiteral>| super::agent_session::opted_in(tree))
 }
 
 /// A foreign-entity tree that can never match: the nil-id opt-out the client
@@ -209,6 +229,11 @@ fn included_types(req: &NotifiedSoupRequest<'_>) -> Vec<&'static str> {
     }
     if req.hydratable.reminders && propertyless_ok {
         types.push(EntityType::Reminder.into());
+    }
+    // Agent sessions hydrate through the main by-ids query like documents,
+    // but are opt-in by filter like reminders, and carry no properties.
+    if includes_agent_sessions(req.filter) && propertyless_ok {
+        types.push(EntityType::AgentSession.into());
     }
     types
 }
@@ -296,6 +321,7 @@ pub(super) async fn notified_soup_page(
             WHEN 'calendar_event' THEN {calendar_event_gate}
             WHEN 'foreign_entity' THEN {foreign_entity_gate}
             WHEN 'reminder' THEN {reminder_gate}
+            WHEN 'agent_session' THEN {agent_session_gate}
             ELSE FALSE
         END
         ORDER BY nc.notified_at DESC, nc.entity_id DESC
@@ -310,6 +336,7 @@ pub(super) async fn notified_soup_page(
         calendar_event_gate = calendar_event_gate(req.filter),
         foreign_entity_gate = foreign_entity_gate(req.filter),
         reminder_gate = reminder_gate(),
+        agent_session_gate = agent_session_gate(),
     );
 
     let after_ts = req.after.as_ref().map(|a| a.notified_at.naive_utc());

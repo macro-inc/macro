@@ -33,7 +33,7 @@ axum = [
   "dep:utoipa",
   "models_pagination/axum",
 ]
-gmail_token = ["dep:authentication_service_client", "dep:redis", "ports"]
+gmail_token = ["dep:authentication_service_client", "dep:google_token", "dep:redis", "ports"]
 http_client = ["dep:reqwest", "ports"]
 inbound = ["ports"]
 outbound = ["dep:sqlx", "ports"]
@@ -46,6 +46,7 @@ attachment = { path = "../attachment", optional = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true, optional = true }
 base64 = { workspace = true }
+lexical_client = { path = "../lexical_client" }
 entity_access = { path = "../entity_access" }
 entity_access_management = { path = "../entity_access_management", default-features = false, features = [
   "ports",
@@ -60,6 +61,7 @@ either = { workspace = true }
 email_utils = { path = "../email_utils" }
 filter_ast = { path = "../filter_ast" }
 frecency = { path = "../frecency" }
+google_token = { path = "../google_token", optional = true }
 item_filters = { path = "../item_filters" }
 lol_html = { workspace = true }
 scraper = { workspace = true }

@@ -1,0 +1,23 @@
+{
+  "name": "@macro-inc/spreadsheet",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@ironcalc/wasm": "0.8.4",
+    "@loro-mirror/core": "workspace:*",
+    "loro-crdt": "catalog:",
+    "ssf": "0.11.2"
+  },
+  "scripts": {
+    "type-check": "tsc --noEmit --project tsconfig.json",
+    "test": "vitest run --config ../../services/ai-editing-worker/src/spreadsheet/vitest.config.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "5.0.1"
+  }
+}

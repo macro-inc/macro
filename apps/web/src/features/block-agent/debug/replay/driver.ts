@@ -3,8 +3,8 @@
  *
  * The driver owns a recording split in two: entries before `splitIndex` are
  * served as the persisted log (`getLog`), the rest stream one at a time
- * through the real realtime entry point, `handleAgentSessionLog` — so
- * buffering, `dropOverlap`, the worker fold, and the status projection all
+ * through the real realtime entry point, `AgentSession.ingest` — so
+ * buffering, Rust row ingestion, the worker fold, and the status projection all
  * run exactly as they do against the gateway.
  *
  * Two knobs exist purely to provoke the catch-up paths: `fetchDelayMs` holds
@@ -13,8 +13,8 @@
  * split so the first streamed frames duplicate fetched ones (they must drop).
  */
 
+import { AgentSession } from '@core/agent-session/AgentSession';
 import type { ResultError } from '@core/util/result';
-import { handleAgentSessionLog } from '@queries/agent-session/session-fold';
 import type {
   AgentSessionLogEntryDto,
   AgentSessionResponse,
@@ -24,7 +24,11 @@ import { err, ok } from 'neverthrow';
 import { type Accessor, createSignal } from 'solid-js';
 import type { ReplayBackend } from './interceptor';
 
-export const REPLAY_BOT: SessionBot = { id: 'replay-bot', name: 'Replay' };
+export const REPLAY_BOT: SessionBot = {
+  id: 'replay-bot',
+  name: 'Replay',
+  handle: 'replay',
+};
 export const REPLAY_OWNER = 'macro|replay@example.com';
 
 /** POST ack → frame in the log, same ordering the harness produces. */
@@ -79,6 +83,7 @@ function sessionFixture(id: string): AgentSessionResponse {
     modifiedAt: now,
     name: 'Agent Session',
     ownerId: REPLAY_OWNER,
+    canEdit: true,
     repoUrl: 'https://example.com/replay.git',
     sandboxSize: 'default',
     status: { kind: 'no_messages' },
@@ -89,6 +94,7 @@ function sessionFixture(id: string): AgentSessionResponse {
 /** The frame the harness would append for a prompt accepted over `control`. */
 function promptEcho(prompt: string): AgentSessionLogEntryDto {
   return {
+    id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
     userId: REPLAY_OWNER,
     direction: 'to_runtime',
@@ -113,7 +119,7 @@ export function createReplayDriver(options: ReplayDriverOptions): ReplayDriver {
   let timer: ReturnType<typeof setTimeout> | undefined;
 
   const emit = (entry: AgentSessionLogEntryDto) => {
-    handleAgentSessionLog({ agentSessionId, ...entry });
+    AgentSession.ingest({ agentSessionId, entries: [entry] });
   };
 
   const pause = () => {

@@ -11,12 +11,12 @@ import { storeChatStateImmediate } from '@core/component/AI/util/storage';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { createChat } from '@core/util/create';
-import { AnimatedStarIcon } from '@icon/wide-star';
+import AgentIcon from '@phosphor/sparkle.svg';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import { Button } from '@ui';
 import { createSignal } from 'solid-js';
 
-export { AnimatedStarIcon as ChatWithAgentIcon };
+export { AgentIcon as ChatWithAgentIcon };
 
 type ChatWithAgentEntity =
   | { type: 'email'; id: string; name: string }
@@ -25,6 +25,7 @@ type ChatWithAgentEntity =
       id: string;
       name: string;
       fileType: string | null | undefined;
+      blockParams?: Record<string, string>;
     }
   | { type: 'project'; id: string; name: string }
   | { type: 'channel'; id: string; name: string; channelType: ChannelType };
@@ -48,6 +49,9 @@ function buildSeed(entity: ChatWithAgentEntity): {
       documentName: entity.name,
       blockName,
       ...(entity.type === 'channel' ? { channelType: entity.channelType } : {}),
+      ...(entity.type === 'document' && entity.blockParams
+        ? { blockParams: entity.blockParams }
+        : {}),
     },
     attachment: {
       entity_id: entity.id,
@@ -64,11 +68,22 @@ async function createAndOpenChat(seed: {
   /** When set, replaces this split's content in place instead of opening a new split. */
   replaceSplit?: SplitHandle;
 }) {
-  const result = await createChat();
+  const manager = globalSplitManager();
+  if (!seed.replaceSplit && !manager) {
+    toast.failure('Unable to open chat');
+    return false;
+  }
+  let result: Awaited<ReturnType<typeof createChat>>;
+  try {
+    result = await createChat();
+  } catch {
+    toast.failure('Unable to start chat');
+    return false;
+  }
   if ('error' in result || !result.chatId) {
     console.warn('createAndOpenChat: createChat failed', result);
     toast.failure('Unable to start chat');
-    return;
+    return false;
   }
 
   const { message, replaceSplit, ...stored } = seed;
@@ -84,17 +99,18 @@ async function createAndOpenChat(seed: {
   if (replaceSplit) {
     replaceSplit.replace({ next: { type: 'chat', id: result.chatId } });
   } else {
-    globalSplitManager()?.openWithSplit(
+    manager?.openWithSplit(
       { type: 'chat', id: result.chatId },
       { activate: true, preferNewSplit: true }
     );
   }
+  return true;
 }
 
 export async function openChatWithAgent(entity: ChatWithAgentEntity) {
   const { mention, attachment } = buildSeed(entity);
-  const input = chatAttachmentMentionToMarkdown(mention);
-  await createAndOpenChat({ input, attachments: [attachment] });
+  const input = `${chatAttachmentMentionToMarkdown(mention)} `;
+  return createAndOpenChat({ input, attachments: [attachment] });
 }
 
 export async function openChatWithInput(initialInput: string) {
@@ -128,40 +144,49 @@ export async function openChatWithMessageReplacingSplit(
   await createAndOpenChat({ message, replaceSplit: splitHandle });
 }
 
-export function ChatWithAgentButton(props: { entity: ChatWithAgentEntity }) {
-  const [hovering, setHovering] = createSignal(false);
-
+export function ChatWithAgentButton(props: {
+  entity: ChatWithAgentEntity;
+  /** Button text; defaults to "Chat". */
+  label?: string;
+  disabled?: boolean;
+}) {
+  const [opening, setOpening] = createSignal(false);
+  async function open() {
+    if (opening() || props.disabled) return;
+    setOpening(true);
+    try {
+      await openChatWithAgent(props.entity);
+    } finally {
+      setOpening(false);
+    }
+  }
   return (
     <Button
-      tooltip="Chat with Agent"
+      tooltip={props.label ?? 'Chat with Agent'}
       variant="outline"
       size="sm"
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
-      onClick={() => openChatWithAgent(props.entity)}
+      onClick={() => void open()}
+      disabled={props.disabled || opening()}
+      aria-busy={opening()}
       depth={2}
       class="bg-surface"
     >
-      <AnimatedStarIcon triggerAnimation={hovering()} />
-      <span class="text-xs">Chat</span>
+      <AgentIcon />
+      <span class="text-xs">{props.label ?? 'Chat'}</span>
     </Button>
   );
 }
 
 export function AskMacroButton(props: { entity: ChatWithAgentEntity }) {
-  const [hovering, setHovering] = createSignal(false);
-
   return (
     <Button
       onClick={() => openChatWithAgent(props.entity)}
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
       variant="ghost"
       size="sm"
       depth={2}
       class="gap-1.5 rounded-full border border-edge-muted px-2"
     >
-      <AnimatedStarIcon triggerAnimation={hovering()} />
+      <AgentIcon />
       <span class="text-xs font-medium">Ask Macro</span>
     </Button>
   );

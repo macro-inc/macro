@@ -6,11 +6,11 @@ import {
   useListInteractions,
 } from '@app/components/list';
 import {
+  type EntityActionNavigationHandler,
   resolveEntityActionViewContext,
   toEntityActionListState,
   useEntityActionHotkeys,
 } from '@app/features/next-soup/actions';
-import { InboxListEntity } from '@app/features/next-soup/soup-view/views/inbox/InboxListEntity';
 import {
   createSoupEntityActions,
   MaybeSoupEntityActionDrawerManager,
@@ -27,6 +27,7 @@ import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
+import { useChannelsContext } from '@core/context/channels';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   type EntityData,
@@ -34,15 +35,18 @@ import {
   isNonMemberChannelEntity,
   type WithNotification,
 } from '@entity';
-import CaretDownIcon from '@phosphor/caret-down.svg';
+import { getChannelThreadName } from '@entity/utils/channel-thread-name';
 import CheckIcon from '@phosphor/check.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
-import { Button, cn } from '@ui';
+import { createElementSize } from '@solid-primitives/resize-observer';
+import { debounce } from '@solid-primitives/scheduled';
+import { Button } from '@ui';
 import {
   createEffect,
   createMemo,
   createSignal,
   Match,
+  onCleanup,
   type Setter,
   Show,
   Switch,
@@ -67,7 +71,7 @@ import {
   type InboxDataSourceItem,
   useInboxDataSource,
 } from '../queries/use-inbox-query';
-import { useInboxPreview } from '../use-inbox-preview';
+import { HomeListEntity } from './HomeListEntity';
 import { InboxDateGroupHeader } from './InboxDateGroupHeader';
 import { InboxEmptyState } from './InboxEmptyState';
 
@@ -81,8 +85,19 @@ type InboxListActivationMetadata = {
   newSplit?: boolean;
 };
 
-/** Compact Inbox-card list used by the Activity-layout Inbox workspace. */
-export function InboxList() {
+type InboxListProps = {
+  previewEntity: EntityData | undefined;
+  onPreviewEntityChange: (entity: EntityData | undefined) => void;
+  onPreviewActivate?: () => void;
+};
+
+/** Compact notification list used by the Notifications workspace. */
+export function InboxList(props: InboxListProps) {
+  const channels = useChannelsContext();
+  const channelName = (entity: WithNotification<EntityData>) =>
+    entity.type === 'channel_thread'
+      ? getChannelThreadName(entity, channels.channelsById())
+      : undefined;
   const { state } = useInboxView();
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
@@ -98,7 +113,7 @@ export function InboxList() {
       selection: {
         getKey: (row) => (row.kind === 'entity' ? row.entity.id : row.id),
       },
-      isNavigable: (row) => row.kind === 'entity' || row.kind === 'load-more',
+      isNavigable: (row) => row.kind === 'entity',
       isSelectable: (row) => row.kind === 'entity',
       onActivate,
     })
@@ -120,18 +135,6 @@ export function InboxList() {
     });
   });
 
-  const preview = useInboxPreview({
-    controller: list,
-    handle: panel.handle,
-    onPreview: (entity) => {
-      void openEntity(entity, {
-        newSplit: false,
-        replacePair: false,
-        mergeHistory: true,
-      });
-    },
-  });
-
   const { buildActionGroups } = createSoupEntityActions();
   const entityActionViewContext = () =>
     resolveEntityActionViewContext({
@@ -143,43 +146,53 @@ export function InboxList() {
     item,
     metadata,
   }: ListActivation<InboxDataSourceItem, InboxListActivationMetadata>) {
-    if (item.kind === 'load-more') {
-      if (!item.isLoading) void source.loadMore();
-
-      return;
-    }
-
     if (item.kind !== 'entity') return;
 
     const sourceRow = source.items().find((row) => row.id === item.id);
 
     if (sourceRow?.kind !== 'entity') return;
 
+    previewAfterNavigation.clear();
+
     const newSplit =
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
 
-    preview.cancel();
+    if (!isTouchDevice() && !newSplit) {
+      markEntitySeen(sourceRow.entity);
+      showPreview(sourceRow.entity);
+      props.onPreviewActivate?.();
+      return;
+    }
 
     void openEntity(sourceRow.entity, {
       event: metadata?.event,
       newSplit,
-      replacePair: metadata?.event?.altKey === true && !newSplit,
     });
   }
+
+  function markEntitySeen(entity: WithNotification<EntityData>) {
+    markReminderSeenOnOpen(entity, notificationSource);
+    if (!isNonMemberChannelEntity(entity)) {
+      markChannelNotificationsSeenOnOpen(entity, notificationSource);
+    }
+  }
+
+  function showPreview(entity: WithNotification<EntityData>) {
+    props.onPreviewEntityChange(entity);
+  }
+
+  const previewAfterNavigation = debounce(showPreview, 150);
+  onCleanup(() => previewAfterNavigation.clear());
 
   async function openEntity(
     entity: WithNotification<EntityData>,
     options: {
       event?: MouseEvent;
       newSplit: boolean;
-      replacePair: boolean;
       mergeHistory?: boolean;
     }
   ) {
-    markReminderSeenOnOpen(entity, notificationSource);
-    if (!isNonMemberChannelEntity(entity)) {
-      markChannelNotificationsSeenOnOpen(entity, notificationSource);
-    }
+    markEntitySeen(entity);
 
     const finishTouchHighlight = options.event
       ? persistSoupNavigationTouchHighlight(options.event)
@@ -188,7 +201,6 @@ export function InboxList() {
     try {
       await openEntityInSplitFromUnifiedList(entity, {
         openInNewSplit: options.newSplit,
-        replacePreview: options.replacePair,
         splitHandle: panel.handle,
         referredFrom: 'inbox',
         mergeHistory: options.mergeHistory,
@@ -199,6 +211,8 @@ export function InboxList() {
   }
 
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
+  const [topSpacer, setTopSpacer] = createSignal<HTMLDivElement>();
+  const topSpacerSize = createElementSize(topSpacer);
   const [emptyViewport, setEmptyViewport] = createSignal<HTMLDivElement>();
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
   const [isPullRefreshing, setIsPullRefreshing] = createSignal(false);
@@ -257,10 +271,40 @@ export function InboxList() {
     return row?.kind === 'entity' ? row.entity : undefined;
   };
 
+  const createActionNavigationHandler = ():
+    | EntityActionNavigationHandler
+    | undefined => {
+    if (props.previewEntity === undefined) return;
+
+    return ({ entity }) => {
+      previewAfterNavigation.clear();
+      props.onPreviewEntityChange(entity);
+    };
+  };
+
   let listRoot: HTMLDivElement | undefined;
+  const [collapseRow, setCollapseRow] =
+    createSignal<(rowId: string) => Promise<void>>();
+
   const actionState = toEntityActionListState({
     controller: list,
     getEntity: (row) => (row.kind === 'entity' ? row.entity : undefined),
+    collapse: {
+      enabled: isTouchDevice,
+      run: async (entityId) => {
+        const collapse = collapseRow();
+        if (!collapse) return;
+
+        // Actions target entities; swipe rows are keyed by notification occurrence.
+        await Promise.all(
+          rows().flatMap((row) =>
+            row.kind === 'entity' && row.entity.id === entityId
+              ? [collapse(row.id)]
+              : []
+          )
+        );
+      },
+    },
     onFocus: (target) => {
       if (target) {
         virtualizer()?.scrollToIndex(target.index, { align: 'nearest' });
@@ -277,9 +321,11 @@ export function InboxList() {
     enabled: panel.isPanelActive,
     navigation: {
       onNavigate: (event) => {
+        previewAfterNavigation.clear();
+
         const row = event.result?.item;
-        if (row?.kind === 'entity') {
-          preview.request(row.entity);
+        if (!isTouchDevice() && row?.kind === 'entity') {
+          previewAfterNavigation(row.entity);
         }
 
         if (event.kind !== 'move' || event.direction !== 1) return;
@@ -301,6 +347,7 @@ export function InboxList() {
   });
 
   useEntityActionHotkeys({
+    enableDeleteHotkey: false,
     scopeId: panel.splitHotkeyScope,
     list: actionState,
     selectedEntities,
@@ -308,6 +355,7 @@ export function InboxList() {
     restoreFocus: () => listRoot?.focus(),
     viewContext: entityActionViewContext,
     splitHandle: panel.handle,
+    createActionNavigationHandler,
     condition: panel.isPanelActive,
   });
 
@@ -318,6 +366,7 @@ export function InboxList() {
       viewContext: entityActionViewContext(),
       viewedProjectId: viewedProjectIdFromContent(content),
       splitHandle: panel.handle,
+      createActionNavigationHandler,
     });
   }
 
@@ -367,10 +416,9 @@ export function InboxList() {
     if (nextTab === activeTab) return;
 
     activeTab = nextTab;
-    preview.cancel();
+    previewAfterNavigation.clear();
     listInteractions.selection.clear();
     list.focus.clear({ reason: 'programmatic' });
-    panel.handle.resetPreview();
     setPersistedListState((current) => ({ ...current, scrollOffset: 0 }));
   });
 
@@ -380,47 +428,70 @@ export function InboxList() {
 
     if (list.focus.result()) return;
 
-    const restored = list.focus.restore(list.focus.requestedKey(), {
+    list.focus.restore(list.focus.requestedKey(), {
       retainUnavailable: false,
-    });
-    if (restored) return;
-    if (isTouchDevice()) return;
-    if (panel.handle.isControllerSplit()) {
-      panel.handle.resetPreview();
-      return;
-    }
-
-    list.focus.first({
-      isNavigable: (row) => row.kind === 'entity',
-      reason: 'restore',
     });
   });
 
   function checkNearEnd() {
-    const handle = virtualizer();
-    if (!handle) return;
+    if (
+      forceEmptyState() ||
+      source.isLoading() ||
+      source.isFetching() ||
+      source.error() ||
+      !source.hasMore()
+    )
+      return;
 
-    if (!source.hasMore()) return;
+    const container = pullScrollContainer();
+    if (!container || container.clientHeight === 0) return;
 
     const distance =
-      handle.scrollSize - handle.scrollOffset - handle.viewportSize;
-    if (distance < 300 && !source.isLoadingMore()) {
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+    if (distance < 300) {
       void source.loadMore();
     }
   }
+
+  const scrollContainerSize = createElementSize(pullScrollContainer);
+  createEffect(() => {
+    rows();
+    source.isFetching();
+    scrollContainerSize.height;
+
+    // Fill short or filtered pages without waiting for a scroll event.
+    const frame = requestAnimationFrame(checkNearEnd);
+    onCleanup(() => cancelAnimationFrame(frame));
+  });
 
   return (
     <MaybeSoupEntityActionDrawerManager>
       <div
         ref={listRoot}
         role="grid"
-        aria-label="Inbox"
+        aria-label="Home"
         aria-multiselectable="true"
         aria-activedescendant={list.focus.key()}
         tabIndex={0}
-        class="soup-list relative mt-3 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden outline-none"
-        style={{ '--mobile-content-inset-top': '0px' }}
+        class="soup-list relative mt-3 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden outline-none touch:mt-0"
       >
+        <Show when={source.warning()}>
+          {(warning) => (
+            <div
+              role="status"
+              class="flex items-center gap-2 px-4 pb-2 text-xs text-ink-muted"
+            >
+              <span>{warning()}</span>
+              <button
+                type="button"
+                class="underline"
+                onClick={() => void source.refresh()}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+        </Show>
         <PullToRefresh
           scrollContainer={pullScrollContainer}
           onRefresh={pullRefresh}
@@ -428,6 +499,7 @@ export function InboxList() {
 
         <SwipableRowProvider
           container={viewport}
+          setCollapseEntity={setCollapseRow}
           canSwipeLeft={(rowId) => {
             const row = swipeRowsById().get(rowId);
             return row ? markDoneActionFor(row) !== undefined : false;
@@ -449,9 +521,9 @@ export function InboxList() {
                 !forceEmptyState() && source.isLoading() && !isPullRefreshing()
               }
             >
-              <div class="grid min-h-0 flex-1 place-items-center text-ink-muted">
+              <div class="grid min-h-0 flex-1 place-items-center text-ink-muted touch:pt-(--mobile-content-inset-top)">
                 <SpinnerIcon
-                  aria-label="Loading inbox"
+                  aria-label="Loading Home"
                   class="size-5 animate-spin"
                 />
               </div>
@@ -460,9 +532,9 @@ export function InboxList() {
             <Match when={!forceEmptyState() && source.error()}>
               <div
                 ref={setEmptyViewport}
-                class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-y-auto pb-[max(1rem,var(--mobile-content-inset-bottom,0px))] text-sm text-ink-muted"
+                class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-y-auto pb-[max(1rem,var(--mobile-content-inset-bottom,0px))] touch:pt-(--mobile-content-inset-top) text-sm text-ink-muted"
               >
-                <span>Inbox couldn’t be loaded.</span>
+                <span>Home couldn’t be loaded.</span>
                 <Button
                   variant="outline"
                   size="sm"
@@ -489,17 +561,26 @@ export function InboxList() {
                   soupNavigationTouchHighlight(element);
                 }}
                 class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto overscroll-none pb-[max(0.5rem,var(--mobile-content-inset-bottom,0px))]"
+                onScroll={checkNearEnd}
               >
+                {/* The spacer scrolls away; the viewport stays behind the filters. */}
+                <div
+                  ref={setTopSpacer}
+                  aria-hidden="true"
+                  class="h-0 touch:h-(--mobile-content-inset-top)"
+                />
                 <Virtualizer
                   ref={registerVirtualizer}
                   data={rows()}
                   scrollRef={viewport()}
+                  startMargin={
+                    isTouchDevice() ? (topSpacerSize.height ?? 0) : 0
+                  }
                   bufferSize={500}
-                  itemSize={88}
+                  itemSize={36}
                   keepMounted={
                     list.focus.index() >= 0 ? [list.focus.index()] : undefined
                   }
-                  onScroll={checkNearEnd}
                 >
                   {(row) => (
                     <Switch>
@@ -534,9 +615,14 @@ export function InboxList() {
                               data-soup-entity
                             >
                               <div role="gridcell">
-                                <InboxListEntity
-                                  class="mx-0 w-full border-b border-edge touch:border-b-0"
-                                  cardClass="rounded-none px-4 py-3"
+                                <HomeListEntity
+                                  channelName={channelName(entityRow().entity)}
+                                  timestamp={
+                                    state.tab === 'signal'
+                                      ? entityRow().entity.sortTs
+                                      : (entityRow().entity.notifiedAt ??
+                                        entityRow().entity.sortTs)
+                                  }
                                   entity={entityRow().entity}
                                   occurrenceKey={entityRow().id}
                                   checked={list.selection.isSelected(
@@ -547,7 +633,6 @@ export function InboxList() {
                                     !isTouchDevice() &&
                                     list.focus.key() === entityRow().id
                                   }
-                                  focusable={false}
                                   entityRowConfig={{
                                     swipeLeftColor: 'bg-success',
                                     swipeLeftRevealedComponent: (
@@ -576,47 +661,6 @@ export function InboxList() {
                               </div>
                             </div>
                           </SoupEntityContextMenu>
-                        )}
-                      </Match>
-                      <Match when={row.kind === 'load-more' ? row : undefined}>
-                        {(loadMore) => (
-                          <div id={loadMore().id} role="row">
-                            <div
-                              role="gridcell"
-                              aria-busy={loadMore().isLoading}
-                              class={cn(
-                                'flex min-h-12 items-center justify-center',
-                                !isTouchDevice() &&
-                                  list.focus.key() === loadMore().id &&
-                                  'bg-active/60'
-                              )}
-                              onClick={() =>
-                                list.activate.key(loadMore().id, {
-                                  reason: 'pointer',
-                                })
-                              }
-                            >
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                depth={2}
-                                disabled={loadMore().isLoading}
-                                class="bg-surface"
-                              >
-                                <Show
-                                  when={!loadMore().isLoading}
-                                  fallback={
-                                    <SpinnerIcon class="size-3 animate-spin" />
-                                  }
-                                >
-                                  <CaretDownIcon class="size-2.5" />
-                                </Show>
-                                {loadMore().isLoading
-                                  ? 'Loading...'
-                                  : 'Load More'}
-                              </Button>
-                            </div>
-                          </div>
                         )}
                       </Match>
                     </Switch>

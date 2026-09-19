@@ -3,8 +3,14 @@
 #[cfg(test)]
 mod test;
 
+#[cfg(feature = "explain_binary")]
+use crate::{
+    domain::models::AccessGrant, outbound::pg_access_repo::queries::list_entity_access_grants,
+};
 use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::SourceIds};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+#[cfg(feature = "explain_binary")]
+use model_entity::EntityType;
 use sqlx::PgPool;
 use std::str::FromStr;
 
@@ -114,6 +120,50 @@ pub async fn get_document_access(
                         AND thread_access.source_id = ANY($2)
                   )
               )
+
+            UNION ALL
+            -- Source 4: a file attached to a document discussion is visible to
+            -- current viewers of that document. Removing the attachment, the
+            -- discussion, or the parent grant removes this path; it never
+            -- shares the parent itself.
+            SELECT 'view' AS access_level
+            FROM comms_attachments a
+            JOIN comms_messages m ON m.id = a.message_id
+            JOIN comms_message_threads mt ON mt.root_id = COALESCE(m.thread_id, m.id)
+            JOIN "Document" parent_doc
+              ON m.parent_entity_type = 'document' AND parent_doc.id = m.parent_entity_id
+            LEFT JOIN "DocumentPermission" dp ON dp."documentId" = parent_doc.id
+            LEFT JOIN "SharePermission" sp ON sp.id = dp."sharePermissionId"
+            WHERE a.entity_type = 'document'
+              AND a.entity_id = $3
+              AND m.deleted_at IS NULL
+              AND mt.deleted_at IS NULL
+              AND parent_doc."deletedAt" IS NULL
+              AND (
+                  parent_doc.owner = $4
+                  OR EXISTS (
+                      SELECT 1
+                      FROM entity_access pa
+                      WHERE pa.entity_type = 'document'
+                        AND pa.entity_id::text = parent_doc.id
+                        AND pa.source_id = ANY($2)
+                  )
+                  OR (
+                      sp."linkShareAccessLevel" IS NOT NULL
+                      AND (
+                          sp."linkShare" = 'PUBLIC'
+                          OR (
+                              sp."linkShare" = 'TEAM'
+                              AND EXISTS (
+                                  SELECT 1
+                                  FROM team_user tu
+                                  WHERE tu.user_id = parent_doc.owner
+                                    AND tu.team_id::text = ANY($2)
+                              )
+                          )
+                      )
+                  )
+              )
         ) AS combined_access
         "#,
         document_id,
@@ -130,4 +180,222 @@ pub async fn get_document_access(
         .max();
 
     Ok(highest_level)
+}
+
+#[cfg(feature = "explain_binary")]
+#[tracing::instrument(err, skip(pool, source_ids))]
+pub async fn explain_document_access(
+    pool: &PgPool,
+    document_id: &uuid::Uuid,
+    source_ids: &SourceIds,
+    user_id: Option<&MacroUserId<Lowercase<'_>>>,
+) -> Result<Vec<AccessGrant>, sqlx::Error> {
+    let mut grants =
+        list_entity_access_grants(pool, document_id, EntityType::Document, source_ids).await?;
+    grants.extend(explain_document_link_shares(pool, document_id, source_ids).await?);
+
+    if let Some(user_id) = user_id {
+        grants.extend(
+            explain_document_email_attachments(pool, document_id, source_ids, user_id).await?,
+        );
+    }
+
+    Ok(grants)
+}
+
+#[cfg(feature = "explain_binary")]
+async fn explain_document_link_shares(
+    pool: &PgPool,
+    document_id: &uuid::Uuid,
+    source_ids: &SourceIds,
+) -> Result<Vec<AccessGrant>, sqlx::Error> {
+    let document_id_str = document_id.to_string();
+    let mut grants = Vec::new();
+
+    let public_levels = sqlx::query_scalar!(
+        r#"
+        SELECT
+            share_permission."linkShareAccessLevel" AS "access_level!: AccessLevel"
+        FROM "SharePermission" share_permission
+        JOIN "DocumentPermission" document_permission
+          ON document_permission."sharePermissionId" = share_permission.id
+        WHERE share_permission."linkShare" = 'PUBLIC'
+          AND share_permission."linkShareAccessLevel" IS NOT NULL
+          AND document_permission."documentId" = $1
+        "#,
+        &document_id_str
+    )
+    .fetch_all(pool)
+    .await?;
+
+    grants.extend(
+        public_levels
+            .into_iter()
+            .map(|access_level| AccessGrant::PublicLink { access_level }),
+    );
+
+    if source_ids.0.is_empty() {
+        return Ok(grants);
+    }
+
+    let team_rows = sqlx::query!(
+        r#"
+        SELECT
+            share_permission."linkShareAccessLevel" AS "access_level!: AccessLevel",
+            owner_team.team_id AS "owner_team_id!"
+        FROM "Document" document
+        JOIN "DocumentPermission" document_permission
+          ON document_permission."documentId" = document.id
+        JOIN "SharePermission" share_permission
+          ON share_permission.id = document_permission."sharePermissionId"
+        JOIN team_user owner_team
+          ON owner_team.user_id = document.owner
+         AND owner_team.team_id::text = ANY($2)
+        WHERE document.id = $1
+          AND share_permission."linkShare" = 'TEAM'
+          AND share_permission."linkShareAccessLevel" IS NOT NULL
+        "#,
+        &document_id_str,
+        &source_ids.0,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    grants.extend(team_rows.into_iter().map(|row| AccessGrant::TeamLink {
+        access_level: row.access_level,
+        owner_team_id: row.owner_team_id,
+    }));
+
+    Ok(grants)
+}
+
+#[cfg(feature = "explain_binary")]
+async fn explain_document_email_attachments(
+    pool: &PgPool,
+    document_id: &uuid::Uuid,
+    source_ids: &SourceIds,
+    user_id: &MacroUserId<Lowercase<'_>>,
+) -> Result<Vec<AccessGrant>, sqlx::Error> {
+    let user_id_str = user_id.as_ref();
+    let rows = sqlx::query!(
+        r#"
+        SELECT
+            t.id AS thread_id,
+            CASE
+                WHEN l.macro_id = $3 THEN 'inbox_owner'
+                WHEN EXISTS (
+                    SELECT 1
+                    FROM macro_user_links mul
+                    WHERE mul.link_id = l.id
+                      AND mul.primary_macro_id = $3
+                ) THEN 'inbox_delegate'
+                ELSE 'thread_grant'
+            END AS "reason!"
+        FROM document_email de
+        JOIN email_attachments ea ON ea.id = de.email_attachment_id
+        JOIN email_messages em ON em.id = ea.message_id
+        JOIN email_threads t ON t.id = em.thread_id
+        JOIN email_links l ON l.id = t.link_id
+        WHERE de.document_id = $1
+          AND (
+              l.macro_id = $3
+              OR EXISTS (
+                  SELECT 1
+                  FROM macro_user_links mul
+                  WHERE mul.link_id = l.id
+                    AND mul.primary_macro_id = $3
+              )
+              OR EXISTS (
+                  SELECT 1
+                  FROM entity_access thread_access
+                  WHERE thread_access.entity_id = t.id
+                    AND thread_access.entity_type = 'email_thread'
+                    AND thread_access.source_id = ANY($2)
+              )
+          )
+        "#,
+        &document_id.to_string(),
+        &source_ids.0,
+        user_id_str,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .filter_map(|row| {
+            AccessGrant::email_attachment_reason(&row.reason).map(|reason| {
+                AccessGrant::EmailAttachmentThread {
+                    thread_id: row.thread_id,
+                    reason,
+                }
+            })
+        })
+        .collect())
+}
+
+/// Historical document ids are not UUIDs and cannot occur in `entity_access`
+/// rows. Their ownership, link grants, channel grants, and project grants still
+/// live in the ordinary document and share tables.
+#[tracing::instrument(err, skip(pool, source_ids))]
+pub async fn get_legacy_document_access(
+    pool: &PgPool,
+    document_id: &str,
+    source_ids: &SourceIds,
+    user_id: Option<&MacroUserId<Lowercase<'_>>>,
+) -> Result<Option<AccessLevel>, sqlx::Error> {
+    let levels = sqlx::query_scalar!(
+        r#"
+        WITH RECURSIVE parent_projects AS (
+            SELECT p.id, p."parentId", p."userId"
+            FROM "Project" p
+            JOIN "Document" d ON d."projectId" = p.id
+            WHERE d.id = $1 AND d."deletedAt" IS NULL AND p."deletedAt" IS NULL
+            UNION
+            SELECT p.id, p."parentId", p."userId"
+            FROM "Project" p
+            JOIN parent_projects child ON p.id = child."parentId"
+            WHERE p."deletedAt" IS NULL
+        ), document_permissions AS (
+            SELECT d.owner, sp.id, sp."linkShare", sp."linkShareAccessLevel"
+            FROM "Document" d
+            LEFT JOIN "DocumentPermission" dp ON dp."documentId" = d.id
+            LEFT JOIN "SharePermission" sp ON sp.id = dp."sharePermissionId"
+            WHERE d.id = $1 AND d."deletedAt" IS NULL
+        )
+        SELECT 'owner'::text AS "level!" FROM document_permissions WHERE owner = $2
+        UNION ALL
+        SELECT "linkShareAccessLevel"::text FROM document_permissions p
+        WHERE "linkShareAccessLevel" IS NOT NULL
+          AND (
+              "linkShare" = 'PUBLIC'
+              OR (
+                  "linkShare" = 'TEAM'
+                  AND EXISTS (
+                      SELECT 1 FROM team_user t
+                      WHERE t.user_id = p.owner AND t.team_id::text = ANY($3)
+                  )
+              )
+          )
+        UNION ALL
+        SELECT c.access_level::text FROM document_permissions p
+        JOIN "ChannelSharePermission" c ON c.share_permission_id = p.id
+        WHERE c.channel_id = ANY($3)
+        UNION ALL
+        SELECT 'edit'::text FROM parent_projects WHERE "userId" = $2
+        UNION ALL
+        SELECT a.access_level::text FROM entity_access a
+        JOIN parent_projects p ON a.entity_id::text = p.id
+        WHERE a.entity_type = 'project' AND a.source_id = ANY($3)
+        "#,
+        document_id,
+        user_id.map(AsRef::as_ref),
+        &source_ids.0,
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(levels
+        .iter()
+        .filter_map(|level| AccessLevel::from_str(level).ok())
+        .max())
 }

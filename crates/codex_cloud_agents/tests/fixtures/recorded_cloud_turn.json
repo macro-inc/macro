@@ -1,0 +1,207 @@
+[
+  {
+    "id": "recorded-id-1",
+    "method": "turn/started",
+    "params": {
+      "threadId": "recorded-id-2",
+      "turn": {
+        "error": null,
+        "id": "recorded-id-3",
+        "items": [],
+        "itemsView": "notLoaded",
+        "startedAt": 1000,
+        "status": "inProgress"
+      }
+    }
+  },
+  {
+    "id": "recorded-id-4",
+    "method": "item/completed",
+    "params": {
+      "completedAtMs": 1000,
+      "item": {
+        "clientId": null,
+        "content": [
+          {
+            "text": "Please inspect the example repository read-only.",
+            "text_elements": [],
+            "type": "text"
+          }
+        ],
+        "id": "recorded-id-5",
+        "type": "userMessage"
+      },
+      "threadId": "recorded-id-2",
+      "turnId": "recorded-id-3"
+    }
+  },
+  {
+    "id": "recorded-id-6",
+    "method": "item/completed",
+    "params": {
+      "completedAtMs": 1000,
+      "item": {
+        "aggregatedOutput": "safe-output\n",
+        "command": "printf \"safe-output\\n\"",
+        "commandActions": [
+          {
+            "command": "printf \"safe-output\\n\"",
+            "type": "unknown"
+          }
+        ],
+        "cwd": "/workspace/example",
+        "durationMs": 1000,
+        "exitCode": 0,
+        "id": "recorded-id-7",
+        "processId": "recorded-id-8",
+        "source": "unifiedExecStartup",
+        "status": "completed",
+        "type": "commandExecution"
+      },
+      "threadId": "recorded-id-2",
+      "turnId": "recorded-id-3"
+    }
+  },
+  {
+    "id": "recorded-id-9",
+    "method": "item/agentMessage/delta",
+    "params": {
+      "delta": "Safe text. ",
+      "itemId": "recorded-id-10",
+      "threadId": "recorded-id-2",
+      "turnId": "recorded-id-3"
+    }
+  },
+  {
+    "id": "recorded-id-11",
+    "method": "item/agentMessage/delta",
+    "params": {
+      "delta": "Safe text. ",
+      "itemId": "recorded-id-10",
+      "threadId": "recorded-id-2",
+      "turnId": "recorded-id-3"
+    }
+  },
+  {
+    "id": "recorded-id-12",
+    "method": "item/agentMessage/delta",
+    "params": {
+      "delta": "Safe text. ",
+      "itemId": "recorded-id-10",
+      "threadId": "recorded-id-2",
+      "turnId": "recorded-id-3"
+    }
+  },
+  {
+    "id": "recorded-id-13",
+    "method": "item/agentMessage/delta",
+    "params": {
+      "delta": "Safe text. ",
+      "itemId": "recorded-id-10",
+      "threadId": "recorded-id-2",
+      "turnId": "recorded-id-3"
+    }
+  },
+  {
+    "id": "recorded-id-14",
+    "method": "item/agentMessage/delta",
+    "params": {
+      "delta": "Safe text. ",
+      "itemId": "recorded-id-10",
+      "threadId": "recorded-id-2",
+      "turnId": "recorded-id-3"
+    }
+  },
+  {
+    "id": "recorded-id-15",
+    "method": "item/agentMessage/delta",
+    "params": {
+      "delta": "Safe text. ",
+      "itemId": "recorded-id-10",
+      "threadId": "recorded-id-2",
+      "turnId": "recorded-id-3"
+    }
+  },
+  {
+    "id": "recorded-id-16",
+    "method": "item/agentMessage/delta",
+    "params": {
+      "delta": "Safe text. ",
+      "itemId": "recorded-id-10",
+      "threadId": "recorded-id-2",
+      "turnId": "recorded-id-3"
+    }
+  },
+  {
+    "id": "recorded-id-17",
+    "method": "item/agentMessage/delta",
+    "params": {
+      "delta": "Safe text. ",
+      "itemId": "recorded-id-10",
+      "threadId": "recorded-id-2",
+      "turnId": "recorded-id-3"
+    }
+  },
+  {
+    "id": "recorded-id-18",
+    "method": "item/agentMessage/delta",
+    "params": {
+      "delta": "Safe text. ",
+      "itemId": "recorded-id-10",
+      "threadId": "recorded-id-2",
+      "turnId": "recorded-id-3"
+    }
+  },
+  {
+    "id": "recorded-id-19",
+    "method": "item/agentMessage/delta",
+    "params": {
+      "delta": "Safe text. ",
+      "itemId": "recorded-id-10",
+      "threadId": "recorded-id-2",
+      "turnId": "recorded-id-3"
+    }
+  },
+  {
+    "id": "recorded-id-20",
+    "method": "item/agentMessage/delta",
+    "params": {
+      "delta": "Safe text. ",
+      "itemId": "recorded-id-10",
+      "threadId": "recorded-id-2",
+      "turnId": "recorded-id-3"
+    }
+  },
+  {
+    "id": "recorded-id-21",
+    "method": "item/completed",
+    "params": {
+      "completedAtMs": 1000,
+      "item": {
+        "id": "recorded-id-10",
+        "phase": "final_answer",
+        "text": "Safe text. Safe text. Safe text. Safe text. Safe text. Safe text. Safe text. Safe text. Safe text. Safe text. Safe text. ",
+        "type": "agentMessage"
+      },
+      "threadId": "recorded-id-2",
+      "turnId": "recorded-id-3"
+    }
+  },
+  {
+    "id": "recorded-id-22",
+    "method": "turn/completed",
+    "params": {
+      "threadId": "recorded-id-2",
+      "turn": {
+        "completedAt": 1000,
+        "durationMs": 1000,
+        "error": null,
+        "id": "recorded-id-3",
+        "items": [],
+        "itemsView": "notLoaded",
+        "startedAt": 1000,
+        "status": "completed"
+      }
+    }
+  }
+]

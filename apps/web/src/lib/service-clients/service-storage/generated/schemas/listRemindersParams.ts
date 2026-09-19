@@ -4,17 +4,17 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ListRemindersEntityType } from './listRemindersEntityType';
+import type { ListRemindersEntityTypeItem } from './listRemindersEntityTypeItem';
 
 export type ListRemindersParams = {
   /**
-   * The type of an entity in Macro
+   * Restrict to reminders attached to an entity of these types.
    */
-  entityType?: ListRemindersEntityType;
+  entityType?: ListRemindersEntityTypeItem[];
   /**
-   * Restrict to reminders attached to this entity id. Requires `entityType`.
+   * Restrict to reminders attached to these entity ids.
    */
-  entityId?: string;
+  entityId?: string[];
   /**
    * Include reminders that have already fired.
    */

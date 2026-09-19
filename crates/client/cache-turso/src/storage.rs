@@ -4,6 +4,10 @@ use crate::{PhysicalResetReason, TursoStorageError};
 use cache_core::codec::{
     cache_namespace, decode_record, decode_record_updates, encode_record, encode_record_updates,
 };
+use cache_core::predicate::reconciliation::{
+    PredicateBaselineEntry, PredicateReconciliation, predicate_membership,
+    reconcile_predicate_baseline,
+};
 use cache_core::predicate::{
     OptimisticShadowReconciliation, OptimisticUpsertReconciliation, PredicateIndexStorage,
     PredicateQueryResult, ProjectionIncompleteKind, ProjectionMutation, ProjectionState,
@@ -91,8 +95,15 @@ const CREATE_SCHEMA: [&str; 28] = [
 const RECORD_GET: &str = "SELECT value FROM records WHERE __typename = ?1 AND id = ?2";
 const RECORD_UPSERT: &str = "INSERT INTO records (__typename, id, value) VALUES (?1, ?2, ?3) ON CONFLICT (__typename, id) DO UPDATE SET value = excluded.value";
 const RECORD_DELETE: &str = "DELETE FROM records WHERE __typename = ?1 AND id = ?2";
-const SEARCH_DELETE: &str = "DELETE FROM search_documents WHERE __typename = ?1 AND id = ?2";
+// Turso otherwise chooses the browse index's profile prefix for a direct composite-key delete.
+// Force a point lookup through the existing primary-key index, then delete by its rowid.
+const SEARCH_ROWID: &str = "SELECT rowid FROM search_documents INDEXED BY sqlite_autoindex_search_documents_1 WHERE profile = ? AND __typename = ? AND id = ?";
+const SEARCH_DELETE: &str = "DELETE FROM search_documents WHERE rowid = ?1";
 const SEARCH_UPSERT: &str = "INSERT INTO search_documents (profile, __typename, id, bucket, search_text, timestamp_ms, source_hash) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) ON CONFLICT (profile, __typename, id) DO UPDATE SET bucket = excluded.bucket, search_text = excluded.search_text, timestamp_ms = excluded.timestamp_ms, source_hash = excluded.source_hash";
+const SEARCH_UPSERT_PREFIX: &str = "INSERT INTO search_documents (profile, __typename, id, bucket, search_text, timestamp_ms, source_hash) VALUES ";
+const SEARCH_UPSERT_ROW: &str = "(?, ?, ?, ?, ?, ?, ?)";
+const SEARCH_UPSERT_SUFFIX: &str = " ON CONFLICT (profile, __typename, id) DO UPDATE SET bucket = excluded.bucket, search_text = excluded.search_text, timestamp_ms = excluded.timestamp_ms, source_hash = excluded.source_hash";
+const SEARCH_WRITE_BATCH_SIZE: usize = 100;
 const SEARCH_LOAD: &str = "SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash FROM search_documents WHERE profile = ?1";
 const SEARCH_BROWSE: &str = "SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash FROM search_documents INDEXED BY search_documents_browse_idx WHERE profile = ?1 AND bucket = ?2 ORDER BY timestamp_ms DESC, __typename ASC, id ASC LIMIT ?3";
 const SEARCH_BROWSE_AFTER: &str = "SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash FROM search_documents INDEXED BY search_documents_browse_idx WHERE profile = ?1 AND bucket = ?2 AND (timestamp_ms < ?3 OR (timestamp_ms = ?3 AND (__typename > ?4 OR (__typename = ?4 AND id > ?5)))) ORDER BY timestamp_ms DESC, __typename ASC, id ASC LIMIT ?6";
@@ -858,7 +869,8 @@ impl Storage for TursoStorage {
             let connection = self.connection();
             driver::write_transaction(&connection, || {
                 let mut record_statement = driver::prepare(&connection, RECORD_DELETE)?;
-                let mut search_statement = driver::prepare(&connection, SEARCH_DELETE)?;
+                let mut search_rowid_statement = driver::prepare(&connection, SEARCH_ROWID)?;
+                let mut search_delete_statement = driver::prepare(&connection, SEARCH_DELETE)?;
                 for (index, key) in keys.iter().enumerate() {
                     let changed = driver::execute_prepared(
                         &mut record_statement,
@@ -867,13 +879,12 @@ impl Storage for TursoStorage {
                     if !(0..=1).contains(&changed) {
                         return Err(invariant());
                     }
-                    let search_changed = driver::execute_prepared(
-                        &mut search_statement,
-                        vec![text(&key.typename), text(&key.id)],
+                    delete_search_document(
+                        &mut search_rowid_statement,
+                        &mut search_delete_statement,
+                        SearchProfile::QuickAccessV1,
+                        key,
                     )?;
-                    if search_changed < 0 {
-                        return Err(invariant());
-                    }
                     self.fault_after(TestFaultSite::Delete, index)?;
                 }
                 Ok(())
@@ -1407,10 +1418,82 @@ impl Storage for TursoStorage {
 }
 
 impl PredicateIndexStorage for TursoStorage {
+    async fn reconcile_predicate_index(
+        &self,
+        query: &ValidatedIndexQuery,
+        baseline: &[PredicateBaselineEntry],
+    ) -> Result<PredicateReconciliation, Self::Error> {
+        self.require_healthy()?;
+        let connection = self.connection();
+        let result = driver::read_transaction(&connection, || {
+            let optimistic = optimistic_query_status(&connection, query)?;
+            // Incomplete authority and unknown shadows are not candidates, but
+            // they must not prevent unrelated known-good rows from updating.
+            let (sql, parameters) =
+                compile_predicate_selection(query, &optimistic.uncertain_ids, true);
+            let candidates = driver::query(&connection, &sql, parameters)?
+                .into_iter()
+                .map(|row| {
+                    if row.len() != 2 {
+                        return Err(invariant());
+                    }
+                    Ok(predicate_index::ReferenceHit {
+                        record_key: PredicateRecordKey::new(required_text(&row, 0)?)
+                            .map_err(|_| invariant())?,
+                        sort_value: required_i64(&row, 1)?,
+                    })
+                })
+                .collect::<Result<Vec<_>, TursoStorageError>>()?;
+            let keys: Vec<_> = baseline
+                .iter()
+                .map(|entry| entry.record_key.clone())
+                .collect();
+            let authority = load_projection_states(&connection, &keys)?;
+            let shadows = load_optimistic_projections(&connection, &keys)?;
+            let present = present_predicate_records(&connection, &keys)?;
+            let membership =
+                keys.iter()
+                    .zip(&authority)
+                    .zip(&shadows)
+                    .map(|((key, authority), shadow)| {
+                        predicate_membership(
+                            query,
+                            authority.as_ref(),
+                            shadow.as_ref(),
+                            present.contains(key),
+                        )
+                    });
+            Ok(reconcile_predicate_baseline(
+                query,
+                baseline,
+                membership,
+                candidates,
+                optimistic.has_shadow,
+            ))
+        });
+        self.latch_result(result)
+    }
+
     async fn delete_batch_with_projections(
         &mut self,
         keys: &[EntityKey<'static>],
         projection_keys: &[PredicateRecordKey],
+    ) -> Result<(), Self::Error> {
+        self.delete_batch_with_projection_changes(
+            keys,
+            projection_keys
+                .iter()
+                .cloned()
+                .map(ProjectionMutation::Delete)
+                .collect(),
+        )
+        .await
+    }
+
+    async fn delete_batch_with_projection_changes(
+        &mut self,
+        keys: &[EntityKey<'static>],
+        projections: Vec<ProjectionMutation>,
     ) -> Result<(), Self::Error> {
         self.require_healthy()?;
         let result = (|| {
@@ -1421,7 +1504,8 @@ impl PredicateIndexStorage for TursoStorage {
             let connection = self.connection();
             driver::write_transaction(&connection, || {
                 let mut record_statement = driver::prepare(&connection, RECORD_DELETE)?;
-                let mut search_statement = driver::prepare(&connection, SEARCH_DELETE)?;
+                let mut search_rowid_statement = driver::prepare(&connection, SEARCH_ROWID)?;
+                let mut search_delete_statement = driver::prepare(&connection, SEARCH_DELETE)?;
                 for key in &keys {
                     let changed = driver::execute_prepared(
                         &mut record_statement,
@@ -1430,22 +1514,14 @@ impl PredicateIndexStorage for TursoStorage {
                     if !(0..=1).contains(&changed) {
                         return Err(invariant());
                     }
-                    driver::execute_prepared(
-                        &mut search_statement,
-                        vec![text(&key.typename), text(&key.id)],
+                    delete_search_document(
+                        &mut search_rowid_statement,
+                        &mut search_delete_statement,
+                        SearchProfile::QuickAccessV1,
+                        key,
                     )?;
                 }
-                for key in projection_keys {
-                    let changed = driver::execute(
-                        &connection,
-                        INDEX_DOCUMENT_DELETE,
-                        vec![text(key.as_str())],
-                    )?;
-                    if !(0..=1).contains(&changed) {
-                        return Err(invariant());
-                    }
-                }
-                Ok(())
+                write_projection_mutations(&connection, projections)
             })
         })();
         self.latch_result(result)
@@ -1739,10 +1815,52 @@ fn write_projection_mutations(
         .filter_map(|(key, state)| state.map(|state| (key, state)))
         .collect::<HashMap<_, _>>();
 
-    for mutation in &mutations {
-        let key = mutation.record_key().clone();
-        apply_authoritative_projection_mutations(&mut states, std::slice::from_ref(mutation));
-        write_projection_state(connection, &key, states.get(&key))?;
+    apply_authoritative_projection_mutations(&mut states, &mutations);
+    // A snapshot can include many child contributions to the same parent.
+    // Preserve mutation order in memory, but persist each final state only once.
+    for key in &keys {
+        write_projection_state(connection, key, states.get(key))?;
+    }
+    if !keys.is_empty() {
+        // Network snapshots and realtime writes must rebase pending member edits
+        // in the same transaction, not leave a shadow based on older authority.
+        let sources = driver::query(connection, QUEUE_SELECT, Vec::new())?
+            .into_iter()
+            .map(|row| {
+                let row = parse_queue_row(&row)?;
+                let source = cache_core::queue::decode_optimistic_source(
+                    &row.optimistic.ok_or_else(invariant)?.optimistic_data_json,
+                )
+                .map_err(|_| invariant())?;
+                Ok((row.id, source))
+            })
+            .collect::<Result<Vec<_>, TursoStorageError>>()?;
+        let layers = sources
+            .iter()
+            .map(
+                |(owner, source)| cache_core::predicate::ProjectionMutationLayer {
+                    owner: *owner,
+                    mutations: &source.projection_mutations,
+                },
+            )
+            .collect::<Vec<_>>();
+        for key in keys {
+            delete_optimistic_projection(connection, &key)?;
+            if let Some(shadow) = cache_core::predicate::compose_effective_optimistic_projection(
+                &key,
+                states.get(&key),
+                &layers,
+            )
+            .map_err(|_| invariant())?
+            {
+                insert_optimistic_projection(
+                    connection,
+                    mutation_id_to_sql(shadow.owner)?,
+                    shadow.state,
+                    shadow.uncertainty,
+                )?;
+            }
+        }
     }
     Ok(())
 }
@@ -2260,6 +2378,40 @@ fn load_index_documents(
     Ok(keys.iter().map(|key| documents.get(key).cloned()).collect())
 }
 
+fn present_predicate_records(
+    connection: &Arc<Connection>,
+    keys: &[PredicateRecordKey],
+) -> Result<BTreeSet<PredicateRecordKey>, TursoStorageError> {
+    let mut present = BTreeSet::new();
+    // Point lookups through records' composite primary key; never scan/decode
+    // normalized blobs just to distinguish an unknown baseline from a deletion.
+    for batch in keys.chunks(500) {
+        let mut parameters = Vec::with_capacity(batch.len() * 2);
+        for key in batch {
+            let parsed = RecordKey::from_entity(&EntityKey(key.as_str().into()))?;
+            parameters.extend([text(&parsed.typename), text(&parsed.id)]);
+        }
+        let values = vec!["(?, ?)"; batch.len()].join(", ");
+        let sql = format!(
+            "WITH requested(typename, id) AS (VALUES {values}) SELECT r.__typename, r.id FROM requested AS q JOIN records AS r ON r.__typename = q.typename AND r.id = q.id"
+        );
+        for row in driver::query(connection, &sql, parameters)? {
+            if row.len() != 2 {
+                return Err(invariant());
+            }
+            present.insert(
+                PredicateRecordKey::new(format!(
+                    "{}:{}",
+                    required_text(&row, 0)?,
+                    required_text(&row, 1)?
+                ))
+                .map_err(|_| invariant())?,
+            );
+        }
+    }
+    Ok(present)
+}
+
 fn predicate_scope_is_incomplete(
     connection: &Arc<Connection>,
     query: &ValidatedIndexQuery,
@@ -2282,10 +2434,11 @@ fn predicate_scope_is_incomplete(
     Ok(!driver::query(connection, &sql, parameters)?.is_empty())
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 struct OptimisticQueryStatus {
     has_shadow: bool,
     incomplete: bool,
+    uncertain_ids: Vec<i64>,
 }
 
 fn optimistic_query_status(
@@ -2319,6 +2472,7 @@ fn optimistic_query_status(
     let mut status = OptimisticQueryStatus {
         has_shadow: !rows.is_empty(),
         incomplete: false,
+        uncertain_ids: Vec::new(),
     };
     let mut uncertainty: HashMap<(i64, Token), Vec<String>> = HashMap::new();
     for row in rows {
@@ -2331,7 +2485,6 @@ fn optimistic_query_status(
         let state = OptimisticIndexDocumentState::try_from(required_i64(&row, 3)?)?;
         if current_scope && state == OptimisticIndexDocumentState::Incomplete {
             status.incomplete = true;
-            return Ok(status);
         }
         if current_scope && let Some(attribute) = nullable_text(&row, 4)? {
             uncertainty
@@ -2340,7 +2493,7 @@ fn optimistic_query_status(
                 .push(attribute);
         }
     }
-    for ((_, partition), attributes) in uncertainty {
+    for ((id, partition), attributes) in uncertainty {
         let uncertainty = parse_optimistic_uncertainty(attributes)?;
         if query
             .dependent_attributes(&partition)
@@ -2348,15 +2501,24 @@ fn optimistic_query_status(
             .any(|attribute| uncertainty.affects(attribute))
         {
             status.incomplete = true;
-            break;
+            status.uncertain_ids.push(id);
         }
     }
+    status.uncertain_ids.sort_unstable();
     Ok(status)
 }
 
 fn compile_predicate_sql(query: &ValidatedIndexQuery) -> (String, Vec<Value>) {
+    compile_predicate_selection(query, &[], false)
+}
+
+fn compile_predicate_selection(
+    query: &ValidatedIndexQuery,
+    excluded_optimistic: &[i64],
+    include_sort: bool,
+) -> (String, Vec<Value>) {
     let descriptor = query.as_query();
-    let mut compiler = SqlPredicateCompiler::new();
+    let mut compiler = SqlPredicateCompiler::new(excluded_optimistic);
     let roots = descriptor
         .partitions
         .iter()
@@ -2374,18 +2536,20 @@ fn compile_predicate_sql(query: &ValidatedIndexQuery) -> (String, Vec<Value>) {
         .map(|root| format!("SELECT source, document_id FROM {root}"))
         .collect::<Vec<_>>()
         .join(" UNION ");
-    compiler
-        .ctes
-        .push(format!("{matches}(source, document_id) AS ({union})"));
-    let effective_sort = compiler.next_name();
-    compiler
-        .parameters
-        .push(text(descriptor.sort_attribute.as_str()));
-    compiler
-        .parameters
-        .push(text(descriptor.sort_attribute.as_str()));
     compiler.ctes.push(format!(
-        "{effective_sort}(source, document_id, value) AS (SELECT 0, document_id, value FROM sort_facts WHERE attribute = ? UNION ALL SELECT 1, document_id, value FROM optimistic_sort_facts WHERE attribute = ?)"
+        "{matches}(source, document_id) AS MATERIALIZED ({union})"
+    ));
+    let hits = compiler.next_name();
+    compiler
+        .parameters
+        .push(text(descriptor.sort_attribute.as_str()));
+    compiler
+        .parameters
+        .push(text(descriptor.sort_attribute.as_str()));
+    // Look up identity and sort facts by their real primary keys. Joining three
+    // materialized sets loses those indexes and makes even small queries quadratic.
+    compiler.ctes.push(format!(
+        "{hits}(record_key, value) AS MATERIALIZED (SELECT d.record_key, s.value FROM {matches} AS m JOIN index_documents AS d ON m.source = 0 AND d.id = m.document_id JOIN sort_facts AS s ON s.document_id = m.document_id AND s.attribute = ? UNION ALL SELECT d.record_key, s.value FROM {matches} AS m JOIN optimistic_index_documents AS d ON m.source = 1 AND d.id = m.document_id JOIN optimistic_sort_facts AS s ON s.document_id = m.document_id AND s.attribute = ?)"
     ));
     compiler
         .parameters
@@ -2398,13 +2562,18 @@ fn compile_predicate_sql(query: &ValidatedIndexQuery) -> (String, Vec<Value>) {
         SortDirection::Asc => "ASC",
         SortDirection::Desc => "DESC",
     };
+    let sort_selection = if include_sort { ", value" } else { "" };
     let sql = format!(
-        "WITH {} SELECT d.record_key FROM {matches} AS m JOIN effective_documents AS d ON d.source = m.source AND d.document_id = m.document_id JOIN {effective_sort} AS s ON s.source = m.source AND s.document_id = m.document_id ORDER BY s.value {sort_direction}, d.record_key {tie_direction} LIMIT ?",
+        "WITH {} SELECT record_key{sort_selection} FROM {hits} ORDER BY value {sort_direction}, record_key {tie_direction} LIMIT ?",
         compiler.ctes.join(", ")
     );
     (sql, compiler.parameters)
 }
 
+// Keep every set-algebra CTE materialized. The pinned Turso planner otherwise
+// re-enters compound-query coroutines for joined rows, repeatedly evaluating
+// the same child sets (millions of VM steps even on a small local corpus).
+// This is generic query execution policy; application predicates remain in IR.
 struct SqlPredicateCompiler {
     ctes: Vec<String>,
     parameters: Vec<Value>,
@@ -2412,12 +2581,26 @@ struct SqlPredicateCompiler {
 }
 
 impl SqlPredicateCompiler {
-    fn new() -> Self {
+    fn new(excluded_optimistic: &[i64]) -> Self {
+        let exclusion = if excluded_optimistic.is_empty() {
+            String::new()
+        } else {
+            format!(
+                " AND o.id NOT IN ({})",
+                sql_placeholders(excluded_optimistic.len())
+            )
+        };
         Self {
             ctes: vec![
-                "effective_documents(source, document_id, record_key, profile, partition) AS (SELECT 0, d.id, d.record_key, d.profile, d.partition FROM index_documents AS d WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) UNION ALL SELECT 1, o.id, o.record_key, o.profile, o.partition FROM optimistic_index_documents AS o WHERE o.state = 0)".to_owned(),
+                "authoritative_documents(document_id, record_key, profile, partition) AS MATERIALIZED (SELECT d.id, d.record_key, d.profile, d.partition FROM index_documents AS d WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key))".to_owned(),
+                format!("optimistic_documents(document_id, record_key, profile, partition) AS MATERIALIZED (SELECT o.id, o.record_key, o.profile, o.partition FROM optimistic_index_documents AS o WHERE o.state = 0{exclusion})"),
+                "effective_documents(source, document_id, record_key, profile, partition) AS MATERIALIZED (SELECT 0, document_id, record_key, profile, partition FROM authoritative_documents UNION ALL SELECT 1, document_id, record_key, profile, partition FROM optimistic_documents)".to_owned(),
             ],
-            parameters: Vec::new(),
+            parameters: excluded_optimistic
+                .iter()
+                .copied()
+                .map(Value::from_i64)
+                .collect(),
             next_id: 0,
         }
     }
@@ -2429,26 +2612,32 @@ impl SqlPredicateCompiler {
     }
 
     fn compile(&mut self, expr: &PredicateExpr, profile: &Profile, partition: &Token) -> String {
+        if matches!(expr, PredicateExpr::Or(_, _))
+            && let Some((attribute, values)) = alternatives::exact_alternatives(expr)
+        {
+            return self.exact(attribute, &values, profile, partition);
+        }
         match expr {
             PredicateExpr::All => self.universe(profile, partition),
             PredicateExpr::None => {
                 let name = self.next_name();
                 self.ctes.push(format!(
-                    "{name}(source, document_id) AS (SELECT source, document_id FROM effective_documents WHERE 0)"
+                    "{name}(source, document_id) AS MATERIALIZED (SELECT source, document_id FROM effective_documents WHERE 0)"
                 ));
                 name
             }
             PredicateExpr::Exact { attribute, value } => {
+                self.exact(attribute, &[value], profile, partition)
+            }
+            PredicateExpr::ExactExists { attribute } => {
                 let name = self.next_name();
                 for _ in 0..2 {
                     self.parameters.push(text(profile.token().as_str()));
                     self.parameters.push(text(partition.as_str()));
                     self.parameters.push(text(attribute.as_str()));
-                    self.parameters
-                        .push(Value::from_blob(value.as_bytes().to_vec()));
                 }
                 self.ctes.push(format!(
-                    "{name}(source, document_id) AS (SELECT 0, f.document_id FROM exact_facts AS f JOIN effective_documents AS d ON d.source = 0 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value = ? UNION SELECT 1, f.document_id FROM optimistic_exact_facts AS f JOIN effective_documents AS d ON d.source = 1 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value = ?)"
+                    "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM exact_facts AS f JOIN index_documents AS d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ? UNION SELECT 1, f.document_id FROM optimistic_exact_facts AS f JOIN optimistic_documents AS d ON d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?)"
                 ));
                 name
             }
@@ -2481,8 +2670,39 @@ impl SqlPredicateCompiler {
                     }
                 }
                 self.ctes.push(format!(
-                    "{name}(source, document_id) AS (SELECT 0, f.document_id FROM integer_facts AS f JOIN effective_documents AS d ON d.source = 0 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?{range} UNION SELECT 1, f.document_id FROM optimistic_integer_facts AS f JOIN effective_documents AS d ON d.source = 1 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?{range})"
+                    "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM integer_facts AS f JOIN index_documents AS d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ?{range} UNION SELECT 1, f.document_id FROM optimistic_integer_facts AS f JOIN optimistic_documents AS d ON d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?{range})"
                 ));
+                name
+            }
+            PredicateExpr::After {
+                attribute,
+                value,
+                key,
+                direction,
+                tie_direction,
+            } => {
+                let name = self.next_name();
+                let cmp = if *direction == SortDirection::Asc {
+                    ">"
+                } else {
+                    "<"
+                };
+                let tie = if *tie_direction == SortDirection::Asc {
+                    ">"
+                } else {
+                    "<"
+                };
+                for _ in 0..2 {
+                    self.parameters.extend([
+                        text(profile.token().as_str()),
+                        text(partition.as_str()),
+                        text(attribute.as_str()),
+                        Value::from_i64(*value),
+                        Value::from_i64(*value),
+                        text(key.as_str()),
+                    ]);
+                }
+                self.ctes.push(format!("{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM sort_facts f JOIN index_documents d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ? AND (f.value {cmp} ? OR (f.value = ? AND d.record_key {tie} ?)) UNION SELECT 1, f.document_id FROM optimistic_sort_facts f JOIN optimistic_documents d ON d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND (f.value {cmp} ? OR (f.value = ? AND d.record_key {tie} ?)))"));
                 name
             }
             PredicateExpr::And(left, right) | PredicateExpr::Or(left, right) => {
@@ -2495,7 +2715,7 @@ impl SqlPredicateCompiler {
                 };
                 let name = self.next_name();
                 self.ctes.push(format!(
-                    "{name}(source, document_id) AS (SELECT source, document_id FROM {left} {operator} SELECT source, document_id FROM {right})"
+                    "{name}(source, document_id) AS MATERIALIZED (SELECT source, document_id FROM {left} {operator} SELECT source, document_id FROM {right})"
                 ));
                 name
             }
@@ -2504,11 +2724,40 @@ impl SqlPredicateCompiler {
                 let child = self.compile(expr, profile, partition);
                 let name = self.next_name();
                 self.ctes.push(format!(
-                    "{name}(source, document_id) AS (SELECT source, document_id FROM {universe} EXCEPT SELECT source, document_id FROM {child})"
+                    "{name}(source, document_id) AS MATERIALIZED (SELECT source, document_id FROM {universe} EXCEPT SELECT source, document_id FROM {child})"
                 ));
                 name
             }
         }
+    }
+
+    fn exact(
+        &mut self,
+        attribute: &Token,
+        values: &[&predicate_index::ExactValue],
+        profile: &Profile,
+        partition: &Token,
+    ) -> String {
+        let name = self.next_name();
+        let condition = if values.len() == 1 {
+            "= ?".to_owned()
+        } else {
+            format!("IN ({})", vec!["?"; values.len()].join(", "))
+        };
+        for _ in 0..2 {
+            self.parameters.push(text(profile.token().as_str()));
+            self.parameters.push(text(partition.as_str()));
+            self.parameters.push(text(attribute.as_str()));
+            self.parameters.extend(
+                values
+                    .iter()
+                    .map(|value| Value::from_blob(value.as_bytes().to_vec())),
+            );
+        }
+        self.ctes.push(format!(
+            "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM exact_facts AS f JOIN index_documents AS d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value {condition} UNION SELECT 1, f.document_id FROM optimistic_exact_facts AS f JOIN optimistic_documents AS d ON d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value {condition})"
+        ));
+        name
     }
 
     fn universe(&mut self, profile: &Profile, partition: &Token) -> String {
@@ -2516,7 +2765,7 @@ impl SqlPredicateCompiler {
         self.parameters.push(text(profile.token().as_str()));
         self.parameters.push(text(partition.as_str()));
         self.ctes.push(format!(
-            "{name}(source, document_id) AS (SELECT source, document_id FROM effective_documents WHERE profile = ? AND partition = ?)"
+            "{name}(source, document_id) AS MATERIALIZED (SELECT source, document_id FROM effective_documents WHERE profile = ? AND partition = ?)"
         ));
         name
     }
@@ -2594,6 +2843,7 @@ fn initialize(
         RECORD_GET,
         RECORD_UPSERT,
         RECORD_DELETE,
+        SEARCH_ROWID,
         SEARCH_DELETE,
         SEARCH_UPSERT,
         SEARCH_LOAD,
@@ -4089,39 +4339,136 @@ fn prepare_records(
         .collect()
 }
 
+fn delete_search_document(
+    rowid_statement: &mut turso_core::Statement,
+    delete_statement: &mut turso_core::Statement,
+    profile: SearchProfile,
+    key: &RecordKey,
+) -> Result<(), TursoStorageError> {
+    let rows = driver::query_prepared(
+        rowid_statement,
+        vec![text(profile.as_str()), text(&key.typename), text(&key.id)],
+    )?;
+    match rows.as_slice() {
+        [] => Ok(()),
+        [row] => require_changed(
+            driver::execute_prepared(
+                delete_statement,
+                vec![Value::from_i64(required_i64(row, 0)?)],
+            )?,
+            1,
+        ),
+        _ => Err(invariant()),
+    }
+}
+
+fn delete_search_documents_batch(
+    connection: &Arc<Connection>,
+    profile: SearchProfile,
+    keys: &[&RecordKey],
+) -> Result<(), TursoStorageError> {
+    for keys in keys.chunks(SEARCH_WRITE_BATCH_SIZE) {
+        let lookup_sql = std::iter::repeat_n(SEARCH_ROWID, keys.len())
+            .collect::<Vec<_>>()
+            .join(" UNION ALL ");
+        let mut parameters = Vec::with_capacity(keys.len() * 3);
+        for key in keys {
+            parameters.push(text(profile.as_str()));
+            parameters.push(text(&key.typename));
+            parameters.push(text(&key.id));
+        }
+        let rowids = driver::query(connection, &lookup_sql, parameters)?
+            .iter()
+            .map(|row| required_i64(row, 0))
+            .collect::<Result<BTreeSet<_>, _>>()?;
+        if rowids.is_empty() {
+            continue;
+        }
+        let expected = i64::try_from(rowids.len()).map_err(|_| invariant())?;
+        require_changed(
+            driver::execute(
+                connection,
+                &format!(
+                    "DELETE FROM search_documents WHERE rowid IN ({})",
+                    sql_placeholders(rowids.len())
+                ),
+                rowids.into_iter().map(Value::from_i64).collect(),
+            )?,
+            expected,
+        )?;
+    }
+    Ok(())
+}
+
+fn upsert_search_documents_batch(
+    connection: &Arc<Connection>,
+    documents: &[(&RecordKey, &SearchDocument)],
+) -> Result<(), TursoStorageError> {
+    for documents in documents.chunks(SEARCH_WRITE_BATCH_SIZE) {
+        let values_sql = std::iter::repeat_n(SEARCH_UPSERT_ROW, documents.len())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let mut parameters = Vec::with_capacity(documents.len() * 7);
+        for (key, document) in documents {
+            parameters.push(text(document.profile.as_str()));
+            parameters.push(text(&key.typename));
+            parameters.push(text(&key.id));
+            parameters.push(text(&document.bucket));
+            parameters.push(text(&document.search_text));
+            parameters.push(Value::from_i64(document.timestamp_ms));
+            parameters.push(text(&document.source_hash));
+        }
+        require_changed(
+            driver::execute(
+                connection,
+                &format!("{SEARCH_UPSERT_PREFIX}{values_sql}{SEARCH_UPSERT_SUFFIX}"),
+                parameters,
+            )?,
+            i64::try_from(documents.len()).map_err(|_| invariant())?,
+        )?;
+    }
+    Ok(())
+}
+
 fn write_search_documents(
     connection: &Arc<Connection>,
     entries: &[EncodedRecord],
 ) -> Result<(), TursoStorageError> {
-    let mut delete = driver::prepare(connection, SEARCH_DELETE)?;
-    let mut upsert = driver::prepare(connection, SEARCH_UPSERT)?;
-    for entry in entries {
-        let changed = driver::execute_prepared(
-            &mut delete,
-            vec![text(&entry.key.typename), text(&entry.key.id)],
-        )?;
-        if changed < 0 {
-            return Err(invariant());
-        }
-        for document in &entry.search_documents {
-            require_changed(
-                driver::execute_prepared(
-                    &mut upsert,
-                    vec![
-                        text(document.profile.as_str()),
-                        text(&entry.key.typename),
-                        text(&entry.key.id),
-                        text(&document.bucket),
-                        text(&document.search_text),
-                        Value::from_i64(document.timestamp_ms),
-                        text(&document.source_hash),
-                    ],
-                )?,
-                1,
-            )?;
-        }
+    let mut last_entry_by_key = HashMap::with_capacity(entries.len());
+    for (index, entry) in entries.iter().enumerate() {
+        last_entry_by_key.insert((entry.key.typename.as_str(), entry.key.id.as_str()), index);
     }
-    Ok(())
+    let entries = entries
+        .iter()
+        .enumerate()
+        .filter_map(|(index, entry)| {
+            (last_entry_by_key.get(&(entry.key.typename.as_str(), entry.key.id.as_str()))
+                == Some(&index))
+            .then_some(entry)
+        })
+        .collect::<Vec<_>>();
+    let stale_keys = entries
+        .iter()
+        .filter(|entry| {
+            !entry
+                .search_documents
+                .iter()
+                .any(|document| document.profile == SearchProfile::QuickAccessV1)
+        })
+        .map(|entry| &entry.key)
+        .collect::<Vec<_>>();
+    delete_search_documents_batch(connection, SearchProfile::QuickAccessV1, &stale_keys)?;
+
+    let documents = entries
+        .iter()
+        .flat_map(|entry| {
+            entry
+                .search_documents
+                .iter()
+                .map(|document| (&entry.key, document))
+        })
+        .collect::<Vec<_>>();
+    upsert_search_documents_batch(connection, &documents)
 }
 
 fn parse_search_document(
@@ -4443,6 +4790,8 @@ impl TursoStorage {
         *self.fault.lock().unwrap_or_else(|error| error.into_inner()) = Some(fault);
     }
 }
+
+mod alternatives;
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod browser_test;

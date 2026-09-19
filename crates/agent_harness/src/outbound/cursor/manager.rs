@@ -19,29 +19,34 @@
 //! every entry point resolves the owner's key and mints a client for that one
 //! session. The manager holds only what a client is built from.
 
-use std::path::Path;
 use std::sync::Arc;
 
 use agent_client_protocol::schema::v1::SessionId;
-use agent_session::domain::model::{AgentSession, AgentSessionId, ExternalSession};
+use agent_session::domain::model::{AgentSession, AgentSessionId, ExternalSession, ReplicaId};
 use agent_session::domain::ports::{AgentSessionRepo, ExternalSessionRepo};
 use cursor_cloud_agents::api::{ApiKey, CursorClient, CursorConfig};
+use cursor_cloud_agents::domain::artifact::{ArtifactListing, FetchedArtifact};
 use cursor_cloud_agents::domain::model::RepoUrl as CursorRepoUrl;
 use cursor_cloud_agents::domain::model::{
     CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice,
 };
-use cursor_cloud_agents::domain::ports::{CursorAgents, RepoResolver, RunStream};
+use cursor_cloud_agents::domain::ports::{
+    ArtifactStore, CursorAgents, CursorArtifacts, NoArtifactStore, RunStream,
+};
 use cursor_cloud_agents::domain::service::CursorSessionService;
 use cursor_cloud_agents::inbound::acp::{AcpNotifier, serve};
 use futures::Stream;
 
 use super::keys::CursorApiKeys;
 use super::pipe::PipeTransport;
+use super::repository_chooser::HaikuRepositoryChooser;
 use crate::domain::error::{HarnessError, Result};
-use crate::domain::model::SpawnContainer;
-use crate::domain::ports::ContainerManager;
+use crate::domain::model::{AgentKind, SessionBlocker, SpawnContainer};
+use crate::domain::pending::PendingCommands;
+use crate::domain::ports::{ContainerManager, ReachableRepositories};
 use crate::domain::sandbox::SandboxResizeEffect;
 use agent_session::domain::model::SandboxSize;
+use macro_user_id::user_id::MacroUserIdStr;
 
 #[cfg(test)]
 mod test;
@@ -85,6 +90,10 @@ const CURSOR_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(
 /// for reclaiming two idle tasks is nothing.
 const CURSOR_IDLE_CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
 
+fn should_reap_cursor_pipe(idle: std::time::Duration, active_turn: bool, pending: bool) -> bool {
+    idle >= CURSOR_IDLE_TIMEOUT && !active_turn && !pending
+}
+
 /// The ref new agents start their work from.
 const DEFAULT_STARTING_REF: &str = "main";
 
@@ -103,25 +112,50 @@ fn interval_from_now(every: std::time::Duration) -> tokio::time::Interval {
     ticker
 }
 
-/// Every session this deployment opens works on the one configured
-/// repository, resolved without looking at the workspace path — the path
-/// names a directory inside a sandbox that does not exist here.
-#[derive(Clone, Debug)]
-struct FixedRepo(CursorRepoUrl);
-
-impl RepoResolver for FixedRepo {
-    fn resolve(&self, _cwd: &Path) -> Option<CursorRepoUrl> {
-        Some(self.0.clone())
-    }
+/// Hands out Cursor cloud agents.
+///
+/// There is no deployment repository here either: a session's repository is
+/// chosen from its first prompt, per session and per owner, which is what the
+/// [`HaikuRepositoryChooser`] built in [`Self::serve_session`] answers. The
+/// manager holds only what building one takes.
+#[derive(Clone)]
+pub struct CursorContainerManager<Sessions, Keys, Repositories, Store> {
+    keys: Keys,
+    /// Where a session's walkthrough artifacts are re-hosted, handed to every
+    /// session this manager serves.
+    artifacts: Store,
+    base_url: String,
+    sessions: Sessions,
+    repositories: Arc<Repositories>,
+    usage: Arc<dyn ai_usage::UsageRecorder>,
+    pull_requests: Option<Arc<dyn agent_session::domain::pull_request::SessionPullRequests>>,
+    journal_storage: JournalStorage,
+    /// Sessions the harness has a command in flight for right now, shared
+    /// with `AgentHarnessService` so the idle reaper below never closes a
+    /// pipe a command is already on its way to.
+    pending: PendingCommands,
 }
 
-/// Hands out Cursor cloud agents.
+/// Where a hosted session's journal lives: the pool it is written to and the
+/// replica claiming its rows. Passed as one value so the manager's constructor
+/// takes a journal rather than its two halves.
 #[derive(Clone)]
-pub struct CursorContainerManager<Sessions, Keys> {
-    keys: Keys,
-    base_url: String,
-    repo: CursorRepoUrl,
-    sessions: Sessions,
+pub struct PostgresJournal {
+    /// The pool session-log rows are written to.
+    pub pool: sqlx::PgPool,
+    /// The replica claiming those rows.
+    pub replica: ReplicaId,
+}
+
+/// Hosted sessions always use durable storage; tests select memory explicitly.
+#[derive(Clone)]
+enum JournalStorage {
+    Postgres {
+        pool: sqlx::PgPool,
+        replica: ReplicaId,
+    },
+    #[cfg(test)]
+    Memory,
 }
 
 /// What a resumed session gets back at restore time.
@@ -136,22 +170,106 @@ struct RestoredCursorSession {
     agent: Option<CursorAgentId>,
     /// The model id the session last reported, from the projected column.
     model_id: Option<String>,
+    /// The last Cursor run whose output reached Macro's session log.
+    last_run: Option<CursorRunId>,
 }
 
-impl<Sessions, Keys> CursorContainerManager<Sessions, Keys>
+impl<Sessions, Keys, Repositories>
+    CursorContainerManager<Sessions, Keys, Repositories, NoArtifactStore>
 where
     Sessions: AgentSessionRepo + ExternalSessionRepo + Clone,
     Keys: CursorApiKeys,
+    Repositories: ReachableRepositories,
 {
-    /// Build the manager over the key source, the API it talks to, and the
-    /// repository every session works on.
-    pub fn new(keys: Keys, base_url: String, repo: CursorRepoUrl, sessions: Sessions) -> Self {
+    /// Build a manager with required durable journal storage and replica identity.
+    ///
+    /// Sessions it serves re-host no artifacts until one is given to
+    /// [`Self::with_artifact_store`].
+    pub fn new(
+        keys: Keys,
+        base_url: String,
+        sessions: Sessions,
+        repositories: Arc<Repositories>,
+        usage: Arc<dyn ai_usage::UsageRecorder>,
+        journal: PostgresJournal,
+        pending: PendingCommands,
+    ) -> Self {
         Self {
             keys,
+            artifacts: NoArtifactStore,
             base_url,
-            repo,
             sessions,
+            repositories,
+            usage,
+            pull_requests: None,
+            journal_storage: JournalStorage::Postgres {
+                pool: journal.pool,
+                replica: journal.replica,
+            },
+            pending,
         }
+    }
+
+    /// Re-host every session's walkthrough artifacts through `artifacts`.
+    ///
+    /// Changes the manager's store type rather than taking an option, so a
+    /// deployment without a static file service cannot accidentally be
+    /// handed one that fails per file.
+    #[must_use]
+    pub fn with_artifact_store<Store>(
+        self,
+        artifacts: Store,
+    ) -> CursorContainerManager<Sessions, Keys, Repositories, Store> {
+        CursorContainerManager {
+            keys: self.keys,
+            artifacts,
+            base_url: self.base_url,
+            sessions: self.sessions,
+            repositories: self.repositories,
+            usage: self.usage,
+            pull_requests: self.pull_requests,
+            journal_storage: self.journal_storage,
+            pending: self.pending,
+        }
+    }
+}
+
+impl<Sessions, Keys, Repositories, Store>
+    CursorContainerManager<Sessions, Keys, Repositories, Store>
+where
+    Sessions: AgentSessionRepo + ExternalSessionRepo + Clone,
+    Keys: CursorApiKeys,
+    Repositories: ReachableRepositories,
+    Store: ArtifactStore + Clone + 'static,
+{
+    #[cfg(test)]
+    fn with_memory_journal(
+        keys: Keys,
+        base_url: String,
+        sessions: Sessions,
+        repositories: Arc<Repositories>,
+        artifacts: Store,
+    ) -> Self {
+        Self {
+            keys,
+            artifacts,
+            base_url,
+            sessions,
+            repositories,
+            usage: Arc::new(ai_usage::NoOpUsageRecorder),
+            pull_requests: None,
+            journal_storage: JournalStorage::Memory,
+            pending: PendingCommands::new(),
+        }
+    }
+
+    /// Persist Cursor's returned PR using the shared session operation.
+    pub fn with_pull_requests(
+        mut self,
+        service: Arc<dyn agent_session::domain::pull_request::SessionPullRequests>,
+    ) -> Self {
+        self.pull_requests = Some(service);
+        self
     }
 
     /// A client authenticated as `session`'s owner.
@@ -159,6 +277,12 @@ where
     /// Built per session and dropped with it, rather than held on the manager:
     /// the key belongs to one user, and the sessions of two users must not be
     /// able to reach each other's Cursor accounts through a shared client.
+    #[tracing::instrument(
+        name = "cursor.client.resolve",
+        skip_all,
+        err,
+        fields(agent.session.id = %session.id)
+    )]
     async fn client_for(&self, session: &AgentSession) -> Result<(CursorClient, Option<String>)> {
         let config = self.keys.resolve(&session.owner_id).await?;
         let client = CursorClient::new(CursorConfig {
@@ -168,7 +292,12 @@ where
             // model now (the user's default, seeded below via
             // `with_default_model`, or a per-session pick), applied per run.
             model: None,
-            starting_ref: DEFAULT_STARTING_REF.to_owned(),
+            starting_ref: session
+                .repo_branch
+                .as_ref()
+                .map(|branch| branch.as_str())
+                .unwrap_or(DEFAULT_STARTING_REF)
+                .to_owned(),
             record_dir: None,
         })
         .map_err(|error| {
@@ -185,13 +314,45 @@ where
     ///
     /// `restore` carries what a resumed session gets back; a fresh spawn
     /// passes `None`.
-    fn serve_session(
+    async fn serve_session(
         &self,
         client: CursorClient,
         default_model_id: Option<String>,
-        session_id: AgentSessionId,
+        session: &AgentSession,
         restore: Option<RestoredCursorSession>,
-    ) -> PipeTransport {
+    ) -> Result<agent_session::domain::connection::RuntimeAttachment<PipeTransport>> {
+        let session_id = session.id;
+        let owner_binding: Option<agent_session::domain::connection::AttachmentActivation>;
+        let journal: Arc<dyn cursor_cloud_agents::domain::journal::CursorJournal> = match &self
+            .journal_storage
+        {
+            JournalStorage::Postgres { pool, replica } => {
+                let journal = Arc::new(
+                    cursor_cloud_agents::outbound::postgres_journal::PgCursorJournal::new(
+                        pool.clone(),
+                        session_id,
+                        *replica,
+                    ),
+                );
+                let activated = journal.clone();
+                owner_binding = Some(Box::new(move |claim| {
+                    activated
+                        .activate(claim.session, claim.replica, claim.fence)
+                        .map_err(|e| {
+                            agent_runtime_protocol::domain::ports::TransportError::Client(
+                                e.to_string(),
+                            )
+                            .into()
+                        })
+                }));
+                journal
+            }
+            #[cfg(test)]
+            JournalStorage::Memory => {
+                owner_binding = None;
+                Arc::new(cursor_cloud_agents::outbound::memory_journal::MemoryJournal::default())
+            }
+        };
         let (ours, theirs) = tokio::io::duplex(PIPE_CAPACITY);
         let (agent_reader, agent_writer) = tokio::io::split(theirs);
         let cursor = RecordingCursor {
@@ -199,23 +360,57 @@ where
             session_id,
             sessions: self.sessions.clone(),
         };
-        let notifier = AcpNotifier::new();
+        let (reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut notifier = AcpNotifier::new().with_reload(reload_tx);
+        if let Some(service) = &self.pull_requests {
+            notifier = notifier.with_pull_requests(Arc::new(
+                super::pull_request::CursorPullRequestReporter {
+                    service: service.clone(),
+                    session: session_id,
+                    owner: session.owner_id.clone(),
+                },
+            ));
+        }
         // The user's chosen model seeds the session as its default: a fresh
         // session starts on it, and a resumed one still prefers whatever it
         // was actually last using (carried in `restore.model_id`) over this.
+        let chooser = HaikuRepositoryChooser::new(
+            Arc::clone(&self.repositories),
+            self.sessions.clone(),
+            Arc::clone(&self.usage),
+            session.owner_id.clone(),
+            session_id,
+        );
         let service = Arc::new(
-            CursorSessionService::new(cursor, notifier.clone(), FixedRepo(self.repo.clone()))
-                .with_default_model(default_model_id),
+            CursorSessionService::new(
+                cursor,
+                notifier.clone(),
+                chooser,
+                journal,
+                self.artifacts.clone(),
+            )
+            .with_default_model(default_model_id),
         );
         if let Some(restored) = restore {
-            service.restore_session(
+            service.restore_session_with_watermark(
                 restored.acp_session,
                 restored.agent,
-                Some(self.repo.clone()),
+                // The repository this session's first prompt chose, read back
+                // from the row the chooser wrote it to. There is no
+                // deployment default to fall back on, and a restored session
+                // must land on the repository its agent was minted against.
+                session.repo_url.as_deref().and_then(CursorRepoUrl::parse),
                 restored.model_id,
+                restored.last_run,
             );
         }
         let pipe_closed = tokio_util::sync::CancellationToken::new();
+        // Cloned before the tasks below move `pipe_closed` itself: the
+        // attachment built at the end of this function hands this same
+        // signal to the session actor's command wait, so a command sent
+        // right as - or just after - this pipe dies fails at once instead
+        // of riding out its own separate timeout for nothing.
+        let attachment_closed = pipe_closed.clone();
         let shutdown = tokio_util::sync::CancellationToken::new();
         let sync_service = Arc::clone(&service);
         let on_pipe_close = pipe_closed.clone();
@@ -234,6 +429,7 @@ where
         let last_activity = Arc::new(std::sync::Mutex::new(tokio::time::Instant::now()));
         let observed = Arc::clone(&last_activity);
         let reaper_shutdown = shutdown.clone();
+        let pending = self.pending.clone();
         tokio::spawn(async move {
             let mut mirror = interval_from_now(FOREIGN_SYNC_INTERVAL);
             let mut reaper = interval_from_now(CURSOR_IDLE_CHECK_INTERVAL);
@@ -241,11 +437,54 @@ where
                 tokio::select! {
                     () = pipe_closed.cancelled() => break,
                     _ = reaper.tick() => {
-                        let idle = last_activity
+                        let observed_at = *last_activity
                             .lock()
-                            .expect("activity clock poisoned")
-                            .elapsed();
-                        if idle >= CURSOR_IDLE_TIMEOUT {
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        let active_turn = sync_service.has_active_turn();
+                        // Checked alongside `active_turn`: a command already
+                        // admitted for this session but not yet turn-active
+                        // (the harness marks this at admission, before
+                        // dispatch - see `queue::enqueue_then_dispatch`) is
+                        // exactly the case `active_turn` alone cannot see.
+                        let pending_command = pending.is_pending(session_id);
+                        let activity = last_activity
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        // Recheck under the activity lock after inspecting the
+                        // turn gate. A prompt frame arriving in that window
+                        // changes the instant and prevents a stale idle reap.
+                        let raced = *activity != observed_at;
+                        let idle_ms = activity.elapsed().as_millis();
+                        let reaped = !raced
+                            && should_reap_cursor_pipe(
+                                activity.elapsed(),
+                                active_turn,
+                                pending_command,
+                            );
+                        // Every tick, not just the reaping one. The inputs to
+                        // this decision are what tell a pipe that died of
+                        // idleness apart from one pulled out from under a
+                        // live turn, and after the fact only the tick that
+                        // fired is reconstructable - so the deadline being
+                        // long expired while a turn held it open has to be
+                        // visible on the ticks that did nothing.
+                        tracing::debug!(
+                            %session_id,
+                            agent.pipe.idle_ms = idle_ms as u64,
+                            agent.pipe.active_turn = active_turn,
+                            agent.pipe.pending_command = pending_command,
+                            agent.pipe.activity_raced = raced,
+                            agent.pipe.reaped = reaped,
+                            "cursor pipe idle check"
+                        );
+                        if reaped {
+                            let _reap = tracing::info_span!(
+                                "agent.pipe.reap",
+                                agent.session.id = %session_id,
+                                agent.pipe.idle_ms = idle_ms as u64,
+                                agent.pipe.close_cause = "idle_timeout",
+                            )
+                            .entered();
                             tracing::info!(%session_id, "idle cursor session; closing its pipe");
                             reaper_shutdown.cancel();
                             break;
@@ -255,38 +494,73 @@ where
                 }
             }
         });
-        PipeTransport::connect_observed(
+        let transport = PipeTransport::connect_recoverable(
             ours,
             move || {
-                *observed.lock().expect("activity clock poisoned") = tokio::time::Instant::now();
+                *observed
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                    tokio::time::Instant::now();
             },
             shutdown,
-        )
+            Some(reload_rx),
+        );
+        let mut attachment = agent_session::domain::connection::RuntimeAttachment::solo(transport)
+            .with_closed(attachment_closed);
+        if let Some(binding) = owner_binding {
+            attachment = attachment.on_activate(binding);
+        }
+        Ok(attachment)
     }
 }
 
-impl<Sessions, Keys> ContainerManager for CursorContainerManager<Sessions, Keys>
+impl<Sessions, Keys, Repositories, Store> ContainerManager
+    for CursorContainerManager<Sessions, Keys, Repositories, Store>
 where
     Sessions: AgentSessionRepo + ExternalSessionRepo + Clone,
     Keys: CursorApiKeys,
+    Repositories: ReachableRepositories,
+    Store: ArtifactStore + Clone + 'static,
 {
     type Transport = PipeTransport;
 
-    async fn spawn(&self, command: SpawnContainer) -> Result<PipeTransport> {
-        // The session row is read for its owner alone: spawning is the first
-        // moment we can tell whether the person who mentioned @cursor has
-        // connected an account, and refusing here is what turns "the bot
-        // ignored me" into a sentence they can act on.
+    /// A `@cursor` session runs on its owner's key, so an owner without one
+    /// is told so before any session exists for them. The kind is not
+    /// consulted: the router only asks this manager about Cursor sessions.
+    async fn preflight(
+        &self,
+        _kind: AgentKind,
+        owner: &MacroUserIdStr<'_>,
+    ) -> Result<Option<SessionBlocker>> {
+        match self.keys.resolve(owner).await {
+            Ok(_) => Ok(None),
+            Err(HarnessError::CursorNotConnected) => Ok(Some(SessionBlocker::CursorNotConnected)),
+            Err(error) => Err(error),
+        }
+    }
+
+    async fn spawn(
+        &self,
+        command: SpawnContainer,
+    ) -> Result<agent_session::domain::connection::RuntimeAttachment<PipeTransport>> {
+        // The session row is read for its owner alone. The mention path has
+        // already asked [`Self::preflight`] about the owner's key; sessions
+        // opened from the create menu and older rows still reach the refusal
+        // here, so "the bot ignored me" stays a sentence they can act on.
         let session = AgentSessionRepo::get(&self.sessions, command.session_id).await?;
         let (client, default_model_id) = self.client_for(&session).await?;
         // No MCP servers pass through here: they ride the ACP protocol
         // itself. The harness's session actor names them in `session/new`,
         // and the in-process adapter forwards them to Cursor's API - the same
         // rail every other transport uses.
-        Ok(self.serve_session(client, default_model_id, command.session_id, None))
+        self.serve_session(client, default_model_id, &session, None)
+            .await
     }
 
-    async fn resume(&self, session: AgentSessionId) -> Result<PipeTransport> {
+    async fn resume(
+        &self,
+        session: AgentSessionId,
+    ) -> Result<agent_session::domain::connection::RuntimeAttachment<PipeTransport>> {
         // The identity lives in Postgres in two halves that appear at
         // different moments: the ACP session id lands when `session/new`
         // answers, the Cursor agent only when the first prompt mints it. A
@@ -299,9 +573,10 @@ where
         let (client, default_model_id) = self.client_for(&stored).await?;
         let restore = match &stored.acp_session_id {
             Some(acp) => {
-                let agent = ExternalSessionRepo::get(&self.sessions, session)
-                    .await?
-                    .map(|external| CursorAgentId::new(external.external_id));
+                let external = ExternalSessionRepo::get(&self.sessions, session).await?;
+                let agent = external
+                    .as_ref()
+                    .map(|external| CursorAgentId::new(external.external_id.clone()));
                 Some(RestoredCursorSession {
                     acp_session: acp.clone(),
                     agent,
@@ -311,6 +586,9 @@ where
                     // harness seeded it with, which the wrapper resolves to
                     // "no opinion" rather than trusting.
                     model_id: Some(stored.model.clone()),
+                    last_run: external
+                        .and_then(|external| external.last_run_id)
+                        .map(CursorRunId::new),
                 })
             }
             None => None,
@@ -322,7 +600,8 @@ where
         // died with the process (only its hash is persisted). The one session
         // this loses servers for is one restored before its first prompt ever
         // landed, which then creates its agent bare rather than not at all.
-        Ok(self.serve_session(client, default_model_id, session, restore))
+        self.serve_session(client, default_model_id, &stored, restore)
+            .await
     }
 
     /// A Cursor session has no container of ours to hold a token: the raw
@@ -397,20 +676,32 @@ impl<Sessions> CursorAgents for RecordingCursor<Sessions>
 where
     Sessions: ExternalSessionRepo + Clone,
 {
+    async fn raw_result(
+        &self,
+        agent: &CursorAgentId,
+        run: &CursorRunId,
+    ) -> std::result::Result<String, rootcause::Report> {
+        self.client.raw_result(agent, run).await
+    }
+
     #[tracing::instrument(skip_all, err, fields(
-        session = %self.session_id,
-        mcp_servers = mcp_servers.len(),
+        agent.session.id = %self.session_id,
+        cursor.repository.configured = repo.is_some(),
+        cursor.pull_request.auto_create = open_pull_request && repo.is_some(),
+        cursor.model.configured = model.is_some(),
+        cursor.mcp_server.count = mcp_servers.len(),
     ))]
     async fn create_agent(
         &self,
         prompt: &str,
         repo: Option<&CursorRepoUrl>,
+        open_pull_request: bool,
         mcp_servers: &[McpServer],
         model: Option<&ModelChoice>,
     ) -> std::result::Result<(CursorAgentId, CursorRunId), rootcause::Report> {
         let (agent, run) = self
             .client
-            .create_agent(prompt, repo, mcp_servers, model)
+            .create_agent(prompt, repo, open_pull_request, mcp_servers, model)
             .await?;
         let summary = self
             .client
@@ -428,6 +719,7 @@ where
                     external_id: agent.to_string(),
                     external_name: summary.as_ref().map(|summary| summary.name.clone()),
                     external_url: summary.map(|summary| summary.url),
+                    last_run_id: None,
                 },
             )
             .await
@@ -435,6 +727,15 @@ where
         Ok((agent, run))
     }
 
+    #[tracing::instrument(
+        skip_all,
+        err,
+        fields(
+            agent.session.id = %self.session_id,
+            cursor.agent.id = %agent,
+            cursor.model.configured = model.is_some(),
+        )
+    )]
     async fn create_run(
         &self,
         agent: &CursorAgentId,
@@ -456,21 +757,43 @@ where
         self.client.cancel_run(agent, run).await
     }
 
-    async fn run_result(
-        &self,
-        agent: &CursorAgentId,
-        run: &CursorRunId,
-    ) -> std::result::Result<cursor_cloud_agents::domain::model::RunOutcome, rootcause::Report>
-    {
-        self.client.run_result(agent, run).await
-    }
-
     async fn list_runs(
         &self,
         agent: &CursorAgentId,
+        through: Option<&CursorRunId>,
     ) -> std::result::Result<Vec<cursor_cloud_agents::domain::model::RunListing>, rootcause::Report>
     {
-        self.client.list_runs(agent).await
+        self.client.list_runs(agent, through).await
+    }
+
+    async fn conversation(
+        &self,
+        agent: &CursorAgentId,
+    ) -> std::result::Result<
+        Vec<cursor_cloud_agents::domain::model::ConversationLine>,
+        rootcause::Report,
+    > {
+        self.client.conversation(agent).await
+    }
+}
+
+impl<Sessions> CursorArtifacts for RecordingCursor<Sessions>
+where
+    Sessions: ExternalSessionRepo + Clone,
+{
+    async fn list_artifacts(
+        &self,
+        agent: &CursorAgentId,
+    ) -> std::result::Result<Vec<ArtifactListing>, rootcause::Report> {
+        CursorArtifacts::list_artifacts(&self.client, agent).await
+    }
+
+    async fn fetch_artifact(
+        &self,
+        agent: &CursorAgentId,
+        path: &str,
+    ) -> std::result::Result<FetchedArtifact, rootcause::Report> {
+        CursorArtifacts::fetch_artifact(&self.client, agent, path).await
     }
 }
 
@@ -478,19 +801,22 @@ impl<Sessions> RunStream for RecordingCursor<Sessions>
 where
     Sessions: ExternalSessionRepo + Clone,
 {
-    async fn stream(
+    async fn raw_stream(
         &self,
         agent: &CursorAgentId,
         run: &CursorRunId,
+        resume_from: Option<&str>,
     ) -> std::result::Result<
-        impl Stream<
-            Item = std::result::Result<
-                cursor_cloud_agents::domain::event::CursorEvent,
-                rootcause::Report,
-            >,
-        > + Send,
-        rootcause::Report,
+        cursor_cloud_agents::domain::ports::ConnectedStream<
+            impl Stream<
+                Item = std::result::Result<
+                    cursor_cloud_agents::domain::journal::NativeRecord,
+                    rootcause::Report,
+                >,
+            > + Send,
+        >,
+        cursor_cloud_agents::domain::ports::StreamConnectError,
     > {
-        self.client.stream(agent, run).await
+        self.client.raw_stream(agent, run, resume_from).await
     }
 }

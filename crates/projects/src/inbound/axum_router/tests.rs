@@ -8,6 +8,7 @@ use axum::{
     Router,
     body::Body,
     http::{Request, StatusCode},
+    response::IntoResponse,
 };
 use entity_access::domain::{
     models::{
@@ -913,4 +914,10 @@ async fn mark_uploaded_preserves_exact_lambda_request_and_response_json() {
         json_body(response).await,
         json!({ "projectIds": [PROJECT_ID, "project-child"] })
     );
+}
+
+#[test]
+fn project_error_conflict_maps_to_409() {
+    let response = ProjectError::Conflict("stale".into()).into_response();
+    assert_eq!(response.status(), StatusCode::CONFLICT);
 }

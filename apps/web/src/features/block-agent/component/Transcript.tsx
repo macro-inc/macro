@@ -1,206 +1,178 @@
-/**
- * The message chain: a virtualized transcript that loads pinned to the
- * bottom and follows appends while the reader is near it.
- *
- * The scroll recipe is the channel's `ThreadList` distilled (see
- * CHANNEL_BLOCK_NOTES.md §5): virtua for virtualization, an immediate
- * bottom preposition on mount (virtua overshoots with an unmeasured
- * viewport and the browser clamps — first paint lands at the bottom), then
- * a settle loop that keeps re-pinning while late content (Pierre diffs,
- * markdown) grows the list, aborting on a real scroll-up gesture. opencode
- * solves the same problem by patching @tanstack/virtual-core with
- * `anchorTo: "end"`/`followOnAppend` — virtua plus this loop is the
- * unpatched equivalent.
- *
- * Chrome shared with the channel: the `@ui` `Scroll` thumb (hidden native
- * scrollbar, drag-seekable gutter) and the channel's `ScrollToBottomOverlay`,
- * fed by the same scroll-state shape `ThreadList` emits.
- */
-
+/** Agent messages on the channel's end-anchored TanStack scroll surface. */
 import { ScrollToBottomOverlay } from '@channel/Channel/ScrollToBottomOverlay';
-import type { ThreadListScrollState } from '@channel/Channel/ThreadList';
-import { Scroll } from '@ui';
-import { createSignal, onCleanup } from 'solid-js';
-import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
+import {
+  ThreadList,
+  type ThreadListNavigation,
+  type ThreadListScrollState,
+} from '@channel/Channel/ThreadList';
+import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  onCleanup,
+  Show,
+} from 'solid-js';
+import { match } from 'ts-pattern';
 import { useAgentSession } from '../context/AgentSessionContext';
+import type { AgentMessageTarget } from '../core/search-location';
+import { isLiveTurn, liveTurnMessage } from '../state/live-turn';
+import { WorkingLine } from '../ui/WorkingLine';
 import { Message } from './AgentMessage';
 import { ReplyToSelection } from './ReplyToSelection';
 
-/** The channel's `NEAR_BOTTOM_THRESHOLD`: within this, the view follows. */
-const NEAR_BOTTOM_PX = 50;
-/** How long the bottom pin keeps correcting after a scroll-to-bottom. */
-const SETTLE_MS = 1000;
-/** The channel's `BASE_ITEM_SIZE` estimate. */
-const ITEM_SIZE = 96;
-
-export function Transcript() {
-  const { messages, quoteSelection } = useAgentSession();
-
-  let scrollRef: HTMLDivElement | undefined;
-  let handle: VirtualizerHandle | undefined;
-  let cancelPin: (() => void) | undefined;
-  let growthObserver: ResizeObserver | undefined;
-  let viewportObserver: ResizeObserver | undefined;
+export function Transcript(props: { searchTarget?: AgentMessageTarget }) {
+  const { messages, quoteSelection, sessionId, turn } = useAgentSession();
+  // At most one turn runs, and the fold's `turn` is the one word on whether
+  // it does - so which message shimmers is decided here, once, not by each
+  // message from its own `stop` (see `state/live-turn`). A speculated stop
+  // reads as `stopping`, which settles the live message before the log
+  // closes it.
+  const working = () => {
+    const state = turn();
+    return state === 'starting' || state === 'running' || state === 'blocked';
+  };
+  const liveTurn = () => liveTurnMessage(messages(), working());
+  const initialTarget = props.searchTarget;
+  const initialSessionId = sessionId();
+  const splitPanel = useSplitPanel();
   const [transcriptEl, setTranscriptEl] = createSignal<HTMLDivElement>();
-
-  onCleanup(() => {
-    cancelPin?.();
-    growthObserver?.disconnect();
-    viewportObserver?.disconnect();
-  });
-  // Whether the view should chase the bottom as content grows. True until
-  // the reader scrolls away; recomputed on every scroll.
-  let follow = true;
-  let didInitialScroll = false;
-  let lastScrollTop = 0;
-
-  // The scroller's inner height, so short transcripts can bottom-align:
-  // the flex spacer needs the content wrapper to be at least viewport-tall.
-  const [viewportHeight, setViewportHeight] = createSignal(0);
   const [scrollState, setScrollState] = createSignal<ThreadListScrollState>();
+  const [navigation, setNavigation] = createSignal<ThreadListNavigation>();
+  const [highlightedId, setHighlightedId] = createSignal<string>();
 
-  const distanceFromBottom = () => {
-    const el = scrollRef;
-    if (!el) return 0;
-    return el.scrollHeight - el.scrollTop - el.clientHeight;
-  };
-
-  const emitScrollState = () => {
-    const el = scrollRef;
-    if (!el) return;
-    const distance = distanceFromBottom();
-    setScrollState({
-      didInitialScroll,
-      isNearBottom: distance <= NEAR_BOTTOM_PX,
-      isScrollingDown: el.scrollTop >= lastScrollTop,
-      distanceFromTop: el.scrollTop,
-      distanceFromBottom: distance,
-      viewportSize: el.clientHeight,
-    });
-    lastScrollTop = el.scrollTop;
-  };
-
-  /**
-   * Scroll to the newest message, then keep re-pinning to the true bottom for
-   * a short window so late-settling content can't leave the last message cut
-   * off. Aborts on a wheel-up or touch drag (a tap is not a scroll) — the
-   * channel's `pinToBottom`, without its target machinery.
-   */
-  const pinToBottom = () => {
-    cancelPin?.();
-    const el = scrollRef;
-    if (!el || !handle) return;
-    follow = true;
-    handle.scrollToIndex(messages().length - 1, { align: 'end' });
-
-    let rafId = 0;
-    const start = performance.now();
-
-    const stop = () => {
-      if (rafId) cancelAnimationFrame(rafId);
-      el.removeEventListener('wheel', onWheel);
-      el.removeEventListener('pointerdown', onPointerDown);
-      if (cancelPin === stop) cancelPin = undefined;
-      didInitialScroll = true;
-      emitScrollState();
-    };
-    function onWheel(event: WheelEvent) {
-      if (event.deltaY < 0) stop();
-    }
-    function onPointerDown(event: PointerEvent) {
-      if (event.pointerType === 'touch') stop();
-    }
-    el.addEventListener('wheel', onWheel, { passive: true });
-    el.addEventListener('pointerdown', onPointerDown, { passive: true });
-    cancelPin = stop;
-
-    const tick = () => {
-      if (distanceFromBottom() > 1) el.scrollTop = el.scrollHeight;
-      if (performance.now() - start >= SETTLE_MS) {
-        stop();
-        return;
+  // Object identity and array positions can change as the live fold reconciles.
+  const messageById = createMemo(
+    () =>
+      new Map(
+        messages().map((message) => [
+          `${message.agentSessionId}:${message.turn}:${message.author.kind}`,
+          message,
+        ])
+      )
+  );
+  // The turn is open and the agent has said nothing yet: the newest message
+  // is the user's, so no agent row exists to carry the working line. One
+  // extra row at the tail says the wait is work, not a stall - a prompt still
+  // on the wire (`starting`) included.
+  const workingKey = () => `${sessionId() ?? ''}:working`;
+  const showsWorking = createMemo(() => {
+    const state = turn();
+    if (state !== 'starting' && state !== 'running') return false;
+    const last = messages().at(-1);
+    return last?.author.kind === 'user';
+  });
+  // What the wait is: the prompt still on the wire, or the agent at work.
+  const workingLabel = () =>
+    match(turn())
+      .with('starting', () => 'Sending')
+      .otherwise(() => 'Working');
+  const keys = createMemo(() => [
+    ...messageById().keys(),
+    ...(showsWorking() ? [workingKey()] : []),
+  ]);
+  let positionedTarget: AgentMessageTarget | undefined;
+  // Navigation is an external effect. Wait for both log hydration and the
+  // virtual list's layout; subsequent live folds must not repeat the jump.
+  createEffect(
+    on(
+      [() => props.searchTarget, messageById, navigation, scrollState],
+      ([target, byId, handle, state]) => {
+        if (
+          !target ||
+          target === positionedTarget ||
+          !handle ||
+          !state?.didInitialScroll
+        )
+          return;
+        const entry = [...byId].find(
+          ([, message]) =>
+            message.turn === target.messageTurn &&
+            message.author.kind === target.author
+        );
+        if (!entry) return;
+        // The ready notification can run within initial layout, before its
+        // scroll-to-latest finishes. Navigate after that layout has committed.
+        const frame = requestAnimationFrame(() => {
+          if (!handle.scrollToMessage(entry[0])) return;
+          positionedTarget = target;
+          setHighlightedId(entry[0]);
+        });
+        onCleanup(() => cancelAnimationFrame(frame));
       }
-      rafId = requestAnimationFrame(tick);
-    };
-    rafId = requestAnimationFrame(tick);
-  };
-
-  // Follow growth beyond the pin window: whenever the virtualized content
-  // resizes (a new turn, a streaming message getting longer) and the reader
-  // hasn't scrolled away, snap back to the bottom. This is the sticky-scroll
-  // rule — follow only near the bottom — applied to content growth, which is
-  // how agent output arrives.
-  const observeGrowth = (el: HTMLDivElement) => {
-    growthObserver = new ResizeObserver(() => {
-      if (follow && distanceFromBottom() > 1) {
-        const scroller = scrollRef;
-        if (scroller) scroller.scrollTop = scroller.scrollHeight;
-      }
-    });
-    growthObserver.observe(el);
-  };
-
-  const attachScroller = (el: HTMLDivElement) => {
-    scrollRef = el;
-    // `Scroll` owns the element's onScroll; listen alongside it.
-    el.addEventListener(
-      'scroll',
-      () => {
-        follow = distanceFromBottom() <= NEAR_BOTTOM_PX;
-        emitScrollState();
-      },
-      { passive: true }
-    );
-    viewportObserver = new ResizeObserver(() => {
-      setViewportHeight(el.clientHeight);
-      emitScrollState();
-    });
-    viewportObserver.observe(el);
-  };
+    )
+  );
+  // Insets belong in virtual measurements, not CSS padding outside the sizer.
+  // ThreadList preserves the end pin across keyboard/viewport and inset resizes.
+  const insets = () =>
+    isTouchDevice()
+      ? {
+          start: splitPanel?.contentOffsetTop() ?? 0,
+          end: FloatRegions.hostHeight(),
+        }
+      : { start: 0, end: 0 };
 
   return (
     <div class="relative flex-1 min-h-0" ref={setTranscriptEl}>
-      <Scroll scrollRef={attachScroller}>
-        <div
-          class="flex flex-col [overflow-anchor:none]"
-          style={{ 'min-height': `${viewportHeight()}px` }}
-        >
-          {/* Bottom-align short transcripts, chat-style. */}
-          <div aria-hidden style={{ 'flex-grow': 1 }} />
-          <div ref={observeGrowth}>
-            <Virtualizer
-              ref={(virtualizer) => {
-                if (!virtualizer) return;
-                handle = virtualizer;
-                // Issue the bottom target immediately, before virtua has a
-                // measured viewport — overshoot clamps to the current
-                // maximum, so the first painted frame is already at the
-                // bottom.
-                if (messages().length > 0) pinToBottom();
-              }}
-              scrollRef={scrollRef}
-              data={messages()}
-              itemSize={ITEM_SIZE}
-              onScrollEnd={() => {
-                // The feed fills asynchronously; if rows arrived after mount
-                // and we're meant to be following, correct the landing.
-                if (follow && distanceFromBottom() > NEAR_BOTTOM_PX) {
-                  pinToBottom();
-                }
-              }}
-            >
+      <ThreadList
+        keys={keys}
+        initialPosition={
+          initialTarget && initialSessionId
+            ? {
+                type: 'element',
+                id: `${initialSessionId}:${initialTarget.messageTurn}:${initialTarget.author}`,
+              }
+            : { type: 'latest' }
+        }
+        insets={insets()}
+        targetId={highlightedId()}
+        onUserNavigation={() => setHighlightedId(undefined)}
+        onReady={(handle) => {
+          setNavigation(handle);
+          return () => {
+            setNavigation(undefined);
+          };
+        }}
+        onScroll={(state) => setScrollState(state)}
+      >
+        {({ id }) => (
+          <Show
+            when={id !== workingKey()}
+            fallback={
+              <div class="macro-message-width mx-auto px-4 pb-4 min-w-0">
+                <WorkingLine label={workingLabel()} />
+              </div>
+            }
+          >
+            <Show when={messageById().get(id)}>
               {(message) => (
-                <div class="w-full max-w-3xl mx-auto px-4 pb-4 min-w-0">
-                  <Message message={message} />
+                <div
+                  class="macro-message-width mx-auto px-4 pb-4 min-w-0 rounded-lg"
+                  classList={{ 'bg-accent/10': highlightedId() === id }}
+                  data-search-target={
+                    highlightedId() === id ? 'true' : undefined
+                  }
+                >
+                  <Message
+                    message={message()}
+                    inFlight={isLiveTurn(message(), liveTurn())}
+                  />
                 </div>
               )}
-            </Virtualizer>
-          </div>
-        </div>
-      </Scroll>
+            </Show>
+          </Show>
+        )}
+      </ThreadList>
       <ScrollToBottomOverlay
         scrollState={scrollState}
-        onScrollToBottom={pinToBottom}
+        onScrollToBottom={() => {
+          setHighlightedId(undefined);
+          navigation()?.scrollToLatest();
+        }}
+        class="touch:top-[calc(var(--mobile-content-inset-top,0)+1rem)]"
       />
       <ReplyToSelection container={transcriptEl()} onReply={quoteSelection} />
     </div>

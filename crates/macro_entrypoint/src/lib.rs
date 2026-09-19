@@ -44,11 +44,28 @@ maybe_env_vars! {
 /// `APP_SECRETS_JSON` (the way the rest of our config is injected, see `macro_env_var`) is ignored
 /// and our tracing filter ends up wrong. This reads `RUST_LOG` the same way `macro_env_var` does —
 /// `APP_SECRETS_JSON` first, then the process environment as a fallback.
+/// Both branches carry an INFO floor, for the same reason
+/// [`otel_trace_filter`] does. A builder with no default directive and an
+/// absent or empty `RUST_LOG` yields a filter with *zero* directives, which
+/// logs nothing at all - not even ERROR. A service deployed without an
+/// explicit `RUST_LOG` is then silent, while its spans keep flowing, so it
+/// reads as healthy-but-quiet rather than as misconfigured.
 fn rust_log_env_filter() -> EnvFilter {
     match RustLog::new() {
-        Some(value) => EnvFilter::builder().parse_lossy(value),
-        None => EnvFilter::from_default_env(),
+        Some(value) => rust_log_filter(Some(&value)),
+        // `from_env_lossy` reads `RUST_LOG` itself, so the process
+        // environment stays behind the builder rather than a direct
+        // `std::env::var` (CS-14).
+        None => rust_log_builder().from_env_lossy(),
     }
+}
+
+fn rust_log_builder() -> tracing_subscriber::filter::Builder {
+    EnvFilter::builder().with_default_directive(LevelFilter::INFO.into())
+}
+
+fn rust_log_filter(value: Option<&str>) -> EnvFilter {
+    rust_log_builder().parse_lossy(value.unwrap_or(""))
 }
 
 /// Build an [`EnvFilter`] for the OpenTelemetry span exporter from `OTEL_TRACE_FILTER`.

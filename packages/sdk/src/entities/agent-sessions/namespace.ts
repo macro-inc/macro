@@ -1,6 +1,10 @@
 import type { SandboxSize } from '../../../generated/agent-harness/types.gen';
 import type { MacroClient } from '../../utils/client';
-import { AgentSession } from './agent-session';
+import {
+  AgentSession,
+  type CreateManagedSessionOptions,
+  type SelectableRepository,
+} from './agent-session';
 
 /** Entry point for coding-agent sessions. */
 export class AgentSessionNamespace {
@@ -12,11 +16,16 @@ export class AgentSessionNamespace {
   }
 
   /** Create a managed agent session. */
-  createManaged(opts?: {
-    prompt?: string;
-    instructions?: string;
-  }): Promise<AgentSession> {
+  createManaged(opts?: CreateManagedSessionOptions): Promise<AgentSession> {
     return AgentSession.createManaged(this.client, opts);
+  }
+
+  /**
+   * The GitHub repositories the caller can hand a managed session, with the
+   * branch each one's sessions start on by default.
+   */
+  repositories(): Promise<SelectableRepository[]> {
+    return AgentSession.repositories(this.client);
   }
 
   /** The caller's default sandbox size for new `@coder` sessions. */

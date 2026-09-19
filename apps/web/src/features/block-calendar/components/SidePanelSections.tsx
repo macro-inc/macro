@@ -3,12 +3,13 @@ import { useCalendarView } from '@app/features/calendar/components/CalendarViewC
 import { SourceControls } from '@app/features/calendar/components/SourceControls';
 import {
   TEAM_OOO_SOURCE_ID,
-  TEAM_OOO_SOURCE_PREFIX,
   type TeamOooWindow,
   useHasTeammates,
   useUpcomingTeamOoo,
 } from '@app/features/calendar/hooks/use-team-ooo';
+import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { SidePanel, useSidePanel } from '@components/app/side-panel/SidePanel';
+import { enableCalendarTeamOoo } from '@core/constant/featureFlags';
 import { Calendar as MiniCalendar, ToggleSwitch } from '@ui';
 import { format } from 'date-fns';
 import {
@@ -107,19 +108,8 @@ function CalendarTeamOooSidePanelSection() {
   const hasTeammates = useHasTeammates();
   const isOverlayVisible = () =>
     calendarView.isSourceVisible(TEAM_OOO_SOURCE_ID);
-  const setOverlayVisible = (visible: boolean) => {
+  const setOverlayVisible = (visible: boolean) =>
     calendarView.setSourceVisibility(TEAM_OOO_SOURCE_ID, visible);
-    // Hiding the whole overlay closes a teammate event's open details, which
-    // the per-source close in setSourceVisibility only does for exact ids.
-    if (
-      !visible &&
-      calendarView
-        .selectedEvent()
-        ?.calendar.id.startsWith(TEAM_OOO_SOURCE_PREFIX)
-    ) {
-      calendarView.closeEventDetails();
-    }
-  };
 
   return (
     <Show when={hasTeammates()}>
@@ -231,7 +221,9 @@ export function SidePanelSections() {
     <Show when={!sidePanel?.isNarrow()}>
       <CalendarMiniCalendarSidePanelSection />
       <CalendarSourcesSidePanelSection />
-      <CalendarTeamOooSidePanelSection />
+      <ShowFeatureFlag flag={enableCalendarTeamOoo}>
+        <CalendarTeamOooSidePanelSection />
+      </ShowFeatureFlag>
     </Show>
   );
 }

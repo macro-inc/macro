@@ -46,6 +46,10 @@ pub enum StreamAudience {
         /// Owning workspace id.
         workspace_id: String,
     },
+    /// Anyone in any of these audiences. Used when an event belongs to more
+    /// than one grant at once, such as a departed session whose owner keeps
+    /// ownership even after losing access to the parent it came from.
+    Any(Vec<StreamAudience>),
 }
 
 /// One normalized broker event plus whose access gates it.
@@ -161,6 +165,14 @@ where
         audience: &StreamAudience,
     ) -> Result<bool, rootcause::Report> {
         match audience {
+            StreamAudience::Any(audiences) => {
+                for audience in audiences {
+                    if Box::pin(self.subscriber_in_audience(audience)).await? {
+                        return Ok(true);
+                    }
+                }
+                Ok(false)
+            }
             StreamAudience::Workspace { workspace_id } => {
                 let current = self.scoped_workspace_id().await?;
                 if self.scope == WebhookScope::Team && current.is_none() {

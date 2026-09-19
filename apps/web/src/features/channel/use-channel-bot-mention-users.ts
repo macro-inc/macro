@@ -1,9 +1,12 @@
+import { isCursorBotId } from '@core/constant/cursorAgent';
+import { useCursorAgentsAccess } from '@core/cursor/flag';
 import type { IUser } from '@core/user/types';
 import { useAgentsQuery } from '@queries/agents/agents';
-import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
 import { useChannelBotsQuery } from '@queries/channel/channel-bots';
+import { queryReadyGate } from '@queries/gate';
 import type { Agent } from '@service-storage/generated/schemas/agent';
 import type { Bot } from '@service-storage/generated/schemas/bot';
+import type { MessageParent } from '@service-storage/messages';
 import { type Accessor, createMemo } from 'solid-js';
 
 function mentionUser(bot: Bot): IUser {
@@ -15,21 +18,27 @@ function mentionUser(bot: Bot): IUser {
   };
 }
 
-/** Build mention entries from installed channel bots and virtual global agents. */
+/**
+ * Build mention entries from installed channel bots and virtual global
+ * agents. Account setup does not hide a mention: the harness answers with
+ * a connection prompt in the thread when setup is needed. The built-in
+ * Cursor entry follows the Cursor rollout flag.
+ */
 export function availableBotMentionUsers(
   channelBots: readonly Bot[],
   agents: readonly Agent[],
-  cursorConnected: boolean
+  cursorEnabled: boolean,
+  surface: 'channel' | 'document' = 'channel'
 ): IUser[] {
   const globalAgents = agents.filter(
     (agent) =>
-      agent.channel_scope === 'all' &&
-      agent.bot.has_agent &&
-      (agent.harness !== 'cursor' || cursorConnected)
+      (surface === 'document' || agent.channel_scope === 'all') &&
+      agent.bot.has_agent
   );
   const seen = new Set<string>();
 
   return [...channelBots, ...globalAgents.map((agent) => agent.bot)]
+    .filter((bot) => cursorEnabled || !isCursorBotId(bot.id))
     .map(mentionUser)
     .filter((user) => {
       if (seen.has(user.id)) return false;
@@ -43,20 +52,23 @@ export function availableBotMentionUsers(
  * typeahead. Like `macroAiMentionUser()`, `email` is set to the bot's name so
  * persisted mentions render as "@BotName", and `id` uses the canonical
  * `bot|<uuid>` principal form so mentions are re-tagged as bot mentions at
- * send time (see `expandMentions`).
+ * send time (see `authoredMentions`).
  */
-export function useChannelBotMentionUsers(
-  channelId: Accessor<string>
+export function useMessageBotMentionUsers(
+  parent: Accessor<MessageParent>
 ): Accessor<IUser[]> {
-  const channelBots = useChannelBotsQuery(channelId);
+  const channelBots = useChannelBotsQuery(() =>
+    parent().type === 'channel' ? parent().id : ''
+  );
   const agents = useAgentsQuery();
-  const cursorStatus = useCursorApiKeyStatusQuery();
+  const canUseCursor = useCursorAgentsAccess();
 
   return createMemo(() =>
     availableBotMentionUsers(
-      channelBots.data ?? [],
-      agents.data ?? [],
-      cursorStatus.data?.registered ?? false
+      queryReadyGate(channelBots) ? channelBots.data : [],
+      queryReadyGate(agents) ? agents.data : [],
+      canUseCursor(),
+      parent().type
     )
   );
 }
