@@ -188,6 +188,24 @@ fn codex_reads_the_closing_raw_output() {
     assert_eq!(reader.terminal_output(&silent.view()), None);
     assert_eq!(reader.terminal_exit_code(&silent.view()), Some(127));
 
+    // The Codex Cloud translator closes with the `commandExecution` item in
+    // Codex's own spelling, beside the output it streamed as content.
+    let cloud = Frame::new()
+        .status(ToolStatus::Failed)
+        .text("ls: nope: No such file or directory\n")
+        .raw_output(json!({
+            "id": "item_1", "type": "commandExecution", "command": "ls nope",
+            "aggregatedOutput": "ls: nope: No such file or directory\n", "exitCode": 2,
+            "status": "failed"
+        }));
+    assert_eq!(
+        reader.terminal_output(&cloud.view()),
+        Some(TerminalOutput::Snapshot(
+            "ls: nope: No such file or directory\n".to_owned()
+        ))
+    );
+    assert_eq!(reader.terminal_exit_code(&cloud.view()), Some(2));
+
     // `_meta` outranks it, on both counts.
     let streamed = Frame::new()
         .status(ToolStatus::Completed)

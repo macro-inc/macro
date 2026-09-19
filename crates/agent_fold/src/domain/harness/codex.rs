@@ -26,7 +26,10 @@
 //! extension while it runs (the neutral reading), and its closing frame
 //! carries the whole of it again as `rawOutput` ([`CommandOutput`]) along
 //! with the exit code - the one place the exit code is when the closing
-//! frame has no `terminal_exit`.
+//! frame has no `terminal_exit`. This repository's Codex Cloud translator
+//! (`agentInfo.name = "codex_acp"`) streams the accumulated output as a text
+//! content block instead and closes with the `commandExecution` item as
+//! `rawOutput`, in Codex's own spelling; the same reading covers both.
 
 use std::collections::BTreeMap;
 
@@ -95,10 +98,14 @@ struct AgentState {
     message: Option<String>,
 }
 
-/// A shell command's `rawOutput` on its closing frame.
+/// A shell command's `rawOutput` on its closing frame: codex-acp's
+/// `{ formatted_output, exit_code }`, or the Codex Cloud translator's
+/// `commandExecution` item with `{ aggregatedOutput, exitCode }`.
 #[derive(Debug, Deserialize)]
 struct CommandOutput {
+    #[serde(alias = "aggregatedOutput")]
     formatted_output: Option<String>,
+    #[serde(alias = "exitCode")]
     exit_code: Option<i32>,
 }
 
