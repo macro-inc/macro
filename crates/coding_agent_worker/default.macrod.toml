@@ -7,6 +7,10 @@ web_url = "https://macro.com/app"
 
 [identity]
 scope = "private"
+# Allow agents to bypass tool permissions, subject to web confirmation.
+# When enabled, agents can run commands and edit files without approval.
+# Changes apply at the next pairing.
+allow_permission_bypass = false
 
 [harness]
 command = "hermes"

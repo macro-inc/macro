@@ -117,7 +117,11 @@ export function ListEntity(props: ListEntityProps) {
   const [snippetContainerRef, setSnippetContainerRef] = createSignal<
     HTMLElement | undefined
   >();
-  const chars = useCharacterCount(snippetContainerRef);
+  const chars = useCharacterCount(() =>
+    props.deferInteractions && !hasSearchContentHits(props.entity)
+      ? undefined
+      : snippetContainerRef()
+  );
 
   // For singleton hits on a SnippetEntity, expanding "show more" only adds
   // value when windowSearchMatch trimmed text — otherwise the inline
@@ -156,6 +160,7 @@ export function ListEntity(props: ListEntityProps) {
   const draggable = createEntityDraggable({
     entity: props.entity,
     splitId: useSplitPanel()?.handle?.id,
+    deferUntilInteraction: () => props.deferInteractions === true,
   });
 
   const listLayout = useListLayout();
@@ -193,7 +198,7 @@ export function ListEntity(props: ListEntityProps) {
         // that the layouts below and the soup group headers both read, so it has
         // to track which layout the Switch actually renders.
         isWide() ? SOUP_ROW_CLASS.wide : SOUP_ROW_CLASS.narrow,
-        'soup-list-entity rounded-lg @container/entity w-[calc(100%-0.5rem)] mr-1 relative group/narrow flex flex-col py-0.5',
+        'soup-list-entity rounded-xl @container/entity w-[calc(100%-0.5rem)] mr-1 relative group/narrow flex flex-col py-0.5',
         {
           'min-h-10 mx-(--soup-row-gutter)':
             !isMobile() && !usesCondensedNarrowLayout(),

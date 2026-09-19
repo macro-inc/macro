@@ -4,6 +4,7 @@ import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import {
   type CalendarDeletionScope,
   type CalendarRsvpScope,
+  type CalendarUpdateScope,
   emailClient,
 } from '@service-email/client';
 import type { CalendarEvent as CalendarEventEntity } from '@service-email/generated/schemas/calendarEvent';
@@ -396,7 +397,16 @@ export interface UpdateCalendarEventArgs {
   eventId: string;
   /** Calendar whose copy of the event is patched. Omit for the canonical copy. */
   calendarId?: string;
-  patch: Omit<UpdateCalendarEventRequest, 'calendarId'>;
+  /** How much of a recurring series to patch; defaults to all of it. */
+  scope?: CalendarUpdateScope;
+  /** Original-start key of the occurrence a scoped update targets. */
+  recurrenceId?: string;
+  /** Cache key of the occurrence a scoped update targets, for the optimistic update. */
+  occurrenceKey?: string;
+  patch: Omit<
+    UpdateCalendarEventRequest,
+    'calendarId' | 'scope' | 'recurrenceId'
+  >;
 }
 
 type UpdateCallbacks = MutationCallbacks<
@@ -469,7 +479,12 @@ function applyEventPatch(
   return { ...item, event, occurrence };
 }
 
-/** Patches event fields; recurring events update the whole series. */
+/**
+ * Patches event fields. A recurring event patches the whole series by
+ * default; a `this_event` scope writes the patch as a single-occurrence
+ * exception addressed by `recurrenceId`, so the optimistic update lands on
+ * that occurrence alone.
+ */
 export function useUpdateCalendarEventMutation(callbacks?: UpdateCallbacks) {
   return useMutation(() => ({
     mutationFn: async (args: UpdateCalendarEventArgs) =>
@@ -477,6 +492,8 @@ export function useUpdateCalendarEventMutation(callbacks?: UpdateCallbacks) {
         emailClient.updateCalendarEvent(args.eventId, {
           ...args.patch,
           calendarId: args.calendarId,
+          scope: args.scope,
+          recurrenceId: args.recurrenceId,
         })
       ),
     ...withCallbacks<
@@ -486,10 +503,18 @@ export function useUpdateCalendarEventMutation(callbacks?: UpdateCallbacks) {
       CalendarMutationContext
     >(
       {
-        onMutate: (args) =>
-          patchOccurrenceCaches(
-            patchEventItems(args.eventId, (item) => applyEventPatch(item, args))
-          ),
+        onMutate: (args) => {
+          const patchesOneOccurrence =
+            args.scope === 'this_event' && args.occurrenceKey !== undefined;
+          return patchOccurrenceCaches(
+            patchEventItems(args.eventId, (item) =>
+              patchesOneOccurrence &&
+              item.occurrence.occurrenceKey !== args.occurrenceKey
+                ? item
+                : applyEventPatch(item, args)
+            )
+          );
+        },
         onError: (_error, _args, context) => context?.rollback(),
         onSettled: (_data, _error, args) => {
           invalidateCalendarEventPreviews(args.eventId);

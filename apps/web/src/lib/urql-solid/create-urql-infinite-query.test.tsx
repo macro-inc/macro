@@ -7,7 +7,7 @@ import {
   type OperationResult,
 } from '@urql/core';
 import { createRoot, createSignal } from 'solid-js';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fromValue, makeSubject, onEnd, pipe } from 'wonka';
 import { createUrqlInfiniteQuery } from './create-urql-infinite-query';
 import { InfiniteQueryObserver } from './infinite-query-observer';
@@ -72,6 +72,7 @@ const DOCUMENT = gql`
 const disposals: Array<() => void> = [];
 afterEach(() => {
   for (const dispose of disposals.splice(0)) dispose();
+  vi.restoreAllMocks();
 });
 
 describe('createUrqlInfiniteQuery', () => {
@@ -239,6 +240,38 @@ describe('createUrqlInfiniteQuery', () => {
     });
     expect(query.data).toEqual(['first-updated', 'second']);
     expect(fake.executions[0]?.unsubscribed).toBe(false);
+  });
+
+  it('does not traverse retained page data on resets and option changes', () => {
+    const fake = makeFakeClient();
+    const [enabled, setEnabled] = createSignal(true);
+    let query!: ReturnType<
+      typeof createUrqlInfiniteQuery<Page, Variables, string | null>
+    >;
+    const dispose = createRoot((rootDispose) => {
+      query = createUrqlInfiniteQuery<Page, Variables, string | null>(() => ({
+        query: DOCUMENT,
+        client: fake.client,
+        enabled: enabled(),
+        initialPageParam: null,
+        variables: (cursor) => ({ cursor }),
+        getNextPageParam: (lastPage) => lastPage.nextCursor,
+      }));
+      return rootDispose;
+    });
+    disposals.push(dispose);
+    const page = { values: ['first'], nextCursor: null };
+    fake.executions[0]?.next(page);
+    const firstData = query.data;
+    const descriptors = vi.spyOn(Object, 'getOwnPropertyDescriptors');
+
+    query.resetToInitialPage();
+    setEnabled(false);
+
+    expect(query.isEnabled).toBe(false);
+    expect(query.data).toBe(firstData);
+    expect(fake.executions[0]?.unsubscribed).toBe(true);
+    expect(descriptors).not.toHaveBeenCalledWith(page);
   });
 
   it('resets to the live initial page before refetching', async () => {

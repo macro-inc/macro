@@ -104,6 +104,15 @@ impl CompaniesRepositoryImpl {
 
     /// Look up the company owning `(team, lower(domain))`. Returns
     /// `(id, hidden)`; `hidden` is read so new contacts can inherit it.
+    ///
+    /// `d.team_id` is filtered as well as `c.team_id`: the two are invariably
+    /// equal (`crm_domains.team_id` is NOT NULL and every insert writes the
+    /// owning company's team, which is never updated), but only the predicate
+    /// on `crm_domains` lets the planner probe
+    /// `crm_domains_team_id_lower_domain_unique (team_id, LOWER(domain))`.
+    /// Without it the leading index column is unconstrained, so the lookup
+    /// degrades to a full scan of `crm_domains` joined against every company
+    /// in the team — while holding this team+domain's advisory lock.
     async fn find_company_by_domain(
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         team_id: &uuid::Uuid,
@@ -115,6 +124,7 @@ impl CompaniesRepositoryImpl {
             FROM crm_companies c
             JOIN crm_domains d ON d.company_id = c.id
             WHERE c.team_id = $1
+              AND d.team_id = $1
               AND LOWER(d.domain) = $2
             LIMIT 1
             "#,

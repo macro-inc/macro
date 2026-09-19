@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 
+import { withDocumentTabItemScope } from '@app/features/next-soup/soup-view/document-tab-scope';
 import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import type { SoupPage } from '@service-storage/generated/schemas/soupPage';
@@ -381,15 +382,43 @@ describe('removeSoupEntitiesFromDoneFilteredQueries', () => {
   const inboxViewKey = [...soupKeys.items._def, { emailView: 'inbox' }];
   const doneFilterKey = [
     ...soupKeys.items._def,
-    { ef: [{ l: { NotificationDone: false } }] },
+    {
+      ef: [
+        {
+          '|': [
+            { l: { NotificationState: 'unseen' } },
+            { l: { NotificationState: 'seen' } },
+          ],
+        },
+      ],
+    },
   ];
-  const ndFilterKey = [...soupKeys.items._def, { df: [{ l: { nd: false } }] }];
+  const ndFilterKey = [
+    ...soupKeys.items._def,
+    { df: [{ '|': [{ l: { ns: 'unseen' } }, { l: { ns: 'seen' } }] }] },
+  ];
   const allViewKey = [...soupKeys.items._def, { emailView: 'all' }];
 
   const itemsAt = (key: unknown[]) =>
     testQueryClient
       .getQueryData<InfiniteData<SoupPage, unknown>>(key)!
       .pages[0].items.map(getSoupItemId);
+
+  it('does not treat negated or mixed-OR state filters as active-only', () => {
+    const active = { l: { ns: 'unseen' } };
+    const cases = [
+      { '!': active },
+      { '|': [active, { l: { ns: 'done' } }] },
+      { '|': [active, { l: { id: 'e-1' } }] },
+      { l: { ns: 'done' } },
+    ];
+    for (const ast of cases) {
+      const key = [...soupKeys.items._def, { df: ast }];
+      testQueryClient.setQueryData(key, mockSoupCache([[emailItem('e-1')]]));
+      removeSoupEntitiesFromDoneFilteredQueries(new Set(['e-1']));
+      expect(itemsAt(key)).toEqual(['e-1']);
+    }
+  });
 
   it('removes from done-filtered queries and keeps done-inclusive ones', () => {
     const data = () => mockSoupCache([[emailItem('e-1'), mockChatItem('c-1')]]);
@@ -421,6 +450,29 @@ describe('removeSoupEntitiesFromDoneFilteredQueries', () => {
 });
 
 describe('removeSearchEntities', () => {
+  it('handles agent-session results without treating them as legacy chats', () => {
+    const session = {
+      type: 'agentSession',
+      id: 'session-1',
+      name: 'Search verification',
+      owner_id: 'macro|owner@example.com',
+      bot_id: 'bot-1',
+      created_at: '2026-09-11T00:00:00Z',
+      updated_at: '2026-09-11T00:00:00Z',
+      agent_session_search_results: [],
+    } satisfies UnifiedSearchResponseItem;
+    seedSearchQuery(
+      mockSearchCache([[session, mockSearchResult('chat', 'chat-1')]])
+    );
+
+    const tx = removeSearchEntities(new Set(['session-1']));
+    expect(getSearchQuery()!.pages[0].results).toEqual([
+      mockSearchResult('chat', 'chat-1'),
+    ]);
+    tx.rollback();
+    expect(getSearchQuery()!.pages[0].results[0]).toEqual(session);
+  });
+
   it('filters matching IDs from search results', () => {
     seedSearchQuery(
       mockSearchCache([
@@ -1093,6 +1145,111 @@ describe('insertSoupEntity — folder membership gate', () => {
   });
 });
 
+/** Shared's request scope must also gate immediate cache admission, even when
+ * restored/mutable client predicates no longer contain `shared-entity`. */
+describe('insertSoupEntity — Shared Files ownership gate', () => {
+  const ME = 'macro|me@example.com';
+  const OTHER = 'macro|other@example.com';
+  const FOLDER = 'folder-1';
+  const GROUP = 'in_progress';
+
+  function document(
+    id: string,
+    ownerId: string,
+    projectId = FOLDER
+  ): SoupApiItem {
+    const item = mockTaskItem(id, GROUP);
+    if (item.tag !== 'document') throw new Error('expected document fixture');
+    return { ...item, data: { ...item.data, ownerId, projectId } };
+  }
+
+  function seed(viewer: string | undefined) {
+    const existing = document('existing', OTHER);
+    const filter = withDocumentTabItemScope('shared', viewer, (item) =>
+      soupItemMatchesProjectMembership(item, FOLDER)
+    );
+    const legacy = [...soupKeys.items._def, 'shared-admission'];
+    const flat = [
+      ...soupKeys.astItems._def,
+      {},
+      {},
+      undefined,
+      'shared-admission',
+    ];
+    const grouped = [
+      ...soupKeys.astItems._def,
+      {},
+      {},
+      STATUS_GROUP_BY,
+      'shared-admission',
+    ];
+    const expanded = [...soupKeys.groupedGroup._def, 'shared-admission'];
+    for (const key of [legacy, flat, grouped, expanded])
+      testQueryClient.setQueryDefaults(key, {
+        meta: { itemFilter: filter, groupBy: STATUS_GROUP_BY, groupKey: GROUP },
+      });
+    testQueryClient.setQueryData(legacy, mockSoupCache([[existing]]));
+    testQueryClient.setQueryData(flat, {
+      pages: [{ kind: 'flat', items: [existing], nextCursor: null }],
+      pageParams: [null],
+    });
+    testQueryClient.setQueryData(
+      grouped,
+      mockGroupedParentCache([existing], [buildGroup(GROUP, ['existing'])])
+    );
+    testQueryClient.setQueryData(expanded, {
+      pages: [{ items: { existing }, group: buildGroup(GROUP, ['existing']) }],
+      pageParams: [null],
+    });
+    return { legacy, flat, grouped, expanded };
+  }
+
+  function expectIds(keys: ReturnType<typeof seed>, ids: string[]) {
+    expect(
+      testQueryClient
+        .getQueryData<InfiniteData<SoupPage>>(keys.legacy)!
+        .pages[0].items.map(getSoupItemId)
+    ).toEqual(ids);
+    expect(
+      testQueryClient
+        .getQueryData<InfiniteData<SoupAstItemsFlatPage>>(keys.flat)!
+        .pages[0].items.map(getSoupItemId)
+    ).toEqual(ids);
+    const grouped = testQueryClient.getQueryData<
+      InfiniteData<SoupAstItemsGroupedPage>
+    >(keys.grouped)!.pages[0];
+    expect(grouped.groups[0].itemIds).toEqual(ids);
+    expect(Object.keys(grouped.items).sort()).toEqual([...ids].sort());
+    const expanded = testQueryClient.getQueryData<
+      InfiniteData<{ items: Record<string, SoupApiItem>; group: GroupMeta }>
+    >(keys.expanded)!.pages[0];
+    expect(expanded.group.itemIds).toEqual(ids);
+    expect(Object.keys(expanded.items).sort()).toEqual([...ids].sort());
+  }
+
+  it('rejects owned documents in flat, grouped-parent and expanded-group caches', () => {
+    const keys = seed(ME);
+    insertSoupEntity(document('owned-new', ME));
+    expectIds(keys, ['existing']);
+  });
+
+  it('rejects document admission before viewer identity is known', () => {
+    const keys = seed(undefined);
+    insertSoupEntity(document('unverified-new', OTHER));
+    expectIds(keys, ['existing']);
+  });
+
+  it('retains the project gate and allows eligible shared documents with rollback', () => {
+    const keys = seed(ME);
+    insertSoupEntity(document('outside-folder', OTHER, 'other-folder'));
+    expectIds(keys, ['existing']);
+    const tx = insertSoupEntity(document('shared-new', OTHER));
+    expectIds(keys, ['shared-new', 'existing']);
+    tx.rollback();
+    expectIds(keys, ['existing']);
+  });
+});
+
 /**
  * Regression coverage for macro-3258: a channel row marked done is removed
  * from the done-filtered inbox pages, but the entity stays in the normalized
@@ -1102,12 +1259,30 @@ describe('insertSoupEntity — folder membership gate', () => {
 describe('restoreSoupEntityToDoneFilteredQueries', () => {
   const doneFilteredAstKey = (suffix: string) => [
     ...soupKeys.astItems._def,
-    { chanf: [{ l: { NotificationDone: false } }] },
+    {
+      chanf: [
+        {
+          '|': [
+            { l: { NotificationState: 'unseen' } },
+            { l: { NotificationState: 'seen' } },
+          ],
+        },
+      ],
+    },
     suffix,
   ];
   const doneFilteredItemsKey = [
     ...soupKeys.items._def,
-    { ef: [{ l: { NotificationDone: false } }] },
+    {
+      ef: [
+        {
+          '|': [
+            { l: { NotificationState: 'unseen' } },
+            { l: { NotificationState: 'seen' } },
+          ],
+        },
+      ],
+    },
     'legacy-inbox',
   ];
   const allViewAstKey = [
@@ -1137,6 +1312,65 @@ describe('restoreSoupEntityToDoneFilteredQueries', () => {
     );
     return item;
   }
+
+  it('restores only queries whose state constraint accepts the arriving notification', () => {
+    cacheChannel('ch-1');
+    const unseen = [
+      ...soupKeys.astItems._def,
+      { chanf: { l: { NotificationState: 'unseen' } } },
+    ];
+    const seen = [
+      ...soupKeys.astItems._def,
+      { chanf: { l: { NotificationState: 'seen' } } },
+    ];
+    seedFlatAstQuery(unseen, [[]]);
+    seedFlatAstQuery(seen, [[]]);
+    seedFlatAstQuery(doneFilteredAstKey('union'), [[]]);
+    restoreSoupEntityToDoneFilteredQueries('ch-1', 'unseen');
+    expect(flatAstItemsAt(unseen)).toEqual(['ch-1']);
+    expect(flatAstItemsAt(seen)).toEqual([]);
+    expect(flatAstItemsAt(doneFilteredAstKey('union'))).toEqual(['ch-1']);
+  });
+
+  it('combines inbox scoping with sibling AST and DTO state constraints', () => {
+    cacheChannel('ch-1');
+    const seenOnly = [
+      [
+        ...soupKeys.astItems._def,
+        { emailView: 'inbox', chanf: { l: { NotificationState: 'seen' } } },
+      ],
+      [
+        ...soupKeys.astItems._def,
+        { emailView: 'inbox', notification_filters: { states: ['seen'] } },
+      ],
+      [
+        ...soupKeys.astItems._def,
+        {
+          emailView: 'inbox',
+          notification_filters: { states: ['unseen', 'seen'] },
+          chanf: { l: { NotificationState: 'seen' } },
+        },
+      ],
+    ];
+    const active = [
+      ...soupKeys.astItems._def,
+      {
+        emailView: 'inbox',
+        chanf: {
+          '|': [
+            { l: { NotificationState: 'unseen' } },
+            { l: { NotificationState: 'seen' } },
+          ],
+        },
+      },
+    ];
+    for (const key of [...seenOnly, active]) seedFlatAstQuery(key, [[]]);
+    restoreSoupEntityToDoneFilteredQueries('ch-1', 'unseen');
+    for (const key of seenOnly) expect(flatAstItemsAt(key)).toEqual([]);
+    expect(flatAstItemsAt(active)).toEqual(['ch-1']);
+    restoreSoupEntityToDoneFilteredQueries('ch-1', 'seen');
+    for (const key of seenOnly) expect(flatAstItemsAt(key)).toEqual(['ch-1']);
+  });
 
   it('prepends the cached entity to done-filtered queries missing it', () => {
     cacheChannel('ch-1');
@@ -1204,7 +1438,7 @@ describe('restoreSoupEntityToDoneFilteredQueries', () => {
     );
     const key = [
       ...soupKeys.astItems._def,
-      { df: [{ l: { nd: false } }] },
+      { df: [{ '|': [{ l: { ns: 'unseen' } }, { l: { ns: 'seen' } }] }] },
       STATUS_GROUP_BY,
       'grouped-inbox',
     ];
@@ -1243,7 +1477,7 @@ describe('restoreSoupEntityToDoneFilteredQueries', () => {
       suffix,
     ];
     const doneFilteredKey = makeGroupQueryKey(
-      { df: [{ l: { nd: false } }] },
+      { df: [{ '|': [{ l: { ns: 'unseen' } }, { l: { ns: 'seen' } }] }] },
       'done-filtered'
     );
     const allViewKey = makeGroupQueryKey({ emailView: 'all' }, 'all-view');
@@ -1286,7 +1520,16 @@ describe('restoreSoupEntityToDoneFilteredQueries', () => {
     // insertGroupedPage cannot resolve a target group, so the query refetches.
     const key = [
       ...soupKeys.astItems._def,
-      { chanf: [{ l: { NotificationDone: false } }] },
+      {
+        chanf: [
+          {
+            '|': [
+              { l: { NotificationState: 'unseen' } },
+              { l: { NotificationState: 'seen' } },
+            ],
+          },
+        ],
+      },
       'grouped-date-inbox',
     ];
     testQueryClient.setQueryData(

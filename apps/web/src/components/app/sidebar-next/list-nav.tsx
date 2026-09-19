@@ -1,3 +1,4 @@
+import { parseAgentsRoute } from '@app/features/agents-view/core/route';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import {
@@ -7,14 +8,18 @@ import {
 } from '@components/app/app-sidebar/sidebar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { TOKENS } from '@core/hotkey/tokens';
+import PhoneCallIcon from '@phosphor-fill/phone-call-fill.svg';
 import { useLocation } from '@solidjs/router';
 import { Button, cn } from '@ui';
-import { createSignal, onCleanup } from 'solid-js';
+import { createSignal, onCleanup, Show } from 'solid-js';
 import { NavGlyph } from './nav-glyph';
 import type { SidebarNextNavItem } from './nav-items';
+import { SidebarUnreadDot } from './unread-dot';
 
 export type ListNavProps = {
   item: SidebarNextNavItem;
+  unread?: boolean;
+  activeCall?: boolean;
   onContextMenuOpenChange?: (open: boolean) => void;
 };
 
@@ -68,6 +73,12 @@ export const ListNav = (props: ListNavProps) => {
         .includes(props.item.id);
     }
     const expected = content();
+    if (
+      props.item.id === 'agents' &&
+      activeContent.type === 'component' &&
+      parseAgentsRoute(activeContent.id)
+    )
+      return true;
     return (
       activeContent.type === expected.type && activeContent.id === expected.id
     );
@@ -172,6 +183,11 @@ export const ListNav = (props: ListNavProps) => {
         size="icon-md"
         class="cursor-default rounded-xl"
         label={props.item.label}
+        aria-description={
+          [props.unread && 'Unread items', props.activeCall && 'Active call']
+            .filter(Boolean)
+            .join('. ') || undefined
+        }
         tooltip={`Go to ${props.item.label}`}
         tooltipPlacement="right"
         hotkey={[TOKENS.sidebar.goToLeader, props.item.hotkeyToken]}
@@ -182,33 +198,38 @@ export const ListNav = (props: ListNavProps) => {
         // tests use keep working.
         data-active={isActive() ? '' : undefined}
         data-sidebar-next-item={props.item.id}
+        data-unread={props.unread ? '' : undefined}
+        data-active-call={props.activeCall ? '' : undefined}
         onMouseDown={onMouseDown}
         onClick={onClick}
       >
-        {/* Flush to the screen edge: the button sits inside the rail's own
-            `px-3`, so -12px lands the bar's outer edge at x=0. Absolutely
-            positioned, so activating a button never shifts its glyph, and grown
-            on the Y axis only — scaling X too would pull the bar off the edge
-            mid-transition. Faded rather than mounted so it arrives on the same
-            curve as the glyph's outline-to-fill swap. */}
+        {/* Fixed geometry keeps the marker flush to the rail edge without
+            moving the glyph when selection changes. */}
         <span
           aria-hidden="true"
           class={cn(
-            'absolute -left-3 top-1/2 h-3/4 w-1 -translate-y-1/2 rounded-r-full bg-accent',
-            'transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none',
-            isActive() ? 'scale-y-100 opacity-100' : 'scale-y-90 opacity-0'
+            'absolute -left-2.5 top-1/2 h-3/4 w-1 -translate-y-1/2 rounded-r-full bg-ink-muted',
+            isActive() ? 'opacity-100' : 'opacity-0'
           )}
         />
 
-        {/* The accent sits on the glyph rather than the button: `ghost`
-            brightens its own text on hover, which would otherwise pull an
-            active button back to `text-ink` under the cursor. */}
         <NavGlyph
           icon={props.item.icon}
           iconActive={props.item.iconActive}
           filled={isActive()}
-          class={cn('size-5.5', isActive() && 'text-accent')}
+          class={cn('size-5.5', isActive() && 'text-ink-muted')}
         />
+        <Show
+          when={props.activeCall}
+          fallback={<SidebarUnreadDot active={props.unread} />}
+        >
+          <span
+            aria-hidden="true"
+            class="pointer-events-none absolute top-0 right-0 flex size-3.5 items-center justify-center text-accent"
+          >
+            <PhoneCallIcon class="size-full" />
+          </span>
+        </Show>
       </Button>
     </SidebarOpenInSplitMenu>
   );

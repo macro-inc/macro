@@ -4,6 +4,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use crate::domain::model::PermissionPolicyConfig;
 use agent_session::domain::connection::RuntimeAttachment;
 use agent_session::domain::model::{AgentMcpServers, AgentSessionId, SandboxSize};
 use agent_session::domain::ports::AgentConnector;
@@ -14,9 +15,11 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use super::error::{HarnessError, Result};
 use super::model::{
-    AgentRuntimeConfig, CommandOutcome, HarnessCommand, PriorChannelMessage, ProvisionedEgress,
-    SandboxEgress, SessionAnnouncement, SpawnContainer,
+    AgentKind, AgentRuntimeConfig, AnnouncedMessage, CommandOutcome, DeclinedMention,
+    HarnessCommand, PriorMessage, ProvisionedEgress, ReachableRepository, SandboxEgress,
+    SessionAnnouncement, SessionBlocker, SpawnContainer,
 };
+use super::notifications::PlannedNotification;
 use super::sandbox::SandboxResizeEffect;
 
 /// The distributed destination for a forwarded command.
@@ -26,6 +29,18 @@ pub enum CommandTarget {
     Replica(agent_session::domain::model::ReplicaId),
     /// The replica holding a registered harness's runtime socket.
     Harness(HarnessId),
+}
+
+/// The repositories a user can reach through Macro's GitHub App.
+///
+/// A port rather than the `github` crate's service directly, so the harness
+/// states what it needs - each repository's url and default branch, for one
+/// user - without the installation records, App credentials and HTTP client
+/// that answering it takes. Reaching nothing is an empty list, not an error.
+#[async_trait::async_trait]
+pub trait ReachableRepositories: Send + Sync + 'static {
+    /// Every repository `user` reaches, sorted by `owner/name`.
+    async fn for_user(&self, user: &MacroUserIdStr<'_>) -> Result<Vec<ReachableRepository>>;
 }
 
 /// Forwards commands to the replica currently responsible for execution.
@@ -71,6 +86,18 @@ pub trait HarnessBindings: Send + Sync + 'static {
     ) -> impl Future<Output = anyhow::Result<Option<HarnessId>>> + Send;
 }
 
+/// Loads facts for the domain to resolve a bot's permission policy.
+///
+/// Resolved at attach time like [`HarnessBindings`], so changing the agent's
+/// setting takes effect on its existing sessions the next time they attach.
+pub trait PermissionPolicySource: Send + Sync + 'static {
+    /// The persona choice and harness limit for `bot` right now.
+    fn permission_policy(
+        &self,
+        bot: BotId,
+    ) -> impl Future<Output = anyhow::Result<PermissionPolicyConfig>> + Send;
+}
+
 /// Durable attach/detach bookkeeping for harness runtime connections.
 ///
 /// The registry itself is in-process liveness; this is what lets the rest of
@@ -99,22 +126,22 @@ pub trait AgentRuntimeDirectory: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<AgentRuntimeConfig>>> + Send;
 }
 
-/// Loads messages preceding a channel-originated agent prompt.
-pub trait ChannelPromptContext: Send + Sync + 'static {
-    /// Verify that a user who triggered a prompt remains a channel member.
-    fn authorize_member(
+/// Authorizes message origins and loads conversation context for agent prompts.
+pub trait MessagePromptContext: Send + Sync + 'static {
+    /// Recheck the actor's posting permission and verify the live message belongs
+    /// to exactly this parent and root before provisioning or dispatching work.
+    fn authorize_origin(
         &self,
-        actor: &macro_user_id::user_id::MacroUserIdStr<'static>,
-        channel_id: macro_uuid::Uuid,
+        actor: &MacroUserIdStr<'static>,
+        origin: &super::model::AnnounceOrigin,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// Return up to ten non-deleted messages immediately before `message_id`
-    /// in chronological order.
+    /// Read up to ten preceding live messages with a fresh access check.
     fn preceding_messages(
         &self,
-        channel_id: macro_uuid::Uuid,
-        message_id: macro_uuid::Uuid,
-    ) -> impl Future<Output = Result<Vec<PriorChannelMessage>>> + Send;
+        actor: &MacroUserIdStr<'static>,
+        origin: &super::model::AnnounceOrigin,
+    ) -> impl Future<Output = Result<Vec<PriorMessage>>> + Send;
 }
 
 /// Composes an agent prompt from raw markdown and optional channel history.
@@ -124,17 +151,103 @@ pub trait AgentPromptComposer: Send + Sync + 'static {
     fn compose(
         &self,
         prompt_markdown: &str,
-        messages: Option<&[PriorChannelMessage]>,
+        parent: Option<&messages::domain::models::MessageParent>,
+        messages: Option<&[PriorMessage]>,
     ) -> impl Future<Output = Result<String>> + Send;
+}
+
+/// Who a prompt names, made able to open the session it is for.
+///
+/// Mentioning someone in a prompt is an invitation: when the author can
+/// drive the session (edit access), everyone they name is granted edit
+/// access too, so the notification that follows leads somewhere they can
+/// act. An author who cannot drive the session amplifies nobody - only the
+/// people who could already open it are returned. The author is never in
+/// the answer.
+pub trait PromptMentions: Send + Sync + 'static {
+    /// The users `prompt_markdown` mentions who can now open `session_id`.
+    fn share_with_mentioned<'a>(
+        &'a self,
+        session_id: AgentSessionId,
+        actor: Option<&'a MacroUserIdStr<'static>>,
+        prompt_markdown: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<MacroUserIdStr<'static>>>> + Send + 'a>>;
+}
+
+impl<Mentions: PromptMentions + ?Sized> PromptMentions for Arc<Mentions> {
+    fn share_with_mentioned<'a>(
+        &'a self,
+        session_id: AgentSessionId,
+        actor: Option<&'a MacroUserIdStr<'static>>,
+        prompt_markdown: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<MacroUserIdStr<'static>>>> + Send + 'a>> {
+        (**self).share_with_mentioned(session_id, actor, prompt_markdown)
+    }
+}
+
+/// A [`PromptMentions`] that finds nobody and shares with nobody: tests and
+/// tooling that never notify.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoPromptMentions;
+
+impl PromptMentions for NoPromptMentions {
+    fn share_with_mentioned<'a>(
+        &'a self,
+        _session_id: AgentSessionId,
+        _actor: Option<&'a MacroUserIdStr<'static>>,
+        _prompt_markdown: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<MacroUserIdStr<'static>>>> + Send + 'a>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+}
+
+/// Delivers the notifications a lifecycle fact warrants to whoever sends
+/// them on. Object-safe and held erased, like the lifecycle publisher.
+pub trait AgentSessionNotifier: Send + Sync + 'static {
+    /// Send one notification. Resolves once the send has been attempted; a
+    /// failure is the adapter's to log, never the fact's to fail on.
+    fn notify(
+        &self,
+        notification: PlannedNotification,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;
+}
+
+impl<Notifier: AgentSessionNotifier + ?Sized> AgentSessionNotifier for Arc<Notifier> {
+    fn notify(
+        &self,
+        notification: PlannedNotification,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+        (**self).notify(notification)
+    }
+}
+
+/// An [`AgentSessionNotifier`] that tells nobody: tests and tooling.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoopAgentSessionNotifier;
+
+impl AgentSessionNotifier for NoopAgentSessionNotifier {
+    fn notify(
+        &self,
+        _notification: PlannedNotification,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+        Box::pin(async {})
+    }
 }
 
 /// Posts a pointer to a new agent session into its originating thread.
 pub trait SessionAnnouncer: Send + Sync + 'static {
-    /// Publish one session announcement.
+    /// Publish one session announcement, returning the message it became.
     fn announce(
         &self,
         announcement: SessionAnnouncement,
-    ) -> impl Future<Output = Result<()>> + Send;
+    ) -> impl Future<Output = Result<AnnouncedMessage>> + Send;
+
+    /// Tell a thread why its mention opened no session.
+    ///
+    /// The other thing the bot can say into a thread: not "here is your
+    /// session" but "here is what you need first". Same channel, same
+    /// sender, no session to point at.
+    fn decline(&self, declined: DeclinedMention) -> impl Future<Output = Result<()>> + Send;
 }
 
 /// Where a session finds its bot's live runtime connection.
@@ -189,11 +302,14 @@ pub trait SandboxEgressProvisioner: Send + Sync + 'static {
     /// [`AgentMcpServers::OwnerConnections`] the owner's enabled apps are
     /// advertised; under [`AgentMcpServers::Selected`] exactly the listed
     /// apps are, connected or not.
+    ///
+    /// The session's repository is not named here: nothing about minting a
+    /// token depends on it, and the URL a session carries is read as a
+    /// repository once, where it is configured.
     fn provision(
         &self,
         session: AgentSessionId,
         owner: &MacroUserIdStr<'static>,
-        repo_url: &str,
         selection: &AgentMcpServers,
     ) -> impl Future<Output = Result<ProvisionedEgress>> + Send;
 
@@ -215,6 +331,24 @@ pub trait SandboxEgressProvisioner: Send + Sync + 'static {
 pub trait ContainerManager: Send + Sync + 'static {
     /// Transport returned by this provider.
     type Transport: AgentConnector;
+
+    /// Whether `owner` is set up for a `kind` session, before anything is
+    /// created for one.
+    ///
+    /// `Ok(None)` is the ordinary answer and the default: most providers
+    /// need nothing from the person mentioning them. A provider that runs
+    /// on the owner's own account answers with what they still have to do,
+    /// so the domain can say so in the thread instead of minting a session
+    /// row whose spawn is doomed. An `Err` is an infrastructure failure -
+    /// the question itself could not be asked.
+    fn preflight(
+        &self,
+        kind: AgentKind,
+        owner: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<SessionBlocker>>> + Send {
+        let _ = (kind, owner);
+        async { Ok(None) }
+    }
 
     /// Boot a new container for a session that has never had one.
     fn spawn(

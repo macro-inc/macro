@@ -1,6 +1,13 @@
 # Revision-Safe Local Predicate Pagination Plan
 
-Status: **local pagination deferred; flat views now use server-baseline reconciliation**
+Status: **Mail first slice implemented; other flat views retain server-baseline reconciliation**
+
+The `soup-mail-v1` ALL/INBOX slice now uses exclusive keyset pages bound to a
+query fingerprint, engine generation and cache revision. Pages cover complete
+cached Mail projections, not proof of whole-mailbox coverage. This is separate
+from the all-or-network proposal below; other Soup partitions continue to use
+server-baseline reconciliation. See `docs/AGENT_GUIDE/surfaces.md` at the repository
+root for the shipped scope and remaining filters.
 
 The implementation now reconciles loaded server-page membership with bounded local
 candidates, retaining unknown baseline rows and removing confirmed non-matches/deletions.

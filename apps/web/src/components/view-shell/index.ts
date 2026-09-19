@@ -3,6 +3,10 @@ export {
   type CollapsibleSectionRootProps,
 } from './CollapsibleSection';
 export {
+  createCollapsedSidebarSectionsStorage,
+  setSidebarSectionCollapsed,
+} from './collapsed-sections';
+export {
   type ListControlOption,
   ListFilterDropdown,
   type ListFilterDropdownProps,
@@ -23,6 +27,17 @@ export {
   type UseViewTabHotkeysOptions,
   useViewTabHotkeys,
 } from './use-view-tab-hotkeys';
+export {
+  ViewBreadcrumbs,
+  type ViewBreadcrumbsButtonProps,
+  type ViewBreadcrumbsEntry,
+  type ViewBreadcrumbsItemProps,
+  type ViewBreadcrumbsItemState,
+  type ViewBreadcrumbsOutletProps,
+  type ViewBreadcrumbsRootProps,
+  type ViewBreadcrumbsSeparatorProps,
+  type ViewBreadcrumbsSeparatorState,
+} from './ViewBreadcrumbs';
 export {
   useViewShell,
   ViewShell,

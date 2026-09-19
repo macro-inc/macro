@@ -1,27 +1,64 @@
-import { SearchBar, useViewControlHotkeys } from '@app/components/view-shell';
+import {
+  SearchBar,
+  useViewControlHotkeys,
+  ViewBreadcrumbs,
+  ViewShell,
+} from '@app/components/view-shell';
+import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { SplitPanel } from '@components/app/split-panel';
-import MenuIcon from '@phosphor/list.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import { Button, Dropdown } from '@ui';
 import { createSignal } from 'solid-js';
 import { composeEmail } from '../compose-email';
+import { EMAIL_TABS } from '../constants';
 import { useEmailView } from '../email-view-context';
 import { EmailControls } from './EmailControls';
-import { EmailInboxSelector } from './EmailInboxSelector';
-import { EmailNavigation } from './EmailSidebar';
+import { EmailInboxMenu } from './EmailInboxSelector';
 
 export type EmailHeaderProps = {
   /** Restores list focus when Escape leaves the search field. */
   onSearchEscape?: () => void;
 };
 
+export function EmailViewBreadcrumbItem() {
+  const { state } = useEmailView();
+  const tabTitle = () =>
+    EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email';
+
+  return (
+    <ViewBreadcrumbs.Item
+      value="email-view"
+      metadata={{ type: 'email-view' }}
+      order={0}
+    >
+      {(item) => (
+        <ViewBreadcrumbs.Button
+          isActive={item.isActive()}
+          onClick={item.onSelect}
+        >
+          <span class="truncate @max-[720px]/view-shell:hidden">
+            {tabTitle()}
+          </span>
+          <span class="hidden @max-[720px]/view-shell:inline">Email</span>
+        </ViewBreadcrumbs.Button>
+      )}
+    </ViewBreadcrumbs.Item>
+  );
+}
+
+export function EmailTopBar() {
+  return (
+    <ViewShell.TopBar>
+      <ViewBreadcrumbs.Outlet class="flex-1" aria-label="Email location" />
+    </ViewShell.TopBar>
+  );
+}
+
 export function EmailHeader(props: EmailHeaderProps) {
   const panel = useSplitPanelOrThrow();
   const { state, setState } = useEmailView();
-  const [navigationOpen, setNavigationOpen] = createSignal(false);
   const [filterOpen, setFilterOpen] = createSignal(false);
   let searchInput: HTMLInputElement | undefined;
+  const selectedTabLabel = () =>
+    EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email';
 
   // The view's control hotkeys are registered once, here, for the split scope.
   useViewControlHotkeys({
@@ -46,50 +83,15 @@ export function EmailHeader(props: EmailHeaderProps) {
 
   return (
     <div class="flex min-w-0 flex-col">
-      <SplitPanel.ControlGroup class="hidden px-2 pb-2 @max-[720px]/view-shell:flex">
-        <SplitPanel.CloseButton />
-        <SplitPanel.BackButton />
-        <SplitPanel.ForwardButton />
-      </SplitPanel.ControlGroup>
-
-      {/* Sidebar stand-in while the aside is collapsed: the tab menu, the
-          inbox selector, and compose. */}
-      <div class="mb-4 hidden min-w-0 items-center gap-2 @max-[720px]/view-shell:flex">
-        <Dropdown
-          open={navigationOpen()}
-          onOpenChange={setNavigationOpen}
-          placement="bottom-start"
-        >
-          <Dropdown.Trigger
-            variant="ghost"
-            size="sm"
-            square
-            class="size-8 shrink-0 rounded-full"
-            aria-label="Open Email navigation"
-          >
-            <MenuIcon class="size-4" />
-          </Dropdown.Trigger>
-          <Dropdown.Content class="w-72 rounded-2xl p-2">
-            <div class="rounded-xl bg-menu">
-              <EmailNavigation onNavigate={() => setNavigationOpen(false)} />
-            </div>
-          </Dropdown.Content>
-        </Dropdown>
+      <div class="mb-4 hidden h-8 min-w-0 items-center gap-2 @max-[720px]/view-shell:flex">
         <h1 class="min-w-0 truncate text-xl font-semibold tracking-[-0.03em] text-ink">
-          Email
+          {selectedTabLabel()}
         </h1>
         <div class="ml-auto flex shrink-0 items-center gap-2">
-          <EmailInboxSelector variant="compact" />
-          <Button
-            type="button"
-            variant="cta"
-            size="md"
-            class="rounded-lg px-3"
-            onClick={composeEmail}
-          >
-            <PlusIcon class="size-4 shrink-0" />
-            New
-          </Button>
+          <EmailInboxMenu />
+          <div class="shrink-0">
+            <SidebarCreateButton label="New" onCreate={() => composeEmail()} />
+          </div>
         </div>
       </div>
 

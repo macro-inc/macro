@@ -2,7 +2,10 @@ import { openReminderComposer } from '@app/features/reminders/reminder-composer'
 import { enableReminders, isFeatureEnabled } from '@core/constant/featureFlags';
 import type { EntityData } from '@entity';
 import { reminderTarget } from '@queries/reminders/reminders';
-import type { EntityActionListState } from './entity-action-context';
+import type {
+  EntityActionListState,
+  EntityActionNavigationHandler,
+} from './entity-action-context';
 import type { makeMarkDoneAction } from './make-mark-done-action';
 
 /**
@@ -17,6 +20,7 @@ import type { makeMarkDoneAction } from './make-mark-done-action';
 export type ReminderCreatedList = {
   soup: EntityActionListState;
   advances: boolean;
+  onNavigate?: EntityActionNavigationHandler;
 };
 
 /** What the invoking surface does with its row once the reminder exists. */
@@ -63,7 +67,10 @@ export const makeCreateReminderAction = (
     entities: EntityData[],
     soup: EntityActionListState,
     /** Whether the list moves on once the row is marked done. */
-    opts: { advances: boolean }
+    opts: {
+      advances: boolean;
+      onNavigate?: EntityActionNavigationHandler;
+    }
   ) => {
     const [entity] = entities;
     if (!entity || !canExecute(entity)) return;
@@ -72,7 +79,11 @@ export const makeCreateReminderAction = (
     // them, by way of marking the row done.
     openReminderComposer(entity, {
       onCreated: () =>
-        options?.onCreated?.(entity, { soup, advances: opts.advances }),
+        options?.onCreated?.(entity, {
+          soup,
+          advances: opts.advances,
+          ...(opts.onNavigate ? { onNavigate: opts.onNavigate } : {}),
+        }),
     });
   };
 
@@ -108,15 +119,20 @@ export const markReminderTargetDone =
     markDone: MarkDoneAction,
     /** Follows the list's focus in an attached split, as mark-done's own
      *  entry points do. */
-    onNavigate?: (entity: EntityData) => void
+    onNavigate?: EntityActionNavigationHandler
   ): ReminderCreatedHandler =>
   async (entity, list) => {
     if (!markDone.canExecute(entity)) return;
 
     if (list?.advances) {
-      await markDone.executeWithSoup([entity], list.soup, onNavigate, {
-        silent: true,
-      });
+      await markDone.executeWithSoup(
+        [entity],
+        list.soup,
+        list.onNavigate ?? onNavigate,
+        {
+          silent: true,
+        }
+      );
       return;
     }
 

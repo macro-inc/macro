@@ -11,6 +11,7 @@ fn raw_chat() -> SoupItem<()> {
     SoupItem::Chat(SoupChat {
         id: Uuid::nil(),
         name: "Test chat".to_string(),
+        model: Some("openai/gpt-5.6".to_string()),
         owner_id: MacroUserIdStr::try_from("macro|test@example.com".to_string()).unwrap(),
         project_id: None,
         is_persistent: true,
@@ -28,6 +29,7 @@ fn raw_extra_serializes_without_fields() {
 
     assert!(value["data"].get("extra").is_none());
     assert!(value["data"].get("properties").is_none());
+    assert_eq!(value["data"]["model"], "openai/gpt-5.6");
 }
 
 #[test]
@@ -38,5 +40,6 @@ fn mapped_extra_is_flattened_into_the_item_data() {
     let value = serde_json::to_value(item).unwrap();
 
     assert_eq!(value["data"]["properties"], serde_json::json!(["priority"]));
+    assert_eq!(value["data"]["model"], "openai/gpt-5.6");
     assert!(value["data"].get("extra").is_none());
 }

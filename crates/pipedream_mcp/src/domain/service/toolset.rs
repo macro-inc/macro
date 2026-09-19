@@ -72,7 +72,7 @@ impl PipedreamToolSet {
 }
 
 impl<Context: Send + Sync + 'static> ToolSet<Context> for PipedreamToolSet {
-    fn try_tool_call<'a>(
+    fn dispatch_tool_call<'a>(
         &'a self,
         context: Context,
         request_context: RequestContext,
@@ -82,7 +82,7 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for PipedreamToolSet {
         Box<dyn Future<Output = Result<ToolResult<serde_json::Value>, ToolSetError>> + 'a + Send>,
     > {
         self.0
-            .try_tool_call(context, request_context, tool_name, json)
+            .dispatch_tool_call(context, request_context, tool_name, json)
     }
 
     fn request_schemas(&self) -> Option<Vec<RequestSchema>> {

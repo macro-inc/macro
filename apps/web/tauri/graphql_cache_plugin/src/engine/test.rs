@@ -1,6 +1,8 @@
 use super::*;
 use pollster::block_on;
 
+mod soup;
+
 const QUERY: &str = r#"query Soup($input: SoupInput!) {
     user { id soup(input: $input) { nextCursor items { __typename id } } }
 }"#;

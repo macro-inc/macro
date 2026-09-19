@@ -11,12 +11,75 @@ describe('inbox-query-filters', () => {
     it('applies inbox notification filters and email importance', () => {
       const result = applyInboxQueryFilters({});
 
-      expect(result.channel_filters?.notification_filters?.done).toBe(false);
-      expect(result.chat_filters?.notification_filters?.done).toBe(false);
-      expect(result.project_filters?.notification_filters?.done).toBe(false);
-      expect(result.document_filters?.notification_filters?.done).toBe(false);
+      expect(result.channel_filters?.notification_filters?.states).toEqual([
+        'unseen',
+        'seen',
+      ]);
+      expect(result.chat_filters?.notification_filters?.states).toEqual([
+        'unseen',
+        'seen',
+      ]);
+      expect(result.project_filters?.notification_filters?.states).toEqual([
+        'unseen',
+        'seen',
+      ]);
+      expect(result.document_filters?.notification_filters?.states).toEqual([
+        'unseen',
+        'seen',
+      ]);
       expect(result.email_filters?.importance).toBe(true);
     });
+  });
+
+  it('retains exact active subsets and never broadens a done-only selection to all states', () => {
+    expect(
+      applyInboxQueryFilters({
+        document_filters: { notification_filters: { states: ['unseen'] } },
+      }).document_filters?.notification_filters?.states
+    ).toEqual(['unseen']);
+    expect(
+      applyInboxQueryFilters({
+        document_filters: { notification_filters: { states: ['seen'] } },
+      }).document_filters?.notification_filters?.states
+    ).toEqual(['seen']);
+    expect(
+      applyInboxQueryFilters({
+        document_filters: { notification_filters: { states: ['done'] } },
+      }).document_filters?.notification_filters?.states
+    ).toEqual(['unseen', 'seen']);
+    expect(
+      applyInboxQueryFilters({
+        document_filters: { notification_filters: { states: [] } },
+      }).document_filters?.notification_filters?.states
+    ).toEqual(['unseen', 'seen']);
+  });
+
+  it('intersects mixed notification selections with active states without losing read intent', () => {
+    for (const states of [
+      ['seen', 'done'],
+      ['unseen', 'done'],
+      ['done', 'seen', 'unseen', 'seen'],
+    ] as const) {
+      const input = {
+        document_filters: { notification_filters: { states: [...states] } },
+        chat_filters: { notification_filters: { states: [...states] } },
+        channel_filters: { notification_filters: { states: [...states] } },
+        project_filters: { notification_filters: { states: [...states] } },
+      };
+      const result = applyInboxQueryFilters(input);
+      expect(input.channel_filters.notification_filters.states).toEqual(states);
+      const expected = (['unseen', 'seen'] as const).filter((state) =>
+        states.some((selected) => selected === state)
+      );
+      for (const filter of [
+        result.document_filters,
+        result.chat_filters,
+        result.channel_filters,
+        result.project_filters,
+      ]) {
+        expect(filter?.notification_filters?.states).toEqual(expected);
+      }
+    }
   });
 
   describe('removeInboxQueryFilters', () => {
@@ -35,12 +98,14 @@ describe('inbox-query-filters', () => {
       const result = removeInboxQueryFilters({
         channel_filters: {
           notification_filters: {
-            done: true,
+            states: ['done'],
           },
         },
       });
 
-      expect(result.channel_filters?.notification_filters?.done).toBe(true);
+      expect(result.channel_filters?.notification_filters?.states).toEqual([
+        'done',
+      ]);
     });
   });
 

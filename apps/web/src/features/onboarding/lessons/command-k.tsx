@@ -141,7 +141,7 @@ function CommandKDemo(props: LessonContentProps) {
 
       <Dialog open={commandKOpen()} onOpenChange={setCommandKOpen}>
         <Dialog.Portal>
-          <Dialog.Overlay class="z-modal fixed inset-0 bg-modal-overlay pattern-edge-muted pattern-diagonal-4" />
+          <Dialog.Overlay class="z-modal fixed inset-0 scrim-glass" />
           <div class="z-modal fixed inset-0 flex items-start justify-center pt-[15vh]">
             <Dialog.Content
               ref={contentEl}

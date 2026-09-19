@@ -1,11 +1,6 @@
+import { useCurrentPageNumber } from '@block-pdf/signal/pdfViewer';
 import {
-  useCurrentPageNumber,
-  viewerHasVisiblePagesSignal,
-} from '@block-pdf/signal/pdfViewer';
-import {
-  activeTabIdSignal,
   MAX_TAB_COUNT,
-  tabDataStore,
   useCreateTab,
   useDeleteTab,
   useNavigateToTab,
@@ -13,6 +8,7 @@ import {
 import PlusIcon from '@phosphor/plus.svg';
 import XIcon from '@phosphor/x.svg';
 import { For, Show } from 'solid-js';
+import { usePdfDocument } from '../context/pdf-document-context';
 
 interface IInternalTabProps {
   label: string;
@@ -25,7 +21,7 @@ interface IInternalTabProps {
 }
 
 function Tab(props: IInternalTabProps) {
-  const [activeTabId] = activeTabIdSignal;
+  const [activeTabId] = usePdfDocument().state.signals.activeTabId;
   const currentPageNumber = useCurrentPageNumber();
 
   const active = () => props.id === activeTabId();
@@ -57,12 +53,14 @@ function Tab(props: IInternalTabProps) {
 }
 
 export function Tabs() {
-  const [tabs] = tabDataStore;
+  const pdf = usePdfDocument();
+  const [tabs] = pdf.state.stores.tabData;
+  const [viewerHasVisiblePages] = pdf.state.signals.viewerHasVisiblePages;
   const createTab = useCreateTab();
   const deleteTab = useDeleteTab();
   const navigate = useNavigateToTab();
   return (
-    <Show when={viewerHasVisiblePagesSignal.get()}>
+    <Show when={viewerHasVisiblePages()}>
       <div class="w-full h-7 rounded-full flex px-1.5 shrink items-center">
         <For each={tabs}>
           {(tab, index) => (

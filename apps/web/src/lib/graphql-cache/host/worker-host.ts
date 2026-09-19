@@ -50,6 +50,12 @@ import {
   type CacheCoordinatorPageAdapter,
   createCacheCoordinatorPageAdapter,
 } from '../worker/coordinator-page-adapter';
+import {
+  CacheBootstrapExhaustedError,
+  COORDINATOR_CONNECT_ATTEMPTS,
+  COORDINATOR_CONNECT_TIMEOUT_MS,
+  STARTUP_RESPONSE_GRACE_MS,
+} from '../worker/startup';
 import { createNoopCacheHost } from './noop-host';
 import type {
   CacheHost,
@@ -95,8 +101,9 @@ export interface WorkerHostOptions {
    */
   requestTimeoutMs?: number;
   /**
-   * Registration/initialization timeout in ms. Defaults to requestTimeoutMs,
-   * so callers cannot hang before a read-only request timer can start.
+   * Overrides each startup-phase timeout (primarily for tests). By default,
+   * registration has its own budget and engine startup follows the coordinator's
+   * asset/open deadlines, with a response grace period.
    */
   initializationTimeoutMs?: number;
   /** Reports terminal initialization or coordinator-transport failure. */
@@ -201,8 +208,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   >();
   const requestTimeoutMs =
     options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
-  const initializationTimeoutMs =
-    options.initializationTimeoutMs ?? requestTimeoutMs;
+  let initializationTimeoutMs =
+    options.initializationTimeoutMs ?? COORDINATOR_CONNECT_TIMEOUT_MS;
+  let registrationInProgress = false;
+  let cancelRegistration: (() => void) | undefined;
   let nextRequestId = 1;
   let state: HostState = 'idle';
   let initialization: Promise<void> | undefined;
@@ -213,6 +222,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   let failureReported = false;
   let terminalFailureHandled = false;
   let adapter: CacheCoordinatorPageAdapter | undefined;
+  let registeredAdapter: CacheCoordinatorPageAdapter | undefined;
   let adapterDisposePromise: Promise<void> | undefined;
   let adapterDisposeWasGraceful = false;
   let adapterDisposalStarted = false;
@@ -386,13 +396,76 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       scope: options.scope,
       hotCapacity: options.hotCapacity,
       onEngineReplaced,
-      onTerminalError: failTransport,
+      onStartupProgress: (progress) => {
+        if (adapter !== created) return;
+        initializationTimeoutMs =
+          options.initializationTimeoutMs ??
+          progress.timeoutMs + STARTUP_RESPONSE_GRACE_MS;
+        for (const [id, entry] of pending) {
+          if (entry.kind === 'init')
+            armRequestTimeout(id, entry, initializationTimeoutMs);
+        }
+      },
+      onTerminalError: (error) => {
+        // start() also rejects; let the bounded registration loop retry before
+        // reporting a terminal failure or quarantining any cache scope.
+        if (adapter === created && !registrationInProgress)
+          failTransport(error);
+      },
       telemetry,
     });
     created.onmessage = onMessage;
     adapter = created;
     registerPagehide();
     return created;
+  }
+
+  async function registerAdapter(): Promise<void> {
+    registrationInProgress = true;
+    try {
+      for (
+        let attempt = 0;
+        attempt < COORDINATOR_CONNECT_ATTEMPTS;
+        attempt += 1
+      ) {
+        const current = getAdapter();
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          await Promise.race([
+            current.start(),
+            new Promise<never>((_resolve, reject) => {
+              cancelRegistration = () =>
+                reject(
+                  new Error('cache worker host was disposed during startup')
+                );
+              timer = setTimeout(
+                () => reject(new Error('cache worker timeout: registration')),
+                options.initializationTimeoutMs ??
+                  COORDINATOR_CONNECT_TIMEOUT_MS
+              );
+            }),
+          ]);
+          if (state !== 'initializing')
+            throw new Error('cache worker host was disposed during startup');
+          registeredAdapter = current;
+          return;
+        } catch (error) {
+          current.onmessage = null;
+          await current.dispose({ graceful: false });
+          if (adapter === current) adapter = undefined;
+          if (
+            state !== 'initializing' ||
+            attempt + 1 === COORDINATOR_CONNECT_ATTEMPTS
+          )
+            throw error;
+        } finally {
+          if (timer !== undefined) clearTimeout(timer);
+          cancelRegistration = undefined;
+        }
+      }
+    } finally {
+      registrationInProgress = false;
+    }
   }
 
   function startLegacyIdbDeletion(): void {
@@ -475,7 +548,13 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   }
 
   function failInitialization(error: Error): void {
-    if (state === 'failed' || state === 'disposed' || state === 'ready') return;
+    if (
+      state === 'failed' ||
+      state === 'disposing' ||
+      state === 'disposed' ||
+      state === 'ready'
+    )
+      return;
     telemetry?.record({
       name: 'graphql_cache.host_ready',
       operationCategory: 'initialization',
@@ -502,6 +581,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
 
   function failTransport(error: Error): void {
     if (terminalFailureHandled) return;
+    const storageWasUntouched = error instanceof CacheBootstrapExhaustedError;
     stopStorageHealthSampling();
     const admittedWorkIsUncertain = [...pending.values()].some(
       (entry) => entry.admitted
@@ -517,7 +597,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     void disposeAdapter(false).then(finishTelemetry);
     // Product failure handling may immediately construct another host. Make
     // the matching old scope unreachable before invoking that callback.
-    void quarantineCacheScope(options.scope).then(() => {
+    const quarantine = storageWasUntouched
+      ? Promise.resolve()
+      : quarantineCacheScope(options.scope);
+    void quarantine.then(() => {
       try {
         reportFailure(error);
       } catch {
@@ -569,6 +652,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   }
 
   function disposeHost(graceful: boolean, preserveDatabase = false): void {
+    cancelRegistration?.();
     stopStorageHealthSampling();
     if (state === 'disposed') return;
     if (state === 'disposing') {
@@ -633,6 +717,22 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     disposeHost(false, true);
   }
 
+  function armRequestTimeout(
+    id: number,
+    entry: Pending,
+    timeoutMs: number
+  ): void {
+    if (entry.timer !== undefined) clearTimeout(entry.timer);
+    entry.timer = setTimeout(() => {
+      if (pending.delete(id)) {
+        const error = new Error(`cache worker timeout: ${entry.kind}`);
+        recordRequestOutcome(entry, 'error', error);
+        entry.reject(error);
+        finishGracefulDisposeIfDrained();
+      }
+    }, timeoutMs);
+  }
+
   function request(
     msg: DistributiveOmit<CacheRequest, 'id'>,
     opKey?: number
@@ -669,14 +769,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
             ? requestTimeoutMs
             : undefined;
       if (timeoutMs !== undefined) {
-        entry.timer = setTimeout(() => {
-          if (pending.delete(id)) {
-            const error = new Error(`cache worker timeout: ${msg.kind}`);
-            recordRequestOutcome(entry, 'error', error);
-            reject(error);
-            finishGracefulDisposeIfDrained();
-          }
-        }, timeoutMs);
+        armRequestTimeout(id, entry, timeoutMs);
       }
       pending.set(id, entry);
       try {
@@ -746,11 +839,20 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     state = 'initializing';
     replacementError = undefined;
     initializationStartedAt = now();
-    const handshake = request({
-      kind: 'init',
-      scope: options.scope,
-      hotCapacity: options.hotCapacity,
-    }).then(
+    const sendInit = () =>
+      request({
+        kind: 'init',
+        scope: options.scope,
+        hotCapacity: options.hotCapacity,
+      });
+    const ready =
+      adapter && registeredAdapter === adapter
+        ? sendInit()
+        : (async () => {
+            await registerAdapter();
+            return await sendInit();
+          })();
+    const handshake = ready.then(
       () => {
         if (state !== 'initializing') return;
         state = 'ready';

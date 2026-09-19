@@ -2,7 +2,8 @@
  * @vitest-environment jsdom
  */
 
-import type { useRemoveLinkPreviewMutation } from '@queries/channel/message';
+import type { MessageData } from '@core/messages/types';
+import type { useRemoveLinkPreviewMutation } from '@queries/messages/mutations';
 import { render, waitFor } from '@solidjs/testing-library';
 import {
   QueryClient,
@@ -24,7 +25,6 @@ import {
   shouldRenderUnfurl,
 } from '../link-previews';
 import { Root } from '../Root';
-import type { MessageData } from '../types';
 
 type MockUnfurlData =
   | { type: 'loading' | 'error'; _createdAt: Date }
@@ -61,7 +61,7 @@ vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'user-1',
 }));
 
-vi.mock('@queries/channel/message', () => ({
+vi.mock('@queries/messages/mutations', () => ({
   useRemoveLinkPreviewMutation: (
     callbacks: Parameters<typeof useRemoveLinkPreviewMutation>[0]
   ) => {

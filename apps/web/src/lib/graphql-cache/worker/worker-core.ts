@@ -825,6 +825,11 @@ export class CacheWorkerCore {
     }
   }
 
+  /** Download/compile/instantiate without acquiring the database lock or opening OPFS. */
+  async prepare(): Promise<void> {
+    await loadCacheWasm();
+  }
+
   private async init(scope: string, hotCapacity?: number): Promise<void> {
     if (this.initPromise) {
       // Subsequent page clients routed to this elected engine re-init idempotently.

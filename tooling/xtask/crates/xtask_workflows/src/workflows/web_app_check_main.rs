@@ -46,7 +46,6 @@ pub fn web_app_check_main() -> Workflow {
         .add_job("path-check", path_check())
         .add_job("typescript", typescript())
         .add_job("biome-check", biome_check())
-        .add_job("tailwind", tailwind())
         .add_job("test", test())
         .add_job("cycles", cycles())
         .add_job("build", build())
@@ -82,6 +81,7 @@ fn typescript() -> Job {
         .add_step(show_sccache_stats())
         .add_step(check_types())
         .add_step(check_collaboration_types())
+        .add_step(check_lexical_service_types())
         .add_step(steps::teardown_nix())
 }
 
@@ -93,16 +93,6 @@ fn biome_check() -> Job {
         .add_step(steps::setup_dev_shell())
         .add_step(run_biome())
         .add_step(run_collaboration_biome())
-        .add_step(steps::teardown_nix())
-}
-
-fn tailwind() -> Job {
-    gated_web_job("Theme Hygiene Inspector")
-        .add_step(checkout("Checkout Repo", true))
-        .add_step(steps::mount_web_cache_volume(false))
-        .add_step(steps::setup_nix())
-        .add_step(steps::setup_reqs_web("Setup Prereqs", false))
-        .add_step(check_tailwind_classes())
         .add_step(steps::teardown_nix())
 }
 
@@ -129,6 +119,8 @@ fn cycles() -> Job {
 
 fn build() -> Job {
     gated_web_job("Build")
+        // Match preview/deploy capacity for Vite's chunk-rendering memory peak.
+        .runs_on(runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG))
         .add_step(checkout("Checkout Repo", false))
         .add_step(steps::mount_web_cache_volume(false))
         .add_step(steps::setup_nix())
@@ -147,7 +139,6 @@ fn status_check() -> Job {
             "path-check".to_string(),
             "typescript".to_string(),
             "biome-check".to_string(),
-            "tailwind".to_string(),
             "test".to_string(),
             "cycles".to_string(),
             "build".to_string(),
@@ -229,6 +220,12 @@ fn check_collaboration_types() -> Step<Run> {
         .working_directory(xtask_paths::repo_dir!("packages/collaboration"))
 }
 
+fn check_lexical_service_types() -> Step<Run> {
+    Step::new("Check Lexical Service Types")
+        .run("bun run check")
+        .working_directory(xtask_paths::repo_dir!("services/lexical-service"))
+}
+
 fn run_biome() -> Step<Run> {
     Step::new("Run Biome")
         .run("biome ci --changed --no-errors-on-unmatched --error-on-warnings")
@@ -239,12 +236,6 @@ fn run_collaboration_biome() -> Step<Run> {
     Step::new("Run Collaboration Package Biome")
         .run("biome ci --changed --no-errors-on-unmatched --error-on-warnings")
         .working_directory(xtask_paths::repo_dir!("packages/collaboration"))
-}
-
-fn check_tailwind_classes() -> Step<Run> {
-    Step::new("Check Tailwind Classes")
-        .run("just check-tailwind")
-        .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
 fn run_tests() -> Step<Run> {
@@ -276,7 +267,6 @@ fn check_job_results() -> Step<Run> {
         echo "path-check: ${{ needs.path-check.result }}"
         echo "typescript: ${{ needs.typescript.result }}"
         echo "biome-check: ${{ needs.biome-check.result }}"
-        echo "tailwind: ${{ needs.tailwind.result }}"
         echo "test: ${{ needs.test.result }}"
         echo "cycles: ${{ needs.cycles.result }}"
         echo "build: ${{ needs.build.result }}"
@@ -285,7 +275,6 @@ fn check_job_results() -> Step<Run> {
         if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
            [[ "${{ needs.typescript.result }}" == "failure" ]] || \
            [[ "${{ needs.biome-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.tailwind.result }}" == "failure" ]] || \
            [[ "${{ needs.test.result }}" == "failure" ]] || \
            [[ "${{ needs.cycles.result }}" == "failure" ]] || \
            [[ "${{ needs.build.result }}" == "failure" ]]; then

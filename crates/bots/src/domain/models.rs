@@ -152,6 +152,17 @@ pub struct Bot {
     pub has_agent: bool,
 }
 
+/// Minimal bot identity used when another domain presents a bot reference.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BotProfile {
+    /// Bot id.
+    pub id: BotId,
+    /// Display name.
+    pub name: String,
+    /// Optional avatar URL.
+    pub avatar_url: Option<String>,
+}
+
 impl Bot {
     /// The [`Bot`] view of a first-party bot.
     ///
@@ -285,6 +296,9 @@ pub struct Agent {
     pub channel_ids: Vec<Uuid>,
     /// Which MCP servers sessions of this agent are handed.
     pub mcp: AgentMcpServers,
+    /// Whether the agent's sessions approve ACP permission requests without
+    /// asking. `None` means always prompt. Bypass also requires the harness's opt-in.
+    pub auto_accept_permissions: Option<bool>,
 }
 
 /// Request to create a persisted AI agent.
@@ -319,6 +333,10 @@ pub struct CreateAgentRequest {
     /// Which MCP servers sessions of this agent are handed.
     #[serde(default)]
     pub mcp: AgentMcpServers,
+    /// Whether the agent's sessions approve ACP permission requests without
+    /// asking. Omit to always prompt.
+    #[serde(default)]
+    pub auto_accept_permissions: Option<bool>,
 }
 
 /// Request to replace the editable configuration of a persisted AI agent.
@@ -353,6 +371,10 @@ pub struct UpdateAgentRequest {
     /// Which MCP servers sessions of this agent are handed.
     #[serde(default)]
     pub mcp: AgentMcpServers,
+    /// Whether the agent's sessions approve ACP permission requests without
+    /// asking. Omit to always prompt.
+    #[serde(default)]
+    pub auto_accept_permissions: Option<bool>,
 }
 
 /// Channel containing a bot.
@@ -530,4 +552,12 @@ pub struct ChannelWebhookRequest {
 pub struct ChannelWebhookResponse {
     /// Created message id.
     pub message_id: String,
+}
+
+/// Facts about a registered harness used to validate a persona.
+pub struct HarnessFacts {
+    /// Who may use the harness.
+    pub owner: HarnessOwner,
+    /// Whether the harness operator permits unattended tool approvals.
+    pub allow_permission_bypass: bool,
 }

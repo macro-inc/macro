@@ -11,7 +11,7 @@
 use super::*;
 use crate::domain::event::CursorEvent;
 use crate::domain::model::{CursorModel, CursorRunId, ModelParam, ModelVariant, RunStatus};
-use crate::testing::{CursorCall, FakeCursor, FixedRepos};
+use crate::testing::{CursorCall, FakeCursor, FixedChooser};
 use agent_client_protocol::schema::v1::InitializeResponse;
 use agent_client_protocol::{Channel, RawJsonRpcMessage, TransportFrame};
 use futures::StreamExt as _;
@@ -19,7 +19,12 @@ use futures::channel::mpsc;
 use tokio::io::AsyncBufReadExt as _;
 use tokio::io::AsyncWriteExt as _;
 
-type Service = CursorSessionService<FakeCursor, AcpNotifier, FixedRepos>;
+type Service = CursorSessionService<
+    FakeCursor,
+    AcpNotifier,
+    FixedChooser,
+    crate::domain::ports::NoArtifactStore,
+>;
 
 /// The client's end of a served connection.
 struct TestClient {
@@ -67,7 +72,7 @@ impl TestClient {
         }));
         loop {
             let frame = self.next_frame().await;
-            if method != "session/load" || frame.get("id") == Some(&serde_json::json!(id)) {
+            if frame.get("id") == Some(&serde_json::json!(id)) {
                 return frame;
             }
             assert!(
@@ -75,9 +80,24 @@ impl TestClient {
                     frame["method"].as_str(),
                     Some("session/update" | "_session/turn_complete")
                 ),
-                "load emits only replay facts before its response"
+                "expected the response or a session update, got {frame}"
             );
         }
+    }
+
+    /// The `available_commands_update` that follows `session/new` / `session/load`.
+    async fn expect_available_commands(&mut self, session: &str) -> Vec<serde_json::Value> {
+        let frame = self.next_frame().await;
+        assert_eq!(frame["method"], "session/update", "{frame}");
+        assert_eq!(frame["params"]["sessionId"], session);
+        assert_eq!(
+            frame["params"]["update"]["sessionUpdate"], "available_commands_update",
+            "{frame}"
+        );
+        frame["params"]["update"]["availableCommands"]
+            .as_array()
+            .unwrap_or_else(|| panic!("availableCommands is an array in {frame}"))
+            .clone()
     }
 }
 
@@ -113,8 +133,9 @@ fn serve_over_channel_with_default_model(
         CursorSessionService::new(
             cursor,
             notifier.clone(),
-            FixedRepos(None),
+            FixedChooser(None, false),
             Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+            crate::domain::ports::NoArtifactStore,
         )
         .with_default_model(default_model.map(str::to_owned)),
     );
@@ -372,8 +393,9 @@ async fn serve_runs_a_whole_conversation_over_an_in_process_pipe() {
     let service = Arc::new(CursorSessionService::new(
         cursor,
         notifier.clone(),
-        FixedRepos(None),
+        FixedChooser(None, false),
         Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        crate::domain::ports::NoArtifactStore,
     ));
     let serve_task = tokio::spawn(serve(service, notifier, agent_reader, agent_writer));
 
@@ -404,6 +426,12 @@ async fn serve_runs_a_whole_conversation_over_an_in_process_pipe() {
         .as_str()
         .expect("a session id")
         .to_owned();
+    let commands = next_client_frame(&mut client_frames).await;
+    assert_eq!(commands["method"], "session/update");
+    assert_eq!(
+        commands["params"]["update"]["sessionUpdate"],
+        "available_commands_update"
+    );
 
     send_client_frame(
         &mut client_writer,
@@ -428,6 +456,7 @@ async fn serve_runs_a_whole_conversation_over_an_in_process_pipe() {
             status: RunStatus::Finished,
             text: None,
             duration_ms: Some(1),
+            git: None,
         })
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
@@ -507,6 +536,7 @@ async fn remote_mcp_servers_are_forwarded_to_the_agent() {
             status: RunStatus::Finished,
             text: None,
             duration_ms: None,
+            git: None,
         })
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
@@ -516,7 +546,7 @@ async fn remote_mcp_servers_are_forwarded_to_the_agent() {
         .expect("prompt runs");
 
     let calls = cursor.calls();
-    let [CursorCall::CreateAgent(_, _, servers, _)] = calls.as_slice() else {
+    let [CursorCall::CreateAgent(_, _, _, servers, _)] = calls.as_slice() else {
         panic!("expected one create_agent, got {calls:?}");
     };
     assert_eq!(
@@ -587,6 +617,7 @@ async fn stdio_mcp_servers_are_declined_without_failing_the_session() {
             status: RunStatus::Finished,
             text: None,
             duration_ms: None,
+            git: None,
         })
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
@@ -596,7 +627,7 @@ async fn stdio_mcp_servers_are_declined_without_failing_the_session() {
         .expect("prompt runs");
 
     let calls = cursor.calls();
-    let [CursorCall::CreateAgent(_, _, servers, _)] = calls.as_slice() else {
+    let [CursorCall::CreateAgent(_, _, _, servers, _)] = calls.as_slice() else {
         panic!("expected one create_agent");
     };
     let names: Vec<&str> = servers.iter().map(|server| server.name.as_str()).collect();
@@ -760,6 +791,72 @@ async fn session_new_advertises_the_models_as_a_config_option() {
     assert_eq!(values, vec!["composer-2.5", "gpt-5.5"]);
 }
 
+/// `session/new` advertises Cursor's cloud slash commands after the session
+/// exists, which is how the agents-block composer learns to open `/`.
+#[tokio::test]
+async fn session_new_advertises_cursor_slash_commands() {
+    let (_service, _cursor, mut client) = harness();
+
+    let opened = client
+        .call(
+            1,
+            "session/new",
+            serde_json::json!({"cwd": "/workspace", "mcpServers": []}),
+        )
+        .await;
+    let session = expect_result(&opened)["sessionId"]
+        .as_str()
+        .expect("a session id")
+        .to_owned();
+    let commands = client.expect_available_commands(&session).await;
+    let names: Vec<String> = commands
+        .iter()
+        .map(|command| command["name"].as_str().expect("a command name").to_owned())
+        .collect();
+    let expected: Vec<String> = crate::domain::slash_commands::cursor_slash_commands()
+        .into_iter()
+        .map(|command| command.name)
+        .collect();
+    assert_eq!(
+        names, expected,
+        "session/new must advertise the curated catalog, in catalog order"
+    );
+}
+
+/// `session/load` re-advertises the same catalog, so a resumed session's `/`
+/// menu is not empty until the next `session/new`.
+#[tokio::test]
+async fn session_load_advertises_cursor_slash_commands() {
+    let cursor = FakeCursor::new();
+    crate::testing::script_legacy_history(&cursor);
+    let (_service, mut client) = serve_over_channel(cursor, |service| {
+        service.restore_session(
+            SessionId::new("cursor-acp-3"),
+            Some(crate::domain::model::CursorAgentId::new("bc-restored")),
+            None,
+            None,
+        );
+    });
+
+    let loaded = client
+        .call(
+            1,
+            "session/load",
+            serde_json::json!({"sessionId": "cursor-acp-3", "cwd": "/workspace", "mcpServers": []}),
+        )
+        .await;
+    expect_result(&loaded);
+    let commands = client.expect_available_commands("cursor-acp-3").await;
+    let names: Vec<&str> = commands
+        .iter()
+        .map(|command| command["name"].as_str().expect("a command name"))
+        .collect();
+    assert!(
+        names.contains(&"goal"),
+        "a resumed session must still advertise commands, got {names:?}"
+    );
+}
+
 /// With two models of one family in the listing, the select goes out as ACP
 /// groups headed by family — `Claude Opus` once, its versions under it — in
 /// listing order, and the flat fixture above stays flat: singletons gain
@@ -874,6 +971,7 @@ async fn setting_the_model_changes_what_the_next_run_asks_for() {
             status: RunStatus::Finished,
             text: None,
             duration_ms: Some(1),
+            git: None,
         })
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
@@ -892,7 +990,7 @@ async fn setting_the_model_changes_what_the_next_run_asks_for() {
         .calls()
         .into_iter()
         .find_map(|call| match call {
-            CursorCall::CreateAgent(_, _, _, model) => Some(model),
+            CursorCall::CreateAgent(_, _, _, _, model) => Some(model),
             _ => None,
         })
         .expect("the turn created an agent");
@@ -987,6 +1085,7 @@ async fn a_restored_session_keeps_its_model() {
             status: RunStatus::Finished,
             text: None,
             duration_ms: None,
+            git: None,
         })
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
@@ -1048,6 +1147,7 @@ async fn a_restored_deployment_slug_falls_back_to_cursors_default() {
             status: RunStatus::Finished,
             text: None,
             duration_ms: None,
+            git: None,
         })
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
@@ -1108,6 +1208,7 @@ async fn session_load_restores_the_clients_mcp_servers() {
             status: RunStatus::Finished,
             text: None,
             duration_ms: None,
+            git: None,
         })
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
@@ -1117,7 +1218,7 @@ async fn session_load_restores_the_clients_mcp_servers() {
         .expect("prompt runs");
 
     let calls = cursor.calls();
-    let [CursorCall::CreateAgent(_, _, servers, _)] = calls.as_slice() else {
+    let [CursorCall::CreateAgent(_, _, _, servers, _)] = calls.as_slice() else {
         panic!("expected one agent creation, got {calls:?}");
     };
     assert_eq!(servers.len(), 1);
@@ -1175,6 +1276,7 @@ async fn a_session_with_no_choice_rests_the_picker_on_auto() {
             status: RunStatus::Finished,
             text: None,
             duration_ms: None,
+            git: None,
         })
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
@@ -1186,7 +1288,7 @@ async fn a_session_with_no_choice_rests_the_picker_on_auto() {
         .calls()
         .into_iter()
         .find_map(|call| match call {
-            CursorCall::CreateAgent(_, _, _, model) => Some(model),
+            CursorCall::CreateAgent(_, _, _, _, model) => Some(model),
             _ => None,
         })
         .expect("the prompt created an agent");
@@ -1251,6 +1353,9 @@ async fn load_queues_all_native_history_before_its_response_and_repeats_without_
                 frame["method"].as_str(),
                 Some("session/update" | "_session/turn_complete")
             ));
+            if frame["params"]["update"]["sessionUpdate"] == "available_commands_update" {
+                continue;
+            }
             replay.push(
                 frame["params"]
                     .get("update")

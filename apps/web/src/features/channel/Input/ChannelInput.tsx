@@ -1,4 +1,4 @@
-import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { DragInsertIndicator } from '@core/component/LexicalMarkdown/component/misc/DragInsertIndicator';
 import {
@@ -6,21 +6,16 @@ import {
   INSERT_DOCUMENT_MENTION_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins';
 import { singleLineMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
+import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
 import {
   clearDragInsertPreview,
   insertDocumentMentionAtDragCoordinates,
   updateDragInsertPreviewFromCoordinates,
 } from '@core/component/LexicalMarkdown/utils/dragInsertUtils';
-import { isCursorBotId } from '@core/constant/cursorAgent';
-import {
-  enableChatV3Agents,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
-import { useCursorAgentsAccess } from '@core/cursor/flag';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { createMessageComposer } from '@core/messages/create-message-composer';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { IUser } from '@core/user/types';
-import { uniqueByKey } from '@core/util/compareUtils';
 import { isPlatform } from '@core/util/platform';
 import {
   chatRuleset,
@@ -28,9 +23,8 @@ import {
   uploadFile,
 } from '@core/util/upload';
 import type { EntityData } from '@entity';
-import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
-import { isIOS } from '@solid-primitives/platform';
-import { CollapsedInput, cn, Surface } from '@ui';
+import type { MessageParent } from '@service-storage/messages';
+import { CollapsedInput, ComposerSurface } from '@ui';
 import { $getRoot } from 'lexical';
 import {
   type Accessor,
@@ -40,24 +34,13 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import {
-  cursorMentionUser,
-  isMacroAiId,
-  isMacroCoderId,
-  isMacroNewId,
-  macroAiMentionUser,
-  macroCoderMentionUser,
-  macroNewMentionUser,
-} from '../macroAi';
+import { useAgentMentionUsers } from '../use-agent-mention-users';
+import { useMessageBotMentionUsers } from '../use-channel-bot-mention-users';
 import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
-import { createInputAttachmentTracker } from './attachment-tracker';
 import { createConfiguredChannelMarkdownEditor } from './configured-markdown-editor';
 import { createCollapsedInputState } from './create-collapsed-input-state';
-import { createInputState } from './create-input-state';
-import { createTypingTracker } from './create-typing-tracker';
 import { FormatButtons } from './FormatButtons';
 import { Input } from './Input';
-import { createMentionsTracker } from './mentions-tracker';
 import type {
   EntityMentionInsertCoordinates,
   InputAttachmentTracker,
@@ -70,6 +53,7 @@ import type {
 } from './types';
 import { isReplyInput } from './types';
 import { uploadInputAttachments } from './upload-attachments';
+import { clearComposer as clearComposerPreservingFocus } from './utils/clear-composer';
 import { entityToDocumentMentionInfo } from './utils/entity-mention';
 import { applyInlineFormat, applyNodeFormat } from './utils/formatting';
 import { $selectTrailingParagraph } from './utils/select-trailing-paragraph';
@@ -77,6 +61,7 @@ import { hasSendableInputContent } from './utils/sendable-content';
 
 export type ChannelInputProps = InputCallbacks & {
   input: InputData;
+  parent?: MessageParent;
   markdownNamespace?: string;
   persistenceKey?: InputPersistenceKey;
   attachmentTracker?: InputAttachmentTracker;
@@ -92,51 +77,37 @@ export type ChannelInputProps = InputCallbacks & {
    * Defaults to `false`.
    */
   collapsible?: boolean;
-  /**
-   * Whether focus leaving the input may collapse it. Defaults to `true`.
-   * Composed alternate input faces can disable this while the message face is
-   * hidden so it remains expanded for the return transition.
-   */
-  collapseOnFocusOut?: boolean;
-  /**
-   * Optional composition slot around the message face inside the shared input
-   * surface. Used by alternate input modes that need to preserve the surface
-   * while switching content.
-   */
-  renderContent?: (messageFace: JSX.Element) => JSX.Element;
 };
 
 function WebDefaultActions(props: { input: InputData }) {
   return (
-    <Input.Actions>
-      <Input.Actions.Left>
+    <>
+      <Input.Layout.ActionsLeft>
         <Input.AttachFilesAction />
-        <Input.ToggleFormatAction />
         <Show when={isReplyInput(props.input)}>
           <Input.CloseReplyAction />
         </Show>
-      </Input.Actions.Left>
-      <Input.Actions.Right>
+      </Input.Layout.ActionsLeft>
+      <Input.Layout.ActionsRight>
         <Input.SendAction />
-      </Input.Actions.Right>
-    </Input.Actions>
+      </Input.Layout.ActionsRight>
+    </>
   );
 }
 
 function IosDefaultActions(props: { input: InputData }) {
   return (
-    <Input.Actions>
-      <Input.Actions.Left>
+    <>
+      <Input.Layout.ActionsLeft>
         <Input.AttachNativeMediaAction />
-        <Input.ToggleFormatAction />
         <Show when={isReplyInput(props.input)}>
           <Input.CloseReplyAction />
         </Show>
-      </Input.Actions.Left>
-      <Input.Actions.Right>
+      </Input.Layout.ActionsLeft>
+      <Input.Layout.ActionsRight>
         <Input.SendAction />
-      </Input.Actions.Right>
-    </Input.Actions>
+      </Input.Layout.ActionsRight>
+    </>
   );
 }
 
@@ -152,54 +123,34 @@ function DefaultActions(props: { input: InputData }) {
 }
 
 export function ChannelInput(props: ChannelInputProps) {
+  const [layout, setLayout] = createSignal<HTMLDivElement>();
   const [scrollContainer, setScrollContainer] = createSignal<HTMLElement>();
-  const mentionsTracker = createMentionsTracker();
-  const attachmentTracker =
-    props.attachmentTracker ??
-    createInputAttachmentTracker({
-      initialAttachments: props.input.attachments,
-    });
   let clearComposer = () => {};
   // Suppresses focus-out handling during clearComposer's iOS blur/refocus
   // cycle, which is not a user-intended blur.
   let isInternalRefocus = false;
 
-  const typingTracker = createTypingTracker({
-    onStartTyping: () => props.onStartTyping?.(),
-    onStopTyping: () => props.onStopTyping?.(),
-  });
-
-  const inputState = createInputState({
-    initialInput: props.input,
-    mentions: mentionsTracker.mentions,
+  const {
+    inputState,
+    mentionsTracker,
     attachmentTracker,
-    clearComposer: () => clearComposer(),
+    typingTracker,
+    onChange,
+  } = createMessageComposer({
+    input: props.input,
+    attachmentTracker: props.attachmentTracker,
+    persistenceKey: props.persistenceKey,
+    callbacks: props,
+    clearEditor: () => clearComposer(),
+    trackTyping: () => acceptTyping,
     attachFiles: async (files) => {
       await uploadInputAttachments({
         files,
         tracker: attachmentTracker,
-        uploadFile: async (file) => {
-          return uploadFile(file, chatRuleset, {
-            hideProgressIndicator: true,
-          });
-        },
+        uploadFile: (file) =>
+          uploadFile(file, chatRuleset, { hideProgressIndicator: true }),
       });
     },
-    clearInput: () => markdownEditor.controls.clear(),
-    callbacks: {
-      onChange: props.onChange,
-      onSend: (snapshot) => {
-        typingTracker.stop();
-        return props.onSend?.(snapshot);
-      },
-      onToggleFormatRibbon: props.onToggleFormatRibbon,
-      onClose: (snapshot) => {
-        typingTracker.stop();
-        return props.onClose?.(snapshot);
-      },
-      onRemoveAttachment: props.onRemoveAttachment,
-    },
-    persistenceKey: props.persistenceKey,
   });
 
   const collapsedInput = createCollapsedInputState({
@@ -266,47 +217,19 @@ export function ChannelInput(props: ChannelInputProps) {
     queueMicrotask(() => focusEditorNow());
   };
 
-  const canUseCursor = useCursorAgentsAccess();
-  const cursorApiKey = useCursorApiKeyStatusQuery();
-
-  // Macro AI and Macro Coder (flag-gated) are mentionable in every channel,
-  // and any bot added to the channel is mentionable too. All are surfaced
-  // through the same `@`-mention typeahead as participants and re-tagged as
-  // bot mentions at send time.
-  const mentionUsers: Accessor<IUser[]> = () => {
-    const cursorEnabled =
-      canUseCursor() && (cursorApiKey.data?.registered ?? false);
-    const base = [
-      ...(props.participants?.() ?? []),
-      ...(props.bots?.() ?? []),
-    ].filter((user) => cursorEnabled || !isCursorBotId(user.id));
-    if (
-      isFeatureEnabled(enableChatV3Agents) &&
-      !base.some((user) => isMacroCoderId(user.id))
-    ) {
-      base.unshift(macroCoderMentionUser());
-    }
-    if (
-      isFeatureEnabled(enableChatV3Agents) &&
-      !base.some((user) => isMacroNewId(user.id))
-    ) {
-      base.unshift(macroNewMentionUser());
-    }
-    if (
-      cursorEnabled &&
-      // Hiding it is not enforcement — a mention can still arrive from a
-      // copied message or another client — so the harness refuses these too.
-      !base.some((user) => isCursorBotId(user.id))
-    ) {
-      base.unshift(cursorMentionUser());
-    }
-    if (!base.some((user) => isMacroAiId(user.id))) {
-      base.unshift(macroAiMentionUser());
-    }
-    return uniqueByKey(base, (user) => user.id);
-  };
+  const parentBots =
+    !props.bots && props.parent
+      ? useMessageBotMentionUsers(() => props.parent!)
+      : () => [];
+  // Connection-prompt behavior for the built-in agents lives in
+  // useAgentMentionUsers; participants and channel/document bots feed it here.
+  const mentionUsers = useAgentMentionUsers(() => [
+    ...(props.participants?.() ?? []),
+    ...(props.bots?.() ?? parentBots()),
+  ]);
 
   const markdownEditor = createConfiguredChannelMarkdownEditor({
+    groupMentions: !props.parent || props.parent.type === 'channel',
     namespace: props.markdownNamespace ?? 'channel-input-markdown',
     enableMentions: true,
     users: mentionUsers,
@@ -317,13 +240,7 @@ export function ChannelInput(props: ChannelInputProps) {
     onMentionRemove: (mention) => {
       mentionsTracker.onMentionRemove(mention);
     },
-    onChange: (markdown) => {
-      const previous = inputState.view().value ?? '';
-      inputState.setValue(markdown);
-      if (!acceptTyping) return;
-      if (markdown.trim() === previous.trim()) return;
-      typingTracker.keystroke();
-    },
+    onChange,
     onEnter: () => {
       if (isTouchDevice()) return false;
       typingTracker.stop();
@@ -339,6 +256,15 @@ export function ChannelInput(props: ChannelInputProps) {
   });
   const markdownHandle = markdownEditor.buildHandle();
   const lexicalEditor = () => markdownHandle.lexical;
+  const { isCompact: oneLineInput } = createComposerLayout(lexicalEditor(), {
+    container: layout,
+    mode: () =>
+      isReplyInput(inputState.view()) ||
+      inputState.view().showFormatRibbon ||
+      inputState.view().attachments?.length
+        ? 'expanded'
+        : 'auto',
+  });
   const [entityDragInsertStore, setEntityDragInsertStore] =
     createDragInsertStore();
 
@@ -356,21 +282,15 @@ export function ChannelInput(props: ChannelInputProps) {
       coordinates.clientY <= rect.bottom
     );
   };
-  // On iOS, blur before clearing so dictation finalizes and discards its buffer
-  // (otherwise it re-injects the sent text into the cleared editor). Re-focus
-  // via rAF so the keyboard stays up: rAF fires after Lexical's update commits,
-  // avoiding a conflict where clear()'s $setSelection(null) undoes the focus.
   clearComposer = () => {
-    if (isIOS) {
-      isInternalRefocus = true;
-      markdownEditor.controls.blur();
-      markdownEditor.controls.clear();
-      requestAnimationFrame(() => {
-        markdownEditor.controls.focus();
-        isInternalRefocus = false;
-      });
-    } else {
-      markdownEditor.controls.clear();
+    isInternalRefocus = true;
+    try {
+      clearComposerPreservingFocus(
+        lexicalEditor(),
+        markdownEditor.controls.clear
+      );
+    } finally {
+      isInternalRefocus = false;
     }
   };
 
@@ -453,72 +373,70 @@ export function ChannelInput(props: ChannelInputProps) {
   });
 
   const renderSurfaceContent = () => {
-    const messageFace = (
+    return (
       <Input.DropZone
         onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
         onDragEnd={() => inputState.setIsDraggedOver(false)}
       >
-        <Input.Layout>
+        <Input.Layout ref={setLayout} oneLineInput={oneLineInput()}>
           <Input.DropOverlay />
-          <Input.FormatRibbon>
-            <FormatButtons
-              selectionState={() => markdownEditor.selection}
-              onInlineFormat={(format) =>
-                applyInlineFormat(markdownEditor.lexical, format)
-              }
-              onNodeFormat={(format) =>
-                applyNodeFormat(markdownEditor.lexical, format)
-              }
-            />
-          </Input.FormatRibbon>
-          <Input.EditorShell
-            ref={setScrollContainer}
-            on:click={(event) => {
-              if (!isTouchDevice()) {
-                event.stopPropagation();
-                markdownEditor.controls.focus();
-              }
-            }}
-          >
-            <Input.Editor>
-              <MarkdownShell
-                config={markdownEditor}
-                placeholder={props.input.placeholder}
-                initialValue={inputState.view().value}
-                autofocus={!isTouchDevice() && (props.autofocus ?? true)}
-                class="text-sm"
-                refFn={attach}
-                onConnect={() => {
-                  isEditorConnected = true;
-                  flushPendingRestore();
-                  flushPendingFocus();
-                  queueMicrotask(() => {
-                    acceptTyping = true;
-                  });
-                }}
+          <Input.Layout.Body>
+            <Input.FormatRibbon>
+              <FormatButtons
+                selectionState={() => markdownEditor.selection}
+                onInlineFormat={(format) =>
+                  applyInlineFormat(markdownEditor.lexical, format)
+                }
+                onNodeFormat={(format) =>
+                  applyNodeFormat(markdownEditor.lexical, format)
+                }
               />
-              <DragInsertIndicator
-                editor={lexicalEditor()}
-                state={entityDragInsertStore}
-                active
-              />
-            </Input.Editor>
-          </Input.EditorShell>
-          <Input.Attachments kind="media" />
-          <Input.Attachments kind="document" />
-          <Input.Footer>
-            <Switch>
-              <Match when={props.children}>{props.children}</Match>
-              <Match when>
-                <DefaultActions input={inputState.view()} />
-              </Match>
-            </Switch>
-          </Input.Footer>
+            </Input.FormatRibbon>
+            <Input.Layout.Editor
+              ref={setScrollContainer}
+              on:click={(event) => {
+                if (!isTouchDevice()) {
+                  event.stopPropagation();
+                  markdownEditor.controls.focus();
+                }
+              }}
+            >
+              <Input.Editor>
+                <ComposerEditor
+                  config={markdownEditor}
+                  placeholder={props.input.placeholder}
+                  initialValue={inputState.view().value}
+                  autofocus={!isTouchDevice() && (props.autofocus ?? true)}
+                  class="text-base"
+                  refFn={attach}
+                  onConnect={() => {
+                    isEditorConnected = true;
+                    flushPendingRestore();
+                    flushPendingFocus();
+                    queueMicrotask(() => {
+                      acceptTyping = true;
+                    });
+                  }}
+                />
+                <DragInsertIndicator
+                  editor={lexicalEditor()}
+                  state={entityDragInsertStore}
+                  active
+                />
+              </Input.Editor>
+            </Input.Layout.Editor>
+            <Input.Attachments kind="media" />
+            <Input.Attachments kind="document" />
+          </Input.Layout.Body>
+          <Switch>
+            <Match when={props.children}>{props.children}</Match>
+            <Match when>
+              <DefaultActions input={inputState.view()} />
+            </Match>
+          </Switch>
         </Input.Layout>
       </Input.DropZone>
     );
-
-    return props.renderContent?.(messageFace) ?? messageFace;
   };
 
   return (
@@ -556,25 +474,17 @@ export function ChannelInput(props: ChannelInputProps) {
           onSend={() => void inputState.commands.send()}
         />
       </Show>
-      <Surface
+      <ComposerSurface
         onFocusOut={(e) => {
           const next = e.relatedTarget as Node | null;
           if (next && e.currentTarget.contains(next)) return;
           if (isInternalRefocus) return;
-          if (props.collapseOnFocusOut === false) return;
           collapsedInput.collapse();
         }}
-        class={cn(
-          'rounded-xl bg-surface touch:rounded-3xl touch:island',
-          isCollapsed() && 'hidden',
-          isTouchDevice() && 'bg-chrome'
-        )}
-        hideBorder={isTouchDevice()}
-        depth={isTouchDevice() ? 3 : 2}
-        solid
+        class={isCollapsed() ? 'hidden' : undefined}
       >
         {renderSurfaceContent()}
-      </Surface>
+      </ComposerSurface>
     </Input.Root>
   );
 }

@@ -26,6 +26,7 @@ fn emits_required_keys() {
         "REDIS_URI",
         "OPENSEARCH_URL",
         "LOCAL_AWS_URL",
+        "LOCAL_AWS_PUBLIC_URL",
         "AWS_ACCESS_KEY_ID",
         "STATIC_STORAGE_BUCKET",
         "CONNECTION_GATEWAY_TABLE",
@@ -206,12 +207,37 @@ fn emits_in_network_service_url_overrides() {
             "http://document-storage-service:8080",
         ),
         (
+            "OVERRIDE_STATIC_FILE_SERVICE_URL",
+            "http://static-file-service:8080",
+        ),
+        (
             "OVERRIDE_LEXICAL_SERVICE_URL",
             "http://lexical-service:8096",
+        ),
+        (
+            "OVERRIDE_STATIC_FILE_SERVICE_URL",
+            "http://static-file-service:8080",
         ),
     ] {
         assert_eq!(env.get(key).map(String::as_str), Some(expected));
     }
+}
+
+/// Permalinks the static file service mints must be loadable by a browser on
+/// the host: the instance proxy's `/static-file/*` block, not the
+/// single-instance CDN port.
+#[test]
+fn static_file_permalinks_go_through_the_instance_proxy() {
+    let env = local_env();
+    let permalink_base = env
+        .get("STATIC_FILE_SERVICE_URL")
+        .expect("static file permalink base");
+    assert!(
+        permalink_base.starts_with("http://localhost:"),
+        "{permalink_base}"
+    );
+    assert!(permalink_base.ends_with("/static-file"), "{permalink_base}");
+    assert!(!permalink_base.contains(":8100"), "{permalink_base}");
 }
 
 /// The auth service presents `SERVICE_INTERNAL_AUTH_KEY` to document storage,
@@ -297,6 +323,10 @@ fn the_agent_harness_uses_local_containers_and_wipes_daytona() {
     // No `CURSOR_API_KEY`: `@cursor` sessions run on the key each user
     // registers in settings, so there is no deployment-wide one to stub.
     assert!(!env.contains_key("CURSOR_API_KEY"));
+    assert_eq!(
+        env.get("CODEX_OAUTH_KMS_KEY_ID").map(String::as_str),
+        Some(resources::CODEX_OAUTH_KMS_ALIAS)
+    );
 }
 
 /// Sandboxes and the harness are both containers, so they reach each other on a
@@ -388,4 +418,15 @@ fn the_public_tunnel_overrides_the_egress_service_url() {
         Some(url)
     );
     assert!(!env.contains_key("EGRESS_BASE_URL"));
+}
+
+#[test]
+fn named_instance_separates_browser_and_container_aws_endpoints() {
+    let instance = Instance::derive(Some("image"), None).expect("named instance derives");
+    let env = LocalEnv::for_instance(Mode::Local, &instance, false, None).to_env();
+    assert_eq!(env["LOCAL_AWS_URL"], "http://localstack:4566");
+    assert_eq!(
+        env["LOCAL_AWS_PUBLIC_URL"],
+        format!("http://localhost:{}", instance.port(Port::LocalStack))
+    );
 }

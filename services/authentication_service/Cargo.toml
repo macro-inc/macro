@@ -24,10 +24,15 @@ path = "src/doppler_config.rs"
 [features]
 default = ["rate_limit"]
 local = []
+# Local opt-out for the throttles `rate_limit` installs — additive, so local
+# builds stay in the one unified `cargo` invocation. See `RATE_LIMIT_ENABLED`.
+no_rate_limit = []
 rate_limit = []
 return_passwordless_code = []
 
 [dependencies]
+codex_connection = { path = "../../crates/codex_connection" }
+codex_cloud_agents = { path = "../../crates/codex_cloud_agents" }
 cursor_api_key = { path = "../../crates/cursor_api_key" }
 cursor_cloud_agents = { path = "../../crates/cursor_cloud_agents" }
 aes-gcm = { workspace = true }
@@ -68,6 +73,7 @@ foreign_entity = { path = "../../crates/foreign_entity" }
 favorites = { path = "../../crates/favorites", features = ["postgres"] }
 fusionauth = { path = "../../crates/fusionauth" }
 futures = { workspace = true }
+gtm_invite = { path = "../../crates/gtm_invite" }
 github = { path = "../../crates/github", default-features = false, features = [
   "axum",
   "inbound",
@@ -99,6 +105,7 @@ macro_db_client = { path = "../../crates/macro_db_client", default-features = fa
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
 macro_event_broker = { path = "../../crates/macro_event_broker" }
+messages = { path = "../../crates/messages", features = ["broker", "delivery"] }
 macro_env_var = { path = "../../crates/macro_env_var" }
 macro_queues = { path = "../../crates/macro_queues" }
 macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = [

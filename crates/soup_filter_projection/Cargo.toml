@@ -14,7 +14,6 @@ base64 = { workspace = true }
 chrono = { workspace = true }
 document_sub_type = { path = "../document_sub_type", default-features = false }
 item-filter-index = { path = "../item_filter_index" }
-model_file_type = { path = "../model_file_type" }
 models_soup = { path = "../models_soup", optional = true }
 postcard = { workspace = true }
 predicate-index = { path = "../predicate_index" }

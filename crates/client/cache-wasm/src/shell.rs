@@ -24,8 +24,11 @@ use cache_turso::{
 use predicate_index::RecordKey;
 use serde::{Deserialize, Serialize};
 use soup_filter_cache_adapter::{
-    SoupFilterCompileOutcome, authoritative_projection_mutations, compile_filter_request,
-    dirty_projection_mutations, optimistic_projection_mutations,
+    SoupFilterCompileOutcome, authoritative_projection_mutations,
+    compile_current_filter_request as compile_filter_request, dirty_projection_mutations,
+    mail::ProjectionError as MailProjectionError, notification_deletion_updates,
+    notification_projection_updates, optimistic_notification_updates,
+    optimistic_projection_mutations,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -304,6 +307,7 @@ struct JsEntityFilterRequest {
     sort_direction: String,
     limit: u16,
     baseline: Option<Vec<JsPredicateBaselineEntry>>,
+    mail: Option<soup_filter_cache_adapter::mail::PageRequest>,
 }
 
 #[derive(Deserialize)]
@@ -421,6 +425,7 @@ fn js_write_result(result: WriteResult, ops: &OpInterner) -> JsWriteResult {
 
 struct CacheState {
     engine: Option<BrowserEngine>,
+    mail_generation: String,
     scope: String,
     hot_capacity: Option<u32>,
     reset_required: bool,
@@ -445,11 +450,29 @@ impl CacheState {
             .expect("callable cache state contains an engine"))
     }
 
+    /// Keep stored projection inputs out of writes that will reset the cache.
+    /// The engine still owns the identity reset and operation invalidation.
+    async fn can_reuse_stored_identity(&mut self, identity: Option<&str>) -> Result<bool, JsValue> {
+        let Some(observed) = identity else {
+            return Ok(true);
+        };
+        let result = self.engine_mut()?.current_identity().await;
+        let bound = self.engine_result(result)?;
+        Ok(bound.as_deref().is_none_or(|bound| bound == observed))
+    }
+
     fn engine_result<T>(
         &mut self,
         result: Result<T, EngineError<TursoStorageError>>,
     ) -> Result<T, JsValue> {
         result.map_err(|error| self.engine_error(error))
+    }
+
+    fn mail_projection_error(&mut self, error: MailProjectionError<TursoStorageError>) -> JsValue {
+        match error {
+            MailProjectionError::Storage(error) => self.engine_error(EngineError::Storage(error)),
+            MailProjectionError::Adapter(error) => err_js(error),
+        }
     }
 
     fn engine_error(&mut self, error: EngineError<TursoStorageError>) -> JsValue {
@@ -594,6 +617,7 @@ async fn open_cache_inner(
         CacheEngine {
             state: Rc::new(Mutex::new(CacheState {
                 engine: Some(build_engine(storage, hot_capacity)),
+                mail_generation: soup_filter_cache_adapter::mail::new_generation(),
                 scope,
                 hot_capacity,
                 reset_required: false,
@@ -750,6 +774,29 @@ pub async fn browser_test_corrupt_queue_payload(scope: String) -> Result<(), JsV
 #[wasm_bindgen(js_name = schemaHash)]
 pub fn schema_hash() -> String {
     cache_core::meta::SCHEMA_HASH.to_string()
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CacheBuildInfo {
+    package_version: &'static str,
+    schema_hash: &'static str,
+    schema_compatibility_epoch: u32,
+    format_version: u32,
+    storage_schema_version: u32,
+}
+
+/// Read-only metadata embedded in this WASM binary, available without opening storage.
+/// Recovery fixtures compare both artifacts before invoking any destructive hook.
+#[wasm_bindgen(js_name = cacheBuildInfo)]
+pub fn cache_build_info() -> Result<JsValue, JsValue> {
+    to_js(&CacheBuildInfo {
+        package_version: env!("CARGO_PKG_VERSION"),
+        schema_hash: cache_core::meta::SCHEMA_HASH,
+        schema_compatibility_epoch: cache_core::codec::CACHE_SCHEMA_COMPATIBILITY_EPOCH,
+        format_version: cache_core::codec::CACHE_FORMAT_VERSION,
+        storage_schema_version: cache_turso::STORAGE_SCHEMA_VERSION,
+    })
 }
 
 fn to_js<T: Serialize>(value: &T) -> Result<JsValue, JsValue> {
@@ -997,6 +1044,26 @@ impl CacheEngine {
             state.ensure_callable()?;
             let request: JsEntityFilterRequest =
                 serde_wasm_bindgen::from_value(request).map_err(err_js)?;
+            if let Some(mail) = request.mail {
+                let generation = state.mail_generation.clone();
+                let result = soup_filter_cache_adapter::mail::page_current(
+                    state.engine_mut()?,
+                    &generation,
+                    request.filters,
+                    &request.sort_method,
+                    &request.sort_direction,
+                    request.limit,
+                    mail,
+                )
+                .await
+                .map_err(|error| match error {
+                    soup_filter_cache_adapter::mail::PageError::Engine(error) => {
+                        state.engine_error(error)
+                    }
+                    soup_filter_cache_adapter::mail::PageError::Adapter(error) => err_js(error),
+                })?;
+                return to_js(&result);
+            }
             let outcome = compile_filter_request(
                 request.filters,
                 &request.sort_method,
@@ -1108,9 +1175,47 @@ impl CacheEngine {
                 let op_id = ops.borrow_mut().intern(&registration.op_id);
                 (op_id, registration.entity_resolvers)
             });
-            let projections =
+            let mut projections =
                 authoritative_projection_mutations(&query, operation_name.as_deref(), &data)
                     .map_err(err_js)?;
+            let reuse_stored_identity =
+                state.can_reuse_stored_identity(identity.as_deref()).await?;
+            if reuse_stored_identity {
+                projections.extend(
+                    notification_projection_updates(
+                        state.engine_mut()?.storage(),
+                        &query,
+                        operation_name.as_deref(),
+                        &vars,
+                        &data,
+                    )
+                    .await
+                    .map_err(err_js)?,
+                );
+            }
+            projections.extend(
+                soup_filter_cache_adapter::mail::projection_updates_for_write(
+                    state.engine_mut()?.storage(),
+                    &query,
+                    operation_name.as_deref(),
+                    &vars,
+                    &data,
+                    reuse_stored_identity,
+                )
+                .await
+                .map_err(|error| state.mail_projection_error(error))?,
+            );
+            let projections = soup_filter_cache_adapter::properties::augment_authoritative(
+                state.engine_mut()?.storage(),
+                &query,
+                operation_name.as_deref(),
+                &vars,
+                &data,
+                reuse_stored_identity,
+                projections,
+            )
+            .await
+            .map_err(|error| state.mail_projection_error(error))?;
             let result = state
                 .engine_mut()?
                 .write_query_with_registration_and_projections(
@@ -1154,9 +1259,47 @@ impl CacheEngine {
             state.ensure_callable()?;
             let variables = parse_variables(variables)?;
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
-            let projections =
+            let mut projections =
                 authoritative_projection_mutations(&query, operation_name.as_deref(), &data)
                     .map_err(err_js)?;
+            let reuse_stored_identity =
+                state.can_reuse_stored_identity(identity.as_deref()).await?;
+            if reuse_stored_identity {
+                projections.extend(
+                    notification_projection_updates(
+                        state.engine_mut()?.storage(),
+                        &query,
+                        operation_name.as_deref(),
+                        &variables,
+                        &data,
+                    )
+                    .await
+                    .map_err(err_js)?,
+                );
+            }
+            projections.extend(
+                soup_filter_cache_adapter::mail::projection_updates_for_write(
+                    state.engine_mut()?.storage(),
+                    &query,
+                    operation_name.as_deref(),
+                    &variables,
+                    &data,
+                    reuse_stored_identity,
+                )
+                .await
+                .map_err(|error| state.mail_projection_error(error))?,
+            );
+            let projections = soup_filter_cache_adapter::properties::augment_authoritative(
+                state.engine_mut()?.storage(),
+                &query,
+                operation_name.as_deref(),
+                &variables,
+                &data,
+                reuse_stored_identity,
+                projections,
+            )
+            .await
+            .map_err(|error| state.mail_projection_error(error))?;
             let result = state
                 .engine_mut()?
                 .hydrate_query_with_projections(
@@ -1216,7 +1359,42 @@ impl CacheEngine {
             let link_patches: Vec<OptimisticLinkPatch> = parse_vec(link_patches)?;
             let revalidations: Vec<QueryRevalidation> = parse_vec(revalidations)?;
             let created_at_ms = parse_timestamp(created_at_ms, "enqueue timestamp")?;
-            let projection_mutations = optimistic_projection_mutations(&data, created_at_ms);
+            let mut projection_mutations = optimistic_projection_mutations(&data, created_at_ms);
+            projection_mutations.extend(
+                optimistic_notification_updates(
+                    notification_projection_updates(
+                        state.engine_mut()?.storage(),
+                        &query,
+                        operation_name.as_deref(),
+                        &vars,
+                        &data,
+                    )
+                    .await
+                    .map_err(err_js)?,
+                )
+                .map_err(err_js)?,
+            );
+            projection_mutations.extend(soup_filter_cache_adapter::mail::optimistic_updates(
+                soup_filter_cache_adapter::mail::projection_updates(
+                    state.engine_mut()?.storage(),
+                    &query,
+                    operation_name.as_deref(),
+                    &vars,
+                    &data,
+                )
+                .await
+                .map_err(|error| state.mail_projection_error(error))?,
+            ));
+            let projection_mutations = soup_filter_cache_adapter::properties::augment_optimistic(
+                state.engine_mut()?.storage(),
+                &query,
+                operation_name.as_deref(),
+                &vars,
+                &data,
+                projection_mutations,
+            )
+            .await
+            .map_err(|error| state.mail_projection_error(error))?;
             let claim = MutationClaimRequest {
                 owner: lease_owner,
                 now_ms: parse_timestamp(now_ms, "claim timestamp")?,
@@ -1410,9 +1588,42 @@ impl CacheEngine {
             };
             let vars = parse_variables(variables)?;
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
-            let projections =
+            let mut projections =
                 authoritative_projection_mutations(&query, operation_name.as_deref(), &data)
                     .map_err(err_js)?;
+            projections.extend(
+                notification_projection_updates(
+                    state.engine_mut()?.storage(),
+                    &query,
+                    operation_name.as_deref(),
+                    &vars,
+                    &data,
+                )
+                .await
+                .map_err(err_js)?,
+            );
+            projections.extend(
+                soup_filter_cache_adapter::mail::projection_updates(
+                    state.engine_mut()?.storage(),
+                    &query,
+                    operation_name.as_deref(),
+                    &vars,
+                    &data,
+                )
+                .await
+                .map_err(|error| state.mail_projection_error(error))?,
+            );
+            let projections = soup_filter_cache_adapter::properties::augment_authoritative(
+                state.engine_mut()?.storage(),
+                &query,
+                operation_name.as_deref(),
+                &vars,
+                &data,
+                true,
+                projections,
+            )
+            .await
+            .map_err(|error| state.mail_projection_error(error))?;
             let result = state
                 .engine_mut()?
                 .commit_optimistic_write_with_projections_outcome(
@@ -1492,9 +1703,24 @@ impl CacheEngine {
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.ensure_callable()?;
-            let projections = dirty_projection_mutations(&keys);
+            let mut projections = dirty_projection_mutations(&keys);
+            projections.extend(soup_filter_cache_adapter::mail::dirty_updates(&keys));
+            projections.extend(
+                notification_deletion_updates(state.engine_mut()?.storage(), &keys, true)
+                    .await
+                    .map_err(err_js)?,
+            );
             let keys: Vec<EntityKey<'static>> =
                 keys.into_iter().map(|key| EntityKey(key.into())).collect();
+            projections.extend(
+                soup_filter_cache_adapter::properties::deletion_updates(
+                    state.engine_mut()?.storage(),
+                    &keys.iter().map(ToString::to_string).collect::<Vec<_>>(),
+                )
+                .await
+                .map_err(|error| state.mail_projection_error(error))?,
+            );
+            let projections = soup_filter_cache_adapter::properties::current_mutations(projections);
             let result = state
                 .engine_mut()?
                 .invalidate_keys_with_projections(&keys, projections)
@@ -1516,15 +1742,29 @@ impl CacheEngine {
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.ensure_callable()?;
-            let projection_keys = keys
-                .iter()
-                .filter_map(|key| RecordKey::new(key.clone()).ok())
-                .collect::<Vec<_>>();
+            let mut projections =
+                notification_deletion_updates(state.engine_mut()?.storage(), &keys, false)
+                    .await
+                    .map_err(err_js)?;
+            projections.extend(
+                keys.iter()
+                    .filter_map(|key| RecordKey::new(key.clone()).ok())
+                    .map(cache_core::predicate::ProjectionMutation::Delete),
+            );
             let keys: Vec<EntityKey<'static>> =
                 keys.into_iter().map(|key| EntityKey(key.into())).collect();
+            projections.extend(
+                soup_filter_cache_adapter::properties::deletion_updates(
+                    state.engine_mut()?.storage(),
+                    &keys.iter().map(ToString::to_string).collect::<Vec<_>>(),
+                )
+                .await
+                .map_err(|error| state.mail_projection_error(error))?,
+            );
+            let projections = soup_filter_cache_adapter::properties::current_mutations(projections);
             let result = state
                 .engine_mut()?
-                .delete_keys_with_projections(&keys, &projection_keys)
+                .delete_keys_with_projection_changes(&keys, projections)
                 .await;
             let affected = state.engine_result(result)?;
             to_js(&JsAffectedOperationsResult {
@@ -1626,6 +1866,7 @@ impl CacheEngine {
                 }
             };
             state.engine = Some(build_engine(storage, hot_capacity));
+            state.mail_generation = soup_filter_cache_adapter::mail::new_generation();
             state.reset_required = false;
             Ok(JsValue::UNDEFINED)
         })

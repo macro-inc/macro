@@ -9,7 +9,9 @@ use entity_access::domain::{
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 
-use crate::domain::models::{Favorite, FavoritesError, FavoritesMutationActor, SetFavoriteResult};
+use crate::domain::models::{
+    Favorite, FavoriteFilter, FavoritesError, FavoritesMutationActor, SetFavoriteResult,
+};
 
 /// Outbound persistence port for favorites.
 pub trait FavoritesRepo: Send + Sync + 'static {
@@ -32,11 +34,13 @@ pub trait FavoritesRepo: Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<i64, Self::Err>> + Send;
 
-    /// List the user's favorites in manual order, hydrated with display
-    /// metadata. Favorites pointing at deleted entities are omitted.
+    /// List the user's favorites matching `filter`, in manual order, hydrated
+    /// with display metadata. Favorites pointing at deleted entities are
+    /// omitted.
     fn list_favorites(
         &self,
         user_id: &MacroUserIdStr<'_>,
+        filter: &FavoriteFilter,
     ) -> impl Future<Output = Result<Vec<Favorite>, Self::Err>> + Send;
 
     /// Remove the favorite for the given entity from the user's collection.
@@ -142,10 +146,11 @@ pub trait FavoritesService: Send + Sync + 'static {
         entity: &Entity<'_>,
     ) -> impl Future<Output = Result<Favorite, FavoritesError>> + Send;
 
-    /// List the user's favorites in manual order.
+    /// List the user's favorites in manual order, restricted by `filter`.
     fn list_favorites(
         &self,
         user_id: &MacroUserIdStr<'_>,
+        filter: &FavoriteFilter,
     ) -> impl Future<Output = Result<Vec<Favorite>, FavoritesError>> + Send;
 
     /// Remove the favorite for the given entity from the user's collection.

@@ -98,6 +98,18 @@ impl RepoUrl {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// `owner/name` for a github.com url, the form a person recognizes.
+    ///
+    /// `None` for anything else — a self-hosted host, or a github.com url
+    /// with more or fewer path segments than a repository has — so callers
+    /// fall back to printing the whole url rather than a guessed slug.
+    #[must_use]
+    pub fn github_owner_and_name(&self) -> Option<&str> {
+        let path = self.0.strip_prefix("https://github.com/")?;
+        let (owner, name) = path.split_once('/')?;
+        (!owner.is_empty() && !name.is_empty() && !name.contains('/')).then_some(path)
+    }
 }
 
 impl std::fmt::Display for RepoUrl {
@@ -137,12 +149,20 @@ pub struct RunOutcome {
     pub text: Option<String>,
 }
 
-impl RunOutcome {
+impl RunStatus {
     /// Whether the run has ended, in any way. `Unknown` counts as terminal:
     /// a status this crate cannot read is not one worth polling forever on.
     #[must_use]
     pub fn is_terminal(&self) -> bool {
-        !matches!(self.status, RunStatus::Creating | RunStatus::Running)
+        !matches!(self, Self::Creating | Self::Running)
+    }
+}
+
+impl RunOutcome {
+    /// Whether the run has ended, in any way. See [`RunStatus::is_terminal`].
+    #[must_use]
+    pub fn is_terminal(&self) -> bool {
+        self.status.is_terminal()
     }
 }
 
@@ -153,6 +173,29 @@ pub struct RunListing {
     pub id: CursorRunId,
     /// Where the run is in its lifecycle.
     pub status: RunStatus,
+}
+
+/// Who said one line of an agent's conversation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConversationSpeaker {
+    /// A prompt, whether typed here or on cursor.com.
+    User,
+    /// One of the agent's replies. A turn has several, one per step.
+    Agent,
+}
+
+/// One line of an agent's conversation, as Cursor still holds it.
+///
+/// Prompts and replies only: no tool calls, no reasoning, no run ids and no
+/// timestamps. Enough to find a prompt that was lost, not enough to rebuild
+/// a turn - which is why this supplements captured history rather than
+/// replacing it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConversationLine {
+    /// Who said it.
+    pub speaker: ConversationSpeaker,
+    /// What was said.
+    pub text: String,
 }
 
 /// An MCP server a session should make available to its Cursor agent.

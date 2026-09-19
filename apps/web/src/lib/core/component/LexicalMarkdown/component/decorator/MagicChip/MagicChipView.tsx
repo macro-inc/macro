@@ -8,6 +8,8 @@ import {
   type RespondToElicitation,
   UserToolComposer,
 } from '@app/features/block-agent/component/parts/LiveElicitation';
+import type { InteractionResponse } from '@app/features/block-agent/context/interaction';
+import { PermissionCard } from '@app/features/block-agent/ui/PermissionCard';
 import {
   StaticMarkdown,
   StaticMarkdownContext,
@@ -15,7 +17,8 @@ import {
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { PulsingStar } from '@entity/components/PulsingStar';
 import ArrowUpRight from '@phosphor/arrow-up-right.svg';
-import type { ElicitationAnswer } from '@service-agent-harness/generated/schemas';
+import ArrowsIn from '@phosphor/arrows-in.svg';
+import type { PendingElicitation } from '@service-agent-fold/generated/types';
 import { Button, Layer } from '@ui';
 import {
   type Component,
@@ -26,11 +29,12 @@ import {
   Switch,
   untrack,
 } from 'solid-js';
+import { MagicChipPullRequest } from './MagicChipPullRequest';
 import {
   type MagicChipActivity,
   type MagicChipHeader,
+  type MagicChipInteraction,
   type MagicChipPresentation,
-  type MagicChipQuestion,
   presentationStatus,
 } from './presentation';
 
@@ -59,9 +63,7 @@ function isTextEntry(target: EventTarget | null) {
 
 /** What the chip's answer to a question does. */
 export type MagicChipAnswer = {
-  /** An answer is on the wire; the buttons wait. */
-  answering: boolean;
-  respond: (answer: ElicitationAnswer) => Promise<boolean>;
+  respond: (response: InteractionResponse) => Promise<boolean>;
 };
 
 /**
@@ -74,11 +76,14 @@ type ChipQuestion =
   | LiveQuestion
   | { kind: 'user_tool'; tool: DraftedTool; toolCall: string };
 
+type MagicChipQuestion = Omit<MagicChipInteraction, 'request'> & {
+  request: PendingElicitation & { kind: 'elicitation' };
+};
+
 function createChipQuestion(asking: MagicChipQuestion): ChipQuestion {
-  const request = asking.question.request;
+  const request = asking.request.request;
   if (request.kind !== 'user_tool') return createLiveQuestion(request);
-  const toolCall =
-    asking.question.toolCall ?? String(asking.question.requestId);
+  const toolCall = asking.request.toolCall ?? String(asking.request.requestId);
   const tool = parseDraftedTool(request, toolCall);
   return tool
     ? { kind: 'user_tool', tool, toolCall }
@@ -178,8 +183,8 @@ const AskingActions: Component<ChipAsking & { onOpen?: () => void }> = (
 
 /**
  * The chip's top row: who is answering (`Macro Agent · model`), what the turn is
- * doing, and the way into the session. The whole label opens the session,
- * as does the arrow.
+ * doing, the pull request the session opened once there is one, and the way
+ * into the session. The whole label opens the session, as does the arrow.
  */
 const ChipHeader: Component<{
   header?: MagicChipHeader;
@@ -187,6 +192,7 @@ const ChipHeader: Component<{
   /** The reply preview, while the answer area has nothing to offer. */
   preview?: string;
   onOpen?: () => void;
+  onCollapse?: () => void;
 }> = (props) => (
   <div
     class="flex min-h-9 items-center gap-1.5 border-b border-edge-muted py-1 pr-1.5 pl-3 text-xs leading-5"
@@ -194,7 +200,7 @@ const ChipHeader: Component<{
   >
     <button
       type="button"
-      class="flex min-w-0 flex-1 items-center gap-1.5 rounded-md text-left text-ink-extra-muted"
+      class="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-md text-left text-ink-extra-muted"
       classList={{ 'hover:text-ink': Boolean(props.onOpen) }}
       data-message-reply-preview={props.preview}
       disabled={!props.onOpen}
@@ -226,6 +232,29 @@ const ChipHeader: Component<{
       </Show>
       <ActivityText activity={props.status} />
     </button>
+    <Show when={props.header?.pullRequestUrl}>
+      {(url) => (
+        <div class="flex min-w-0 max-w-[40%] justify-end overflow-hidden">
+          <MagicChipPullRequest url={url()} />
+        </div>
+      )}
+    </Show>
+    <Show when={props.onCollapse}>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        aria-label="Collapse to mention"
+        tooltip="Collapse to mention"
+        on:click={(event) => {
+          // Lexical intercepts delegated clicks inside editable decorators.
+          event.preventDefault();
+          event.stopPropagation();
+          props.onCollapse?.();
+        }}
+      >
+        <ArrowsIn />
+      </Button>
+    </Show>
     <Button
       variant="ghost"
       size="icon-xs"
@@ -276,7 +305,7 @@ const Passage: Component<{ markdown: string }> = (props) => (
 const Question: Component<ChipAsking> = (props) => (
   <div class="flex min-w-0 flex-col gap-2" data-magic-chip-asking>
     <span class="text-sm leading-5 text-ink wrap-break-word">
-      {props.asking.question.message}
+      {props.asking.request.message}
     </span>
     <Switch>
       <Match when={reviewedTool(props.question)}>
@@ -289,9 +318,7 @@ const Question: Component<ChipAsking> = (props) => (
               tool={review().tool}
               toolCall={review().toolCall}
               review={{
-                canAnswer: () => props.asking.canAnswer,
-                ownerName: () => props.asking.ownerName,
-                answering: () => props.locked && props.asking.canAnswer,
+                canAnswer: () => props.asking.canAnswer && !props.locked,
                 respond: props.respond,
               }}
             />
@@ -324,11 +351,24 @@ export const MagicChipView: Component<{
   /** How the chip answers a question; absent renders it read-only. */
   answer?: MagicChipAnswer;
   onOpen?: () => void;
+  onCollapse?: () => void;
 }> = (props) => {
   // Memoized: read from many places per flush, once per streamed chunk.
   const asking = createMemo(() =>
     props.presentation.kind === 'asking' ? props.presentation.asking : undefined
   );
+  const elicitation = (): MagicChipQuestion | undefined => {
+    const current = asking();
+    return current?.request.kind === 'elicitation'
+      ? { ...current, request: current.request }
+      : undefined;
+  };
+  const permission = () => {
+    const current = asking();
+    return current?.request.kind === 'permission'
+      ? { ...current, request: current.request }
+      : undefined;
+  };
   const markdown = createMemo(() => answerMarkdown(props.presentation));
   const status = createMemo(() => presentationStatus(props.presentation));
   const [expanded, setExpanded] = createSignal(false);
@@ -336,28 +376,40 @@ export const MagicChipView: Component<{
   // One draft per question: keyed on the request id so metadata refreshes of
   // the same question keep what was typed, and a new question starts clean.
   const requestKey = createMemo(() => {
-    const current = asking();
-    return current ? String(current.question.requestId) : undefined;
+    const current = elicitation();
+    return current
+      ? JSON.stringify([
+          current.request.kind,
+          current.request.turn,
+          current.request.requestId,
+        ])
+      : undefined;
   });
   const question = createMemo(() => {
     if (!requestKey()) return undefined;
     return untrack(() => {
-      const current = asking();
+      const current = elicitation();
       return current ? createChipQuestion(current) : undefined;
     });
   });
   const chipAsking = (): ChipAsking | undefined => {
-    const current = asking();
+    const current = elicitation();
     const state = question();
     if (!current || !state) return undefined;
-    const locked =
-      !current.canAnswer || !props.answer || props.answer.answering;
+    const locked = !current.canAnswer || current.answering || !props.answer;
     return {
       asking: current,
       question: state,
       locked,
       respond: async (answer) =>
-        locked ? false : ((await props.answer?.respond(answer)) ?? false),
+        locked
+          ? false
+          : ((await props.answer?.respond({
+              kind: 'elicitation',
+              requestId: current.request.requestId,
+              turn: current.request.turn,
+              answer,
+            })) ?? false),
     };
   };
   // The question's state, kept through its own teardown: once the answer
@@ -377,7 +429,11 @@ export const MagicChipView: Component<{
     if (markdown() && !live) return undefined;
     const current = status();
     const line = `${current.label}${current.detail ? ` ${current.detail}` : ''}`;
-    return live ? `${line} · ${live.question.message}` : line;
+    return live?.request.kind === 'elicitation'
+      ? `${line} · ${live.request.message}`
+      : live?.detail
+        ? `${line} · ${live.detail}`
+        : line;
   };
 
   // Before there is anything to expand, the whole card leads to the session.
@@ -393,7 +449,9 @@ export const MagicChipView: Component<{
         class="my-2 flex w-full min-w-0 max-w-full flex-col overflow-hidden rounded-lg border border-edge-muted bg-surface"
         data-magic-chip={props.agentSessionId}
         data-magic-chip-preview
-        onMouseDown={(event) => {
+        data-lexical-interactive
+        onClick={(event) => event.stopPropagation()}
+        on:mousedown={(event) => {
           // The chip sits in a Lexical message; a press must not move the
           // editor's selection, unless it is landing in one of its own inputs.
           if (!isTextEntry(event.target)) event.preventDefault();
@@ -404,60 +462,89 @@ export const MagicChipView: Component<{
           status={status()}
           preview={preview()}
           onOpen={props.onOpen}
+          onCollapse={props.onCollapse}
         />
-        <div
-          role="button"
-          tabIndex={0}
-          aria-expanded={expandable() ? expanded() : undefined}
-          class="flex min-h-41 min-w-0 flex-col text-left"
-          classList={{ 'h-41': !expanded() }}
-          data-magic-chip-answer
-          onClick={onAreaClick}
-          onKeyDown={(event) => {
-            if (event.target !== event.currentTarget) return;
-            if (event.key !== 'Enter' && event.key !== ' ') return;
-            event.preventDefault();
-            if (expandable()) setExpanded((open) => !open);
-            else props.onOpen?.();
-          }}
-        >
-          <div
-            class="relative mx-3 mt-1 mb-1 min-h-0 flex-1"
-            classList={{ 'overflow-hidden': !expanded() }}
-            data-magic-chip-clip
-          >
-            <Show
-              when={requestKey()}
-              keyed
-              fallback={
-                <Show
-                  when={markdown()}
-                  fallback={<AnswerPending busy={status().busy} />}
-                >
-                  {(answer) => <Passage markdown={answer()} />}
-                </Show>
-              }
-            >
-              {/* `held` is set whenever a request id is. */}
-              <Question {...held()!} />
-            </Show>
-            {/* Cropped content fades out; expanding shows it whole. */}
-            <Show when={expandable() && !expanded()}>
-              <div
-                class="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-linear-to-t from-surface to-transparent"
-                data-magic-chip-fade
-              />
-            </Show>
-          </div>
-          <Show when={requestKey() && held()?.asking.canAnswer}>
+        <Show
+          when={permission()}
+          fallback={
             <div
-              class="flex shrink-0 items-center justify-end gap-2 px-3 pb-2"
-              data-magic-chip-decisions
+              role="button"
+              tabIndex={0}
+              aria-expanded={expandable() ? expanded() : undefined}
+              class="flex min-h-41 min-w-0 flex-col text-left"
+              classList={{ 'h-41': !expanded() }}
+              data-magic-chip-answer
+              onClick={onAreaClick}
+              on:keydown={(event) => {
+                if (event.target !== event.currentTarget) return;
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                event.stopPropagation();
+                if (expandable()) setExpanded((open) => !open);
+                else props.onOpen?.();
+              }}
             >
-              <AskingActions {...held()!} onOpen={props.onOpen} />
+              <div
+                class="relative mx-3 mt-1 mb-1 min-h-0 flex-1"
+                classList={{ 'overflow-hidden': !expanded() }}
+                data-magic-chip-clip
+              >
+                <Show
+                  when={requestKey()}
+                  keyed
+                  fallback={
+                    <Show
+                      when={markdown()}
+                      fallback={<AnswerPending busy={status().busy} />}
+                    >
+                      {(answer) => <Passage markdown={answer()} />}
+                    </Show>
+                  }
+                >
+                  {/* `held` is set whenever a request id is. */}
+                  <Question {...held()!} />
+                </Show>
+                {/* Cropped content fades out; expanding shows it whole. */}
+                <Show when={expandable() && !expanded()}>
+                  <div
+                    class="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-linear-to-t from-surface to-transparent"
+                    data-magic-chip-fade
+                  />
+                </Show>
+              </div>
+              <Show when={requestKey() && held()?.asking.canAnswer}>
+                <div
+                  class="flex shrink-0 items-center justify-end gap-2 px-3 pb-2"
+                  data-magic-chip-decisions
+                >
+                  <AskingActions {...held()!} onOpen={props.onOpen} />
+                </div>
+              </Show>
             </div>
-          </Show>
-        </div>
+          }
+        >
+          {(pending) => (
+            <div class="p-3" data-magic-chip-permission>
+              <PermissionCard
+                action={pending().action}
+                detail={pending().detail}
+                options={pending().request.options}
+                canAnswer={pending().canAnswer && Boolean(props.answer)}
+                disabled={pending().answering}
+                onSelect={(optionId) => {
+                  const current = pending();
+                  if (!current.canAnswer || current.answering) return;
+                  void props.answer?.respond({
+                    kind: 'permission',
+                    requestId: current.request.requestId,
+                    turn: current.request.turn,
+                    answer: { kind: 'selected', optionId },
+                  });
+                }}
+              />
+            </div>
+          )}
+        </Show>
       </div>
     </Layer>
   );

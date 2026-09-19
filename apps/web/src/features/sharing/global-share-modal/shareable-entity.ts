@@ -2,7 +2,12 @@ import { ENABLE_EMAIL_SHARING } from '@core/constant/featureFlags';
 import type { EntityData } from '@entity';
 
 /** Entity types the global share modal knows how to open. */
-export type ShareableEntityType = 'document' | 'chat' | 'project' | 'email';
+export type ShareableEntityType =
+  | 'document'
+  | 'chat'
+  | 'project'
+  | 'email'
+  | 'agent_session';
 
 /** The subset of {@link EntityData} the global share modal accepts. */
 export type ShareableEntityData = Extract<
@@ -21,5 +26,10 @@ export const isShareableEntityType = (
   // Email threads share through the same modal, which forwards the thread to
   // a channel. Gated by the flag that also gates the email block's Share tool.
   if (type === 'email') return ENABLE_EMAIL_SHARING;
-  return type === 'document' || type === 'chat' || type === 'project';
+  return (
+    type === 'document' ||
+    type === 'chat' ||
+    type === 'project' ||
+    type === 'agent_session'
+  );
 };

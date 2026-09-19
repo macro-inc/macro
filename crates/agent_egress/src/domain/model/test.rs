@@ -231,6 +231,33 @@ fn a_repo_slug_rejects_rather_than_repairs() {
     }
 }
 
+/// A configured URL is read into a slug only when it names a repository and
+/// nothing else: this is the one reading of `repo_url`, and the harness mints
+/// a session's token against whatever it says.
+#[test]
+fn reads_the_repository_out_of_a_configured_url() {
+    for url in [
+        "https://github.com/macro-inc/macro",
+        "https://github.com/macro-inc/macro/",
+        "https://github.com/macro-inc/macro.git",
+    ] {
+        let repo = RepoSlug::parse_github_url(url).expect(url);
+        assert_eq!(repo.to_string(), "macro-inc/macro", "for {url}");
+    }
+
+    for url in [
+        "",
+        "not a url",
+        "https://github.com",
+        "https://github.com/macro-inc",
+        "https://gitlab.com/macro-inc/macro",
+        "https://github.com.evil.example/macro-inc/macro",
+        "https://github.com/macro-inc/macro/tree/main",
+    ] {
+        assert_eq!(RepoSlug::parse_github_url(url), None, "accepted {url}");
+    }
+}
+
 /// The allowlist is the whole point: anything not one of the three smart-HTTP
 /// routes - the dumb protocol's object endpoints most of all - is not a target
 /// this crate can name.

@@ -107,12 +107,14 @@ export function isFeatureEnabled(flag: Flag): boolean {
 
 /**
  * Switches Inbox, Tasks, and Channels from the current SoupView implementations
- * to the new composable view implementations. Override locally with
- * VITE_ENABLE_NEW_APP_VIEWS.
+ * to the new composable view implementations. Enabled by default in local
+ * development; production follows PostHog. Override locally with
+ * VITE_ENABLE_NEW_APP_VIEWS=false.
  */
 export const enableNewAppViews = defineFlag({
   key: 'enable-new-app-views',
   env: 'ENABLE_NEW_APP_VIEWS',
+  default: DEV_MODE_ENV || undefined,
 });
 
 /**
@@ -123,6 +125,13 @@ export const enableNewAppViews = defineFlag({
 export const PROD_MODE_ENV = import.meta.env.MODE === 'production';
 
 const onInDev = DEV_MODE_ENV || undefined;
+
+// Claude Cloud demo onboarding and harness/model discovery. Off until PostHog
+// enables it, including in dev; override locally with VITE_CLAUDE_CLOUD.
+export const claudeCloud = defineFlag({
+  key: 'claude-cloud',
+  env: 'CLAUDE_CLOUD',
+});
 
 export const ENABLE_PDF_MODIFICATION_DATA_AUTOSAVE = defineFlag({
   env: 'ENABLE_PDF_MODIFICATION_DATA_AUTOSAVE',
@@ -274,16 +283,6 @@ export const ENABLE_SVG_PREVIEW = defineFlag({
   default: true,
 }).enabled;
 
-export const USE_WIDE_ICONS = defineFlag({
-  env: 'USE_WIDE_ICONS',
-  default: true,
-}).enabled;
-
-export const ENABLE_ANIMATED_ICONS = defineFlag({
-  env: 'ENABLE_ANIMATED_ICONS',
-  default: true,
-}).enabled;
-
 export const ENABLE_TTFT = defineFlag({
   env: 'ENABLE_TTFT',
   default: DEV_MODE_ENV,
@@ -400,19 +399,6 @@ export const enableEmailSignatures = defineFlag({
   default: onInDev,
 });
 
-// SidebarNext: the rebuilt app sidebar — the narrow icon rail in
-// `components/app/sidebar-next` — rendered in place of `AppSidebar`.
-// PostHog-gated everywhere, dev included: no dev-mode default, so `AppSidebar`
-// stays the sidebar you get by default until the flag is on for you. Set
-// VITE_ENABLE_SIDEBAR_NEXT=true to force the rail on locally without PostHog.
-//
-// The PostHog key is deliberately broader than the local names: `enable-new-app-views`
-// is the rollout switch for the rebuilt app surfaces, of which this sidebar is one.
-export const enableSidebarNext = defineFlag({
-  key: 'enable-new-app-views',
-  env: 'ENABLE_SIDEBAR_NEXT',
-});
-
 // CRM companies & contacts frontend: the Companies view + sidebar entry, the
 // company/contact detail blocks, CRM mentions / quick-access, and CRM rows in
 // global search. PostHog-gated (currently targeted at the Macro team in prod)
@@ -421,6 +407,13 @@ export const enableCrm = defineFlag({
   key: 'enable-crm',
   env: 'ENABLE_CRM',
   default: onInDev,
+});
+
+// Company collections are paused until ready; preserve stored lists while off.
+export const enableCrmLists = defineFlag({
+  key: 'enable-crm-lists',
+  env: 'ENABLE_CRM_LISTS',
+  default: false,
 });
 
 // Reminders: the "Remind me" entry in the command menu, the soup
@@ -665,24 +658,20 @@ export const enableChatV3Agents = defineFlag({
   default: onInDev,
 });
 
-// The agent session composer behind `Create → Agent`: pick an agent and a
-// model override before the session opens. Off, the entry opens a managed
-// session straight away as it always has. Override with
-// VITE_ENABLE_AGENT_SESSION_COMPOSER.
-export const enableAgentSessionComposer = defineFlag({
-  key: 'enable-agent-session-composer',
-  env: 'ENABLE_AGENT_SESSION_COMPOSER',
-  default: onInDev,
-});
-
-// The `@cursor` mention entry: agent sessions served by Cursor cloud agents
-// on Macro's Cursor account. PostHog-gated per user; the backend additionally
-// restricts these sessions to @macro.com senders. Override with
-// VITE_ENABLE_CURSOR_AGENTS.
+// The built-in @cursor mention, using the mentioning user's own Cursor account.
+// Account setup is checked after the mention; this flag controls discovery.
+// Override with VITE_ENABLE_CURSOR_AGENTS.
 export const enableCursorAgents = defineFlag({
   key: 'enable-cursor-agents',
   env: 'ENABLE_CURSOR_AGENTS',
   default: onInDev,
+});
+
+// Codex composer choices also require enableChatV3Agents.
+// Override with VITE_ENABLE_CODEX_AGENTS.
+export const enableCodexAgents = defineFlag({
+  key: 'enable-codex-agents',
+  env: 'ENABLE_CODEX_AGENTS',
 });
 
 // The Recent view: the touched-by-me feed (everything the viewer mutated,
@@ -702,5 +691,25 @@ export const enableRecentView = defineFlag({
 export const enableNotificationSettings = defineFlag({
   key: 'enable-notification-settings',
   env: 'ENABLE_NOTIFICATION_SETTINGS',
+  default: onInDev,
+});
+
+// PostHog controls the internal pilot and team targeting in every environment.
+export const enableSpreadsheets = defineFlag({
+  key: 'enable-spreadsheets',
+  env: 'ENABLE_SPREADSHEETS',
+});
+
+/**
+ * Document comments read and write through the shared message API and render
+ * with the channel message components; the legacy annotation comment stores
+ * stay in place while this is off. Channels are not gated. On in dev, where the
+ * legacy comments have already been imported into the message store; production
+ * follows PostHog and stays off until its own import has run. Override locally
+ * with VITE_ENABLE_UNIFIED_DOCUMENT_DISCUSSIONS.
+ */
+export const enableUnifiedDocumentDiscussions = defineFlag({
+  key: 'enable-unified-document-discussions',
+  env: 'ENABLE_UNIFIED_DOCUMENT_DISCUSSIONS',
   default: onInDev,
 });

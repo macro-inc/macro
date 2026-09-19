@@ -1,4 +1,4 @@
-import { Model, type TModel } from '../constant/model';
+import { DEFAULT_MODEL, Model, type TModel } from '../constant/model';
 
 export const parseModel = (
   value: string | null | undefined
@@ -8,3 +8,11 @@ export const parseModel = (
   if (values.includes(value)) return value as TModel;
   return undefined;
 };
+
+/** The selected model for a saved chat: draft, supported server model, default. */
+export function resolveChatInputModel(
+  serverModel: string | null | undefined,
+  draftModel?: TModel
+): TModel {
+  return draftModel ?? parseModel(serverModel) ?? DEFAULT_MODEL;
+}

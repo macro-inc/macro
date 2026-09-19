@@ -1,6 +1,4 @@
-import { activeHighlightSignal } from '../component/UserHighlight';
-import { generalPopupLocationSignal } from '../signal/location';
-import { useClearSelectionHighlights } from '../store/highlight';
+import { usePdfDocument } from '../context/pdf-document-context';
 
 /**
  * Check if a user selection spans multiple pages of the pdf document.
@@ -65,13 +63,19 @@ function nodeToString(node: Node): string {
 }
 
 export function useResetSelection() {
-  const clearSelectionHighlights = useClearSelectionHighlights();
-  const setActiveHighlight = activeHighlightSignal.set;
-  const setGeneralPopupLocation = generalPopupLocationSignal.set;
+  const { signals, stores } = usePdfDocument().state;
+  const setActiveHighlight = signals.activeHighlight[1];
+  const setGeneralPopupLocation = signals.generalPopupLocation[1];
+  const setSelection = stores.selection[1];
+
   return (selection?: Selection) => {
     selection?.removeAllRanges();
     setGeneralPopupLocation(null);
-    clearSelectionHighlights();
+    setSelection({
+      highlightsUnderSelection: [],
+      selection: null,
+      selectionString: '',
+    });
     setActiveHighlight(null);
   };
 }

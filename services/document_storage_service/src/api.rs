@@ -213,6 +213,10 @@ fn api_router(state: ApiContext) -> Router {
             "/channels",
             channels::inbound::axum_router::channels_router(state.channels_state.clone()),
         )
+        .nest(
+            "/messages",
+            messages::inbound::axum_router::router(state.messages_state.clone()),
+        )
         .merge(bots::inbound::axum_router::bots_router(
             state.bots_state.clone(),
         ))
@@ -237,6 +241,10 @@ fn api_router(state: ApiContext) -> Router {
         .nest(
             "/reminders",
             reminders::inbound::axum_router::reminders_router(state.reminders_state.clone()),
+        )
+        .nest(
+            "/initiatives",
+            initiative::inbound::axum_router::initiative_router(state.initiative_state.clone()),
         )
         .nest(
             "/collab_surfaces",

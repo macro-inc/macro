@@ -53,6 +53,10 @@ pub enum CursorEvent {
         text: Option<String>,
         /// Wall-clock duration of the run.
         duration_ms: Option<u64>,
+        /// What the run did to the repositories it was given — the branch it
+        /// pushed and, when the agent was asked for one, the pull request it
+        /// opened. Absent on runs that touched no repository.
+        git: Option<GitState>,
     },
     /// A keepalive; carries nothing.
     Heartbeat,
@@ -72,6 +76,31 @@ pub enum CursorEvent {
         /// Its raw payload.
         data: Value,
     },
+}
+
+/// What a run left behind in the repositories it was given, as reported by
+/// the terminal `result` event.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GitState {
+    /// One entry per repository the run pushed to. Stacked agents report
+    /// several.
+    #[serde(default)]
+    pub branches: Vec<GitBranch>,
+}
+
+/// One repository's outcome inside a [`GitState`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitBranch {
+    /// The repository, without a scheme — `github.com/macro-inc/macro`.
+    pub repo_url: String,
+    /// The branch Cursor pushed, when it pushed one.
+    #[serde(default)]
+    pub branch: Option<String>,
+    /// The pull request Cursor opened, present only when the agent was
+    /// created with `autoCreatePR`.
+    #[serde(default)]
+    pub pr_url: Option<String>,
 }
 
 /// A `tool_call` event: Cursor sends the same event name for the opening
@@ -213,6 +242,7 @@ impl CursorEvent {
                     status: payload.status,
                     text: payload.text,
                     duration_ms: payload.duration_ms,
+                    git: payload.git,
                 },
                 Err(_) => Self::unknown(event, data),
             },
@@ -355,6 +385,8 @@ struct ResultPayload {
     text: Option<String>,
     #[serde(default)]
     duration_ms: Option<u64>,
+    #[serde(default)]
+    git: Option<GitState>,
 }
 
 #[derive(Deserialize)]

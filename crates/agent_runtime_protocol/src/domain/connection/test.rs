@@ -277,3 +277,15 @@ async fn runtime_model_probes_fan_out_without_serializing() {
         ));
     }
 }
+
+#[tokio::test]
+async fn runtime_closes_when_transport_drops_even_with_an_idle_acp_peer() {
+    let (server_channel, runtime_channel) = Channel::duplex();
+    let (mut runtime, _idle_acp) = RuntimeConnection::connect(runtime_channel);
+    drop(server_channel);
+
+    timeout(Duration::from_secs(1), runtime.closed())
+        .await
+        .expect("transport closure must be observable without ACP traffic");
+    runtime.closed().await;
+}

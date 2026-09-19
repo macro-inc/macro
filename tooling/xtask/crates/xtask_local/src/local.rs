@@ -311,10 +311,20 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
     }
     let fe_build = (share_app && !stage.is_dry_run()).then(|| {
         let instance = instance.clone();
-        std::thread::spawn(move || {
-            frontend::build_static(&Stage::from_env().quiet(), &instance, mode)
-        })
+        let stage = stage.background();
+        std::thread::spawn(move || frontend::build_static(&stage, &instance, mode))
     });
+
+    // The init snapshot decision, exactly as `stack up` makes it (see
+    // `stack::up`): hash the init-defining inputs — possible only after
+    // `prepare` wrote the kickstart — and check for a stored snapshot. A hit
+    // skips migrate + Kafka topics + the ~1min FusionAuth kickstart + index
+    // creation; a miss runs the real init and saves one, which is how the cache
+    // seeds itself. The full-delete/full-create idempotency is unchanged: the
+    // key *is* the definition of clean, so any input change is a structural miss.
+    let snapshot_plan = (!args.no_snapshot && !stage.is_dry_run())
+        .then(|| snapshot::Plan::compute(&instance))
+        .transpose()?;
 
     // Join the background teardown before we (re)create volumes + bring infra up,
     // surfaced as a live spinner so it's clear what we're blocked on. It
@@ -337,7 +347,17 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
     // start. The teardown means everything is freshly created each run, so
     // otherwise the services race their backends on startup (no `macrodb`,
     // DynamoDB/OpenSearch connection refused).
-    bring_up_infra(&stage, mode, &instance, &env, InfraInit::Full)?;
+    match &snapshot_plan {
+        Some(plan) if plan.exists() => {
+            snapshot::restore(&stage, &instance, plan)?;
+            bring_up_infra(&stage, mode, &instance, &env, InfraInit::FromSnapshot)?;
+        }
+        Some(plan) => {
+            bring_up_infra(&stage, mode, &instance, &env, InfraInit::Full)?;
+            snapshot::save(&stage, &instance, &env, plan)?;
+        }
+        None => bring_up_infra(&stage, mode, &instance, &env, InfraInit::Full)?,
+    }
     if let Some(handle) = fe_build {
         stage.run_step("Building frontend (static bundle)", move || {
             handle
@@ -386,6 +406,7 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
     let shared_app_url = app_tunnel
         .as_ref()
         .map(|tunnel| format!("{}/app/", tunnel.url));
+    stage.print_timings("bring-up");
     summary::print(
         mode,
         &instance,
@@ -410,7 +431,7 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
         }
         // Non-interactive (piped/CI): just hold the dev server until it exits.
         Some(mut fe) => {
-            let status = fe.child.wait()?;
+            let status = fe.process.child.wait()?;
             if !status.success() {
                 let out = fe.tail_output(40);
                 if !out.trim().is_empty() {
@@ -426,7 +447,9 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
 
 /// Print the hotkey legend shown while attached to a running stack.
 fn print_hotkeys(stage: &Stage) {
-    stage.note("  [r] rebuild & reload services   [q] quit (tears the stack down)");
+    stage.note(
+        "  [r] rebuild & reload services   [f] restart Vite   [q] quit (tears the stack down)",
+    );
 }
 
 /// Re-build the service binaries on the host and restart only the containers
@@ -536,7 +559,8 @@ fn binary_mtime(
 }
 
 /// Stay attached to the running stack, handling hotkeys until the user quits or
-/// the frontend exits. `r` rebuilds + reloads the services; `q`/Esc/Ctrl-C stops
+/// the frontend exits. `r` rebuilds + reloads the services; `f` restarts Vite;
+/// `q`/Esc/Ctrl-C stops
 /// the frontend and tears the whole stack down (so the next run starts clean and
 /// fast). An unexpected frontend exit just returns, leaving the stack up for
 /// inspection — the next run's start-of-run teardown will reclaim it.
@@ -555,7 +579,7 @@ fn interact(
     print_hotkeys(stage);
     loop {
         // Noticed on the next keypress; the frontend running silently is fine.
-        if let Some(status) = fe.child.try_wait()? {
+        if let Some(status) = fe.process.child.try_wait()? {
             let out = fe.tail_output(40);
             if !out.trim().is_empty() {
                 stage.note("frontend output (last lines):");
@@ -575,6 +599,13 @@ fn interact(
                 // run_step renders ✗ + the captured build error on failure; keep
                 // the loop alive so the user can fix and press `r` again.
                 let _ = rebuild_and_reload(stage, mode, instance, env, target, build_aux_services);
+                print_hotkeys(stage);
+            }
+            Ok(Key::Char('f' | 'F')) => {
+                let _ = term.clear_last_lines(1);
+                // A failed restart returns with captured output and leaves the
+                // backend containers running, like an unexpected frontend exit.
+                fe.restart(stage)?;
                 print_hotkeys(stage);
             }
             Ok(Key::Char('q' | 'Q') | Key::Escape | Key::CtrlC) | Err(_) => {
@@ -1164,7 +1195,7 @@ fn ensure_external_resources(stage: &Stage, instance: &Instance) -> Result<()> {
 
 fn wait_http(stage: &Stage, label: &str, url: &str) -> Result<()> {
     let script = format!(
-        "for i in $(seq 1 60); do curl -fsS --max-time 3 {url} >/dev/null 2>&1 && exit 0; sleep 2; done; echo 'not ready: {url}'; exit 1"
+        "for i in $(seq 1 600); do curl -fsS --max-time 3 {url} >/dev/null 2>&1 && exit 0; sleep 0.2; done; echo 'not ready: {url}'; exit 1"
     );
     let mut cmd = Command::new("bash");
     cmd.arg("-lc").arg(script);

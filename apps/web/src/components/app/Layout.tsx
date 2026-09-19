@@ -26,6 +26,8 @@ import { MacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMc
 import { Paywall } from '@app/features/paywall/Paywall';
 import { PropertyEditorModal } from '@app/features/property/editor/PropertyEditorModal';
 import { ReminderComposerModal } from '@app/features/reminders/ReminderComposerModal';
+import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
+import { MobileSettings } from '@app/features/settings/MobileSettings';
 import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
 import { GlobalShareModal } from '@app/features/sharing/global-share-modal/GlobalShareModal';
 import { IosShareSheet } from '@app/features/sharing/ios-share-sheet/IosShareSheet';
@@ -82,6 +84,7 @@ import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { FloatRegion } from './mobile/float-regions/FloatRegion';
 import { FloatRegionHost } from './mobile/float-regions/FloatRegionHost';
+import { installGlassPress } from './mobile/glassPress';
 import { MobileDockRow } from './mobile/MobileDockRow';
 import { MobileViewsRow } from './mobile/MobileViewsRow';
 import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
@@ -98,6 +101,8 @@ const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}welcome`,
   `${ROUTER_BASE_CONCAT}mobile-email-signup`,
   `${ROUTER_BASE_CONCAT}team-invite`,
+  `${ROUTER_BASE_CONCAT}invite`,
+  `${ROUTER_BASE_CONCAT}internal/invite-links`,
 ];
 
 const [sidebarState, setSidebarState] = makePersisted(
@@ -127,7 +132,9 @@ export function Layout(props: RouteSectionProps) {
           expand: () => setSidebarState('expanded'),
         }}
       >
-        <LayoutInner {...props} />
+        <MobileSettingsProvider>
+          <LayoutInner {...props} />
+        </MobileSettingsProvider>
       </SidebarCollapseContext.Provider>
     </SidebarVisibilityContext.Provider>
   );
@@ -413,6 +420,7 @@ function LayoutInner(props: RouteSectionProps) {
   });
 
   onMount(() => {
+    onCleanup(installGlassPress());
     if (sessionStorage.getItem('showUpgradeModal') === 'true') {
       showPaywall();
       sessionStorage.removeItem('showUpgradeModal');
@@ -509,13 +517,7 @@ function LayoutInner(props: RouteSectionProps) {
                 />
               }
             >
-              <SidebarRail
-                sidebarState={sidebarState()}
-                onOpenChange={(open) =>
-                  // The rail has no slim mode, so `cmd+.` hides it outright.
-                  setSidebarState(open ? 'expanded' : 'hidden')
-                }
-              />
+              <SidebarRail />
             </Show>
           </Show>
           <Show when={sidebarCollapsed()}>
@@ -532,7 +534,7 @@ function LayoutInner(props: RouteSectionProps) {
             />
           </Show>
 
-          <div class="flex-1 w-full min-h-0 font-sans text-ink caret-accent">
+          <div class="flex-1 w-full min-h-0 font-sans text-ink caret-current">
             {props.children}
           </div>
         </ItemDndProvider>
@@ -554,6 +556,9 @@ function LayoutInner(props: RouteSectionProps) {
         }
       >
         <FloatRegionHost />
+        <Show when={isMobile()}>
+          <MobileSettings />
+        </Show>
         <MobileViewsRow />
         <FloatRegion
           region="dock"

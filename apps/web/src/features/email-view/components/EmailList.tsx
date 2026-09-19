@@ -1,10 +1,5 @@
 import '@entity/composed/ListEntity.css';
-import {
-  createListController,
-  type ListActivation,
-  listOwnedSlotName,
-  useListInteractions,
-} from '@app/components/list';
+import { type ListActivation, useListInteractions } from '@app/components/list';
 import {
   resolveEntityActionViewContext,
   toEntityActionListState,
@@ -14,17 +9,13 @@ import {
   createSoupEntityActions,
   MaybeSoupEntityActionDrawerManager,
   SoupEntityContextMenu,
-  useSoupListNavigationHotkeys,
   viewedProjectIdFromContent,
 } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { makePersistedState } from '@app/lib/persistence';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
-import {
-  useSplitPanelOrThrow,
-  withSplitPanelOwner,
-} from '@components/app/split-layout/layoutUtils';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   type EntityData,
@@ -37,12 +28,14 @@ import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { Button, cn, Surface } from '@ui';
+import { debounce } from '@solid-primitives/scheduled';
+import { Button, cn } from '@ui';
 import {
   createEffect,
   createMemo,
   createSignal,
   Match,
+  onCleanup,
   type Setter,
   Show,
   Suspense,
@@ -54,16 +47,16 @@ import {
   soupNavigationTouchHighlight,
 } from '../../next-soup/soup-view/soup-navigation-touch-highlight';
 import { openEntityInSplitFromUnifiedList } from '../../next-soup/utils';
-import { useEmailView } from '../email-view-context';
+import {
+  type EmailListActivationMetadata,
+  useEmailView,
+} from '../email-view-context';
 import {
   createEmailListEntryStorage,
   DEFAULT_EMAIL_LIST_STATE,
   type EmailListStateSnapshot,
 } from '../persistence';
-import {
-  type EmailDataSourceItem,
-  useEmailDataSource,
-} from '../queries/use-email-query';
+import type { EmailDataSourceItem } from '../queries/use-email-query';
 import { useEmailListHotkeys } from '../use-email-list-hotkeys';
 import { EmailDateGroupHeader } from './EmailDateGroupHeader';
 import { EmailEmptyState } from './EmailEmptyState';
@@ -73,23 +66,15 @@ type EmailActionRow = {
   rowId: string;
 };
 
-type EmailListActivationMetadata = {
-  event?: MouseEvent;
-  newSplit?: boolean;
-};
-
 export type EmailListProps = {
   /** The focusable list root, for callers that hand keyboard focus back. */
   ref?: (element: HTMLDivElement) => void;
 };
 
 export function EmailList(props: EmailListProps) {
-  const { state, setOpenThreadId } = useEmailView();
+  const { state, source, list, registerListActivationHandler, openThread } =
+    useEmailView();
   const panel = useSplitPanelOrThrow();
-
-  const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
-    useEmailDataSource(state)
-  );
 
   function openEntity(
     entity: EntityData,
@@ -100,8 +85,6 @@ export function EmailList(props: EmailListProps) {
       mergeHistory?: boolean;
     } = {}
   ) {
-    if (entity.type === 'email') setOpenThreadId(entity.id);
-
     const finishTouchHighlight = options.event
       ? persistSoupNavigationTouchHighlight(options.event)
       : undefined;
@@ -114,6 +97,12 @@ export function EmailList(props: EmailListProps) {
       mergeHistory: options.mergeHistory,
     }).finally(() => finishTouchHighlight?.());
   }
+
+  const previewAfterNavigation = debounce(
+    (entity: EntityData) => openEntity(entity, { mergeHistory: true }),
+    150
+  );
+  onCleanup(() => previewAfterNavigation.clear());
 
   function onActivate({
     item,
@@ -131,8 +120,21 @@ export function EmailList(props: EmailListProps) {
 
     if (sourceRow?.kind !== 'entity') return;
 
+    previewAfterNavigation.clear();
+
     const newSplit =
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
+
+    if (
+      !newSplit &&
+      metadata?.event?.altKey !== true &&
+      !panel.handle.isControllerSplit() &&
+      openThread(
+        { id: sourceRow.entity.id, fallbackName: sourceRow.entity.name },
+        { event: metadata?.event }
+      )
+    )
+      return;
 
     openEntity(sourceRow.entity, {
       event: metadata?.event,
@@ -141,31 +143,7 @@ export function EmailList(props: EmailListProps) {
     });
   }
 
-  const list = withSplitPanelOwner(listOwnedSlotName('controller'), () =>
-    createListController<EmailDataSourceItem, EmailListActivationMetadata>({
-      items: source.items,
-      getKey: (row) => row.id,
-      selection: {
-        getKey: (row) => (row.kind === 'entity' ? row.entity.id : row.id),
-      },
-      isNavigable: (row) => row.kind === 'entity' || row.kind === 'load-more',
-      isSelectable: (row) => row.kind === 'entity',
-      onActivate,
-    })
-  );
-
-  withSplitPanelOwner(listOwnedSlotName('navigation-hotkeys'), () => {
-    useSoupListNavigationHotkeys({
-      splitHotkeyScope: panel.splitHotkeyScope,
-      viewId: 'mail',
-      dataSource: source,
-      controller: list,
-      handle: panel.handle,
-      openEntityInSplit: (entity, options) => {
-        openEntity(entity, { mergeHistory: options.mergeHistory });
-      },
-    });
-  });
+  registerListActivationHandler(onActivate);
 
   const { buildActionGroups } = createSoupEntityActions();
   const entityActionViewContext = () =>
@@ -195,7 +173,9 @@ export function EmailList(props: EmailListProps) {
     const current = readListState();
     const value = typeof next === 'function' ? next(current) : next;
 
-    if (value.focusKey !== current.focusKey) {
+    // The view-owned controller survives inline detail navigation. Restore
+    // persisted focus only on a cold mount that has no live focus to preserve.
+    if (current.focusKey === undefined && value.focusKey !== undefined) {
       list.focus.restore(value.focusKey, { reason: 'restore' });
     }
 
@@ -266,9 +246,11 @@ export function EmailList(props: EmailListProps) {
     enabled: panel.isPanelActive,
     navigation: {
       onNavigate: (event) => {
+        previewAfterNavigation.clear();
+
         const row = event.result?.item;
         if (row?.kind === 'entity' && panel.handle.isControllerSplit()) {
-          openEntity(row.entity, { mergeHistory: true });
+          previewAfterNavigation(row.entity);
         }
 
         if (event.kind !== 'move' || event.direction !== 1) return;
@@ -367,6 +349,7 @@ export function EmailList(props: EmailListProps) {
     if (nextScope === activeScope) return;
 
     activeScope = nextScope;
+    previewAfterNavigation.clear();
     listInteractions.selection.clear();
     list.focus.clear({ reason: 'programmatic' });
     panel.handle.resetPreview();
@@ -410,9 +393,7 @@ export function EmailList(props: EmailListProps) {
 
   return (
     <MaybeSoupEntityActionDrawerManager>
-      <Surface
-        depth={isTouchDevice() ? 0 : 2}
-        hideBorder={isTouchDevice()}
+      <div
         ref={(element: HTMLDivElement) => {
           setGrid(element);
           props.ref?.(element);
@@ -422,10 +403,7 @@ export function EmailList(props: EmailListProps) {
         aria-multiselectable="true"
         aria-activedescendant={list.focus.key()}
         tabIndex={0}
-        class={cn(
-          'soup-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none',
-          isTouchDevice() ? 'rounded-none bg-transparent' : 'rounded-2xl p-2'
-        )}
+        class="soup-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none"
       >
         <PullToRefresh
           scrollContainer={pullScrollContainer}
@@ -485,10 +463,7 @@ export function EmailList(props: EmailListProps) {
               </Match>
 
               <Match when={forceEmptyState() || rows().length === 0}>
-                {/* No top inset on the wrapper: each EmptyStatePanel pads itself
-                    below the floating chrome (centered ones by default, the
-                    left-aligned ones in EmailEmptyState), so padding here too
-                    would double it. */}
+                {/* EmptyStatePanel owns the top inset below the mobile chrome. */}
                 <div
                   ref={setEmptyViewport}
                   class="min-h-0 flex-1 overflow-y-auto touch:pb-(--mobile-content-inset-bottom)"
@@ -693,7 +668,7 @@ export function EmailList(props: EmailListProps) {
             analyticsSource="email_view_selection_toolbar"
           />
         </Show>
-      </Surface>
+      </div>
     </MaybeSoupEntityActionDrawerManager>
   );
 }

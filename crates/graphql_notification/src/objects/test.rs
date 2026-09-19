@@ -26,7 +26,7 @@ fn raw_notification(metadata: serde_json::Value) -> UserNotificationRow<serde_js
         notification_event_type: "task_assigned".to_string(),
         entity: EntityType::Document.with_entity_string("document-1".to_string()),
         sent: true,
-        done: false,
+        state: notification::domain::models::NotificationState::Unseen,
         created_at: Utc::now(),
         viewed_at: None,
         updated_at: Utc::now(),

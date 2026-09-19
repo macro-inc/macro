@@ -2,7 +2,8 @@
 edition = "2024"
 name = "cache-wasm"
 publish = false
-version = "0.6.6"
+# Rebuild for raw file-type projections and SQL-compatible nullable filters.
+version = "0.6.16"
 
 [features]
 default = []

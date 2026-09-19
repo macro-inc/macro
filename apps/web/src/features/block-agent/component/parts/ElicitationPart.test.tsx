@@ -14,6 +14,7 @@ import type { ElicitationAnswer } from '@service-agent-harness/generated/schemas
 import { fireEvent, render } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { InteractionResponse } from '../../context/interaction';
 
 const respond = vi.fn<(answer: ElicitationAnswer) => Promise<boolean>>();
 let pending: PendingElicitation | undefined;
@@ -22,12 +23,14 @@ let canAnswer = true;
 vi.mock('../../context/AgentSessionContext', () => ({
   useAgentSession: () => ({
     bot: () => ({ name: 'Macro Coder' }),
-    elicitation: {
-      pending: () => pending,
+    interactions: {
+      pending: () => (pending ? [{ kind: 'elicitation', ...pending }] : []),
       canAnswer: () => canAnswer,
-      ownerName: () => 'Alice Owner',
       answering: () => false,
-      respond,
+      respond: (response: InteractionResponse) =>
+        response.kind === 'elicitation'
+          ? respond(response.answer)
+          : Promise.resolve(false),
     },
   }),
 }));
@@ -198,22 +201,22 @@ describe('ElicitationPart', () => {
   it('offers the form only while the metadata names this question', () => {
     pending = live();
     const { queryByTestId, getByTestId } = render(() => (
-      <ElicitationPart part={part()} />
+      <ElicitationPart turn={0} part={part()} />
     ));
     expect(queryByTestId('form')).not.toBeNull();
     expect(getByTestId('title').textContent).toContain('Macro Coder is asking');
     expect(getByTestId('trailing').textContent).toBe('Waiting for you');
   });
 
-  it('a viewer who is not the owner sees the question locked and named for the owner', () => {
+  it('a viewer without edit access sees the question locked', () => {
     pending = live();
     canAnswer = false;
     const { getByTestId, getByText } = render(() => (
-      <ElicitationPart part={part()} />
+      <ElicitationPart turn={0} part={part()} />
     ));
-    expect(getByTestId('trailing').textContent).toBe('Waiting for Alice Owner');
+    expect(getByTestId('trailing').textContent).toBe('Waiting for an editor');
     expect(getByTestId('body').textContent).toContain(
-      'Only Alice Owner can answer this.'
+      'Only people who can edit this session can answer.'
     );
     for (const label of ['Submit', 'Decline', 'Cancel']) {
       const button = getByText(label).closest('button');
@@ -226,22 +229,33 @@ describe('ElicitationPart', () => {
   it('reads as not answered once the agent has moved on', () => {
     pending = undefined;
     const { queryByTestId, getByTestId } = render(() => (
-      <ElicitationPart part={part()} />
+      <ElicitationPart turn={0} part={part()} />
     ));
     expect(queryByTestId('form')).toBeNull();
     expect(getByTestId('trailing').textContent).toBe('Not answered');
   });
 
+  it('a request id reused in a later turn does not reactivate this card', () => {
+    pending = { ...live(), turn: 1 };
+    const { queryByTestId } = render(() => (
+      <ElicitationPart turn={0} part={part()} />
+    ));
+    expect(queryByTestId('elicitation-form')).toBeNull();
+    expect(respond).not.toHaveBeenCalled();
+  });
+
   it('a different pending question does not make this one live', () => {
     pending = { ...live(), requestId: 7 };
-    const { queryByTestId } = render(() => <ElicitationPart part={part()} />);
+    const { queryByTestId } = render(() => (
+      <ElicitationPart turn={0} part={part()} />
+    ));
     expect(queryByTestId('form')).toBeNull();
   });
 
   it('submits the chosen option under the property name', () => {
     pending = live();
     const { getByTestId, getByText } = render(() => (
-      <ElicitationPart part={part()} />
+      <ElicitationPart turn={0} part={part()} />
     ));
     fireEvent.click(getByTestId('pick-red'));
     fireEvent.click(getByText('Submit'));
@@ -254,7 +268,7 @@ describe('ElicitationPart', () => {
   it('submits custom text under the custom key, and never both', () => {
     pending = live();
     const { getByTestId, getByText } = render(() => (
-      <ElicitationPart part={part()} />
+      <ElicitationPart turn={0} part={part()} />
     ));
     fireEvent.click(getByTestId('type-other'));
     fireEvent.click(getByText('Submit'));
@@ -266,14 +280,18 @@ describe('ElicitationPart', () => {
 
   it('refuses to submit an empty required form', () => {
     pending = live();
-    const { getByText } = render(() => <ElicitationPart part={part()} />);
+    const { getByText } = render(() => (
+      <ElicitationPart turn={0} part={part()} />
+    ));
     fireEvent.click(getByText('Submit'));
     expect(respond).not.toHaveBeenCalled();
   });
 
   it('decline and cancel send their actions', () => {
     pending = live();
-    const { getByText } = render(() => <ElicitationPart part={part()} />);
+    const { getByText } = render(() => (
+      <ElicitationPart turn={0} part={part()} />
+    ));
     fireEvent.click(getByText('Decline'));
     expect(respond).toHaveBeenCalledWith({ action: 'decline' });
     fireEvent.click(getByText('Cancel'));
@@ -283,6 +301,7 @@ describe('ElicitationPart', () => {
   it('shows the harness-reported answer over what was sent', () => {
     const { getByTestId } = render(() => (
       <ElicitationPart
+        turn={0}
         part={part({
           outcome: {
             kind: 'accepted',
@@ -324,6 +343,7 @@ describe('ElicitationPart', () => {
     };
     const { getByText } = render(() => (
       <ElicitationPart
+        turn={0}
         part={part({
           request: {
             kind: 'url',
@@ -382,6 +402,7 @@ describe('ElicitationPart', () => {
       pending = { ...live(), request };
       const { getByTestId, queryByTestId } = render(() => (
         <ElicitationPart
+          turn={0}
           part={part({ request, message: 'Create calendar event?' })}
         />
       ));
@@ -408,7 +429,7 @@ describe('ElicitationPart', () => {
       });
       pending = { ...live(), request };
       const { queryByTestId } = render(() => (
-        <ElicitationPart part={part({ request })} />
+        <ElicitationPart turn={0} part={part({ request })} />
       ));
       expect(queryByTestId('email-composer')).not.toBeNull();
     });
@@ -425,7 +446,7 @@ describe('ElicitationPart', () => {
       });
       pending = { ...live(), request };
       const { getByText } = render(() => (
-        <ElicitationPart part={part({ request })} />
+        <ElicitationPart turn={0} part={part({ request })} />
       ));
       fireEvent.click(getByText('Cancel'));
       expect(respond).toHaveBeenCalledWith({ action: 'decline' });
@@ -436,11 +457,11 @@ describe('ElicitationPart', () => {
       const request = review('CreateCalendarEvent', eventDraft);
       pending = { ...live(), request };
       const { getByTestId } = render(() => (
-        <ElicitationPart part={part({ request })} />
+        <ElicitationPart turn={0} part={part({ request })} />
       ));
       expect(getByTestId('calendar-composer').dataset.canAct).toBe('false');
       expect(getByTestId('locked-notice').textContent).toBe(
-        'Waiting for Alice Owner to answer.'
+        'Waiting for an editor to answer.'
       );
       fireEvent.click(getByTestId('composer-execute'));
       expect(respond).not.toHaveBeenCalled();
@@ -453,7 +474,7 @@ describe('ElicitationPart', () => {
       };
       pending = { ...live(), request };
       const { queryByTestId } = render(() => (
-        <ElicitationPart part={part({ request })} />
+        <ElicitationPart turn={0} part={part({ request })} />
       ));
       expect(queryByTestId('calendar-composer')).toBeNull();
       expect(queryByTestId('form')).not.toBeNull();
@@ -463,6 +484,7 @@ describe('ElicitationPart', () => {
       const request = review('CreateCalendarEvent', eventDraft);
       const { getByTestId } = render(() => (
         <ElicitationPart
+          turn={0}
           part={part({
             request,
             outcome: { kind: 'accepted', answers: [] },
@@ -483,6 +505,7 @@ describe('ElicitationPart', () => {
       const request = review('CreateCalendarEvent', eventDraft);
       const { getByTestId, queryByTestId } = render(() => (
         <ElicitationPart
+          turn={0}
           part={part({ request, outcome: { kind: 'declined' } })}
         />
       ));
@@ -504,6 +527,7 @@ describe('ElicitationPart', () => {
     };
     const { getByText } = render(() => (
       <ElicitationPart
+        turn={0}
         part={part({
           request: {
             kind: 'url',

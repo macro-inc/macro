@@ -8,11 +8,11 @@ import {
   getTaskPriorityOptionId,
   getTaskStatusOptionId,
 } from '@entity/utils/task-properties';
-import ArrowClockwiseIcon from '@phosphor/arrow-clockwise.svg';
-import ClockIcon from '@phosphor/clock.svg';
+import CalendarIcon from '@phosphor/calendar.svg';
 import EyeIcon from '@phosphor/eye.svg';
 import FlagIcon from '@phosphor/flag.svg';
 import ListChecksIcon from '@phosphor/list-checks.svg';
+import EditIcon from '@phosphor/pencil-simple.svg';
 import { PROPERTY_OPTION_IDS } from '@property/constants';
 import type { JSX } from 'solid-js';
 
@@ -179,12 +179,12 @@ const SORT_OPTIONS = [
   {
     value: 'updated_at',
     label: 'Last updated',
-    icon: () => <ArrowClockwiseIcon class="size-3.5" />,
+    icon: () => <EditIcon class="size-3.5" />,
   },
   {
     value: 'created_at',
     label: 'Date created',
-    icon: () => <ClockIcon class="size-3.5" />,
+    icon: () => <CalendarIcon class="size-3.5" />,
   },
   {
     value: 'priority',

@@ -1,7 +1,23 @@
 //! The per-session command queue: admission, the worker that drains it one
 //! command at a time, and routing to the replica that holds the session.
 
+use agent_fold::domain::model::{StopReason, TurnSignal};
+use agent_session::domain::events::{
+    AgentSessionLifecycleEvent, InputReceivedMetadata, SessionDeletedMetadata,
+    SessionSettledMetadata, SessionStoppedMetadata, TurnEndedMetadata, TurnStartedMetadata,
+    WaitingForInputMetadata,
+};
+
 use super::*;
+
+/// What [`AgentHarnessInner::dispatch_next`] found waiting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Dispatch {
+    /// The oldest queued action reached the runtime.
+    Dispatched,
+    /// Nothing was queued: the session is idle.
+    QueueEmpty,
+}
 
 pub(super) type SessionWorkers = DashMap<AgentSessionId, mpsc::UnboundedSender<QueuedCommand>>;
 
@@ -44,7 +60,18 @@ impl<F: CommandForwarder> ErasedForwarder for F {
     }
 }
 
-impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress>
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+>
     AgentHarnessService<
         Sessions,
         Containers,
@@ -53,15 +80,21 @@ impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, E
         PromptContext,
         PromptComposer,
         Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
     >
 where
     Sessions: AgentSessionService,
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
-    PromptContext: ChannelPromptContext,
+    PromptContext: MessagePromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
 {
     pub(super) fn enqueue(
         &self,
@@ -124,7 +157,18 @@ where
     }
 }
 
-impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress>
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+>
     AgentHarnessInner<
         Sessions,
         Containers,
@@ -133,15 +177,21 @@ impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, E
         PromptContext,
         PromptComposer,
         Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
     >
 where
     Sessions: AgentSessionService,
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
-    PromptContext: ChannelPromptContext,
+    PromptContext: MessagePromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
 {
     /// Execute where the session's live actor is: locally when nobody (or
     /// this replica) manages it, on the managing peer otherwise.
@@ -165,8 +215,7 @@ where
         command: HarnessCommand,
     ) -> Result<CommandOutcome> {
         let span = tracing::Span::current();
-        // Open never routes: it is what creates the session row this routing
-        // would read, and a fresh id has no manager to defer to.
+        // Open creates the row and has no existing manager to route through.
         if matches!(command, HarnessCommand::Open(_)) {
             span.record("agent.session.management", "open");
             span.record("agent.command.forwarded", false);
@@ -240,10 +289,25 @@ where
             // an edited entry is delivered later under its original identity,
             // so rewriting (or dropping) what a Daytona session is about to
             // run is the same privilege as prompting it.
+            HarnessCommand::Deliver(DeliverAction {
+                actor,
+                action: AgentAction::RespondToPermission(_),
+                ..
+            }) => {
+                if actor.is_none() {
+                    return Err(AgentSessionError::Forbidden.into());
+                }
+            }
             HarnessCommand::Deliver(DeliverAction { actor, .. })
             | HarnessCommand::EditQueued { actor, .. }
             | HarnessCommand::RemoveQueued { actor, .. } => {
                 let session = self.sessions.get_session(session_id).await?;
+                if AgentKind::for_session(session.bot_id, &session.harness)
+                    == AgentKind::ClaudeCloud
+                    && actor.as_ref() != Some(&session.owner_id)
+                {
+                    return Err(AgentSessionError::Forbidden.into());
+                }
                 if AgentKind::of(session.bot_id) == AgentKind::SandboxedCoder
                     && !actor.as_ref().is_some_and(is_macro_staff)
                 {
@@ -251,8 +315,8 @@ where
                 }
             }
             HarnessCommand::Open(_)
-            | HarnessCommand::TurnEnded
-            | HarnessCommand::SessionStopped
+            | HarnessCommand::Turn(_)
+            | HarnessCommand::SessionStopped { .. }
             | HarnessCommand::SetSandboxSize(_)
             | HarnessCommand::Delete => {}
         }
@@ -291,18 +355,112 @@ where
                 self.publish_queue(session_id).await;
                 Ok(CommandOutcome::Completed)
             }
-            HarnessCommand::TurnEnded => {
-                self.busy.remove(&session_id);
+            HarnessCommand::Turn(TurnSignal::TurnEnded {
+                stop,
+                last_text,
+                action_id: fold_action_id,
+                ..
+            }) => {
+                let ended = self.busy.take(session_id);
+                // A turn end with no record: this replica restarted mid-turn
+                // and the in-memory mark went with it, or the fold closed a
+                // turn nobody here prompted. The queue still drains; only the
+                // facts about *that* turn are unknowable.
+                if ended.is_none() {
+                    tracing::info!(%session_id, "turn ended with no in-flight record");
+                }
+                if let (Some(turn), Some(fold_action_id)) = (&ended, fold_action_id)
+                    && turn.action_id != fold_action_id
+                {
+                    tracing::warn!(
+                        %session_id,
+                        dispatched = %turn.action_id,
+                        folded = %fold_action_id,
+                        "the fold closed a different turn than the one dispatched"
+                    );
+                }
+                let stop_reason = wire_stop_reason(&stop);
+                if let Some(turn) = &ended {
+                    let turn = turn.clone();
+                    let queued_remaining = self.queues.list(session_id).len();
+                    let stop_reason = stop_reason.clone();
+                    self.publish_lifecycle(session_id, |identity| {
+                        AgentSessionLifecycleEvent::TurnEnded(TurnEndedMetadata {
+                            identity,
+                            turn: turn.turn,
+                            action_id: turn.action_id,
+                            actor: turn.actor,
+                            announcement_message_id: turn.announcement_message_id,
+                            stop_reason,
+                            queued_remaining,
+                        })
+                    })
+                    .await;
+                }
                 let dispatched = self.dispatch_next(session_id).await;
                 // Published whatever dispatching did: a claim, a requeued
                 // failure, and an emptied queue are all changes a viewer is
                 // watching for.
                 self.publish_queue(session_id).await;
-                dispatched?;
+                let dispatched = dispatched?;
+                // Settled: the turn ended and nothing followed it. Emitted
+                // only with the turn's record, because "settled" without
+                // knowing what settled is a fact nobody can act on. The
+                // excerpt is the fold's last text for the turn: the same
+                // passage the chip shows once it is done.
+                if let (Dispatch::QueueEmpty, Some(turn)) = (dispatched, ended) {
+                    self.publish_lifecycle(session_id, |identity| {
+                        AgentSessionLifecycleEvent::Settled(SessionSettledMetadata {
+                            identity,
+                            last_turn: Some(turn.ended(stop_reason, last_text)),
+                        })
+                    })
+                    .await;
+                }
                 Ok(CommandOutcome::Completed)
             }
-            HarnessCommand::SessionStopped => {
-                self.busy.remove(&session_id);
+            HarnessCommand::SessionStopped { reason } => {
+                let in_flight = self.busy.take(session_id);
+                self.publish_lifecycle(session_id, |identity| {
+                    AgentSessionLifecycleEvent::Stopped(SessionStoppedMetadata {
+                        identity,
+                        reason,
+                        turn_in_flight: in_flight.as_ref().map(InFlightTurn::summary),
+                    })
+                })
+                .await;
+                Ok(CommandOutcome::Completed)
+            }
+            HarnessCommand::Turn(TurnSignal::ElicitationRaised { question, .. }) => {
+                let Some(turn) = self.busy.turn(session_id) else {
+                    tracing::warn!(%session_id, "elicitation raised with no in-flight record");
+                    return Ok(CommandOutcome::Completed);
+                };
+                self.publish_lifecycle(session_id, |identity| {
+                    AgentSessionLifecycleEvent::WaitingForInput(WaitingForInputMetadata {
+                        identity,
+                        turn: turn.turn,
+                        action_id: turn.action_id,
+                        announcement_message_id: turn.announcement_message_id,
+                        question,
+                    })
+                })
+                .await;
+                Ok(CommandOutcome::Completed)
+            }
+            HarnessCommand::Turn(TurnSignal::ElicitationCleared { .. }) => {
+                let Some(turn) = self.busy.turn(session_id) else {
+                    tracing::warn!(%session_id, "elicitation cleared with no in-flight record");
+                    return Ok(CommandOutcome::Completed);
+                };
+                self.publish_lifecycle(session_id, |identity| {
+                    AgentSessionLifecycleEvent::InputReceived(InputReceivedMetadata {
+                        identity,
+                        turn: turn.turn,
+                        action_id: turn.action_id,
+                    })
+                })
+                .await;
                 Ok(CommandOutcome::Completed)
             }
             HarnessCommand::SetSandboxSize(size) => {
@@ -310,14 +468,30 @@ where
                 Ok(CommandOutcome::Completed)
             }
             HarnessCommand::Delete => {
+                // Identity first: the row is gone once the delete succeeds.
+                let identity = self.identity(session_id).await;
                 self.delete(session_id).await?;
                 // The queue and busy mark die with the session: a deleted
                 // session's entries will never dispatch, and leaving them
                 // would leak them for the life of the process. The published
                 // empty snapshot is the viewers' goodbye.
-                self.busy.remove(&session_id);
+                self.busy.clear(session_id);
                 self.queues.drop_session(session_id);
                 self.publish_queue(session_id).await;
+                match identity {
+                    Ok(identity) => {
+                        self.lifecycle_publisher
+                            .publish(AgentSessionLifecycleEvent::Deleted(
+                                SessionDeletedMetadata { identity },
+                            ))
+                            .await;
+                    }
+                    Err(error) => tracing::warn!(
+                        error = ?error,
+                        %session_id,
+                        "skipping agent_session.deleted: identity unavailable"
+                    ),
+                }
                 Ok(CommandOutcome::Completed)
             }
         }
@@ -330,31 +504,87 @@ where
     /// necessarily: entries can linger from a drain that failed, and FIFO
     /// order holds regardless. The outcome reports what happened to *this*
     /// action - still waiting, or on the wire.
+    ///
+    /// An action whose id this session already holds is the same action
+    /// arriving twice - a caller retrying a control request under the id it
+    /// named. It reports what became of the first copy instead of queueing a
+    /// second, so a retry cannot double-prompt. Only what this replica still
+    /// holds is checked: an id whose action has already finished its turn is
+    /// no longer anywhere to be seen, and accepting it again is indistinguishable
+    /// from asking for the same thing twice on purpose.
+    ///
+    /// A channel follow-up (`announce` set) that lands on a running turn
+    /// steers: it goes to the front of the queue, a stop cancels the current
+    /// turn, and the chip is posted on that follow-up immediately - so it
+    /// flushes next, ahead of anything queued before it.
     pub(super) async fn enqueue_then_dispatch(
         &self,
         session_id: AgentSessionId,
         command: DeliverAction,
     ) -> Result<CommandOutcome> {
         let action_id = command.id;
-        queue_result(
-            self.queues.enqueue(
-                session_id,
-                QueuedEntry {
-                    action_id,
-                    action: command.action,
-                    actor: command.actor,
-                    announce: command.announce,
-                    announced: false,
-                    created_at: chrono::Utc::now(),
-                },
-            ),
-            session_id,
-        )?;
+        if self.queues.contains(session_id, action_id) {
+            return Ok(CommandOutcome::Queued);
+        }
+        if self
+            .busy
+            .turn(session_id)
+            .is_some_and(|turn| turn.action_id == action_id)
+        {
+            return Ok(CommandOutcome::Completed);
+        }
+        let prompt = match &command.action {
+            AgentAction::Prompt(prompt) => Some(prompt.prompt.clone()),
+            _ => None,
+        };
+        let actor = command.actor.clone();
+        let announce = command.announce.clone();
+        let action = command.action.clone();
+        let steers = announce.is_some() && self.busy.turn(session_id).is_some();
+        let entry = QueuedEntry {
+            action_id,
+            action: command.action,
+            actor: command.actor,
+            announce: command.announce,
+            announced: None,
+            created_at: chrono::Utc::now(),
+        };
+        let enqueued = if steers {
+            self.queues.enqueue_front(session_id, entry)
+        } else {
+            self.queues.enqueue(session_id, entry)
+        };
+        queue_result(enqueued, session_id)?;
+        // Mentions are a fact about the prompt, not the turn: published as
+        // soon as the prompt is accepted, whether it dispatches now or waits.
+        if let Some(prompt) = prompt {
+            self.publish_mentions(session_id, action_id, actor.clone(), &prompt)
+                .await;
+        }
 
-        let dispatched = if self.busy.contains_key(&session_id) {
+        if steers {
+            self.steer_channel_follow_up(session_id, action_id, &action, actor.as_ref(), announce)
+                .await?;
+        }
+
+        let dispatched = if self.busy.is_pending(session_id) {
             Ok(())
         } else {
-            self.dispatch_next(session_id).await
+            // Marked before dispatching, not only once `dispatch_next`'s own
+            // delivery succeeds: this closes the window between "a command
+            // was just handed off for this session" and "the runtime
+            // visibly started a turn", which a reaper watching only the
+            // latter cannot see. The turn itself is unknowable this early -
+            // `dispatch_next` fills it in with `mark_turn` once delivery
+            // names one - so this records only that something is coming. On
+            // failure nothing actually started, so the mark comes back off
+            // rather than sticking to a session with nothing running.
+            self.busy.admit(session_id);
+            let result = self.dispatch_next(session_id).await.map(drop);
+            if result.is_err() {
+                self.busy.clear(session_id);
+            }
+            result
         };
         self.publish_queue(session_id).await;
         dispatched?;
@@ -364,6 +594,58 @@ where
         } else {
             CommandOutcome::Completed
         })
+    }
+
+    /// Cancel a running turn and post the chip on the channel follow-up that
+    /// interrupted it. The follow-up is already at the front of the queue,
+    /// so it flushes as the next prompt once the cancelled turn ends.
+    ///
+    /// Stop is delivered first: the fold records it as its own control turn,
+    /// and the chip has to name the prompt turn that comes after that, not
+    /// the id the fold would have handed out before the cancel. A failed
+    /// cancel is best-effort — the prompt is already queued and still drains
+    /// when the current turn ends on its own.
+    async fn steer_channel_follow_up(
+        &self,
+        session_id: AgentSessionId,
+        action_id: AgentActionId,
+        action: &AgentAction,
+        actor: Option<&MacroUserIdStr<'static>>,
+        announce: Option<AnnounceOrigin>,
+    ) -> Result<()> {
+        if let Err(error) = self
+            .deliver(
+                session_id,
+                DeliverAction {
+                    id: AgentActionId::mint(),
+                    action: AgentAction::Stop,
+                    actor: actor.cloned(),
+                    announce: None,
+                },
+            )
+            .await
+        {
+            tracing::warn!(
+                error = ?error,
+                %session_id,
+                "failed to stop the running turn for a channel follow-up"
+            );
+        }
+
+        // Front of the queue, so the next prompt turn is this one's.
+        let prompted_message_id = self.sessions.next_prompt_message_id(session_id).await?;
+        let announcement = self
+            .announcement(session_id, action, actor, announce, prompted_message_id)
+            .await?;
+        if let Some(announcement) = announcement {
+            let announced = self.announcer.announce(announcement).await?;
+            queue_result(
+                self.queues
+                    .mark_announced(session_id, action_id, announced.message_id),
+                session_id,
+            )?;
+        }
+        Ok(())
     }
 
     /// Push the queue as it now stands to the session's viewers.
@@ -403,9 +685,9 @@ where
     /// the queue meanwhile. The error still propagates, so a caller whose
     /// own action triggered this dispatch hears about it.
     #[tracing::instrument(err, skip(self), fields(%session_id))]
-    pub(super) async fn dispatch_next(&self, session_id: AgentSessionId) -> Result<()> {
+    pub(super) async fn dispatch_next(&self, session_id: AgentSessionId) -> Result<Dispatch> {
         let Some(mut entry) = self.queues.claim_next(session_id) else {
-            return Ok(());
+            return Ok(Dispatch::QueueEmpty);
         };
 
         // Compose a copy: the queued entry stays raw so a retry still edits
@@ -420,13 +702,25 @@ where
             return Err(error);
         }
 
-        if !entry.announced {
+        // The turn this action opens, read before delivery appends the
+        // prompt to the log. Unchanged across a failed attempt, so a retry
+        // reports the same turn.
+        let prompted_message_id = match self.sessions.next_prompt_message_id(session_id).await {
+            Ok(message_id) => message_id,
+            Err(error) => {
+                self.queues.requeue_front(session_id, entry);
+                return Err(error.into());
+            }
+        };
+
+        if entry.announced.is_none() {
             let announcement = match self
                 .announcement(
                     session_id,
                     &entry.action,
                     entry.actor.as_ref(),
                     entry.announce.clone(),
+                    prompted_message_id,
                 )
                 .await
             {
@@ -437,11 +731,13 @@ where
                 }
             };
             if let Some(announcement) = announcement {
-                if let Err(error) = self.announcer.announce(announcement).await {
-                    self.queues.requeue_front(session_id, entry);
-                    return Err(error);
+                match self.announcer.announce(announcement).await {
+                    Ok(announced) => entry.announced = Some(announced.message_id),
+                    Err(error) => {
+                        self.queues.requeue_front(session_id, entry);
+                        return Err(error);
+                    }
                 }
-                entry.announced = true;
             }
         }
 
@@ -453,14 +749,44 @@ where
         };
         match self.deliver(session_id, command).await {
             Ok(()) => {
-                self.busy.insert(session_id, ());
-                Ok(())
+                let turn = InFlightTurn {
+                    action_id: entry.action_id,
+                    turn: prompted_message_id.turn,
+                    actor: entry.actor,
+                    announcement_message_id: entry.announced,
+                };
+                self.busy.mark_turn(session_id, turn.clone());
+                self.publish_lifecycle(session_id, |identity| {
+                    AgentSessionLifecycleEvent::TurnStarted(TurnStartedMetadata {
+                        identity,
+                        turn: turn.turn,
+                        action_id: turn.action_id,
+                        actor: turn.actor,
+                        announcement_message_id: turn.announcement_message_id,
+                    })
+                })
+                .await;
+                Ok(Dispatch::Dispatched)
             }
             Err(error) => {
                 self.queues.requeue_front(session_id, entry);
                 Err(error)
             }
         }
+    }
+}
+
+/// The stop reason as downstream reads it: the ACP wire word for the reasons
+/// ACP names, `error` for a prompt the runtime refused.
+fn wire_stop_reason(stop: &StopReason) -> String {
+    match stop {
+        StopReason::EndTurn => "end_turn".to_owned(),
+        StopReason::MaxTokens => "max_tokens".to_owned(),
+        StopReason::MaxTurnRequests => "max_turn_requests".to_owned(),
+        StopReason::Refusal => "refusal".to_owned(),
+        StopReason::Cancelled => "cancelled".to_owned(),
+        StopReason::Other { reason } => reason.clone(),
+        StopReason::Failed { .. } => "error".to_owned(),
     }
 }
 
@@ -487,18 +813,22 @@ pub(super) async fn run_session_worker<
     PromptContext,
     PromptComposer,
     Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
 >(
     session_id: AgentSessionId,
-    inner: Arc<
-        AgentHarnessInner<
-            Sessions,
-            Containers,
-            Announcer,
-            Runtimes,
-            PromptContext,
-            PromptComposer,
-            Egress,
-        >,
+    inner: SharedInner<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
     >,
     mut receiver: mpsc::UnboundedReceiver<QueuedCommand>,
 ) where
@@ -506,9 +836,12 @@ pub(super) async fn run_session_worker<
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
-    PromptContext: ChannelPromptContext,
+    PromptContext: MessagePromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
 {
     while let Some(queued) = receiver.recv().await {
         let QueuedCommand {

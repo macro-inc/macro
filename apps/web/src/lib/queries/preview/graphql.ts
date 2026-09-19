@@ -37,6 +37,7 @@ import {
   createSignal,
   onCleanup,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import {
   buildGraphqlEntitiesSoupInput,
   buildGraphqlEntitySoupInput,
@@ -148,6 +149,8 @@ function documentSubType(
       return { type: 'snippet' as const };
     case 'GraphqlSkillSubType':
       return { type: 'skill' as const };
+    case 'GraphqlInitiativeDescriptionSubType':
+      return undefined;
   }
 }
 
@@ -277,8 +280,12 @@ function previewFromQuery(
   data: ItemPreviewQuery | ItemPreviewsQuery,
   item: ItemEntity
 ): PreviewItem | undefined {
+  // Cache-and-network can emit a user envelope before this soup selection
+  // is present. Treat that as unloaded so REST fallback can take over.
+  const items = data.user?.soup?.items;
+  if (!items) return undefined;
   const recordKey = normalizedRecordKey(item);
-  const record = data.user.soup.items.find(
+  const record = items.find(
     (record) => `${record.__typename}:${record.id}` === recordKey
   );
   return record ? graphqlRecordToPreview(record) : undefined;
@@ -377,6 +384,46 @@ export async function setGraphqlPreviewName(
   const input = itemPreviewInput(item);
   if (!input) return;
   const type = normalizedItemType(item) as GraphqlPreviewType;
+  const base = { id: item.id, displayName: name };
+  // displayName drives previews; Soup rows read the concrete entity's name
+  // (or customName for calls). Write both through their generated selections.
+  const record = match(type)
+    .with('document', () => ({
+      ...base,
+      __typename: 'GraphqlSoupDocument' as const,
+      documentName: name,
+    }))
+    .with('chat', () => ({
+      ...base,
+      __typename: 'GraphqlSoupChat' as const,
+      chatName: name,
+    }))
+    .with('project', () => ({
+      ...base,
+      __typename: 'GraphqlSoupProject' as const,
+      projectName: name,
+    }))
+    .with('channel', () => ({
+      ...base,
+      __typename: 'GraphqlSoupChannel' as const,
+      channelDisplayName: name,
+    }))
+    .with('call', () => ({
+      ...base,
+      __typename: 'GraphqlSoupCall' as const,
+      customName: name,
+    }))
+    .with('crm_company', () => ({
+      ...base,
+      __typename: 'GraphqlSoupCrmCompany' as const,
+      companyName: name,
+    }))
+    .with('email', () => ({
+      ...base,
+      __typename: 'GraphqlSoupEmailThread' as const,
+      emailName: name,
+    }))
+    .exhaustive();
   await writeGraphqlPreviewCache({
     query: stringifyDocument(ItemPreviewNameCacheWriteDocument),
     operationName: 'ItemPreviewNameCacheWrite',
@@ -385,13 +432,7 @@ export async function setGraphqlPreviewName(
       user: {
         id: userId,
         soup: {
-          items: [
-            {
-              __typename: GRAPHQL_TYPENAMES[type],
-              id: item.id,
-              displayName: name,
-            },
-          ],
+          items: [record],
         },
       },
     } satisfies ItemPreviewNameCacheWriteQuery,

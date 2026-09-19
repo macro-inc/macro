@@ -1,7 +1,9 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
 import { isLargeModelCatalog } from '@core/component/AI/component/input/modelCatalog';
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
 import { toast } from '@core/component/Toast/Toast';
+import { claudeCloud } from '@core/constant/featureFlags';
 import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
@@ -9,7 +11,7 @@ import { usePipedreamMcpFlag } from '@core/pipedream/flag';
 import MacroLogo from '@icon/macro-logo.svg';
 import PencilIcon from '@phosphor/pencil-simple.svg';
 import PlusIcon from '@phosphor/plus.svg';
-import RobotIcon from '@phosphor/robot.svg';
+import AgentIcon from '@phosphor/sparkle.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import UploadIcon from '@phosphor/upload-simple.svg';
 import XIcon from '@phosphor/x.svg';
@@ -32,10 +34,11 @@ import { usePipedreamConnectedSlugs } from '@queries/pipedream-connectors';
 import { useCurrentTeamQuery, useIsTeamOwner } from '@queries/team/teams';
 import type { AgentMcpServer } from '@service-storage/generated/schemas/agentMcpServer';
 import type { AgentMcpServers } from '@service-storage/generated/schemas/agentMcpServers';
+import { useSearchParams } from '@solidjs/router';
 import { Avatar, Button, Dialog, Panel } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { botAssignableChannelOptions } from '../channel/Bots/botChannelOptions';
-import { canDeleteBot } from '../channel/Bots/botPermissions';
+import { canDeleteBot, canManageAgent } from '../channel/Bots/botPermissions';
 import { ChannelMultiSelect } from '../channel/Bots/ChannelMultiSelect';
 import { PipedreamAppPicker } from './PipedreamAppPicker';
 import {
@@ -66,6 +69,7 @@ type ConnectedHarness = {
   id: string;
   name: string;
   kind: 'builtin' | 'macrod';
+  allowPermissionBypass: boolean;
   target: AgentModelTarget;
   connected?: boolean;
 };
@@ -76,6 +80,7 @@ const IN_MEMORY_HARNESS: ConnectedHarness = {
   id: 'in-memory',
   name: 'In-memory',
   kind: 'builtin',
+  allowPermissionBypass: true,
   target: { harness: 'in-memory' },
 };
 
@@ -92,7 +97,16 @@ const MACRO_AGENT: AgentSummary = {
 
 /** Settings page for viewing and creating persistent agents. */
 export function Agents() {
+  const claudeCloudFlag = useFeatureFlag(claudeCloud);
   const [creating, setCreating] = createSignal(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const creatingFromLink = () => searchParams.createAgent === 'true';
+  const closeCreateAgent = () => {
+    setCreating(false);
+    if (creatingFromLink()) {
+      setSearchParams({ createAgent: undefined }, { replace: true });
+    }
+  };
   const [editingAgent, setEditingAgent] = createSignal<AgentWithHarnessId>();
   const [deletingAgent, setDeletingAgent] = createSignal<AgentWithHarnessId>();
   const channelsContext = useChannelsContext();
@@ -109,33 +123,46 @@ export function Agents() {
   const harnessesQuery = useHarnessesQuery();
   const connectedHarnesses = (): readonly ConnectedHarness[] => {
     const harnesses = harnessesQuery.isSuccess ? harnessesQuery.data : [];
-    return buildAgentModelTargets(cursorConnected(), harnesses).map(
-      (target) => {
-        if (target.harness === 'in-memory') return IN_MEMORY_HARNESS;
-        if (target.harness === 'cursor') {
-          return {
-            id: 'cursor',
-            name: 'Cursor',
-            kind: 'builtin',
-            target,
-          };
-        }
-
-        const harness = harnesses.find(
-          (candidate) => candidate.id === target.harnessId
-        );
+    return buildAgentModelTargets(
+      cursorConnected(),
+      harnesses,
+      claudeCloudFlag().enabled
+    ).map((target) => {
+      if (target.harness === 'in-memory') return IN_MEMORY_HARNESS;
+      if (target.harness === 'claude-cloud') {
         return {
-          id: target.harnessId ?? '',
-          name:
-            harness?.owner.type === 'team'
-              ? `${harness.name} · Team`
-              : (harness?.name ?? 'macrod'),
-          kind: 'macrod',
+          id: 'claude-cloud',
+          name: 'Claude Cloud',
+          kind: 'builtin',
+          allowPermissionBypass: true,
           target,
-          connected: harness?.connected,
         };
       }
-    );
+      if (target.harness === 'cursor') {
+        return {
+          id: 'cursor',
+          name: 'Cursor',
+          kind: 'builtin',
+          allowPermissionBypass: true,
+          target,
+        };
+      }
+
+      const harness = harnesses.find(
+        (candidate) => candidate.id === target.harnessId
+      );
+      return {
+        id: target.harnessId ?? '',
+        name:
+          harness?.owner.type === 'team'
+            ? `${harness.name} · Team`
+            : (harness?.name ?? 'macrod'),
+        kind: 'macrod',
+        allowPermissionBypass: harness?.allow_permission_bypass ?? false,
+        target,
+        connected: harness?.connected,
+      };
+    });
   };
   const channelOptions = createMemo(() =>
     botAssignableChannelOptions(channelsContext.channels())
@@ -150,9 +177,13 @@ export function Agents() {
   const canDeleteAgent = (agent: AgentWithHarnessId) =>
     canDeleteBot(agent.bot, currentUserId(), currentTeamId(), isTeamOwner());
   const agents = createMemo(() =>
-    (agentsQuery.isSuccess ? agentsQuery.data : []).map((agent) =>
-      summarizeAgent(agent, connectedHarnesses(), channelOptions())
-    )
+    (agentsQuery.isSuccess ? agentsQuery.data : [])
+      .filter((agent) =>
+        canManageAgent(agent.bot, currentUserId(), currentTeamId())
+      )
+      .map((agent) =>
+        summarizeAgent(agent, connectedHarnesses(), channelOptions())
+      )
   );
   const teamAgents = createMemo(() => [
     MACRO_AGENT,
@@ -291,14 +322,14 @@ export function Agents() {
         </SettingsSection>
       </SettingsPage>
 
-      <Show when={creating()}>
+      <Show when={creating() || creatingFromLink()}>
         <AgentDialog
           connectedHarnesses={connectedHarnesses()}
           currentTeamId={currentTeamId()}
           canShareWithTeam={canShareWithTeam()}
           canMakePrivate
           pending={createAgentMutation.isPending}
-          onClose={() => setCreating(false)}
+          onClose={closeCreateAgent}
           onSave={createAgent}
         />
       </Show>
@@ -366,6 +397,7 @@ function summarizeAgent(
 function harnessName(id: string): string {
   if (id === 'in-memory') return 'In-memory';
   if (id === 'cursor') return 'Cursor';
+  if (id === 'claude-cloud') return 'Claude Cloud';
   // Any other id is a registered macrod harness uuid; if it is not in the
   // connected list any more, the harness has been removed.
   return 'Disconnected harness';
@@ -438,7 +470,7 @@ function AgentAvatar(props: { agent: AgentSummary }) {
           <Avatar.Fallback>
             <Show
               when={props.agent.id === MACRO_AGENT_BOT_ID}
-              fallback={<RobotIcon class="size-5" />}
+              fallback={<AgentIcon class="size-5" />}
             >
               <MacroLogo class="size-5" />
             </Show>
@@ -632,6 +664,14 @@ function AgentDialog(props: {
     rememberedMcpServers = servers;
     setMcp({ scope: 'selected', servers });
   };
+  const [autoAcceptChoice, setAutoAcceptChoice] = createSignal(
+    props.agent?.auto_accept_permissions === true
+  );
+  const allowPermissionBypass = () =>
+    selectedHarness()?.allowPermissionBypass === true;
+  const autoAcceptPermissions = () =>
+    selectedHarness()?.kind === 'builtin' ||
+    (allowPermissionBypass() && autoAcceptChoice());
   let avatarInputRef: HTMLInputElement | undefined;
   let dialogContentRef: HTMLDivElement | undefined;
 
@@ -645,6 +685,7 @@ function AgentDialog(props: {
   const handleHarnessChange = (id: string) => {
     setHarnessId(id);
     setDefaultModelId(preferredModelId(id));
+    setAutoAcceptChoice(false);
   };
 
   const handleAvatarInput = (file: File | undefined) => {
@@ -694,6 +735,7 @@ function AgentDialog(props: {
       // section never wipes a selection somebody else made.
       mcp: mcp(),
       teamId: selectedTeamId(),
+      autoAcceptPermissions: autoAcceptPermissions(),
     });
     if (saved) close();
   };
@@ -839,14 +881,26 @@ function AgentDialog(props: {
                   <span class="text-xs font-medium text-ink">Harness</span>
                   <select
                     class="settings-input w-full"
-                    value={harnessId()}
                     onChange={(event) =>
                       handleHarnessChange(event.currentTarget.value)
                     }
                   >
-                    <For each={props.connectedHarnesses}>
+                    <For
+                      each={props.connectedHarnesses.filter(
+                        (harness) =>
+                          harness.id !== 'claude-cloud' ||
+                          harness.id === harnessId() ||
+                          modelDataForHarness(harness.id)?.status ===
+                            'available'
+                      )}
+                    >
                       {(harness) => (
-                        <option value={harness.id}>{harness.name}</option>
+                        <option
+                          value={harness.id}
+                          selected={harness.id === harnessId()}
+                        >
+                          {harness.name}
+                        </option>
                       )}
                     </For>
                   </select>
@@ -953,6 +1007,38 @@ function AgentDialog(props: {
                   </Show>
                 </label>
               </div>
+              <Show when={selectedHarness()?.kind === 'macrod'}>
+                <fieldset class="mt-4 grid gap-2 border-t border-ink/[0.06] pt-4">
+                  <legend class="text-xs font-medium text-ink">
+                    Permission requests
+                  </legend>
+                  <ChoiceRow
+                    name="agent-permission-policy"
+                    value="prompt"
+                    title="Always prompt"
+                    description="Session editors approve or reject each permission request."
+                    checked={!autoAcceptPermissions()}
+                    onChange={() => setAutoAcceptChoice(false)}
+                  />
+                  <Show
+                    when={allowPermissionBypass()}
+                    fallback={
+                      <p class="text-xs text-ink-muted">
+                        This harness requires permission prompts.
+                      </p>
+                    }
+                  >
+                    <ChoiceRow
+                      name="agent-permission-policy"
+                      value="bypass"
+                      title="Always bypass"
+                      description="Approve tool calls without asking."
+                      checked={autoAcceptPermissions()}
+                      onChange={() => setAutoAcceptChoice(true)}
+                    />
+                  </Show>
+                </fieldset>
+              </Show>
             </AgentFormSection>
 
             <Show when={pipedreamMcp()}>
@@ -995,7 +1081,7 @@ function AgentDialog(props: {
                 <Show when={share() === 'Team'}>
                   <p class="mt-3 border-t border-edge-muted pt-3 text-xs text-ink-extra-muted">
                     Connections are personal. Teammates who use this agent
-                    connect these apps under Settings → Connections; the
+                    connect these apps under Settings → Integrations; the
                     indicators here show only your own.
                   </p>
                 </Show>

@@ -9,9 +9,9 @@ use crate::domain::error::Result;
 use crate::domain::model::{ProvisionedEgress, SandboxEgress};
 use crate::domain::ports::SandboxEgressProvisioner;
 
-/// One recorded provisioning: session, owner, repository URL, and the MCP
-/// selection it was asked to advertise.
-pub type RecordedProvisioning = (AgentSessionId, String, String, AgentMcpServers);
+/// One recorded provisioning: session, owner, and the MCP selection it was
+/// asked to advertise.
+pub type RecordedProvisioning = (AgentSessionId, String, AgentMcpServers);
 
 /// A [`SandboxEgressProvisioner`] that records who it was asked for and hands
 /// back a fixed environment. Cloning shares one record.
@@ -27,8 +27,8 @@ impl EgressProvisionerMock {
         Self::default()
     }
 
-    /// Every provisioning recorded, as session, owner, repository URL, and
-    /// the MCP selection it was asked to advertise.
+    /// Every provisioning recorded, as session, owner, and the MCP selection
+    /// it was asked to advertise.
     #[must_use]
     pub fn provisioned(&self) -> Vec<RecordedProvisioning> {
         self.provisioned
@@ -43,18 +43,12 @@ impl SandboxEgressProvisioner for EgressProvisionerMock {
         &self,
         session: AgentSessionId,
         owner: &MacroUserIdStr<'static>,
-        repo_url: &str,
         selection: &AgentMcpServers,
     ) -> Result<ProvisionedEgress> {
         self.provisioned
             .lock()
             .expect("egress mock lock should not be poisoned")
-            .push((
-                session,
-                owner.to_string(),
-                repo_url.to_owned(),
-                selection.clone(),
-            ));
+            .push((session, owner.to_string(), selection.clone()));
 
         Ok(ProvisionedEgress {
             sandbox: test_egress(),

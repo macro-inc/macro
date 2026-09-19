@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) AS \"count!\" FROM \"Thread\" t\n           WHERE t.\"documentId\" = ANY($1) AND t.\"deletedAt\" IS NULL\n             AND t.metadata->>'markId' IS NOT NULL\n             AND t.metadata->>'markId' !~ $2\n             AND t.metadata->>'markId' NOT LIKE $3\n             AND NOT EXISTS (SELECT 1 FROM \"PdfPlaceableCommentAnchor\" p WHERE p.\"threadId\" = t.id AND NOT p.\"wasDeleted\")\n             AND NOT EXISTS (SELECT 1 FROM \"PdfHighlightAnchor\" h\n                             WHERE h.\"threadId\" = t.id AND h.\"deletedAt\" IS NULL)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "c32423d596dca1eb14bef93e22d6b2a37d52cfbf3cf650d1965df042056ad9ce"
+}

@@ -9,10 +9,21 @@ pub mod cursor;
 pub mod daytona;
 pub mod egress;
 pub mod forward;
+pub mod github_repositories;
 pub mod local;
 pub(crate) mod managed_containers;
 pub mod namespace;
+pub mod notifications;
+pub mod prompt_mentions;
 pub(crate) mod provision;
 pub mod routing;
 pub mod runtime_registry;
 pub mod sidecar;
+
+/// Provider-neutral in-process ACP transport.
+pub mod acp_pipe;
+/// Per-owner Codex cloud runtime.
+pub mod codex;
+
+/// Claude cloud container and model adapters.
+pub mod claude;

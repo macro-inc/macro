@@ -1,4 +1,4 @@
-import { type Accessor, createContext, type JSX } from 'solid-js';
+import { type Accessor, createContext, type JSX, type Setter } from 'solid-js';
 
 export type SidePanelSectionEntry = {
   id: string;
@@ -37,6 +37,7 @@ export type SidePanelContextType = {
    * a side-by-side split.
    */
   isNarrow: Accessor<boolean>;
+  setIsNarrow: Setter<boolean>;
 };
 
 export const SidePanelContext = createContext<SidePanelContextType>();

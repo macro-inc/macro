@@ -8,7 +8,6 @@ import {
   type NodeTransformType,
 } from '@core/component/LexicalMarkdown/plugins/node-transform/nodeTransformPlugin';
 import { fileSelector } from '@core/directive/fileSelector';
-
 import { plural } from '@core/util/string';
 import PaperclipIcon from '@phosphor/paperclip.svg?component-solid';
 import TextAa from '@phosphor/text-aa.svg';
@@ -24,7 +23,6 @@ export function EmailComposeToolbar(props: {
 }) {
   const ctx = useCompose();
   const [showFormatRibbon, setShowFormatRibbon] = createSignal(false);
-  let attachButtonRef!: HTMLDivElement;
 
   const handleAddAttachments = (files: File[]) => {
     const currentAttachments = ctx.attachments();
@@ -62,7 +60,10 @@ export function EmailComposeToolbar(props: {
   };
 
   return (
-    <>
+    <Show
+      when={!ctx.isMobile()}
+      fallback={<MobileToolbar handleAddAttachments={handleAddAttachments} />}
+    >
       <Show when={showFormatRibbon()}>
         <div class="flex flex-row w-full gap-2 items-center p-2 -ml-3">
           <FormatButtons
@@ -76,133 +77,112 @@ export function EmailComposeToolbar(props: {
           />
         </div>
       </Show>
-      <div class="flex flex-row w-full h-8 justify-between items-center space-x-2 mt-2">
-        <Show
-          when={!ctx.isMobile()}
-          fallback={
-            <MobileToolbar
-              attachButtonRef={attachButtonRef}
-              handleAddAttachments={handleAddAttachments}
-            />
-          }
-        >
-          <div class="flex flex-row items-center gap-1">
-            <Show when={!ctx.hideAttachments}>
-              <div class="relative" ref={attachButtonRef}>
-                <Button
-                  ref={(el) =>
-                    fileSelector(el, () => ({
-                      multiple: true,
-                      onSelect: handleAddAttachments,
-                    }))
-                  }
-                  tooltip="Attach"
-                  size="icon-sm"
-                  disabled={ctx.disabled()}
-                >
-                  <PaperclipIcon />
-                </Button>
-              </div>
-            </Show>
-            <Button
-              tooltip="Format"
-              size="icon-sm"
-              disabled={ctx.disabled()}
-              onClick={() => {
-                setShowFormatRibbon(!showFormatRibbon());
-              }}
-            >
-              <TextAa />
-            </Button>
-            <Show when={ctx.hasDraft()}>
-              <div aria-hidden="true" class="mx-1 h-4 w-px bg-edge-muted/70" />
-              <Button
-                onclick={ctx.onDelete}
-                tooltip="Delete draft"
-                size="icon-sm"
-              >
-                <Trash />
-              </Button>
-            </Show>
-          </div>
-
-          <div class="flex items-center gap-1">
-            <Show when={ctx.scheduleEnabled && ctx.onSendTimeChange}>
-              <EmailDateSelector
-                mobile={ctx.isMobile()}
-                sendTime={ctx.sendTime()}
-                onSendTimeChange={ctx.onSendTimeChange}
-                disabled={ctx.scheduleSendDisabled?.()}
-              />
-            </Show>
-            <Tooltip label={ctx.sendTime() ? 'Send time is scheduled' : ''}>
-              <SendButton
-                onClick={() => ctx.onSend()}
-                disabled={
-                  ctx.isSavingDraft?.() ||
-                  !!ctx.sendTime() ||
-                  ctx.isSending() ||
-                  ctx.disabled()
-                }
-                pending={ctx.isSending()}
-                tooltip="Send email"
-                shortcut="cmd+enter"
-              />
-            </Tooltip>
-          </div>
+      <div class="mt-2 flex items-center justify-end gap-1">
+        <Show when={ctx.hasDraft()}>
+          <Button
+            onClick={ctx.onDelete}
+            tooltip="Delete draft"
+            size="icon-composer"
+          >
+            <Trash />
+          </Button>
         </Show>
+        <Show when={!ctx.hideAttachments}>
+          <Button
+            ref={(el) =>
+              fileSelector(el, () => ({
+                multiple: true,
+                onSelect: handleAddAttachments,
+              }))
+            }
+            tooltip="Attach"
+            size="icon-composer"
+            disabled={ctx.disabled()}
+          >
+            <PaperclipIcon />
+          </Button>
+        </Show>
+        <Button
+          tooltip="Format"
+          size="icon-composer"
+          disabled={ctx.disabled()}
+          onClick={() => setShowFormatRibbon(!showFormatRibbon())}
+        >
+          <TextAa />
+        </Button>
+        <Show when={ctx.scheduleEnabled && ctx.onSendTimeChange}>
+          <EmailDateSelector
+            mobile={false}
+            sendTime={ctx.sendTime()}
+            onSendTimeChange={ctx.onSendTimeChange}
+            disabled={ctx.scheduleSendDisabled?.()}
+          />
+        </Show>
+        <Tooltip label={ctx.sendTime() ? 'Send time is scheduled' : ''}>
+          <SendButton
+            appearance="composer"
+            onClick={() => ctx.onSend()}
+            disabled={
+              ctx.isSavingDraft?.() ||
+              !!ctx.sendTime() ||
+              ctx.isSending() ||
+              ctx.disabled()
+            }
+            pending={ctx.isSending()}
+            tooltip="Send email"
+            shortcut="cmd+enter"
+          />
+        </Tooltip>
       </div>
-    </>
+    </Show>
   );
 }
 
 function MobileToolbar(props: {
-  attachButtonRef: HTMLDivElement;
   handleAddAttachments: (files: File[]) => void;
 }) {
   const ctx = useCompose();
 
   return (
     <SplitHeaderRight>
-      <HeaderIsland>
-        <div class="flex items-center gap-1 pl-2">
-          <Show when={!ctx.hideAttachments}>
-            <div class="relative" ref={props.attachButtonRef}>
-              <Button
-                ref={(el) =>
-                  fileSelector(el, () => ({
-                    multiple: true,
-                    onSelect: props.handleAddAttachments,
-                  }))
-                }
-                size="icon-sm"
-                disabled={ctx.disabled()}
-              >
-                <PaperclipIcon />
-              </Button>
-            </div>
-          </Show>
+      <HeaderIsland class="h-(--mobile-chrome-button-size) p-[5px]">
+        <Show when={!ctx.hideAttachments}>
+          <div class="relative">
+            <Button
+              ref={(el) =>
+                fileSelector(el, () => ({
+                  multiple: true,
+                  onSelect: props.handleAddAttachments,
+                }))
+              }
+              size="icon-sm"
+              disabled={ctx.disabled()}
+            >
+              <PaperclipIcon />
+            </Button>
+          </div>
+        </Show>
 
-          <Show when={ctx.scheduleEnabled && ctx.onSendTimeChange}>
-            <EmailDateSelector
-              mobile={ctx.isMobile()}
-              sendTime={ctx.sendTime()}
-              onSendTimeChange={ctx.onSendTimeChange}
-              disabled={ctx.scheduleSendDisabled?.()}
-              compact
-            />
-          </Show>
-          <SendButton
-            disabled={
-              ctx.isSending() ||
-              ctx.isSavingDraft?.() ||
-              ctx.disabled() ||
-              !!ctx.sendTime()
-            }
-            pending={ctx.isSending()}
-            onClick={() => ctx.onSend()}
+        <Show when={ctx.scheduleEnabled && ctx.onSendTimeChange}>
+          <EmailDateSelector
+            mobile={ctx.isMobile()}
+            sendTime={ctx.sendTime()}
+            onSendTimeChange={ctx.onSendTimeChange}
+            disabled={ctx.scheduleSendDisabled?.()}
+            compact
           />
-        </div>
+        </Show>
+        <SendButton
+          tooltip="Send email"
+          disabled={
+            ctx.isSending() ||
+            ctx.isSavingDraft?.() ||
+            ctx.disabled() ||
+            !!ctx.sendTime()
+          }
+          pending={ctx.isSending()}
+          onClick={() => ctx.onSend()}
+        />
       </HeaderIsland>
     </SplitHeaderRight>
   );

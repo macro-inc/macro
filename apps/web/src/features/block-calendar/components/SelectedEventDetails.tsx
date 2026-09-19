@@ -8,10 +8,16 @@ import {
   type CalendarTimeFormat,
   reminderCalendarIdOf,
 } from '@app/features/calendar/types';
+import {
+  eventEmailRecipients,
+  guestEmails,
+} from '@app/features/calendar/utils/guest-emails';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { toast } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
 import { Popover } from '@kobalte/core/popover';
+import CopyIcon from '@phosphor/copy.svg';
+import EnvelopeIcon from '@phosphor/envelope.svg';
 import ExclamationIcon from '@phosphor/exclamation-mark.svg';
 import LinkIcon from '@phosphor/link.svg';
 import PencilSimpleIcon from '@phosphor/pencil-simple.svg';
@@ -26,12 +32,15 @@ import {
   DeleteDialog,
   Layer,
   type ManagedDialogProps,
+  RadioGroup,
   useImperativeDialog,
 } from '@ui';
-import { type Accessor, createMemo, createSignal, Show } from 'solid-js';
+import { type Accessor, createMemo, createSignal, For, Show } from 'solid-js';
 import { copyCalendarEventMention } from '../copy-event-mention';
+import { copyGuestEmails } from '../copy-guest-emails';
 import { EventRsvpSection } from './EventRsvpSection';
 import { useOpenEventComposer } from './use-open-event-composer';
+import { useOpenEventEmail } from './use-open-event-email';
 
 interface SelectedEventDetailsProps {
   anchor: Accessor<HTMLElement | undefined>;
@@ -166,6 +175,50 @@ function EveryoneElseDeclinedNotice(props: {
   );
 }
 
+/**
+ * The guest-row actions Google Calendar users know: copy every guest's
+ * address, or start an email to the other guests (hidden when the viewer is
+ * the only one). Emailing closes the details first: closing hands focus back
+ * to the calendar chip, and the composer's To field has to win that exchange.
+ */
+function EventGuestActions(props: {
+  event: CalendarEvent;
+  closeDetails: () => void;
+}) {
+  const openEventEmail = useOpenEventEmail();
+
+  return (
+    <>
+      <Button
+        label="Copy guest emails"
+        variant="ghost"
+        size="icon-sm"
+        depth={3}
+        class="rounded-md text-ink-muted [&_svg]:size-4"
+        onClick={() => copyGuestEmails(guestEmails(props.event.attendees))}
+      >
+        <CopyIcon />
+      </Button>
+      <Show when={eventEmailRecipients(props.event).length > 0}>
+        <Button
+          label="Email guests"
+          variant="ghost"
+          size="icon-sm"
+          depth={3}
+          class="rounded-md text-ink-muted [&_svg]:size-4"
+          onClick={() => {
+            const event = props.event;
+            props.closeDetails();
+            openEventEmail(event);
+          }}
+        >
+          <EnvelopeIcon />
+        </Button>
+      </Show>
+    </>
+  );
+}
+
 function EventDetailsDrawer(props: EventDetailsOverlayProps) {
   const openEventComposer = useOpenEventComposer();
   const deleteDialog = useDeleteEventDialog({
@@ -190,20 +243,20 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
       preventScrollbarShift={false}
     >
       <MobileDrawer.Portal>
-        <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
+        <MobileDrawer.Overlay />
         <MobileDrawer.Content
           aria-label={props.event.title}
           class="overflow-hidden"
         >
-          <MobileDrawer.Handle class="pointer-events-none absolute inset-x-0 top-0 z-1" />
-          <div class="flex shrink-0 items-center justify-between px-2 pb-3 pt-2">
+          <MobileDrawer.Handle class="pb-1" />
+          <div class="flex shrink-0 items-center justify-between gap-3 px-6 pb-4">
             <MobileDrawer.Close
               as={Button}
               aria-label="Close event details"
               variant="ghost"
               size="icon-md"
               depth={3}
-              class="rounded-md text-ink-extra-muted [&_svg]:size-4"
+              class="size-11 rounded-full bg-ink/6 text-ink-muted [&_svg]:size-5"
             >
               <CloseIcon />
             </MobileDrawer.Close>
@@ -213,7 +266,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                 variant="ghost"
                 size="icon-md"
                 depth={3}
-                class="rounded-md text-ink-extra-muted [&_svg]:size-4"
+                class="size-11 rounded-full bg-ink/6 text-ink-muted [&_svg]:size-5"
                 onClick={() => copyCalendarEventMention(props.event)}
               >
                 <LinkIcon />
@@ -224,7 +277,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                   variant="ghost"
                   size="icon-md"
                   depth={3}
-                  class="rounded-md text-ink-extra-muted [&_svg]:size-4"
+                  class="size-11 rounded-full bg-ink/6 text-ink-muted [&_svg]:size-5"
                   onClick={openEditor}
                 >
                   <PencilSimpleIcon />
@@ -234,7 +287,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                   variant="ghost"
                   size="icon-md"
                   depth={3}
-                  class="rounded-md text-ink-extra-muted [&_svg]:size-4"
+                  class="size-11 rounded-full bg-ink/6 text-ink-muted [&_svg]:size-5"
                   onClick={deleteDialog.open}
                 >
                   <TrashIcon />
@@ -256,7 +309,15 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                 defaultReminders={props.defaultReminders}
               />
             </div>
-            <EventAttendeesSection attendees={props.event.attendees} />
+            <EventAttendeesSection
+              attendees={props.event.attendees}
+              actions={
+                <EventGuestActions
+                  event={props.event}
+                  closeDetails={() => props.onOpenChange(false)}
+                />
+              }
+            />
             <EventRsvpSection event={props.event} buttonSize="md" />
           </MobileDrawer.ScrollBody>
         </MobileDrawer.Content>
@@ -286,6 +347,15 @@ function useDeleteEventDialog(props: {
 
   return { open, isOpen: dialog.isOpen };
 }
+
+const DELETE_SCOPE_OPTIONS = [
+  { scope: 'this_event', label: 'This event' },
+  { scope: 'this_and_following', label: 'This and following events' },
+  { scope: 'all', label: 'All events' },
+] as const satisfies readonly {
+  scope: CalendarDeletionScope;
+  label: string;
+}[];
 
 function DeleteEventDialog(
   props: ManagedDialogProps & {
@@ -335,38 +405,25 @@ function DeleteEventDialog(
           </p>
         }
       >
-        <div class="flex flex-col gap-2">
+        <div class="flex flex-col gap-3">
           <p>
             Remove “{props.event.title || 'Untitled event'}”? Guests will be
             notified.
           </p>
-          <label class="flex items-center gap-2">
-            <input
-              type="radio"
-              name="delete-scope"
-              checked={scope() === 'this_event'}
-              onChange={() => setScope('this_event')}
-            />
-            This event
-          </label>
-          <label class="flex items-center gap-2">
-            <input
-              type="radio"
-              name="delete-scope"
-              checked={scope() === 'this_and_following'}
-              onChange={() => setScope('this_and_following')}
-            />
-            This and following events
-          </label>
-          <label class="flex items-center gap-2">
-            <input
-              type="radio"
-              name="delete-scope"
-              checked={scope() === 'all'}
-              onChange={() => setScope('all')}
-            />
-            All events
-          </label>
+          <RadioGroup
+            value={scope()}
+            onChange={(value) => setScope(value as CalendarDeletionScope)}
+            aria-label="Delete recurring event"
+          >
+            <For each={DELETE_SCOPE_OPTIONS}>
+              {(option) => (
+                <RadioGroup.Item value={option.scope}>
+                  <RadioGroup.ItemControl />
+                  <RadioGroup.ItemLabel>{option.label}</RadioGroup.ItemLabel>
+                </RadioGroup.Item>
+              )}
+            </For>
+          </RadioGroup>
         </div>
       </Show>
     </DeleteDialog>
@@ -443,7 +500,7 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
             }}
           >
             <Popover.Arrow class="fill-surface" />
-            <div class="w-fit min-w-[min(20rem,calc(100vw-2rem))] max-w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-xl bg-surface text-ink shadow-menu ring ring-edge-muted">
+            <div class="w-fit min-w-[min(20rem,calc(100vw-2rem))] max-w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-xl glass bg-menu-glass text-ink">
               <Popover.Title class="sr-only">{props.event.title}</Popover.Title>
               <div class="flex items-center justify-end gap-1 px-2 pt-2">
                 <Button
@@ -503,7 +560,15 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
                     defaultReminders={props.defaultReminders}
                   />
                 </div>
-                <EventAttendeesSection attendees={props.event.attendees} />
+                <EventAttendeesSection
+                  attendees={props.event.attendees}
+                  actions={
+                    <EventGuestActions
+                      event={props.event}
+                      closeDetails={() => props.onOpenChange(false)}
+                    />
+                  }
+                />
                 <EventRsvpSection event={props.event} />
               </div>
             </div>

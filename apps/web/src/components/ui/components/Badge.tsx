@@ -56,7 +56,16 @@ export function badgeTriggerClasses(options: BadgeClassOptions = {}): string {
   );
 }
 
-/** A non-interactive label with Button-aligned sizing. */
+/** A non-interactive label with Button-aligned sizing.
+ *
+ * @do Keep badge text to a word or two.
+ * @do Use `badgeTriggerClasses` when a badge needs to behave like a button.
+ * @do Use a palette color for identity (tags, calendars) and a semantic color
+ *   for state.
+ * @dont Do not attach a click handler to `Badge` directly — it renders a
+ *   `span`.
+ * @dont Do not use a badge where a Tooltip would carry the information better.
+ */
 export function Badge(props: BadgeProps) {
   const [local, others] = splitProps(props, ['variant', 'size', 'class']);
   const variant = () => local.variant ?? 'ghost';

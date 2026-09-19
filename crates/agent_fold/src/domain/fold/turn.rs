@@ -1,7 +1,5 @@
 //! Opening, closing, and failing turns.
 
-use std::collections::HashMap;
-
 use crate::domain::error::FoldError;
 use crate::domain::model::{Author, FoldedMessage, MessagePart, StopReason, TurnId};
 use agent_client_protocol::RawJsonRpcParams;
@@ -10,21 +8,31 @@ use agent_runtime_protocol::domain::action::AgentActionId;
 use macro_user_id::user_id::MacroUserIdStr;
 use non_empty::NonEmpty;
 
-use super::convert::{content_block_text, deserialize_params};
+use super::convert::{deserialize_params, user_content_part};
 use super::state::{Changed, FoldState, Turn};
 
 impl FoldState {
     /// Adjacent user chunks form one replayed prompt; agent activity separates turns.
-    pub(super) fn replay_user_text(&mut self, text: String) -> Option<Changed> {
-        if text.is_empty() {
+    ///
+    /// Text chunks extend the prompt's text part; an attachment chunk becomes
+    /// its own part after it, the same shape [`Self::begin_turn`] derives
+    /// from an original prompt, so a replayed session renders like a live one.
+    pub(super) fn replay_user_part(&mut self, part: MessagePart) -> Option<Changed> {
+        if matches!(&part, MessagePart::Text { text } if text.is_empty()) {
             return None;
         }
         if self.turn.as_ref().is_some_and(|turn| turn.agent.is_none())
             && let Some(message) = self.messages.last_mut()
             && matches!(message.author, Author::User { .. })
-            && let Some(MessagePart::Text { text: held }) = message.parts.get_mut(0)
         {
-            held.push_str(&text);
+            match part {
+                MessagePart::Text { text } => match message.parts.get_mut(0) {
+                    Some(MessagePart::Text { text: held }) => held.push_str(&text),
+                    // The prompt so far was attachments only; its text leads.
+                    _ => message.parts.insert(0, MessagePart::Text { text }),
+                },
+                part => message.parts.push(part),
+            }
             return Some(Changed::updated(self.messages.len() - 1));
         }
         self.close_turn(Some(StopReason::EndTurn));
@@ -35,8 +43,9 @@ impl FoldState {
             id,
             author: Author::User { user_id: None },
             request_id: None,
-            parts: NonEmpty::one(MessagePart::Text { text }),
+            parts: NonEmpty::one(part),
             stop: None,
+            pending: self.speculative,
         });
         Some(Changed::new(message))
     }
@@ -47,16 +56,27 @@ impl FoldState {
         prompt_id: &RequestId,
         params: Option<&RawJsonRpcParams>,
         user_id: Option<MacroUserIdStr<'static>>,
-    ) -> Option<Changed> {
-        // A second prompt without an intervening response means the previous
-        // turn never got one. Its agent message is already in `messages` and
-        // already reads `stop: None`, so there is nothing left to report -
-        // which is what keeps a push to one changed message.
-        let closed = self.close_turn(None);
-        debug_assert!(
-            closed.is_none(),
-            "closing a turn without a stop reason changes nothing"
-        );
+    ) -> Vec<Changed> {
+        // A speculative prompt behind a stop is the queue head, dispatching
+        // once the cancel lands. The turn it follows can only end one way,
+        // so that end is predicted here rather than leaving the turn open
+        // under the prompt that replaces it. A confirmed prompt never does
+        // this: the runtime's own response closes its turn, in log order.
+        let closed =
+            if self.speculative && self.turn.as_ref().is_some_and(|turn| turn.stop_requested) {
+                self.close_turn(Some(StopReason::Cancelled))
+            } else {
+                // A second prompt without an intervening response means the
+                // previous turn never got one. Its agent message is already in
+                // `messages` and already reads `stop: None`, so there is nothing
+                // left to report.
+                let closed = self.close_turn(None);
+                debug_assert!(
+                    closed.is_none(),
+                    "closing a turn without a stop reason changes nothing"
+                );
+                None
+            };
 
         let id = TurnId(self.turns_opened);
         self.turns_opened += 1;
@@ -67,41 +87,58 @@ impl FoldState {
         // id, an optional `_meta`) carry nothing this fold renders, so there
         // is nothing to warn *about* beyond "no text," which showing no user
         // message already says.
-        let text = deserialize_params::<PromptRequest>(params)
-            .map(|request| {
-                request
-                    .prompt
-                    .into_iter()
-                    .filter_map(content_block_text)
-                    .collect::<Vec<_>>()
-                    .join("")
-            })
-            .unwrap_or_default();
+        //
+        // Text blocks join into one part, since a harness may split prose
+        // across blocks; each attached file is its own part, in prompt order
+        // after the text, which is the order this side sends them in.
+        let mut text = String::new();
+        let mut attachments = Vec::new();
+        if let Some(request) = deserialize_params::<PromptRequest>(params) {
+            // A confirmed prompt names the session the runtime answers
+            // to; a speculative one only echoes what this fold already
+            // knew, so it must not become the source of that fact.
+            if !self.speculative {
+                self.acp_session = Some(request.session_id.clone());
+            }
+            for block in request.prompt {
+                match user_content_part(block) {
+                    Some(MessagePart::Text { text: chunk }) => text.push_str(&chunk),
+                    Some(part) => attachments.push(part),
+                    None => {}
+                }
+            }
+        }
+        let mut parts = attachments;
+        if !text.is_empty() {
+            parts.insert(0, MessagePart::Text { text });
+        }
 
-        // A prompt carrying no text derives no user message, but still opens
-        // the turn the agent will answer into.
-        let changed = (!text.is_empty()).then(|| {
+        // A prompt carrying nothing renderable derives no user message, but
+        // still opens the turn the agent will answer into.
+        let changed = NonEmpty::new(parts).ok().map(|parts| {
             let message = self.messages.len();
             self.messages.push(FoldedMessage {
                 id,
                 author: Author::User { user_id },
                 request_id: AgentActionId::from_request_id(prompt_id),
-                parts: NonEmpty::one(MessagePart::Text { text }),
+                parts,
                 stop: None,
+                pending: self.speculative,
             });
             Changed::new(message)
         });
 
         self.turn = Some(Turn {
             id,
+            prompt_pending: self.speculative,
+            stop_requested: false,
             prompt_id: Some(prompt_id.clone()),
             agent: None,
-            permission_positions: HashMap::new(),
             plan_position: None,
             expects_reply: true,
         });
 
-        changed
+        closed.into_iter().chain(changed).collect()
     }
 
     /// Handle the response to `session/prompt`: close the turn.
@@ -212,6 +249,7 @@ impl FoldState {
                 text: String::new(),
             }),
             stop: None,
+            pending: self.speculative,
         });
         (message, Changed::new(message))
     }
@@ -234,9 +272,10 @@ impl FoldState {
 
         self.turn = Some(Turn {
             id,
+            prompt_pending: false,
+            stop_requested: false,
             prompt_id: None,
             agent: None,
-            permission_positions: HashMap::new(),
             plan_position: None,
             expects_reply: true,
         });

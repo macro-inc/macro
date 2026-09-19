@@ -5,6 +5,7 @@ use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::response::DocumentResponseMetadata;
 use model::document::{DocumentMetadata, FileType};
+use models_permissions::share_permission::LinkShareState;
 
 use super::response::DocumentResponse;
 use model::sync_service::SyncServiceVersionID;
@@ -306,6 +307,17 @@ pub struct CopyDocumentQueryParams {
     pub version_id: Option<i64>,
 }
 
+/// How a new document's link share is initialized.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum InitialLinkShare {
+    /// The entity-type default (md is PUBLIC/Edit), overridden only by the owner's team default.
+    #[default]
+    EntityDefault,
+    /// Exactly this state, already resolved by the caller. The document never carries the
+    /// entity-type default, not even between creation and a later update.
+    Exact(LinkShareState),
+}
+
 /// Arguments for creating a document in the repository.
 pub struct CreateDocumentRepoArgs {
     /// Optional user-provided document ID.
@@ -320,8 +332,11 @@ pub struct CreateDocumentRepoArgs {
     pub file_type: Option<FileType>,
     /// Project to associate the document with.
     pub project_id: Option<uuid::Uuid>,
-    /// Team to use when assigning a per-team task number.
+    /// Team to use when assigning a per-team task number, never sharing authority.
     pub team_id: Option<uuid::Uuid>,
+    /// Explicit task creation consent. Initializes Comment using the persisted owner's team.
+    /// Ordinary documents, snippets, and imports must leave this false.
+    pub share_with_team: bool,
     /// Custom creation timestamp.
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     /// Sub type of the document — task or snippet (MD files only).
@@ -330,6 +345,8 @@ pub struct CreateDocumentRepoArgs {
     pub skip_history: bool,
     /// Explicit activity attribution. Unset uses [`Self::resolved_attribution`].
     pub attribution: Option<Attribution>,
+    /// How the new document's link share is initialized.
+    pub initial_link_share: InitialLinkShare,
 }
 
 impl CreateDocumentRepoArgs {
@@ -418,6 +435,9 @@ pub struct EditDocumentRepoArgs {
     /// Updated share permissions.
     pub share_permission:
         Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+    /// Owner-authorized conditional team update, applied in the metadata transaction.
+    pub team_share:
+        Option<models_permissions::share_permission::team_share::AuthorizedTeamShareCommand>,
     /// Whether to revoke direct non-owner user access in the edit transaction.
     pub revoke_non_owner_user_access: bool,
     /// New file type (None = no change).
@@ -613,7 +633,7 @@ pub struct SystemSkillsResponse {
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentTeamShareResponse {
-    /// Whether the document is currently shared with the owner's team.
+    /// Whether explicit team sharing is enabled; inherited team access does not count.
     pub shared_with_team: bool,
     /// The owner's team the document is (or would be) shared with. `None` when
     /// the owner does not belong to a team.
@@ -635,7 +655,7 @@ pub struct SetDocumentTeamShareRequest {
 pub struct DocumentTeamShare {
     /// The owner's team, when the owner belongs to one.
     pub team_id: Option<uuid::Uuid>,
-    /// Whether a team-source access row exists for the document.
+    /// Whether the document has an explicit canonical team-share level.
     pub shared_with_team: bool,
 }
 

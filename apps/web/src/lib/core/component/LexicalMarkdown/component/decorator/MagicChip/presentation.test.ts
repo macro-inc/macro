@@ -12,6 +12,7 @@ const response = (overrides: Partial<FoldedMessage> = {}): FoldedMessage => ({
   author: { kind: 'agent' },
   parts: [{ kind: 'thought', text: 'Inspecting the repository' }],
   stop: null,
+  pending: false,
   ...overrides,
 });
 
@@ -201,6 +202,7 @@ describe('deriveMagicChipPresentation', () => {
             },
             {
               kind: 'permission',
+              requestId: 'perm-1',
               toolCall: 'tool',
               options: [],
               outcome: { kind },
@@ -222,7 +224,7 @@ describe('deriveMagicChipPresentation', () => {
       response: response({
         parts: [
           {
-            kind: 'elicitation',
+            kind: 'elicitation' as const,
             requestId: 0,
             toolCall: 'tool',
             message: 'Which approach?',
@@ -323,6 +325,30 @@ describe('deriveMagicChipPresentation', () => {
     });
   });
 
+  it("shows the runtime's reason under a failed turn", () => {
+    const presentation = deriveMagicChipPresentation({
+      persistedStatus: 'acp_ready',
+      response: response({
+        parts: [],
+        stop: {
+          kind: 'failed',
+          message:
+            "Cursor can't access macro-inc/macro. Connect the repository to Cursor's GitHub app, then prompt again.",
+        },
+      }),
+    });
+
+    expect(presentation).toEqual({
+      kind: 'working',
+      activity: {
+        label: "Agent couldn't answer",
+        detail:
+          "Cursor can't access macro-inc/macro. Connect the repository to Cursor's GitHub app, then prompt again.",
+        busy: false,
+      },
+    });
+  });
+
   it('settles into final markdown without completion chrome', () => {
     const presentation = deriveMagicChipPresentation({
       persistedStatus: 'booting',
@@ -337,7 +363,8 @@ describe('deriveMagicChipPresentation', () => {
 
   describe('a question the agent is waiting on', () => {
     const asking = {
-      question: {
+      request: {
+        kind: 'elicitation' as const,
         requestId: 9,
         turn: 0,
         toolCall: 'toolu_evt',
@@ -355,7 +382,7 @@ describe('deriveMagicChipPresentation', () => {
         },
       },
       canAnswer: true,
-      ownerName: 'Alice Owner',
+      answering: false,
     };
 
     it('outranks whatever else the open turn is doing, keeping the answer so far', () => {
@@ -454,14 +481,14 @@ describe('presentationStatus', () => {
     busy: true,
   };
   const question = {
-    question: {
+    request: {
+      kind: 'elicitation' as const,
       requestId: 1,
       turn: 0,
       toolCall: null,
       message: 'Which?',
       request: { kind: 'unrecognized' as const, mode: 'x', raw: {} },
     },
-    ownerName: 'Alice Owner',
   };
 
   it('reads the activity while the agent works or writes', () => {
@@ -476,16 +503,16 @@ describe('presentationStatus', () => {
       presentationStatus({
         kind: 'asking',
         markdown: '',
-        asking: { ...question, canAnswer: true },
+        asking: { ...question, canAnswer: true, answering: false },
       })
     ).toEqual({ label: 'Waiting for you', busy: false });
     expect(
       presentationStatus({
         kind: 'asking',
         markdown: '',
-        asking: { ...question, canAnswer: false },
+        asking: { ...question, canAnswer: false, answering: false },
       })
-    ).toEqual({ label: 'Waiting for Alice Owner', busy: false });
+    ).toEqual({ label: 'Waiting for an editor', busy: false });
   });
 
   it('reads Done once settled', () => {

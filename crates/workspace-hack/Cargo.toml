@@ -31,7 +31,7 @@ aws-smithy-runtime-api = { version = "1", features = ["client", "http-02x", "htt
 aws-smithy-types = { version = "1", default-features = false, features = ["byte-stream-poll-next", "http-body-0-4-x", "http-body-1-x", "rt-tokio", "test-util"] }
 aws_lambda_events = { version = "0.16", default-features = false, features = ["eventbridge", "s3", "sns", "sqs"] }
 axum = { version = "0.8", features = ["macros", "multipart", "ws"] }
-axum-extra = { version = "0.10", features = ["cookie", "typed-header"] }
+axum-extra = { version = "0.10", features = ["cookie", "query", "typed-header"] }
 base64 = { version = "0.22" }
 bstr = { version = "1" }
 byteorder = { version = "1" }
@@ -73,6 +73,7 @@ hyper-rustls-adf3d7031871b0af = { package = "hyper-rustls", version = "0.24", de
 hyper-util = { version = "0.1", features = ["client-legacy", "client-proxy", "http1", "http2", "server", "service"] }
 idna = { version = "1" }
 indexmap = { version = "2", features = ["serde"] }
+insta = { version = "1", features = ["glob", "json"] }
 itertools = { version = "0.13" }
 lazy_static = { version = "1", default-features = false, features = ["spin_no_std"] }
 libc = { version = "0.2", features = ["extra_traits"] }
@@ -163,7 +164,7 @@ aws-smithy-runtime-api = { version = "1", features = ["client", "http-02x", "htt
 aws-smithy-types = { version = "1", default-features = false, features = ["byte-stream-poll-next", "http-body-0-4-x", "http-body-1-x", "rt-tokio", "test-util"] }
 aws_lambda_events = { version = "0.16", default-features = false, features = ["eventbridge", "s3", "sns", "sqs"] }
 axum = { version = "0.8", features = ["macros", "multipart", "ws"] }
-axum-extra = { version = "0.10", features = ["cookie", "typed-header"] }
+axum-extra = { version = "0.10", features = ["cookie", "query", "typed-header"] }
 base64 = { version = "0.22" }
 bstr = { version = "1" }
 byteorder = { version = "1" }
@@ -207,6 +208,7 @@ hyper-rustls-adf3d7031871b0af = { package = "hyper-rustls", version = "0.24", de
 hyper-util = { version = "0.1", features = ["client-legacy", "client-proxy", "http1", "http2", "server", "service"] }
 idna = { version = "1" }
 indexmap = { version = "2", features = ["serde"] }
+insta = { version = "1", features = ["glob", "json"] }
 itertools = { version = "0.13" }
 lazy_static = { version = "1", default-features = false, features = ["spin_no_std"] }
 libc = { version = "0.2", features = ["extra_traits"] }

@@ -74,6 +74,7 @@ function favoritePreviewEntity(favorite: Favorite): ItemEntity | undefined {
     case 'email_thread':
       return { id: favorite.entityId, type: 'email' };
     case 'document':
+    case 'agent_session':
     case 'chat':
     case 'project':
     case 'call':

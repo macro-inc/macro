@@ -10,6 +10,7 @@ import { useMutation, useQuery } from '@tanstack/solid-query';
 import { harnessKeys } from './keys';
 
 export type ApproveHarnessPairingParams = {
+  allowPermissionBypass?: boolean;
   code: string;
   name?: string;
   teamId?: string;
@@ -65,6 +66,7 @@ export function useApproveHarnessPairingMutation() {
           code: vars.code,
           name: vars.name,
           team_id: vars.teamId,
+          allow_permission_bypass: vars.allowPermissionBypass ?? false,
         })
       ),
     onSuccess: async (_harness, vars) => {

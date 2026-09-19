@@ -6,6 +6,7 @@
  */
 import type { DocumentPreviewDataSubTypeOneOf } from './documentPreviewDataSubTypeOneOf';
 import type { DocumentPreviewDataSubTypeOneOfFive } from './documentPreviewDataSubTypeOneOfFive';
+import type { DocumentPreviewDataSubTypeOneOfSeven } from './documentPreviewDataSubTypeOneOfSeven';
 import type { DocumentPreviewDataSubTypeOneOfThree } from './documentPreviewDataSubTypeOneOfThree';
 
 /**
@@ -15,4 +16,5 @@ Task-related properties are encoded within the variant to ensure valid states.
 export type DocumentPreviewDataSubType =
   | DocumentPreviewDataSubTypeOneOf
   | DocumentPreviewDataSubTypeOneOfThree
-  | DocumentPreviewDataSubTypeOneOfFive;
+  | DocumentPreviewDataSubTypeOneOfFive
+  | DocumentPreviewDataSubTypeOneOfSeven;

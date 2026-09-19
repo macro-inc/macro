@@ -137,6 +137,30 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     });
   }
 
+  /** Messages created strictly after `after`, most recent first, auto-paginated. */
+  messagesAfter(
+    after: Date | string,
+    opts?: { pageSize?: number },
+  ): AsyncGenerator<Message> {
+    const afterQuery = after instanceof Date ? after.toISOString() : after;
+    return paginate(async (cursor) => {
+      const page = unwrap(
+        await this.client.storage.getChannelMessagesCatchUp({
+          path: { channel_id: this.id },
+          query: {
+            after: afterQuery,
+            ...(opts?.pageSize ? { limit: opts.pageSize } : {}),
+            ...(cursor ? { cursor } : {}),
+          },
+        }),
+      );
+      return {
+        items: page.items.map((m) => Message.from(this.client, m)),
+        nextCursor: page.next_cursor,
+      };
+    });
+  }
+
   /** A handle to a message in this channel by id. */
   message(id: string): Message {
     return Message.byId(this.client, this.id, id);

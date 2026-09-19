@@ -31,6 +31,13 @@ pub struct LocalEnv {
     frontend_port: u16,
     /// Browser-facing route to document cognition's MCP OAuth callback.
     mcp_public_url: String,
+    /// Browser-facing base the static file service stamps into permalinks.
+    /// Only the service itself reads `STATIC_FILE_SERVICE_URL`; callers
+    /// reach it in-network through the `OVERRIDE_` form below. Without this
+    /// a named instance mints `http://localhost:8100/file/...`, the
+    /// single-instance CDN port, which nothing on a named instance serves;
+    /// the proxy's `/static-file/*` block is what does.
+    static_file_public_url: String,
     infra: InfraEnv,
     storage: StorageEnv,
     queues: QueueEnv,
@@ -66,7 +73,11 @@ impl LocalEnv {
                 instance.port(Port::Frontend)
             },
             mcp_public_url: format!("http://localhost:{}/cognition", instance.port(Port::Proxy)),
-            infra: InfraEnv::local(),
+            static_file_public_url: format!(
+                "http://localhost:{}/static-file",
+                instance.port(Port::Proxy)
+            ),
+            infra: InfraEnv::local(instance),
             storage: StorageEnv::local(),
             queues: QueueEnv::local(),
             mail: MailEnv::local(),
@@ -85,6 +96,10 @@ impl LocalEnv {
         env.insert("PORT".into(), "8080".into());
         env.insert("FRONTEND_PORT".into(), self.frontend_port.to_string());
         env.insert("MCP_PUBLIC_URL".into(), self.mcp_public_url.clone());
+        env.insert(
+            "STATIC_FILE_SERVICE_URL".into(),
+            self.static_file_public_url.clone(),
+        );
         // Pipedream's hosted Connect UI refuses to be opened from an origin
         // outside this list, and document_cognition's own local default only
         // names port 3000 - a named instance's frontend lives on a derived
@@ -128,16 +143,18 @@ struct InfraEnv {
     redis_uri: String,
     opensearch_url: String,
     local_aws_url: String,
+    local_aws_public_url: String,
     kafka_brokers: String,
 }
 
 impl InfraEnv {
-    fn local() -> Self {
+    fn local(instance: &Instance) -> Self {
         InfraEnv {
             database_url: "postgres://user:password@postgres:5432/macrodb".into(),
             redis_uri: "redis://redis:6379".into(),
             opensearch_url: "http://search:9200".into(),
             local_aws_url: "http://localstack:4566".into(),
+            local_aws_public_url: format!("http://localhost:{}", instance.port(Port::LocalStack)),
             // The broker's in-network listener (see docker/docker-compose-databases.yml);
             // host processes use localhost:9092 instead.
             kafka_brokers: "kafka:29092".into(),
@@ -155,6 +172,10 @@ impl InfraEnv {
         env.insert("LAST_ONLINE_REDIS_URI".into(), self.redis_uri.clone());
         env.insert("OPENSEARCH_URL".into(), self.opensearch_url.clone());
         env.insert("LOCAL_AWS_URL".into(), self.local_aws_url.clone());
+        env.insert(
+            "LOCAL_AWS_PUBLIC_URL".into(),
+            self.local_aws_public_url.clone(),
+        );
         env.insert("KAFKA_BROKERS".into(), self.kafka_brokers.clone());
         // In-network services resolve the gateway through the OVERRIDE_ var;
         // without it the resolver's Environment::Local default
@@ -181,6 +202,11 @@ impl InfraEnv {
             "OVERRIDE_LEXICAL_SERVICE_URL".into(),
             "http://lexical-service:8096".into(),
         );
+        // Channel picture authorization reads file metadata from inside DSS.
+        env.insert(
+            "OVERRIDE_STATIC_FILE_SERVICE_URL".into(),
+            "http://static-file-service:8080".into(),
+        );
         // Same failure mode for the email connect flows: without these,
         // first-inbox provisioning (auth-service → `/email/init`) and Gmail
         // token fetches (email-service → `/internal/google_access_token`)
@@ -194,6 +220,14 @@ impl InfraEnv {
             "OVERRIDE_AUTH_SERVICE_URL".into(),
             "http://authentication-service:8080".into(),
         );
+        // Same split for the static file service: without this a service
+        // storing a file (the agent harness re-hosting a Cursor artifact)
+        // asks http://localhost:8100, the host port of the single-instance
+        // CDN, which inside a container is the caller itself.
+        env.insert(
+            "OVERRIDE_STATIC_FILE_SERVICE_URL".into(),
+            "http://static-file-service:8080".into(),
+        );
         // The alias LocalStack provisions for the Cursor API key CMK. Named by
         // alias rather than key id because `CreateKey` mints a random id every
         // run, and KMS accepts an alias anywhere a key id goes. Required by
@@ -204,6 +238,10 @@ impl InfraEnv {
         env.insert(
             "CURSOR_API_KEY_KMS_KEY_ID".into(),
             resources::CURSOR_API_KEY_KMS_ALIAS.into(),
+        );
+        env.insert(
+            "CODEX_OAUTH_KMS_KEY_ID".into(),
+            resources::CODEX_OAUTH_KMS_ALIAS.into(),
         );
         // Dummy creds: the SDK talks to LocalStack, never real AWS.
         env.insert("AWS_ACCESS_KEY_ID".into(), "test".into());
@@ -256,6 +294,11 @@ impl QueueEnv {
                 env.insert(key.into(), form.value(queue.name));
             }
         }
+        // Without these the `ai_tools` SQS client is built with no queue name
+        // and every enqueue fails, so an agent session can neither send email
+        // nor sync thread labels. Deployed environments set them in Doppler.
+        env.insert("ENABLE_EMAIL_SCHEDULED_QUEUE".into(), "true".into());
+        env.insert("ENABLE_GMAIL_OPS_QUEUE".into(), "true".into());
     }
 }
 
@@ -507,6 +550,15 @@ impl BootStubEnv {
         );
         // search_processing_service; the local cluster has the security plugin
         // disabled so these are accepted but ignored (same as opensearch.rs).
+        // document_cognition_service mounts the Pipedream webhook when both
+        // values are set. Nothing local can receive Pipedream's callbacks, so
+        // these only need to be well-formed: the URI must carry the same
+        // secret the route checks against.
+        env.insert(
+            "PIPEDREAM_WEBHOOK_URI".into(),
+            "http://localhost:8080/pipedream/mcp/webhook?secret=local".into(),
+        );
+        env.insert("PIPEDREAM_WEBHOOK_SECRET".into(), "local".into());
         env.insert("OPENSEARCH_USERNAME".into(), "macrouser".into());
         env.insert("OPENSEARCH_PASSWORD".into(), "local".into());
         // document_storage_service's presigned-URL config. Locally the

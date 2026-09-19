@@ -12,7 +12,10 @@ import { Show } from 'solid-js';
 const TOGGLE_BUTTON_CLASS =
   'inline-flex items-center gap-2 rounded-md h-7 px-2.5 text-xs select-none w-fit border border-ink-muted/[0.08] bg-ink-muted/[0.025] text-ink hover:bg-ink-muted/[0.06]';
 
-export function CompanySharingSection(props: { company?: CrmCompanyEntity }) {
+export function CompanySharingSection(props: {
+  company?: CrmCompanyEntity;
+  onHidden?: () => void;
+}) {
   const hideMutation = useSetCompanyHiddenMutation();
   const emailSyncMutation = useSetEmailSyncMutation();
   const { replaceOrInsertSplit } = useSplitLayout();
@@ -32,7 +35,8 @@ export function CompanySharingSection(props: { company?: CrmCompanyEntity }) {
       // Un-hide leaves them on the block.
       if (willHide) {
         toast.success('Company hidden.');
-        replaceOrInsertSplit({ type: 'component', id: 'companies' });
+        if (props.onHidden) props.onHidden();
+        else replaceOrInsertSplit({ type: 'component', id: 'companies' });
       }
     } catch (error) {
       console.error('failed to update company sharing', error);

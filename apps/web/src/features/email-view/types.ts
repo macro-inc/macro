@@ -14,7 +14,12 @@ export type EmailTab =
   | 'shared'
   | 'all';
 
-export type EmailFilterGroupId = 'read' | 'done' | 'attachments' | 'calendar';
+export type EmailFilterGroupId =
+  | 'read'
+  | 'done'
+  | 'attachments'
+  | 'calendar'
+  | 'tags';
 
 export type EmailFilterOptionId =
   | 'all'
@@ -38,10 +43,17 @@ export type EmailViewState = {
   inboxIds: string[] | undefined;
   facets: FacetSelection;
   /**
-   * The thread last opened from this view. Restored into the preview on the
-   * next visit, the way the Channels view reopens its selected channel.
+   * The thread last opened from this view. Restored into the in-view detail on
+   * the next visit, the way the Channels view reopens its selected channel.
    */
   openThreadId?: string;
+  /** Sidebar sections the user folded away; kept per user, not per visit. */
+  collapsedSidebarSectionIds: string[];
 };
 
 export type EmailViewStateOptions = Partial<EmailViewState>;
+
+export type EmailThreadTarget = {
+  id: string;
+  fallbackName?: string;
+};

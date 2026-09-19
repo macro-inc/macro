@@ -17,11 +17,11 @@ import { useUserId, useUserInfo } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { setActiveTabId } from '@core/signal/settingsTab';
 import { createChat } from '@core/util/create';
-import { AnimatedProfileIcon } from '@icon/wide-profile';
 import BookOpenIcon from '@phosphor/book-open.svg';
 import PaletteIcon from '@phosphor/palette.svg';
 import PlayCircleIcon from '@phosphor/play-circle.svg';
 import PlugsIcon from '@phosphor/plugs.svg';
+import ProfileIcon from '@phosphor/user-circle.svg';
 import { useGithubLinkStatusQuery } from '@queries/auth/github-link';
 import { isRealNamePart, useOwnUserName } from '@queries/auth/user-name-self';
 import { useEmailLinksQuery } from '@queries/email/link';
@@ -111,13 +111,12 @@ function GettingStartedContent() {
   };
 
   const openSettingsTab = (tab: SettingsTab) => {
-    setActiveTabId(tab);
     if (isMobile()) {
-      // Mobile has no Preview Pair; the docked settings split is the
-      // full-screen path there.
+      // The mobile entry point opens this section in the settings sheet.
       openSettingsInSplit(tab);
       return;
     }
+    setActiveTabId(tab);
     // Deliberately not openSettings(): on desktop it collapses to solo
     // settings, destroying the Controller/Viewer pair.
     openInPreview({ type: 'component', id: 'settings' });
@@ -203,7 +202,7 @@ function GettingStartedContent() {
         },
         {
           id: 'set-name',
-          icon: AnimatedProfileIcon,
+          icon: ProfileIcon,
           title: 'Set your name & profile picture',
           description: 'Introduce yourself in Account settings',
           onActivate: () => openSettingsTab('Account'),

@@ -2,6 +2,7 @@ import { getChannelParams } from '@channel/Channel/link';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import {
   buildReplyTargetMarkdown,
+  isReplyTargetData,
   markdownToPlainText,
   stripLeadingReplyTargetMarkdown,
 } from '@macro-inc/lexical-core';
@@ -72,6 +73,22 @@ export function buildReplyTargetValue(input: {
 }): string {
   if (!input.message.thread_id) return input.existingValue ?? '';
 
+  for (const match of (input.existingValue ?? '').matchAll(
+    /<m-reply-target>(.*?)<\/m-reply-target>/gs
+  )) {
+    try {
+      const target: unknown = JSON.parse(match[1]);
+      if (
+        isReplyTargetData(target) &&
+        target.targetMessageId === input.message.id
+      ) {
+        return input.existingValue ?? '';
+      }
+    } catch {
+      // Malformed references should not prevent adding a valid reply target.
+    }
+  }
+
   const messageText = markdownToPlainText(
     stripMagicChipMarkdown(
       stripLeadingReplyTargetMarkdown(input.message.content)
@@ -81,7 +98,7 @@ export function buildReplyTargetValue(input: {
     input.selectedText || input.renderedText || messageText
   );
   const replyTarget = buildReplyTargetMarkdown({
-    channelId: input.channelId,
+    parent: { type: 'channel', id: input.channelId },
     targetMessageId: input.message.id,
     targetThreadId: input.message.thread_id,
     displayText,

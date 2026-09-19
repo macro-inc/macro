@@ -5,7 +5,6 @@ import { getSearchSplit } from '@app/features/next-soup/soup-view/search-control
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { TabsInset } from '@core/component/TabsInset';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
@@ -19,10 +18,12 @@ import type { HotkeyCommand, RegisterHotkeyReturn } from '@core/hotkey/types';
 import { runCommand } from '@core/hotkey/utils';
 import { debouncedDependent } from '@core/util/debounce';
 import { openExternalUrl } from '@core/util/url';
-import { type EntityData, InlineEntity, isGithubPrEntity } from '@entity';
+import { type EntityData, isGithubPrEntity } from '@entity';
+import { EntitySelectionBadge } from '@entity/components/EntitySelectionBadge';
 import Macro from '@icon/macro-logo.svg';
 import ArrowLeft from '@phosphor/arrow-left.svg';
 import {
+  Badge,
   CommandMenuEmptyState,
   CommandMenuHotkeyHint,
   CommandMenuSearchInput,
@@ -31,6 +32,7 @@ import {
   createCommandListController,
   Dialog,
   Hotkey,
+  Tabs,
 } from '@ui';
 import {
   createEffect,
@@ -594,15 +596,14 @@ export function CommandMenuInner(props: {
       <Show when={isEntityActionMode() || !isInCommandScope()}>
         <CommandMenuShell.Toolbar
           class={cn(
-            'pl-2.5 pr-1.5 pt-2 border-0',
+            'pl-2.5 pr-1.5 pt-2 border-0 bg-transparent',
             isEntityActionMode() && 'gap-1.5'
           )}
         >
           <Show
             when={isEntityActionMode()}
             fallback={
-              <TabsInset
-                depth={1}
+              <Tabs
                 list={categoryTabs}
                 value={CommandState.categoryFilter()}
                 onChange={(value) => {
@@ -645,7 +646,7 @@ export function CommandMenuInner(props: {
         </div>
       </CommandMenuShell.Body>
 
-      <CommandMenuShell.Footer>
+      <CommandMenuShell.Footer class="bg-transparent">
         <span class="flex items-center gap-1">
           <div class="flex gap-1">
             <div class="flex border border-edge-muted text-xxs rounded-md items-center px-1.5 py-px font-normal">
@@ -711,25 +712,10 @@ function EntityActionPreview(props: { entities: EntityData[] }) {
   return (
     <>
       <For each={displayEntities()}>
-        {(entity) => {
-          return (
-            <div
-              class={cn(
-                'bg-active border border-edge-muted px-2 py-1 truncate text-xs rounded',
-                {
-                  'max-w-[50%]': props.entities.length === 2,
-                }
-              )}
-            >
-              <InlineEntity entity={entity} />
-            </div>
-          );
-        }}
+        {(entity) => <EntitySelectionBadge entity={entity} />}
       </For>
       <Show when={remainingCount() > 0}>
-        <div class="text-ink-muted text-xs px-2 py-1">
-          +{remainingCount()} more
-        </div>
+        <Badge size="sm">+{remainingCount()} more</Badge>
       </Show>
     </>
   );

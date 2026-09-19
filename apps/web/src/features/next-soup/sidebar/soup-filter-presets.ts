@@ -124,6 +124,10 @@ const getInboxSignalFilters = () => {
       // so an unflagged user never pays for the reminders lookup on every
       // Signal fetch.
       ...(isFeatureEnabled(enableReminders) ? { includeReminders: true } : {}),
+      // Agent sessions the user was notified about (finished, asking, or a
+      // mention). Off by default server-side like reminders, so this literal
+      // is what surfaces them in the feed.
+      includeAgentSessions: true,
       // Calendar events with a not-done notification (a fired event alarm).
       // Referencing `calf` opts the calendar arm into the signal query, which
       // `defineQueryFilters` otherwise excludes with a nil id filter.
@@ -262,7 +266,10 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         if (!ctx.userId) return undefined;
         return {
           filters: defineQueryFilters({
-            include: { chatOwnerId: [ctx.userId] },
+            include: {
+              chatOwnerId: [ctx.userId],
+              agentSessionOwnerId: [ctx.userId],
+            },
           }),
           clientFilters: { and: ['agent'] },
         };
@@ -271,7 +278,10 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         if (!ctx.userId) return undefined;
         return {
           filters: defineQueryFilters({
-            include: { chatOwnerId: [ctx.userId] },
+            include: {
+              chatOwnerId: [ctx.userId],
+              agentSessionOwnerId: [ctx.userId],
+            },
           }),
           clientFilters: { and: ['agent', 'owned-entity'] },
         };
@@ -280,7 +290,11 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         if (!ctx.userId) return undefined;
         return {
           filters: defineQueryFilters({
-            exclude: { chatOwnerId: [ctx.userId] },
+            include: { includeAgentSessions: true },
+            exclude: {
+              chatOwnerId: [ctx.userId],
+              agentSessionOwnerId: [ctx.userId],
+            },
           }),
           clientFilters: { and: ['agent', 'shared-entity'] },
         };

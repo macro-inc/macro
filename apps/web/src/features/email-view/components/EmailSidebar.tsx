@@ -1,26 +1,26 @@
 import { useViewTabHotkeys, ViewSidebar } from '@app/components/view-shell';
+import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { SplitPanel } from '@components/app/split-panel';
-import { AnimatedNoiseIcon } from '@icon/wide-noise';
-import { AnimatedSignalIcon } from '@icon/wide-signal';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import FileIcon from '@phosphor/file.svg';
 import PaperPlaneTiltIcon from '@phosphor/paper-plane-tilt.svg';
-import PlusIcon from '@phosphor/plus.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
-import { Button } from '@ui';
+import SignalIcon from '@phosphor/wave-sine.svg';
+import NoiseIcon from '@phosphor/waveform.svg';
+import { SidebarTagsSection } from '@property/tags/SidebarTagsSection';
+import { pressHandlers } from '@ui';
 import { type Component, For } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { composeEmail } from '../compose-email';
 import { EMAIL_TAB_IDS, EMAIL_TABS, type EmailTabItem } from '../constants';
 import { useEmailView } from '../email-view-context';
 import type { EmailTab } from '../types';
-import { EmailInboxSelector } from './EmailInboxSelector';
+import { EmailInboxList } from './EmailInboxSelector';
 
 const TAB_ICONS: Record<EmailTab, Component<{ class?: string }>> = {
-  important: AnimatedSignalIcon,
-  noise: AnimatedNoiseIcon,
+  important: SignalIcon,
+  noise: NoiseIcon,
   sent: PaperPlaneTiltIcon,
   calendar: CalendarBlankIcon,
   drafts: FileIcon,
@@ -34,14 +34,14 @@ function Tab(props: { item: EmailTabItem; onNavigate?: () => void }) {
   return (
     <ViewSidebar.Item
       active={state.tab === props.item.id}
-      onClick={() => {
+      {...pressHandlers(() => {
         setTab(props.item.id);
         props.onNavigate?.();
-      }}
+      })}
     >
-      <span aria-hidden="true" class="flex size-4 shrink-0 items-center">
+      <ViewSidebar.Icon>
         <Dynamic component={TAB_ICONS[props.item.id]} class="size-4" />
-      </span>
+      </ViewSidebar.Icon>
       <span class="truncate">{props.item.label}</span>
     </ViewSidebar.Item>
   );
@@ -59,7 +59,13 @@ export function EmailNavigation(props: { onNavigate?: () => void }) {
 
 export function EmailSidebar() {
   const panel = useSplitPanelOrThrow();
-  const { state, setTab } = useEmailView();
+  const {
+    state,
+    setTab,
+    showTags,
+    isSidebarSectionOpen,
+    setSidebarSectionOpen,
+  } = useEmailView();
 
   useViewTabHotkeys({
     scopeId: panel.splitHotkeyScope,
@@ -70,33 +76,24 @@ export function EmailSidebar() {
   });
 
   return (
-    <ViewSidebar.Root
-      aria-label="Email navigation"
-      class="gap-4 border-r-0 pt-2"
-    >
-      <SplitPanel.ControlGroup>
-        <SplitPanel.CloseButton />
-        <SplitPanel.BackButton />
-        <SplitPanel.ForwardButton />
-      </SplitPanel.ControlGroup>
+    <ViewSidebar.Root aria-label="Email navigation">
+      <SidebarCreateHeader
+        title="Email"
+        label="New email"
+        onCreate={() => composeEmail()}
+      />
 
-      <ViewSidebar.Header>
-        <ViewSidebar.Title>Email</ViewSidebar.Title>
-        <Button
-          type="button"
-          variant="cta"
-          size="md"
-          class="rounded-lg px-3"
-          onClick={composeEmail}
-        >
-          <PlusIcon class="size-4 shrink-0" />
-          New
-        </Button>
-      </ViewSidebar.Header>
+      <ViewSidebar.Content>
+        <EmailInboxList />
 
-      <ViewSidebar.Content class="flex flex-col gap-3 pt-1">
-        <EmailInboxSelector variant="sidebar" />
         <EmailNavigation />
+
+        <SidebarTagsSection
+          activeIds={state.facets.tags ?? []}
+          onActiveIdsChange={showTags}
+          open={isSidebarSectionOpen('tags')}
+          onOpenChange={(open) => setSidebarSectionOpen('tags', open)}
+        />
       </ViewSidebar.Content>
     </ViewSidebar.Root>
   );

@@ -4,6 +4,7 @@ import { $wrapNodeInElement, mergeRegister } from '@lexical/utils';
 import type { PeerIdValidator } from '@macro-inc/lexical-core';
 import {
   $collapseInlineSearch,
+  $createAgentSessionMentionNode,
   $createContactMentionNode,
   $createDateMentionNode,
   $createDocumentMentionNode,
@@ -15,6 +16,7 @@ import {
   $createUserMentionNode,
   $handleInlineSearchNodeMutation,
   $handleInlineSearchNodeTransform,
+  $isAgentSessionMentionNode,
   $isContactMentionNode,
   $isDateMentionNode,
   $isDocumentMentionNode,
@@ -22,6 +24,8 @@ import {
   $isPullRequestMentionNode,
   $isUserMentionNode,
   $removeInlineSearch,
+  type AgentSessionMentionInfo,
+  AgentSessionMentionNode,
   type ContactMentionInfo,
   ContactMentionNode,
   type DateMentionInfo,
@@ -117,6 +121,9 @@ export const INSERT_USER_MENTION_COMMAND: LexicalCommand<UserMentionInfo> =
 export const INSERT_GROUP_MENTION_COMMAND: LexicalCommand<GroupMentionInfo> =
   createCommand('INSERT_GROUP_MENTION_COMMAND');
 
+export const INSERT_AGENT_SESSION_MENTION_COMMAND: LexicalCommand<AgentSessionMentionInfo> =
+  createCommand('INSERT_AGENT_SESSION_MENTION_COMMAND');
+
 export const INSERT_PR_MENTION_COMMAND: LexicalCommand<PullRequestMentionInfo> =
   createCommand('INSERT_PR_MENTION_COMMAND');
 
@@ -138,6 +145,7 @@ export type ItemMention = {
     | 'color'
     | 'call'
     | 'calendar_event'
+    | 'agent_session'
     | 'foreign'
     | 'group'
     | 'automation'
@@ -158,6 +166,7 @@ function $isMentionNode(
   | DocumentMentionNode
   | ContactMentionNode
   | DateMentionNode
+  | AgentSessionMentionNode
   | PullRequestMentionNode
   | GroupMentionNode {
   return (
@@ -165,6 +174,7 @@ function $isMentionNode(
     $isDocumentMentionNode(node) ||
     $isContactMentionNode(node) ||
     $isDateMentionNode(node) ||
+    $isAgentSessionMentionNode(node) ||
     $isPullRequestMentionNode(node) ||
     $isGroupMentionNode(node)
   );
@@ -246,6 +256,12 @@ function $mentionItemFromNode(node: MentionNode): ItemMention {
       itemId: node.getGroupAlias(),
       groupAlias: node.getGroupAlias(),
     };
+  } else if ($isAgentSessionMentionNode(node)) {
+    return {
+      itemType: 'agent_session',
+      itemId: node.getId(),
+      documentName: node.getLabel(),
+    };
   } else if ($isPullRequestMentionNode(node)) {
     return {
       itemType: 'foreign',
@@ -298,6 +314,7 @@ const getDocumentMentionItemType = (
   return match<ItemType, ItemMention['itemType']>(itemType)
     .with('email', () => 'thread')
     .with('document', () => 'document')
+    .with('agent_session', () => 'agent_session')
     .with('chat', () => 'chat')
     .with('channel', () => 'channel')
     .with('project', () => 'project')
@@ -342,6 +359,7 @@ function registerMentionsPlugin(
       ContactMentionNode,
       DateMentionNode,
       PullRequestMentionNode,
+      AgentSessionMentionNode,
       InlineSearchNode,
     ])
   ) {
@@ -397,10 +415,16 @@ function registerMentionsPlugin(
       (payload) => {
         editor.update(() => {
           const selection = $getSelection();
-          const mentionNode = $createDocumentMentionNode({
-            ...payload,
-            createdAt: payload.createdAt ?? Date.now(),
-          });
+          const mentionNode =
+            payload.blockName === 'agent'
+              ? $createAgentSessionMentionNode({
+                  id: payload.documentId,
+                  label: payload.documentName,
+                })
+              : $createDocumentMentionNode({
+                  ...payload,
+                  createdAt: payload.createdAt ?? Date.now(),
+                });
 
           if (payload.mentionUuid) {
             mentionNode.setMentionUuid(payload.mentionUuid);
@@ -527,6 +551,39 @@ function registerMentionsPlugin(
         return true;
       },
       COMMAND_PRIORITY_NORMAL
+    ),
+
+    editor.registerCommand(
+      INSERT_AGENT_SESSION_MENTION_COMMAND,
+      (payload) => {
+        const node = $createAgentSessionMentionNode(payload);
+        $insertNodes([node]);
+        if ($isRootOrShadowRoot(node.getParentOrThrow()))
+          $wrapNodeInElement(node, $createParagraphNode);
+        node.selectEnd();
+        return true;
+      },
+      COMMAND_PRIORITY_NORMAL
+    ),
+
+    editor.registerMutationListener(
+      AgentSessionMentionNode,
+      (mutations, { prevEditorState }) => {
+        for (const [key, mutation] of mutations) {
+          const node = nodeByKey(
+            mutation === 'destroyed'
+              ? prevEditorState
+              : editor.getEditorState(),
+            key
+          );
+          if (!$isAgentSessionMentionNode(node)) continue;
+          if (mutation === 'created')
+            onCreateMention?.($mentionItemFromNode(node));
+          if (mutation === 'destroyed')
+            onRemoveMention?.($mentionItemFromNode(node));
+        }
+        updateMentionsSignal();
+      }
     ),
 
     editor.registerCommand(

@@ -1,18 +1,24 @@
 //! Commands and values used by the harness domain.
 
 use agent_client_protocol::schema::v1::{HttpHeader, McpServer as AcpMcpServer, McpServerHttp};
-use agent_egress::domain::model::McpServerSlug;
-use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
+use agent_egress::domain::model::{McpServerSlug, RepoSlug};
+use agent_fold::domain::model::TurnSignal;
+use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
 use agent_session::domain::model::{AgentMcpServers, AgentSessionId, MessageId, SandboxSize};
 use agent_session::domain::ports::ControlEvent;
+use agent_session::domain::session::PermissionPolicy;
+
+#[cfg(test)]
+mod test;
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use messages::domain::events::MessageEventAttachment;
 /// Where a mention happened.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MentionOrigin {
-    /// Channel the mentioning message was posted in.
-    pub channel_id: Uuid,
+    /// Channel or document the mentioning message was posted in.
+    pub parent: messages::domain::models::MessageParent,
     /// Thread the announcement replies into: the mention's thread root.
     pub thread_id: Uuid,
     /// The mentioning message itself.
@@ -21,6 +27,68 @@ pub struct MentionOrigin {
     pub sender: MacroUserIdStr<'static>,
     /// The message text, verbatim; becomes the session's first prompt.
     pub content: String,
+    /// Files attached to the message, as the prompt will refer to them.
+    #[serde(default)]
+    pub attachments: Vec<PromptAttachment>,
+}
+
+/// How a channel message's attached files are named to an agent.
+///
+/// Channel attachments are stored by static file id; the agent needs a URL it
+/// can fetch. The base URL is deployment configuration handed in by the
+/// composition root, so this stays a pure translation.
+#[derive(Debug, Clone)]
+pub struct StaticFileLinks {
+    base_url: String,
+}
+
+impl StaticFileLinks {
+    /// Channel attachment entity type for an image stored as a static file.
+    const STATIC_IMAGE: &str = "static/image";
+    /// Channel attachment entity type for a video stored as a static file.
+    const STATIC_VIDEO: &str = "static/video";
+
+    /// Links under the static file service at `base_url`.
+    #[must_use]
+    pub fn new(base_url: impl Into<String>) -> Self {
+        let mut base_url = base_url.into();
+        while base_url.ends_with('/') {
+            base_url.pop();
+        }
+        Self { base_url }
+    }
+
+    /// The prompt attachment for a channel attachment, or `None` for one that
+    /// is not a static file - documents reach the agent through mentions,
+    /// and have no URL an agent could fetch unauthenticated.
+    ///
+    /// Channel rows record only that a file is an image or a video, not its
+    /// exact type, so the media type is the matching wildcard range.
+    #[must_use]
+    pub fn prompt_attachment(
+        &self,
+        attachment: &MessageEventAttachment,
+    ) -> Option<PromptAttachment> {
+        let (kind, mime_type) = match attachment.entity_type.as_str() {
+            Self::STATIC_IMAGE => ("image", "image/*"),
+            Self::STATIC_VIDEO => ("video", "video/*"),
+            _ => return None,
+        };
+        let uri = format!("{}/file/{}", self.base_url, attachment.entity_id);
+        Some(PromptAttachment::new(uri, kind).mime_type(mime_type))
+    }
+
+    /// The prompt attachments for a message's attached files, in order.
+    #[must_use]
+    pub fn prompt_attachments(
+        &self,
+        attachments: &[MessageEventAttachment],
+    ) -> Vec<PromptAttachment> {
+        attachments
+            .iter()
+            .filter_map(|attachment| self.prompt_attachment(attachment))
+            .collect()
+    }
 }
 
 /// Open a new session for a mention.
@@ -63,6 +131,10 @@ pub enum AgentKind {
     SandboxedCoder,
     /// A Cursor cloud agent, served over an in-process ACP pipe.
     Cursor,
+    /// A per-owner Codex cloud conversation served over ACP.
+    CodexCloud,
+    /// Anthropic-hosted Claude Code using the session owner's subscription.
+    ClaudeCloud,
     /// The in-process (in-memory) "macro(new)" bot, served by `agent_inmem`.
     InMemory,
     /// The bot's operator hosts the runtime and dials the gateway; no
@@ -78,6 +150,10 @@ impl AgentKind {
             Self::SandboxedCoder
         } else if bot == bot_id::CURSOR_BOT_ID {
             Self::Cursor
+        } else if bot == bot_id::CODEX_BOT_ID {
+            Self::CodexCloud
+        } else if bot == bot_id::CLAUDE_BOT_ID {
+            Self::ClaudeCloud
         } else if bot == bot_id::MACRO_NEW_BOT_ID {
             Self::InMemory
         } else {
@@ -90,6 +166,8 @@ impl AgentKind {
     pub fn from_harness(harness: &str) -> Self {
         match harness {
             "cursor" => Self::Cursor,
+            "codex-cloud" => Self::CodexCloud,
+            "claude-cloud" => Self::ClaudeCloud,
             "in-memory" | "macro-inmem" => Self::InMemory,
             // Registered macrod harnesses are the deliberate external case:
             // the agent's `harness_id` names whose daemon serves it.
@@ -117,6 +195,71 @@ impl AgentKind {
     pub fn is_managed(self) -> bool {
         !matches!(self, Self::External)
     }
+
+    /// How this kind's sessions answer permission requests without a registered
+    /// local harness.
+    ///
+    /// Managed runtimes act inside sandboxes this deployment owns (or, for
+    /// Cursor, never ask), so approving on arrival costs nothing. An external
+    /// runtime is somebody's own machine, where a bot approving its own tool
+    /// calls is exactly what a person should be asked about.
+    #[must_use]
+    pub fn default_permission_policy(self) -> PermissionPolicy {
+        match self {
+            Self::SandboxedCoder
+            | Self::Cursor
+            | Self::CodexCloud
+            | Self::ClaudeCloud
+            | Self::InMemory => PermissionPolicy::AutoAccept,
+            Self::External => PermissionPolicy::Prompt,
+        }
+    }
+}
+
+/// Stored facts used by the domain to choose a session permission policy.
+pub enum PermissionPolicyConfig {
+    /// A fixed system bot with no editable persona configuration.
+    Fixed(AgentKind),
+    /// An editable persona and its harness operator's limit.
+    Persona {
+        /// The runtime serving this persona.
+        kind: AgentKind,
+        /// A registered harness's opt-in. `None` denotes a built-in runtime.
+        harness_allows_bypass: Option<bool>,
+        /// The agent owner's choice for a local harness; absent means prompt.
+        auto_accept_permissions: Option<bool>,
+    },
+}
+
+impl PermissionPolicyConfig {
+    /// Apply local harness consent and agent choice, or the built-in policy.
+    #[must_use]
+    pub fn resolve(self) -> PermissionPolicy {
+        match self {
+            Self::Fixed(kind) => kind.default_permission_policy(),
+            Self::Persona {
+                kind,
+                harness_allows_bypass,
+                auto_accept_permissions,
+            } => match harness_allows_bypass {
+                Some(allowed) => resolve_permission_policy(allowed, auto_accept_permissions),
+                None => kind.default_permission_policy(),
+            },
+        }
+    }
+}
+
+/// Resolve a persona's choice within the harness operator's permission limit.
+#[must_use]
+pub fn resolve_permission_policy(
+    allow_bypass: bool,
+    auto_accept: Option<bool>,
+) -> PermissionPolicy {
+    if allow_bypass && auto_accept == Some(true) {
+        PermissionPolicy::AutoAccept
+    } else {
+        PermissionPolicy::Prompt
+    }
 }
 
 /// Runtime settings used to open one database-backed or fixed agent.
@@ -141,20 +284,20 @@ pub(crate) use agent_egress::domain::model::is_macro_staff;
 
 /// Where a prompt came from, when it came from somewhere the session should
 /// answer back into.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct AnnounceOrigin {
-    /// Channel the prompt was posted in.
-    pub channel_id: Uuid,
+    /// Channel or document the prompt was posted in.
+    pub parent: messages::domain::models::MessageParent,
     /// Thread the announcement replies into.
     pub thread_id: Uuid,
-    /// The channel message that triggered the prompt.
+    /// The message that triggered the prompt.
     pub message_id: Uuid,
 }
 
-/// One channel message supplied as untrusted prompt context.
+/// One prior message supplied as untrusted prompt context.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PriorChannelMessage {
-    /// Sender identifier as represented by the channels service.
+pub struct PriorMessage {
+    /// Sender identifier as the message service represents it.
     pub sender: String,
     /// Message body.
     pub content: String,
@@ -211,14 +354,18 @@ pub enum HarnessCommand {
         /// The user responsible, as on [`Self::EditQueued`].
         actor: Option<MacroUserIdStr<'static>>,
     },
-    /// The session's runtime answered its in-flight turn: clear the busy
-    /// mark and dispatch the next queued action. Internal - enqueued by the
-    /// turn observer on the managing replica, never forwarded.
-    TurnEnded,
+    /// The session's fold reported a turn fact: an ended turn clears the
+    /// busy mark and dispatches the next queued action; a raised or cleared
+    /// question is published as is. Internal - enqueued by the turn observer
+    /// on the managing replica, never forwarded.
+    Turn(TurnSignal),
     /// The session's live actor stopped: clear the busy mark and nothing
     /// more - resuming a dead runtime stays the next user action's job.
-    /// Internal, like [`Self::TurnEnded`].
-    SessionStopped,
+    /// Internal, like [`Self::Turn`].
+    SessionStopped {
+        /// Why the actor stopped.
+        reason: String,
+    },
     /// Change the session's sandbox size and the owner's default.
     SetSandboxSize(SandboxSize),
     /// Release a session's live resources and delete it.
@@ -238,26 +385,31 @@ pub enum CommandOutcome {
 
 impl DeliverAction {
     /// A prompt from a user, arriving from a channel that may need answering.
+    ///
+    /// Takes the action rather than its text so a prompt's attached files
+    /// ride along; `AgentAction::prompt(text)` is the plain-text form.
     pub fn prompt(
-        content: impl Into<String>,
+        action: AgentAction,
         actor: Option<MacroUserIdStr<'static>>,
         announce: Option<AnnounceOrigin>,
     ) -> Self {
         Self {
             id: AgentActionId::mint(),
-            action: AgentAction::prompt(content),
+            action,
             actor,
             announce,
         }
     }
 
-    /// A control request under a caller-visible id. Names no origin: control
-    /// is "deliver this to the session", and announcing a prompt into its
-    /// channel is the trigger pipeline's job, keyed on what it observed
-    /// rather than anything a caller claims.
-    pub fn control(id: AgentActionId, event: ControlEvent) -> Self {
+    /// A control request under a caller-visible id: the caller's own id when
+    /// it named one, so its optimistic entry is confirmed in place, and a
+    /// freshly minted id otherwise. Names no origin: control is "deliver this
+    /// to the session", and announcing a prompt into its channel is the
+    /// trigger pipeline's job, keyed on what it observed rather than anything
+    /// a caller claims.
+    pub fn control(event: ControlEvent) -> Self {
         Self {
-            id,
+            id: event.action_id.unwrap_or_else(AgentActionId::mint),
             action: event.action,
             actor: event.actor,
             announce: None,
@@ -272,7 +424,7 @@ impl DeliverAction {
 /// the control endpoint, and this posts the magic-chip message the replies
 /// render into. Split that way because each side is the only one that can
 /// do its half honestly: only the runtime can reach its harness, and only
-/// the observed trigger event can vouch for the channel context.
+/// the observed trigger event can vouch for the conversation context.
 #[derive(Debug, Clone)]
 pub struct AnnouncePrompt {
     /// The bot the trigger named; must match the session row before posting.
@@ -292,8 +444,8 @@ pub struct SessionAnnouncement {
     pub session_id: AgentSessionId,
     /// The bot the session runs for; the announcement posts as it.
     pub bot_id: BotId,
-    /// Channel containing the mention that opened the session.
-    pub origin_channel_id: Uuid,
+    /// Channel or document containing the mention that opened the session.
+    pub origin_parent: messages::domain::models::MessageParent,
     /// Thread where the announcement should be posted.
     pub origin_thread_id: Uuid,
     /// Channel message targeted by the announcement.
@@ -304,6 +456,45 @@ pub struct SessionAnnouncement {
     pub prompted_content: String,
     /// User whose mention triggered the announcement.
     pub triggered_by: MacroUserIdStr<'static>,
+}
+
+/// Something the mentioner has to set up before their provider will open a
+/// session for them - the one class of refusal that is theirs to fix, so
+/// it is answered in the thread rather than logged.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionBlocker {
+    /// `@cursor` runs on the mentioner's own Cursor account, and they have
+    /// not registered a key in settings yet.
+    CursorNotConnected,
+    /// The mentioner has not connected their ChatGPT account for Codex.
+    CodexNotConnected,
+    /// Codex is connected, but no cloud environment has been selected.
+    CodexEnvironmentNotConfigured,
+    /// The mentioner has not connected their Claude account.
+    ClaudeNotConnected,
+}
+
+/// A mention that opened no session, and why. Posted back into the mention's
+/// thread as the bot, so the person who asked learns what to do next instead
+/// of watching a chip that never answers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeclinedMention {
+    /// The bot that was mentioned; the reply posts as it.
+    pub bot_id: BotId,
+    /// Where the mention was posted, and so where the reply goes.
+    pub origin: AnnounceOrigin,
+    /// Who mentioned the bot.
+    pub triggered_by: MacroUserIdStr<'static>,
+    /// What stands between them and a session.
+    pub blocker: SessionBlocker,
+}
+
+/// The message an announcement became.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AnnouncedMessage {
+    /// The posted message: the magic chip its turn renders into.
+    pub message_id: Uuid,
 }
 
 /// Values required to provision a new session container.
@@ -371,6 +562,9 @@ pub const SESSION_TOKEN_VARIABLE: &str = "MACRO_SESSION_TOKEN";
 /// kept short and stable because agents namespace tool names under it.
 pub const MACRO_MCP_NAME: &str = "macro";
 
+/// Harness-owned session tools, separate from the workspace MCP catalog.
+pub const INTERNAL_MCP_NAME: &str = "macro_internal";
+
 impl SandboxEgress {
     /// Where the proxy serves `slug` - the URL a client dials to reach that
     /// server, whichever client it is.
@@ -403,16 +597,35 @@ impl SandboxEgress {
         ]
     }
 
-    /// Every server the session may dial, as `(name, url)` pairs: Macro's own
-    /// server first, then the advertised apps under their Pipedream slugs.
+    /// The workspace and internal MCP servers, followed by the owner's apps,
+    /// as `(name, url)` pairs.
     ///
     /// The one enumeration behind both renderings - [`Self::acp_servers`] and
     /// the Cursor API's - so the two can never advertise different sets.
     pub fn server_entries(&self) -> impl Iterator<Item = (String, String)> + '_ {
-        std::iter::once((MACRO_MCP_NAME.to_owned(), self.macro_mcp_url())).chain(
+        [
+            (MACRO_MCP_NAME.to_owned(), self.macro_mcp_url()),
+            (
+                INTERNAL_MCP_NAME.to_owned(),
+                format!("{}/mcp/internal", self.base_url),
+            ),
+        ]
+        .into_iter()
+        .chain(
             self.mcp_servers
                 .iter()
                 .map(|slug| (slug.as_str().to_owned(), self.mcp_url(slug))),
+        )
+    }
+
+    /// Session-scoped internal tools, also supplied to external runtimes.
+    pub fn internal_mcp_server(&self) -> AcpMcpServer {
+        AcpMcpServer::Http(
+            McpServerHttp::new(INTERNAL_MCP_NAME, format!("{}/mcp/internal", self.base_url))
+                .headers(vec![HttpHeader::new(
+                    "Authorization",
+                    self.authorization_header(),
+                )]),
         )
     }
 
@@ -461,6 +674,49 @@ impl std::fmt::Debug for SandboxEgress {
     }
 }
 
+/// The repository a deployment's sessions work in, valid by construction.
+///
+/// Held as the URL a session's row carries, not as the [`RepoSlug`] it was
+/// read as: the row is what the egress proxy re-reads to decide which
+/// repository a sandbox's git traffic may reach, so the URL is the value
+/// that has to survive. Parsing is what makes it a repository rather than a
+/// string - a URL that names no repository could only fail later, at a clone
+/// nobody is watching - and the parse is the proxy's own.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionRepository(String);
+
+impl SessionRepository {
+    /// Read a configured GitHub URL as the repository it names.
+    ///
+    /// [`None`] for a URL that names no repository. That is a deployment
+    /// misconfiguration, and the composition root is where it should be
+    /// refused: every session this deployment would go on to open carries it.
+    #[must_use]
+    pub fn parse(repository_url: &str) -> Option<Self> {
+        RepoSlug::parse_github_url(repository_url)?;
+        Some(Self(repository_url.to_owned()))
+    }
+
+    /// The URL, as a session's row carries it.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// One repository a user can reach through Macro's GitHub App.
+///
+/// What a chooser offers and what the open path authorizes against: the url
+/// is the value a session's row is pinned to, and the default branch is where
+/// a session starts when its caller selected the repository but no branch.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReachableRepository {
+    /// The canonical `https://github.com/owner/name` url.
+    pub url: String,
+    /// The branch a clone checks out, absent for a repository with no commits.
+    pub default_branch: Option<String>,
+}
+
 /// Session-row values that remain deployment configuration for now.
 #[derive(Debug, Clone)]
 pub struct SessionDefaults {
@@ -474,8 +730,16 @@ pub struct SessionDefaults {
     pub model: String,
     /// Harness slug, e.g. `opencode`.
     pub harness: String,
-    /// Repository sessions run against.
-    pub repo_url: String,
+    /// Repository this bot's sessions open against, or [`None`] for a bot
+    /// whose sessions do not learn one until they run.
+    ///
+    /// A Codex cloud session is the latter: it works in whatever repository
+    /// its cloud environment holds, which is not known until the environment
+    /// resolves, and the row is written then (see
+    /// `CodexRuntime::resolve_target`). Seeding the row with a deployment
+    /// default would make it briefly claim a repository the session will
+    /// never touch.
+    pub repo_url: Option<SessionRepository>,
 }
 
 /// Session defaults for every bot a deployment answers for.

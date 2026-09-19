@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            share_permission.\"linkShareAccessLevel\" AS \"access_level!: AccessLevel\",\n            owner_team.team_id AS \"owner_team_id!\"\n        FROM \"Document\" document\n        JOIN \"DocumentPermission\" document_permission\n          ON document_permission.\"documentId\" = document.id\n        JOIN \"SharePermission\" share_permission\n          ON share_permission.id = document_permission.\"sharePermissionId\"\n        JOIN team_user owner_team\n          ON owner_team.user_id = document.owner\n         AND owner_team.team_id::text = ANY($2)\n        WHERE document.id = $1\n          AND share_permission.\"linkShare\" = 'TEAM'\n          AND share_permission.\"linkShareAccessLevel\" IS NOT NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level!: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "owner_team_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "ff96096a9ac83c19f76d4392d718e18a042b3358de4837f0e6eb7c4f263ea7c9"
+}

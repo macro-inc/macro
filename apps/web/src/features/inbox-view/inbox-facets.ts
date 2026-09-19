@@ -4,7 +4,7 @@ import {
   type FacetClause,
   type FacetOption,
   NIL_UUID,
-} from '@app/features/soup';
+} from '@app/features/soup/filters';
 import {
   type EntityData,
   isGithubPrEntity,
@@ -62,7 +62,7 @@ function readOption(
               compositeEntity(toNotificationEntity(entity))
             ]) ?? [];
       const unread = notifications.some(
-        (notification) => !notification.viewed_at
+        (notification) => notification.state === 'unseen'
       );
 
       return unread !== seen;
@@ -103,11 +103,17 @@ const typeOptions: Record<InboxTypeFilter, InboxFacetOption> = {
       entity.type === 'channel_message' ||
       entity.type === 'channel_thread',
   },
+  chats: {
+    id: 'chats',
+    label: 'Chats',
+    clause: { cf: clause.not(clause.eq('chatId', NIL_UUID)) },
+    predicate: (entity) => entity.type === 'chat',
+  },
   agents: {
     id: 'agents',
     label: 'Agents',
-    clause: { cf: clause.not(clause.eq('chatId', NIL_UUID)) },
-    predicate: (entity) => entity.type === 'chat',
+    clause: { asf: clause.not(clause.eq('agentSessionId', NIL_UUID)) },
+    predicate: (entity) => entity.type === 'agent_session',
   },
   projects: {
     id: 'projects',
@@ -142,26 +148,13 @@ const typeOptions: Record<InboxTypeFilter, InboxFacetOption> = {
 type InboxFilterGroup = {
   id: string;
   label: string;
-  selectionMode?: 'single' | 'multiple';
-  defaultOptionId?: string;
   options: { id: string; label: string }[];
 };
 
 export const INBOX_FILTER_GROUPS: InboxFilterGroup[] = [
   {
-    id: 'read',
-    label: 'Status',
-    selectionMode: 'single',
-    defaultOptionId: 'all',
-    options: [
-      { id: 'unread', label: 'Unread' },
-      { id: 'read', label: 'Read' },
-      { id: 'all', label: 'All' },
-    ],
-  },
-  {
     id: 'type',
-    label: 'Type',
+    label: 'Entity types',
     options: Object.values(typeOptions),
   },
 ];
@@ -183,6 +176,11 @@ export const INBOX_FACETS: Facet<
     id: 'type',
     mode: 'or',
     restrict: true,
-    options: Object.values(typeOptions),
+    // Empty selections mean unrestricted in Soup. An explicit option with no
+    // allowed targets represents hiding every type, including in server queries.
+    options: [
+      ...Object.values(typeOptions),
+      { id: 'none', label: 'None', clause: {}, predicate: () => false },
+    ],
   },
 ];

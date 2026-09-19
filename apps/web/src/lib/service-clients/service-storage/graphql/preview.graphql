@@ -6,6 +6,13 @@ query ItemPreviewNameCacheWrite($input: SoupInput!) {
 				__typename
 				id
 				displayName
+				... on GraphqlSoupDocument { documentName: name }
+				... on GraphqlSoupChat { chatName: name }
+				... on GraphqlSoupProject { projectName: name }
+				... on GraphqlSoupChannel { channelDisplayName: name }
+				... on GraphqlSoupCall { customName }
+				... on GraphqlSoupCrmCompany { companyName: name }
+				... on GraphqlSoupEmailThread { emailName: name }
 			}
 		}
 	}

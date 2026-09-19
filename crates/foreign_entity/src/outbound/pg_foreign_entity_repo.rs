@@ -19,13 +19,12 @@ struct ForeignEntityBatchQuery<'a> {
     sort_method: SimpleSortMethod,
     filter_jsonpath: Option<&'a str>,
     participant_github_user_id: Option<&'a str>,
-    /// Macro user id used to scope the per-user notification done/seen predicates.
+    /// Macro user id used to scope the per-user notification state predicates.
     /// When a notification filter is requested but this is `None`, nothing matches.
     notification_user_id: Option<&'a str>,
-    /// `Some(true)`/`Some(false)` keeps entities whose notification is/ isn't done; `None` ignores.
-    notification_done: Option<bool>,
-    /// `Some(true)`/`Some(false)` keeps entities whose notification is/ isn't seen; `None` ignores.
-    notification_seen: Option<bool>,
+    /// Accepted sets of states present on the entity (unseen=1, seen=2, done=4).
+    /// None means no notification filter; an empty list matches nothing.
+    notification_sets: Option<&'a [i32]>,
     cursor_id: Option<Uuid>,
     cursor_value: Option<DateTime<Utc>>,
     limit: i64,
@@ -38,61 +37,72 @@ fn source_id_parts(source_ids: &[SourceId]) -> (Vec<String>, Vec<String>) {
         .unzip()
 }
 
-/// Marker error for filters that place a hoisted literal (see [`is_hoisted_literal`]) somewhere it
-/// cannot be lifted into a dedicated SQL predicate (under `Or`/`Not`).
+/// A participant or mixed metadata/notification subtree cannot be lifted safely.
+/// Pure notification subtrees support AND, OR, and NOT.
 struct UnsupportedHoistedFilter;
 
 /// Filters lifted off the top-level AND spine into dedicated SQL predicates because they cannot be
 /// expressed in the metadata jsonpath (they need indexed-containment or notification-table joins).
 #[derive(Default)]
 struct HoistedForeignEntityFilters {
-    /// Whether the requesting user must be a participant in the entity's metadata.
     includes_me: bool,
-    /// Notification done filter for the requesting user (`None` ignores).
-    notification_done: Option<bool>,
-    /// Notification seen filter for the requesting user (`None` ignores).
-    notification_seen: Option<bool>,
-    /// True when the AND spine carries contradictory predicates (e.g. done=true AND done=false),
-    /// in which case the whole filter is unsatisfiable and must match nothing.
-    unsatisfiable: bool,
-    /// jsonpath for the residual (non-hoisted) filter, if any.
+    // A truth table over the eight possible sets of notification states present
+    // on an entity. AND combines truth tables, not row-level state predicates:
+    // an unseen literal and a seen literal can match different notifications.
+    notification_matches: Option<u8>,
     jsonpath: Option<String>,
 }
 
 impl HoistedForeignEntityFilters {
-    /// Combine two `Option<bool>` predicates taken from the two sides of an `And`. Returns the
-    /// merged value plus whether the two sides contradicted each other (true AND false).
-    fn merge_bool_filter(a: Option<bool>, b: Option<bool>) -> (Option<bool>, bool) {
-        match (a, b) {
-            (Some(x), Some(y)) if x != y => (None, true),
-            (Some(x), Some(_)) => (Some(x), false),
-            (Some(x), None) | (None, Some(x)) => (Some(x), false),
-            (None, None) => (None, false),
-        }
-    }
-
-    /// Combine two extracted filter halves taken from the two sides of an `And`.
     fn and(self, other: Self) -> Self {
-        let (notification_done, done_conflict) =
-            Self::merge_bool_filter(self.notification_done, other.notification_done);
-        let (notification_seen, seen_conflict) =
-            Self::merge_bool_filter(self.notification_seen, other.notification_seen);
-
-        let jsonpath = match (self.jsonpath, other.jsonpath) {
-            (Some(left), Some(right)) => Some(format!("({left} && {right})")),
-            (left, right) => left.or(right),
-        };
         Self {
             includes_me: self.includes_me || other.includes_me,
-            notification_done,
-            notification_seen,
-            unsatisfiable: self.unsatisfiable
-                || other.unsatisfiable
-                || done_conflict
-                || seen_conflict,
-            jsonpath,
+            notification_matches: match (self.notification_matches, other.notification_matches) {
+                (Some(a), Some(b)) => Some(a & b),
+                (a, b) => a.or(b),
+            },
+            jsonpath: match (self.jsonpath, other.jsonpath) {
+                (Some(a), Some(b)) => Some(format!("({a} && {b})")),
+                (a, b) => a.or(b),
+            },
         }
     }
+}
+
+fn notification_matches(expr: &Expr<ForeignEntityLiteral>, present: u8) -> Option<bool> {
+    match expr {
+        Expr::Literal(ForeignEntityLiteral::NotificationState(state)) => {
+            use item_filters::NotificationState::*;
+            let bit = match state {
+                Unseen => 1,
+                Seen => 2,
+                Done => 4,
+            };
+            Some(present & bit != 0)
+        }
+        Expr::And(a, b) => {
+            let (a, b) = (
+                notification_matches(a, present)?,
+                notification_matches(b, present)?,
+            );
+            Some(a && b)
+        }
+        Expr::Or(a, b) => {
+            let (a, b) = (
+                notification_matches(a, present)?,
+                notification_matches(b, present)?,
+            );
+            Some(a || b)
+        }
+        Expr::Not(expr) => notification_matches(expr, present).map(|v| !v),
+        _ => None,
+    }
+}
+
+fn notification_truth_table(expr: &Expr<ForeignEntityLiteral>) -> Option<u8> {
+    (0..8).try_fold(0, |table, present| {
+        notification_matches(expr, present).map(|matches| table | (u8::from(matches) << present))
+    })
 }
 
 /// Literals that cannot be represented in the metadata jsonpath and must be lifted into dedicated
@@ -100,9 +110,7 @@ impl HoistedForeignEntityFilters {
 fn is_hoisted_literal(literal: &ForeignEntityLiteral) -> bool {
     matches!(
         literal,
-        ForeignEntityLiteral::IncludesMe
-            | ForeignEntityLiteral::NotificationDone(_)
-            | ForeignEntityLiteral::NotificationSeen(_)
+        ForeignEntityLiteral::IncludesMe | ForeignEntityLiteral::NotificationState(_)
     )
 }
 
@@ -116,14 +124,18 @@ fn contains_hoisted_literal(expr: &Expr<ForeignEntityLiteral>) -> bool {
     }
 }
 
-/// Strip hoisted literals ([`ForeignEntityLiteral::IncludesMe`], notification done/seen) off the
-/// top-level AND spine of a filter tree, returning them alongside the jsonpath for the residual
-/// filter. Hoisted literals cannot be expressed in the jsonpath (they need the indexed metadata
-/// containment predicate or a join against the notification tables), so any occurrence under
-/// `Or`/`Not` is an error.
+/// Lift participant predicates and pure notification subtrees off the AND spine.
+/// Notification subtrees preserve their full boolean expression through a truth table;
+/// other literals remain in the metadata jsonpath. Mixed OR/NOT subtrees fail closed.
 fn extract_hoisted_filters(
     expr: &Expr<ForeignEntityLiteral>,
 ) -> Result<HoistedForeignEntityFilters, UnsupportedHoistedFilter> {
+    if let Some(table) = notification_truth_table(expr) {
+        return Ok(HoistedForeignEntityFilters {
+            notification_matches: Some(table),
+            ..Default::default()
+        });
+    }
     match expr {
         Expr::And(left, right) => {
             Ok(extract_hoisted_filters(left)?.and(extract_hoisted_filters(right)?))
@@ -132,18 +144,6 @@ fn extract_hoisted_filters(
             includes_me: true,
             ..Default::default()
         }),
-        Expr::Literal(ForeignEntityLiteral::NotificationDone(done)) => {
-            Ok(HoistedForeignEntityFilters {
-                notification_done: Some(*done),
-                ..Default::default()
-            })
-        }
-        Expr::Literal(ForeignEntityLiteral::NotificationSeen(seen)) => {
-            Ok(HoistedForeignEntityFilters {
-                notification_seen: Some(*seen),
-                ..Default::default()
-            })
-        }
         other => {
             if contains_hoisted_literal(other) {
                 Err(UnsupportedHoistedFilter)
@@ -184,9 +184,9 @@ fn foreign_entity_literal_jsonpath(literal: &ForeignEntityLiteral) -> String {
         // IncludesMe and the notification literals are hoisted into dedicated SQL predicates by
         // extract_hoisted_filters and never reach the jsonpath; if one slips through, match nothing
         // rather than everything.
-        ForeignEntityLiteral::IncludesMe
-        | ForeignEntityLiteral::NotificationDone(_)
-        | ForeignEntityLiteral::NotificationSeen(_) => "(1 == 0)".to_string(),
+        ForeignEntityLiteral::IncludesMe | ForeignEntityLiteral::NotificationState(_) => {
+            "(1 == 0)".to_string()
+        }
     }
 }
 
@@ -219,8 +219,7 @@ impl PgForeignEntityRepo {
             filter_jsonpath,
             participant_github_user_id,
             notification_user_id,
-            notification_done,
-            notification_seen,
+            notification_sets,
             cursor_id,
             cursor_value,
             limit,
@@ -272,30 +271,17 @@ impl PgForeignEntityRepo {
                     OR (fe.metadata -> 'participantGithubUserIds') ? $8::text
                   )
                   AND (
-                    $9::bool IS NULL
-                    OR EXISTS (
-                        SELECT 1
+                    $9::int[] IS NULL
+                    OR ($10::text IS NOT NULL AND (
+                        SELECT COALESCE(bit_or(CASE un.state
+                            WHEN 'unseen' THEN 1 WHEN 'seen' THEN 2 WHEN 'done' THEN 4 END), 0)
                         FROM notification n
                         JOIN user_notification un ON un.notification_id = n.id
-                        WHERE un.user_id = $11::text
+                        WHERE un.user_id = $10::text
                           AND un.deleted_at IS NULL
                           AND n.event_item_type = 'foreign_entity'
                           AND n.event_item_id = fe.id::text
-                          AND un.done = $9::bool
-                    )
-                  )
-                  AND (
-                    $10::bool IS NULL
-                    OR EXISTS (
-                        SELECT 1
-                        FROM notification n
-                        JOIN user_notification un ON un.notification_id = n.id
-                        WHERE un.user_id = $11::text
-                          AND un.deleted_at IS NULL
-                          AND n.event_item_type = 'foreign_entity'
-                          AND n.event_item_id = fe.id::text
-                          AND (un.seen_at IS NOT NULL) = $10::bool
-                    )
+                    ) = ANY($9::int[]))
                   )
                 ORDER BY fe.foreign_entity_source, fe.foreign_entity_id, sort_at DESC, fe.id DESC
             )
@@ -322,8 +308,7 @@ impl PgForeignEntityRepo {
             cursor_id,
             limit,
             participant_github_user_id,
-            notification_done,
-            notification_seen,
+            notification_sets,
             notification_user_id,
         )
         .fetch_all(&self.pool)
@@ -418,9 +403,7 @@ impl ForeignEntityRepository for PgForeignEntityRepo {
 
         let HoistedForeignEntityFilters {
             includes_me,
-            notification_done,
-            notification_seen,
-            unsatisfiable,
+            notification_matches,
             jsonpath: filter_jsonpath,
         } = match query
             .filter()
@@ -431,15 +414,15 @@ impl ForeignEntityRepository for PgForeignEntityRepo {
             Ok(hoisted) => hoisted.unwrap_or_default(),
             Err(UnsupportedHoistedFilter) => {
                 tracing::warn!(
-                    "IncludesMe/notification literal under Or/Not in a foreign entity filter is unsupported; returning no results"
+                    "IncludesMe or mixed metadata/notification literal under Or/Not in a foreign entity filter is unsupported; returning no results"
                 );
                 return Ok(Vec::new());
             }
         };
 
-        // Contradictory predicates on the AND spine (e.g. done=true AND done=false) can never
-        // match, so short-circuit before doing any work.
-        if unsatisfiable {
+        // No possible set of notifications satisfies this boolean expression.
+        // Different state literals joined by AND are not inherently contradictory.
+        if notification_matches == Some(0) {
             return Ok(Vec::new());
         }
 
@@ -456,7 +439,12 @@ impl ForeignEntityRepository for PgForeignEntityRepo {
             None
         };
 
-        // Notification done/seen are scoped to the requesting user's per-user notification row.
+        let notification_sets: Option<Vec<i32>> = notification_matches.map(|table| {
+            (0..8)
+                .filter(|present| table & (1 << present) != 0)
+                .collect()
+        });
+        // Notification states are scoped to the requesting user's per-user notification row.
         // Without a requesting user the predicate matches nothing, so an active notification
         // filter yields no results (consistent with the participant filter above).
         let notification_user_id = requesting_user.as_deref();
@@ -471,8 +459,7 @@ impl ForeignEntityRepository for PgForeignEntityRepo {
             filter_jsonpath: filter_jsonpath.as_deref(),
             participant_github_user_id: participant_github_user_id.as_deref(),
             notification_user_id,
-            notification_done,
-            notification_seen,
+            notification_sets: notification_sets.as_deref(),
             cursor_id: cursor_id.copied(),
             cursor_value: cursor_value.copied(),
             limit: limit as i64,

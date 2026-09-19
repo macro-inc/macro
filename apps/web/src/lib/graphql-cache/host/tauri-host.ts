@@ -18,6 +18,8 @@ import type {
   CommitOptimisticWriteResult,
   DeferOptimisticWriteResult,
   EnqueueOptimisticMutationResult,
+  EntityFilterCacheArgs,
+  EntityFilterCacheResult,
   HydrationResult,
   MutationClaim,
   MutationSettlement,
@@ -73,6 +75,7 @@ export interface TauriHostOptions {
 }
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
+const ENTITY_FILTER_COMMAND = 'graphql_cache_entity_filter';
 
 export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   const clientId = crypto.randomUUID();
@@ -83,6 +86,12 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   >();
   const requestTimeoutMs =
     options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+
+  // TODO(native-full-release): Remove this flag and the missing-command fallback
+  // once a full native/iOS release includes entity filtering AND older binaries
+  // no longer receive these OTA bundles. OTA updates cannot add Rust commands.
+  // Keep this per host so a new native binary is probed again after restarting.
+  let entityFilterUnavailable = false;
 
   function request<T>(
     command: string,
@@ -204,9 +213,27 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       });
     },
 
-    async entityFilter() {
-      // The first profile is browser Turso/OPFS-only.
-      return { kind: 'unsupported' };
+    async entityFilter(
+      args: EntityFilterCacheArgs
+    ): Promise<EntityFilterCacheResult> {
+      await ready;
+      if (entityFilterUnavailable) return { kind: 'unsupported' };
+      try {
+        return await request<EntityFilterCacheResult>(ENTITY_FILTER_COMMAND, {
+          request: args,
+        });
+      } catch (error) {
+        // Match Tauri's exact unknown-command response, not storage, validation,
+        // ACL or timeout failures. Preserve the pre-OTA behavior on old binaries.
+        if (
+          !(error instanceof Error) ||
+          error.message !== `Command ${ENTITY_FILTER_COMMAND} not found`
+        ) {
+          throw error;
+        }
+        entityFilterUnavailable = true;
+        return { kind: 'unsupported' };
+      }
     },
 
     async writeQuery(args: CacheWriteArgs): Promise<WriteResult> {

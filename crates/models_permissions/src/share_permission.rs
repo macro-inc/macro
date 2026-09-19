@@ -9,6 +9,7 @@ use utoipa::ToSchema;
 pub mod access_level;
 pub mod channel_share_permission;
 mod link_share;
+pub mod team_share;
 
 pub use link_share::LinkShare;
 
@@ -22,6 +23,8 @@ pub struct SharePermissionV2 {
     /// The level of access granted through the share link
     #[serde(skip_serializing_if = "Option::is_none")]
     pub link_share_access_level: Option<AccessLevel>,
+    /// The explicit access level granted to the owner's team, or `null` when disabled.
+    pub team_share_access_level: Option<AccessLevel>,
     /// The owner of the item
     pub owner: String,
     /// The channel share permissions for the item
@@ -35,14 +38,51 @@ pub struct SharePermissionV2 {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TeamLinkShareDefault(pub Option<LinkShare>);
 
+/// A fully resolved link-share setting, so a scope without a level (or the reverse) cannot be
+/// copied from one entity onto another.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LinkShareState {
+    /// Link sharing is disabled.
+    #[default]
+    Off,
+    /// Anyone matching `scope` who has the link gets `level`.
+    On {
+        /// Who the link admits.
+        scope: LinkShare,
+        /// What the link grants.
+        level: AccessLevel,
+    },
+}
+
 impl SharePermissionV2 {
     fn new(link_share: Option<LinkShare>, link_share_access_level: Option<AccessLevel>) -> Self {
         SharePermissionV2 {
             id: String::new(),
             link_share,
             link_share_access_level,
+            team_share_access_level: None,
             owner: String::new(),
             channel_share_permissions: None,
+        }
+    }
+
+    /// The link share this permission carries. A stored scope without a level reads as `View`,
+    /// matching what the repositories write for that pair.
+    pub fn link_share_state(&self) -> LinkShareState {
+        match self.link_share {
+            Some(scope) => LinkShareState::On {
+                scope,
+                level: self.link_share_access_level.unwrap_or(AccessLevel::View),
+            },
+            None => LinkShareState::Off,
+        }
+    }
+
+    /// Exactly `state`, consulting neither the entity-type default nor the owner's team default.
+    pub fn from_link_share_state(state: LinkShareState) -> Self {
+        match state {
+            LinkShareState::Off => Self::new(None, None),
+            LinkShareState::On { scope, level } => Self::new(Some(scope), Some(level)),
         }
     }
 
@@ -91,6 +131,12 @@ impl SharePermissionV2 {
         let (link_share, link_share_access_level) = Self::resolve(team_default, (None, None));
         Self::new(link_share, link_share_access_level)
     }
+
+    /// Creates a new share permission object for an initiative
+    pub fn new_initiative_share_permission(team_default: Option<TeamLinkShareDefault>) -> Self {
+        let (link_share, link_share_access_level) = Self::resolve(team_default, (None, None));
+        Self::new(link_share, link_share_access_level)
+    }
 }
 
 /// Deserializes an optional field while preserving explicit `null` values.
@@ -121,6 +167,14 @@ pub struct UpdateSharePermissionRequestV2 {
         skip_serializing_if = "Option::is_none"
     )]
     pub link_share_access_level: Option<Option<AccessLevel>>,
+    /// The explicit team access level. Omit to leave unchanged or pass `null` to disable team
+    /// sharing. Only the actual owner may change this setting; `owner` is not an allowed level.
+    #[serde(
+        default,
+        deserialize_with = "double_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub team_share_access_level: Option<Option<AccessLevel>>,
     /// Any channel share permissions to be created/updated/removed
     pub channel_share_permissions: Option<Vec<UpdateChannelSharePermission>>,
 }

@@ -409,7 +409,9 @@ where
             | EntityType::CalendarEvent
             | EntityType::Reminder
             | EntityType::Skill
-            | EntityType::AgentSession => {
+            | EntityType::AgentSession
+            | EntityType::ScheduledAction
+            | EntityType::Initiative => {
                 return unsupported(requested, "rename");
             }
         };
@@ -455,7 +457,9 @@ where
             | EntityType::CalendarEvent
             | EntityType::Reminder
             | EntityType::Skill
-            | EntityType::AgentSession => {
+            | EntityType::AgentSession
+            | EntityType::ScheduledAction
+            | EntityType::Initiative => {
                 return unsupported(requested, "move");
             }
         };
@@ -503,7 +507,9 @@ where
             | EntityType::CalendarEvent
             | EntityType::Reminder
             | EntityType::Skill
-            | EntityType::AgentSession => {
+            | EntityType::AgentSession
+            | EntityType::ScheduledAction
+            | EntityType::Initiative => {
                 return unsupported(requested, "share policy updates");
             }
         };
@@ -554,7 +560,9 @@ where
             | EntityType::CalendarEvent
             | EntityType::Reminder
             | EntityType::Skill
-            | EntityType::AgentSession => {
+            | EntityType::AgentSession
+            | EntityType::ScheduledAction
+            | EntityType::Initiative => {
                 return unsupported(requested, "trash");
             }
         };
@@ -584,7 +592,9 @@ where
             | EntityType::CalendarEvent
             | EntityType::Reminder
             | EntityType::Skill
-            | EntityType::AgentSession => {
+            | EntityType::AgentSession
+            | EntityType::ScheduledAction
+            | EntityType::Initiative => {
                 return unsupported(requested, "restore");
             }
         };
@@ -634,7 +644,9 @@ where
             | EntityType::CalendarEvent
             | EntityType::Reminder
             | EntityType::Skill
-            | EntityType::AgentSession => {
+            | EntityType::AgentSession
+            | EntityType::ScheduledAction
+            | EntityType::Initiative => {
                 return unsupported(requested, "permanent deletion");
             }
         };
@@ -694,7 +706,9 @@ where
             | EntityType::CalendarEvent
             | EntityType::Reminder
             | EntityType::Skill
-            | EntityType::AgentSession => {
+            | EntityType::AgentSession
+            | EntityType::ScheduledAction
+            | EntityType::Initiative => {
                 return unsupported(requested, "duplication");
             }
         };

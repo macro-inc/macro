@@ -1,5 +1,4 @@
 import { openChatWithMessage } from '@app/features/chat/ChatWithAgentButton';
-import { pressPulse } from '@components/app/mobile/pressPulse';
 import {
   useForegroundMobileView,
   useMobileNavNavigate,
@@ -10,9 +9,6 @@ import XIcon from '@phosphor/x.svg';
 import { cn } from '@ui';
 import { createEffect, on } from 'solid-js';
 import { SearchState } from './mobileSearchState';
-
-// Keeps the directive import from being tree-shaken / lint-flagged.
-false && pressPulse;
 
 // This component only writes the global session state. The active split's
 // bridge effect (see soup-view-context) mirrors the session into its own
@@ -42,7 +38,6 @@ export function MobileAskAiButton() {
   return (
     <button
       type="button"
-      use:pressPulse
       // Tapping it must not drop the keyboard before the action runs.
       data-keep-keyboard
       class={cn(

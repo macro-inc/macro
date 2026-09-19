@@ -68,6 +68,16 @@ export type AppEvents = {
    * linked, an email-code signup with none. `entry_step` is where the
    * user landed ('email' unless a persisted step was restored).
    */
+  /** A GTM invite welcome page resolved its link (`/invite?token=`). */
+  gtm_invite_opened: { status: string };
+  /** The recipient pressed Continue on the welcome page. */
+  gtm_invite_continue: { authenticated: boolean };
+  /** An account was attributed to an invite link and granted its offer. */
+  gtm_invite_redeemed: { link_id: string; promo_code: string };
+  /** The plan step showed the free-month offer instead of the picker. */
+  gtm_invite_offer_viewed: { link_id: string; promo_code: string };
+  /** Staff created an invite link in the internal portal. */
+  gtm_invite_link_created: { link_id: string };
   onboarding_v4_started: {
     signup_method: 'google' | 'email_code';
     entry_step: string;
@@ -183,6 +193,19 @@ export type AppEvents = {
   email_message_sent: Record<string, unknown>;
 
   channel_message_sent: Record<string, unknown>;
+  channel_messages_load: {
+    channelId: string;
+    path: 'catch_up' | 'full';
+    reason:
+      | 'watermark'
+      | 'list_ahead'
+      | 'no_cache'
+      | 'cache_not_at_latest'
+      | 'load_around'
+      | 'delta_overflow'
+      | 'catch_up_error';
+    after?: string;
+  };
   channel_reaction: {
     emoji: string;
     action: 'add' | 'remove';

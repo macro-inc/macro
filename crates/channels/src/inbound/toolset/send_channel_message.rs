@@ -5,10 +5,13 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::domain::models::{PostMessageNotificationPolicy, PostMessageRequest, Sender};
 use crate::domain::ports::ChannelService;
 use crate::inbound::toolset::ChannelToolContext;
 use entity_access::domain::ports::EntityAccessService;
+use messages::domain::{
+    models::{MessageAttribution, PostMessage, PostMessageNotificationPolicy},
+    ports::MessageError,
+};
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[schemars(
@@ -57,36 +60,38 @@ where
             .require_channel_member(&request_context, self.channel_id)
             .await?;
 
-        // AI sends as the tool actor bot; the triggering user is recorded
-        // separately so the client can render a "from <user>" pill.
-        let actor = Sender::new_from_bot(service_context.actor);
-        let triggered_by = Some(request_context.user_id.as_ref().to_string());
-
-        let req = PostMessageRequest {
-            content: self.content.clone(),
-            mentions: vec![],
-            attachments: vec![],
-            nonce: None,
-            notification_policy: PostMessageNotificationPolicy::Default,
-            thread_id: self.thread_id,
-            triggered_by,
-        };
+        // AI sends as the tool actor bot; the capability carries the requesting
+        // user so the message records who triggered it and the client can render
+        // a "from <user>" pill.
+        let access = service_context
+            .require_channel_message_write(&request_context, self.channel_id)
+            .await?;
 
         service_context
-            .service
-            .post_message(actor, self.channel_id, req)
+            .messages
+            .post(
+                access,
+                PostMessage {
+                    attribution: MessageAttribution::ActingUser,
+                    notification_policy: PostMessageNotificationPolicy::Default,
+                    content: self.content.clone(),
+                    thread_id: self.thread_id,
+                    anchor: None,
+                    mentions: vec![],
+                    attachments: vec![],
+                    nonce: None,
+                },
+            )
             .await
             .map_err(tool_err("failed to send message"))
-            .map(|response| SendChannelMessageResponse {
+            .map(|message| SendChannelMessageResponse {
                 channel_id: self.channel_id,
-                message_id: response.id,
+                message_id: message.id.to_string(),
             })
     }
 }
 
-fn tool_err(
-    description: &'static str,
-) -> impl FnOnce(crate::domain::ports::ChannelMutationErr) -> ToolCallError {
+fn tool_err(description: &'static str) -> impl FnOnce(MessageError) -> ToolCallError {
     move |err| ToolCallError {
         description: description.to_string(),
         internal_error: anyhow::Error::new(err),

@@ -21,6 +21,11 @@ impl<'a> OpenAiChatCompletionsModel<'a> {
         Self { model, client }
     }
 
+    /// The routed id this model was bound to.
+    pub fn model(&self) -> &Model<'a> {
+        &self.model
+    }
+
     /// The rig completion model for this id.
     ///
     /// Unlike the Responses API, the Chat Completions API does not coerce tools
@@ -72,6 +77,11 @@ impl<'a> OpenAiResponsesModel<'a> {
     /// Bind `model` to the Responses API client that serves it.
     pub fn new(model: Model<'a>, client: Arc<openai::Client>) -> Self {
         Self { model, client }
+    }
+
+    /// The routed id this model was bound to.
+    pub fn model(&self) -> &Model<'a> {
+        &self.model
     }
 
     /// The rig Responses API completion model for this id.

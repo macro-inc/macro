@@ -15,6 +15,7 @@ use utoipa_swagger_ui::SwaggerUi;
 pub(crate) mod context;
 
 // Routes
+mod codex;
 mod cursor_api_key;
 #[allow(unused_imports)]
 mod email;
@@ -117,6 +118,7 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
         .nest("/user", user::router())
         .nest("/link", link::router())
         .nest("/cursor-api-key", cursor_api_key::router())
+        .nest("/codex", codex::router())
         .nest("/github_pull_requests", github_pull_requests::router())
         .nest(
             "/team",
@@ -133,6 +135,16 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
             referral::inbound::axum_router::referral_router(
                 referral::inbound::axum_router::ReferralRouterState {
                     service: state.referral_service.clone(),
+                    rate_limiter: state.rate_limit_service.clone(),
+                    authorization_state: state.authorization_state.clone(),
+                },
+            ),
+        )
+        .nest(
+            "/gtm-invite",
+            gtm_invite::inbound::axum_router::gtm_invite_router(
+                gtm_invite::inbound::axum_router::GtmInviteRouterState {
+                    service: state.gtm_invite_service.clone(),
                     rate_limiter: state.rate_limit_service.clone(),
                     authorization_state: state.authorization_state.clone(),
                 },

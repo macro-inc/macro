@@ -9,12 +9,11 @@
 //!
 //! A first run starts unpaired: the panel offers pairing (press `p`), the
 //! user approves the printed code in the web app, and the minted harness
-//! credential is embedded in the sensitive `macrod.toml`. Once paired, each
-//! `agent_trigger.new` delivery opens a session over the harness service's
-//! API, dials its runtime gateway, spawns the configured harness in ACP mode,
-//! bridges its stdio to the websocket, and forwards the mention as the first
-//! prompt; `agent_trigger.existing` deliveries forward follow-up messages,
-//! redialing first when the bridge is gone.
+//! credential is embedded in the sensitive `macrod.toml`. Once paired, the
+//! daemon connects to the runtime gateway and bridges the configured ACP
+//! harness, making model discovery available before any agents exist. Each
+//! `agent_trigger.new` delivery opens a session and forwards the first prompt;
+//! `agent_trigger.existing` deliveries forward follow-up messages.
 
 mod config;
 mod daemon;

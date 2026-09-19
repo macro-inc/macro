@@ -20,6 +20,9 @@ use predicate_index::{PredicateExpr, RangeBound};
 
 use super::*;
 
+mod channels;
+mod confinement;
+
 fn request() -> SoupFlatRequest {
     SoupFlatRequest {
         sort: SoupIndexSort::UpdatedAt,
@@ -93,6 +96,7 @@ fn production_documents_membership_literals_require_and_compile_in_v2() {
         DocumentLiteral::SubType(DocumentSubType::Task),
         DocumentLiteral::SubType(DocumentSubType::Snippet),
         DocumentLiteral::SubType(DocumentSubType::Skill),
+        DocumentLiteral::SubType(DocumentSubType::InitiativeDescription),
     ] {
         let mut ast = excluded_deferred_partitions();
         ast.document_filter = Some(Arc::new(Expr::val(literal)));
@@ -321,6 +325,15 @@ fn every_deferred_partition_must_be_proven_empty() {
     assert_eq!(
         check_soup_flat_v1(&ast, request()),
         Eligibility::Unsupported(UnsupportedReason::Partition("reminder"))
+    );
+
+    let mut ast = excluded_deferred_partitions();
+    ast.agent_session_filter = Some(Arc::new(Expr::val(
+        item_filters::ast::agent_session::AgentSessionLiteral::Include,
+    )));
+    assert_eq!(
+        check_soup_flat_v1(&ast, request()),
+        Eligibility::Unsupported(UnsupportedReason::Partition("agent_session"))
     );
 
     let mut ast = excluded_deferred_partitions();

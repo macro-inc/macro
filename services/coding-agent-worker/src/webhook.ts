@@ -1,4 +1,4 @@
-import { Macro } from '@macro/sdk';
+import { Macro } from '@macro-inc/sdk';
 import { env } from './env';
 
 const STATE_FILE = new URL('../.webhook.json', import.meta.url);

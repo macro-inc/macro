@@ -8,7 +8,7 @@
 	"dependencies": {
 		"@agentclientprotocol/sdk": "^1.2.1",
 		"@daytona/sdk": "latest",
-		"@macro/sdk": "file:../../packages/sdk",
+		"@macro-inc/sdk": "file:../../packages/sdk",
 		"envsafe": "^2.0.3",
 		"hono": "^4.12.30",
 		"ink": "^7.1.1",

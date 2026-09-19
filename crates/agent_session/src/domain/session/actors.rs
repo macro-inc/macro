@@ -12,7 +12,7 @@
 //! loop (see [`super::super::service`]), while tests exercise its input and
 //! dispatch halves directly.
 
-use std::{collections::VecDeque, time::Duration};
+use std::{collections::VecDeque, sync::Arc, time::Duration};
 
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_client_protocol::schema::v1::{McpServer, SessionId};
@@ -30,15 +30,24 @@ use crate::domain::model::{AgentSessionId, AgentSessionLog, Message};
 use agent_runtime_protocol::domain::ports::{TransportReceiver, TransportSender};
 
 use crate::domain::ports::{
-    AgentConnector, AgentSessionLogWriter, AgentSessionRepo, SessionTurnObserver,
+    AgentConnector, AgentSessionLogWriter, AgentSessionRepo, SessionToolCatalog,
+    SessionTurnObserver,
 };
+use agent_fold::domain::model::TurnSignal;
 
-use super::{CloseReason, Effect, HandshakeStatus, Input, RuntimeStatus, SessionMachine};
+use super::telemetry::GenAiProjector;
+use super::{
+    CloseReason, Effect, HandshakeStatus, Input, PermissionPolicy, RuntimeStatus, SessionMachine,
+    StopReason,
+};
 
 /// How long the ACP handshake has to finish before the session is declared dead.
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(60);
 /// How long one caller's action has to reach the runtime.
 const COMMAND_DELIVERY_TIMEOUT: Duration = Duration::from_secs(60);
+/// How long the session's MCP servers have to list their tools for telemetry
+/// before the listing is given up on. Off the actor's own path, so generous.
+const TOOL_LISTING_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// A caller's request to deliver one action, and the wire back to them.
 pub(crate) struct SessionCommand {
@@ -56,12 +65,12 @@ pub(crate) struct SessionCompletion {
 }
 
 /// Whether a [`SessionActor`] has more steps to take.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Stepped {
     /// Keep stepping.
     Continue,
-    /// The machine stopped; clean up.
-    Stopped,
+    /// The machine stopped for this reason; clean up.
+    Stopped(StopReason),
 }
 
 /// One session connection's imperative shell: pulls one input, runs the
@@ -87,7 +96,17 @@ pub(crate) struct SessionActor<Connector: AgentConnector, Logs> {
     handshake_deadline: Instant,
     /// Told when the machine reports a turn over, so the harness can dispatch
     /// its next queued prompt.
-    turn_observer: std::sync::Arc<dyn SessionTurnObserver>,
+    turn_observer: Arc<dyn SessionTurnObserver>,
+    /// GenAI spans for the turns and tool calls this connection carries, fed
+    /// every frame the effects below send or log. See [`super::telemetry`].
+    telemetry: GenAiProjector,
+    /// Lists the session's MCP tools once the connection is live, for the
+    /// projector's `gen_ai.tool.definitions`.
+    tool_catalog: Arc<dyn SessionToolCatalog>,
+    /// The servers to list, as the machine sends them on `session/new`.
+    mcp_servers: Vec<McpServer>,
+    /// Whether the listing has been started; it runs once per connection.
+    tools_listed: bool,
 }
 
 impl<Connector, Logs> SessionActor<Connector, Logs>
@@ -103,11 +122,13 @@ where
         acp_session_id: Option<SessionId>,
         workspace: String,
         mcp_servers: Vec<McpServer>,
+        permission_policy: PermissionPolicy,
         connector: Connector,
         logs: Logs,
         commands: mpsc::Receiver<SessionCommand>,
         handshake: watch::Sender<HandshakeStatus>,
-        turn_observer: std::sync::Arc<dyn SessionTurnObserver>,
+        turn_observer: Arc<dyn SessionTurnObserver>,
+        tool_catalog: Arc<dyn SessionToolCatalog>,
     ) -> Self {
         // Marked unseen so the first wait reports the *current* state rather
         // than only later changes: a session binding after the handshake
@@ -131,8 +152,14 @@ where
             handshake_seen,
             handshake,
             machine: match acp_session_id {
-                None => SessionMachine::new(id, workspace, mcp_servers),
-                Some(session_id) => SessionMachine::resume(id, session_id, workspace, mcp_servers),
+                None => SessionMachine::new(id, workspace, mcp_servers.clone(), permission_policy),
+                Some(session_id) => SessionMachine::resume(
+                    id,
+                    session_id,
+                    workspace,
+                    mcp_servers.clone(),
+                    permission_policy,
+                ),
             }
             .with_connection_context(macro_uuid::generate_uuid_v7()),
             logs,
@@ -140,7 +167,21 @@ where
             handshake_span: Some(handshake_span),
             handshake_deadline: Instant::now() + HANDSHAKE_TIMEOUT,
             turn_observer,
+            telemetry: GenAiProjector::new(
+                id,
+                genai_telemetry::ContentPolicy::from_env(),
+                Default::default(),
+            ),
+            tool_catalog,
+            mcp_servers,
+            tools_listed: false,
         }
+    }
+
+    /// Apply an explicit starting model before a new session becomes live.
+    pub(crate) fn with_initial_model(mut self, model: Option<String>) -> Self {
+        self.machine = self.machine.with_initial_model(model);
+        self
     }
 
     /// The session this actor's connection belongs to.
@@ -170,8 +211,29 @@ where
                     std::future::pending::<()>().await;
                 }
             };
+            let log_flush_deadline = self.logs.flush_deadline();
+            let log_flush_due = async {
+                match log_flush_deadline {
+                    Some(deadline) => tokio::time::sleep_until(deadline).await,
+                    None => std::future::pending().await,
+                }
+            };
             let input = tokio::select! {
             () = handshake_timeout => Input::Closed(CloseReason::HandshakeTimedOut),
+            // Buffered log frames have waited long enough; write them out. A
+            // failed flush is a failed log write, and the machine decides
+            // what that means, same as a failed append.
+            () = log_flush_due => match self.logs.flush().await {
+                Ok(()) => continue,
+                Err(error) => {
+                    tracing::error!(
+                        error = ?error,
+                        id = %self.machine.id(),
+                        "agent session failed to flush buffered log frames"
+                    );
+                    Input::Closed(CloseReason::LogFailed)
+                }
+            },
             command = self.commands.recv() => match command {
                 Some(SessionCommand { user_id, action, action_id, completed, span, enqueued_at }) => {
                     span.record(
@@ -237,11 +299,16 @@ where
 
         while let Some(effect) = effects.pop_front() {
             match effect {
-                Effect::Send { from, message } => {
+                Effect::Send { from, mut message } => {
                     let command_span = effects.front().and_then(|effect| match effect {
                         Effect::Complete { token, .. } => Some(token.span.clone()),
                         _ => None,
                     });
+                    // Before delivery, so the turn's span starts when the
+                    // prompt leaves. A delivery that fails closes the
+                    // connection, which ends the turn in error below.
+                    self.telemetry
+                        .on_outbound(&mut message, command_span.as_ref());
                     let delivery = self.deliver(from, message);
                     let (result, close_reason) =
                         match (command_span.as_ref(), handshake_span.as_ref()) {
@@ -299,6 +366,7 @@ where
                     }
                 }
                 Effect::Log { message, boundary } => {
+                    self.telemetry.on_inbound(&message);
                     if let Some(ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(
                         request,
                     )))) = &self.initialization_request
@@ -339,15 +407,18 @@ where
                             ),
                         },
                     };
-                    if let Err(error) = result {
-                        tracing::error!(
-                            error = ?error,
-                            id = %self.machine.id(),
-                            "agent session failed to persist an inbound message"
-                        );
-                        self.fail_remaining_completions(&mut effects, error);
-                        effects.extend(self.machine.handle(Input::Closed(close_reason)));
-                        self.finish_handshake_if_complete();
+                    match result {
+                        Ok(appended) => self.forward_signals(appended.signals),
+                        Err(error) => {
+                            tracing::error!(
+                                error = ?error,
+                                id = %self.machine.id(),
+                                "agent session failed to persist an inbound message"
+                            );
+                            self.fail_remaining_completions(&mut effects, error);
+                            effects.extend(self.machine.handle(Input::Closed(close_reason)));
+                            self.finish_handshake_if_complete();
+                        }
                     }
                 }
                 Effect::EstablishInitialization { context } => {
@@ -359,7 +430,8 @@ where
                                 user_id: None,
                                 content: Message::ToRuntime(context.request.clone()),
                             })
-                            .await?;
+                            .await?
+                            .log_id;
                         self.machine.initialization_persisted(id);
                         self.log(None, Message::ToServer(context.response.clone()))
                             .await
@@ -407,24 +479,6 @@ where
                         }),
                     });
                 }
-                Effect::TurnEnded { action_id } => {
-                    // The counterpart to `agent.session.disconnect`: a turn
-                    // that ended here reached its stop reason, so a session
-                    // whose last turn has this span and no disconnect after
-                    // it finished cleanly. One per turn.
-                    let _ended = tracing::info_span!(
-                        "agent.session.turn_ended",
-                        agent.session.id = %self.machine.id(),
-                        agent.action.id = %action_id,
-                    )
-                    .entered();
-                    tracing::info!(
-                        id = %self.machine.id(),
-                        %action_id,
-                        "agent session turn ended"
-                    );
-                    self.turn_observer.turn_ended(self.machine.id());
-                }
                 Effect::Complete { token, result } => {
                     if let Err(error) = &result {
                         token.span.record("otel.status_code", "ERROR");
@@ -435,6 +489,7 @@ where
                     let _ = token.completed.send(result);
                 }
                 Effect::Stop { reason } => {
+                    self.telemetry.on_stopped(&reason);
                     // The one place a session's `disconnected` event is
                     // written. The frame itself carries no cause, so a
                     // routine idle teardown and a runtime lost mid-turn are
@@ -478,7 +533,7 @@ where
                         }
                     }
                     tracing::info!(id = %self.machine.id(), %reason, "agent session stopped");
-                    stepped = Stepped::Stopped;
+                    stepped = Stepped::Stopped(reason);
                 }
             }
         }
@@ -507,7 +562,7 @@ where
             tracing::Span::current().record("rpc.system.name", "jsonrpc");
             tracing::Span::current().record("rpc.method", method);
         }
-        let id = self
+        let appended = self
             .logs
             .append(AgentSessionLog {
                 agent_session_id: self.machine.id(),
@@ -516,10 +571,13 @@ where
             })
             .await?;
         if acp_method(&message) == Some("initialize") {
-            self.machine.initialization_persisted(id);
+            self.machine.initialization_persisted(appended.log_id);
             self.initialization_request = Some(message.clone());
         }
         self.outbound.send(message).await?;
+        // After the send, so a signal never describes a frame the runtime has
+        // not seen: an answer to a question clears it once it is on the wire.
+        self.forward_signals(appended.signals);
         Ok(())
     }
 
@@ -528,14 +586,59 @@ where
         user_id: Option<MacroUserIdStr<'static>>,
         content: Message,
     ) -> Result<()> {
-        self.logs
+        let appended = self
+            .logs
             .append(AgentSessionLog {
                 agent_session_id: self.machine.id(),
                 user_id,
                 content,
             })
-            .await
-            .map(|_| ())
+            .await?;
+        self.forward_signals(appended.signals);
+        Ok(())
+    }
+
+    /// Hand the fold's turn signals to the observer, one span per turn end.
+    ///
+    /// The counterpart to `agent.session.disconnect`: a turn that ended here
+    /// reached its stop reason, so a session whose last turn has this span
+    /// and no disconnect after it finished cleanly.
+    fn forward_signals(&self, signals: Vec<TurnSignal>) {
+        for signal in signals {
+            match &signal {
+                TurnSignal::TurnEnded {
+                    turn,
+                    action_id,
+                    stop,
+                    ..
+                } => {
+                    let _ended = tracing::info_span!(
+                        "agent.session.turn_ended",
+                        agent.session.id = %self.machine.id(),
+                        agent.turn.id = turn.0,
+                        agent.action.id = action_id.map(tracing::field::display),
+                        agent.turn.stop_reason = ?stop,
+                    )
+                    .entered();
+                    tracing::info!(id = %self.machine.id(), "agent session turn ended");
+                }
+                TurnSignal::ElicitationRaised { request_id, .. } => {
+                    tracing::info!(
+                        id = %self.machine.id(),
+                        ?request_id,
+                        "agent session is waiting for input"
+                    );
+                }
+                TurnSignal::ElicitationCleared { request_id, .. } => {
+                    tracing::info!(
+                        id = %self.machine.id(),
+                        ?request_id,
+                        "agent session elicitation cleared"
+                    );
+                }
+            }
+            self.turn_observer.signal(self.machine.id(), signal);
+        }
     }
 
     async fn persist_acp_session(&self, acp_session_id: SessionId) -> Result<()> {
@@ -548,6 +651,7 @@ where
         match self.machine.status() {
             RuntimeStatus::Live { .. } => {
                 self.handshake_span.take();
+                self.list_tools_once();
             }
             RuntimeStatus::Dead => {
                 if let Some(span) = self.handshake_span.take() {
@@ -557,6 +661,40 @@ where
             }
             RuntimeStatus::Booting | RuntimeStatus::Handshaking => {}
         }
+    }
+
+    /// List the session's MCP tools for its telemetry, once, off this actor's
+    /// path: the listing dials the same servers the agent was just handed and
+    /// must never hold up a prompt. Whatever it finds is published for the
+    /// projector to pick up on the next turn it records.
+    fn list_tools_once(&mut self) {
+        if self.tools_listed {
+            return;
+        }
+        self.tools_listed = true;
+        if self.mcp_servers.is_empty() {
+            return;
+        }
+        let catalog = Arc::clone(&self.tool_catalog);
+        let servers = self.mcp_servers.clone();
+        let definitions = self.telemetry.tool_definitions();
+        let id = self.machine.id();
+        tokio::spawn(
+            async move {
+                match tokio::time::timeout(TOOL_LISTING_TIMEOUT, catalog.tool_definitions(servers))
+                    .await
+                {
+                    Ok(listed) => {
+                        tracing::debug!(%id, tools = listed.len(), "listed an agent session's tools");
+                        definitions.publish(listed);
+                    }
+                    Err(_) => {
+                        tracing::warn!(%id, "timed out listing an agent session's tools");
+                    }
+                }
+            }
+            .in_current_span(),
+        );
     }
 
     /// The failing effect's own caller gets `cause` itself; anything still
@@ -585,8 +723,7 @@ where
                 | Effect::Log { .. }
                 | Effect::EstablishInitialization { .. }
                 | Effect::PersistAcpSession { .. }
-                | Effect::Initialized { .. }
-                | Effect::TurnEnded { .. } => {}
+                | Effect::Initialized { .. } => {}
             }
         }
         if let Some(stop) = stop {

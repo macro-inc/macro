@@ -35,17 +35,27 @@ pub async fn create_project_transaction(
     .fetch_one(transaction.as_mut())
     .await?;
 
-    // Create share permission
     create_project_permission(transaction, &project.id, share_permission).await?;
     upsert_user_history(transaction, user_id.copied(), &project.id, "project").await?;
 
+    let project_uuid = macro_uuid::string_to_uuid(&project.id).unwrap();
     entity_access_db_utils::insert_entity_access_row(
         transaction,
-        &macro_uuid::string_to_uuid(&project.id).unwrap(),
+        &project_uuid,
         EntityType::Project,
         user_id.as_ref(),
         entity_access_db_utils::EntityAccessSourceType::User,
         AccessLevel::Owner,
+    )
+    .await?;
+
+    entity_registry_db_utils::insert_entity(
+        transaction,
+        entity_registry_db_utils::NewEntityRecord::new(
+            project_uuid,
+            entity_registry_db_utils::RegisteredEntityType::Project,
+            model_owner::Owner::User(user_id.copied().into_owned()),
+        ),
     )
     .await?;
 
@@ -134,6 +144,7 @@ pub async fn create_onboarding_documents(
 
     for document_id in &document_ids {
         create_document_permission(transaction, document_id, share_permission).await?;
+        register_owned_document(transaction, document_id, user_id.copied()).await?;
     }
 
     let mut documents = Vec::new();
@@ -206,6 +217,7 @@ pub async fn create_onboarding_docx(
 
     // Add item to user history for creator
     upsert_user_history(transaction, user_id.copied(), &document.id, "document").await?;
+    register_owned_document(transaction, &document.id, user_id.copied()).await?;
 
     Ok(BasicDocument {
         document_id: document.id,
@@ -224,3 +236,32 @@ pub async fn create_onboarding_docx(
         sub_type: None,
     })
 }
+
+async fn register_owned_document(
+    transaction: &mut Transaction<'_, Postgres>,
+    document_id: &str,
+    user_id: MacroUserIdStr<'_>,
+) -> anyhow::Result<()> {
+    let document_uuid = macro_uuid::string_to_uuid(document_id)?;
+    let owner = model_owner::Owner::User(user_id.copied().into_owned());
+    entity_registry_db_utils::insert_entity(
+        transaction,
+        entity_registry_db_utils::NewEntityRecord::new(
+            document_uuid,
+            entity_registry_db_utils::RegisteredEntityType::Document,
+            owner.clone(),
+        ),
+    )
+    .await?;
+    entity_access_db_utils::upsert_owner_grant(
+        transaction,
+        &document_uuid,
+        EntityType::Document,
+        &owner,
+    )
+    .await?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod test;

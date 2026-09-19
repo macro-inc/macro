@@ -4,60 +4,87 @@ import {
   listOwnedSlotName,
   useListInteractions,
 } from '@app/components/list';
-import { useViewTabHotkeys } from '@app/components/view-shell';
+import {
+  useViewControlHotkeys,
+  useViewTabHotkeys,
+} from '@app/components/view-shell';
+import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
+import { favoriteSplitContent } from '@app/util/favorites';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
-import type { ChannelEntity } from '@entity';
+import { debouncedDependent } from '@core/util/debounce';
+import { type ChannelEntity, isChannelEntity, type WithSearch } from '@entity';
+import { useFavoritesData } from '@queries/favorites/favorites';
+import { useSearchSoupQuery } from '@queries/soup/search';
+import type { EntityFilters } from '@service-search/generated/models';
+import type { Favorite } from '@service-storage/generated/schemas/favorite';
+import { debounce } from '@solid-primitives/scheduled';
 import {
   createEffect,
   createMemo,
   createSignal,
   createUniqueId,
-  on,
   onCleanup,
 } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import { useChannelsView } from '../../channels-view-context';
-import { type ChannelsSources, deduplicateChannels } from '../../queries';
+import {
+  type ChannelsSourceScope,
+  type ChannelsSources,
+  deduplicateChannels,
+} from '../../queries';
 import type {
-  ChannelsGroup,
   ChannelsQueryScope,
+  ChannelsRailSection,
   ChannelsTab,
 } from '../../types';
 import {
+  type ChannelRailActivationMetadata,
   type ChannelRailRow,
   type ChannelsRailContext,
   ChannelsRailProvider,
   domIdForRow,
   rowKeyForChannel,
+  rowKeyForFavorite,
   rowKeyForSection,
 } from './ChannelsRailContext';
 import { ExpandedChannelsRail } from './ExpandedChannelsRail';
 import { useChannelCalls } from './hooks/useChannelCalls';
 import { useChannelRailActivity } from './hooks/useChannelRailActivity';
-import { SlimChannelsRail } from './SlimChannelsRail';
 
-const CHANNEL_GROUPS: ChannelsGroup[] = ['channels', 'direct_messages'];
+const CHANNEL_RAIL_SECTIONS: ChannelsRailSection[] = [
+  'favorites',
+  'channels',
+  'direct_messages',
+];
+const BROWSE_QUERY_SCOPES = ['channels', 'direct_messages'] as const;
 const CHANNEL_TAB_IDS: ChannelsTab[] = ['browse', 'recents'];
 const DM_LOADING_PREVIEW_OFFSET = 80;
+const CHANNEL_SEARCH_FILTERS = {
+  ...QUERY_FILTERS_BASE,
+  channel_filters: { is_participant: true },
+} satisfies EntityFilters;
 
 export type ChannelsRailProps = {
   sources: ChannelsSources;
-  mode: 'full' | 'slim';
-  onModeChange: (mode: 'full' | 'slim') => void;
+  searchOpen: boolean;
+  onSearchOpenChange: (open: boolean) => void;
 };
 
 type ChannelRailItemsByScope = Record<
   ChannelsQueryScope,
   readonly ChannelEntity[]
->;
+> & {
+  favorites: readonly Favorite[];
+};
 
 export function buildChannelRailRows(
   tab: ChannelsTab,
-  expandedGroups: Record<ChannelsGroup, boolean>,
+  expandedGroups: Record<ChannelsRailSection, boolean>,
   items: ChannelRailItemsByScope
 ): ChannelRailRow[] {
   if (tab === 'recents') {
@@ -70,13 +97,32 @@ export function buildChannelRailRows(
     }));
   }
 
-  const rows: ChannelRailRow[] = [
-    {
+  const rows: ChannelRailRow[] = [];
+  if (items.favorites.length > 0) {
+    rows.push({
       kind: 'section',
-      id: 'section:channels',
-      group: 'channels',
-    },
-  ];
+      id: 'section:favorites',
+      group: 'favorites',
+    });
+    if (expandedGroups.favorites) {
+      rows.push(
+        ...items.favorites.map(
+          (favorite): ChannelRailRow => ({
+            kind: 'favorite',
+            id: rowKeyForFavorite(favorite),
+            group: 'favorites',
+            favorite,
+          })
+        )
+      );
+    }
+  }
+
+  rows.push({
+    kind: 'section',
+    id: 'section:channels',
+    group: 'channels',
+  });
   if (expandedGroups.channels) {
     rows.push(
       ...items.channels.map(
@@ -116,38 +162,161 @@ export function buildChannelRailRows(
 }
 
 export function ChannelsRail(props: ChannelsRailProps) {
-  const { state, setGroupOpen, setSelectedChannelId, setTab } =
+  const { state, setGroupOpen, setSelectedChannelId, setSortBy, setTab } =
     useChannelsView();
+
   const panel = useSplitPanelOrThrow();
+  const layout = useSplitLayout();
+
+  const favoritesData = useFavoritesData({ entityType: ['channel'] });
+
   const listDomId = createUniqueId();
+
   const [sectionScrollRoots, setSectionScrollRoots] = createSignal<
-    Partial<Record<ChannelsGroup, HTMLDivElement>>
-  >({});
-  const [listRoot, setListRoot] = createSignal<HTMLDivElement>();
-  const [virtualizers, setVirtualizers] = createSignal<
-    Partial<Record<ChannelsQueryScope, VirtualizerHandle>>
+    Partial<Record<ChannelsRailSection, HTMLDivElement>>
   >({});
 
+  const [listRoot, setListRoot] = createSignal<HTMLDivElement>();
+  const [virtualizers, setVirtualizers] = createSignal<
+    Partial<Record<ChannelsSourceScope, VirtualizerHandle>>
+  >({});
+
+  const [searchQuery, setSearchQuery] = createSignal('');
+
+  const [restoreListScroll, setRestoreListScroll] = createSignal(false);
+
+  const normalizedSearchQuery = () => searchQuery().trim();
+
+  const serviceSearchQuery = debouncedDependent(normalizedSearchQuery, 300);
+
+  let searchInput: HTMLInputElement | undefined;
+
+  const previewAfterNavigation = debounce(setSelectedChannelId, 150);
+  onCleanup(() => previewAfterNavigation.clear());
+
+  const closeSearch = () => {
+    if (props.searchOpen) setRestoreListScroll(true);
+    setSearchQuery('');
+    props.onSearchOpenChange(false);
+  };
+
+  const openSearch = () => {
+    props.onSearchOpenChange(true);
+    queueMicrotask(() => searchInput?.focus());
+  };
+
+  const selectTab = (tab: ChannelsTab) => {
+    previewAfterNavigation.clear();
+    setRestoreListScroll(true);
+    setTab(tab);
+  };
+
   const channelCalls = useChannelCalls();
+
   const channels = createMemo(() =>
     deduplicateChannels([
       props.sources.channels.items(),
       props.sources.direct_messages.items(),
       props.sources.recents.items(),
+      props.sources.search.items(),
     ])
   );
-  const channelActivity = useChannelRailActivity(channels, channelCalls);
 
-  const visibleRows = createMemo(() =>
-    buildChannelRailRows(state.tab, state.expandedGroups, {
-      channels: props.sources.channels.items(),
-      direct_messages: props.sources.direct_messages.items(),
-      recents: props.sources.recents.items(),
+  const channelSearchQuery = useSearchSoupQuery(
+    () => ({
+      params: { page_size: 100 },
+      body: {
+        query: serviceSearchQuery(),
+        match_type: 'partial',
+        search_on: 'name',
+        filters: CHANNEL_SEARCH_FILTERS,
+      },
+    }),
+    () => ({
+      enabled:
+        props.searchOpen && normalizedSearchQuery() === serviceSearchQuery(),
     })
   );
 
+  const localSearchResults = createMemo(() => {
+    const query = normalizedSearchQuery().toLocaleLowerCase();
+    const items = props.sources.search.items();
+    if (!query) return items;
+
+    return items.filter((channel) =>
+      channel.name.toLocaleLowerCase().includes(query)
+    );
+  });
+
+  const serviceSearchResults = createMemo(() => {
+    if (
+      normalizedSearchQuery() !== serviceSearchQuery() ||
+      channelSearchQuery.isFetching ||
+      !channelSearchQuery.isSuccess
+    ) {
+      return [];
+    }
+
+    return channelSearchQuery.data.filter(
+      (entity): entity is WithSearch<ChannelEntity> => isChannelEntity(entity)
+    );
+  });
+
+  const searchResults = createMemo(() =>
+    deduplicateChannels([localSearchResults(), serviceSearchResults()])
+  );
+
+  const searchLoading = () =>
+    props.sources.search.isLoading() ||
+    (normalizedSearchQuery().length >= 3 &&
+      (normalizedSearchQuery() !== serviceSearchQuery() ||
+        channelSearchQuery.isFetching));
+
+  const searchError = () => {
+    if (
+      normalizedSearchQuery() === serviceSearchQuery() &&
+      channelSearchQuery.error instanceof Error
+    ) {
+      return channelSearchQuery.error;
+    }
+
+    return props.sources.search.error() ?? undefined;
+  };
+
+  const retrySearch = async () => {
+    await props.sources.search.refresh();
+    if (normalizedSearchQuery().length >= 3) {
+      await channelSearchQuery.refetch();
+    }
+  };
+
+  const channelActivity = useChannelRailActivity(channels, channelCalls);
+
+  const favorites = createMemo(() => favoritesData()?.favorites ?? []);
+
+  const visibleRows = createMemo(() => {
+    if (props.searchOpen) {
+      return searchResults().map(
+        (channel, localIndex): ChannelRailRow => ({
+          kind: 'conversation',
+          id: rowKeyForChannel(channel.id),
+          scope: 'search',
+          localIndex,
+          channel,
+        })
+      );
+    }
+
+    return buildChannelRailRows(state.tab, state.expandedGroups, {
+      favorites: favorites(),
+      channels: props.sources.channels.items(),
+      direct_messages: props.sources.direct_messages.items(),
+      recents: props.sources.recents.items(),
+    });
+  });
+
   const list = withSplitPanelOwner(listOwnedSlotName('controller'), () =>
-    createListController<ChannelRailRow>({
+    createListController<ChannelRailRow, ChannelRailActivationMetadata>({
       items: visibleRows,
       getKey: (row) => row.id,
       isSelectable: () => false,
@@ -155,13 +324,39 @@ export function ChannelsRail(props: ChannelsRailProps) {
         state.selectedChannelId === undefined
           ? undefined
           : rowKeyForChannel(state.selectedChannelId),
-      onActivate: ({ item }) => {
+      onActivate: ({ item, metadata }) => {
+        previewAfterNavigation.clear();
+        const openInNewSplit =
+          metadata?.newSplit === true || metadata?.event?.shiftKey === true;
+
         if (item.kind === 'section') {
           setGroupOpen(item.group, !state.expandedGroups[item.group]);
           return;
         }
 
-        setSelectedChannelId(item.channel.id);
+        if (
+          item.kind === 'favorite' &&
+          item.favorite.entityType !== 'channel'
+        ) {
+          layout.openWithSplit(favoriteSplitContent(item.favorite), {
+            preferNewSplit: openInNewSplit,
+            referredFrom: 'channels',
+          });
+          return;
+        }
+
+        const channelId =
+          item.kind === 'favorite' ? item.favorite.entityId : item.channel.id;
+
+        if (openInNewSplit) {
+          layout.openWithSplit(
+            { type: 'channel', id: channelId },
+            { preferNewSplit: true, referredFrom: 'channels' }
+          );
+          return;
+        }
+
+        setSelectedChannelId(channelId);
       },
     })
   );
@@ -180,12 +375,15 @@ export function ChannelsRail(props: ChannelsRailProps) {
       }
 
       const element = document.getElementById(domIdForRow(listDomId, row.id));
-      const scrollRoot =
-        row.kind === 'conversation' && row.group
-          ? sectionScrollRoots()[row.group]
-          : state.tab === 'recents'
-            ? listRoot()
-            : undefined;
+      const scrollRoot = props.searchOpen
+        ? listRoot()
+        : row.kind === 'favorite'
+          ? sectionScrollRoots().favorites
+          : row.kind === 'conversation' && row.group
+            ? sectionScrollRoots()[row.group]
+            : state.tab === 'recents'
+              ? listRoot()
+              : undefined;
       if (!element || !scrollRoot) return;
 
       const elementBounds = element.getBoundingClientRect();
@@ -198,12 +396,118 @@ export function ChannelsRail(props: ChannelsRailProps) {
     },
   };
 
+  const scrollScopeToSelectedOrStart = (scope: ChannelsQueryScope) => {
+    const items = props.sources[scope].items();
+
+    const selectedIndex = items.findIndex(
+      (channel) => channel.id === state.selectedChannelId
+    );
+
+    const targetIndex = selectedIndex >= 0 ? selectedIndex : 0;
+    const virtualizer = virtualizers()[scope];
+
+    if (virtualizer && items.length > 0) {
+      virtualizer.scrollToIndex(targetIndex, {
+        align: selectedIndex >= 0 ? 'nearest' : 'start',
+      });
+      return;
+    }
+
+    const scrollRoot =
+      scope === 'recents' ? listRoot() : sectionScrollRoots()[scope];
+    if (scrollRoot?.isConnected) scrollRoot.scrollTop = 0;
+  };
+
+  const scrollSearchToSelectedOrStart = () => {
+    const items = searchResults();
+
+    const selectedIndex = items.findIndex(
+      (channel) => channel.id === state.selectedChannelId
+    );
+
+    const virtualizer = virtualizers().search;
+    if (!virtualizer || items.length === 0) return;
+
+    virtualizer.scrollToIndex(selectedIndex >= 0 ? selectedIndex : 0, {
+      align: selectedIndex >= 0 ? 'nearest' : 'start',
+    });
+  };
+
+  const scrollFavoritesToSelectedOrStart = () => {
+    const scrollRoot = sectionScrollRoots().favorites;
+    if (!scrollRoot?.isConnected) return;
+
+    scrollRoot.scrollTop = 0;
+
+    const favorite = favorites().find(
+      (item) =>
+        item.entityType === 'channel' &&
+        item.entityId === state.selectedChannelId
+    );
+    if (!favorite) return;
+
+    const element = document.getElementById(
+      domIdForRow(listDomId, rowKeyForFavorite(favorite))
+    );
+    if (!element) return;
+
+    const elementBounds = element.getBoundingClientRect();
+    const scrollBounds = scrollRoot.getBoundingClientRect();
+
+    if (elementBounds.bottom > scrollBounds.bottom) {
+      scrollRoot.scrollTop += elementBounds.bottom - scrollBounds.bottom;
+    }
+  };
+
+  createEffect(() => {
+    if (!restoreListScroll()) return;
+
+    const searchOpen = props.searchOpen;
+    const sourcesReady = searchOpen
+      ? !props.sources.search.isLoading()
+      : state.tab === 'recents'
+        ? !props.sources.recents.isLoading()
+        : BROWSE_QUERY_SCOPES.every(
+            (scope) => !props.sources[scope].isLoading()
+          );
+    if (!sourcesReady) return;
+
+    const frame = requestAnimationFrame(() => {
+      if (props.searchOpen !== searchOpen) return;
+
+      if (searchOpen) {
+        scrollSearchToSelectedOrStart();
+      } else if (state.tab === 'recents') {
+        scrollScopeToSelectedOrStart('recents');
+      } else {
+        scrollFavoritesToSelectedOrStart();
+        for (const scope of BROWSE_QUERY_SCOPES) {
+          scrollScopeToSelectedOrStart(scope);
+        }
+      }
+      setRestoreListScroll(false);
+    });
+    onCleanup(() => cancelAnimationFrame(frame));
+  });
+
   useViewTabHotkeys({
     scopeId: panel.splitHotkeyScope,
     enabled: panel.isPanelActive,
     ids: () => CHANNEL_TAB_IDS,
     activeId: () => state.tab,
-    setActiveId: setTab,
+    setActiveId: selectTab,
+  });
+
+  useViewControlHotkeys({
+    scopeId: panel.splitHotkeyScope,
+    enabled: panel.isPanelActive,
+    search: {
+      description: 'Search channels and direct messages',
+      run: () => {
+        openSearch();
+        return true;
+      },
+    },
   });
 
   withSplitPanelOwner(listOwnedSlotName('navigation-hotkeys'), () =>
@@ -214,6 +518,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
       enabled: panel.isPanelActive,
       navigation: {
         onBeforeMove: ({ direction, current }) => {
+          if (props.searchOpen) return true;
+
           const row = current?.item;
           if (direction !== 1 || row?.kind !== 'conversation') return true;
 
@@ -253,32 +559,46 @@ export function ChannelsRail(props: ChannelsRailProps) {
         },
         onNavigate: (event) => {
           listRoot()?.focus({ preventScroll: true });
+          previewAfterNavigation.clear();
 
           const row = event.result?.item;
           if (row?.kind === 'conversation') {
-            setSelectedChannelId(row.channel.id);
+            previewAfterNavigation(row.channel.id);
+          } else if (
+            row?.kind === 'favorite' &&
+            row.favorite.entityType === 'channel'
+          ) {
+            previewAfterNavigation(row.favorite.entityId);
           }
         },
       },
+      activation: {
+        createMetadata: (intent) => ({ newSplit: intent === 'alternate' }),
+        alternateDescription: 'Open in new split',
+      },
       disclosure: {
         getKey: (row) => row.group,
-        isExpanded: (group) => state.expandedGroups[group as ChannelsGroup],
+        isExpanded: (group) =>
+          state.expandedGroups[group as ChannelsRailSection],
         setExpanded: (group, expanded) =>
-          setGroupOpen(group as ChannelsGroup, expanded),
-        getFocusKey: (group) => rowKeyForSection(group as ChannelsGroup),
+          setGroupOpen(group as ChannelsRailSection, expanded),
+        getFocusKey: (group) => rowKeyForSection(group as ChannelsRailSection),
       },
     })
   );
 
   const jumpToSection = (offset: 1 | -1) => {
     const currentGroup = list.focus.item()?.group;
-    const currentIndex = currentGroup
-      ? CHANNEL_GROUPS.indexOf(currentGroup)
-      : -1;
+
+    const sections =
+      favorites().length > 0
+        ? CHANNEL_RAIL_SECTIONS
+        : CHANNEL_RAIL_SECTIONS.filter((section) => section !== 'favorites');
+
+    const currentIndex = currentGroup ? sections.indexOf(currentGroup) : -1;
     const origin = currentIndex === -1 ? (offset === 1 ? -1 : 0) : currentIndex;
-    const nextIndex =
-      (origin + offset + CHANNEL_GROUPS.length) % CHANNEL_GROUPS.length;
-    const nextGroup = CHANNEL_GROUPS[nextIndex];
+    const nextIndex = (origin + offset + sections.length) % sections.length;
+    const nextGroup = sections[nextIndex];
     if (!nextGroup) return false;
 
     const result = list.focus.set(rowKeyForSection(nextGroup), {
@@ -293,7 +613,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const sectionHotkeys = createHotkeyGroup();
   const sectionHotkeysEnabled = () =>
-    panel.isPanelActive() && state.tab === 'browse';
+    panel.isPanelActive() && !props.searchOpen && state.tab === 'browse';
 
   registerHotkey({
     hotkey: ']',
@@ -311,28 +631,15 @@ export function ChannelsRail(props: ChannelsRailProps) {
   }).withGroup(sectionHotkeys);
   onCleanup(() => sectionHotkeys.dispose());
 
-  createEffect(
-    on(
-      () => props.mode,
-      () => {
-        const focusedIndex = list.focus.index();
-        if (focusedIndex < 0) return;
-
-        const frame = requestAnimationFrame(() => {
-          scrollHandle.scrollToIndex(focusedIndex);
-        });
-        onCleanup(() => cancelAnimationFrame(frame));
-      },
-      { defer: true }
-    )
-  );
-
-  const activateRow = (rowId: ChannelRailRow['id']) => {
-    list.activate.key(rowId, { reason: 'pointer' });
+  const activateRow = (rowId: ChannelRailRow['id'], event?: MouseEvent) => {
+    list.activate.key(rowId, {
+      reason: 'pointer',
+      metadata: event ? { event } : undefined,
+    });
   };
 
   const registerVirtualizer = (
-    scope: ChannelsQueryScope,
+    scope: ChannelsSourceScope,
     handle: VirtualizerHandle
   ) => {
     setVirtualizers((current) => ({ ...current, [scope]: handle }));
@@ -352,11 +659,14 @@ export function ChannelsRail(props: ChannelsRailProps) {
     railId: listDomId,
     list,
     tab: () => state.tab,
-    selectTab: setTab,
-    setMode: (mode) => props.onModeChange(mode),
+    selectTab,
     sources: props.sources,
+    favorites,
     selectedChannelId: () => state.selectedChannelId,
     isGroupOpen: (group) => state.expandedGroups[group],
+    toggleGroup: (group) => setGroupOpen(group, !state.expandedGroups[group]),
+    sortBy: (group) => state.sortBy[group],
+    setSortBy,
     registerRootRef: setListRoot,
     activateRow,
     registerScrollRef: (group, element) => {
@@ -373,13 +683,24 @@ export function ChannelsRail(props: ChannelsRailProps) {
     <ChannelsRailProvider value={rail}>
       <aside
         aria-label="Chat navigation"
-        class="flex size-full min-h-0 flex-col gap-3 border-r border-edge bg-panel pt-2"
+        class="flex size-full min-h-0 flex-col gap-3 bg-panel"
       >
-        {props.mode === 'full' ? (
-          <ExpandedChannelsRail />
-        ) : (
-          <SlimChannelsRail />
-        )}
+        <ExpandedChannelsRail
+          search={{
+            isOpen: () => props.searchOpen,
+            query: searchQuery,
+            results: searchResults,
+            isLoading: searchLoading,
+            error: searchError,
+            open: openSearch,
+            close: closeSearch,
+            setQuery: setSearchQuery,
+            registerInput: (element) => {
+              searchInput = element;
+            },
+            retry: retrySearch,
+          }}
+        />
       </aside>
     </ChannelsRailProvider>
   );

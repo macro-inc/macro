@@ -1,4 +1,6 @@
 /** @vitest-environment jsdom */
+import type { InteractionResponse } from '@app/features/block-agent/context/interaction';
+import type { PendingElicitation } from '@service-agent-fold/generated/types';
 import type { ElicitationAnswer } from '@service-agent-harness/generated/schemas';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
@@ -18,6 +20,15 @@ vi.mock(
 
 vi.mock('@core/component/LexicalMarkdown/theme', () => ({
   channelTheme: {},
+}));
+
+// The PR link resolves its entity over the network; the view only places it.
+vi.mock('./MagicChipPullRequest', () => ({
+  MagicChipPullRequest: (props: { url: string }) => (
+    <a data-testid="chip-pull-request" href={props.url}>
+      {props.url}
+    </a>
+  ),
 }));
 
 // The chip answers a form with the real `ElicitationForm`; the rest of the
@@ -90,12 +101,105 @@ vi.mock('@core/component/AI/component/tool/email/DraftComposer', () => ({
 }));
 
 const respond = vi.fn<(answer: ElicitationAnswer) => Promise<boolean>>();
+const elicitationAnswer = {
+  respond: (response: InteractionResponse) =>
+    response.kind === 'elicitation'
+      ? respond(response.answer)
+      : Promise.resolve(false),
+};
 const onOpen = vi.fn();
 
 beforeEach(() => {
   respond.mockReset();
   respond.mockResolvedValue(true);
   onOpen.mockReset();
+});
+
+describe('MagicChipView permission requests', () => {
+  it.each([true, false])(
+    'replaces loading with an approval card for canAnswer=%s',
+    (canAnswer) => {
+      const answer = vi
+        .fn<(response: InteractionResponse) => Promise<boolean>>()
+        .mockResolvedValue(true);
+      const [presentation, setPresentation] =
+        createSignal<MagicChipPresentation>({
+          kind: 'asking',
+          markdown: '',
+          asking: {
+            request: {
+              kind: 'permission',
+              requestId: 0,
+              turn: 3,
+              toolCall: 'cmd',
+              options: [
+                {
+                  id: 'approve-command',
+                  kind: 'allow_once',
+                  name: 'Yes, proceed',
+                },
+                { id: 'reject-command', kind: 'reject_once', name: 'No' },
+              ],
+            },
+            canAnswer,
+            answering: false,
+            action: 'Run command',
+            detail: 'echo hi',
+          },
+        });
+      const view = render(() => (
+        <MagicChipView
+          agentSessionId="session"
+          presentation={presentation()}
+          answer={{ respond: answer }}
+        />
+      ));
+      expect(view.getByText('Approval needed')).toBeTruthy();
+      expect(view.getByText('echo hi')).toBeTruthy();
+      expect(
+        view.container.querySelector('[data-magic-chip-pending]')
+      ).toBeNull();
+      if (canAnswer) {
+        fireEvent.click(view.getByRole('button', { name: 'Allow once' }));
+        expect(answer).toHaveBeenCalledExactlyOnceWith({
+          kind: 'permission',
+          requestId: 0,
+          turn: 3,
+          answer: { kind: 'selected', optionId: 'approve-command' },
+        });
+      } else {
+        expect(view.queryByRole('button', { name: 'Allow once' })).toBeNull();
+        expect(view.queryByRole('button', { name: 'Deny' })).toBeNull();
+        expect(answer).not.toHaveBeenCalled();
+      }
+      setPresentation({
+        kind: 'answering',
+        markdown: 'Done.',
+        activity: { label: 'Writing response', busy: true },
+      });
+      expect(view.queryByText('Approval needed')).toBeNull();
+      expect(view.getByText('Done.')).toBeTruthy();
+    }
+  );
+});
+
+describe('Magic Chip inside an editor', () => {
+  it('collapses even when the editor stops delegated clicks', () => {
+    const collapse = vi.fn();
+    render(() => (
+      <div on:click={(event) => event.stopPropagation()}>
+        <MagicChipView
+          agentSessionId="session"
+          presentation={{ kind: 'settled', markdown: 'Latest answer' }}
+          onCollapse={collapse}
+        />
+      </div>
+    ));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Collapse to mention' })
+    );
+    expect(collapse).toHaveBeenCalledOnce();
+  });
 });
 
 describe('MagicChipView', () => {
@@ -148,6 +252,28 @@ describe('MagicChipView', () => {
     expect(label?.textContent).toContain('Claude Opus 5');
     expect(label?.textContent).toContain('Thinking');
   });
+
+  it.each(['Cursor Agent', 'Codex Agent'])(
+    'places the pull request in the %s header once the session opened one',
+    (agent) => {
+      const { container } = render(() => (
+        <MagicChipView
+          agentSessionId="session-1"
+          presentation={{ kind: 'settled', markdown: 'Opened a PR.' }}
+          header={{
+            agent,
+            pullRequestUrl: 'https://github.com/macro-inc/macro/pull/6303',
+          }}
+        />
+      ));
+      const link = header(container)?.querySelector(
+        '[data-testid="chip-pull-request"]'
+      );
+      expect(link?.getAttribute('href')).toBe(
+        'https://github.com/macro-inc/macro/pull/6303'
+      );
+    }
+  );
 
   it('keeps the same answer height once the answer streams in', () => {
     const { container } = render(() => (
@@ -264,7 +390,8 @@ function asking(canAnswer: boolean, markdown = ''): MagicChipPresentation {
     kind: 'asking',
     markdown,
     asking: {
-      question: {
+      request: {
+        kind: 'elicitation',
         requestId: 9,
         turn: 0,
         toolCall: 'toolu_evt',
@@ -282,7 +409,7 @@ function asking(canAnswer: boolean, markdown = ''): MagicChipPresentation {
         },
       },
       canAnswer,
-      ownerName: 'Alice Owner',
+      answering: false,
     },
   };
 }
@@ -300,7 +427,7 @@ describe('MagicChipView reviewing a tool draft', () => {
       <MagicChipView
         agentSessionId="session"
         presentation={asking(true, 'Setting that up.')}
-        answer={{ answering: false, respond }}
+        answer={elicitationAnswer}
         onOpen={onOpen}
       />
     ));
@@ -344,7 +471,7 @@ describe('MagicChipView reviewing a tool draft', () => {
       <MagicChipView
         agentSessionId="session"
         presentation={asking(true)}
-        answer={{ answering: false, respond }}
+        answer={elicitationAnswer}
         onOpen={onOpen}
       />
     ));
@@ -373,12 +500,12 @@ describe('MagicChipView reviewing a tool draft', () => {
       <MagicChipView
         agentSessionId="session"
         presentation={asking(false)}
-        answer={{ answering: false, respond }}
+        answer={elicitationAnswer}
         onOpen={onOpen}
       />
     ));
     expect(header(view.container)?.textContent).toContain(
-      'Waiting for Alice Owner'
+      'Waiting for an editor'
     );
     // The composer is there to read, but cannot act for a viewer.
     expect(view.getByTestId('calendar-composer').dataset.canAct).toBe('false');
@@ -389,13 +516,9 @@ describe('MagicChipView reviewing a tool draft', () => {
     expect(respond).not.toHaveBeenCalled();
   });
 
-  it('holds the buttons while an answer is on the wire', () => {
+  it('a chip with no answer handler is read-only', () => {
     const view = render(() => (
-      <MagicChipView
-        agentSessionId="session"
-        presentation={asking(true)}
-        answer={{ answering: true, respond }}
-      />
+      <MagicChipView agentSessionId="session" presentation={asking(true)} />
     ));
     expect(view.getByTestId('calendar-composer').dataset.canAct).toBe('false');
     fireEvent.click(view.getByTestId('composer-execute'));
@@ -418,7 +541,7 @@ describe('MagicChipView reviewing a tool draft', () => {
       <MagicChipView
         agentSessionId="session"
         presentation={presentation()}
-        answer={{ answering: false, respond }}
+        answer={elicitationAnswer}
         onOpen={onOpen}
       />
     ));
@@ -476,17 +599,15 @@ const colourForm = {
 };
 
 function askingQuestion(
-  request: Extract<
-    MagicChipPresentation,
-    { kind: 'asking' }
-  >['asking']['question']['request'],
+  request: PendingElicitation['request'],
   options: { canAnswer?: boolean; requestId?: number; markdown?: string } = {}
 ): MagicChipPresentation {
   return {
     kind: 'asking',
     markdown: options.markdown ?? '',
     asking: {
-      question: {
+      request: {
+        kind: 'elicitation',
         requestId: options.requestId ?? 0,
         turn: 0,
         toolCall: null,
@@ -494,7 +615,7 @@ function askingQuestion(
         request,
       },
       canAnswer: options.canAnswer ?? true,
-      ownerName: 'Alice Owner',
+      answering: false,
     },
   };
 }
@@ -505,7 +626,7 @@ describe('MagicChipView asking a form', () => {
       <MagicChipView
         agentSessionId="session"
         presentation={askingQuestion(colourForm)}
-        answer={{ answering: false, respond }}
+        answer={elicitationAnswer}
         onOpen={onOpen}
       />
     ));
@@ -549,7 +670,7 @@ describe('MagicChipView asking a form', () => {
       <MagicChipView
         agentSessionId="session"
         presentation={askingQuestion(colourForm)}
-        answer={{ answering: false, respond }}
+        answer={elicitationAnswer}
       />
     ));
     fireEvent.input(view.getByPlaceholderText('Type your own answer'), {
@@ -570,7 +691,7 @@ describe('MagicChipView asking a form', () => {
       <MagicChipView
         agentSessionId="session"
         presentation={presentation()}
-        answer={{ answering: false, respond }}
+        answer={elicitationAnswer}
       />
     ));
     fireEvent.click(view.getByRole('radio', { name: 'Blue' }));
@@ -587,17 +708,17 @@ describe('MagicChipView asking a form', () => {
     ).toBe('false');
   });
 
-  it('a viewer who is not the owner sees the choices locked and no decisions', () => {
+  it('a viewer without edit access sees the choices locked and no decisions', () => {
     const view = render(() => (
       <MagicChipView
         agentSessionId="session"
         presentation={askingQuestion(colourForm, { canAnswer: false })}
-        answer={{ answering: false, respond }}
+        answer={elicitationAnswer}
         onOpen={onOpen}
       />
     ));
     expect(header(view.container)?.textContent).toContain(
-      'Waiting for Alice Owner'
+      'Waiting for an editor'
     );
     const red = view.getByRole('radio', { name: 'Red' }) as HTMLButtonElement;
     expect(red.disabled).toBe(true);
@@ -616,7 +737,7 @@ describe('MagicChipView asking a form', () => {
           elicitationId: 'gh-1',
           url: 'https://agent.example.com/connect?e=gh-1',
         })}
-        answer={{ answering: false, respond }}
+        answer={elicitationAnswer}
       />
     ));
     expect(view.getByText('agent.example.com')).toBeTruthy();
@@ -642,7 +763,7 @@ describe('MagicChipView asking a form', () => {
           mode: 'hologram',
           raw: {},
         })}
-        answer={{ answering: false, respond }}
+        answer={elicitationAnswer}
       />
     ));
     expect(view.getByText(/cannot display a "hologram" request/)).toBeTruthy();

@@ -35,7 +35,7 @@ use tokio::sync::{Mutex, mpsc, watch};
 use tokio_util::sync::CancellationToken;
 
 use crate::domain::model::{AgentSessionId, SessionClaim};
-use crate::domain::session::HandshakeStatus;
+use crate::domain::session::{HandshakeStatus, PermissionPolicy};
 
 #[cfg(test)]
 mod test;
@@ -150,6 +150,18 @@ pub struct RuntimeAttachment<Connector> {
     /// fresh at each attach - the set follows what the owner has connected
     /// *now*, not what they had connected when the session was created.
     pub(crate) mcp_servers: Vec<McpServer>,
+    /// Cancelled by the connector the moment its transport ends, for
+    /// connectors that can tell - most can, via whatever already tears their
+    /// pipe or socket down. `None` for a connector with no such signal;
+    /// callers waiting on a reply then fall back to their own timeout alone,
+    /// exactly as before this existed.
+    pub(crate) closed: Option<CancellationToken>,
+    /// How this attachment's session answers permission requests. Per
+    /// attachment for the same reason as `mcp_servers`: it follows what the
+    /// agent's owner has configured *now*.
+    pub(crate) permission_policy: PermissionPolicy,
+    /// Model to select after creating a fresh ACP session, before any prompt.
+    pub(crate) initial_model: Option<String>,
 }
 
 /// Activate attachment-owned resources with the exact acquired ownership claim.
@@ -168,6 +180,9 @@ impl<Connector> RuntimeAttachment<Connector> {
             connector,
             handshake,
             mcp_servers: Vec::new(),
+            closed: None,
+            permission_policy: PermissionPolicy::default(),
+            initial_model: None,
         }
     }
 
@@ -178,6 +193,17 @@ impl<Connector> RuntimeAttachment<Connector> {
         self
     }
 
+    /// Wire up the connector's own transport-closed signal, when it has one.
+    ///
+    /// Lets a command waiting on this session's reply fail the moment the
+    /// transport is known to be gone, rather than only once its own
+    /// wall-clock timeout separately elapses.
+    #[must_use]
+    pub fn with_closed(mut self, closed: CancellationToken) -> Self {
+        self.closed = Some(closed);
+        self
+    }
+
     /// Change the carrier without losing its handshake or activation lifecycle.
     pub fn map_transport<T>(self, map: impl FnOnce(Connector) -> T) -> RuntimeAttachment<T> {
         RuntimeAttachment {
@@ -185,6 +211,9 @@ impl<Connector> RuntimeAttachment<Connector> {
             handshake: self.handshake,
             mcp_servers: self.mcp_servers,
             activation: self.activation,
+            closed: self.closed,
+            permission_policy: self.permission_policy,
+            initial_model: self.initial_model,
         }
     }
 
@@ -193,6 +222,21 @@ impl<Connector> RuntimeAttachment<Connector> {
     #[must_use]
     pub fn mcp_servers(mut self, mcp_servers: Vec<McpServer>) -> Self {
         self.mcp_servers = mcp_servers;
+        self
+    }
+
+    /// Select this model before the first prompt of a newly created ACP session.
+    /// Empty values and the provider-default sentinel keep the runtime's default.
+    #[must_use]
+    pub fn initial_model(mut self, model: String) -> Self {
+        self.initial_model = (!model.trim().is_empty() && model != "default").then_some(model);
+        self
+    }
+
+    /// How this attachment's session answers the agent's permission requests.
+    #[must_use]
+    pub fn permission_policy(mut self, permission_policy: PermissionPolicy) -> Self {
+        self.permission_policy = permission_policy;
         self
     }
 }
@@ -361,6 +405,12 @@ where
             // External runtimes hold no egress environment; the sessions
             // they serve are not handed proxied MCP servers.
             mcp_servers: Vec::new(),
+            // This connection already tracks its own end (`evict`, or the
+            // router task finishing) - the same signal `closed()` awaits.
+            closed: Some(self.closed.clone()),
+            // The caller knows whose agent this is; the connection does not.
+            permission_policy: PermissionPolicy::default(),
+            initial_model: None,
         }
     }
 

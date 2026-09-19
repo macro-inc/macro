@@ -7,6 +7,7 @@ import {
   type BaseListEntityProps,
   InboxDivider,
 } from '@entity/composed/list-entity/shared';
+import { getChannelThreadName } from '@entity/utils/channel-thread-name';
 import { cn } from '@ui';
 import { createMemo, Show } from 'solid-js';
 import { InboxCardLayout, toInboxCardDisplayItem } from './inbox-card-layouts';
@@ -31,13 +32,13 @@ type InboxListEntityProps = BaseListEntityProps & {
 export function InboxListEntity(props: InboxListEntityProps) {
   const channels = useChannelsContext();
 
-  // A channel_thread soup entity comes back with a generic name ("Channel
-  // thread"), so resolve the real channel name for the row's location label.
   const entity = createMemo(() => {
     const scoped = scopeThreadNotifications(props.entity);
     if (scoped.type !== 'channel_thread') return scoped;
-    const name = channels.channelsById()[scoped.channelId]?.name;
-    return name ? { ...scoped, name } : scoped;
+    return {
+      ...scoped,
+      name: getChannelThreadName(scoped, channels.channelsById()),
+    };
   });
 
   const item = createMemo(() => toInboxCardDisplayItem(entity()));

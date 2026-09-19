@@ -9,11 +9,10 @@
 //! each end reads at runtime as "every request from every sandbox is
 //! unauthenticated".
 
-use agent_egress::domain::model::{McpServerSlug, RepoSlug, SessionToken};
+use agent_egress::domain::model::{McpServerSlug, SessionToken};
 use macro_user_id::user_id::MacroUserIdStr;
 use pipedream_mcp::domain::ports::ConnectionStore;
 use std::sync::Arc;
-use url::Url;
 
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{ProvisionedEgress, SandboxEgress};
@@ -22,11 +21,6 @@ use agent_session::domain::model::{AgentMcpServers, AgentSessionId};
 
 #[cfg(test)]
 mod test;
-
-/// The only host a configured repository URL may name. Validating the
-/// deployment's own configuration, not a request: a URL pointing somewhere else
-/// would mint a session token for a repository the proxy cannot reach.
-const GITHUB_HOST: &str = "github.com";
 
 /// Mints session tokens and gathers the MCP servers a sandbox may dial.
 pub struct EgressProvisioner<Connections> {
@@ -126,14 +120,8 @@ where
         &self,
         session: AgentSessionId,
         owner: &MacroUserIdStr<'static>,
-        repo_url: &str,
         selection: &AgentMcpServers,
     ) -> Result<ProvisionedEgress> {
-        // Validated even though nothing here uses it: it is the deployment's
-        // repository URL, and a session whose git traffic could never resolve
-        // should fail at provisioning rather than at the agent's first clone.
-        repo_slug(repo_url)?;
-
         let token = SessionToken::mint();
 
         Ok(ProvisionedEgress {
@@ -159,35 +147,4 @@ where
             mcp_servers: self.advertised(owner, selection).await?,
         })
     }
-}
-
-/// The repository a configured GitHub URL names.
-///
-/// Deliberately narrow: it must be `https://github.com/<owner>/<name>` and
-/// nothing else. This reads the deployment's own configuration, so a URL that
-/// is nearly right - a different host, an extra path segment - is a mistake
-/// worth failing on rather than guessing at, and the answer decides which
-/// repository a session's credential will be minted for.
-fn repo_slug(repo_url: &str) -> Result<RepoSlug> {
-    let unusable = || {
-        HarnessError::Egress(rootcause::report!(
-            "configured repository url does not name a github repository"
-        ))
-    };
-
-    let url = Url::parse(repo_url).map_err(|_| unusable())?;
-    if url.host_str() != Some(GITHUB_HOST) {
-        return Err(unusable());
-    }
-
-    let mut segments = url.path_segments().ok_or_else(unusable)?;
-    let owner = segments.next().ok_or_else(unusable)?;
-    let name = segments.next().ok_or_else(unusable)?;
-    // Anything after the repository name is not part of it. A trailing empty
-    // segment is just a trailing slash.
-    if segments.any(|segment| !segment.is_empty()) {
-        return Err(unusable());
-    }
-
-    RepoSlug::parse(owner, name.trim_end_matches(".git")).ok_or_else(unusable)
 }

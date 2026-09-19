@@ -4,7 +4,7 @@ import { useUnfurl } from '@core/signal/unfurl';
 import { extractDomain, openExternalUrl } from '@core/util/url';
 import GlobeIcon from '@phosphor/globe-simple.svg';
 import XIcon from '@phosphor/x.svg';
-import { useRemoveLinkPreviewMutation } from '@queries/channel/message';
+import { useRemoveLinkPreviewMutation } from '@queries/messages/mutations';
 import { proxyResource } from '@service-unfurl/client';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
 import { cn } from '@ui';

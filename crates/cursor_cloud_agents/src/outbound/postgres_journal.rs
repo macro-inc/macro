@@ -5,6 +5,7 @@ use agent_client_protocol::schema::v1::SessionId;
 use agent_session::domain::model::{AgentSessionId, ManagerFence, ReplicaId};
 use futures::future::BoxFuture;
 use sqlx::PgPool;
+use tracing::Instrument;
 
 /// Bound to exactly one authorized host session and its current management
 /// claim. A takeover updates the same locked row and invalidates this writer.
@@ -46,6 +47,10 @@ impl PgCursorJournal {
         }
         Ok(())
     }
+    /// Its own span because its duration is the row-lock wait: the one
+    /// number that tells a contended row apart from a slow database or a
+    /// slow Cursor API when a journal write looks stuck.
+    #[tracing::instrument(name = "cursor.journal.lock_owner", skip_all)]
     async fn lock_owner(
         &self,
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
@@ -53,6 +58,18 @@ impl PgCursorJournal {
         // Dispatch fencing cannot stop an already-running stream or mirror
         // poll. Hold the same row takeover updates until the journal commits;
         // checking the claim before opening this transaction would race.
+        //
+        // A plain, blocking FOR UPDATE - never NOWAIT. This row is shared
+        // with writers that are not takeovers at all: the session actor's
+        // fenced log write locks it for every frame it stores, and during a
+        // streaming turn that write runs concurrently with the very append
+        // that produced the frame. Contention here is therefore routine and
+        // says nothing about the claim; only the fence comparison below does.
+        // Treating "someone else holds the row" as "fenced out" failed every
+        // streaming turn the moment its first text delta was logged. A
+        // superseding claim is still detected promptly: its single-statement
+        // transaction commits in milliseconds, after which this select
+        // re-reads the row and the fence no longer matches.
         let expected = *self
             .fence
             .get()
@@ -71,6 +88,10 @@ impl CursorJournal for PgCursorJournal {
         &'a self,
         _session: &'a SessionId,
     ) -> BoxFuture<'a, Result<Vec<JournalEntry>, rootcause::Report>> {
+        let span = tracing::info_span!(
+            "cursor.journal.read",
+            agent.session.id = %self.session,
+        );
         Box::pin(async move {
             // A read is scoped by the bound host identity, never by a caller's
             // ACP ID, which is only unique within a transport.
@@ -89,7 +110,7 @@ impl CursorJournal for PgCursorJournal {
                     })
                 })
                 .collect()
-        })
+        }.instrument(span))
     }
     fn append<'a>(
         &'a self,
@@ -98,6 +119,12 @@ impl CursorJournal for PgCursorJournal {
         run: Option<&'a CursorRunId>,
         input: &'a JournalInput,
     ) -> BoxFuture<'a, Result<JournalEntry, rootcause::Report>> {
+        let span = tracing::info_span!(
+            "cursor.journal.append",
+            agent.session.id = %self.session,
+            cursor.run.id = run.map(tracing::field::display),
+            cursor.journal.expected_sequence = expected,
+        );
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(|e| rootcause::report!(e))?;
             self.lock_owner(&mut tx).await?;
@@ -119,7 +146,7 @@ impl CursorJournal for PgCursorJournal {
                 run: run.cloned(),
                 input: input.clone(),
             })
-        })
+        }.instrument(span))
     }
 }
 

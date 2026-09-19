@@ -9,20 +9,25 @@
  * tool from its title.
  */
 
-import type { MessagePart } from '@service-agent-fold/generated/types';
 import type { JSX } from 'solid-js';
 import { match } from 'ts-pattern';
+import { settledToolStatus } from '../../ui';
 import { EditToolCall } from './EditToolCall';
+import { ExchangeToolCall } from './ExchangeToolCall';
 import { MacroToolCall } from './MacroToolCall';
 import { OutputToolCall } from './OutputToolCall';
 import { PathsToolCall } from './PathsToolCall';
 import { SearchToolCall } from './SearchToolCall';
 import { SubagentToolCall } from './SubagentToolCall';
-import { type ToolCallCommon, type ToolCallContext, toolLabel } from './shared';
+import {
+  type ToolCallCommon,
+  type ToolCallContext,
+  type ToolUsePart,
+  toolLabel,
+  toolServer,
+} from './shared';
 import { TerminalToolCall } from './TerminalToolCall';
 import { UserToolCall } from './UserToolCall';
-
-type ToolUsePart = Extract<MessagePart, { kind: 'tool_use' }>;
 
 export function ToolCallPart(props: {
   part: ToolUsePart;
@@ -30,12 +35,18 @@ export function ToolCallPart(props: {
   context?: ToolCallContext;
 }): JSX.Element {
   const failed = () => props.part.status === 'failed';
+  // A call the log still has running once its turn is over is not running
+  // (see `settledToolStatus`). Without a turn to place it in there is no
+  // live turn either, so it settles too.
+  const status = () =>
+    settledToolStatus(props.part.status, props.context?.inFlight ?? false);
   // The chat block's failed-tool treatment: the same row, faded, with a quiet
   // trailing label — not a separate error card.
   const common = (): ToolCallCommon => ({
     id: props.part.id,
     label: toolLabel(props.part.name),
-    status: props.part.status,
+    server: toolServer(props.part.name),
+    status: status(),
     muted: failed(),
     trailing: failed() ? <span class="text-ink">Failed</span> : undefined,
   });
@@ -53,8 +64,11 @@ export function ToolCallPart(props: {
     .with({ kind: 'search' }, (detail) => (
       <SearchToolCall detail={detail} common={common()} />
     ))
-    .with({ kind: 'fetch' }, { kind: 'think' }, { kind: 'other' }, (detail) => (
+    .with({ kind: 'fetch' }, { kind: 'think' }, (detail) => (
       <OutputToolCall detail={detail} common={common()} />
+    ))
+    .with({ kind: 'other' }, (detail) => (
+      <ExchangeToolCall detail={detail} common={common()} />
     ))
     .with({ kind: 'macro' }, (detail) => (
       <MacroToolCall

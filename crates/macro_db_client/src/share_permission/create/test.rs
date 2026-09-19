@@ -9,6 +9,7 @@ use super::*;
 struct StoredSharePermission {
     link_share: Option<String>,
     link_share_access_level: Option<String>,
+    team_share_access_level: Option<String>,
 }
 
 fn share_permission(
@@ -19,6 +20,7 @@ fn share_permission(
         id: String::new(),
         link_share,
         link_share_access_level,
+        team_share_access_level: None,
         owner: String::new(),
         channel_share_permissions: None,
     }
@@ -33,7 +35,8 @@ async fn get_stored_share_permission(
         r#"
         SELECT
             "linkShare" as link_share,
-            "linkShareAccessLevel"::text as link_share_access_level
+            "linkShareAccessLevel"::text as link_share_access_level,
+            team_share_access_level::text as team_share_access_level
         FROM "SharePermission"
         WHERE id = $1
         "#,
@@ -65,6 +68,7 @@ async fn create_share_permission_writes_link_columns(pool: Pool<Postgres>) -> an
         StoredSharePermission {
             link_share: Some("PUBLIC".to_string()),
             link_share_access_level: Some("edit".to_string()),
+            team_share_access_level: None,
         }
     );
 
@@ -79,6 +83,7 @@ async fn create_share_permission_writes_link_columns(pool: Pool<Postgres>) -> an
         StoredSharePermission {
             link_share: Some("TEAM".to_string()),
             link_share_access_level: Some("comment".to_string()),
+            team_share_access_level: None,
         }
     );
 
@@ -94,9 +99,35 @@ async fn create_share_permission_writes_link_columns(pool: Pool<Postgres>) -> an
         StoredSharePermission {
             link_share: None,
             link_share_access_level: None,
+            team_share_access_level: None,
         }
     );
 
+    Ok(())
+}
+
+#[sqlx::test]
+async fn generic_creation_does_not_copy_explicit_team_sharing(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let mut transaction = pool.begin().await?;
+    for level in [
+        AccessLevel::View,
+        AccessLevel::Comment,
+        AccessLevel::Edit,
+        AccessLevel::Owner,
+    ] {
+        let mut permission = share_permission(None, None);
+        permission.team_share_access_level = Some(level);
+        let created = create_share_permission(&mut transaction, &permission).await?;
+        assert_eq!(created.team_share_access_level, None);
+        assert_eq!(
+            get_stored_share_permission(&mut transaction, &created.id)
+                .await?
+                .team_share_access_level,
+            None
+        );
+    }
     Ok(())
 }
 
@@ -117,6 +148,7 @@ async fn create_share_permission_defaults_enabled_links_to_view(
             StoredSharePermission {
                 link_share: Some(link_share.to_string()),
                 link_share_access_level: Some("view".to_string()),
+                team_share_access_level: None,
             }
         );
     }

@@ -26,7 +26,9 @@ import { Dynamic } from 'solid-js/web';
  * ContextMenu-only abstractions. The DropdownMenu equivalents that used to
  * live alongside these (in the old `Menu.tsx`) have been retired in favor of
  * `@ui` `Dropdown`. Right-click menus still use this file because they need
- * separate behavior + positioning from the click-triggered Dropdown.
+ * separate behavior + positioning from the click-triggered Dropdown. The
+ * content wrapper also accepts a click-menu content component when a surface
+ * (such as sidebar Search) should match the context menus.
  */
 
 type BaseMenuItemWrapperProps = {
@@ -292,10 +294,12 @@ function MobileConditionalOverlay(
 
 const MENU_SURFACE_SCOPE = '[--color-surface:var(--color-menu)]';
 
-export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start border border-edge bg-menu ${MENU_SURFACE_SCOPE} shadow-menu rounded-xl p-1.5 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal menu-open-animation`;
+export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start border border-edge bg-menu-glass ${MENU_SURFACE_SCOPE} glass rounded-xl p-1.5 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal menu-open-animation`;
 
 type MenuContentProps = ParentProps<{
   class?: string;
+  /** Reuse the surface with click-menu dismissal and focus behavior. */
+  contentComponent?: typeof ContextMenu.Content;
   submenu?: boolean;
   onOpenAutoFocus?: (event: Event) => void;
   onCloseAutoFocus?: (event: Event) => void;
@@ -400,7 +404,8 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
         when={props.submenu}
         fallback={
           <Layer depth={2}>
-            <ContextMenu.Content
+            <Dynamic
+              component={props.contentComponent ?? ContextMenu.Content}
               class={cn(
                 MENU_SURFACE_SCOPE,
                 !props.overrideStyling && MENU_CONTENT_CLASS,
@@ -415,7 +420,7 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
               onCloseAutoFocus={props.onCloseAutoFocus}
             >
               {props.children}
-            </ContextMenu.Content>
+            </Dynamic>
           </Layer>
         }
       >

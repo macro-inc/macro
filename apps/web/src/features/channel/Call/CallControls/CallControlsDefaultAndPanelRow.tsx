@@ -1,8 +1,8 @@
-import PhoneDisconnect from '@icon/wide-call-disconnect.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import Gear from '@phosphor/gear.svg';
 import Microphone from '@phosphor/microphone.svg';
 import MicrophoneSlash from '@phosphor/microphone-slash.svg';
+import PhoneDisconnect from '@phosphor/phone-disconnect.svg';
 import Screencast from '@phosphor/screencast.svg';
 import VideoCamera from '@phosphor/video-camera.svg';
 import VideoCameraSlash from '@phosphor/video-camera-slash.svg';

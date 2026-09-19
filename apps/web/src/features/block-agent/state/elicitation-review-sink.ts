@@ -17,17 +17,13 @@ export const DRAFT_FIELD = 'draft';
 
 export function createElicitationReviewSink<T>(options: {
   canAnswer: Accessor<boolean>;
-  ownerName: Accessor<string>;
-  answering: Accessor<boolean>;
   respond: (answer: ElicitationAnswer) => Promise<boolean>;
 }): UserToolReviewSink<T> {
-  const canAct = () => options.canAnswer() && !options.answering();
+  const canAct = () => options.canAnswer();
   return {
     canAct,
     lockedNotice: () =>
-      options.canAnswer()
-        ? undefined
-        : `Waiting for ${options.ownerName()} to answer.`,
+      options.canAnswer() ? undefined : 'Waiting for an editor to answer.',
     onExecute: (args) =>
       canAct()
         ? options.respond({

@@ -1,10 +1,10 @@
-import { createBlockStore } from '@core/block';
 import { produce } from 'solid-js/store';
 import {
   decodeString,
   // LINE_HEIGHT,
   MAX_LINES,
 } from '../component/DefinitionLookup/shared';
+import { usePdfDocument } from '../context/pdf-document-context';
 import type Term from '../model/Term';
 import { InvalidActionError } from '../util/errors';
 import { estimateTextWidth } from '../util/estimateTextWidth';
@@ -88,7 +88,7 @@ function updateTermIDToSizingMap(draft: Partial<ISectionPopupContext>): void {
 
 // TODO terms that are actually the same definition have different IDs
 // As a result, you can open several of the same definition
-interface ISectionPopupContext {
+export interface ISectionPopupContext {
   terms: Term[];
   termIDs: Array<string>;
   termIDToSizingMap: Partial<
@@ -104,15 +104,6 @@ interface ISectionPopupContext {
   pageWidth: number | null;
   element: Element | null;
 }
-
-const defaultState: ISectionPopupContext = {
-  terms: [],
-  termIDs: [],
-  termIDToSizingMap: {},
-
-  pageWidth: null,
-  element: null,
-};
 
 type SetRectsAction = {
   type: 'SET_RECTS';
@@ -234,19 +225,18 @@ const handler = (
   }
 };
 
-const rootDefinitionStore = createBlockStore({ ...defaultState });
-const popupDefinitionStore = createBlockStore({ ...defaultState });
-
 export function usePopupContextUpdate(isPopup: boolean) {
-  const setStore = isPopup ? popupDefinitionStore.set : rootDefinitionStore.set;
+  const { rootDefinition, popupDefinition } = usePdfDocument().state.stores;
+  const setStore = isPopup ? popupDefinition[1] : rootDefinition[1];
 
   return (action: ISectionPopupAction) => {
-    setStore(produce((state) => handler(state, action)));
+    setStore(produce<ISectionPopupContext>((state) => handler(state, action)));
   };
 }
 
 export function usePopupStore(isPopup: boolean) {
-  const store = isPopup ? popupDefinitionStore.get : rootDefinitionStore.get;
+  const { rootDefinition, popupDefinition } = usePdfDocument().state.stores;
+  const store = isPopup ? popupDefinition[0] : rootDefinition[0];
 
   return {
     terms: () => store.terms,

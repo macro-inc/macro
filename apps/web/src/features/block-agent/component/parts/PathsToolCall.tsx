@@ -16,6 +16,7 @@ export function PathsToolCall(props: {
       status={props.common.status}
       muted={props.common.muted}
       trailing={props.common.trailing}
+      hasContent={props.detail.paths.length > 1}
     >
       <Show when={props.detail.paths.length > 1}>
         <FoldedPathList paths={props.detail.paths} />

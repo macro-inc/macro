@@ -2,15 +2,16 @@
 
 use async_graphql::{Enum, ID, Object, Union};
 use model_notifications::{
-    AiResponseMetadata, CalendarEventReminderMetadata, CallStartedMetadata, ChannelInviteMetadata,
-    ChannelMentionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType,
-    CommentedOnDocumentMetadata, DocumentMentionMetadata, GithubPrCheckRun, GithubPrCheckRunState,
-    GithubPrComment, GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus,
-    GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview,
-    GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
-    InviteToTeamMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata, NotifEvent,
-    NotificationDocumentSubType, ReminderMetadata, RepliedToDocumentCommentThreadMetadata,
-    TaskAssignedMetadata,
+    AgentSessionMentionedMetadata, AgentSessionNotificationRef, AgentSessionSettledMetadata,
+    AgentSessionWaitingForInputMetadata, AiResponseMetadata, CalendarEventReminderMetadata,
+    CallStartedMetadata, ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
+    ChannelReplyMetadata, ChannelType, CommentedOnDocumentMetadata, DocumentMentionMetadata,
+    GithubPrCheckRun, GithubPrCheckRunState, GithubPrComment, GithubPrCommentKind,
+    GithubPrEventAction, GithubPrEventStatus, GithubPrMention, GithubPrMentionLocation,
+    GithubPrNotificationCommon, GithubPrReview, GithubPrReviewState, GithubPrStatusChanged,
+    GithubReviewRequested, InboxReauthRequiredMetadata, InviteToTeamMetadata,
+    MentionedInDocumentCommentMetadata, NewEmailMetadata, NotifEvent, NotificationDocumentSubType,
+    ReminderMetadata, RepliedToDocumentCommentThreadMetadata, TaskAssignedMetadata,
 };
 
 /// GraphQL channel type used by notification metadata.
@@ -46,6 +47,8 @@ pub enum GraphqlNotificationDocumentSubType {
     Snippet,
     /// Skill document.
     Skill,
+    /// The description document of an initiative.
+    InitiativeDescription,
 }
 
 impl From<NotificationDocumentSubType> for GraphqlNotificationDocumentSubType {
@@ -54,6 +57,7 @@ impl From<NotificationDocumentSubType> for GraphqlNotificationDocumentSubType {
             NotificationDocumentSubType::Task => Self::Task,
             NotificationDocumentSubType::Snippet => Self::Snippet,
             NotificationDocumentSubType::Skill => Self::Skill,
+            NotificationDocumentSubType::InitiativeDescription => Self::InitiativeDescription,
         }
     }
 }
@@ -367,14 +371,16 @@ impl GraphqlMentionedInDocumentCommentMetadata {
         &self.0.mention_id
     }
 
-    /// Comment identifier.
-    async fn comment_id(&self) -> i64 {
-        self.0.comment_id
+    /// Comment identifier: a legacy numeric comment id, or the message id in
+    /// the shared message store.
+    async fn comment_id(&self) -> String {
+        self.0.comment_id.to_string()
     }
 
-    /// Comment thread identifier.
-    async fn thread_id(&self) -> i64 {
-        self.0.thread_id
+    /// Comment thread identifier: a legacy numeric thread id, or the root
+    /// message id in the shared message store.
+    async fn thread_id(&self) -> String {
+        self.0.thread_id.to_string()
     }
 
     /// Comment text.
@@ -385,6 +391,10 @@ impl GraphqlMentionedInDocumentCommentMetadata {
     /// Sender profile-picture URL.
     async fn sender_profile_picture_url(&self) -> Option<&str> {
         self.0.sender_profile_picture_url.as_deref()
+    }
+    /// Display name for a non-user sender.
+    async fn sender_display_name(&self) -> Option<&str> {
+        self.0.sender_display_name.as_deref()
     }
 }
 
@@ -414,14 +424,16 @@ impl GraphqlRepliedToDocumentCommentThreadMetadata {
         self.0.sub_type.clone().map(Into::into)
     }
 
-    /// Comment identifier.
-    async fn comment_id(&self) -> i64 {
-        self.0.comment_id
+    /// Comment identifier: a legacy numeric comment id, or the message id in
+    /// the shared message store.
+    async fn comment_id(&self) -> String {
+        self.0.comment_id.to_string()
     }
 
-    /// Comment thread identifier.
-    async fn thread_id(&self) -> i64 {
-        self.0.thread_id
+    /// Comment thread identifier: a legacy numeric thread id, or the root
+    /// message id in the shared message store.
+    async fn thread_id(&self) -> String {
+        self.0.thread_id.to_string()
     }
 
     /// Reply text.
@@ -432,6 +444,10 @@ impl GraphqlRepliedToDocumentCommentThreadMetadata {
     /// Sender profile-picture URL.
     async fn sender_profile_picture_url(&self) -> Option<&str> {
         self.0.sender_profile_picture_url.as_deref()
+    }
+    /// Display name for a non-user sender.
+    async fn sender_display_name(&self) -> Option<&str> {
+        self.0.sender_display_name.as_deref()
     }
 }
 
@@ -461,14 +477,16 @@ impl GraphqlCommentedOnDocumentMetadata {
         self.0.sub_type.clone().map(Into::into)
     }
 
-    /// Comment identifier.
-    async fn comment_id(&self) -> i64 {
-        self.0.comment_id
+    /// Comment identifier: a legacy numeric comment id, or the message id in
+    /// the shared message store.
+    async fn comment_id(&self) -> String {
+        self.0.comment_id.to_string()
     }
 
-    /// Comment thread identifier.
-    async fn thread_id(&self) -> i64 {
-        self.0.thread_id
+    /// Comment thread identifier: a legacy numeric thread id, or the root
+    /// message id in the shared message store.
+    async fn thread_id(&self) -> String {
+        self.0.thread_id.to_string()
     }
 
     /// Comment text.
@@ -479,6 +497,10 @@ impl GraphqlCommentedOnDocumentMetadata {
     /// Sender profile-picture URL.
     async fn sender_profile_picture_url(&self) -> Option<&str> {
         self.0.sender_profile_picture_url.as_deref()
+    }
+    /// Display name for a non-user sender.
+    async fn sender_display_name(&self) -> Option<&str> {
+        self.0.sender_display_name.as_deref()
     }
 }
 
@@ -1044,6 +1066,124 @@ impl GraphqlGithubPrReviewMetadata {
     }
 }
 
+/// GraphQL wrapper for the session an agent-session notification is about.
+pub struct GraphqlAgentSessionRef(AgentSessionNotificationRef);
+
+/// The session an agent-session notification points at.
+#[Object]
+impl GraphqlAgentSessionRef {
+    /// Agent session identifier; what a click opens.
+    async fn session_id(&self) -> ID {
+        ID(self.0.session_id.to_string())
+    }
+
+    /// Session name at the time of the event.
+    async fn session_name(&self) -> &str {
+        &self.0.session_name
+    }
+
+    /// Bot identifier.
+    async fn bot_id(&self) -> ID {
+        ID(self.0.bot_id.to_string())
+    }
+
+    /// Bot display name; agent notifications read as being from the bot.
+    async fn bot_name(&self) -> &str {
+        &self.0.bot_name
+    }
+
+    /// Channel the session was opened from, when it was.
+    async fn channel_id(&self) -> Option<ID> {
+        self.0.channel_id.map(|id| ID(id.to_string()))
+    }
+
+    /// Thread the session was opened from, when it was.
+    async fn thread_id(&self) -> Option<ID> {
+        self.0.thread_id.map(|id| ID(id.to_string()))
+    }
+
+    /// The magic-chip message for the turn, when one was posted.
+    async fn announcement_message_id(&self) -> Option<ID> {
+        self.0.announcement_message_id.map(|id| ID(id.to_string()))
+    }
+}
+
+/// GraphQL wrapper for an agent session finishing a turn.
+pub struct GraphqlAgentSessionSettledMetadata(AgentSessionSettledMetadata);
+
+/// Metadata for an agent session that finished with nothing queued.
+#[Object]
+impl GraphqlAgentSessionSettledMetadata {
+    /// The session this is about.
+    async fn session(&self) -> GraphqlAgentSessionRef {
+        GraphqlAgentSessionRef(self.0.session.clone())
+    }
+
+    /// The turn that ended.
+    async fn turn(&self) -> i32 {
+        i32::try_from(self.0.turn).unwrap_or(i32::MAX)
+    }
+
+    /// Who prompted the turn.
+    async fn actor(&self) -> Option<String> {
+        self.0.actor.as_ref().map(ToString::to_string)
+    }
+
+    /// ACP stop reason, or `error`.
+    async fn stop_reason(&self) -> &str {
+        &self.0.stop_reason
+    }
+
+    /// The agent's last prose in the turn.
+    async fn excerpt(&self) -> Option<&str> {
+        self.0.excerpt.as_deref()
+    }
+}
+
+/// GraphQL wrapper for an agent session waiting on its owner.
+pub struct GraphqlAgentSessionWaitingForInputMetadata(AgentSessionWaitingForInputMetadata);
+
+/// Metadata for an agent session blocked on a question.
+#[Object]
+impl GraphqlAgentSessionWaitingForInputMetadata {
+    /// The session this is about.
+    async fn session(&self) -> GraphqlAgentSessionRef {
+        GraphqlAgentSessionRef(self.0.session.clone())
+    }
+
+    /// The turn asking.
+    async fn turn(&self) -> i32 {
+        i32::try_from(self.0.turn).unwrap_or(i32::MAX)
+    }
+
+    /// The question, as the agent phrased it.
+    async fn question(&self) -> &str {
+        &self.0.question
+    }
+}
+
+/// GraphQL wrapper for a mention in an agent-session prompt.
+pub struct GraphqlAgentSessionMentionedMetadata(AgentSessionMentionedMetadata);
+
+/// Metadata for being named in a prompt to an agent session.
+#[Object]
+impl GraphqlAgentSessionMentionedMetadata {
+    /// The session this is about.
+    async fn session(&self) -> GraphqlAgentSessionRef {
+        GraphqlAgentSessionRef(self.0.session.clone())
+    }
+
+    /// Who wrote the prompt.
+    async fn mentioned_by(&self) -> Option<String> {
+        self.0.mentioned_by.as_ref().map(ToString::to_string)
+    }
+
+    /// The action carrying the prompt.
+    async fn action_id(&self) -> ID {
+        ID(self.0.action_id.to_string())
+    }
+}
+
 /// Typed GraphQL union containing every supported notification event payload.
 #[derive(Union)]
 pub enum GraphqlNotifEvent {
@@ -1091,6 +1231,12 @@ pub enum GraphqlNotifEvent {
     GithubPrMention(GraphqlGithubPrMentionMetadata),
     /// GitHub pull-request review metadata.
     GithubPrReview(GraphqlGithubPrReviewMetadata),
+    /// Agent session finished metadata.
+    AgentSessionSettled(GraphqlAgentSessionSettledMetadata),
+    /// Agent session waiting-for-input metadata.
+    AgentSessionWaitingForInput(GraphqlAgentSessionWaitingForInputMetadata),
+    /// Agent session mention metadata.
+    AgentSessionMentioned(GraphqlAgentSessionMentionedMetadata),
 }
 
 impl From<NotifEvent> for GraphqlNotifEvent {
@@ -1159,6 +1305,15 @@ impl From<NotifEvent> for GraphqlNotifEvent {
             }
             NotifEvent::GithubPrReview(metadata) => {
                 Self::GithubPrReview(GraphqlGithubPrReviewMetadata(metadata))
+            }
+            NotifEvent::AgentSessionSettled(metadata) => {
+                Self::AgentSessionSettled(GraphqlAgentSessionSettledMetadata(metadata))
+            }
+            NotifEvent::AgentSessionWaitingForInput(metadata) => Self::AgentSessionWaitingForInput(
+                GraphqlAgentSessionWaitingForInputMetadata(metadata),
+            ),
+            NotifEvent::AgentSessionMentioned(metadata) => {
+                Self::AgentSessionMentioned(GraphqlAgentSessionMentionedMetadata(metadata))
             }
         }
     }

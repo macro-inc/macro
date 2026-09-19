@@ -22,7 +22,8 @@ use bot_id::BotId;
 use entity_access::domain::{
     models::{
         AccessError, AccessLevel, BotAccessScope, CallChannelInfo, EntityAccessReceipt,
-        EntityPermission, EntityType, RequiredPermission, TeamRole, UserTeamInfo,
+        EntityPermission, EntityType, MemberParticipantRole, RequiredPermission, TeamRole,
+        UserTeamInfo,
     },
     ports::{EntityAccessService, NoOpEntityAccessService},
 };
@@ -34,6 +35,107 @@ use std::sync::{
 use uuid::Uuid;
 
 const TEST_USER_ID: &str = "macro|channel-owner@example.com";
+
+type PostedSharedMessage = (
+    EntityAccessReceipt<messages::domain::service::MessageWrite>,
+    messages::domain::models::PostMessage,
+);
+
+#[derive(Clone, Default)]
+struct RecordingMessages {
+    posts: Arc<Mutex<Vec<PostedSharedMessage>>>,
+}
+
+#[async_trait::async_trait]
+impl messages::domain::api::MessageCommands for RecordingMessages {
+    async fn post(
+        &self,
+        access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        input: messages::domain::models::PostMessage,
+    ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
+        let parent =
+            messages::domain::models::MessageParent::parse("channel", &access.entity().entity_id)
+                .unwrap();
+        let sender = match access.auth() {
+            entity_access::domain::models::EntityAccessAuth::Bot(bot) => {
+                Sender::new_from_bot(bot.bot_id())
+            }
+            _ => Sender::new_from_user(user_id()),
+        };
+        let message = messages::domain::models::Message {
+            id: Uuid::new_v4(),
+            parent,
+            thread_id: input.thread_id,
+            sender_id: sender,
+            imported_author: None,
+            bot_profile: None,
+            mentions: vec![],
+            triggered_by: access
+                .acting_user_id()
+                .map(|user| user.as_ref().to_string()),
+            content: input.content.clone(),
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            edited_at: None,
+            deleted_at: None,
+            attachments: vec![],
+            reactions: vec![],
+        };
+        self.posts.lock().unwrap().push((access, input));
+        Ok(message)
+    }
+    async fn patch(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _: Uuid,
+        _: messages::domain::ports::MessagePatch,
+    ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
+        unimplemented!()
+    }
+    async fn delete(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _: Uuid,
+        _: Option<String>,
+    ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
+        unimplemented!()
+    }
+    async fn react(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _: Uuid,
+        _: String,
+        _: bool,
+        _: Option<String>,
+    ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
+        unimplemented!()
+    }
+    async fn typing(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _: Option<Uuid>,
+        _: bool,
+        _: Option<String>,
+    ) -> Result<(), messages::domain::ports::MessageError> {
+        unimplemented!()
+    }
+    async fn patch_thread(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _: Uuid,
+        _: messages::domain::models::ThreadPatch,
+    ) -> Result<messages::domain::models::ThreadState, messages::domain::ports::MessageError> {
+        unimplemented!()
+    }
+    async fn delete_thread(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _: Uuid,
+        _: Option<String>,
+    ) -> Result<messages::domain::models::ThreadState, messages::domain::ports::MessageError> {
+        unimplemented!()
+    }
+}
 
 fn user_id() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(TEST_USER_ID.to_string()).expect("valid macro user id")
@@ -80,6 +182,16 @@ impl ToolTestChannelService {
 }
 
 impl ChannelService for ToolTestChannelService {
+    async fn set_channel_picture(
+        &self,
+        _access: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::AdminParticipantRole,
+        >,
+        _picture_id: Option<uuid::Uuid>,
+    ) -> Result<(), crate::domain::ports::ChannelMutationErr> {
+        unimplemented!("picture mutation is not used by this fixture")
+    }
+
     async fn get_channel_messages(
         &self,
         _channel_id: Uuid,
@@ -186,13 +298,19 @@ impl ChannelService for ToolTestChannelService {
 
     async fn patch_channel(
         &self,
-        actor: Sender,
-        channel_id: Uuid,
+        access: EntityAccessReceipt<MemberParticipantRole>,
         req: PatchChannelRequest,
     ) -> Result<(), ChannelMutationErr> {
         if let Some(message) = &self.patch_error {
             return Err(ChannelMutationErr::BadRequest(message.clone()));
         }
+        let actor = Sender::new_from_user(
+            access
+                .get_authenticated_user()
+                .cloned()
+                .expect("authenticated user"),
+        );
+        let channel_id = Uuid::parse_str(&access.entity().entity_id).expect("channel id");
         self.patches
             .lock()
             .expect("patch lock")
@@ -290,12 +408,29 @@ impl EntityAccessService for ToolTestAccessService {
 
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
         &self,
-        _bot_id: entity_access::domain::models::BotId,
-        _scope: BotAccessScope,
-        _entity_id: &str,
-        _entity_type: EntityType,
+        bot_id: entity_access::domain::models::BotId,
+        scope: BotAccessScope,
+        entity_id: &str,
+        entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        Err(AccessError::internal("test access failure"))
+        self.receipt_calls.fetch_add(1, Ordering::SeqCst);
+        if let Some(error) = self.receipt_error {
+            return Err(match error {
+                ReceiptFail::Unauthorized => AccessError::Unauthorized,
+                ReceiptFail::NotFound => AccessError::NotFound("missing"),
+            });
+        }
+        EntityAccessReceipt::try_new_bot(
+            bot_id.into_storage_id(),
+            (&scope).into(),
+            entity_access::domain::models::Entity {
+                entity_id: entity_id.to_string(),
+                entity_type,
+            },
+            EntityPermission::ChannelRole {
+                role: entity_access::domain::models::ParticipantRole::Member,
+            },
+        )
     }
 
     async fn get_access_level(
@@ -429,7 +564,8 @@ fn rename_channel_schema_is_valid() {
     assert!(result.is_ok(), "{result:?}");
     let validated = result.unwrap();
     assert_eq!(validated.name, "RenameChannel");
-    assert!(validated.description.contains("Rename"));
+    assert!(validated.description.contains("participant"));
+    assert!(!validated.description.to_lowercase().contains("admin"));
 }
 
 #[test]
@@ -504,7 +640,11 @@ async fn create_private_channel_does_not_resolve_a_team() {
         ..ToolTestChannelService::default()
     };
     let created = service.created.clone();
-    let context = ChannelToolContext::new(service, NoOpEntityAccessService);
+    let context = ChannelToolContext::new(
+        Arc::new(RecordingMessages::default()),
+        service,
+        NoOpEntityAccessService,
+    );
 
     let response = CreateChannel {
         name: "  Planning  ".to_string(),
@@ -541,6 +681,7 @@ async fn create_team_channel_injects_the_caller_when_participants_are_empty() {
     let service = ToolTestChannelService::default();
     let created = service.created.clone();
     let context = ChannelToolContext::new(
+        Arc::new(RecordingMessages::default()),
         service,
         ToolTestAccessService {
             team: Some(UserTeamInfo {
@@ -591,6 +732,7 @@ async fn create_private_channel_uses_the_context_actor_for_the_user() {
 
     tool.call(
         ServiceContext(ChannelToolContext::new(
+            Arc::new(RecordingMessages::default()),
             default_service,
             NoOpEntityAccessService,
         )),
@@ -600,8 +742,12 @@ async fn create_private_channel_uses_the_context_actor_for_the_user() {
     .expect("default actor can create");
     tool.call(
         ServiceContext(
-            ChannelToolContext::new(custom_service, NoOpEntityAccessService)
-                .with_actor(BotId::TEST_A),
+            ChannelToolContext::new(
+                Arc::new(RecordingMessages::default()),
+                custom_service,
+                NoOpEntityAccessService,
+            )
+            .with_actor(BotId::TEST_A),
         ),
         RequestContext::new(user_id()),
     )
@@ -634,7 +780,11 @@ async fn create_private_channel_uses_the_context_actor_for_the_user() {
 async fn create_team_channel_fails_when_the_user_has_no_team() {
     let service = ToolTestChannelService::default();
     let created = service.created.clone();
-    let context = ChannelToolContext::new(service, ToolTestAccessService::default());
+    let context = ChannelToolContext::new(
+        Arc::new(RecordingMessages::default()),
+        service,
+        ToolTestAccessService::default(),
+    );
 
     let error = CreateChannel {
         name: "Team Sync".to_string(),
@@ -651,8 +801,11 @@ async fn create_team_channel_fails_when_the_user_has_no_team() {
 
 #[tokio::test]
 async fn create_channel_rejects_an_empty_name() {
-    let context =
-        ChannelToolContext::new(ToolTestChannelService::default(), NoOpEntityAccessService);
+    let context = ChannelToolContext::new(
+        Arc::new(RecordingMessages::default()),
+        ToolTestChannelService::default(),
+        NoOpEntityAccessService,
+    );
 
     let error = CreateChannel {
         name: "   ".to_string(),
@@ -669,6 +822,7 @@ async fn create_channel_rejects_an_empty_name() {
 #[tokio::test]
 async fn create_channel_surfaces_domain_errors() {
     let context = ChannelToolContext::new(
+        Arc::new(RecordingMessages::default()),
         ToolTestChannelService {
             create_error: Some("participants must be a non-empty list of 'macro|<email>'".into()),
             ..ToolTestChannelService::default()
@@ -693,7 +847,7 @@ async fn create_channel_surfaces_domain_errors() {
 }
 
 #[tokio::test]
-async fn rename_channel_requires_admin_and_patches_only_the_name() {
+async fn rename_channel_requires_member_and_patches_only_the_name() {
     let channel_id = Uuid::new_v4();
     let service = ToolTestChannelService {
         metadata_name: Some("Old Name".to_string()),
@@ -702,7 +856,7 @@ async fn rename_channel_requires_admin_and_patches_only_the_name() {
     let patches = service.patches.clone();
     let access = ToolTestAccessService::default();
     let receipt_calls = access.receipt_calls.clone();
-    let context = ChannelToolContext::new(service, access);
+    let context = ChannelToolContext::new(Arc::new(RecordingMessages::default()), service, access);
 
     let response = RenameChannel {
         channel_id,
@@ -710,7 +864,7 @@ async fn rename_channel_requires_admin_and_patches_only_the_name() {
     }
     .call(ServiceContext(context), RequestContext::new(user_id()))
     .await
-    .expect("admin can rename");
+    .expect("member can rename");
 
     assert_eq!(response.name, "New Name");
     assert_eq!(response.previous_name.as_deref(), Some("Old Name"));
@@ -724,8 +878,9 @@ async fn rename_channel_requires_admin_and_patches_only_the_name() {
 }
 
 #[tokio::test]
-async fn rename_channel_rejects_non_admins() {
+async fn rename_channel_rejects_non_members() {
     let context = ChannelToolContext::new(
+        Arc::new(RecordingMessages::default()),
         ToolTestChannelService::default(),
         ToolTestAccessService {
             receipt_error: Some(ReceiptFail::Unauthorized),
@@ -739,17 +894,18 @@ async fn rename_channel_rejects_non_admins() {
     }
     .call(ServiceContext(context), RequestContext::new(user_id()))
     .await
-    .expect_err("non-admin");
+    .expect_err("non-member");
 
     assert_eq!(
         error.description,
-        "you need channel admin access to rename this channel"
+        "you must be a member of the channel to rename it"
     );
 }
 
 #[tokio::test]
 async fn rename_channel_surfaces_dm_rename_rejection() {
     let context = ChannelToolContext::new(
+        Arc::new(RecordingMessages::default()),
         ToolTestChannelService {
             patch_error: Some("cannot change channel_name for direct message channels".into()),
             ..ToolTestChannelService::default()
@@ -774,8 +930,8 @@ async fn rename_channel_surfaces_dm_rename_rejection() {
 #[tokio::test]
 async fn send_channel_message_posts_as_the_context_actor_for_the_user() {
     let channel_id = Uuid::new_v4();
-    let service = ToolTestChannelService::default();
-    let posts = service.posts.clone();
+    let messages = RecordingMessages::default();
+    let posts = messages.posts.clone();
 
     let tool = SendChannelMessage {
         content: "hello".to_string(),
@@ -785,7 +941,8 @@ async fn send_channel_message_posts_as_the_context_actor_for_the_user() {
 
     tool.call(
         ServiceContext(ChannelToolContext::new(
-            service.clone(),
+            Arc::new(messages.clone()),
+            ToolTestChannelService::default(),
             ToolTestAccessService::default(),
         )),
         RequestContext::new(user_id()),
@@ -794,8 +951,12 @@ async fn send_channel_message_posts_as_the_context_actor_for_the_user() {
     .expect("member can post");
     tool.call(
         ServiceContext(
-            ChannelToolContext::new(service, ToolTestAccessService::default())
-                .with_actor(BotId::TEST_A),
+            ChannelToolContext::new(
+                Arc::new(messages),
+                ToolTestChannelService::default(),
+                ToolTestAccessService::default(),
+            )
+            .with_actor(BotId::TEST_A),
         ),
         RequestContext::new(user_id()),
     )
@@ -803,18 +964,27 @@ async fn send_channel_message_posts_as_the_context_actor_for_the_user() {
     .expect("member can post");
 
     let posts = posts.lock().expect("post lock");
-    let [(default_actor, _, default_req), (custom_actor, _, _)] = posts.as_slice() else {
+    let [(default_access, default_input), (custom_access, _)] = posts.as_slice() else {
         panic!("expected two posts, got {}", posts.len());
     };
+    let bot_of =
+        |access: &EntityAccessReceipt<messages::domain::service::MessageWrite>| match access.auth()
+        {
+            entity_access::domain::models::EntityAccessAuth::Bot(bot) => Some(bot.bot_id()),
+            _ => None,
+        };
+    assert_eq!(bot_of(default_access), Some(bot_id::MACRO_AI_BOT_ID));
+    assert_eq!(default_access.entity().entity_id, channel_id.to_string());
     assert_eq!(
-        default_actor.as_bot().map(|id| id.bot_id()),
-        Some(bot_id::MACRO_AI_BOT_ID)
+        default_access.acting_user_id().map(|user| user.as_ref()),
+        Some(TEST_USER_ID)
     );
-    assert_eq!(default_req.triggered_by.as_deref(), Some(TEST_USER_ID));
     assert_eq!(
-        custom_actor.as_bot().map(|id| id.bot_id()),
-        Some(BotId::TEST_A)
+        default_input.attribution,
+        messages::domain::models::MessageAttribution::ActingUser
     );
+    assert_eq!(default_input.content, "hello");
+    assert_eq!(bot_of(custom_access), Some(BotId::TEST_A));
 }
 
 #[tokio::test]
@@ -822,7 +992,11 @@ async fn manage_participants_adds_canonical_ids() {
     let channel_id = Uuid::new_v4();
     let service = ToolTestChannelService::default();
     let adds = service.adds.clone();
-    let context = ChannelToolContext::new(service, ToolTestAccessService::default());
+    let context = ChannelToolContext::new(
+        Arc::new(RecordingMessages::default()),
+        service,
+        ToolTestAccessService::default(),
+    );
 
     let response = ManageChannelParticipants {
         channel_id,
@@ -849,7 +1023,11 @@ async fn manage_participants_canonicalizes_remove_ids() {
     let channel_id = Uuid::new_v4();
     let service = ToolTestChannelService::default();
     let removes = service.removes.clone();
-    let context = ChannelToolContext::new(service, ToolTestAccessService::default());
+    let context = ChannelToolContext::new(
+        Arc::new(RecordingMessages::default()),
+        service,
+        ToolTestAccessService::default(),
+    );
 
     ManageChannelParticipants {
         channel_id,
@@ -868,7 +1046,11 @@ async fn manage_participants_canonicalizes_remove_ids() {
 async fn manage_participants_rejects_an_empty_list_before_the_service() {
     let service = ToolTestChannelService::default();
     let adds = service.adds.clone();
-    let context = ChannelToolContext::new(service, ToolTestAccessService::default());
+    let context = ChannelToolContext::new(
+        Arc::new(RecordingMessages::default()),
+        service,
+        ToolTestAccessService::default(),
+    );
 
     let error = ManageChannelParticipants {
         channel_id: Uuid::new_v4(),
@@ -885,8 +1067,11 @@ async fn manage_participants_rejects_an_empty_list_before_the_service() {
 
 #[tokio::test]
 async fn manage_participants_requires_membership() {
-    let context =
-        ChannelToolContext::new(ToolTestChannelService::default(), NoOpEntityAccessService);
+    let context = ChannelToolContext::new(
+        Arc::new(RecordingMessages::default()),
+        ToolTestChannelService::default(),
+        NoOpEntityAccessService,
+    );
 
     let error = ManageChannelParticipants {
         channel_id: Uuid::new_v4(),
@@ -903,6 +1088,7 @@ async fn manage_participants_requires_membership() {
 #[tokio::test]
 async fn manage_participants_distinguishes_missing_channels() {
     let context = ChannelToolContext::new(
+        Arc::new(RecordingMessages::default()),
         ToolTestChannelService::default(),
         ToolTestAccessService {
             receipt_error: Some(ReceiptFail::NotFound),

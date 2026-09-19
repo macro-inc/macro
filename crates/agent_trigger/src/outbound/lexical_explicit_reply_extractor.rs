@@ -28,7 +28,7 @@ impl ExplicitReplyExtractor for LexicalExplicitReplyExtractor {
             .extract_explicit_reply(markdown)
             .await?
             .map(|reply| ExtractedExplicitReply {
-                channel_id: reply.channel_id,
+                parent: reply.parent,
                 target_message_id: reply.target_message_id,
                 target_thread_id: reply.target_thread_id,
                 display_text: reply.display_text,

@@ -2,7 +2,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CloseIcon from '@phosphor/x.svg';
-import { Button, type ButtonProps, cn } from '@ui';
+import { Button, type ButtonProps, cn, pressHandlers } from '@ui';
 import {
   createContext,
   type JSX,
@@ -153,7 +153,10 @@ function ControlGroup(props: JSX.HTMLAttributes<HTMLDivElement>) {
   );
 }
 
-type SplitControlButtonProps = Omit<ButtonProps, 'children' | 'onClick'> & {
+type SplitControlButtonProps = Omit<
+  ButtonProps,
+  'children' | 'onClick' | 'onMouseDown'
+> & {
   children?: JSX.Element;
 };
 
@@ -182,14 +185,14 @@ function BackButton(props: SplitControlButtonProps) {
       square={local.square ?? true}
       class={cn(
         !local.size && 'p-1',
-        'rounded-lg touch:active:bg-transparent',
+        'rounded-lg transition-none touch:active:bg-transparent',
         local.class
       )}
       aria-label={local['aria-label']}
       label={label()}
       hotkey={local.hotkey ?? TOKENS.split.go.back}
       disabled={Boolean(local.disabled) || !controller.canGoBack()}
-      onClick={() => controller.goBack()}
+      {...pressHandlers(() => controller.goBack())}
     >
       {local.children ?? <CaretLeftIcon />}
     </Button>
@@ -221,14 +224,14 @@ function ForwardButton(props: SplitControlButtonProps) {
       square={local.square ?? true}
       class={cn(
         !local.size && 'p-1',
-        'rounded-lg touch:active:bg-transparent',
+        'rounded-lg transition-none touch:active:bg-transparent',
         local.class
       )}
       aria-label={local['aria-label']}
       label={label()}
       hotkey={local.hotkey ?? TOKENS.split.go.forward}
       disabled={Boolean(local.disabled) || !controller.canGoForward()}
-      onClick={() => controller.goForward()}
+      {...pressHandlers(() => controller.goForward())}
     >
       {local.children ?? <CaretRightIcon />}
     </Button>
@@ -236,7 +239,8 @@ function ForwardButton(props: SplitControlButtonProps) {
 }
 
 function CloseButton(props: SplitControlButtonProps) {
-  const controller = useSplitPanelController();
+  // Shared workspace headers also render outside a split (for example previews).
+  const controller = useContext(SplitPanelControllerContext);
   const [local, rest] = splitProps(props, [
     'aria-label',
     'children',
@@ -252,21 +256,22 @@ function CloseButton(props: SplitControlButtonProps) {
   const label = () => local.label ?? 'Close';
 
   return (
-    <Show when={controller.canClose()}>
+    <Show when={controller?.canClose()}>
       <Button
         {...rest}
         type={local.type ?? 'button'}
         variant={local.variant}
-        size={local.size ?? 'sm'}
+        size={local.size ?? 'icon-sm'}
         square={local.square ?? true}
-        class={cn('rounded-lg', local.class)}
+        class={cn('rounded-lg transition-none', local.class)}
         aria-label={local['aria-label']}
         label={label()}
         hotkey={local.hotkey ?? TOKENS.split.close}
         disabled={Boolean(local.disabled)}
-        onClick={() => controller.close()}
+        data-split-panel-close=""
+        {...pressHandlers(() => controller?.close())}
       >
-        {local.children ?? <CloseIcon />}
+        {local.children ?? <CloseIcon class="size-4" />}
       </Button>
     </Show>
   );

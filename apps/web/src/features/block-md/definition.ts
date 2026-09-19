@@ -21,7 +21,7 @@ import {
   resumeDocumentSpan,
   startDocumentSpan,
 } from './observability';
-import type { MarkdownRewriteOutput } from './signal/rewriteSignal';
+import type { Diff } from './types';
 
 export const definition = defineBlock({
   name: 'md',
@@ -172,8 +172,6 @@ export const definition = defineBlock({
 export type MarkdownData = ExtractLoadType<(typeof definition)['load']>;
 
 export type MarkdownBlockSpec = {
-  setPatches: (args: {
-    patches: MarkdownRewriteOutput['diffs'];
-  }) => Promise<void>;
+  setPatches: (args: { patches: Diff[] }) => Promise<void>;
   setIsRewriting: () => Promise<void>;
 };
