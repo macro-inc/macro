@@ -1,5 +1,5 @@
 import { ViewBreadcrumbs } from '@app/components/view-shell';
-import { useBlockEntityCommands } from '@app/features/next-soup/actions';
+import { useBlockEntityCommands } from '@app/features/soup/actions';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -29,7 +29,9 @@ export function FileDetailBreadcrumbItem(props: {
   onDuplicate: (id: string, name: string) => void;
 }) {
   const panel = useSplitPanelOrThrow();
+
   const documentId = () => props.documentMetadata.documentId;
+
   const documentName = () =>
     props.documentMetadata.documentName ?? props.fallbackName ?? 'Untitled';
 

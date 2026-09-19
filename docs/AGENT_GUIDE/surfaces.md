@@ -464,9 +464,10 @@ Favorite/Unfavorite, Move to folder, Copy Link, and owner-only Rename and Delete
 A folder's Share dialog, when the owner belongs to a team, has Team access
 (None, View, Comment, or Edit) without a Link sharing card or Link tab.
 Favorites use the same open actions and **Remove from favorites** menu as Tasks.
-The **Filter** menu reuses the
-legacy **Type**, searchable **Tags**, and **Created by** submenus alongside **Files**
-for Default, All files, and Email attachments. Created by is hidden while My Files
+The **Filter** menu uses the same controls as Tasks: **Type**, searchable **Tags**,
+and **Created by** submenus alongside **Files** for Default, All files, and Email
+attachments. Options within a group match any selected option; different groups
+combine to narrow the results. Created by is hidden while My Files
 is restricted to your own files. Recent offers only file-scope filtering.
 `Sort files` offers modified, created, and viewed dates.
 Recent uses the viewer's own interaction order and does not offer a sort override.
@@ -476,10 +477,14 @@ while Markdown, code/CSV, image, video, PDF/DOCX, canvas, and unrecognized file
 clicks and Enter replace the list with a breadcrumbed detail. Choose the current location
 breadcrumb to return to the list; choosing an ancestor file drops newer detail
 entries. Opening a list row or sidebar favorite starts a new detail path; only
-navigation originating inside a detail appends to that path. Modified clicks
-retain existing split navigation. On narrow layouts, use `Select Drive view` for tabs, favorites,
-folders, and tags. Navigation state and expanded folders are restored when returning
-from an opened file.
+navigation originating inside a detail appends to that path. Cmd/Ctrl-clicking a
+row toggles selection; Shift-clicking a checkbox selects a range, and Shift+Enter
+opens the focused row in a new split. Cmd/Ctrl-clicking a row's folder link or
+search hit opens a new tab. Short filtered pages load more results automatically;
+a failed page shows a retry action instead of silently stopping. On narrow layouts,
+use `Select Drive view` for tabs, favorites, folders, and tags. Location, search,
+filters, expanded folders, list focus, and scroll position are restored when
+returning from an opened file.
 
 ## Calendar — `/app/calendar/view`
 
