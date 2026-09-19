@@ -710,12 +710,15 @@ async fn send_notifications(
     let sender_id =
         sender_contact.and_then(|contact| MacroUserIdStr::try_from_email(&contact.email).ok());
 
+    let sender_photo_url = resolve_sender_photo_url(ctx, sender_id.as_ref(), sender_contact).await;
+
     let notification = NewEmailMetadata {
         sender,
         to_email: link.email_address.0.as_ref().to_string(),
         thread_id: message.thread_db_id.to_string(),
         subject: message.subject.unwrap_or_default(),
         snippet: message.snippet.unwrap_or_default(),
+        sender_photo_url,
     };
 
     let primaries = macro_db_client::macro_user_links::get_primaries_for_link(
@@ -763,6 +766,36 @@ async fn send_notifications(
     }
 
     Ok(())
+}
+
+/// Best-effort avatar for an email sender: their Macro profile picture when
+/// the sender is a Macro user, falling back to the recipient's synced contact
+/// photo (mirrors the web `UserIcon` priority). Lookup failures degrade to no
+/// photo rather than failing the notification.
+async fn resolve_sender_photo_url(
+    ctx: &PubSubContext,
+    sender_id: Option<&MacroUserIdStr<'_>>,
+    sender_contact: Option<&models_email::email::service::address::ContactInfo>,
+) -> Option<String> {
+    let macro_profile_picture = match sender_id {
+        Some(sender_id) => macro_db_client::user::update_profile_picture::get_profile_pictures(
+            &ctx.db,
+            &vec![sender_id.to_string()],
+        )
+        .await
+        .inspect_err(|e| tracing::warn!(error=?e, "failed to fetch sender macro profile picture"))
+        .ok()
+        .and_then(|profiles| {
+            profiles
+                .pictures
+                .into_iter()
+                .next()
+                .map(|picture| picture.url)
+        }),
+        None => None,
+    };
+
+    macro_profile_picture.or_else(|| sender_contact.and_then(|contact| contact.photo_url.clone()))
 }
 
 async fn publish_new_email_notification<U: serde::Serialize + Send + Sync + 'static>(

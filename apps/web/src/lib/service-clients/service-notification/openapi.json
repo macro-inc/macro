@@ -2174,6 +2174,10 @@
           "sender": {
             "type": ["string", "null"]
           },
+          "senderPhotoUrl": {
+            "type": ["string", "null"],
+            "description": "Profile photo of the sender (Macro profile picture or the recipient's\nsynced contact photo), when known."
+          },
           "snippet": {
             "type": "string"
           },
@@ -2645,10 +2649,26 @@
         "type": "object",
         "required": ["notificationId"],
         "properties": {
+          "communicationTitle": {
+            "type": ["string", "null"],
+            "description": "Sender line for the communication-notification layout, without any\nchannel suffix (e.g. `hutch mentioned you`). The Notification Service\nExtension falls back to the alert title when absent."
+          },
+          "conversationId": {
+            "type": ["string", "null"],
+            "description": "Stable conversation identifier (channel or email-thread id) for\n`INSendMessageIntent.conversationIdentifier`."
+          },
+          "groupName": {
+            "type": ["string", "null"],
+            "description": "Conversation group name (e.g. `#bug-reports`) rendered as the second\nline of a group communication notification. Only set for non-DM\nchannel notifications."
+          },
           "notificationId": {
             "type": "string",
             "format": "uuid",
             "description": "The id of the notification record (UserNotification.id)"
+          },
+          "notificationType": {
+            "type": ["string", "null"],
+            "description": "The notification type name (e.g. `new_email`), used by the Notification\nService Extension to pick per-type rendering such as the generic email\navatar fallback."
           },
           "senderProfilePictureUrl": {
             "type": ["string", "null"],

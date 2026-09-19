@@ -677,6 +677,11 @@ impl GraphqlNewEmailMetadata {
     async fn snippet(&self) -> &str {
         &self.0.snippet
     }
+
+    /// Profile photo of the sender, when known.
+    async fn sender_photo_url(&self) -> Option<&str> {
+        self.0.sender_photo_url.as_deref()
+    }
 }
 
 /// GraphQL wrapper for inbox reauthentication metadata.
