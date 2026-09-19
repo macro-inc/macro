@@ -48,6 +48,7 @@ import {
   createMemo,
   createRoot,
   createSignal,
+  getOwner,
   Match,
   onCleanup,
   runWithOwner,
@@ -188,22 +189,22 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
     NonNullable<DocumentCardDecoratorProps['previewComponent']> | undefined
   >(undefined);
 
-  const blockOwner = useBlockOwner();
+  const previewOwner = useBlockOwner() ?? getOwner();
 
   const registerPreviewElement = (
     nodeId: string,
     getElement: () => JSX.Element
   ) =>
-    runWithOwner(blockOwner, () => {
-      let disposeOnBlockUnmount: () => void = () => {};
-      onCleanup(() => disposeOnBlockUnmount());
+    runWithOwner(previewOwner, () => {
+      let disposeOnOwnerCleanup: () => void = () => {};
+      onCleanup(() => disposeOnOwnerCleanup());
 
       return createRoot((dispose) => {
         const element = createMemo(getElement);
         setDocumentCardPreviewComponent(nodeId, element, dispose);
-        disposeOnBlockUnmount = () => unsetDocumentCardPreviewCache(nodeId);
+        disposeOnOwnerCleanup = () => unsetDocumentCardPreviewCache(nodeId);
         return element;
-      }, blockOwner);
+      }, previewOwner);
     });
 
   createEffect(() => {
