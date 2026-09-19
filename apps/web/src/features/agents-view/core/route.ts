@@ -1,3 +1,5 @@
+import { ROUTER_BASE } from '@app/lib/constants/routerBase';
+import { modeForKind, systemBotKind } from './agent-kind';
 import type { AgentsMode } from './mode';
 import type { AgentConversationTarget } from './recent-conversations';
 
@@ -45,4 +47,30 @@ export function agentsRouteFromSegments(
 ): string | undefined {
   const componentId = `${PREFIX}${section}~${id}`;
   return parseAgentsRoute(componentId) ? componentId : undefined;
+}
+
+/** Router-relative path, e.g. `/agents/<id>`. */
+export function agentsRoutePath(route: AgentsRoute): string {
+  return `/${agentsRouteSegments(agentsRouteId(route))!.join('/')}`;
+}
+
+/** Absolute app href so session rows can be opened, copied, or middle-clicked. */
+export function agentsRouteHref(route: AgentsRoute): string {
+  const path = agentsRoutePath(route);
+  return ROUTER_BASE === '/' ? path : `${ROUTER_BASE}${path}`;
+}
+
+/** Workspace route for an agent session when only the bot id is known. */
+export function agentsRouteForSession(id: string, botId?: string): AgentsRoute {
+  return {
+    mode: modeForKind(systemBotKind(botId) ?? 'agent'),
+    conversation: { type: 'agent_session', id },
+  };
+}
+
+export function agentsSessionSplitContent(id: string, botId?: string) {
+  return {
+    type: 'component' as const,
+    id: agentsRouteId(agentsRouteForSession(id, botId)),
+  };
 }

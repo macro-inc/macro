@@ -107,7 +107,7 @@ describe('mixed Agents sidebar', () => {
       />
     ));
     expect(screen.queryByRole('tablist')).toBeNull();
-    const code = screen.getByRole('button', { name: /Fix build/ });
+    const code = screen.getByRole('link', { name: /Fix build/ });
     const chat = screen.getByRole('button', { name: /Plan launch/ });
     expect(code.closest('[data-kind]')?.getAttribute('data-kind')).toBe('code');
     expect(chat.getAttribute('data-kind')).toBe('chat');
@@ -165,8 +165,13 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
 
   it('adds the PR as metadata arrives without taking over session navigation', () => {
     const { open, view } = setup();
-    const session = screen.getByRole('button', { name: 'Fix build' });
-    expect(screen.queryByRole('link')).toBeNull();
+    const session = screen.getByRole('link', { name: 'Fix build' });
+    expect(session.getAttribute('href')).toMatch(
+      /\/(?:app\/)?(?:agents|coders)\/coding-session$/
+    );
+    expect(
+      screen.queryByRole('link', { name: 'View PR #42 in GitHub' })
+    ).toBeNull();
     setMetadata({
       harness: 'cursor',
       pullRequestUrl: 'https://github.com/macro-inc/macro/pull/42',
@@ -193,11 +198,16 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
 
   it('keeps the session available without metadata and uses the session harness for its icon', () => {
     const { open, view } = setup();
-    fireEvent.click(screen.getByRole('button', { name: 'Fix build' }));
+    fireEvent.click(screen.getByRole('link', { name: 'Fix build' }));
     expect(open).toHaveBeenCalledOnce();
+    expect(
+      screen.getByRole('link', { name: 'Fix build' }).getAttribute('href')
+    ).toMatch(/\/(?:app\/)?(?:agents|coders)\/coding-session$/);
     setMetadata({ harness: 'in-memory' });
     expect(view.container.querySelector('[data-kind="chat"]')).toBeTruthy();
-    expect(screen.queryByRole('link')).toBeNull();
+    expect(
+      screen.queryByRole('link', { name: 'View PR #42 in GitHub' })
+    ).toBeNull();
     expect(screen.queryByText('Ready')).toBeNull();
   });
 });

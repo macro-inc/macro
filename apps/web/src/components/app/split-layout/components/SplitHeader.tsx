@@ -1,5 +1,6 @@
 import { ViewBreadcrumbs } from '@app/components/view-shell';
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
+import { agentsSessionSplitContent } from '@app/features/agents-view/core/route';
 import { driveLocationLabel } from '@app/features/drive-view/core/location-label';
 import type { DriveState } from '@app/features/drive-view/core/types';
 import { useSoup } from '@app/features/next-soup/soup-context';
@@ -78,10 +79,9 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
           id: entity.channelId,
         })
       )
-      .with({ type: 'agent_session' }, (entity) => ({
-        type: 'agent',
-        id: entity.id,
-      }))
+      .with({ type: 'agent_session' }, (entity) =>
+        agentsSessionSplitContent(entity.id, entity.botId)
+      )
       // Reminders open their referenced entity rather than a block of their own.
       .with({ type: P.union('foreign', 'reminder') }, () => undefined)
       // The full calendar opening path supplies the event range to focus.

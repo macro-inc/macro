@@ -1,9 +1,14 @@
+import { CURSOR_BOT_ID } from '@core/constant/cursorAgent';
 import { describe, expect, it } from 'vitest';
 import {
   type AgentsRoute,
+  agentsRouteForSession,
   agentsRouteFromSegments,
+  agentsRouteHref,
   agentsRouteId,
+  agentsRoutePath,
   agentsRouteSegments,
+  agentsSessionSplitContent,
   parseAgentsRoute,
 } from './route';
 
@@ -32,6 +37,24 @@ describe('Agents workspace routes', () => {
     expect(parseAgentsRoute(id)).toEqual(route);
     expect(agentsRouteSegments(id)).toEqual([section, route.conversation.id]);
     expect(agentsRouteFromSegments(section, route.conversation.id)).toBe(id);
+    expect(agentsRoutePath(route)).toBe(`/${section}/${route.conversation.id}`);
+    expect(agentsRouteHref(route)).toMatch(
+      new RegExp(`/(?:app/)?${section}/${route.conversation.id}$`)
+    );
+  });
+
+  it('puts coding bots on /coders and everyone else on /agents', () => {
+    expect(agentsRouteForSession('session-1', CURSOR_BOT_ID)).toEqual({
+      mode: 'code',
+      conversation: { type: 'agent_session', id: 'session-1' },
+    });
+    expect(agentsSessionSplitContent('session-2', 'chat-bot')).toEqual({
+      type: 'component',
+      id: agentsRouteId({
+        mode: 'chat',
+        conversation: { type: 'agent_session', id: 'session-2' },
+      }),
+    });
   });
 
   it('does not claim unrelated routes or malformed component identities', () => {

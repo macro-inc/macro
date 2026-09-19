@@ -18,7 +18,10 @@
   Rows have no agent or runtime-status subtext. Sessions with a linked PR show
   **View PR #<number> in GitHub** beneath the title; clicking it opens GitHub in
   a new tab without opening the session. The leading icon reflects the PR status. Changing the composer mode does not filter the sidebar.
-  Selecting a row opens its own mode; Shift-click opens it in a new split.
+  Selecting a row opens its own mode and updates the URL to that session
+  (`/app/agents/<id>`, `/app/coders/<id>`, or `/app/agent-chats/<id>`), so
+  reload and back/forward restore it. Home agent-session rows do the same
+  instead of previewing in place. Shift-click opens it in a new split.
 - The starting page has a compact composer that starts at one line and grows
   with longer prompts or Shift+Enter. Lists, quotes, headings, and other
   non-paragraph blocks expand immediately, even with short text. This also applies
