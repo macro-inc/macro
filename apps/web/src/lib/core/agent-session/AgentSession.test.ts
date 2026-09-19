@@ -41,6 +41,7 @@ vi.mock('@queries/agent-session/queue-sync', () => ({
 }));
 
 import { AgentSession } from './AgentSession';
+import { resetSessionTurns, sessionTurn } from './session-turn';
 
 const SESSION = '01a0abed-279f-724c-9f49-60dbedc79b6e';
 
@@ -77,6 +78,7 @@ function deferred<T>() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetSessionTurns();
   socket.listeners.clear();
   // Instances are shared and refcounted, so a test that fails before its
   // `release()` would hand the next one a session that is already loaded.
@@ -377,6 +379,18 @@ describe('AgentSession', () => {
     await live.issue({ type: 'prompt', prompt: 'later' });
 
     expect(speculations()).toEqual([]);
+    live.release();
+  });
+
+  it('publishes the fold turn so list rows can follow a working session', async () => {
+    const live = await loadedWith('running');
+    expect(sessionTurn(SESSION)).toBe('running');
+    fold.pushSession.mockResolvedValueOnce([
+      { kind: 'metadata', metadata: { turn: 'idle' } },
+    ]);
+    AgentSession.ingest({ agentSessionId: SESSION, ...row(2) });
+    await settle();
+    expect(sessionTurn(SESSION)).toBe('idle');
     live.release();
   });
 

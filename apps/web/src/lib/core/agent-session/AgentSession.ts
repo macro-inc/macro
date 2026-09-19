@@ -37,6 +37,7 @@ import type {
   SessionBot,
 } from '@service-agent-harness/generated/schemas';
 import { v7 as uuidv7 } from 'uuid';
+import { publishSessionTurn } from './session-turn';
 
 export type AgentSessionListener = (events: FoldedStreamEvent[]) => void;
 
@@ -114,6 +115,12 @@ export class AgentSession {
    */
   private turn: TurnState = 'idle';
 
+  private setTurn(turn: TurnState | undefined): void {
+    const next = turn ?? 'idle';
+    this.turn = next;
+    publishSessionTurn(this.id, next);
+  }
+
   private constructor(id: string) {
     this.id = id;
     // Subscribed before the fetch so no row between the two is lost: rows
@@ -164,7 +171,7 @@ export class AgentSession {
       // moves when the worker answers, and two prompts sent inside that
       // window would both speculate - the second one showing a bubble the
       // server's `queued` then takes away again.
-      if (occupiesTurn(action)) this.turn = 'starting';
+      if (occupiesTurn(action)) this.setTurn('starting');
       void this.enqueue({
         kind: 'speculated',
         actionId,
@@ -220,7 +227,7 @@ export class AgentSession {
     action: AgentAction,
     options: { userId?: string } = {}
   ): void {
-    if (occupiesTurn(action)) this.turn = 'starting';
+    if (occupiesTurn(action)) this.setTurn('starting');
     void this.enqueue({
       kind: 'speculated',
       actionId,
@@ -316,7 +323,7 @@ export class AgentSession {
       await this.apply(inputs);
     }
     this.ready = true;
-    this.turn = (await readSession(this.id)).metadata.turn;
+    this.setTurn((await readSession(this.id)).metadata.turn);
     return { session: session.value, bot: log.value.bot };
   }
 
@@ -346,7 +353,7 @@ export class AgentSession {
       const events = await pushSession(this.id, inputs);
       if (this.closed || events.length === 0) return;
       const metadata = events.findLast((event) => event.kind === 'metadata');
-      if (metadata) this.turn = metadata.metadata.turn;
+      if (metadata) this.setTurn(metadata.metadata.turn);
       for (const listener of this.listeners) listener(events);
     });
     // A failed push must not poison the chain for every input after it.
