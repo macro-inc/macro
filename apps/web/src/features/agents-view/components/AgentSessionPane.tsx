@@ -1,4 +1,3 @@
-import { AgentSessionProvider } from '@app/features/block-agent/agent-session-provider';
 import {
   AgentChangesProvider,
   AgentChangesSplit,
@@ -6,6 +5,7 @@ import {
   ChangesToggle,
   ReviewNotesDock,
 } from '@app/features/agent-changes/agent-changes';
+import { AgentSessionProvider } from '@app/features/block-agent/agent-session-provider';
 import { AgentComposer } from '@app/features/block-agent/component/AgentComposer';
 import { AgentPullRequestChip } from '@app/features/block-agent/component/AgentPullRequestChip';
 import { agentSessionTitle } from '@app/features/block-agent/component/AgentSplitHeader';
