@@ -155,6 +155,8 @@ export function ListEntity(props: ListEntityProps) {
     setSnippetContainerRef,
     chars: chars(),
     onProjectClick: props.onProjectClick,
+    onFilterByTag: props.onFilterByTag,
+    showCalendarAttendance: props.showCalendarAttendance,
   });
 
   const draggable = createEntityDraggable({
