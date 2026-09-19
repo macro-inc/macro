@@ -167,7 +167,7 @@ const [seenOverrides, setSeenOverrides] = createRoot(() =>
   createStore<Record<string, SeenOverride | undefined>>({})
 );
 
-function setSeenOverride(ids: readonly string[], viewedAt: string | undefined) {
+export function setSeenOverride(ids: readonly string[], viewedAt: string | undefined) {
   if (ids.length === 0) return () => undefined;
   const token = Symbol();
   const previous = untrack(
