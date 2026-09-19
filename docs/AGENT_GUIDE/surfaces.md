@@ -708,20 +708,23 @@ with `Customize stages`, inline rename, reorder by drag handle or arrow keys (up
 buttons on touch), delete, `Add stage`, `Reset to defaults`, and `Closed stages`
 checkboxes, editable by the role set as `edit_stages_role`),
 `Connections` (email/tool OAuth), `MCP server`
-(setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE), `Bots`; Agents → `Agents`, `Runtimes`;
+(setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE), `Bots`; Agents → `Agents & runtimes`;
 `Log out`.
-`Agents` lists team and private agents with a search field, instruction previews,
+`Agents & runtimes` combines team and private agents with runtime configuration below.
+The agent list has a search field, readable instruction previews,
 and a `Create agent` action. `Edit <name>` opens the same editor with saved values.
-The built-in Macro agent is marked `Built in` and cannot be edited or deleted.
-`Manage runtimes` opens Runtimes in the current settings panel at
-`/app/settings/runtimes`; older `/app/settings/harness`
-links still work, including pairing links with `?pair=...`.
+Built-in entries carry a `System` chip. The Macro agent cannot be edited or deleted.
+The combined page lives at `/app/settings/agents`; older `/app/settings/runtimes`
+and `/app/settings/harness` links open it too, including pairing links with `?pair=...`.
 Open settings from the user-email menu or `Ctrl+;`. `Back to app` returns to the
 previous surface.
 
 The agent editor gives instructions a large writing area alongside identity,
-runtime, model, connected apps, and channel access. New agents start private on
-Macro, with all connected apps and all channels. Name fills the @handle until it
+runtime, model, connected apps, and channel access. Instructions use the app’s
+Lexical rich-text editor and are saved as standard Markdown. Select text to reveal formatting
+controls; reopening preserves headings, lists, links, and emphasis. Loading an
+existing agent does not rewrite its instructions or mark the draft changed.
+New agents start private on Macro, with all connected apps and all channels. Name fills the @handle until it
 is edited separately. Optional instruction examples provide a starting point.
 Use `Private` / `Team` under `Who can manage it`; team members can edit team agents,
 only the creator can make one private, and the creator or team owner can delete it.
@@ -753,13 +756,16 @@ and duplicate submissions. Closing an edited draft offers `Keep editing` and
 `Discard changes`. Name takes focus when the editor opens or reopens.
 `?createAgent=true` still opens creation directly.
 
-`Runtimes` shows compact cloud-provider rows and a `Your computers` section.
-Macro is built in. Every user can open this page to configure Cursor, Claude
-Cloud, Codex, and their paired macrod runtimes. Cloud providers expose connection
-or configuration controls on demand. Connection chips in agent replies open this page, including
-before any account is connected.
+The `Runtimes` section sits below agents on the same page. It shows Macro, Cursor,
+Claude Cloud, Codex, and paired computers. Click a provider row to open its
+configuration modal. All provider modals use the same header, scrollable body,
+Done action, and close button; Escape and outside click close them unless a write
+is pending. Closing restores focus to the provider row. Connection chips in agent
+replies open the combined page, including before an account is connected.
 Cursor's default-model selector uses live model discovery and saves changes.
-`Pair a runtime` walks through code entry, review, naming, and Private/Team
+The flat macrod card cycles through compatible agent examples; reduced-motion
+preferences keep the example static. Its `Setup guide` opens the installation
+instructions. `Pair a runtime` walks through code entry, review, naming, and Private/Team
 ownership. Pairing approval is distinct from the machine actually connecting;
 connection indicators update from the runtime list. Removal requires confirmation
 and is offered only to a private owner, team registrant, or team owner.
@@ -770,7 +776,7 @@ and use **Continue to ChatGPT** to finish sign-in in the provider tab. The Macro
 page displays pending, expired, failed, and retryable error states; **Cancel
 sign-in** cancels the attempt. After connecting, choose a **Cloud environment**
 and click **Save Codex settings** before using Codex. Until an environment is
-saved, the row says **Setup required** and keeps configuration visible. Options show their
+saved, the row says **Setup required** and keeps configuration visible within the open modal. Options show their
 repositories. New sessions always use the `main` branch; there is no branch
 picker or automatic repository selection. Changed selections display **Unsaved
 changes** until the server confirms them. The save button is disabled until an

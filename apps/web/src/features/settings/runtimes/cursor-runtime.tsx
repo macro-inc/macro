@@ -11,8 +11,9 @@ import {
   useSetCursorDefaultModel,
 } from '@queries/auth/cursor-api-key';
 import { Button } from '@ui';
-import { createSignal, createUniqueId, For, Show, Suspense } from 'solid-js';
+import { createSignal, For, Show, Suspense } from 'solid-js';
 import { RuntimeRow } from './components/runtime-row';
+import { RuntimeSettingsDialog } from './components/runtime-settings-dialog';
 
 const CURSOR_KEY_PREFIX = 'crsr_';
 function failureMessage(error: unknown, fallback: string): string {
@@ -31,8 +32,8 @@ export function CursorRuntime() {
 }
 
 function CursorRuntimeContent() {
-  const [expanded, setExpanded] = createSignal(false);
-  const detailsId = createUniqueId();
+  let trigger: HTMLButtonElement | undefined;
+  const [open, setOpen] = createSignal(false);
   const [cursorApiKey, setCursorApiKey] = createSignal('');
   const cursorStatus = useCursorApiKeyStatusQuery();
   const saveCursorApiKey = useSaveCursorApiKey();
@@ -116,48 +117,40 @@ function CursorRuntimeContent() {
   };
 
   return (
-    <RuntimeRow
-      name="Cursor"
-      description="Coding agents, powered by your Cursor account."
-      icon={<CursorIcon />}
-      status={
-        cursorStatus.isPlaceholderData || !cursorStatus.isSuccess
-          ? cursorStatus.isError
-            ? 'Unavailable'
-            : 'Loading…'
-          : cursorRegistered()
-            ? 'Connected'
-            : 'Not connected'
-      }
-      connected={cursorRegistered()}
-      action={
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          aria-label={
-            expanded()
-              ? 'Done configuring Cursor'
-              : cursorRegistered()
-                ? 'Configure Cursor'
-                : 'Connect Cursor'
+    <>
+      <RuntimeRow
+        triggerRef={(element) => {
+          trigger = element;
+        }}
+        name="Cursor"
+        system
+        description="Coding agents, powered by your Cursor account."
+        icon={<CursorIcon />}
+        status={
+          cursorStatus.isPlaceholderData || !cursorStatus.isSuccess
+            ? cursorStatus.isError
+              ? 'Unavailable'
+              : 'Loading…'
+            : cursorRegistered()
+              ? 'Connected'
+              : 'Not connected'
+        }
+        connected={cursorRegistered()}
+        actionLabel={cursorRegistered() ? 'Configure' : 'Connect'}
+        onConfigure={() => setOpen(true)}
+      />
+      <Show when={open()}>
+        <RuntimeSettingsDialog
+          returnFocus={() => trigger}
+          title="Cursor"
+          description="Connect your Cursor account and choose the model new sessions start with."
+          busy={
+            saveCursorApiKey.isPending ||
+            disconnectCursor.isPending ||
+            setCursorDefaultModel.isPending
           }
-          aria-expanded={expanded()}
-          aria-controls={detailsId}
-          disabled={!cursorStatus.isSuccess || cursorStatus.isPlaceholderData}
-          onClick={() => setExpanded(!expanded())}
+          onClose={() => setOpen(false)}
         >
-          {expanded() ? 'Done' : cursorRegistered() ? 'Configure' : 'Connect'}
-        </Button>
-      }
-    >
-      <Show when={cursorStatus.isError}>
-        <p role="alert" class="mt-3 text-xs text-negative">
-          Could not load your Cursor connection. Try refreshing this page.
-        </p>
-      </Show>
-      <Show when={expanded()}>
-        <div id={detailsId} class="mt-4 border-t border-edge-muted pt-1">
           <Show
             when={cursorStatus.isSuccess && !cursorStatus.isPlaceholderData}
             fallback={
@@ -171,7 +164,7 @@ function CursorRuntimeContent() {
             <Show
               when={cursorRegistered()}
               fallback={
-                <div class="mt-4 flex flex-col gap-1.5">
+                <div class="flex flex-col gap-1.5">
                   <label for="cursor-harness-api-key" class="text-xs text-ink">
                     API key
                   </label>
@@ -219,7 +212,7 @@ function CursorRuntimeContent() {
                 </div>
               }
             >
-              <div class="mt-4 flex flex-col gap-1.5">
+              <div class="flex flex-col gap-1.5">
                 <label for="cursor-default-model" class="text-xs text-ink">
                   Default model
                 </label>
@@ -228,7 +221,7 @@ function CursorRuntimeContent() {
                   fallback={
                     <select
                       id="cursor-default-model"
-                      class="settings-input w-56"
+                      class="settings-input w-full"
                       disabled
                     >
                       <option>Loading models…</option>
@@ -266,7 +259,7 @@ function CursorRuntimeContent() {
                         fallback={
                           <select
                             id="cursor-default-model"
-                            class="settings-input w-56"
+                            class="settings-input w-full"
                             value={
                               (cursorStatus.isSuccess
                                 ? cursorStatus.data.defaultModelId
@@ -296,7 +289,7 @@ function CursorRuntimeContent() {
                           onSelect={(id) => void handleCursorModelChange(id)}
                           disabled={setCursorDefaultModel.isPending}
                           ariaLabel="Default model"
-                          triggerClass="w-72 max-w-full justify-between"
+                          triggerClass="w-full justify-between"
                         />
                       </Show>
                     </Show>
@@ -327,8 +320,8 @@ function CursorRuntimeContent() {
               </div>
             </Show>
           </Show>
-        </div>
+        </RuntimeSettingsDialog>
       </Show>
-    </RuntimeRow>
+    </>
   );
 }

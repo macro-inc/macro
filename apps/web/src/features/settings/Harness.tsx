@@ -2,9 +2,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { ThrownResultError } from '@core/util/result';
 import MacroLogo from '@icon/macro-logo.svg';
-import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
 import DesktopIcon from '@phosphor/desktop.svg';
-import PlusIcon from '@phosphor/plus.svg';
 import {
   useDeleteHarnessMutation,
   useHarnessesQuery,
@@ -18,11 +16,10 @@ import { ClaudeConnection } from '../claude-connection/claude-connection';
 import { CodexHarness } from './codex/views/CodexHarness';
 import { HarnessPairingDialog } from './HarnessPairingDialog';
 import { HarnessIcon, StatusDot } from './integration-ui';
-import { SettingsCard, SettingsPage, SettingsSection } from './primitives';
+import { SettingsCard, SettingsSection } from './primitives';
+import { MacrodPromo } from './runtimes/components/macrod-promo';
 import { RuntimeRow } from './runtimes/components/runtime-row';
 import { CursorRuntime } from './runtimes/cursor-runtime';
-
-const BYOA_DOCS_URL = 'https://docs.macro.com/AI/bring-your-own';
 
 function failureMessage(error: unknown, fallback: string): string {
   return (error instanceof ThrownResultError && error.message) || fallback;
@@ -34,7 +31,7 @@ function lastConnectedText(harness: RegisteredHarness): string {
     : 'Waiting for the first connection';
 }
 
-/** Production entry point for the runtimes settings screen. */
+/** Runtime configuration section shared by the combined settings page. */
 export function Harness() {
   return (
     <Suspense
@@ -67,6 +64,14 @@ function RuntimeSettings() {
   const [pairingDialog, setPairingDialog] = createSignal<{
     initialCode?: string;
   }>();
+  let pairingTrigger: HTMLElement | undefined;
+  const openPairing = () => {
+    pairingTrigger =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : undefined;
+    setPairingDialog({});
+  };
   const [removingHarness, setRemovingHarness] =
     createSignal<RegisteredHarness>();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -92,138 +97,99 @@ function RuntimeSettings() {
   };
 
   return (
-    <SettingsPage
+    <SettingsSection
       title="Runtimes"
-      description="Choose where your agents work. Connect an account or pair your own computer."
+      description="Where your agents run. Connect a cloud account or use your own computer."
     >
-      <SettingsSection title="Cloud runtimes">
-        <SettingsCard>
-          <RuntimeRow
-            name="Macro"
-            description="Work with your documents, messages, and workspace."
-            icon={<MacroLogo />}
-            status="Built in"
-            connected
-          />
-          <ClaudeConnection />
-          <CursorRuntime />
-          <CodexHarness />
-        </SettingsCard>
-      </SettingsSection>
+      <SettingsCard class="border-edge-muted">
+        <RuntimeRow
+          name="Macro"
+          description="Work with your documents, messages, and workspace."
+          icon={<MacroLogo />}
+          status="Built in"
+          connected
+          system
+        />
+        <ClaudeConnection />
+        <CursorRuntime />
+        <CodexHarness />
 
-      <SettingsSection title="Your computers">
-        <SettingsCard>
-          <section class="px-5 py-5 mobile:px-4">
-            <div class="flex items-start gap-3">
-              <HarnessIcon>
-                <DesktopIcon />
-              </HarnessIcon>
-              <div class="min-w-0 flex-1">
-                <h2 class="text-sm font-medium text-ink">
-                  Run agents on your computer
-                </h2>
-                <p class="mt-1 text-xs leading-5 text-ink-muted">
-                  Give agents access to your local tools and projects. Connect a
-                  computer with macrod, then choose it when creating an agent.
-                </p>
-                <div class="mt-4 flex flex-wrap items-center gap-3">
+        <Show when={harnessesQuery.isError}>
+          <div class="flex items-center justify-between gap-3 px-5 py-4">
+            <p role="alert" class="text-xs text-negative">
+              Could not load your paired runtimes.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void harnessesQuery.refetch()}
+            >
+              Retry
+            </Button>
+          </div>
+        </Show>
+        <Show when={!harnessesQuery.isError}>
+          <For
+            each={harnessesQuery.isSuccess ? harnessesQuery.data : []}
+            fallback={
+              <p class="px-5 py-4 text-xs text-ink-extra-muted">
+                {harnessesQuery.isPending
+                  ? 'Loading paired runtimes…'
+                  : 'No computers paired yet. Your runtimes will appear here.'}
+              </p>
+            }
+          >
+            {(harness) => (
+              <div class="flex items-start gap-3 px-5 py-4 mobile:px-4">
+                <HarnessIcon>
+                  <DesktopIcon />
+                </HarnessIcon>
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <h3 class="break-words text-sm font-medium text-ink">
+                      {harness.name}
+                    </h3>
+                    <span class="rounded border border-edge-muted px-1.5 py-0.5 text-[10px] text-ink-muted">
+                      {harness.owner.type === 'team' ? 'Team' : 'Private'}
+                    </span>
+                  </div>
+                  <p class="mt-1 flex items-center gap-1.5 text-xs text-ink-muted">
+                    <StatusDot
+                      state={harness.connected ? 'connected' : 'disconnected'}
+                      label={harness.connected ? 'Connected' : 'Offline'}
+                    />
+                    {harness.connected ? 'Connected' : 'Offline'}
+                  </p>
+                  <p class="mt-1 text-[11px] leading-4 text-ink-extra-muted">
+                    {lastConnectedText(harness)}
+                  </p>
+                </div>
+                <Show when={canRemove(harness)}>
                   <Button
                     type="button"
-                    variant="cta"
+                    variant="ghost"
                     size="sm"
-                    onClick={() => setPairingDialog({})}
+                    aria-label={`Remove ${harness.name}`}
+                    onClick={() => setRemovingHarness(harness)}
                   >
-                    <PlusIcon class="size-3.5" />
-                    Pair a runtime
+                    Remove
                   </Button>
-                  <a
-                    href={BYOA_DOCS_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="inline-flex items-center gap-1 text-xs font-medium text-ink-muted outline-none hover:text-ink focus-visible:underline"
-                  >
-                    Setup guide
-                    <ArrowUpRightIcon class="size-3.5" />
-                  </a>
-                </div>
+                </Show>
               </div>
-            </div>
-          </section>
-          <Show when={harnessesQuery.isError}>
-            <div class="flex items-center justify-between gap-3 px-5 py-4">
-              <p role="alert" class="text-xs text-negative">
-                Could not load your paired runtimes.
-              </p>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void harnessesQuery.refetch()}
-              >
-                Retry
-              </Button>
-            </div>
-          </Show>
-          <Show when={!harnessesQuery.isError}>
-            <For
-              each={harnessesQuery.isSuccess ? harnessesQuery.data : []}
-              fallback={
-                <p class="px-5 py-4 text-xs text-ink-extra-muted">
-                  {harnessesQuery.isPending
-                    ? 'Loading paired runtimes…'
-                    : 'No computers paired yet. Your runtimes will appear here.'}
-                </p>
-              }
-            >
-              {(harness) => (
-                <div class="flex items-start gap-3 px-5 py-4 mobile:px-4">
-                  <HarnessIcon>
-                    <DesktopIcon />
-                  </HarnessIcon>
-                  <div class="min-w-0 flex-1">
-                    <div class="flex flex-wrap items-center gap-2">
-                      <h3 class="break-words text-sm font-medium text-ink">
-                        {harness.name}
-                      </h3>
-                      <span class="rounded border border-edge-muted px-1.5 py-0.5 text-[10px] text-ink-muted">
-                        {harness.owner.type === 'team' ? 'Team' : 'Private'}
-                      </span>
-                    </div>
-                    <p class="mt-1 flex items-center gap-1.5 text-xs text-ink-muted">
-                      <StatusDot
-                        state={harness.connected ? 'connected' : 'disconnected'}
-                        label={harness.connected ? 'Connected' : 'Offline'}
-                      />
-                      {harness.connected ? 'Connected' : 'Offline'}
-                    </p>
-                    <p class="mt-1 text-[11px] leading-4 text-ink-extra-muted">
-                      {lastConnectedText(harness)}
-                    </p>
-                  </div>
-                  <Show when={canRemove(harness)}>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      aria-label={`Remove ${harness.name}`}
-                      onClick={() => setRemovingHarness(harness)}
-                    >
-                      Remove
-                    </Button>
-                  </Show>
-                </div>
-              )}
-            </For>
-          </Show>
-        </SettingsCard>
-        <p class="px-6 text-xs leading-5 text-ink-extra-muted">
-          Private runtimes are only available to you. Team runtimes can be used
-          by everyone on your team.
-        </p>
-      </SettingsSection>
+            )}
+          </For>
+        </Show>
+      </SettingsCard>
+      <MacrodPromo onPair={openPairing} />
+      <p class="px-6 text-xs leading-5 text-ink-extra-muted">
+        Private runtimes are only available to you. Team runtimes can be used by
+        everyone on your team.
+      </p>
       <Show when={pairingDialog()} keyed>
         {(dialog) => (
           <HarnessPairingDialog
+            returnFocus={() => pairingTrigger}
             initialCode={dialog.initialCode}
             onClose={() => setPairingDialog(undefined)}
           />
@@ -239,7 +205,7 @@ function RuntimeSettings() {
           />
         )}
       </Show>
-    </SettingsPage>
+    </SettingsSection>
   );
 }
 

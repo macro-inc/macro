@@ -237,7 +237,7 @@ describe('Harness', () => {
     try {
       render(() => <Harness />);
       expect(
-        screen.queryByRole('region', { name: 'Claude Cloud connection' })
+        screen.queryByRole('button', { name: 'Connect Claude Cloud' })
       ).toBeTruthy();
       expect(claudeFlag.source).toHaveBeenCalled();
       expect(screen.getByRole('heading', { name: 'Cursor' })).toBeTruthy();
@@ -335,7 +335,7 @@ describe('Harness', () => {
     ).toBeTruthy();
     expect(screen.getByLabelText('Anthropic')).toBeTruthy();
     expect(
-      screen.getByRole('heading', { name: 'Run agents on your computer' })
+      screen.getByRole('heading', { name: /Bring your own agents to Macro/ })
     ).toBeTruthy();
     expect(screen.queryByLabelText('API key')).toBeNull();
   });

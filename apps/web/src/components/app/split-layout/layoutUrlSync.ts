@@ -127,7 +127,9 @@ export function createLayoutUrlSync(
     if (
       pathChanged &&
       pairs()[0] === 'settings' &&
-      (((pairs()[1] === 'runtimes' || pairs()[1] === 'harness') &&
+      (((pairs()[1] === 'agents' ||
+        pairs()[1] === 'runtimes' ||
+        pairs()[1] === 'harness') &&
         currentQuery.get('pair')) ||
         (pairs()[1] === 'agents' && currentQuery.get('createAgent') === 'true'))
     ) {

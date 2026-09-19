@@ -7,6 +7,7 @@ import { OptionSwitch } from '../components/option-switch';
 import { RuntimePicker } from '../components/runtime-picker';
 import type { AgentEditorSource } from '../context/editor-source';
 import type { AgentApp, AgentDraft } from '../core/types';
+import { AgentInstructionsEditor } from '../instructions-editor';
 import { createAgentDraft } from '../primitives/create-agent-draft';
 
 const INSTRUCTION_EXAMPLES = [
@@ -33,6 +34,7 @@ export function AgentEditorView(props: {
   source: AgentEditorSource;
   appsEnabled: boolean;
   onClose: () => void;
+  returnFocus?: () => HTMLElement | undefined;
   renderApps: (
     servers: Accessor<AgentApp[]>,
     onChange: (servers: AgentApp[]) => void,
@@ -90,14 +92,20 @@ export function AgentEditorView(props: {
       onOpenChange={(open) => {
         if (!open) close();
       }}
+      onCloseAutoFocus={(event) => {
+        const trigger = props.returnFocus?.();
+        if (!trigger?.isConnected) return;
+        event.preventDefault();
+        trigger.focus({ preventScroll: true });
+      }}
     >
       <Panel
         depth={2}
-        class="relative flex h-[min(780px,90dvh)] flex-col overflow-hidden rounded-xl text-ink"
+        class="relative flex h-[min(800px,90dvh)] flex-col overflow-hidden rounded-xl border border-edge text-ink shadow-xl"
       >
-        <Panel.Header class="shrink-0 gap-2 px-5 py-3 pr-12">
+        <Panel.Header class="shrink-0 gap-2 bg-panel px-6 py-4 pr-12">
           <AgentIcon class="size-4 text-accent" />
-          <Dialog.Title class="text-sm font-semibold">
+          <Dialog.Title class="text-base font-semibold">
             {props.editing ? 'Edit agent' : 'Create agent'}
           </Dialog.Title>
         </Panel.Header>
@@ -107,7 +115,7 @@ export function AgentEditorView(props: {
         </Dialog.Description>
         <form
           id="agent-form"
-          class="grid min-h-0 flex-1 gap-6 overflow-y-auto p-5 md:grid-cols-[minmax(280px,0.85fr)_minmax(0,1.15fr)] md:grid-rows-[auto_minmax(0,1fr)] md:overflow-hidden"
+          class="grid min-h-0 flex-1 gap-6 overflow-y-auto bg-ink/[0.025] p-6 md:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.2fr)] md:grid-rows-[auto_minmax(0,1fr)] md:overflow-hidden"
           onSubmit={(event) => {
             event.preventDefault();
             void submit();
@@ -185,25 +193,20 @@ export function AgentEditorView(props: {
               </p>
             </div>
           </fieldset>
-          <div class="flex min-w-0 flex-col self-start rounded-xl border border-edge-muted bg-input md:col-start-2 md:row-span-2 md:row-start-1 md:min-h-0 md:self-stretch">
+          <div class="flex min-w-0 flex-col self-start rounded-lg border border-edge bg-input shadow-sm md:col-start-2 md:row-span-2 md:row-start-1 md:min-h-0 md:self-stretch">
             <div class="shrink-0 border-b border-edge-muted px-4 py-3">
-              <label for="agent-instructions" class="text-sm font-medium">
-                Instructions
-              </label>
+              <h2 class="text-sm font-semibold text-ink">Instructions</h2>
               <p class="mt-1 text-xs leading-5 text-ink-muted">
                 What should this agent do? Describe its role, how it should
                 work, and what a good result looks like.
               </p>
             </div>
-            <textarea
-              id="agent-instructions"
+            <AgentInstructionsEditor
+              markdown={editor.draft().instructions}
+              onChange={(markdown) => editor.update('instructions', markdown)}
               disabled={editor.busy()}
-              class="h-56 flex-none resize-none bg-transparent px-4 py-4 text-sm leading-6 text-ink outline-none placeholder:text-ink-placeholder focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/30 md:h-auto md:min-h-0 md:flex-1"
-              placeholder="You are a research assistant. Find the relevant documents, compare sources, and write a concise answer with links…"
-              value={editor.draft().instructions}
-              onInput={(event) =>
-                editor.update('instructions', event.currentTarget.value)
-              }
+              class="h-64 flex-none overflow-y-auto px-4 py-4 md:h-auto md:min-h-0 md:flex-1"
+              placeholder="Describe your agent’s role, how it should work, and what a good result looks like…"
             />
             <Show when={!props.editing && !editor.draft().instructions}>
               <div class="shrink-0 border-t border-edge-muted p-4">
@@ -304,8 +307,8 @@ export function AgentEditorView(props: {
                 </p>
               </Show>
               <p class="mt-2 text-xs text-ink-muted">
-                Connect cloud accounts or pair a computer in Settings →
-                Runtimes.
+                Connect accounts and pair computers in the Runtimes section
+                below your agents.
               </p>
               <div class="mt-4">
                 <AgentModelPicker
@@ -395,7 +398,7 @@ export function AgentEditorView(props: {
             </EditorSection>
           </fieldset>
         </form>
-        <Panel.Footer class="shrink-0 flex-wrap justify-end gap-2 border-t border-edge-muted px-5 py-3">
+        <Panel.Footer class="shrink-0 flex-wrap justify-end gap-2 border-t border-edge-muted bg-panel px-6 py-4">
           <Show
             when={editor.discarding()}
             fallback={

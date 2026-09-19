@@ -5,7 +5,6 @@ import BuildingsIcon from '@phosphor/buildings.svg';
 import CpuIcon from '@phosphor/cpu.svg';
 import CreditCardIcon from '@phosphor/credit-card.svg';
 import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
-import HardDrivesIcon from '@phosphor/hard-drives.svg';
 import KeyIcon from '@phosphor/key.svg';
 import KeyboardIcon from '@phosphor/keyboard.svg';
 import PlugIcon from '@phosphor/plug.svg';
@@ -79,10 +78,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
   },
   {
     label: 'Agents',
-    items: [
-      { tab: 'Agents', label: 'Agents', icon: AgentIcon },
-      { tab: 'Harness', label: 'Runtimes', icon: HardDrivesIcon },
-    ],
+    items: [{ tab: 'Agents', label: 'Agents & runtimes', icon: AgentIcon }],
   },
   {
     label: 'Admin',
@@ -114,7 +110,7 @@ const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   'Mobile App': 'mobile-app',
   Agent: 'mcp-server',
   Agents: 'agents',
-  Harness: 'runtimes',
+  Harness: 'agents',
   Bots: 'bots',
   Team: 'team',
   Tags: 'tags',
@@ -129,7 +125,9 @@ const SETTINGS_SLUG_TO_TAB = new Map<string, SettingsTab>([
   ...(Object.entries(SETTINGS_TAB_SLUGS) as [SettingsTab, string][]).map(
     ([tab, slug]): [string, SettingsTab] => [slug, tab]
   ),
-  ['harness', 'Harness'],
+  ['agents', 'Agents'],
+  ['runtimes', 'Agents'],
+  ['harness', 'Agents'],
 ]);
 
 /** The URL slug for a settings tab (e.g. `Connected` → `connections`). */
@@ -150,7 +148,9 @@ export const settingsSlugToTab = (
 export const getSettingsTabItem = (
   tab: SettingsTab
 ): SettingsTabItem | undefined =>
-  SETTINGS_TAB_ITEMS.find((item) => item.tab === tab);
+  SETTINGS_TAB_ITEMS.find(
+    (item) => item.tab === (tab === 'Harness' ? 'Agents' : tab)
+  );
 
 /**
  * Returns a predicate gating which settings tabs are available given feature
@@ -190,7 +190,7 @@ export const useSettingsTabAvailable = () => {
         return ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform();
       case 'Agent':
         return !isNativeMobilePlatform();
-      // Configurable agents are still rolling out; keep both tabs behind the
+      // Configurable agents are still rolling out; keep the combined page behind the
       // same enable-chat-v3-agents gate as the channel mention surfaces, so
       // settings never advertises agents to a user who cannot mention one.
       case 'Harness':

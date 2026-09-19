@@ -1,5 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { ThrownResultError } from '@core/util/result';
+import XIcon from '@phosphor/x.svg';
 import {
   useApproveHarnessPairingMutation,
   useHarnessPairingQuery,
@@ -33,6 +34,7 @@ function expiresInMinutes(expiresAt: string): number {
 export function HarnessPairingDialog(props: {
   initialCode?: string;
   onClose: () => void;
+  returnFocus?: () => HTMLElement | undefined;
 }) {
   const [codeInput, setCodeInput] = createSignal(props.initialCode ?? '');
   const [committedCode, setCommittedCode] = createSignal<string | undefined>(
@@ -111,15 +113,24 @@ export function HarnessPairingDialog(props: {
       }
       position="center"
       visibleScrim
-      class="w-[min(480px,calc(100vw-16px))]"
+      class="w-[min(520px,calc(100vw-24px))]"
+      onCloseAutoFocus={(event) => {
+        const trigger = props.returnFocus?.();
+        if (!trigger?.isConnected) return;
+        event.preventDefault();
+        trigger.focus({ preventScroll: true });
+      }}
     >
-      <Panel depth={2} class="max-h-[88vh] rounded-xl text-ink">
-        <Panel.Header class="px-5 py-3">
-          <Dialog.Title class="text-sm font-semibold">
+      <Panel
+        depth={2}
+        class="relative max-h-[88dvh] rounded-xl border border-edge text-ink"
+      >
+        <Panel.Header class="bg-panel px-6 py-4 pr-12">
+          <Dialog.Title class="text-base font-semibold">
             {approved() ? 'Pairing approved' : 'Pair a runtime'}
           </Dialog.Title>
         </Panel.Header>
-        <Panel.Body class="overflow-y-auto p-5">
+        <Panel.Body class="overflow-y-auto p-6">
           <Dialog.Description class="mb-5 text-sm leading-5 text-ink-muted">
             {approved()
               ? 'Your computer is approved to run agents in Macro.'
@@ -273,7 +284,7 @@ export function HarnessPairingDialog(props: {
             </Match>
           </Switch>
         </Panel.Body>
-        <Panel.Footer class="justify-end gap-2 px-5 py-3">
+        <Panel.Footer class="justify-end gap-2 bg-panel px-6 py-4">
           <Switch>
             <Match when={approved()}>
               <Button
@@ -346,6 +357,17 @@ export function HarnessPairingDialog(props: {
             </Match>
           </Switch>
         </Panel.Footer>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          class="absolute top-3 right-4"
+          aria-label="Close runtime pairing"
+          disabled={approveMutation.isPending}
+          onClick={props.onClose}
+        >
+          <XIcon />
+        </Button>
       </Panel>
     </Dialog>
   );

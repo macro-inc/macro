@@ -331,7 +331,7 @@ export function RosterPage(props: {
                       type="button"
                       class="icon-btn"
                       aria-label="Configure runtimes"
-                      onClick={() => openSettings('Harness')}
+                      onClick={() => openSettings('Agents')}
                     >
                       <GearIcon class="ph" />
                     </button>
@@ -352,7 +352,7 @@ export function RosterPage(props: {
                       type="button"
                       class="icon-btn"
                       aria-label="Configure Cursor"
-                      onClick={() => openSettings('Harness')}
+                      onClick={() => openSettings('Agents')}
                     >
                       <GearIcon class="ph" />
                     </button>

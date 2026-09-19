@@ -91,10 +91,10 @@ describe('settings runtime links', () => {
   it.each(['runtimes', 'harness'])(
     'opens the runtimes tab from /settings/%s',
     (slug) => {
-      expect(settingsTabFromSplitPath(`/app/settings/${slug}`)).toBe('Harness');
+      expect(settingsTabFromSplitPath(`/app/settings/${slug}`)).toBe('Agents');
       expect(
         settingsTabFromSplitPath(`/app/component/inbox/settings/${slug}`)
-      ).toBe('Harness');
+      ).toBe('Agents');
     }
   );
 

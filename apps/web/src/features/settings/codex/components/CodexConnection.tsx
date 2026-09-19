@@ -1,11 +1,15 @@
 import OpenAiIcon from '@core/component/AI/assets/openai.svg';
 import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
 import { Button } from '@ui';
-import { createSignal, createUniqueId, For, Show } from 'solid-js';
-import { HarnessIcon } from '../../integration-ui';
+import { createSignal, For, Show } from 'solid-js';
+import { RuntimeRow } from '../../runtimes/components/runtime-row';
+import { RuntimeSettingsDialog } from '../../runtimes/components/runtime-settings-dialog';
 import type { CodexConnectionDisplay, CodexLoginDisplay } from '../core/types';
 
 export function CodexConnection(props: {
+  open: boolean;
+  onOpen: () => void;
+  onClose: () => void;
   connection: CodexConnectionDisplay | undefined;
   login: CodexLoginDisplay | undefined;
   environments: {
@@ -28,11 +32,10 @@ export function CodexConnection(props: {
   onRetryEnvironments: () => void;
   onSave: (config: { environmentId: string }) => void;
 }) {
+  let trigger: HTMLButtonElement | undefined;
   const connected = () => props.connection?.connected === true;
   const needsSetup = () => connected() && !props.connection?.environmentId;
   const ready = () => connected() && !needsSetup();
-  const [expanded, setExpanded] = createSignal(needsSetup());
-  const detailsId = createUniqueId();
   const [environment, setEnvironment] = createSignal<string>();
   const selectedEnvironment = () =>
     environment() ?? props.connection?.environmentId ?? '';
@@ -40,75 +43,45 @@ export function CodexConnection(props: {
     selectedEnvironment() !== (props.connection?.environmentId ?? '');
   const loginPending = () => props.login?.status === 'pending';
   return (
-    <section class="px-5 py-4 mobile:px-4" aria-label="Codex connection">
-      <div class="flex items-start gap-3">
-        <HarnessIcon>
-          <OpenAiIcon />
-        </HarnessIcon>
-        <div class="min-w-0 flex-1">
-          <div class="flex items-start justify-between gap-2">
-            <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-              <h2 class="text-sm font-medium text-ink">Codex</h2>
-              <span
-                class="inline-flex items-center gap-1.5 text-[11px]"
-                classList={{
-                  'text-success': ready(),
-                  'text-ink-extra-muted': !ready(),
-                }}
-              >
-                <span
-                  aria-hidden="true"
-                  class="size-1.5 rounded-full"
-                  classList={{
-                    'bg-success': ready(),
-                    'bg-ink-extra-muted': !ready(),
-                  }}
-                />
-                {props.loading
-                  ? 'Loading…'
-                  : needsSetup()
-                    ? 'Setup required'
-                    : connected()
-                      ? 'Connected'
-                      : 'Not connected'}
-              </span>
-            </div>
-            <Show when={!loginPending() && !needsSetup()}>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                class="shrink-0"
-                disabled={props.pending || props.loading}
-                aria-label={
-                  connected()
-                    ? expanded()
-                      ? 'Done configuring Codex'
-                      : 'Configure Codex'
-                    : 'Connect with ChatGPT'
-                }
-                aria-expanded={connected() ? expanded() : undefined}
-                aria-controls={connected() ? detailsId : undefined}
-                onClick={() =>
-                  connected() ? setExpanded(!expanded()) : props.onConnect()
-                }
-              >
-                {connected() ? (expanded() ? 'Done' : 'Configure') : 'Connect'}
-              </Button>
-            </Show>
-          </div>
-          <p class="mt-1 text-xs leading-5 text-ink-muted">
-            Cloud coding sessions with your ChatGPT account.
-          </p>
-        </div>
-      </div>
-      <Show when={props.error}>
-        <p role="alert" class="mt-3 text-sm text-negative">
-          {props.error}
-        </p>
-      </Show>
-      <Show when={needsSetup() || expanded() || (props.login && !connected())}>
-        <div id={detailsId} class="mt-4 border-t border-edge-muted pt-1">
+    <>
+      <RuntimeRow
+        triggerRef={(element) => {
+          trigger = element;
+        }}
+        name="Codex"
+        system
+        description="Cloud coding sessions with your ChatGPT account."
+        icon={<OpenAiIcon />}
+        connected={ready()}
+        status={
+          props.loading
+            ? 'Loading…'
+            : needsSetup()
+              ? 'Setup required'
+              : connected()
+                ? 'Connected'
+                : loginPending()
+                  ? 'Sign-in pending'
+                  : 'Not connected'
+        }
+        actionLabel={
+          connected() ? 'Configure' : props.login ? 'Continue' : 'Connect'
+        }
+        onConfigure={props.onOpen}
+      />
+      <Show when={props.open}>
+        <RuntimeSettingsDialog
+          returnFocus={() => trigger}
+          title="Codex"
+          description="Connect your ChatGPT account and choose a cloud environment for coding sessions."
+          busy={props.pending}
+          onClose={props.onClose}
+        >
+          <Show when={props.error}>
+            <p role="alert" class="mb-4 text-sm text-negative">
+              {props.error}
+            </p>
+          </Show>
           <Show
             when={!props.loading}
             fallback={
@@ -136,6 +109,15 @@ export function CodexConnection(props: {
                             ChatGPT sign-in failed. Please try again.
                           </p>
                         </Show>
+                        <Button
+                          type="button"
+                          variant="cta"
+                          size="sm"
+                          disabled={props.pending}
+                          onClick={props.onConnect}
+                        >
+                          Connect with ChatGPT
+                        </Button>
                         <p class="text-xs text-ink-extra-muted">
                           You'll finish sign-in on ChatGPT.
                         </p>
@@ -321,8 +303,8 @@ export function CodexConnection(props: {
               </div>
             </Show>
           </Show>
-        </div>
+        </RuntimeSettingsDialog>
       </Show>
-    </section>
+    </>
   );
 }

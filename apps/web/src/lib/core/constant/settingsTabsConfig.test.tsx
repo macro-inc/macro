@@ -15,14 +15,20 @@ vi.mock('../context/user', () => ({
 }));
 
 describe('settings navigation', () => {
-  it('presents the runtime settings as Runtimes', () => {
-    expect(getSettingsTabItem('Harness')?.label).toBe('Runtimes');
+  it('combines agents and runtimes in one navigation entry', () => {
+    expect(getSettingsTabItem('Agents')?.label).toBe('Agents & runtimes');
+    expect(getSettingsTabItem('Harness')?.tab).toBe('Agents');
+    expect(
+      SETTINGS_TAB_GROUPS.flatMap((group) => group.items).filter(
+        (item) => item.tab === 'Harness'
+      )
+    ).toEqual([]);
   });
 
-  it('creates runtime URLs while accepting bookmarked harness URLs', () => {
-    expect(settingsTabToSlug('Harness')).toBe('runtimes');
-    expect(settingsSlugToTab('runtimes')).toBe('Harness');
-    expect(settingsSlugToTab('harness')).toBe('Harness');
+  it('routes runtime and harness bookmarks to the combined page', () => {
+    expect(settingsTabToSlug('Harness')).toBe('agents');
+    expect(settingsSlugToTab('runtimes')).toBe('Agents');
+    expect(settingsSlugToTab('harness')).toBe('Agents');
   });
 
   it('resolves every navigation tab from its canonical slug', () => {

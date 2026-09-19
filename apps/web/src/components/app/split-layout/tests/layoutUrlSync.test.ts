@@ -351,7 +351,7 @@ describe('layout URL synchronization', () => {
     harness.dispose();
   });
 
-  it.each(['runtimes', 'harness'])(
+  it.each(['agents', 'runtimes', 'harness'])(
     'preserves a macrod pairing code while settings canonicalizes /settings/%s',
     async (slug) => {
       const harness = createHarness({
@@ -368,7 +368,7 @@ describe('layout URL synchronization', () => {
     }
   );
 
-  it.each(['runtimes', 'harness'])(
+  it.each(['agents', 'runtimes', 'harness'])(
     'does not stall URL synchronization for an empty pairing code at /settings/%s',
     async (slug) => {
       const harness = createHarness({

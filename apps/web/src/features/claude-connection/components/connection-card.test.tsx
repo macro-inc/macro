@@ -1,13 +1,9 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, expect, it, vi } from 'vitest';
 import { ConnectionCard, type ConnectionCardProps } from './connection-card';
 
-vi.mock('@ui', () => ({
-  Button: (
-    props: import('solid-js').JSX.ButtonHTMLAttributes<HTMLButtonElement>
-  ) => <button {...props} />,
-}));
+beforeAll(() => vi.stubGlobal('scrollTo', vi.fn()));
 afterEach(cleanup);
 function props(): ConnectionCardProps {
   return {
@@ -27,7 +23,9 @@ it('keeps disconnected Claude compact and starts sign-in', () => {
   const value = props();
   render(() => <ConnectionCard {...value} />);
   expect(screen.getByText('Claude Cloud')).toBeTruthy();
-  expect(screen.queryByText(/Reconnect after a backend restart/)).toBeNull();
+  expect(screen.queryByRole('dialog')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Connect Claude Cloud' }));
+  expect(screen.getByRole('dialog', { name: 'Claude Cloud' })).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Connect Claude' }));
   expect(value.onBegin).toHaveBeenCalledOnce();
 });
@@ -42,6 +40,9 @@ it('renders consent link and masked code entry without tokens', () => {
     code: 'code#state',
   };
   render(() => <ConnectionCard {...value} />);
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Continue Claude Cloud' })
+  );
   expect(screen.getByRole('link').getAttribute('rel')).toBe(
     'noopener noreferrer'
   );
@@ -60,12 +61,14 @@ it('shows disabled and failed states instead of silently disappearing', () => {
       status={{ enabled: false, connected: false, ephemeral: false }}
     />
   ));
+  fireEvent.click(screen.getByRole('button', { name: 'Connect Claude Cloud' }));
   expect(
     screen.getByText(/sign-in is not configured on this deployment/)
   ).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Connect Claude' })).toBeNull();
   cleanup();
   render(() => <ConnectionCard {...props()} status={undefined} failed />);
+  fireEvent.click(screen.getByRole('button', { name: 'Connect Claude Cloud' }));
   expect(
     screen.getByRole('button', { name: 'Retry connection status' })
   ).toBeTruthy();

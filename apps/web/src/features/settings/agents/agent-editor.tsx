@@ -21,6 +21,7 @@ export function AgentEditor(props: {
   canMakePrivate: boolean;
   pending: boolean;
   onClose: () => void;
+  returnFocus?: () => HTMLElement | undefined;
   onSave: (agent: CreateAgentParams) => Promise<boolean>;
 }) {
   const models = useAgentModelsQueries(() =>
@@ -100,6 +101,7 @@ export function AgentEditor(props: {
       source={source}
       appsEnabled={appsEnabled()}
       onClose={props.onClose}
+      returnFocus={props.returnFocus}
       renderApps={(servers, onChange, container) => (
         <Suspense
           fallback={

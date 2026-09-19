@@ -78,14 +78,29 @@ const agentMocks = vi.hoisted(() => ({
   update: vi.fn(),
   toastSuccess: vi.fn(),
   toastFailure: vi.fn(),
-  selectSettingsTab: vi.fn(),
   currentUserId: 'macro|user@example.com',
   currentTeam: { team: { id: 'team-1' } } as { team: { id: string } } | null,
   isTeamOwner: false,
 }));
 
-vi.mock('@core/constant/SettingsState', () => ({
-  useSettingsState: () => ({ selectTab: agentMocks.selectSettingsTab }),
+vi.mock('./Harness', () => ({
+  Harness: () => <section aria-label="Runtimes">Runtime connections</section>,
+}));
+
+// The real Lexical surface has its own Markdown round-trip suite.
+vi.mock('./agents/instructions-editor', () => ({
+  AgentInstructionsEditor: (props: {
+    markdown: string;
+    disabled?: boolean;
+    onChange: (markdown: string) => void;
+  }) => (
+    <textarea
+      aria-label="Instructions"
+      disabled={props.disabled}
+      value={props.markdown}
+      onInput={(event) => props.onChange(event.currentTarget.value)}
+    />
+  ),
 }));
 
 vi.mock('@queries/auth/cursor-api-key', () => ({
@@ -318,16 +333,27 @@ const MACROD_HARNESS = {
 } satisfies Harness;
 
 describe('Agents', () => {
-  it('opens Runtimes within the existing settings surface', () => {
+  it('combines agent management and runtimes on the same settings page', () => {
     render(() => <Agents />);
-    const manageRuntimes = screen.getByRole('button', {
-      name: 'Manage runtimes',
-    });
-    expect(manageRuntimes.hasAttribute('href')).toBe(false);
-    fireEvent.click(manageRuntimes);
-    expect(agentMocks.selectSettingsTab).toHaveBeenCalledExactlyOnceWith(
-      'Harness'
+    expect(
+      screen.getByRole('heading', { name: 'Agents & runtimes' })
+    ).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Runtimes' })).toBeTruthy();
+    expect(
+      screen.queryByRole('button', { name: 'Manage runtimes' })
+    ).toBeNull();
+  });
+
+  it('returns focus to the create trigger after closing the editor', async () => {
+    render(() => <Agents />);
+    const trigger = screen.getByRole('button', { name: 'Create agent' });
+    trigger.focus();
+    fireEvent.click(trigger);
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByLabelText('Name'))
     );
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
   });
 
   it.each([false, true])(
@@ -550,7 +576,7 @@ describe('Agents', () => {
 
     expect(within(teamSection).getByText('Macro')).toBeTruthy();
     expect(within(teamSection).getByText('@macro')).toBeTruthy();
-    expect(within(teamSection).getByText('Built in')).toBeTruthy();
+    expect(within(teamSection).getByText('System')).toBeTruthy();
     expect(within(teamSection).getByText(/All channels/)).toBeTruthy();
     expect(
       within(teamSection).queryByRole('button', { name: 'Delete Macro' })

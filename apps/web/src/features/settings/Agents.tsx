@@ -3,12 +3,9 @@ import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
 import { toast } from '@core/component/Toast/Toast';
 import { claudeCloud } from '@core/constant/featureFlags';
 import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
-import { useSettingsState } from '@core/constant/SettingsState';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import MacroLogo from '@icon/macro-logo.svg';
-import ArrowRightIcon from '@phosphor/arrow-right.svg';
-import DesktopIcon from '@phosphor/desktop.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import PencilIcon from '@phosphor/pencil-simple.svg';
 import PlusIcon from '@phosphor/plus.svg';
@@ -32,7 +29,9 @@ import { createMemo, createSignal, For, Show } from 'solid-js';
 import { botAssignableChannelOptions } from '../channel/Bots/botChannelOptions';
 import { canDeleteBot, canManageAgent } from '../channel/Bots/botPermissions';
 import { AgentEditor } from './agents/agent-editor';
+import { agentInstructionsPreview } from './agents/core/instructions-preview';
 import type { AgentRuntime, AgentShare } from './agents/core/types';
+import { Harness } from './Harness';
 import { SettingsCard, SettingsPage, SettingsSection } from './primitives';
 
 type AgentSummary = {
@@ -72,7 +71,6 @@ const MACRO_AGENT: AgentSummary = {
 
 /** Settings page for viewing and creating persistent agents. */
 export function Agents() {
-  const { selectTab } = useSettingsState();
   const claudeCloudFlag = useFeatureFlag(claudeCloud);
   const [creating, setCreating] = createSignal(false);
   const [search, setSearch] = createSignal('');
@@ -85,6 +83,22 @@ export function Agents() {
     }
   };
   const [editingAgent, setEditingAgent] = createSignal<AgentWithHarnessId>();
+  let editorTrigger: HTMLElement | undefined;
+  const rememberEditorTrigger = () => {
+    editorTrigger =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : undefined;
+  };
+  const openCreateAgent = () => {
+    rememberEditorTrigger();
+    setCreating(true);
+  };
+  const openEditAgent = (agent: AgentWithHarnessId | undefined) => {
+    if (!agent) return;
+    rememberEditorTrigger();
+    setEditingAgent(agent);
+  };
   const [deletingAgent, setDeletingAgent] = createSignal<AgentWithHarnessId>();
   const channelsContext = useChannelsContext();
   const currentUserId = useUserId();
@@ -234,10 +248,10 @@ export function Agents() {
   return (
     <>
       <SettingsPage
-        title="Agents"
-        description="Give an agent a role, instructions, and the apps it needs. Then come back to it whenever you need that work done."
+        title="Agents & runtimes"
+        description="Create assistants for your work, and choose where they run."
         actions={
-          <Button variant="cta" size="sm" onClick={() => setCreating(true)}>
+          <Button variant="cta" size="sm" onClick={openCreateAgent}>
             <PlusIcon />
             Create agent
           </Button>
@@ -258,7 +272,7 @@ export function Agents() {
           title="Team agents"
           description="Shared assistants your team can work with."
         >
-          <SettingsCard>
+          <SettingsCard class="border-edge-muted">
             <For
               each={teamAgents()}
               fallback={
@@ -272,7 +286,7 @@ export function Agents() {
                   agent={agent}
                   onEdit={
                     agent.editable && agent.persistedAgent
-                      ? () => setEditingAgent(agent.persistedAgent)
+                      ? () => openEditAgent(agent.persistedAgent)
                       : undefined
                   }
                   onDelete={
@@ -290,7 +304,7 @@ export function Agents() {
           title="Private agents"
           description="Agents you manage, ready for your next conversation."
         >
-          <SettingsCard>
+          <SettingsCard class="border-edge-muted">
             <Show
               when={privateAgents().length > 0}
               fallback={
@@ -320,7 +334,7 @@ export function Agents() {
                       variant="outline"
                       size="sm"
                       class="mt-4"
-                      onClick={() => setCreating(true)}
+                      onClick={openCreateAgent}
                     >
                       <PlusIcon />
                       Create your first agent
@@ -335,7 +349,7 @@ export function Agents() {
                     agent={agent}
                     onEdit={
                       agent.editable && agent.persistedAgent
-                        ? () => setEditingAgent(agent.persistedAgent)
+                        ? () => openEditAgent(agent.persistedAgent)
                         : undefined
                     }
                     onDelete={
@@ -355,29 +369,12 @@ export function Agents() {
             </Show>
           </SettingsCard>
         </SettingsSection>
-        <button
-          type="button"
-          aria-label="Manage runtimes"
-          onClick={() => selectTab('Harness')}
-          class="flex items-center gap-4 rounded-xl border border-edge-muted px-5 py-4 text-left outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-accent"
-        >
-          <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-ink/5 text-ink-muted">
-            <DesktopIcon class="size-5" />
-          </span>
-          <span class="min-w-0 flex-1">
-            <span class="block text-sm font-medium text-ink">
-              Manage runtimes
-            </span>
-            <span class="mt-1 block text-xs text-ink-muted">
-              Connect a cloud account or pair your computer for your agents.
-            </span>
-          </span>
-          <ArrowRightIcon class="size-4 shrink-0 text-ink-muted" />
-        </button>
+        <Harness />
       </SettingsPage>
 
       <Show when={creating() || creatingFromLink()}>
         <AgentEditor
+          returnFocus={() => editorTrigger}
           runtimes={connectedHarnesses()}
           currentTeamId={currentTeamId()}
           canShareWithTeam={canShareWithTeam()}
@@ -390,6 +387,7 @@ export function Agents() {
       <Show when={editingAgent()} keyed>
         {(agent) => (
           <AgentEditor
+            returnFocus={() => editorTrigger}
             agent={agent}
             runtimes={connectedHarnesses()}
             currentTeamId={currentTeamId()}
@@ -462,6 +460,9 @@ function AgentRow(props: {
   onEdit?: () => void;
   onDelete?: () => void;
 }) {
+  const instructionsPreview = createMemo(() =>
+    agentInstructionsPreview(props.agent.instructions)
+  );
   return (
     <div class="group flex items-center gap-4 px-6 py-4 mobile:items-start touch:px-4">
       <AgentAvatar agent={props.agent} />
@@ -473,19 +474,25 @@ function AgentRow(props: {
           <span class="truncate text-xs text-ink-extra-muted">
             @{props.agent.tag}
           </span>
-          <span class="shrink-0 rounded-full border border-edge-muted px-2 py-0.5 text-xxs font-medium text-ink-extra-muted">
+          <span
+            class="shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide"
+            classList={{
+              'border-accent/20 bg-accent/5 text-accent':
+                props.agent.id === MACRO_AGENT_BOT_ID,
+              'border-edge-muted bg-ink/5 text-ink-muted':
+                props.agent.id !== MACRO_AGENT_BOT_ID,
+            }}
+          >
             {props.agent.id === MACRO_AGENT_BOT_ID
-              ? 'Built in'
+              ? 'System'
               : props.agent.share}
           </span>
         </div>
         <Show
-          when={
-            props.agent.instructions || props.agent.id === MACRO_AGENT_BOT_ID
-          }
+          when={instructionsPreview() || props.agent.id === MACRO_AGENT_BOT_ID}
         >
           <p class="mt-1 line-clamp-2 text-xs leading-5 text-ink-muted">
-            {props.agent.instructions ||
+            {instructionsPreview() ||
               'Your everyday assistant for work in Macro.'}
           </p>
         </Show>

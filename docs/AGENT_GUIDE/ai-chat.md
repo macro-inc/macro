@@ -48,7 +48,7 @@
   Clicking an agent directly uses its default; choosing a submenu model selects
   both the agent and that model. A checkmark identifies the selected model,
   including when it is the agent’s configured default; there is no separate default row.
-  Disconnected Cursor offers **Connect Cursor**, opening Settings → Runtimes.
+  Disconnected Cursor offers **Connect Cursor**, opening Settings → Agents & runtimes.
   The built-in sandbox and paired macrod runtimes are not offered here.
 - Selecting an agent changes the heading: **What should we work on?** for chat
   agents and **What should we build?** for coding agents. The draft stays intact
