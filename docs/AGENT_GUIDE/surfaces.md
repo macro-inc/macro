@@ -694,6 +694,12 @@ week and with no visible scrollbar. Under ~672px the four stats read as a two-co
 value, and chips shorten. Rows stay on one line at every width. On touch devices the list rests
 below the floating page title and above the bottom toolbar.
 
+With GraphQL enabled, open Activity with document or email events from a cold page.
+Entity labels should resolve from `Loading...` while the page remains responsive.
+After a referenced entity is renamed, its label should update without repeated
+preview requests. Reopen Activity and confirm that its feed can still scroll and
+open an entity.
+
 ## Home — `/app/component/home`
 
 Greeting, getting-started checklist, example prompt buttons (`Draft a document`,

@@ -6,9 +6,9 @@ import { useChannelName } from '@core/context/channels';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { type Accessor, createMemo, type JSX } from 'solid-js';
+import { type Accessor, createMemo, type JSX, on } from 'solid-js';
 import { match } from 'ts-pattern';
-import { entityTypeToItemType } from '../utils';
+import { entityTypeToItemType } from '../utils/entityConversion';
 
 const PREVIEWABLE_ENTITY_TYPES: EntityType[] = [
   'DOCUMENT',
@@ -62,25 +62,29 @@ export function usePropertyEntityDisplay(
 ): PropertyEntityDisplayResult {
   const previewType = () => entityTypeToItemType(entityType());
 
-  const previewWrapper = () => {
-    const eType = entityType();
-    const pType = previewType();
-    if (isPreviewable(eType)) {
-      return useItemPreview(() => ({
-        id: entityId(),
-        type: pType,
-      }))[0];
-    }
-  };
-  const preview = createMemo(() => previewWrapper()?.());
+  // Preview updates must not recreate their own query owner. The hook follows
+  // identity changes through its accessor and is released for non-preview types.
+  const previewHook = createMemo(
+    on(
+      () => isPreviewable(entityType()) && entityId() !== '',
+      (previewable) =>
+        previewable
+          ? useItemPreview(() => ({
+              id: entityId(),
+              type: previewType(),
+            }))[0]
+          : undefined
+    )
+  );
+  const preview = () => previewHook()?.();
 
-  const channelNameWrapper = () => {
-    const eType = entityType();
-    if (eType === 'CHANNEL') {
-      return useChannelName(entityId());
-    }
-  };
-  const channelName = createMemo(() => channelNameWrapper()?.());
+  const channelNameHook = createMemo(
+    on(
+      () => (entityType() === 'CHANNEL' ? entityId() : undefined),
+      (id) => (id === undefined ? undefined : useChannelName(id))
+    )
+  );
+  const channelName = () => channelNameHook()?.();
 
   const userNameWrapper = () => {
     const eType = entityType();
@@ -91,7 +95,7 @@ export function usePropertyEntityDisplay(
   const userName = createMemo(() => userNameWrapper()?.() ?? '');
 
   const isLoading = createMemo(() => {
-    if (!isPreviewable(entityType())) return false;
+    if (!previewHook()) return false;
     const previewItem = preview();
     return !previewItem || previewItem.loading;
   });
