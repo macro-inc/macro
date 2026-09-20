@@ -347,4 +347,36 @@ describe('ring coordination', () => {
     fixture.participation.stop();
     expect(fixture.onEnd).toHaveBeenCalledOnce();
   });
+
+  it('keeps the original deadline after demotion and a late takeover', async () => {
+    const module = await importRingCoordination();
+    const fixture = createParticipant(module, { maxDurationMs: 5_500 });
+    await vi.advanceTimersByTimeAsync(500);
+    MockBroadcastChannel.instance?.emit(foreignClaim());
+    expect(fixture.onRelease).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(4_000);
+    expect(fixture.onAcquire).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(fixture.onEnd).toHaveBeenCalledOnce();
+    expect(fixture.onRelease).toHaveBeenCalledTimes(2);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('releases the sound and timers when ringing ends during scope setup', async () => {
+    const module = await importRingCoordination();
+    const stopSound = vi.fn();
+    const fixture = createParticipant(module, {
+      ring: (end) => {
+        end();
+        return stopSound;
+      },
+    });
+    expect(stopSound).toHaveBeenCalledOnce();
+    expect(fixture.onEnd).toHaveBeenCalledOnce();
+    // Flush jsdom's queued storage events; owned ring timers must be gone.
+    await vi.advanceTimersByTimeAsync(0);
+    expect(vi.getTimerCount()).toBe(0);
+    fixture.participation.stop();
+    expect(fixture.onEnd).toHaveBeenCalledOnce();
+  });
 });
