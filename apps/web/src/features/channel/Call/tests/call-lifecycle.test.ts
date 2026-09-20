@@ -130,6 +130,40 @@ describe('shared call lifecycle', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it.each(['joined', 'adopted'] as const)(
+    'preserves the %s live call when another channel tries to join',
+    async (origin) => {
+      const { lifecycle, ports, join, unwatch, disconnect } = setup();
+      if (origin === 'joined') await join();
+      else lifecycle.syncSession(call);
+      const tokenRequests = ports.requestToken.mock.calls.length;
+      const onLeave = vi.fn();
+      const onJoin = vi.fn();
+      lifecycle.onLeave(onLeave);
+      ports.requestToken.mockRejectedValueOnce(
+        new ThrownResultError([
+          { code: 'CONFLICT', message: 'Already in another call' },
+        ])
+      );
+      await expect(lifecycle.join('channel-2', onJoin)).rejects.toThrow();
+      await vi.advanceTimersByTimeAsync(300);
+      expect(lifecycle.getState()).toEqual({ t: 'active', call });
+      expect(ports.requestToken).toHaveBeenCalledTimes(tokenRequests);
+      expect(ports.disconnect).not.toHaveBeenCalled();
+      expect(ports.leave).not.toHaveBeenCalled();
+      expect(unwatch).not.toHaveBeenCalled();
+      expect(onLeave).not.toHaveBeenCalled();
+      expect(onJoin).toHaveBeenCalledOnce();
+      expect(ports.setError).toHaveBeenLastCalledWith(
+        "You're already in another call. Leave your current call before joining a new one."
+      );
+      await lifecycle.join(call.channelId);
+      expect(ports.setError).toHaveBeenLastCalledWith(null);
+      disconnect(LK_DISCONNECT_REASON.CLIENT_INITIATED);
+      expect(onLeave).toHaveBeenCalledExactlyOnceWith(call.channelId);
+    }
+  );
+
   it('releases a timed-out join while cleanup hangs, and ignores its late token', async () => {
     const { lifecycle, ports } = setup();
     const oldToken = deferred<CallTokenResponse>();

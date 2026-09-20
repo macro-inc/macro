@@ -1108,9 +1108,6 @@ function createCallState() {
     currentConnectionState() === LK_CONNECTION_STATE.Reconnecting ||
     currentConnectionState() === LK_CONNECTION_STATE.SignalReconnecting;
 
-  const currentJoinError = () =>
-    currentNativeCallSnapshot() ? null : store.joinError;
-
   // --- mutations ---
 
   async function finishLocalMediaSetup(targetRoom: Room, setupVersion: number) {
@@ -1536,7 +1533,7 @@ function createCallState() {
     isNoiseSuppressed: () =>
       isNoiseSuppressionEnabled(store.noiseSuppressionMode),
     toggleNoiseSuppression,
-    joinError: currentJoinError,
+    joinError: () => store.joinError,
     callPageChannelId: () => store.callPageChannelId,
     syncCallPageTab,
     isCallPage: () => {

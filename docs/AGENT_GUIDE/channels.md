@@ -354,8 +354,9 @@ user chose Leave. A failed join must restore the Try again control even if
 background cleanup is slow.
 
 If another call prevents joining, the error should say to leave the current
-call first. A restored live session must clear any earlier join or recovery
-error. Failed Join, Call Again, and Leave actions must not produce unhandled
+call first. Trying to join another channel must keep the current call connected,
+with its participants and controls intact. A restored live session must clear
+any earlier join or recovery error. Failed Join, Call Again, and Leave actions must not produce unhandled
 promise rejections.
 
 On iOS, ending a call during connection must leave Join usable. If CallKit

@@ -19,6 +19,8 @@ import { LK_DISCONNECT_REASON } from './livekit-loader';
 
 export const JOIN_TIMEOUT_MS = 15_000;
 export const LEAVE_TIMEOUT_MS = 10_000;
+const ALREADY_IN_CALL_MESSAGE =
+  "You're already in another call. Leave your current call before joining a new one.";
 export type CallIdentity = { channelId: string; callId: string | null };
 
 function sameCall(first: CallIdentity | undefined, second: CallIdentity) {
@@ -388,7 +390,7 @@ export function createCallLifecycle(options: {
         options.rollbackJoin();
         options.setError(
           thrownResultErrorHasCode(error, 'CONFLICT')
-            ? "You're already in another call. Leave your current call before joining a new one."
+            ? ALREADY_IN_CALL_MESSAGE
             : 'Unable to join the call. Please check your connection.'
         );
         let active = true;
@@ -471,9 +473,14 @@ export function createCallLifecycle(options: {
         state.request.channelId !== channelId)
     )
       return Promise.reject(new Error('Call is still leaving'));
-    if (state.t === 'active' && state.call.channelId === channelId) {
+    if (state.t === 'active') {
       try {
         onJoin?.();
+        if (state.call.channelId !== channelId) {
+          options.setError(ALREADY_IN_CALL_MESSAGE);
+          return Promise.reject(new Error(ALREADY_IN_CALL_MESSAGE));
+        }
+        options.setError(null);
         return Promise.resolve();
       } catch (error) {
         return Promise.reject(error);

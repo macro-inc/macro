@@ -3,7 +3,7 @@ import { useCallContext } from './CallContext';
 import type { CallSessionDisconnectOptions } from './CallSessionController';
 
 type UseCallOptions = {
-  /** Called when joining starts, so the view can select its call tab. */
+  /** Select the call tab when Join is requested, including a refused join. */
   onJoin?: () => void;
   /** Called when this channel's call ends for any reason. */
   onLeave?: () => void;
@@ -37,7 +37,12 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
     isInCall: callCtx.isInCall,
     isInThisChannel: () =>
       callCtx.isInCall() && callCtx.activeChannelId() === channelId(),
-    joinError: callCtx.joinError,
+    joinError: () => {
+      const state = lifecycle.getState();
+      return state.t === 'active' && state.call.channelId === channelId()
+        ? null
+        : callCtx.joinError();
+    },
     callCtx,
   };
 }
