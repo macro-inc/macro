@@ -4,10 +4,8 @@ import { createCallback } from '@solid-primitives/rootless';
 import { debounce } from '@solid-primitives/scheduled';
 import {
   type Accessor,
-  createEffect,
   createMemo,
   createSignal,
-  on,
   onCleanup,
   onMount,
   untrack,
@@ -126,9 +124,6 @@ export function createThreadNavigation(
     }
   };
 
-  const canRunInitialEmailScroll = () =>
-    !isTouchDevice() || host.isActive?.() !== false;
-
   const [keyboardSelecting, setKeyboardSelecting] = createSignal(false);
   const [listAnchor, setListAnchor] = createSignal<'title' | 'composer'>();
   let lastPointer = { x: Number.NaN, y: Number.NaN };
@@ -234,38 +229,29 @@ export function createThreadNavigation(
       }),
     release: ({ messageId }) => {
       if (context.messages.targetMessageId() === messageId)
-        context.messages.setTargetMessageId(undefined);
+        context.messages.clearTargetMessage();
     },
     onError: (error) => console.error('Error loading target message:', error),
   });
   onCleanup(targetNavigation.dispose);
-  createEffect(
-    on(
-      [props.threadId, context.messages.targetMessageId],
-      ([threadId, messageId]) =>
-        targetNavigation.syncTarget(
-          messageId ? { threadId, messageId } : undefined
-        )
-    )
-  );
-  context.onInitialDataLoad(() => {
-    if (!canRunInitialEmailScroll() || !untrack(context.messagesListRef))
-      return false;
-    const messageId = context.messages.targetMessageId();
-    if (messageId)
-      targetNavigation.navigate({ threadId: props.threadId(), messageId });
-    return true;
-  });
-
   const [userOpenedMiddle, setUserOpenedMiddle] = createSignal(false);
-  createEffect(
-    on(
-      () => context.thread()?.db_id,
-      () => {
+  let previousThreadId: string | undefined;
+  context.onInitialDataLoad(
+    () => {
+      const messageId = context.messages.targetMessageId();
+      if (messageId)
+        targetNavigation.navigate({ threadId: props.threadId(), messageId });
+    },
+    ({ threadId, messageId }) => {
+      targetNavigation.syncTarget(
+        messageId ? { threadId, messageId } : undefined
+      );
+      if (threadId !== previousThreadId) {
+        previousThreadId = threadId;
         setUserOpenedMiddle(false);
         leaveHiddenChip();
       }
-    )
+    }
   );
 
   const showMiddleMessages = createMemo(() => {

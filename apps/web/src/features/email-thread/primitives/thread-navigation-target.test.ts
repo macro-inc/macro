@@ -31,6 +31,10 @@ function setup(
   render(ids);
   document.body.append(container);
   const fixture = createRoot((dispose) => {
+    const [threadId, setThreadId] = createSignal('thread');
+    const [isFetching, setFetching] = createSignal(false);
+    const [isTouch, setTouch] = createSignal(false);
+    const [isActive, setActive] = createSignal(true);
     const [snapshot, setSnapshot] = createSignal(
       thread(ids.map((id) => message(id)))
     );
@@ -43,17 +47,38 @@ function setup(
       setHasMore(false);
     });
     const source = createThreadContext({
+      id: threadId,
       thread: snapshot,
+      isFetching,
       hasMore,
       fetchOlder,
     });
-    const [targetMessageId, setTarget] = createSignal(target);
-    const host = { targetMessageId };
+    source.isTouch = isTouch;
+    const [targetMessageId, setTarget] = createSignal<string | undefined>(
+      target
+    );
+    const host = { targetMessageId, isActive };
     const state = createEmailThreadState(source, host);
-    createThreadNavigation({ threadId: () => 'thread' }, state, source, host);
+    const navigation = createThreadNavigation(
+      { threadId },
+      state,
+      source,
+      host
+    );
     state.registerMessagesList(container);
     state.registerMessagesContainer(container);
-    return { state, fetchOlder, setTarget, dispose };
+    return {
+      state,
+      navigation,
+      fetchOlder,
+      setTarget,
+      setFetching,
+      setTouch,
+      setActive,
+      setThreadId,
+      setSnapshot,
+      dispose,
+    };
   });
   return {
     ...fixture,
@@ -160,4 +185,87 @@ it('ignores a page response after the thread unmounts', async () => {
   resolveFetch();
   await vi.advanceTimersByTimeAsync(1000);
   expect(fixture.container.scrollBy).not.toHaveBeenCalled();
+});
+
+it('cancels a queued frame before a removed target can wait on a busy query', async () => {
+  const fixture = setup('target', ['first', 'target', 'last']);
+  try {
+    await vi.advanceTimersByTimeAsync(0);
+    fixture.setFetching(true);
+    fixture.setTarget(undefined);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(fixture.container.scrollBy).not.toHaveBeenCalled();
+    expect(fixture.state.messages.targetMessageId()).toBeUndefined();
+    fixture.setFetching(false);
+    expect(fixture.state.initialLoadComplete()).toBe(true);
+  } finally {
+    fixture.dispose();
+  }
+});
+
+it('cancels the old highlight while a replacement waits for an inactive mobile view', async () => {
+  const fixture = setup('target', ['first', 'target', 'last']);
+  try {
+    await vi.advanceTimersByTimeAsync(20);
+    fixture.setTouch(true);
+    fixture.setActive(false);
+    fixture.setTarget('last');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(fixture.state.messages.targetMessageId()).toBe('last');
+    expect(fixture.container.scrollBy).toHaveBeenCalledOnce();
+    fixture.setActive(true);
+    await vi.advanceTimersByTimeAsync(20);
+    expect(fixture.state.messages.focusedId()).toBe('last');
+    expect(fixture.container.scrollBy).toHaveBeenCalledTimes(2);
+  } finally {
+    fixture.dispose();
+  }
+});
+
+it('resets navigation and hidden-message focus when the thread changes while loading', async () => {
+  const fixture = setup('target', ['first', 'target', 'last']);
+  try {
+    await vi.advanceTimersByTimeAsync(0);
+    fixture.navigation.setUserOpenedMiddle(true);
+    fixture.state.messages.setHiddenChipFocused(true);
+    fixture.setFetching(true);
+    fixture.setThreadId('other');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(fixture.container.scrollBy).not.toHaveBeenCalled();
+    expect(fixture.state.messages.hiddenChipFocused()).toBe(false);
+    expect(fixture.state.initialLoadComplete()).toBe(false);
+    fixture.setSnapshot(
+      thread(
+        ['first', 'target', 'last'].map((id) => message(id)),
+        { db_id: 'other' }
+      )
+    );
+    fixture.setFetching(false);
+    await vi.advanceTimersByTimeAsync(20);
+    expect(fixture.state.messages.focusedId()).toBe('target');
+    expect(fixture.container.scrollBy).toHaveBeenCalledOnce();
+    expect(fixture.state.initialLoadComplete()).toBe(true);
+  } finally {
+    fixture.dispose();
+  }
+});
+
+it('does not restart a cleared target on a cache update, but supports opening it again', async () => {
+  const fixture = setup('target', ['first', 'target', 'last']);
+  try {
+    await vi.advanceTimersByTimeAsync(1000);
+    fixture.setSnapshot(
+      thread(['first', 'target', 'last'].map((id) => message(id)))
+    );
+    await vi.advanceTimersByTimeAsync(20);
+    expect(fixture.state.messages.targetMessageId()).toBeUndefined();
+    expect(fixture.container.scrollBy).toHaveBeenCalledOnce();
+    fixture.setTarget(undefined);
+    fixture.setTarget('target');
+    await vi.advanceTimersByTimeAsync(20);
+    expect(fixture.state.messages.targetMessageId()).toBe('target');
+    expect(fixture.container.scrollBy).toHaveBeenCalledTimes(2);
+  } finally {
+    fixture.dispose();
+  }
 });
