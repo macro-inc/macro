@@ -38,8 +38,8 @@ use chrono::{DateTime, Utc};
 use entity_access::{
     domain::{
         models::{
-            AccessError, AccessLevel, AdminParticipantRole, EntityAccessReceipt, EntityType,
-            MemberParticipantRole, OwnerParticipantRole, RequiredPermission, ViewOnly,
+            AccessError, AccessLevel, EntityAccessReceipt, EntityType, MemberParticipantRole,
+            OwnerParticipantRole, RequiredPermission, ViewOnly,
         },
         ports::EntityAccessService,
     },
@@ -523,12 +523,13 @@ pub async fn patch_channel_handler<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<ChannelsRouterState<S, Svc, Auth>>,
-    access: ChannelAccessLevelExtractor<AdminParticipantRole, Svc, Auth>,
+    access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc, Auth>,
     Json(req): Json<PatchChannelRequest>,
 ) -> Result<(StatusCode, String), ChannelsHandlerErr> {
-    let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
-    let actor = user_actor_from_receipt(&access.entity_access_receipt)?;
-    state.service.patch_channel(actor, channel_id, req).await?;
+    state
+        .service
+        .patch_channel(access.entity_access_receipt, req)
+        .await?;
     Ok((StatusCode::OK, "patched channel".to_string()))
 }
 

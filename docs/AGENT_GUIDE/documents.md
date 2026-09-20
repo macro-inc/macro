@@ -13,8 +13,9 @@ ellipsis beside the title uses the same menu as documents, including rename,
 favorite, move, copy, and permission-appropriate file actions. Native spreadsheets
 use a green grid icon in file lists and search. The grid fills
 the panel beneath the formatting and formula bars. They have the `.spreadsheet` file type; uploading an
-Excel workbook in Files does not automatically convert it. Open a native spreadsheet
-and use the bottom-right **Import and export → Import…** menu to import its sheets.
+Excel or CSV file in Files or a channel opens a read-only spreadsheet preview, including existing `/app/unknown/<uuid>` links and CSV code routes. Review **Import notes**, then choose **Edit in Macro** to create a collaborative native copy. The original file and its link remain intact. Conversion waits for a durable save before opening the copy; a failed save can be retried without creating another copy. The normal document download action retrieves the original; the spreadsheet footer exports the imported representation.
+
+You can also open a native spreadsheet and use the bottom-right **Import and export → Import…** menu to import its sheets.
 
 Select a cell to inspect its address and input in the formula bar. Double-click
 a cell, start typing, or use the formula bar to edit its value. Formulas begin
@@ -43,12 +44,20 @@ at the caret (for example, type `=SUM(`, then drag B4 through B7). The draft upd
 to `=SUM(B4:B7` without committing or moving the active cell. A dashed outline shows
 the referenced range. Release, type `)`, and press Enter to calculate. This works
 in both the cell editor and formula bar, including reverse drags, replacement of
-an existing reference, and subsequent arguments after a comma or operator.
+an existing reference, and subsequent arguments after a comma or operator. To reference another sheet,
+click its tab while the formula is awaiting a reference, then click or drag the
+source cells. The draft stays in the formula bar; Enter commits it to the original
+sheet and cell. Names with spaces are quoted automatically. Escape cancels and
+returns to the original sheet.
 On touch screens, tap a cell while editing a formula, then drag **Move reference
 start** or **Move reference end** to extend its reference. Tapping a suggestion or
 adjusting a reference should keep the input focused and the software keyboard open.
 
 Drag across cells, Shift-click, or use Shift + arrow keys to select a range.
+Drag across row/column headers or Shift-click a second header to select multiple
+whole rows/columns. Arrow keys then move from the selection's active cell. The
+focused grid owns typing and navigation; app navigation shortcuts do not run while
+it has focus.
 The active cell keeps a complete border while editing; a range has a shaded
 fill and an outer border. Verify selection in both drag directions and after
 scrolling, including near the last row and column.
@@ -59,10 +68,15 @@ Copy within Macro and paste elsewhere to translate relative references: copying
 `=B4-C4` down becomes `=B5-C5`, while `$B$4` stays fixed. Drag the small handle
 at the selection's bottom-right corner to fill down/up or right/left. Select a
 range and use **Format and data → Fill down / Fill right** or **Cmd/Ctrl+D** /
-**Cmd/Ctrl+R**. Fill repeats values/formulas and formatting; it does not infer
-number sequences. Plain-text paste from other apps keeps formulas as supplied.
+**Cmd/Ctrl+R**. Drag fill continues arithmetic number sequences and daily,
+weekly, monthly, or quarterly date sequences (including month ends). Text and
+irregular patterns repeat; relative formula references translate. Keyboard/menu
+Fill down/right explicitly copies the starting row/column. Plain-text paste from
+other apps keeps formulas as supplied.
 
-Drag a column header's right boundary to resize; double-click it to auto-fit.
+Drag a column header's right boundary or row header's bottom boundary to resize;
+double-click the boundary to auto-fit. Row separators support Up/Down arrows and
+Enter to restore automatic height. Explicit row heights take precedence over wrap.
 At 100% zoom, default columns are 100 pixels wide and rows are 21 pixels high;
 larger text and wrapping expand the row. Saved custom column widths take precedence.
 The resize separator also supports Left/Right arrows and Enter for auto-fit.
@@ -74,9 +88,16 @@ undo/redo, paste, zoom and view options, currency/percent/decimals/number format
 font and size, text styles, text/fill color, borders, alignment, wrapping,
 functions, format/data actions, and find. Icon controls expose accessible button
 names and tooltips. **Paste special** offers **Paste** and **Paste values only**.
-Select a range first; formatting applies to all selected cells. Font sizes are
+Select a range first; formatting applies to all selected cells. Toggling bold,
+italic, underline, or strikethrough on a mixed selection first enables it for the
+entire selection. Whole-column formatting preserves the viewport. In a cell that
+is already percentage-formatted, typing `5` means `5%`; formulas and AI/API numeric
+values still use fractional values (`0.05` for 5%). Font sizes are
 points. Wrapped rows grow automatically up to 160 pixels at 100% zoom. Check
 selection and formula-reference outlines after changing wrapping, font size, or zoom.
+Excel black text and borders on unfilled cells follow the app's foreground color
+so imported sheets remain readable in dark mode. Explicit text/fill color pairs
+remain unchanged; theme changes never alter saved or exported workbook colors.
 
 **View options** directly toggles gridlines, the formula bar, and formula display;
 these settings and zoom are local to the editor. **Go to cell** accepts ranges such
@@ -96,18 +117,39 @@ Select data without its header when sorting. A concurrent edit cancels a pending
 sort; references elsewhere in the sheet are not rewritten to follow sorted rows.
 
 The footer's bottom-right **Import and export → Import…** accepts `.csv` and `.xlsx`.
+Right-click a row number or column letter for Macro's contextual menu: clipboard actions,
+clear, hide/unhide, resize and fit-to-data; columns also offer whole-sheet sorting.
+The menu keeps an existing whole-row/column selection when opened within it.
+Insert/delete shifts references and named ranges in local workbooks only; these
+commands are disabled on shared workbooks (including offline sessions) until
+collaborative rows and columns have stable identities. Adding blank rows at the
+bottom remains available. Hidden cells are skipped by keyboard navigation.
+
+Cells support Macro mentions without Markdown formatting. Type `@` in a cell or
+the formula bar to search people, documents, channels and email, then choose an
+item with the pointer or keyboard. Pasting a Macro app link renders a document
+pill, preserving navigation parameters. Formulas still use the formula editor;
+`@` inside a formula or email address does not start mention search. Other Markdown
+is literal text. Mentions remain attached through copy/fill, undo and collaboration;
+Excel/CSV export uses their display text. Plain URLs and email addresses are clickable;
+web links use the same hover preview as channel messages. Click the surrounding cell
+or use the formula bar to edit link text. AI `set_cells` accepts Macro URLs or the
+same `<m-user-mention>` / `<m-document-mention>` encoding as docs. Formula references
+to mention cells use literal labels, never execute a label as a formula.
+
 CSV imports a file up to 1 MB into the selection, adding rows if needed within the
 1,000 × 26 limit. Existing cells in that rectangle
 are replaced, with undo available. Excel imports accept up to 5 MB, 10 sheets, and
 1,000 rows × 26 columns per sheet. An import preview lists each sheet and warns about
-unsupported content (for example charts, merges, and custom formatting). Choose
+unsupported content (for example charts, validation rules, and rich text). Choose
 **Insert new sheets** to keep existing work, or **Replace workbook** to replace it
 in one undoable operation. Names must be unique when inserting sheets. Canceling
 leaves the workbook untouched; a replacement is blocked if the workbook changed
 while the preview was open. Legacy `.xls`, macros, and encrypted files are rejected.
 
 **Import and export → Download as Excel (.xlsx)** exports every sheet with formulas,
-current formula result caches, supported formatting, and column widths.
+current formula result caches, precise numeric values, custom Excel number formats, fonts, borders, and column widths. Named ranges and named constants are retained; unsupported named expressions show explicit calculation errors. Imported merged ranges, hidden sheets/rows/columns, row heights, filters, and frozen panes are retained for export. Macro hides imported rows and columns, shows hidden sheets and individual cells of merged ranges; editing a covered merged cell omits that merge during export with a warning so the edit is preserved. Complex Excel features such as pivots, structured table formulas, charts, conditional formatting, validation, and rich text are not fully supported; review import notes before conversion.
+CSV imports preserve long identifiers and leading zeros as text and never execute formula-like strings.
 **Download as CSV** in the same menu exports only the active sheet's current
 calculated values. Clipboard menu actions use the browser clipboard; if access is
 unavailable, use Cmd/Ctrl+V or Cmd/Ctrl+Shift+V in the grid.
@@ -171,6 +213,41 @@ software keyboard. The isolated browser fixture has separate Android Chrome and
 iPhone WebKit projects. Chromium uses trusted touch drags; WebKit uses native taps
 and mouse-pointer handle drags. A reduced test viewport only checks layout; verify
 actual keyboard resizing and iOS gesture behavior in the simulator or on a device.
+
+Right-click a cell for the Macro cell menu: Cut, Copy, Paste, Paste values only,
+Clear values, Clear formatting, Fill down/right, and Comment on saved workbooks.
+Right-click inside a selected range to act on that range; outside it targets the
+clicked cell. **Shift + F10** or the keyboard context-menu key opens the same menu
+for the selection; Escape returns focus to the grid. Fill requires a multi-cell
+range along that direction. Commenters can copy and comment without editing cells.
+Right-click inside the cell text editor retains the native text-editing menu.
+
+Opening a saved spreadsheet from Files/Drive (including a favorite) keeps the
+Drive navigation sidebar in place. Collapse it with the sidebar control; the
+spreadsheet header then shows the navigation toggle to reopen it. Opening a
+spreadsheet does not change the saved sidebar preference. The header keeps the
+Files location breadcrumbs before the sheet title; click a location breadcrumb
+to return to that file listing.
+
+## Spreadsheet comments
+
+On a saved spreadsheet, select a cell or range and choose **Comment** in the
+formatting ribbon (or **⌘/Ctrl + Alt + M**) to compose beside the cell. A comment
+captures the sheet ID and selected range; later selection changes do not move
+the draft's attachment. The top-right triangle marks the first cell of a
+commented range. Hover any cell in that range to read its threads; choose
+**Reply** in the card to respond without opening the sidebar. Clicking the
+triangle also opens the card on touch devices. Interacting with a card keeps it
+open until dismissed so a reply is not lost when moving the pointer.
+
+**Comments** in the document header opens all workbook threads. Range labels
+navigate to the corresponding sheet and cells; deleted-sheet threads remain
+readable. These are the same document annotation comments used by docs/tasks:
+mentions and replies use the existing inbox notifications and comment links.
+Opening an inbox notification opens the sidebar and targets its comment/range.
+Comment-only access can post/reply; view-only access can read. Edit/delete applies
+to the author's own comments, and failures retain the input draft. Draft demos
+must be saved before persistent comments are available.
 
 ## Ask Macro about a spreadsheet
 
@@ -328,7 +405,8 @@ Touch keeps separate `Attach images` and
 `Format` buttons. `Send comment` is disabled until text exists. Click the
 composer, `type_text`, then click `Send comment` (Enter also submits). The comment renders
 above the composer with author + timestamp. `@`-mentions in comments notify the mentioned
-user. On mobile, the new-comment composer is docked above the navigation bar,
+user. Editing a discussion comment keeps the attachment and send controls, with no
+trash button. On mobile, the new-comment composer is docked above the navigation bar,
 replacing Ask AI and New when commenting is available in documents and tasks.
 When the comment composer is unavailable, the default Ask AI row appears instead.
 Tap `Leave a comment...`
@@ -354,6 +432,67 @@ keeps at least 16px of
 bottom clearance above the drawer's curve, including while the keyboard is open,
 and accounts for the home-indicator safe area when the keyboard is closed.
 
+### Unified document discussions (`enable-unified-document-discussions`)
+
+With the PostHog flag `enable-unified-document-discussions` on (locally
+`VITE_ENABLE_UNIFIED_DOCUMENT_DISCUSSIONS=true`), document comments are messages
+read and written through `/dss/messages/document/<id>`, and both comment
+surfaces reuse the channel message components. The legacy annotation comment
+endpoints are not called for that document. Channels are not gated and always
+use the message API.
+
+Below the editor, expand `Discussion` to see comments without a text anchor.
+Its `Leave a comment...` composer is the channel composer: `Attach files`,
+formatting, mentions, and `Send message` (Enter also submits). Confirm
+completion by the new message appearing above the composer; a failed send
+retains the draft. The timeline initially loads a bounded page with up to three
+preview replies per thread. Expand a thread to load its replies;
+`Load earlier comments` pages backward. Live updates preserve unsent replies
+and edits while updating the surrounding thread.
+
+The `Include channel mentions` checkbox under the `Discussion` header is off by
+default. Checking it adds channel threads whose messages mention this document,
+each under a `From <channel name>` link to the source channel, after the
+document's own comments. These threads stay channel-owned: replies, edits, and
+reactions post to the channel, `Copy link` yields the channel link, and
+`Resolve` / `Delete discussion` do not appear on them. Only channels the viewer
+can read are listed, and a thread from a channel the viewer cannot post in has
+no reply, edit, or delete controls. The list refreshes on live channel message
+changes, on reconnect, and every 30 seconds while the checkbox is on, so a new
+mention in another channel or a lost channel membership shows up or disappears
+within that interval. A reply draft in a listed thread survives those
+refreshes. Unchecking hides the channel threads again without touching the
+document's comments.
+
+Select text and choose the comment action to create an anchored comment. These
+threads appear beside their text in the margin (or in the active thread drawer
+on phones) and never in the bottom Discussion, including after live updates or
+reloads. Existing highlights locate threads by their stable mark IDs. Replies,
+attachments, reactions, and editing use the same message controls as channels.
+Removing the last marked text moves its retained conversation to Discussion,
+where it remains after reload. Removing only part of a marked range keeps the
+conversation anchored to the remaining text. On phones, the active Markdown
+thread opens in a drawer with a pinned reply composer; long-press any message
+for edit, delete, copy-link, and reaction actions.
+
+`Resolve` / `Reopen` changes the discussion state. Deleting the root message
+leaves a tombstone and retains its replies. `Delete discussion` explicitly
+removes the whole thread and requests confirmation. `Copy link` targets the
+specific comment with `comment_id=<message id>`. Previously copied numeric links
+still resolve under current document permissions. Deleting an anchored Markdown
+discussion removes its mark while preserving the document text and any
+overlapping comments. If deletion happens while the document is closed, its next
+editable view removes the retained mark when the document loads. Read-only
+viewers see plain text without a dead comment highlight; the stored document
+and overlapping live comments stay intact.
+
+Unified PDF discussions are deferred: PDFs keep the legacy comment subsystem
+regardless of the flag, so PDF comments (the side-panel `Comments` section,
+anchored margin threads, highlight comments, and placeable comments) behave as
+they do with the flag off. The message-backed PDF path is a follow-up.
+
+With the flag off, documents behave exactly as described above this section.
+
 ## Side panel
 
 Right side of a doc (toggle with `Hide/Show Side Panel`):
@@ -369,9 +508,11 @@ Right side of a doc (toggle with `Hide/Show Side Panel`):
   oldest fetched entry (usually `created this`) pinned last; the toggle flips to `Show less`
   once expanded.
 - Header: `Share`, `Copy Share Link`, overflow menu — use `Share` to inspect or change the
-  doc's visibility/permissions. Documents and AI chats also have a `Team access` dropdown
-  (None / View / Comment / Edit) for sharing directly with the owner's team. That is
-  independent of the team-scoped link control.
+  doc's visibility/permissions. Documents, AI chats, and folders have a `Team access`
+  control (None / View / Comment / Edit) for sharing directly with the owner's team.
+  That is independent of the team-scoped link control. Folders hide link sharing, so
+  Team access is its own card on desktop and a Team tab on mobile, not nested in the
+  Link card.
 
 ## Known failure: "expected instance of LoroDoc"
 

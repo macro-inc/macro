@@ -6,8 +6,46 @@ const cell = z
   .object({ address: z.string().min(2).max(8), value: z.string().max(10_000) })
   .strict();
 const color = z.string().regex(/^(#[0-9a-fA-F]{6})?$/);
+const borderStyle = z.enum([
+  '',
+  'thin',
+  'dotted',
+  'dashDot',
+  'hair',
+  'dashDotDot',
+  'slantDashDot',
+  'mediumDashed',
+  'mediumDashDotDot',
+  'mediumDashDot',
+  'medium',
+  'double',
+  'thick',
+  'dashed',
+]);
 const style = z
   .object({
+    numberFormat: z
+      .string()
+      .max(512)
+      .refine((value) =>
+        Array.from(value).every((character) => character.charCodeAt(0) >= 32)
+      )
+      .optional(),
+    fontName: z
+      .string()
+      .max(128)
+      .refine((value) =>
+        Array.from(value).every((character) => character.charCodeAt(0) >= 32)
+      )
+      .optional(),
+    borderTopStyle: borderStyle.optional(),
+    borderTopColor: color.optional(),
+    borderRightStyle: borderStyle.optional(),
+    borderRightColor: color.optional(),
+    borderBottomStyle: borderStyle.optional(),
+    borderBottomColor: color.optional(),
+    borderLeftStyle: borderStyle.optional(),
+    borderLeftColor: color.optional(),
     bold: z.boolean().optional(),
     italic: z.boolean().optional(),
     underline: z.boolean().optional(),

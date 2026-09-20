@@ -91,6 +91,11 @@ export type AddPinRequest = {
  */
 export type Agent = {
     /**
+     * Whether the agent's sessions approve ACP permission requests without
+     * asking. `None` means always prompt. Bypass also requires the harness's opt-in.
+     */
+    auto_accept_permissions?: boolean | null;
+    /**
      * The bot identity used for mentions and channel participation.
      */
     bot: Bot;
@@ -127,11 +132,12 @@ export type Agent = {
  * frame, and read back off that frame as `request_id` on the folded message
  * it derives.
  *
- * Minted only by the server at accept time, as a v7 uuid so ids sort by mint
- * time. On the wire and in JSON it is the bare uuid, and a uuid-shaped
- * request id is the whole ownership test: the server is the only writer of
- * runtime-bound frames. The machine's own handshake request ids
- * (`agent_session:{session}:{n}`) are not uuids and stay `None`.
+ * A v7 uuid, so ids sort by mint time. Minted by the server at accept time,
+ * or by a client that speculated the action and named it in the control
+ * request - either way the server is the only writer of runtime-bound
+ * frames, so a uuid-shaped request id remains the whole ownership test. The
+ * machine's own handshake request ids (`agent_session:{session}:{n}`) are
+ * not uuids and stay `None`.
  */
 export type AgentActionId = string;
 
@@ -1122,6 +1128,10 @@ export type ApiThreadReply = {
  */
 export type ApprovePairingRequest = {
     /**
+     * Whether agents may bypass ACP permission requests on this harness.
+     */
+    allow_permission_bypass?: boolean;
+    /**
      * Display name override. Defaults to the daemon's requested name.
      */
     name?: string | null;
@@ -1283,6 +1293,8 @@ export type BasicDocumentSubType = {
     type: 'snippet';
 } | {
     type: 'skill';
+} | {
+    type: 'initiative_description';
 };
 
 export type BomPart = {
@@ -3074,6 +3086,11 @@ export type CountedReaction = {
  */
 export type CreateAgentRequest = {
     /**
+     * Whether the agent's sessions approve ACP permission requests without
+     * asking. Omit to always prompt.
+     */
+    auto_accept_permissions?: boolean | null;
+    /**
      * Optional avatar URL or data URL.
      */
     avatar_url?: string | null;
@@ -3469,7 +3486,8 @@ export type CreateEntityMentionResponse = {
  */
 export type CreateInitiativeRequest = {
     /**
-     * Optional description.
+     * Initial markdown for the description document. Not stored on the initiative; later
+     * edits happen in the document editor.
      */
     description?: string | null;
     /**
@@ -3537,6 +3555,10 @@ export type CreateMarkdownDocumentResponse = {
  * The daemon serializes this, so both derives are used.
  */
 export type CreatePairingRequest = {
+    /**
+     * Daemon operator consent ceiling. Omitted by older clients; web approval decides.
+     */
+    allow_permission_bypass?: boolean | null;
     /**
      * Display-only description of the machine, e.g. `eric@macbook / darwin`.
      */
@@ -4329,6 +4351,11 @@ export type DeleteUnthreadedPdfAnchorRequest = {
 };
 
 /**
+ * Id of the markdown document that holds an initiative's description.
+ */
+export type DescriptionDocumentId = string;
+
+/**
  * Returns basic information of a document used for some db queries
  */
 export type DocumentBasic = {
@@ -4712,6 +4739,8 @@ export type DocumentPreviewDataSubType = {
     type: 'snippet';
 } | {
     type: 'skill';
+} | {
+    type: 'initiative_description';
 };
 
 /**
@@ -4823,8 +4852,11 @@ export type DocumentStorageServiceApiVersion = 'v1' | 'v2';
 /**
  * The document sub type enum represents all values of document sub types.
  * These values should match the `document_sub_type_value` table in macrodb.
+ *
+ * Wire, database, and `Display` spellings are all `snake_case` so a
+ * multi-word variant serializes identically in every system.
  */
-export type DocumentSubType = 'task' | 'snippet' | 'skill';
+export type DocumentSubType = 'task' | 'snippet' | 'skill' | 'initiative_description';
 
 /**
  * Metadata for [`DocumentTopicEvent::SyncContentUpdated`].
@@ -6257,6 +6289,10 @@ export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewe
  */
 export type Harness = {
     /**
+     * Whether agents may bypass ACP permission requests on this harness.
+     */
+    allow_permission_bypass?: boolean;
+    /**
      * Whether the daemon currently holds a runtime connection.
      */
     connected: boolean;
@@ -6428,9 +6464,9 @@ export type InitiativeDetail = {
      */
     createdAt: string;
     /**
-     * Optional description.
+     * The markdown document holding the description; open it in the editor.
      */
-    description?: string | null;
+    descriptionDocumentId: DescriptionDocumentId;
     /**
      * Opaque identifier.
      */
@@ -6485,9 +6521,9 @@ export type InitiativeList = {
  */
 export type InitiativeSummary = {
     /**
-     * Optional description.
+     * The markdown document holding the description; open it in the editor.
      */
-    description?: string | null;
+    descriptionDocumentId: DescriptionDocumentId;
     /**
      * Opaque identifier.
      */
@@ -7094,6 +7130,10 @@ export type PairingDetails = {
      * Display-only description of the machine.
      */
     host?: string | null;
+    /**
+     * Daemon operator consent ceiling; false forbids bypass at approval.
+     */
+    requested_allow_permission_bypass?: boolean | null;
     /**
      * Harness display name the daemon asked for.
      */
@@ -9005,6 +9045,8 @@ export type SoupDocumentSubType = {
     type: 'snippet';
 } | {
     type: 'skill';
+} | {
+    type: 'initiative_description';
 };
 
 /**
@@ -9794,17 +9836,22 @@ export type ThreadAnchor = {
 };
 
 /**
- * The channel thread a session was opened from, when it was.
+ * The thread a session was opened from, when it was.
  */
 export type ThreadOrigin = {
     /**
-     * Channel the thread lives in.
+     * Channel the thread lives in, for channel parents only. Kept beside
+     * `parent` for consumers written when every origin was a channel.
      */
-    channel_id: string;
+    channel_id?: string | null;
     /**
      * The message whose mention opened the session.
      */
     originating_message_id: string;
+    /**
+     * Entity owning the thread: the channel or document it was posted in.
+     */
+    parent: MessageParent;
     /**
      * Root message of the thread.
      */
@@ -10071,6 +10118,11 @@ export type UnthreadedPdfUuidRequest = {
  */
 export type UpdateAgentRequest = {
     /**
+     * Whether the agent's sessions approve ACP permission requests without
+     * asking. Omit to always prompt.
+     */
+    auto_accept_permissions?: boolean | null;
+    /**
      * Optional avatar URL or data URL.
      */
     avatar_url?: string | null;
@@ -10156,13 +10208,9 @@ export type UpdateCrmTeamSettingsRequest = {
 
 /**
  * Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`
- * present is a full replace.
+ * present is a full replace. The description is edited in its document, not here.
  */
 export type UpdateInitiativeRequest = {
-    /**
-     * Replacement description. `Some("")` clears it after trim.
-     */
-    description?: string | null;
     /**
      * Full replacement member list when present.
      */

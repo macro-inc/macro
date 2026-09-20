@@ -76,10 +76,17 @@ export function buildUploadedAttachment(
   result: UploadSuccess
 ): InputAttachmentData | undefined {
   if (result.destination === 'static') {
+    // A static upload keeps the kind the file was classified as: channels
+    // only send media here, but the agent composer sends every file, and a
+    // PDF stored as a static file is still a document chip.
     return {
       id: result.id,
       name: file.name,
-      kind: pendingKind === 'video' ? 'video' : 'image',
+      kind: pendingKind,
+      iconType:
+        pendingKind === 'document'
+          ? iconTypeFromFilename(file.name)
+          : undefined,
     };
   }
 

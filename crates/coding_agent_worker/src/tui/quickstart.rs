@@ -17,6 +17,7 @@ pub(crate) struct Quickstart {
     pub(crate) focus: QuickstartFocus,
     pub(crate) workspace: String,
     pub(crate) scope: IdentityScope,
+    pub(crate) allow_permission_bypass: bool,
     pub(crate) mode: QuickstartMode,
     pub(crate) status: Option<(String, bool)>,
 }
@@ -34,6 +35,7 @@ pub(crate) enum QuickstartFocus {
     Agent(usize),
     Workspace,
     Scope,
+    PermissionBypass,
     Submit,
 }
 
@@ -55,6 +57,7 @@ impl Quickstart {
             focus: QuickstartFocus::Agent(0),
             workspace,
             scope: IdentityScope::Private,
+            allow_permission_bypass: false,
             mode: QuickstartMode::Normal,
             status: None,
         })
@@ -93,6 +96,7 @@ impl Quickstart {
             focus,
             workspace: config.workspace.path.display().to_string(),
             scope: config.identity.scope,
+            allow_permission_bypass: config.identity.allow_permission_bypass,
             mode: QuickstartMode::Normal,
             status: None,
         }
@@ -115,7 +119,8 @@ impl Quickstart {
                         }
                         QuickstartFocus::Workspace => QuickstartFocus::Agent(self.agents.len()),
                         QuickstartFocus::Scope => QuickstartFocus::Workspace,
-                        QuickstartFocus::Submit => QuickstartFocus::Scope,
+                        QuickstartFocus::PermissionBypass => QuickstartFocus::Scope,
+                        QuickstartFocus::Submit => QuickstartFocus::PermissionBypass,
                     };
                     QuickstartAction::Continue
                 }
@@ -126,7 +131,10 @@ impl Quickstart {
                         }
                         QuickstartFocus::Agent(_) => QuickstartFocus::Workspace,
                         QuickstartFocus::Workspace => QuickstartFocus::Scope,
-                        QuickstartFocus::Scope | QuickstartFocus::Submit => QuickstartFocus::Submit,
+                        QuickstartFocus::Scope => QuickstartFocus::PermissionBypass,
+                        QuickstartFocus::PermissionBypass | QuickstartFocus::Submit => {
+                            QuickstartFocus::Submit
+                        }
                     };
                     QuickstartAction::Continue
                 }
@@ -168,6 +176,10 @@ impl Quickstart {
                             IdentityScope::Private => IdentityScope::Team,
                             IdentityScope::Team => IdentityScope::Private,
                         };
+                        QuickstartAction::Continue
+                    }
+                    QuickstartFocus::PermissionBypass => {
+                        self.allow_permission_bypass = !self.allow_permission_bypass;
                         QuickstartAction::Continue
                     }
                     QuickstartFocus::Submit if self.selected_agent.is_none() => {

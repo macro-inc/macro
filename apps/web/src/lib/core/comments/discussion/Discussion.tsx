@@ -2,7 +2,6 @@ import { buildChannelMessageListMeta } from '@channel/Channel/message-list-meta'
 import type { InputSnapshot } from '@channel/Input/types';
 import type { ChannelMessageListMeta } from '@channel/Message/list-meta';
 import { Message } from '@channel/Message/Message';
-import type { MessageActions } from '@channel/Message/types';
 import { buildThreadReplyListMeta } from '@channel/Thread/reply-list-meta';
 import { Thread } from '@channel/Thread/Thread';
 import { ThreadReplyInputConnector } from '@channel/Thread/ThreadReplyInputConnector';
@@ -10,6 +9,7 @@ import { ThreadReplyRail } from '@channel/Thread/ThreadReplyRail';
 import { channelReplyInputOffsetX } from '@channel/Thread/utils/thread-rail-geometry';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
+import type { MessageActions } from '@core/messages/types';
 import { getDisplayName, tryMacroId } from '@core/user';
 import CaretDown from '@phosphor/caret-down.svg';
 import CaretRight from '@phosphor/caret-right.svg';
@@ -18,6 +18,7 @@ import {
   createMemo,
   createSignal,
   For,
+  type JSX,
   onCleanup,
   onMount,
   Show,
@@ -38,7 +39,10 @@ import type {
  * [`DiscussionSource`]. Backend-agnostic: drive it via a `DiscussionProvider`
  * supplying a document/task or CRM source.
  */
-export function Discussion(props: { hideComposer?: boolean }) {
+export function Discussion(props: {
+  hideComposer?: boolean;
+  threadHeader?: (thread: ViewThread) => JSX.Element;
+}) {
   const source = useDiscussion();
   const [isExpanded, setIsExpanded] = createSignal(true);
   const [mountedCommentsVersion, setMountedCommentsVersion] = createSignal(0);
@@ -143,12 +147,15 @@ export function Discussion(props: { hideComposer?: boolean }) {
                   const listMeta = () =>
                     root() ? rootMetaById()[root()!.id] : undefined;
                   return (
-                    <DiscussionThreadView
-                      thread={thread}
-                      listMeta={listMeta()}
-                      onCommentMount={registerMountedComment}
-                      onCommentCleanup={unregisterMountedComment}
-                    />
+                    <>
+                      {props.threadHeader?.(thread)}
+                      <DiscussionThreadView
+                        thread={thread}
+                        listMeta={listMeta()}
+                        onCommentMount={registerMountedComment}
+                        onCommentCleanup={unregisterMountedComment}
+                      />
+                    </>
                   );
                 }}
               </For>
@@ -169,6 +176,7 @@ export function Discussion(props: { hideComposer?: boolean }) {
 /** The new-thread composer can be placed independently of the thread list. */
 export function DiscussionComposer(props: {
   collapsible?: boolean;
+  autofocus?: boolean;
   /** Dismiss the keyboard after submitting from a floating mobile composer. */
   blurOnSend?: boolean;
 }) {
@@ -192,7 +200,7 @@ export function DiscussionComposer(props: {
         onReady={(handle) => {
           inputHandle = handle;
         }}
-        autofocus={false}
+        autofocus={props.autofocus ?? false}
       />
     </Show>
   );
@@ -200,6 +208,7 @@ export function DiscussionComposer(props: {
 
 export function DiscussionThreadView(props: {
   thread: ViewThread;
+  showReplyAction?: boolean;
   listMeta?: ChannelMessageListMeta;
   onCommentMount?: (commentId: string, element: HTMLElement) => void;
   onCommentCleanup?: (commentId: string, element: HTMLElement) => void;
@@ -257,15 +266,24 @@ export function DiscussionThreadView(props: {
               setIsReplying(true);
             }
           : undefined,
-      onEdit: own
-        ? () => {
-            setEditingId(comment.id);
-          }
-        : undefined,
+      onEdit:
+        own && canEdit()
+          ? () => {
+              setEditingId(comment.id);
+            }
+          : undefined,
       onDelete:
         own && canEdit()
           ? async () => {
-              await source.deleteComment(comment);
+              try {
+                await source.deleteComment(comment);
+              } catch (error) {
+                toast.failure(
+                  error instanceof Error
+                    ? error.message
+                    : 'Unable to delete comment.'
+                );
+              }
             }
           : undefined,
       onCopyLink: makeCopyLink(comment),
@@ -320,6 +338,26 @@ export function DiscussionThreadView(props: {
                 />
               </div>
 
+              <Show
+                when={
+                  props.showReplyAction &&
+                  !hasReplies() &&
+                  !isReplying() &&
+                  canEdit()
+                }
+              >
+                <Thread.ActionsFooter>
+                  <Thread.ReplyButton
+                    getFocusTarget={() =>
+                      replyInputContainerRef?.querySelector<HTMLElement>(
+                        '[contenteditable]'
+                      ) ?? null
+                    }
+                    onClick={() => setIsReplying(true)}
+                    aria-label="Reply"
+                  />
+                </Thread.ActionsFooter>
+              </Show>
               <Show when={hasReplies() || isReplying()}>
                 <div class="relative w-full">
                   <Thread.ReplyRailDecorations />
@@ -461,7 +499,7 @@ function DiscussionMessageView(props: {
             <Show when={isEditing()} fallback={<Message.Content />}>
               <DiscussionInput
                 input={{
-                  mode: 'reply',
+                  mode: 'channel',
                   placeholder: 'Edit comment...',
                   value: props.comment.text,
                 }}

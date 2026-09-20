@@ -47,6 +47,8 @@ pub enum GraphqlNotificationDocumentSubType {
     Snippet,
     /// Skill document.
     Skill,
+    /// The description document of an initiative.
+    InitiativeDescription,
 }
 
 impl From<NotificationDocumentSubType> for GraphqlNotificationDocumentSubType {
@@ -55,6 +57,7 @@ impl From<NotificationDocumentSubType> for GraphqlNotificationDocumentSubType {
             NotificationDocumentSubType::Task => Self::Task,
             NotificationDocumentSubType::Snippet => Self::Snippet,
             NotificationDocumentSubType::Skill => Self::Skill,
+            NotificationDocumentSubType::InitiativeDescription => Self::InitiativeDescription,
         }
     }
 }

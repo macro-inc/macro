@@ -30,6 +30,8 @@ import type { SpreadsheetData } from './definition';
 import { createSpreadsheetStore } from './primitives/create-spreadsheet-store';
 import { useSpreadsheetAccess } from './primitives/use-spreadsheet-access';
 import { createSpreadsheetSession } from './queries/spreadsheet-session';
+import { SpreadsheetComments } from './SpreadsheetComments';
+import { spreadsheetMentions } from './spreadsheet-mentions';
 import { SpreadsheetEditor } from './views/SpreadsheetEditor';
 import { SpreadsheetModalsProvider } from './views/SpreadsheetModalsProvider';
 
@@ -138,24 +140,33 @@ function SpreadsheetBlockContent() {
                     />
                   </div>
                 </SplitHeaderRight>
-                <SpreadsheetEditor
-                  store={store}
-                  name={name()}
-                  onExportXlsx={(bytes) =>
-                    downloadFile(
-                      new Blob([bytes.slice().buffer], {
-                        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                      }),
-                      `${name()}.xlsx`
-                    )
-                  }
-                  onExport={(content) =>
-                    downloadFile(
-                      new Blob([content], { type: 'text/csv;charset=utf-8' }),
-                      `${name()}.csv`
-                    )
-                  }
-                />
+                <SpreadsheetComments documentId={documentId} store={store}>
+                  {(commentLocation, comments) => (
+                    <SpreadsheetEditor
+                      commentLocation={commentLocation()}
+                      comments={comments}
+                      mentions={spreadsheetMentions}
+                      store={store}
+                      name={name()}
+                      onExportXlsx={(bytes) =>
+                        downloadFile(
+                          new Blob([bytes.slice().buffer], {
+                            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                          }),
+                          `${name()}.xlsx`
+                        )
+                      }
+                      onExport={(content) =>
+                        downloadFile(
+                          new Blob([content], {
+                            type: 'text/csv;charset=utf-8',
+                          }),
+                          `${name()}.csv`
+                        )
+                      }
+                    />
+                  )}
+                </SpreadsheetComments>
               </>
             );
           }}

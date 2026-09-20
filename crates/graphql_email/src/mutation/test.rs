@@ -19,6 +19,10 @@ enum CapturedMutation {
         user_id: String,
         thread_id: Uuid,
     },
+    Unread {
+        user_id: String,
+        thread_id: Uuid,
+    },
     Label {
         user_id: String,
         thread_id: Uuid,
@@ -30,6 +34,7 @@ enum CapturedMutation {
 #[derive(Default)]
 struct CapturingEmailMutationService {
     calls: Mutex<Vec<CapturedMutation>>,
+    reject_unread: bool,
 }
 
 impl EmailMutationService for CapturingEmailMutationService {
@@ -42,6 +47,21 @@ impl EmailMutationService for CapturingEmailMutationService {
             user_id: user_id.to_string(),
             thread_id,
         });
+        Ok(())
+    }
+
+    async fn mark_email_thread_unread(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        thread_id: Uuid,
+    ) -> Result<(), EmailErr> {
+        self.calls.lock().unwrap().push(CapturedMutation::Unread {
+            user_id: user_id.to_string(),
+            thread_id,
+        });
+        if self.reject_unread {
+            return Err(EmailErr::ThreadNotFound);
+        }
         Ok(())
     }
 
@@ -130,6 +150,82 @@ async fn mark_seen_calls_the_email_service_and_returns_the_reloaded_thread() {
             thread_id,
         }]
     );
+}
+
+#[tokio::test]
+async fn mark_unread_calls_the_service_and_returns_authoritative_state_not_a_hardcoded_flag() {
+    let service = Arc::new(CapturingEmailMutationService::default());
+    let thread_id = Uuid::from_u128(42);
+    let response = schema(service.clone())
+        .execute(format!(
+            r#"mutation {{ markEmailThreadUnread(input: {{ threadId: "{thread_id}" }}) {{ id isRead }} }}"#
+        ))
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    // The loader intentionally returns true: the resolver must reload, not
+    // synthesize the intended false value after calling the service.
+    assert_eq!(
+        response.data.into_json().unwrap()["markEmailThreadUnread"],
+        serde_json::json!({ "id": thread_id, "isRead": true })
+    );
+    assert_eq!(
+        *service.calls.lock().unwrap(),
+        vec![CapturedMutation::Unread {
+            user_id: "macro|viewer@example.com".to_string(),
+            thread_id,
+        }]
+    );
+}
+
+#[tokio::test]
+async fn mark_unread_requires_authentication() {
+    let service = Arc::new(CapturingEmailMutationService::default());
+    let schema = Schema::build(
+        QueryRoot,
+        GraphqlEmailMutation::<CapturingEmailMutationService, TestEmailThreadOutput>::new(),
+        EmptySubscription,
+    )
+    .data(service.clone())
+    .finish();
+    let response = schema
+        .execute(format!(
+            r#"mutation {{ markEmailThreadUnread(input: {{ threadId: "{}" }}) {{ id }} }}"#,
+            Uuid::from_u128(42)
+        ))
+        .await;
+
+    assert!(!response.errors.is_empty());
+    assert!(service.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn mark_unread_rejects_invalid_thread_ids_before_calling_the_service() {
+    let service = Arc::new(CapturingEmailMutationService::default());
+    let response = schema(service.clone())
+        .execute(r#"mutation { markEmailThreadUnread(input: { threadId: "invalid" }) { id } }"#)
+        .await;
+
+    assert!(!response.errors.is_empty());
+    assert!(service.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn mark_unread_propagates_service_failure_instead_of_returning_a_thread() {
+    let service = Arc::new(CapturingEmailMutationService {
+        reject_unread: true,
+        ..Default::default()
+    });
+    let response = schema(service)
+        .execute(format!(
+            r#"mutation {{ markEmailThreadUnread(input: {{ threadId: "{}" }}) {{ id }} }}"#,
+            Uuid::from_u128(42)
+        ))
+        .await;
+
+    assert_eq!(response.errors.len(), 1);
+    assert_eq!(response.errors[0].message, "email thread not found");
+    assert_eq!(response.data, async_graphql::Value::Null);
 }
 
 #[tokio::test]

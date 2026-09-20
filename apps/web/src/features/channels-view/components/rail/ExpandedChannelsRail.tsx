@@ -122,6 +122,8 @@ function ChannelSortDropdown(props: { group: ChannelsGroup; label: string }) {
     <Dropdown placement="bottom-end">
       <Dropdown.Trigger
         as={ViewSidebar.Control}
+        variant="ghost"
+        size="icon-sm"
         label={`Sort ${props.label.toLowerCase()}`}
       >
         <SortIcon class="size-3.5" />
@@ -266,7 +268,7 @@ function ExpandedFavoritesSection() {
 
   return (
     <Show when={section().items.length > 0}>
-      <CollapsibleSection.Root open={section().open}>
+      <CollapsibleSection.Root open={section().open} sizing="content">
         <CollapsibleSection.Header
           focused={section().focused}
           focusWithin={section().containsFocus}
@@ -472,7 +474,7 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
   return (
     <CollapsibleSection.Root
       open={section().open}
-      fillAvailable={section().fillAvailable}
+      sizing={section().fillAvailable ? 'fill' : 'half'}
     >
       <CollapsibleSection.Header
         focused={section().focused}
@@ -594,9 +596,14 @@ function ExpandedBrowse() {
       <Match when={true}>
         <ViewSidebar.Content class="h-full overflow-hidden">
           <ExpandedFavoritesSection />
-          <For each={GROUPS}>
-            {(config) => <ExpandedGroupSection config={config} />}
-          </For>
+          {/* The groups split the height left after favorites between them.
+              Their half-height caps resolve against this column, not the
+              whole sidebar, so favorites is never squeezed out. */}
+          <div class="flex min-h-0 flex-1 flex-col gap-(--sidebar-section-gap)">
+            <For each={GROUPS}>
+              {(config) => <ExpandedGroupSection config={config} />}
+            </For>
+          </div>
         </ViewSidebar.Content>
       </Match>
     </Switch>

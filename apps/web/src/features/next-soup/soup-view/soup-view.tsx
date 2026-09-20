@@ -584,12 +584,15 @@ export const SoupView = (props: SoupViewProps) => {
     },
   });
 
-  const content = (onOpenEntity?: (entity: EntityData) => boolean) => (
+  const content = (
+    onOpenEntity?: (entity: EntityData) => boolean,
+    mobileHeaderLeading?: JSX.Element
+  ) => (
     <div
       class="size-full flex flex-col @container"
       data-list-view={activeListView()}
     >
-      <Show when={!isComponentListView('companies')}>
+      <Show when={!isComponentListView('companies') || isTouchDevice()}>
         <div class="flex flex-col w-full">
           <SplitHeaderLeft>
             <div
@@ -606,7 +609,7 @@ export const SoupView = (props: SoupViewProps) => {
                 the view title (the bottom accessory region now belongs to the
                 global views row). */}
               <Show when={isTouchDevice()}>
-                <MobileSoupViewTabs />
+                <MobileSoupViewTabs leading={mobileHeaderLeading} />
               </Show>
               <Show when={!isTouchDevice() && !narrowSearchExpanded()}>
                 <div class="flex items-center gap-1">
@@ -797,7 +800,11 @@ export const SoupView = (props: SoupViewProps) => {
         <CrmDefaultViewLoader />
       </Show>
       <Show when={isComponentListView('companies')} fallback={content()}>
-        <CrmWorkspace>{(onOpenEntity) => content(onOpenEntity)}</CrmWorkspace>
+        <CrmWorkspace>
+          {(options) =>
+            content(options.onOpenEntity, options.mobileHeaderLeading)
+          }
+        </CrmWorkspace>
       </Show>
     </>
   );

@@ -1,7 +1,12 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { usePdfDocument } from '@block-pdf/context/pdf-document-context';
 import type { PdfRootLayout } from '@block-pdf/type/comments';
-import { type DeleteCommentInfo, isRoot } from '@core/comments/commentType';
+import {
+  type CommentId,
+  type DeleteCommentInfo,
+  isRoot,
+  type ThreadId,
+} from '@core/comments/commentType';
 import { threadMeasureContainerId } from '@core/comments/Thread';
 import type {
   CreateCommentRequest,
@@ -35,7 +40,9 @@ export function useCreateComment() {
   const newThreadPlaceable = useNewThreadPlaceable();
 
   return createCallback(
-    async (info: CreateCommentRequest & { threadId: number }) => {
+    async (
+      info: Omit<CreateCommentRequest, 'threadId'> & { threadId: ThreadId }
+    ) => {
       analytics.track('comment_create', { blockType: 'pdf' });
       const { threadId, text, mentions } = info;
 
@@ -97,7 +104,8 @@ export function useCreateComment() {
         return response;
       }
 
-      return await createThreadReply(info);
+      if (typeof threadId !== 'number') return null;
+      return await createThreadReply({ ...info, threadId });
     }
   );
 }
@@ -107,10 +115,17 @@ export function useUpdateComment() {
 
   const editComment = useEditCommentResource();
 
-  return createCallback((commentId: number, info: EditCommentRequest) => {
-    analytics.track('comment_update', { blockType: 'pdf' });
-    return editComment(commentId, info);
-  });
+  return createCallback(
+    (
+      commentId: CommentId,
+      info: Omit<EditCommentRequest, 'threadId'> & { threadId: ThreadId }
+    ) => {
+      analytics.track('comment_update', { blockType: 'pdf' });
+      if (typeof commentId !== 'number' || typeof info.threadId !== 'number')
+        return Promise.resolve(false);
+      return editComment(commentId, { ...info, threadId: info.threadId });
+    }
+  );
 }
 
 export function useDeleteComment() {
@@ -126,6 +141,7 @@ export function useDeleteComment() {
       deleteNewComments();
       return false;
     }
+    if (typeof commentId !== 'number') return false;
 
     const success = await deleteComment(commentId, {
       removeAnchorThreadOnly: info.removeAnchorThreadOnly,

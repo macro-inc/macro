@@ -6,6 +6,9 @@ pub type Result<T, E = AgentSessionError> = std::result::Result<T, E>;
 
 #[derive(Error, Debug)]
 pub enum AgentSessionError {
+    /// A repository or branch cannot be used by this session.
+    #[error("{0}")]
+    InvalidRepositorySelection(&'static str),
     #[error("agent session {0} already has an active transport")]
     AlreadyConnected(AgentSessionId),
     #[error("agent session {0} is managed by another live replica")]
@@ -36,6 +39,12 @@ pub enum AgentSessionError {
     EmptyQueuedPrompt,
     #[error("agent session {0} has too many queued actions")]
     ControlQueueFull(AgentSessionId),
+    #[error(
+        "agent session {0} has no open permission request with this id; it may already have been answered or cancelled"
+    )]
+    PermissionRequestNotFound(AgentSessionId),
+    #[error("agent session {0} was not offered that permission option")]
+    PermissionOptionUnknown(AgentSessionId),
     #[error(
         "agent session {0} cannot be restored because the agent supports neither session/resume nor session/load"
     )]

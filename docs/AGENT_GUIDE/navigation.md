@@ -68,10 +68,19 @@ Narrow navigation overlays use the same brief width and opacity animation.
 Visibility is a sticky preference per app type (Home, Email, Chat, Tasks, Drive,
 Agents, Customers), independent of other apps and restored on reload. Narrow
 workspaces reopen navigation as an overlay; the backdrop or **Hide navigation**
-closes it. The overlay never contains the split's **Close** button. Mobile keeps
+closes it temporarily. Opening or closing the narrow overlay never changes the
+saved wide-layout preference. Widening restores that preference, including in
+Home and Chat: navigation returns unless explicitly hidden at desktop width.
+Shrinking again starts with the overlay closed.
+The overlay never contains the split's **Close** button. Mobile keeps
 its existing navigation controls. Block detail panels (including Calendar) have
 **Hide side panel** in their own header and a hamburger **Show side panel** beside
 the main title when hidden, with separate preferences per block type.
+
+Multiple desktop splits appear as individually bordered, medium-rounded panels with
+6px top, right, and bottom insets and 6px resizable gaps, including preview pairs.
+The leftmost panel sits flush against the app rail, whose divider is hidden while
+multiple splits are open. A single split stays edge to edge. Touch layouts keep their existing presentation.
 
 Split focus mode (`Shift+Esc`) floats the active split in a rounded, bordered
 panel over the same glass scrim as dialogs. Click the scrim or use the shortcut
@@ -132,6 +141,8 @@ Its **New conversation** button opens the unified composer with one **Agent**
 selector on the right. Choosing a coding agent reveals the repository drawer;
 there is no Chat/Code switch. New sessions use the selected agent's default model
 and the URL for its kind. Opening an existing row restores its own kind and URL.
+Right-click a conversation for Rename, Favorite, Copy link, Share, Delete, and
+the other entity actions used on Home.
 
 Home's inner rail starts with a full-width **New chat** plus button that returns
 to Home's starting pane without creating a chat. Email and Tasks use the same
@@ -329,3 +340,55 @@ refreshes the session credential and restores the saved selection.
 Claude sessions expose **Open in Claude** in the header
 toolbar (or its overflow menu). With a live runtime, messages sent in Claude are
 polled into Macro about every two seconds; disconnected runtimes must resume first.
+
+Home does not bind Delete or Backspace to deleting list items. These keys remain
+available to the open editor (for example, clearing a selected spreadsheet range).
+Use the item menu to delete an item from Home.
+
+`C A` (Create → Agent) opens the Agents new-conversation page and focuses its
+message input; `C Shift+A` requests a new split. It does not open a modal or
+create a session before the user sends. Repeating it focuses the existing draft.
+
+### Content already open
+
+Entity content can be open in only one split or inline preview/detail view at a
+time. Shell components may have duplicate splits when `allowDuplicate` is enabled.
+An Agents conversation route counts as the same entity as its agent or chat block.
+Opening an entity already in a split focuses that split when activation is
+requested; the sidebar's **Open in new split** also shows a **Content already open** toast.
+Selecting an entity owned by another view from a detail view leaves the current
+detail and navigation history unchanged and shows a **Content already open**
+toast. Close or navigate away
+from the owning view before opening it elsewhere. The same rule applies to mouse
+selection, keyboard preview navigation, and detail breadcrumbs. Touch layouts
+never render inline previews or detail views: a tap opens the entity in the
+split, so the toast only appears when the content is genuinely open elsewhere.
+
+## Entity action dialogs
+
+Rename, Delete, and Move to folder use compact centered dialogs on desktop and
+the shared drawer on mobile, with actions in a separated footer. One selected
+item shows a compact name chip; multiple items show two chips and
+`+N`, which expands single-line names for review.
+Selected-item chips in action command menus and dialogs use the shared Badge,
+cap each name at 192px, and reveal truncated names on hover. Overflow counts
+remain on one line.
+
+Bulk Rename uses bubble tabs for Prepend, Append, Replace, and Total. It starts
+with the first item’s name and shows one before/after example. Replace
+shows only Find and Replace with fields; Total applies one name to all items.
+The preview counts changed names.
+Partial deletes keep the dialog open, report confirmed successes, and leave only
+failed items selected for retry.
+Cancel and Escape dismiss the dialog. Use Cancel when
+reviewing dialogs against hosted data; confirmation performs real mutations.
+
+The New reminder dialog uses the same compact panel and fixed action footer.
+Its referenced item is a capped Badge; repeat options use bubble tabs (Does not
+repeat / Weekly / Monthly). Date, time, weekdays, and timezone retain their
+scheduling behavior. Creating a reminder dismisses the composer before saving,
+with success or failure reported by toast.
+
+Action dialogs share `ActionDialogShell` presentation slots: the same capped selection badges for single and multiple items, compact heading and copy, prominent fields, and an attached footer. Rename, delete, move, reminder creation, and shared confirmations use this layout. Bulk rename keeps bubble tabs and one first-item preview.
+
+The Move to folder picker uses the Drive sidebar’s folder rows: neutral icons, trailing expand/collapse buttons, and indented branch guides. Click a folder to select it; use the chevron to expand it. Search and arrow-key navigation remain available.

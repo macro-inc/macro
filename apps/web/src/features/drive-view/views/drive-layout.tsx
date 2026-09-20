@@ -10,6 +10,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import FolderIcon from '@phosphor/folder.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
+import { SidebarTagsSection } from '@property/tags/SidebarTagsSection';
 import { Button, Dropdown } from '@ui';
 import { createMemo, createSignal, type JSX, Show } from 'solid-js';
 import { DriveBreadcrumbsOutlet } from '../components/DriveBreadcrumbs';
@@ -43,8 +44,14 @@ export function DriveLayout(props: {
   onToggleFolder: (id: string) => void;
   onFavoritesOpen: (open: boolean) => void;
   onRootOpen: (open: boolean) => void;
+  /** Tag option ids narrowing the current location. */
+  activeTagIds: readonly string[];
+  onTags: (ids: string[]) => void;
+  onTagsOpen: (open: boolean) => void;
   createMenu: () => JSX.Element;
   favorites: () => JSX.Element;
+  /** The favorites section is hidden entirely when the user has none. */
+  hasFavorites: boolean;
   locationMenu: DriveLocationMenu;
   detail?: JSX.Element;
   children: JSX.Element;
@@ -72,18 +79,20 @@ export function DriveLayout(props: {
           setNavigationOpen(false);
         }}
       />
-      <CollapsibleSection.Root
-        open={props.state.favoritesOpen}
-        onOpenChange={props.onFavoritesOpen}
-      >
-        <CollapsibleSection.Trigger>
-          <span class="min-w-0 truncate">Favorites</span>
-          <CollapsibleSection.Indicator />
-        </CollapsibleSection.Trigger>
-        <CollapsibleSection.Content>
-          <props.favorites />
-        </CollapsibleSection.Content>
-      </CollapsibleSection.Root>
+      <Show when={props.hasFavorites}>
+        <CollapsibleSection.Root
+          open={props.state.favoritesOpen}
+          onOpenChange={props.onFavoritesOpen}
+        >
+          <CollapsibleSection.Trigger>
+            <span class="min-w-0 truncate">Favorites</span>
+            <CollapsibleSection.Indicator />
+          </CollapsibleSection.Trigger>
+          <CollapsibleSection.Content>
+            <props.favorites />
+          </CollapsibleSection.Content>
+        </CollapsibleSection.Root>
+      </Show>
       <CollapsibleSection.Root
         open={props.state.rootOpen}
         onOpenChange={props.onRootOpen}
@@ -178,6 +187,13 @@ export function DriveLayout(props: {
           </ViewSidebar.Nav>
         </CollapsibleSection.Content>
       </CollapsibleSection.Root>
+      <SidebarTagsSection
+        activeIds={props.activeTagIds}
+        onActiveIdsChange={props.onTags}
+        open={props.state.tagsOpen}
+        onOpenChange={props.onTagsOpen}
+        onNavigate={() => setNavigationOpen(false)}
+      />
     </>
   );
 

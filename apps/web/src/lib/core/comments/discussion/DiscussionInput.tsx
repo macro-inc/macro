@@ -20,6 +20,7 @@ import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import { addMediaFromFile } from '@core/component/LexicalMarkdown/plugins/media';
 import { singleLineMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
+import { toast } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { IUser } from '@core/user/types';
@@ -178,6 +179,13 @@ export function DiscussionInput(props: DiscussionInputProps) {
           collapsedInput.collapse();
         }
         return true;
+      } catch (error) {
+        toast.failure(
+          error instanceof Error
+            ? error.message
+            : 'Unable to send comment. Your draft has been kept.'
+        );
+        return false;
       } finally {
         setIsSending(false);
       }

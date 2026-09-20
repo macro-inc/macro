@@ -773,3 +773,54 @@ describe('sheet formula references', () => {
     expect(formulaReferencesSheet(formula, name)).toBe(expected);
   });
 });
+
+it('duplicates local definitions without duplicating global names and rejects colliding appended names atomically', () => {
+  const doc = new LoroDoc();
+  try {
+    importSpreadsheetSheets(
+      doc,
+      [
+        {
+          name: 'Inputs',
+          cells: { A1: { value: '10' } },
+          rowCount: 200,
+          columnWidths: {},
+          metadata: {
+            definedNames: [
+              { name: 'GlobalRate', formula: '0.1' },
+              { name: 'LocalRate', formula: '0.2', local: true },
+            ],
+          },
+        },
+      ],
+      true
+    );
+    const source = readSpreadsheetWorkbook(doc)[0];
+    duplicateSpreadsheetSheet(doc, source.id);
+    const workbook = readSpreadsheetWorkbook(doc);
+    expect(workbook[1].metadata?.definedNames).toEqual([
+      { name: 'LocalRate', formula: '0.2', local: true },
+    ]);
+    const before = doc.version().encode();
+    expect(() =>
+      importSpreadsheetSheets(
+        doc,
+        [
+          {
+            name: 'Extra',
+            cells: {},
+            rowCount: 200,
+            columnWidths: {},
+            metadata: {
+              definedNames: [{ name: 'globalrate', formula: '0.3' }],
+            },
+          },
+        ],
+        false
+      )
+    ).toThrow(/name/i);
+    expect(doc.version().encode()).toEqual(before);
+  } finally {
+    doc.free();
+  }
+});

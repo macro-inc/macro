@@ -1,3 +1,4 @@
+export { ActionDialogShell } from './components/ActionDialogShell';
 export type {
   AvatarGroupProps,
   AvatarGroupSize,

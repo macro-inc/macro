@@ -1,3 +1,4 @@
+import { encodeCellMention } from '@macro-inc/spreadsheet/cell-mentions';
 import { describe, expect, it } from 'vitest';
 import type { CellSelection } from './grid-selection';
 import {
@@ -93,11 +94,11 @@ describe('spreadsheet range operations', () => {
     );
     expect(result).toEqual({
       edits: {
-        B2: { value: 'Name' },
-        C2: { value: 'Note' },
-        B3: { value: 'Smith, Lee' },
-        C3: { value: 'said "yes"\nnext line' },
-        B4: { value: 'Last' },
+        B2: { value: "'Name" },
+        C2: { value: "'Note" },
+        B3: { value: "'Smith, Lee" },
+        C3: { value: '\'said "yes"\nnext line' },
+        B4: { value: "'Last" },
         C4: { value: '' },
       },
       rowCount: 4,
@@ -124,7 +125,7 @@ describe('spreadsheet range operations', () => {
     expect(() => csvImportEdits('one,two', lastCell)).toThrow('fit within');
     expect(() => csvImportEdits('one\ntwo', lastCell)).toThrow('fit within');
     expect(csvImportEdits('fits', lastCell).edits).toEqual({
-      Z1000: { value: 'fits' },
+      Z1000: { value: "'fits" },
     });
   });
 
@@ -181,4 +182,35 @@ describe('spreadsheet range operations', () => {
       )
     ).toEqual({ A1: { value: 'a b\n c' }, C1: { value: '=literal text' } });
   });
+});
+
+it('treats mentions as atomic during find, replace and whitespace cleanup', () => {
+  const mention = encodeCellMention({
+    type: 'document',
+    documentId: 'id-2026',
+    documentName: 'Budget  2026',
+    blockName: 'md',
+  });
+  const value = `  Budget 2026 ${mention}  `;
+  expect(replaceCellText(value, '2026', '2027"\\', options)).toBe(
+    `  Budget 2027"\\ ${mention}  `
+  );
+  expect(
+    replaceCellText(mention, 'Budget  2026', 'Changed', {
+      ...options,
+      entireCell: true,
+    })
+  ).toBe(mention);
+  expect(trimWhitespaceEdits({ A1: { value } }, origin).A1?.value).toBe(
+    `Budget 2026 ${mention}`
+  );
+  expect(
+    findCells({ A1: { value } }, {}, 'id-2026', { ...options, formulas: true })
+  ).toEqual([]);
+  expect(
+    findCells({ A1: { value } }, {}, 'Budget  2026', {
+      ...options,
+      formulas: true,
+    })
+  ).toEqual(['A1']);
 });

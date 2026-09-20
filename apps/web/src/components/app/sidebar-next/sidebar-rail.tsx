@@ -52,7 +52,10 @@ export const SidebarRail = () => {
     <div
       {...hotkeyScopeNeutralAttribute}
       data-ui="sidebar-rail"
-      class="relative flex h-full w-14 shrink-0 flex-col items-center gap-2 overflow-hidden border-r border-edge-muted bg-surface px-2.5 pb-3 pt-3"
+      classList={{
+        'border-r': (globalSplitManager()?.splits().length ?? 1) <= 1,
+      }}
+      class="relative flex h-full w-14 shrink-0 flex-col items-center gap-2 overflow-hidden border-edge-muted bg-surface px-2.5 pb-3 pt-3"
     >
       <SidebarRailCreateButton />
       <SearchRailButton />

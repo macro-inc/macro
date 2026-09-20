@@ -10,23 +10,30 @@
 //! agreement.
 //!
 //! Messages go out as type [`AGENT_SESSION_LOG`] with a
-//! [`AgentSessionLogEvent`] body:
+//! [`AgentSessionLogEvent`] body: the session, and the run of frames the
+//! writer just flushed, in log order.
 //!
 //! ```json
 //! {
 //!   "agentSessionId": "019f…",
-//!   "createdAt":      "2026-08-13T12:34:56.789Z",
-//!   "userId":         "macro|someone@example.com",
-//!   "direction":      "to_server",
-//!   "content":        { "type": "acp", "jsonrpc": "2.0", … }
+//!   "entries": [
+//!     {
+//!       "id":        "019f…",
+//!       "createdAt": "2026-08-13T12:34:56.789Z",
+//!       "userId":    "macro|someone@example.com",
+//!       "direction": "to_server",
+//!       "content":   { "type": "acp", "jsonrpc": "2.0", … }
+//!     }
+//!   ]
 //! }
 //! ```
 //!
-//! The last four fields are exactly the entry shape
-//! `GET /agent-sessions/{id}/log` serves, flattened in the same way. That is
-//! the point of the contract rather than an accident of it: a client catching
-//! up on a log and a client following one are folding the same bytes, so they
-//! can share one fold and cannot disagree about what a frame means.
+//! Each entry is exactly the entry shape `GET /agent-sessions/{id}/log`
+//! serves, flattened in the same way. That is the point of the contract
+//! rather than an accident of it: a client catching up on a log and a client
+//! following one are folding the same bytes, so they can share one fold and
+//! cannot disagree about what a frame means. A batch rather than a frame
+//! because the writer publishes once per flush, however many frames that is.
 //!
 //! `agentSessionId` both addresses the frame and is what the fold keys its
 //! messages on, so it must be passed through unchanged: a message is
@@ -40,13 +47,12 @@ use crate::domain::model::{
 };
 use crate::domain::ports::{AgentSessionQueueChanged, AgentSessionRealtime};
 use connection_gateway_client::ConnectionGatewayClient;
-use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model_entity::EntityType as GatewayEntityType;
 use serde::Serialize;
 use std::sync::Arc;
 
-/// The realtime message type carrying one appended log frame.
+/// The realtime message type carrying a run of appended log frames.
 ///
 /// Matched on by the web client's websocket dispatch; changing it breaks
 /// streaming silently, since an unrecognized type is ignored rather than
@@ -64,16 +70,28 @@ pub const AGENT_SESSION_RENAMED: &str = "agent_session_renamed";
 /// response can never carry information the socket will not deliver.
 pub const AGENT_SESSION_QUEUE: &str = "agent_session_queue";
 
+/// The realtime message type telling viewers a session's captured changes
+/// moved: a capture started, finished, or failed. Carries only the session
+/// id; viewers refetch `GET /agent-sessions/{id}/changes`.
+pub const AGENT_SESSION_CHANGES: &str = "agent_session_changes";
+
 /// The body of an [`AGENT_SESSION_LOG`] message - the module docs are the
 /// contract.
 #[derive(Debug, Serialize)]
 pub struct AgentSessionLogEvent {
-    /// Durable row identity, matching the GET log entry and breaking timestamp ties.
-    pub id: Uuid,
-    /// The session the frame belongs to, and half of the composite id its
+    /// The session the frames belong to, and half of the composite id their
     /// folded messages are keyed by.
     #[serde(rename = "agentSessionId")]
     pub agent_session_id: Uuid,
+    /// The flushed frames, in log order. Never empty.
+    pub entries: Vec<AgentSessionLogEventEntry>,
+}
+
+/// One frame of an [`AgentSessionLogEvent`]: the GET log entry shape.
+#[derive(Debug, Serialize)]
+pub struct AgentSessionLogEventEntry {
+    /// Durable row identity, matching the GET log entry and breaking timestamp ties.
+    pub id: Uuid,
     /// When the durable log recorded the frame.
     #[serde(rename = "createdAt")]
     pub created_at: chrono::DateTime<chrono::Utc>,
@@ -139,23 +157,30 @@ impl From<AgentSessionQueueChanged> for AgentSessionQueueEvent {
 }
 
 impl AgentSessionLogEvent {
-    /// The event for one appended frame.
+    /// The event for one flushed run of frames.
     #[must_use]
     pub fn new(event: LogAppended) -> Self {
-        let StoredAgentSessionLog {
-            id,
-            created_at,
-            entry: AgentSessionLog {
-                user_id, content, ..
-            },
-        } = event.entry;
-
         Self {
-            id,
             agent_session_id: event.agent_session_id.as_uuid(),
-            created_at,
-            user_id: user_id.map(|user| user.to_string()),
-            message: content,
+            entries: event
+                .entries
+                .into_iter()
+                .map(
+                    |StoredAgentSessionLog {
+                         id,
+                         created_at,
+                         entry:
+                             AgentSessionLog {
+                                 user_id, content, ..
+                             },
+                     }| AgentSessionLogEventEntry {
+                        id,
+                        created_at,
+                        user_id: user_id.map(|user| user.to_string()),
+                        message: content,
+                    },
+                )
+                .collect(),
         }
     }
 }
@@ -179,22 +204,40 @@ impl<Participants> ConnectionGatewayAgentSessionRealtime<Participants> {
     }
 }
 
-/// Who should receive a session's frames.
-///
-/// The gateway addresses users, so publishing needs a list of them. Named as
-/// its own capability rather than reaching for a repository, because this is
-/// the only thing the adapter wants from one.
-///
-/// Asked by session rather than by channel: a session created since they
-/// stopped owning a channel has no membership list to consult. The answer is
-/// the same either way for older sessions, whose channel only ever had one
-/// participant - the owner, written by `create`.
-pub trait SessionAudience: Send + Sync + 'static {
-    /// The users who should see this session's frames.
-    fn viewers(
+pub use crate::domain::audience::SessionAudience;
+
+/// Reads subscriptions without treating a tracked entity as a permission grant.
+#[derive(Clone)]
+pub struct ConnectionGatewaySessionSubscriptions(pub Arc<ConnectionGatewayClient>);
+
+impl crate::domain::audience::SessionSubscriptions for ConnectionGatewaySessionSubscriptions {
+    async fn candidates(
         &self,
-        agent_session_id: AgentSessionId,
-    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, rootcause::Report>> + Send;
+        id: AgentSessionId,
+        parent: Option<&messages::domain::models::MessageParent>,
+    ) -> Result<std::collections::HashSet<String>, rootcause::Report> {
+        let mut users: std::collections::HashSet<_> = self
+            .0
+            .track_entity_users(GatewayEntityType::AgentSession.with_entity_string(id.to_string()))
+            .await
+            .map_err(|error| rootcause::report!(error))?
+            .into_iter()
+            .collect();
+        if let Some(parent) = parent {
+            let kind = if parent.is_discussion() {
+                GatewayEntityType::Document
+            } else {
+                GatewayEntityType::Channel
+            };
+            users.extend(
+                self.0
+                    .track_entity_users(kind.with_entity_string(parent.entity_id()))
+                    .await
+                    .map_err(|error| rootcause::report!(error))?,
+            );
+        }
+        Ok(users)
+    }
 }
 
 impl<Participants> AgentSessionRealtime for ConnectionGatewayAgentSessionRealtime<Participants>
@@ -264,6 +307,33 @@ where
         self.client
             .batch_send_message(
                 "agent_session_updated".to_owned(),
+                payload,
+                recipients
+                    .iter()
+                    .map(|user| GatewayEntityType::User.with_entity_str(user.as_ref()))
+                    .collect(),
+            )
+            .await
+            .map_err(|error| rootcause::report!(error))?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err, fields(agent.session.id = %session))]
+    async fn publish_changes_updated(
+        &self,
+        session: AgentSessionId,
+    ) -> Result<(), rootcause::Report> {
+        let recipients = self.participants.viewers(session).await?;
+        if recipients.is_empty() {
+            return Ok(());
+        }
+        let payload = serde_json::to_value(AgentSessionUpdatedEvent {
+            agent_session_id: session.as_uuid(),
+        })
+        .map_err(|error| rootcause::report!(error))?;
+        self.client
+            .batch_send_message(
+                AGENT_SESSION_CHANGES.to_owned(),
                 payload,
                 recipients
                     .iter()

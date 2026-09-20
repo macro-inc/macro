@@ -15,11 +15,14 @@ import {
 } from './linkShare';
 
 describe('isTeamShareSupportedForItem', () => {
-  it.each(['document', 'chat', 'call'] as const)('supports %s', (itemType) => {
-    expect(isTeamShareSupportedForItem(itemType)).toBe(true);
-  });
+  it.each(['document', 'chat', 'call', 'project'] as const)(
+    'supports %s',
+    (itemType) => {
+      expect(isTeamShareSupportedForItem(itemType)).toBe(true);
+    }
+  );
 
-  it.each(['project', 'email', 'agent_session'] as const)(
+  it.each(['email', 'agent_session'] as const)(
     'does not offer team access for %s',
     (itemType) => {
       expect(isTeamShareSupportedForItem(itemType)).toBe(false);
@@ -34,6 +37,7 @@ describe('getShareItemNoun', () => {
     ['call', 'call'],
     ['email', 'email thread'],
     ['agent_session', 'agent session'],
+    ['project', 'folder'],
   ] as const)('names %s as "%s"', (itemType, noun) => {
     expect(getShareItemNoun(itemType)).toBe(noun);
   });
@@ -135,6 +139,12 @@ describe('team share payload', () => {
       { value: 'view', label: 'View' },
     ]);
     expect(teamShareScopeOptionsForItem('document')).toEqual([
+      { value: 'NONE', label: 'None' },
+      { value: 'view', label: 'View' },
+      { value: 'comment', label: 'Comment' },
+      { value: 'edit', label: 'Edit' },
+    ]);
+    expect(teamShareScopeOptionsForItem('project')).toEqual([
       { value: 'NONE', label: 'None' },
       { value: 'view', label: 'View' },
       { value: 'comment', label: 'Comment' },

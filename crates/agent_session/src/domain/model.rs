@@ -1,5 +1,5 @@
 use agent_client_protocol::schema::v1::SessionId;
-use agent_runtime_protocol::domain::schema::v0::SystemEvent;
+use agent_runtime_protocol::domain::schema::v0::{AcpMessage, SystemEvent, ToServerMessage};
 use bots::domain::models::BotId;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -176,6 +176,8 @@ pub struct CreateAgentSessionParams {
     pub harness: String,
     /// Repository the agent works with, when one was stated.
     pub repo_url: Option<String>,
+    /// Starting branch explicitly selected for this session.
+    pub repo_branch: Option<super::repository_branch::RepositoryBranch>,
     /// Absolute directory the harness runs in on its runtime.
     pub workspace: String,
     /// Compute tier the managed sandbox was spawned with.
@@ -210,10 +212,9 @@ pub struct AgentSession {
     pub owner_id: MacroUserIdStr<'static>,
     /// The root message where the bot was originally invoked, if any.
     pub thread_id: Option<Uuid>,
-    /// The channel `thread_id` lives in, when the session was spawned from a
-    /// thread. Derived from the thread root's message row rather than
-    /// stored — the message's channel is authoritative.
-    pub thread_channel_id: Option<Uuid>,
+    /// Entity owning the originating thread, derived from its root message.
+    /// The persisted message parent is authoritative for routing and access.
+    pub thread_parent: Option<messages::domain::models::MessageParent>,
     /// The exact message that originally invoked the bot, if any.
     pub originating_message_id: Option<Uuid>,
     /// the bot id of the bot running the agent
@@ -224,6 +225,8 @@ pub struct AgentSession {
     pub harness: String,
     /// repo we are working with, when one was stated
     pub repo_url: Option<String>,
+    /// Starting branch explicitly selected for this session.
+    pub repo_branch: Option<super::repository_branch::RepositoryBranch>,
     /// The pull request associated with this session, independent of conversation history.
     pub pull_request_url: Option<String>,
     /// Directory the harness runs in, snapshotted at creation. The session
@@ -333,6 +336,10 @@ pub struct QueuedActionDto {
     /// replaces.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub prompt: Option<String>,
+    /// Files the prompt refers to, for prompts only. Kept through an edit,
+    /// which replaces the text alone.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<agent_runtime_protocol::domain::action::PromptAttachment>,
     /// The user who queued it, absent when a bot acted on nobody's behalf.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub actor_user_id: Option<String>,
@@ -343,36 +350,74 @@ pub struct QueuedActionDto {
 impl From<super::ports::QueuedControl> for QueuedActionDto {
     fn from(queued: super::ports::QueuedControl) -> Self {
         use agent_runtime_protocol::domain::action::AgentAction;
-        let prompt = match &queued.action {
-            AgentAction::Prompt(action) => Some(action.prompt.clone()),
-            _ => None,
+        let (prompt, attachments) = match &queued.action {
+            AgentAction::Prompt(action) => {
+                (Some(action.prompt.clone()), action.attachments.clone())
+            }
+            _ => (None, Vec::new()),
         };
         Self {
             action_id: queued.action_id,
             kind: queued.action.as_ref().to_owned(),
             prompt,
+            attachments,
             actor_user_id: queued.actor.map(|actor| actor.to_string()),
             created_at: queued.created_at,
         }
     }
 }
 
-/// One frame appended to a live session's log, for anyone watching.
+/// The Cursor run a frame checkpoints, if it is the adapter's empty
+/// `agent_message_chunk` carrying `_meta.macroCursorRunCheckpoint`.
+///
+/// A domain fact rather than a persistence detail: the store projects it
+/// onto `external_agent_session.last_run_id`, and the live writer must know
+/// it to keep such a frame out of a plain batch, so both read one function.
+#[must_use]
+pub fn cursor_run_checkpoint(message: &Message) -> Option<String> {
+    let Message::ToServer(ToServerMessage::Acp(AcpMessage(frame))) = message else {
+        return None;
+    };
+    let value = serde_json::to_value(frame).ok()?;
+    if value.get("method")?.as_str()? != "session/update" {
+        return None;
+    }
+    let params = value.get("params")?;
+    let update = params.get("update")?;
+    if update.get("sessionUpdate")?.as_str()? != "agent_message_chunk"
+        || !update.get("content")?.get("text")?.as_str()?.is_empty()
+    {
+        return None;
+    }
+    params
+        .get("_meta")?
+        .get("macroCursorRunCheckpoint")?
+        .as_str()
+        .map(str::to_owned)
+}
+
+/// A run of frames appended to a live session's log, for anyone watching.
 ///
 /// The streaming counterpart of [`SessionLog`]: that is the selected history window
-/// for a reader arriving late, this is one frame for a reader already here.
-/// Both carry the same entry shape, so a client folds them the same way -
-/// catching up on the log and then following it is one fold, not two.
+/// for a reader arriving late, this is the frames a reader already here has
+/// not seen yet. Both carry the same entry shape, so a client folds them the
+/// same way - catching up on the log and then following it is one fold, not
+/// two.
+///
+/// A batch rather than a frame because the writer flushes frames in runs
+/// (see `LiveSessionLogWriter`), and every run costs one publish however
+/// many frames it holds. `entries` are in log order and never empty.
 ///
 /// Addressed by session: it is the only thing a frame belongs to now that a
 /// session does not own a channel.
 #[derive(Debug, Clone)]
 pub struct LogAppended {
-    /// The session the entry belongs to. The fold keys its messages on this,
+    /// The session the entries belong to. The fold keys its messages on this,
     /// so a client must pass it through unchanged.
     pub agent_session_id: AgentSessionId,
-    /// The frame and the timestamp assigned when it was stored.
-    pub entry: StoredAgentSessionLog,
+    /// The frames and the timestamps assigned when they were stored, in the
+    /// order the log holds them.
+    pub entries: Vec<StoredAgentSessionLog>,
 }
 
 /// One entry of a session's log as it was stored, with the time the log
@@ -424,8 +469,8 @@ pub struct SessionLog {
     clippy::large_enum_variant,
     reason = "one data variant against None; boxing would only move the size"
 )]
-pub enum ChannelSession {
-    /// No session matched the channel context.
+pub enum ThreadSession {
+    /// No session matched the thread context.
     None,
     /// The bot's session was created from the incoming thread.
     CreatedFromThread(AgentSession),
@@ -466,6 +511,21 @@ impl AgentSessionPreview {
             Self::NoAccess(id) | Self::DoesNotExist(id) => *id,
         }
     }
+}
+
+/// One session found by [`AgentSessionRepo::preview`](super::ports::AgentSessionRepo::preview),
+/// before access policy: what a chip would show, whether an access row grants
+/// the viewer at least view access, and where the session came from, so the
+/// service can resolve inherited access that no row materializes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionPreviewCandidate {
+    /// What a chip renders once access is settled.
+    pub data: AgentSessionPreviewData,
+    /// Whether a materialized grant - the viewer, a channel they are in, or a
+    /// team they belong to - gives them at least view access.
+    pub has_grant: bool,
+    /// Parent of the thread the session was opened from, when it was.
+    pub thread_parent: Option<messages::domain::models::MessageParent>,
 }
 
 /// The subset of an [`AgentSession`] a chip or mention renders.

@@ -9,6 +9,7 @@ import {
   useDeleteComment,
   useUpdateComment,
 } from '@block-pdf/store/comments/commentOperations';
+import type { CommentId, ThreadId } from '@core/comments/commentType';
 import {
   baseCommentTheme,
   CommentsContext,
@@ -44,7 +45,7 @@ const useCommentsContext = (
   const pdf = usePdfDocument();
   const comments = usePdfComments();
   const commentsById = comments.byId;
-  const setActiveThread = (threadId: number | null) => {
+  const setActiveThread = (threadId: ThreadId | null) => {
     if (threadId == null) {
       comments.clearActiveThread();
     } else {
@@ -57,13 +58,13 @@ const useCommentsContext = (
   const deleteComment = useDeleteComment();
 
   const userId = useUserId();
-  const ownedComment = (id: number) => {
+  const ownedComment = (id: CommentId) => {
     const currentUserId = userId();
     return (
       currentUserId != null && commentsById().get(id)?.owner === currentUserId
     );
   };
-  const getCommentById = (id: number) => commentsById().get(id);
+  const getCommentById = (id: CommentId) => commentsById().get(id);
 
   const commentsContext: CommentsContextType = {
     setActiveThread,
@@ -95,7 +96,7 @@ function CommentsAndSuggestions(props: { pageIndex: number }) {
 
   const isSelectingThreadSelector = createSelector(comments.selectedThreadId);
 
-  const commentTheme = (threadId: number | null) => {
+  const commentTheme = (threadId: ThreadId | null) => {
     const isSelecting = isSelectingThreadSelector(threadId);
     let theme = {
       ...baseCommentTheme,
@@ -107,7 +108,7 @@ function CommentsAndSuggestions(props: { pageIndex: number }) {
     return theme;
   };
 
-  const handleThreadMouseDown = (threadId: number) => (e: MouseEvent) => {
+  const handleThreadMouseDown = (threadId: ThreadId) => (e: MouseEvent) => {
     e.stopPropagation();
     comments.selectThread(threadId);
 

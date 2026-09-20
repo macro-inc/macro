@@ -65,14 +65,12 @@ impl BotDirectory for PgBotDirectory {
             let selected_channels = agent
                 .as_ref()
                 .is_some_and(|agent| agent.channel_scope == AgentChannelScope::Selected);
-            let managed_profile = agent
-                .filter(|_| is_managed)
-                .map(|agent| ManagedAgentProfile {
-                    model: agent.default_model,
-                    harness: agent.harness,
-                    instructions: agent.instructions,
-                    mcp_servers: agent.mcp,
-                });
+            let managed_profile = agent.map(|agent| ManagedAgentProfile {
+                model: agent.default_model,
+                harness: agent.harness,
+                instructions: agent.instructions,
+                mcp_servers: agent.mcp,
+            });
             (is_managed, harness_id, managed_profile, selected_channels)
         } else {
             (false, None, None, false)

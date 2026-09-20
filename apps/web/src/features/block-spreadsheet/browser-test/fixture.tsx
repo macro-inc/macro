@@ -2,6 +2,7 @@ import '@fontsource-variable/inter';
 import '@fontsource-variable/roboto-mono';
 import '../../../index.css';
 import { useAppSquishHandlers } from '@components/app/useAppSquishHandlers';
+import { registerHotkey, useHotKeyRoot } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createSyncSocket } from '@macro-inc/collaboration/sync-service/socket';
 import {
@@ -9,8 +10,13 @@ import {
   SyncServiceSource,
 } from '@macro-inc/collaboration/sync-service/source';
 import { createWebsocketStateSignal } from '@macro-inc/collaboration/websocket/solid/state-signal';
+import {
+  cellPlainText,
+  encodeCellMention,
+} from '@macro-inc/spreadsheet/cell-mentions';
 import { createEffect, createSignal, onCleanup } from 'solid-js';
 import { render } from 'solid-js/web';
+import { CellMentionEditor } from '../components/CellMentionEditor';
 import type { SpreadsheetWorkbookSheet } from '../core/workbook-document';
 import { createLocalSpreadsheetSource } from '../primitives/create-local-spreadsheet-source';
 import { createSpreadsheetStore } from '../primitives/create-spreadsheet-store';
@@ -23,6 +29,7 @@ declare global {
       snapshot: () => SpreadsheetWorkbookSheet[];
       setReadonly: (readonly: boolean) => void;
       connectionStatus: () => string;
+      globalShortcutCount: () => number;
     };
   }
 }
@@ -46,6 +53,19 @@ function Fixture() {
     new URLSearchParams(location.search).has('readonly')
   );
   const params = new URLSearchParams(location.search);
+  const [globalShortcutCount, setGlobalShortcutCount] = createSignal(0);
+  if (params.has('hotkeys')) {
+    useHotKeyRoot();
+    registerHotkey({
+      scopeId: 'global',
+      hotkey: ['h', 'arrowdown'],
+      description: 'Fixture app navigation',
+      keyDownHandler: () => {
+        setGlobalShortcutCount((count) => count + 1);
+        return true;
+      },
+    });
+  }
   const documentId = params.get('document');
   const socketUrl = params.get('socket');
   const socket =
@@ -79,6 +99,7 @@ function Fixture() {
     snapshot: () => structuredClone(store.workbook()),
     setReadonly,
     connectionStatus: source.status,
+    globalShortcutCount,
   };
   onCleanup(() => {
     // Revoke the fixture bridge when Vite unmounts this owner during HMR.
@@ -88,6 +109,40 @@ function Fixture() {
   return (
     <main class="h-[calc(var(--dvh,1dvh)*100)] w-screen overflow-hidden bg-page font-sans text-ink">
       <SpreadsheetEditor
+        mentions={
+          params.has('mentions')
+            ? {
+                renderText: cellPlainText,
+                renderEditor: (props) => (
+                  <CellMentionEditor
+                    {...props}
+                    convertPaste={(value) => value}
+                    renderMenu={(menu, _anchor, pick) => (
+                      <button
+                        type="button"
+                        class="fixed right-4 top-4 z-[100]"
+                        aria-label="Mention Taylor"
+                        onPointerDown={(e) => e.preventDefault()}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() =>
+                          pick(
+                            encodeCellMention({
+                              type: 'user',
+                              userId: 'macro|taylor@macro.com',
+                              email: 'taylor@macro.com',
+                              displayName: 'Taylor',
+                            })
+                          )
+                        }
+                      >
+                        Taylor ({menu.searchTerm()})
+                      </button>
+                    )}
+                  />
+                ),
+              }
+            : undefined
+        }
         store={store}
         name="Browser fixture"
         autoFocus

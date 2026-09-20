@@ -4,17 +4,14 @@ import {
   ViewBreadcrumbs,
   ViewShell,
 } from '@app/components/view-shell';
+import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import { Button, Dropdown, pressHandlers } from '@ui';
 import { createSignal } from 'solid-js';
 import { composeEmail } from '../compose-email';
 import { EMAIL_TABS } from '../constants';
 import { useEmailView } from '../email-view-context';
 import { EmailControls } from './EmailControls';
 import { EmailInboxMenu } from './EmailInboxSelector';
-import { EmailNavigation } from './EmailSidebar';
 
 export type EmailHeaderProps = {
   /** Restores list focus when Escape leaves the search field. */
@@ -58,7 +55,6 @@ export function EmailTopBar() {
 export function EmailHeader(props: EmailHeaderProps) {
   const panel = useSplitPanelOrThrow();
   const { state, setState } = useEmailView();
-  const [navigationOpen, setNavigationOpen] = createSignal(false);
   const [filterOpen, setFilterOpen] = createSignal(false);
   let searchInput: HTMLInputElement | undefined;
   const selectedTabLabel = () =>
@@ -87,43 +83,15 @@ export function EmailHeader(props: EmailHeaderProps) {
 
   return (
     <div class="flex min-w-0 flex-col">
-      {/* Sidebar stand-in while the aside is collapsed: the tab menu, the
-          inbox selector, and compose. */}
-      <div class="mb-4 hidden min-w-0 items-center gap-2 @max-[720px]/view-shell:flex">
-        <Dropdown
-          open={navigationOpen()}
-          onOpenChange={setNavigationOpen}
-          placement="bottom-start"
-        >
-          <h1 class="min-w-0">
-            <Dropdown.Trigger
-              variant="ghost"
-              size="sm"
-              class="h-auto min-w-0 max-w-full gap-1 rounded-lg px-2 py-1 text-xl font-semibold tracking-[-0.03em] text-ink"
-              aria-label={`Select email view: ${selectedTabLabel()}`}
-            >
-              <span class="truncate">{selectedTabLabel()}</span>
-              <CaretDownIcon class="size-3.5 shrink-0 text-ink-muted" />
-            </Dropdown.Trigger>
-          </h1>
-          <Dropdown.Content class="w-72 rounded-2xl p-2">
-            <div class="rounded-xl bg-menu">
-              <EmailNavigation onNavigate={() => setNavigationOpen(false)} />
-            </div>
-          </Dropdown.Content>
-        </Dropdown>
+      <div class="mb-4 hidden h-8 min-w-0 items-center gap-2 @max-[720px]/view-shell:flex">
+        <h1 class="min-w-0 truncate text-xl font-semibold tracking-[-0.03em] text-ink">
+          {selectedTabLabel()}
+        </h1>
         <div class="ml-auto flex shrink-0 items-center gap-2">
           <EmailInboxMenu />
-          <Button
-            type="button"
-            variant="cta"
-            size="md"
-            class="rounded-lg px-3 transition-none"
-            {...pressHandlers(() => composeEmail())}
-          >
-            <PlusIcon class="size-4 shrink-0" />
-            New
-          </Button>
+          <div class="shrink-0">
+            <SidebarCreateButton label="New" onCreate={() => composeEmail()} />
+          </div>
         </div>
       </div>
 

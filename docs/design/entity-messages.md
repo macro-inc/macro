@@ -88,9 +88,9 @@ and never turns the committed write into an error:
   `message.attachment_removed`, keyed by root id. Reactions and typing stay off the
   topic. Payloads carry the parent, message and root ids, sender, and the same
   fields as the channel-only events, minus `channel_type`.
-- The local built-in agent queue. In this stage the Macro AI trigger still arrives
-  through the channel side effects below, so this sink is a no-op until the agent PR
-  moves detection onto the message facts.
+- The local built-in agent queue: every human-authored post, on either parent, is
+  handed to the in-process Macro AI detector (see Agents below). Bot posts never
+  enter it, so bots cannot trigger each other.
 - Parent delivery. For channels, `ChannelMessageDelivery` dispatches the same
   `ChannelEvent`s the old writer dispatched, so notifications, activity, sharing of
   referenced items, contact sync, search indexing, bot triggers, and the
@@ -103,14 +103,73 @@ and never turns the committed write into an error:
   Comment notifications now identify the comment by message id, so the metadata's
   `commentId` / `threadId` accept either a legacy number or a message UUID.
 
+## Agents
+
+Every committed post publishes `message.posted` with the persisted parent, the message
+and root ids, the sender, mentions and attachments, and the verified triggering user.
+Agent invocation reads that fact and never requires a channel id.
+
+Hosted and external agents:
+
+1. The trigger consumer verifies the sender's current ability to write to the parent
+   (channel membership or document comment access) and mints an invocation capability
+   bound to that parent and root. Agent availability is checked next: system agents
+   are global; a document permits the caller's own private or team agents; a channel
+   keeps its installation rules for selected agents and legacy agent bots.
+2. An existing session is resumed only when it was opened from the same parent and
+   root. Explicit reply references and follow-up mentions cannot select another
+   conversation's session. Otherwise a session is created for this root, and its
+   `thread_parent` is derived from the root message rather than stored.
+3. History is read through the message service under the invocation capability,
+   downgraded to view access. Document history stays inside its discussion; channel
+   history may include the preceding channel messages. The composed prompt names the
+   parent so document tools can address the enclosing document.
+4. The harness rechecks the sender's access before provisioning and again at
+   dispatch, then announces the session as the bot into the same thread through the
+   message service with a capability minted on the invoking user. Session origins,
+   queued prompts, external webhook payloads, and coding-worker origins carry the
+   parent.
+
+A document collaborator inherits session viewing from document viewing, and session
+editing from document commenting or editing; the session owner keeps explicit
+ownership, and other collaborators lose inherited access when the document grant is
+revoked. Realtime session frames are addressed through the same current access.
+
+Classic `@Macro` runs in the storage service on the local agent queue for both
+parents. It rechecks the invoking user's write access before reading context, posts a
+silent thinking message as the bot on that user's capability, and patches it into the
+answer with normal notification delivery. A deleted placeholder or revoked access
+prevents publishing the answer.
+
+### Trigger event transition
+
+The trigger consumers can read either `message.posted` on `macro.messages` (the
+default) or the pre-parent `channel.message_posted` on `macro.channels`, selected by
+`AGENT_TRIGGER_EVENT_SOURCE`. Only one source is read at a time: the storage service
+publishes every channel post on both topics, so reading both would evaluate each
+channel mention twice. The channel source stays available as a rollback until PR 7
+retires the `channel.message_*` events, at which point it is removed.
+
+Agent-session trigger events on `macro.agent_sessions` stay at schema version 1. A
+channel-parent trigger keeps the shapes every consumer already decodes
+(`top_level_mentioned` and `channel`, embedding the channel-only post with its
+`channel_type`, which the trigger reads from the channel when `message.posted` did not
+carry it). A document-parent trigger travels in the new `mentioned` and `thread`
+variants, which consumers built before message parents drop as undecodable. Old
+replicas and user-run macrod daemons therefore keep serving channel mentions through a
+deploy; only document mentions wait for them to roll. Lifecycle events keep their
+schema too: `ThreadOrigin` gains `parent` and its `channel_id` becomes optional, and
+older origins without a parent decode as channel origins.
+
 ## What each remaining PR adds
 
 1. Comment import: an online, idempotent copy of `Comment` / `Thread` rows into the
    shared store, filling the legacy-id mapping tables and the PDF anchors' `root_id`.
 2. Frontend: the shared message queries, cache, and thread components mounted on both
    surfaces behind a flag, consuming `message_update` and the new routes.
-3. Parent-aware agents: trigger detection, session origins, history, and reply
-   delivery on `message.posted`; the local agent sink replaces the channel trigger.
+3. Parent-aware agents (this document's Agents section): trigger detection, session
+   origins, history, and reply delivery on `message.posted`; the local agent sink
+   replaces the channel trigger.
 4. References: documents list the channel threads that mention them.
 5. Contract: drop the legacy comment tables and handlers, `channel_id`, the shim
    triggers, the old channel message routes, and the `channel.message_*` broker

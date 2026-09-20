@@ -131,6 +131,17 @@ describe('spreadsheet document', () => {
   it('reopens all formatting fields and clears style without changing values', () => {
     const original = new LoroDoc();
     const style: Required<SpreadsheetCellStyle> = {
+      numberFormat: '#,##0;(#,##0);"—"',
+      fontName: 'Calibri',
+      borderTopStyle: 'double',
+      borderTopColor: '#123456',
+      borderRightStyle: 'double',
+      borderRightColor: '#123456',
+      borderBottomStyle: 'double',
+      borderBottomColor: '#123456',
+      borderLeftStyle: 'double',
+      borderLeftColor: '#123456',
+
       bold: true,
       italic: true,
       underline: true,

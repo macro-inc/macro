@@ -300,6 +300,20 @@ fn creation_contract_distinguishes_ordinary_task_call_and_initiative_defaults() 
 }
 
 #[test]
+fn initiative_description_resolves_like_initiative() {
+    for team in [None, Some(Uuid::from_u128(1))] {
+        assert_eq!(
+            TeamShareCreation::InitiativeDescription.resolve(team),
+            TeamShareCreation::Initiative.resolve(team)
+        );
+    }
+    assert_eq!(
+        TeamShareCreation::InitiativeDescription.resolve(None),
+        Err(TeamSharePolicyError::MissingTeam)
+    );
+}
+
+#[test]
 fn lifecycle_clear_needs_no_actor_or_current_membership() {
     let mut facts = facts();
     facts.current = Some(TeamShareGrant {

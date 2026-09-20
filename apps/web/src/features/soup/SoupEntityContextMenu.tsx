@@ -33,6 +33,8 @@ interface SoupEntityContextMenuProps {
   selectedEntities: Accessor<EntityData[]>;
   viewContext: EntityActionViewContext;
   class?: string;
+  /** Use a div trigger when the row already renders its own button. */
+  as?: 'div';
   onOpenChange?: (open: boolean) => void;
 }
 
@@ -111,6 +113,7 @@ export const SoupEntityContextMenu: FlowComponent<
       <Match when={true}>
         <ContextMenu onOpenChange={props.onOpenChange}>
           <ContextMenu.Trigger
+            as={props.as}
             class={cn('size-full group/cm-trigger', props.class)}
             on:contextmenu={(event: MouseEvent) =>
               setMenuPosition({ x: event.clientX, y: event.clientY })

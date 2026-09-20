@@ -33,7 +33,7 @@ axum = [
   "dep:utoipa",
   "models_pagination/axum",
 ]
-gmail_token = ["dep:authentication_service_client", "dep:redis", "ports"]
+gmail_token = ["dep:authentication_service_client", "dep:google_token", "dep:redis", "ports"]
 http_client = ["dep:reqwest", "ports"]
 inbound = ["ports"]
 outbound = ["dep:sqlx", "ports"]
@@ -61,6 +61,7 @@ either = { workspace = true }
 email_utils = { path = "../email_utils" }
 filter_ast = { path = "../filter_ast" }
 frecency = { path = "../frecency" }
+google_token = { path = "../google_token", optional = true }
 item_filters = { path = "../item_filters" }
 lol_html = { workspace = true }
 scraper = { workspace = true }

@@ -181,6 +181,17 @@ export type SubType = {
   is_completed?: boolean;
 } | null;
 
+/** Wire subtypes without a dedicated block, including initiative_description, become null. */
+export const toSubType = (
+  wire: { type: string; is_completed?: boolean } | null | undefined
+): SubType => {
+  if (wire == null) return null;
+  const { type } = wire;
+  return type === 'task' || type === 'snippet' || type === 'skill'
+    ? { type, is_completed: wire.is_completed }
+    : null;
+};
+
 export type BaseDocumentEntity = EntityBase & {
   type: 'document';
   fileType?: string;

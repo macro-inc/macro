@@ -13,7 +13,11 @@ import { Dropdown } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { AgentIcon } from '../components/AgentGlyph';
 import { modelLabel } from '../components/model-label';
-import { MACRO_PERSONA_ID, type RosterAgent } from '../core/roster';
+import {
+  MACRO_PERSONA_ID,
+  type RosterAgent,
+  rosterForAgentPicker,
+} from '../core/roster';
 import { createComposerModels } from '../queries/composer-models';
 
 /** Agent selection with a per-message model catalog in each submenu. */
@@ -31,8 +35,7 @@ export function AgentPicker(props: {
   const macro = () =>
     props.agents.find((agent) => agent.id === MACRO_PERSONA_ID);
   const macroCatalog = createComposerModels(macro);
-  const agents = () =>
-    props.agents.filter((agent) => agent.id !== MACRO_PERSONA_ID);
+  const agents = () => rosterForAgentPicker(props.agents);
   const rawModel = () => props.selected?.id === MACRO_PERSONA_ID;
   const model = () =>
     props.modelOverride ??
@@ -57,32 +60,34 @@ export function AgentPicker(props: {
             ? label()
             : `${props.selected?.name ?? 'Choose agent'} · ${label()}`
         }
-        class="pill min-w-0 max-w-full gap-2"
+        class="h-[33.75px] min-w-0 max-w-full gap-[5.625px] rounded-full bg-transparent hover:bg-hover px-[7.5px] text-base font-normal text-ink-muted light-mode:text-composer-placeholder"
       >
         <Show
           when={rawModel()}
           fallback={
             <Show when={props.selected}>
-              {(agent) => <AgentIcon agent={agent()} class="size-6 shrink-0" />}
+              {(agent) => (
+                <AgentIcon agent={agent()} class="size-[15px] shrink-0" />
+              )}
             </Show>
           }
         >
-          <ProviderIcon model={model()} class="size-6" />
+          <ProviderIcon model={model()} class="size-[15px]" />
         </Show>
-        <span class="min-w-0 truncate text-left text-sm leading-5">
+        <span class="min-w-0 truncate text-left leading-5">
           <Show
             when={rawModel()}
             fallback={
               <>
                 {props.selected?.name ?? 'Choose agent'}
-                <span class="text-[13px] text-ink-muted"> · {label()}</span>
+                <span> · {label()}</span>
               </>
             }
           >
             {label()}
           </Show>
         </span>
-        <CaretDownIcon class="size-3 shrink-0" />
+        <CaretDownIcon class="size-[15px] shrink-0" />
       </Dropdown.Trigger>
       <Dropdown.Content
         class="w-80 max-w-[calc(100vw-1rem)] overflow-hidden"
@@ -91,7 +96,51 @@ export function AgentPicker(props: {
       >
         <div class="flex min-h-0 max-h-[min(28rem,var(--kb-popper-content-available-height))] flex-col">
           <div class="min-h-0 overflow-y-auto overscroll-contain">
-            <For each={['coder', 'agent'] as const}>
+            <Show when={macro()}>
+              {(agent) => (
+                <Dropdown.Group>
+                  <Dropdown.GroupLabel>Models</Dropdown.GroupLabel>
+                  <For each={macroCatalog.models()}>
+                    {(option) => (
+                      <Dropdown.Item
+                        closeOnSelect
+                        class="min-w-0 gap-2"
+                        disabled={Boolean(agent().unavailableReason)}
+                        textValue={modelLabel(option.id, option.name)}
+                        title={modelLabel(option.id, option.name)}
+                        onSelect={() => choose(agent(), option.id)}
+                      >
+                        <span class="flex size-5 shrink-0 items-center justify-center">
+                          <Show
+                            when={modelProvider(option.id)}
+                            fallback={<SparkleIcon class="size-4 shrink-0" />}
+                          >
+                            <ProviderIcon model={option.id} class="size-4" />
+                          </Show>
+                        </span>
+                        <span class="min-w-0 flex-1 truncate">
+                          {modelLabel(option.id, option.name)}
+                        </span>
+                        <Show
+                          when={
+                            props.selected?.id === agent().id &&
+                            model() === option.id
+                          }
+                        >
+                          <CheckIcon class="size-3.5 shrink-0 text-accent" />
+                        </Show>
+                      </Dropdown.Item>
+                    )}
+                  </For>
+                  <Show when={macroCatalog.models().length === 0}>
+                    <div role="status" class="px-3 py-2 text-xs text-ink-muted">
+                      {macroCatalog.message()}
+                    </div>
+                  </Show>
+                </Dropdown.Group>
+              )}
+            </Show>
+            <For each={['agent', 'coder'] as const}>
               {(kind) => (
                 <Show when={agents().some((agent) => agent.kind === kind)}>
                   <Dropdown.Group>
@@ -120,48 +169,6 @@ export function AgentPicker(props: {
                 </Show>
               )}
             </For>
-            <Show when={macro()}>
-              {(agent) => (
-                <Dropdown.Group>
-                  <Dropdown.GroupLabel>Models</Dropdown.GroupLabel>
-                  <For each={macroCatalog.models()}>
-                    {(option) => (
-                      <Dropdown.Item
-                        closeOnSelect
-                        class="min-w-0 gap-2"
-                        disabled={Boolean(agent().unavailableReason)}
-                        textValue={modelLabel(option.id, option.name)}
-                        title={modelLabel(option.id, option.name)}
-                        onSelect={() => choose(agent(), option.id)}
-                      >
-                        <Show
-                          when={modelProvider(option.id)}
-                          fallback={<SparkleIcon class="size-5 shrink-0" />}
-                        >
-                          <ProviderIcon model={option.id} class="size-5" />
-                        </Show>
-                        <span class="min-w-0 flex-1 truncate">
-                          {modelLabel(option.id, option.name)}
-                        </span>
-                        <Show
-                          when={
-                            props.selected?.id === agent().id &&
-                            model() === option.id
-                          }
-                        >
-                          <CheckIcon class="size-3.5 shrink-0 text-accent" />
-                        </Show>
-                      </Dropdown.Item>
-                    )}
-                  </For>
-                  <Show when={macroCatalog.models().length === 0}>
-                    <div role="status" class="px-3 py-2 text-xs text-ink-muted">
-                      {macroCatalog.message()}
-                    </div>
-                  </Show>
-                </Dropdown.Group>
-              )}
-            </Show>
             <Show when={props.loading}>
               <div
                 role="status"
@@ -221,11 +228,12 @@ function AgentPickerRow(props: {
             closeOnSelect
             class="min-w-0 flex-1"
             disabled={!props.agent.connectLabel}
+            title={props.agent.unavailableReason}
             onSelect={props.onConnect}
           >
             {identity()}
             <span class="text-xs text-ink-muted">
-              {props.agent.connectLabel}
+              {props.agent.connectLabel ?? props.agent.unavailableReason}
             </span>
           </Dropdown.Item>
         }

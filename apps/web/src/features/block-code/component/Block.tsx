@@ -7,13 +7,26 @@ import {
   blockTextSignal,
   blockUserAccessSignal,
 } from '@core/signal/load';
-import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  lazy,
+  on,
+  Show,
+  Suspense,
+} from 'solid-js';
+import { useSpreadsheetAccess } from '../../block-spreadsheet/primitives/use-spreadsheet-access';
 import { saveCodeDocument } from '../queries/code-document';
 import { isHtmlFileType } from '../util/fileMode';
 import { type CodeBlockMode, CodeContent } from './CodeContent';
 import { CodeMarkdown } from './CodeMarkdown';
 import { ModalsProvider } from './ModalsProvider';
 import { TopBar } from './TopBar';
+
+const UploadedWorkbook = lazy(
+  () => import('../../block-spreadsheet/views/UploadedWorkbook')
+);
 
 export default function BlockCode() {
   useBlockEntityCommands();
@@ -23,6 +36,9 @@ export default function BlockCode() {
   const blockText = blockTextSignal.get;
   const setBlockText = blockTextSignal.set;
   const blockUserAccess = blockUserAccessSignal.get;
+  const spreadsheetEnabled = useSpreadsheetAccess();
+  const spreadsheet = () =>
+    spreadsheetEnabled() && blockMetadata()?.fileType?.toLowerCase() === 'csv';
   const isHtmlFile = createMemo(() =>
     isHtmlFileType(blockMetadata()?.fileType)
   );
@@ -50,14 +66,27 @@ export default function BlockCode() {
                   mode={mode()}
                   onModeChange={setMode}
                 />
-                <CodeContent
-                  text={blockText() ?? ''}
-                  fileType={blockMetadata()?.fileType}
-                  readOnly={readOnly()}
-                  mode={mode()}
-                  onTextChange={setBlockText}
-                  onSave={(text) => saveCodeDocument(documentId, text)}
-                />
+                <Show
+                  when={spreadsheet()}
+                  fallback={
+                    <CodeContent
+                      text={blockText() ?? ''}
+                      fileType={blockMetadata()?.fileType}
+                      readOnly={readOnly()}
+                      mode={mode()}
+                      onTextChange={setBlockText}
+                      onSave={(text) => saveCodeDocument(documentId, text)}
+                    />
+                  }
+                >
+                  <Suspense
+                    fallback={
+                      <div class="p-6 text-ink-muted">Opening spreadsheet…</div>
+                    }
+                  >
+                    <UploadedWorkbook />
+                  </Suspense>
+                </Show>
               </div>
             </SidePanel.Layout>
           </ModalsProvider>

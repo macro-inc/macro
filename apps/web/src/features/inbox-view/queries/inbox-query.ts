@@ -137,14 +137,22 @@ export type InboxViewContext = {
 /**
  * Signal and Noise are notification feeds: a row belongs where its latest
  * notification puts it, not where its content's last edit does — a comment
- * on a week-old task is today's news. The server sort is also a filter (rows
- * without a notification are absent), which is what those tabs mean anyway.
+ * on a week-old task is today's news.
+ */
+export const inboxTabIsNotificationFeed = (tab: InboxTab): boolean =>
+  tab === 'signal' || tab === 'noise';
+
+/**
+ * Whether to ask the server to sort (and, being a sort-as-filter, restrict)
+ * these tabs by the viewer's latest notification. Gated behind a flag: the
+ * candidate query is costly. Client-side date bucketing is not gated on it —
+ * see `inboxGroupTimestamp` — so a live notification still re-buckets its row
+ * even while the server keeps sorting by content recency.
  */
 export const inboxTabOrdersByNotification = (
   context: Pick<InboxViewContext, 'tab' | 'capabilities'>
 ): boolean =>
-  context.capabilities.notifiedSort &&
-  (context.tab === 'signal' || context.tab === 'noise');
+  context.capabilities.notifiedSort && inboxTabIsNotificationFeed(context.tab);
 
 /** Builds the heterogeneous Soup AST for the composable Inbox view. */
 export function buildInboxQuery(

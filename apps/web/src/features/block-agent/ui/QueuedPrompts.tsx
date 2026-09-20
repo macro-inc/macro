@@ -32,6 +32,8 @@ export type QueuedPromptItem = {
   kind: string;
   /** The prompt's raw text, absent for a compact. */
   prompt?: string;
+  /** Files the prompt refers to; an edit keeps them, only the text changes. */
+  attachments?: { name: string; mimeType?: string | null }[];
   /** Who queued it, when it was somebody other than the current user. */
   queuedBy?: string;
 };
@@ -234,6 +236,22 @@ function PromptBody(props: QueuedRowProps) {
   return (
     <div class="text-sm text-ink" onFocusOut={flush}>
       <MarkdownShell config={editor} initialValue={props.item.prompt} />
+      {/* Attached files ride the prompt as-is: an edit rewrites the text and
+          keeps them, so they are shown but not editable here. */}
+      <Show when={props.item.attachments?.length}>
+        <div
+          class="flex flex-wrap gap-1 pt-1 text-xs text-ink-muted"
+          data-testid="agent-queued-attachments"
+        >
+          <For each={props.item.attachments}>
+            {(attachment) => (
+              <span class="rounded-xs border border-edge-muted px-1.5 py-0.5">
+                {attachment.name}
+              </span>
+            )}
+          </For>
+        </div>
+      </Show>
     </div>
   );
 }

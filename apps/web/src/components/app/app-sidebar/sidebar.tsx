@@ -1778,7 +1778,7 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
       allowDuplicate: true,
       referredFrom: 'sidebar',
     });
-    props.onOpened?.(split, 'new-split');
+    if (split) props.onOpened?.(split, 'new-split');
   };
 
   const openFullscreen = () => {

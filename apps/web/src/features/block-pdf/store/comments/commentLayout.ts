@@ -6,6 +6,7 @@ import type {
   Overflow,
   PdfRootLayout,
 } from '@block-pdf/type/comments';
+import type { ThreadId } from '@core/comments/commentType';
 import { isRoot, type Root } from '@core/comments/commentType';
 import { type Accessor, createMemo } from 'solid-js';
 import { createStore } from 'solid-js/store';
@@ -15,7 +16,7 @@ import { usePdfViewer } from '../../context/pdf-viewer-context';
 // how much to pad the container for the "show more" buttons
 const CONTAINER_PADDING = 80;
 
-type ThreadHeights = Record<number, number>;
+type ThreadHeights = Record<ThreadId, number>;
 
 const isPdfRootLayout = (
   comment: CommentStore[number]
@@ -79,7 +80,7 @@ export function computePageCommentLayout({
   threadHeights,
 }: {
   comments: readonly PdfRootLayout[];
-  activeThreadId: number | null;
+  activeThreadId: ThreadId | null;
   pageHeight: number | undefined;
   threadHeights: Partial<ThreadHeights>;
 }): CommentLayout<Root>[] {
@@ -172,7 +173,7 @@ export function usePageCommentLayout(pageIndex: Accessor<number>) {
 
   return {
     threads,
-    setThreadHeight: (threadId: number, height: number) => {
+    setThreadHeight: (threadId: ThreadId, height: number) => {
       if (threadHeights[threadId] === height) return;
       setThreadHeights(threadId, height);
     },

@@ -1,6 +1,7 @@
 //! Native capture contract and the shared live/load processing machine.
 use super::artifact::{CollectedArtifact, artifact_markdown};
 use super::event::{CursorEvent, InteractionUpdate};
+use super::inline_image::InlineImageFilter;
 use super::model::{CursorRunId, RunOutcome, RunStatus};
 use super::translate::TranslateMachine;
 use agent_client_protocol::schema::v1::{
@@ -120,6 +121,9 @@ struct RunState {
     prompt: bool,
     text: String,
     terminal: Option<RunStatus>,
+    /// What the reader sees of `text`: the same stream minus the `<img>`
+    /// tags Cursor writes for files only its sandbox can reach.
+    images: InlineImageFilter,
 }
 /// Complete live/replay state, including user prompts and terminal tool cleanup.
 #[derive(Debug, Default)]
@@ -266,7 +270,11 @@ impl ReplayMachine {
             // the rest; this is what happens when it does not.
             CursorEvent::Status { status, .. } if status.is_terminal() => {
                 state.terminal = Some(status);
-                Ok(self.translator.close_open_calls())
+                let mut updates = self.translator.push(CursorEvent::Assistant {
+                    text: state.images.flush(),
+                });
+                updates.extend(self.translator.close_open_calls());
+                Ok(updates)
             }
             CursorEvent::Interaction(InteractionUpdate::Other { kind })
                 if kind == "step-started" =>
@@ -274,7 +282,9 @@ impl ReplayMachine {
                 // Cursor's final result contains the final step, not earlier
                 // commentary emitted before tool execution in the same run.
                 state.text.clear();
-                Ok(Vec::new())
+                Ok(self.translator.push(CursorEvent::Assistant {
+                    text: state.images.flush(),
+                }))
             }
             CursorEvent::Interaction(InteractionUpdate::UserMessage { text }) => {
                 if state.prompt {
@@ -287,6 +297,7 @@ impl ReplayMachine {
             }
             CursorEvent::Assistant { text } => {
                 state.text.push_str(&text);
+                let text = state.images.push(&text);
                 Ok(self.translator.push(CursorEvent::Assistant { text }))
             }
             CursorEvent::Result {
@@ -314,11 +325,9 @@ impl ReplayMachine {
                     // what the user watched arrive - stays as it is.
                     match text.strip_prefix(state.text.as_str()) {
                         Some(suffix) => {
-                            if !suffix.is_empty() {
-                                updates.extend(self.translator.push(CursorEvent::Assistant {
-                                    text: suffix.to_owned(),
-                                }));
-                            }
+                            updates.extend(self.translator.push(CursorEvent::Assistant {
+                                text: state.images.push(suffix),
+                            }));
                             state.text = text;
                         }
                         None => tracing::warn!(
@@ -329,6 +338,9 @@ impl ReplayMachine {
                         ),
                     }
                 }
+                updates.extend(self.translator.push(CursorEvent::Assistant {
+                    text: state.images.flush(),
+                }));
                 updates.extend(self.translator.push(CursorEvent::Result {
                     run_id,
                     status: status.clone(),

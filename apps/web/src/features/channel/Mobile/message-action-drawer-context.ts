@@ -1,5 +1,5 @@
+import type { MessageActions, MessageData } from '@core/messages/types';
 import { type Accessor, createContext, useContext } from 'solid-js';
-import type { MessageActions, MessageData } from '../Message/types';
 
 export type MessageActionDrawerState = {
   isOpen: Accessor<boolean>;

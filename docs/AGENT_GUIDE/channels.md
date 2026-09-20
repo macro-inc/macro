@@ -24,6 +24,18 @@ session-specific modal. Folder moves, duplication, and property/tag editing are
 not offered because those APIs do not support sessions. Runtime controls remain
 session-specific.
 
+A session transcript shows each tool call as a collapsible row (consecutive calls
+fold into a `Called N tools` group; click it to see the rows). A tool reached over
+an MCP server - Macro's own (`ReadContent · macro`) from a Cursor, Claude, or
+Codex session, or a third-party server (`ask_question · deepwiki`) - is titled by
+the tool's name with the server as its subtitle, never by the harness's dispatcher
+(`mcp`). Clicking the row expands the exchange: a `Request` section with the
+tool's own arguments and a `Response` section with what it returned, both as
+syntax-lit, pretty-printed JSON (prose results show as text), each with a copy
+button that copies the whole section; a call that failed is faded, shows the
+error as its subtitle, and adds an `Error` section. Rows for a call still running
+show whatever has arrived so far.
+
 ## Message composer
 
 Composer and conversation body text use `text-base` (15px at the default root
@@ -54,7 +66,8 @@ shorten it and resize the pane. It should expand when the text no longer fits
 beside the buttons and collapse when it fits again, without flickering between
 layouts. Also add and remove a line break or attachment and
 confirm the draft and caret position survive. The attachment and send controls
-should remain usable in both layouts, including when editing an existing message.
+should remain usable in both layouts. Existing message and reply edit inputs show
+only the send control, with no format or discard button; Escape cancels the edit.
 The iOS share sheet keeps its editor above the attachment and formatting controls.
 Check this arrangement at both phone and tablet widths.
 
@@ -98,7 +111,7 @@ event is created — no invitation goes out from the initial request. It cannot 
 email at all. The bot's prompt carries the current date and time in the mentioning user's
 own time zone (their primary calendar's), so it resolves relative times ("tomorrow at 4",
 "EOD") without asking; when no calendar is connected the prompt falls back to UTC and the
-bot asks before scheduling a specific clock time. `@macro-new` / `@coder` / `@cursor` / `@codex` open
+bot asks before scheduling a specific clock time. `@macro-new` / `@coder` / `@cursor` / `@codex` / `@claude` open
 an agent session; follow-up
 `@` mentions of that bot in the same thread route to it.
 A follow-up sent while that session is still working stops the current turn,
@@ -117,15 +130,29 @@ cropped at the chip's height with a fade at its foot; clicking it expands it in 
 clicking again collapses it. Before anything is there to expand, clicking the area also
 opens the session.
 
-`@codex` requires both `enable-chat-v3-agents` and `enable-codex-agents`.
-It appears when the mentioning user has connected ChatGPT and saved a
-cloud environment in Settings → Harness. New sessions use that environment on
+`@codex` and `@claude` are offered to every user before account setup. The built-in
+`@cursor` entry requires the `enable-cursor-agents` rollout flag (local override:
+`VITE_ENABLE_CURSOR_AGENTS`). Custom agents keep their channel visibility rules
+regardless of which harness they use.
+A mention without a connected account creates no session and replies in the thread
+with a **Connect Cursor**, **Connect Codex**, or **Connect Claude** chip. Each chip
+opens Settings → Harness, where all three connection cards are visible. The same
+chip reads **connected** after setup; mention the bot again to start a session.
+Codex also prompts for a cloud environment when ChatGPT is connected but no
+environment has been saved. New sessions use that environment on
 `main`; there is no automatic repository selection. Follow-up mentions continue the same agent session. When
 the provider URL arrives, the session header offers **Open in Codex**. Codex
 assistant text appears as complete messages while tool activity and thinking
 can continue updating during the turn. Mention
 eligibility is covered by component/query tests; the channel interaction requires
 a configured backend for end-to-end verification.
+
+Within the Cursor rollout, `@cursor` is offered whether connected or not. A mention from someone with
+no Cursor API key opens no session: the Cursor bot replies in the thread that
+`@cursor` runs on their own account and is not connected yet, followed by a
+**Connect Cursor** chip. Clicking the chip opens Settings → Harness; once a key
+is saved the same chip reads **Cursor connected** and stops navigating. The
+original mention is not replayed - mention `@cursor` again after connecting.
 
 Cursor sessions choose a repository from the mentioning user's linked GitHub App
 installations on their first prompt. A session without a repository can still use
@@ -136,6 +163,13 @@ name the repository explicitly in a new session's prompt.
 PR status in an open Magic Chip updates from connection-gateway events after
 webhook sync. Reconnecting refreshes active PR lookups to recover missed updates.
 A late webhook does not require reloading the page.
+
+When the agent requests permission, the Magic Chip replaces its loading state
+with the action and `Allow once`, `Deny`, and `More options` controls. Permission
+requests and questions share the chip's pending-interaction state and apply only
+to its anchored turn. Session editors and owners can answer directly in the chip;
+viewers and commenters see a waiting notice. Answering clears the request in both
+the chip and the open session, and the chip follows the agent's next activity.
 
 Coding agents use `macro_internal.set_pull_request` to register an existing or
 new GitHub PR with their session. Macro Internal MCP is hosted by the harness
@@ -233,12 +267,22 @@ messages and composer visible. Expand a thread while its replies are still
 loading: existing preview replies should remain visible until the full list
 arrives. Repeat after reopening the channel to cover both cold and cached data.
 
+Channel messages, thread replies, reactions, edits, deletions, and typing go
+through the shared message API at `GET|POST /dss/messages/channel/<id>` and its
+`items`, `threads`, and `typing` subroutes; the `/dss/channels/<id>/message*`
+routes are no longer called by the web app. Live updates arrive as one
+`message_update` websocket payload per committed change (`posted`, `edited`,
+`message_deleted`, `reaction_changed`, `thread_updated`, `typing`); the older
+`comms_message`, `comms_reaction`, `comms_attachment`, and `comms_typing`
+frames are ignored. Documents share the same client, cache, and components
+behind `enable-unified-document-discussions` (see documents.md).
+
 Reopening a channel already loaded this session requests
-`GET /dss/channels/<id>/messages/catch-up?after=<newest cached created_at>&limit=50`
+`GET /dss/messages/channel/<id>?selection=<cursor of the newest cached root, direction newer, limit 50>`
 and merges the result into the cached first page. A first open, a message link,
-a channel cached away from its latest page, and a delta longer than one page use
-`GET /dss/channels/<id>/messages`. The `channel_messages_load` event records
-`path` (`catch_up` or `full`) and `reason`
+a channel cached away from its latest page, and a delta longer than one page load
+the latest page with the default selection. The `channel_messages_load` event
+records `path` (`catch_up` or `full`) and `reason`
 (`watermark`, `list_ahead`, `no_cache`, `cache_not_at_latest`, `load_around`,
 `delta_overflow`, or `catch_up_error`).
 
@@ -247,13 +291,20 @@ a channel cached away from its latest page, and a delta longer than one page use
 The title bar's **Hide navigation** control hides the whole rail. Reopen it with
 **Show navigation** (the hamburger) immediately before the conversation title,
 or in the Chat header when no conversation is selected. Chat remembers this
-choice independently of other apps and restores it after reload.
+choice independently of other workspaces and restores it after reload. Chat uses
+the shared 256px default sidebar width and resize limits. In splits narrower than
+720px, navigation collapses; the hamburger or `Cmd+.` opens it as a slide-over
+with the same full sidebar contents. There is no separate skinny sidebar mode.
 
 On desktop, the Chat rail has `All` and `Recent` tabs. All contains an
 optional `Favorites` section above the independently paginated `Channels` and
 `DMs` sections. It appears when the user has channel favorites and only lists
 channels. Channel favorites open in the channel preview. Shift-clicking a
 favorite, channel, or DM opens that conversation in a new split instead.
+If a restored Chat selection is already open in another view, its preview stays
+closed but the saved selection is retained. Close the other view, then select
+the conversation again or reopen Chat to restore its preview. Verify that an
+unrelated rail preference change while blocked does not erase the saved selection.
 While reading older history or composing in the preview, incoming notifications
 (including ones for other channels) must not jump to latest, blank/refetch the
 messages, or revoke composer focus. To check this, leave an unsent draft in a
@@ -273,10 +324,6 @@ exist in the DOM.
 Channels and DMs each have a sort action before their create action. They can be
 sorted by last viewed, last updated, or date created, and each choice persists
 independently as a user preference.
-In slim mode, Favorites remains a separate collapsible section, while Channels
-and DMs render in one continuous list without section headings. The gear action
-in the footer controls whether each group appears and exposes the same
-independently persisted sort choices.
 Compact channel and DM rows in All have the same height. Section headings place
 their caret immediately after the title and reveal it on hover or while the
 section is collapsed; hovering only undims the heading text, while
@@ -310,6 +357,14 @@ instead.
 - Bots: `New bot`, `Search existing bots…` combobox, `Invite bot` — webhook-powered channel
   participants.
 
+## Incoming call ringing
+
+For cross-tab ringing checks, sign the recipient into two tabs and start a call
+from another account. Both tabs may show the incoming call; only one should play
+the chime. Closing the audible tab lets the other take over while the call is
+still ringing. Answering or dismissing stops ringing across tabs. An unanswered
+call stops ringing after 30 seconds, including after a tab takes over.
+
 ## Onboarding channel
 
 New users get `Macro Support x <name>` seeded with a welcome message that @mentions them —
@@ -330,9 +385,10 @@ message or acknowledgement and verify that it does not pull you to latest.
 
 ## Channel pictures
 
-Channels and group chats can have a custom picture. Admins and owners (the same
-people who can rename a channel) can open the title menu. Beside `Rename`,
-choose `Set channel picture` to add or replace a picture. Select a PNG, JPG,
+Channels and group chats can have a custom picture. Any active participant can
+`Rename` a named channel from the title menu. Direct messages cannot be renamed.
+Only admins and owners also get `Set channel picture` and `Remove channel
+picture`. Choose `Set channel picture` to add or replace a picture. Select a PNG, JPG,
 WebP, or GIF up to 16 MB. The upload must finish before the picture is saved;
 the server accepts only supported images uploaded by the person setting the
 picture. An error leaves the previous picture in place. When a picture is set, the menu also offers

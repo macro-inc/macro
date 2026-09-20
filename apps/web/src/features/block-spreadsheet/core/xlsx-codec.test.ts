@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { initSync } from '@ironcalc/wasm';
+import { encodeCellMention } from '@macro-inc/spreadsheet/cell-mentions';
 import ExcelJS from 'exceljs';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -50,6 +51,25 @@ function simpleSheet(): WorkbookFileSheet {
 }
 
 describe('Excel workbook files', () => {
+  it('exports mention labels as literal Excel text with an explicit warning', async () => {
+    const sheet = simpleSheet();
+    sheet.cells.A1 = {
+      value: encodeCellMention({
+        type: 'document',
+        documentId: 'document',
+        documentName: '=1+1',
+        blockName: 'md',
+      }),
+    };
+    const result = await encodeXlsx({ sheets: [sheet] });
+    expect(result.warnings.join(' ')).toContain('mention');
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(result.bytes.slice().buffer);
+    expect(workbook.worksheets[0].getCell('A1').value).toBe('=1+1');
+    expect(workbook.worksheets[0].getCell('A1').type).toBe(
+      ExcelJS.ValueType.String
+    );
+  });
   it('round trips real XLSX with multiple sheets, formula caches, values, styles and widths', async () => {
     const sheets: WorkbookFileSheet[] = [
       {
@@ -357,15 +377,12 @@ describe('Excel workbook files', () => {
     for (const term of [
       'Charts',
       'External workbook',
-      'Named ranges',
       'validation',
       'Hidden sheets',
-      'Merged cells',
+      'Merged ranges',
       'Frozen panes',
-      'row heights',
       'Hyperlinks',
       'Rich text',
-      'error cells',
       'comments',
     ])
       expect(warning).toContain(term);
@@ -550,7 +567,9 @@ describe('Excel workbook files', () => {
       const result = await decodeXlsx(zipSync(entries));
       expect(result.sheets[0].cells.A1.value).toBe('42');
       expect(result.warnings.join(' ')).toContain('Data validation');
-      expect(result.warnings.join(' ')).toContain('Named ranges');
+      expect(result.sheets[0].metadata?.definedNames).toEqual([
+        { name: 'WholeSheet', formula: "'Sheet 1'!$A$1:$XFD$1048576" },
+      ]);
       expect(load).toHaveBeenCalledOnce();
     } finally {
       load.mockRestore();

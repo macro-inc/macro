@@ -1082,3 +1082,69 @@ async fn both_parents_use_bounded_previews_and_bidirectional_windows(pool: PgPoo
         );
     }
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn legacy_ids_resolve_through_the_import_mapping_tables(pool: PgPool) {
+    setup(&pool).await;
+    let repo = PgMessageRepository::new(pool.clone());
+    let parent = MessageParent::parse("document", "message-doc-a").unwrap();
+    let root = repo
+        .create(command("message-doc-a", None, "imported root"))
+        .await
+        .unwrap();
+    let reply = repo
+        .create(command("message-doc-a", Some(root.id), "imported reply"))
+        .await
+        .unwrap();
+    sqlx::query!(
+        "INSERT INTO migrated_comment_thread_id (thread_id, root_id, document_id) VALUES (1, $1, 'message-doc-a')",
+        root.id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO migrated_comment_id (comment_id, message_id, document_id)
+         VALUES (10, $1, 'message-doc-a'), (11, $2, 'message-doc-a')",
+        root.id,
+        reply.id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        repo.resolve_legacy(&parent, 11, false).await.unwrap(),
+        Some(reply.id)
+    );
+    assert_eq!(
+        repo.resolve_legacy(&parent, 10, false).await.unwrap(),
+        Some(root.id)
+    );
+    assert_eq!(
+        repo.resolve_legacy(&parent, 1, true).await.unwrap(),
+        Some(root.id)
+    );
+    // A comment id is not a thread id, and a mapping only resolves under its own document.
+    assert_eq!(repo.resolve_legacy(&parent, 11, true).await.unwrap(), None);
+    let other = MessageParent::parse("document", "message-doc-b").unwrap();
+    assert_eq!(repo.resolve_legacy(&other, 11, false).await.unwrap(), None);
+    let channel = MessageParent::parse("channel", &Uuid::from_u128(7).to_string()).unwrap();
+    assert_eq!(
+        repo.resolve_legacy(&channel, 11, false).await.unwrap(),
+        None
+    );
+
+    // Mappings cannot point at messages that were never written.
+    let dangling = sqlx::query!(
+        "INSERT INTO migrated_comment_id (comment_id, message_id, document_id) VALUES (12, $1, 'message-doc-a')",
+        macro_uuid::generate_uuid_v7()
+    )
+    .execute(&pool)
+    .await
+    .unwrap_err();
+    assert_eq!(
+        dangling.as_database_error().unwrap().code().as_deref(),
+        Some("23503")
+    );
+}

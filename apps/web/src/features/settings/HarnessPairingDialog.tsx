@@ -5,7 +5,7 @@ import {
   useHarnessPairingQuery,
 } from '@queries/harnesses/harnesses';
 import { useCurrentTeamQuery } from '@queries/team/teams';
-import { Button, Dialog, Panel } from '@ui';
+import { Button, Checkbox, Dialog, Panel } from '@ui';
 import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
 import { ChoiceRow } from './primitives';
 
@@ -38,6 +38,9 @@ export function HarnessPairingDialog(props: {
   const [committedCode, setCommittedCode] = createSignal<string | undefined>(
     props.initialCode || undefined
   );
+  const [allowPermissionBypass, setAllowPermissionBypass] = createSignal(false);
+  const [permissionBypassEdited, setPermissionBypassEdited] =
+    createSignal(false);
   const [approved, setApproved] = createSignal(false);
   const [approveError, setApproveError] = createSignal<string>();
   const [name, setName] = createSignal('');
@@ -57,6 +60,11 @@ export function HarnessPairingDialog(props: {
     const pairing = pairingData();
     if (!pairing) return;
     if (!nameEdited()) setName(pairing.requested_name);
+    if (!permissionBypassEdited()) {
+      setAllowPermissionBypass(
+        pairing.requested_allow_permission_bypass === true
+      );
+    }
     // The daemon's config may ask for a scope; preselect it, but the person
     // approving keeps the final say.
     if (
@@ -88,6 +96,8 @@ export function HarnessPairingDialog(props: {
     setName('');
     setShare('Private');
     setShareEdited(false);
+    setAllowPermissionBypass(false);
+    setPermissionBypassEdited(false);
   };
 
   const canApprove = () =>
@@ -103,6 +113,9 @@ export function HarnessPairingDialog(props: {
     try {
       await approveMutation.mutateAsync({
         code: pairing.code,
+        allowPermissionBypass:
+          pairing.requested_allow_permission_bypass !== false &&
+          allowPermissionBypass(),
         name: name().trim(),
         teamId: share() === 'Team' ? currentTeamId() : undefined,
       });
@@ -227,6 +240,36 @@ export function HarnessPairingDialog(props: {
                       }}
                     />
                   </fieldset>
+                  <div class="flex flex-col gap-2">
+                    <Checkbox
+                      class="flex items-center gap-3 text-sm"
+                      checked={allowPermissionBypass()}
+                      disabled={
+                        pairing().requested_allow_permission_bypass === false
+                      }
+                      onChange={(allowed) => {
+                        setPermissionBypassEdited(true);
+                        setAllowPermissionBypass(allowed);
+                      }}
+                    >
+                      <Checkbox.Control />
+                      <Checkbox.Label>
+                        Allow bypassing permission requests
+                      </Checkbox.Label>
+                    </Checkbox>
+                    <p class="text-xs text-ink-muted">
+                      {pairing().requested_allow_permission_bypass === false
+                        ? 'This daemon requires permission prompts. Change its setting and pair again to allow bypass.'
+                        : 'When off, every agent on this harness must ask for permission.'}
+                    </p>
+                    <Show when={allowPermissionBypass()}>
+                      <p class="text-xs text-negative" role="alert">
+                        Agents can run commands and edit files on this machine
+                        without approval. Only enable this if you trust everyone
+                        who can create agents on this harness.
+                      </p>
+                    </Show>
+                  </div>
                 </div>
               )}
             </Match>

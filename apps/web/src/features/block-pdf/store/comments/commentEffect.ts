@@ -39,7 +39,8 @@ const useScrollToActiveThreadEffect = () => {
     if (activeThreadId == null) return;
     if (!hasActiveThread()) return;
 
-    scrollToCommentThread(activeThreadId);
+    if (typeof activeThreadId === 'number')
+      scrollToCommentThread(activeThreadId);
   });
 };
 

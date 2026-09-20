@@ -1,4 +1,4 @@
-import type { ThreadId } from '@core/comments/commentType';
+import type { CommentId, ThreadId } from '@core/comments/commentType';
 import {
   type Accessor,
   createContext,
@@ -11,7 +11,7 @@ import type { CommentStore } from '../type/comments';
 
 type PdfCommentsContextValue = {
   all: Accessor<CommentStore>;
-  byId: Accessor<Map<number, CommentStore[number]>>;
+  byId: Accessor<Map<CommentId, CommentStore[number]>>;
   activeThreadId: Accessor<ThreadId | null>;
   selectedThreadId: Accessor<ThreadId | null>;
   scrollingSuppressed: Accessor<boolean>;
@@ -36,7 +36,7 @@ export const PdfCommentsProvider: FlowComponent<{
   );
   const [scrollingSuppressed, setScrollingSuppressed] = createSignal(false);
   const byId = createMemo(() => {
-    const comments = new Map<number, CommentStore[number]>();
+    const comments = new Map<CommentId, CommentStore[number]>();
     for (const comment of props.comments()) comments.set(comment.id, comment);
     return comments;
   });

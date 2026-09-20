@@ -32,7 +32,7 @@ export function ModelSelector(props: {
       }))}
       triggerLabel={props.label}
       placeholder={modelLabel(props.model)}
-      triggerClass="pill min-w-0 max-w-full gap-2 border-0 text-ink-muted"
+      triggerClass="h-[33.75px] min-w-0 max-w-full gap-[5.625px] rounded-full border-0 bg-transparent hover:bg-hover px-[7.5px] text-base font-normal text-ink-muted light-mode:text-composer-placeholder [&_svg]:size-[15px]"
       ariaLabel="Model"
       placement="top-end"
       disabled={props.disabled}

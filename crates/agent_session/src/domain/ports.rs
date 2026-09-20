@@ -51,7 +51,7 @@ pub struct BotFacts {
     pub selected_channels: bool,
 }
 
-/// Runtime settings snapshotted when a managed persona opens a session.
+/// Runtime settings snapshotted when a persisted agent opens a session.
 #[derive(Debug, Clone)]
 pub struct ManagedAgentProfile {
     /// Model configured as this persona's default.
@@ -179,8 +179,8 @@ pub async fn managed_persona_for_user<Bots: BotDirectory>(
 /// where the bot can already post.
 #[derive(Debug, Clone)]
 pub struct SessionThread {
-    /// Channel the mentioning message was posted in.
-    pub channel_id: Uuid,
+    /// Channel or document the mentioning message was posted in.
+    pub parent: messages::domain::models::MessageParent,
     /// Thread the session belongs to.
     pub thread_id: Uuid,
     /// The mentioning message itself.
@@ -194,6 +194,8 @@ pub struct SessionThread {
 pub struct OpenExternalAgentSession {
     /// The bot the session runs for.
     pub bot_id: BotId,
+    /// Persisted agent settings resolved by the authenticated entry point.
+    pub profile: Option<ManagedAgentProfile>,
     /// Absolute directory the bot's harness runs in on its runtime.
     pub workspace: String,
     /// Repository nominally checked out at `workspace`, when stated.
@@ -208,12 +210,15 @@ pub struct OpenExternalAgentSession {
 
 /// Everything needed to open a session the server hosts itself.
 ///
-/// Deliberately thin: a managed session runs in a sandbox this deployment
-/// provisions from its own configuration, so the bot, the repository and the
-/// workspace are not the caller's to choose. There is no originating mention
-/// and nothing to announce.
+/// The deployment provisions the selected persona's runtime. Cursor sessions
+/// may select an owner-accessible repository and starting branch; workspace
+/// paths remain runtime-owned. There is no originating mention to announce.
 #[derive(Debug, Clone)]
 pub struct OpenManagedSession {
+    /// Repository explicitly selected by the caller for a supported runtime.
+    pub repo_url: Option<String>,
+    /// Starting branch for the selected repository.
+    pub repo_branch: Option<super::repository_branch::RepositoryBranch>,
     /// The user who owns the session and is credited for its messages.
     pub owner: MacroUserIdStr<'static>,
     /// First prompt to deliver once the sandbox is attached. `None` opens an
@@ -279,19 +284,18 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     /// Get an agent session by id.
     fn get(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
 
-    /// Resolve each of `ids` to what `viewer` may see of it, for chips.
-    ///
-    /// One [`AgentSessionPreview`] per id in `ids`, in no particular order.
-    /// Access is the session's own `entity_access` grants resolved against
-    /// the viewer - as themselves, through the channels they are still in,
-    /// and through their teams - the same predicate the read routes' access
-    /// extractor applies, so a preview says `Access` exactly when
-    /// `GET /agent-sessions/{id}` would answer.
+    /// The sessions among `ids` that exist, each with what a chip shows and
+    /// whether a materialized grant lets `viewer` see it: their own grant,
+    /// one through a channel they are still in, or one through their teams -
+    /// the same three the read routes' access extractor resolves. Inherited
+    /// access that no row materializes (a document collaborator's) is the
+    /// service's to resolve from the returned thread parent. Ids with no
+    /// session are simply absent.
     fn preview(
         &self,
         viewer: &MacroUserIdStr<'static>,
         ids: &[AgentSessionId],
-    ) -> impl Future<Output = Result<Vec<AgentSessionPreview>>> + Send;
+    ) -> impl Future<Output = Result<Vec<SessionPreviewCandidate>>> + Send;
 
     /// Replace the session credential when attaching an external runtime.
     fn set_egress_token_hash(
@@ -324,15 +328,15 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     /// otherwise `None`. There is nothing else to match: a session does not
     /// own a channel, and messages sent directly to a session arrive through
     /// their own topic rather than as channel events.
-    fn find_for_channel(
+    fn find_for_thread(
         &self,
         thread_id: Option<Uuid>,
         bot_id: Option<BotId>,
-    ) -> impl Future<Output = Result<ChannelSession>> + Send;
+    ) -> impl Future<Output = Result<ThreadSession>> + Send;
 
     /// Every session rooted at this thread, newest first, regardless of bot.
     ///
-    /// [`find_for_channel`](Self::find_for_channel) answers for one known bot;
+    /// [`find_for_thread`](Self::find_for_thread) answers for one known bot;
     /// this answers when no bot was named - a message in the thread may still
     /// be meant for whichever agent lives there.
     fn find_all_for_thread(
@@ -534,6 +538,26 @@ pub trait AgentSessionLogRepo: Send + Sync + 'static {
         boundary: Option<HistoryBoundary>,
     ) -> impl Future<Output = Result<StoredAgentSessionLog>> + Send;
 
+    /// Append a run of plain frames in one write, under the current
+    /// ownership fence, and return them stamped as the log stored them.
+    ///
+    /// Plain means: nothing the store projects - no system event, no load
+    /// boundary, no Cursor checkpoint. Those keep going through
+    /// [`create_fenced_with_boundary`](Self::create_fenced_with_boundary)
+    /// one at a time; this is the fast path for the streamed output that is
+    /// the bulk of every session. Entries carry their ids already - the
+    /// writer hands them out at append time so a caller has a durable
+    /// identity before the flush lands - and arrive in append order, which
+    /// the store must preserve in `(created_at, id)` order for readers.
+    ///
+    /// Every entry must belong to `claim`'s session. An empty batch is a
+    /// no-op.
+    fn create_batch_fenced(
+        &self,
+        entries: Vec<StoredAgentSessionLog>,
+        claim: &SessionClaim,
+    ) -> impl Future<Output = Result<Vec<StoredAgentSessionLog>>> + Send;
+
     /// List effective ACP history in deterministic `(created_at, id)` order.
     /// Starts at the latest successfully loaded initialization, or the beginning.
     /// Raw failed/partial replay frames remain; consumers must stage load attempts.
@@ -621,6 +645,11 @@ pub struct Appended {
 }
 
 /// Sequential live log writer owned by one session actor.
+///
+/// A writer may hold streamed frames back and both write and publish them in
+/// runs: `append` returning `Ok` means the frame is durable *or buffered*,
+/// and [`flush_deadline`](Self::flush_deadline) tells the owning actor when
+/// the buffer must next be forced out with [`flush`](Self::flush).
 pub trait AgentSessionLogWriter: Send + 'static {
     /// Persist and fold one frame into this connection's live projection.
     fn append(&mut self, log: AgentSessionLog) -> impl Future<Output = Result<Appended>> + Send {
@@ -635,6 +664,19 @@ pub trait AgentSessionLogWriter: Send + 'static {
         log: AgentSessionLog,
         boundary: Option<HistoryBoundary>,
     ) -> impl Future<Output = Result<Appended>> + Send;
+
+    /// Durably write any frames still held back, then push everything
+    /// stored but unpublished to the session's viewers. A writer that holds
+    /// nothing back has nothing to do.
+    fn flush(&mut self) -> impl Future<Output = Result<()>> + Send {
+        async { Ok(()) }
+    }
+
+    /// When held frames must be flushed by - `None` while nothing is held,
+    /// so an idle writer never wakes its owner.
+    fn flush_deadline(&self) -> Option<tokio::time::Instant> {
+        None
+    }
 }
 
 /// A session's queue changed; this is the whole queue as it stands now.
@@ -659,7 +701,7 @@ pub struct AgentSessionQueueChanged {
 /// they reload, and the log it was derived from is already durable - so an
 /// implementation may drop, and callers must not fail an append over it.
 pub trait AgentSessionRealtime {
-    /// Publish one appended frame to the session's viewers.
+    /// Publish a run of appended frames to the session's viewers.
     fn publish(
         &self,
         event: LogAppended,
@@ -686,6 +728,15 @@ pub trait AgentSessionRealtime {
     fn publish_queue_changed(
         &self,
         _event: AgentSessionQueueChanged,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send {
+        async { Ok(()) }
+    }
+
+    /// Tell viewers the session's captured changes moved: a capture started,
+    /// finished, or failed. Viewers refetch the changes summary.
+    fn publish_changes_updated(
+        &self,
+        _session: AgentSessionId,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send {
         async { Ok(()) }
     }
@@ -764,6 +815,21 @@ impl<T: SessionTurnObserver + ?Sized> SessionTurnObserver for std::sync::Arc<T> 
 
     fn session_stopped(&self, id: AgentSessionId, reason: StopReason) {
         (**self).session_stopped(id, reason);
+    }
+}
+
+/// Two observers told the same facts, in order. How the composition root
+/// fans one session service's signals out to the harness (which drains its
+/// queue on them) and to anything else that wants to know a turn ended.
+impl<A: SessionTurnObserver, B: SessionTurnObserver> SessionTurnObserver for (A, B) {
+    fn signal(&self, id: AgentSessionId, signal: TurnSignal) {
+        self.0.signal(id, signal.clone());
+        self.1.signal(id, signal);
+    }
+
+    fn session_stopped(&self, id: AgentSessionId, reason: StopReason) {
+        self.0.session_stopped(id, reason.clone());
+        self.1.session_stopped(id, reason);
     }
 }
 
@@ -861,6 +927,11 @@ impl AgentSessionRealtime for NoOpRealtime {
 pub struct ControlEvent {
     /// What the agent was asked to do.
     pub action: AgentAction,
+    /// The id the caller already speculated this action under, when it minted
+    /// one. Adopted as the accepted id so the caller's optimistic entry is
+    /// promoted in place rather than retracted and reissued; `None` leaves
+    /// the recipient to mint one.
+    pub action_id: Option<AgentActionId>,
     /// The user responsible, absent when a bot acted on nobody's behalf.
     ///
     /// `None` means "no user is responsible", not "unknown" - a bot's own
@@ -919,6 +990,11 @@ pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
     /// A control operation the live connection has to be told about. Returns
     /// the action id the caller correlates against the fold stream, and
     /// whether the action went out or waits in the session's queue.
+    ///
+    /// A caller-supplied [`ControlEvent::action_id`] is adopted as that id.
+    /// Re-sending an action under an id the session still has queued or in
+    /// flight reports what became of the first one instead of accepting a
+    /// second, so a retried request cannot double-prompt.
     fn control_event(
         &self,
         id: AgentSessionId,
@@ -978,3 +1054,32 @@ pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
 
 #[cfg(test)]
 mod test;
+
+/// Current view access to a session, resolved the way a read route resolves
+/// it - including access inherited from the document a session was opened
+/// from, which no access row materializes.
+///
+/// Object-safe so the service holds it erased, like its turn observer.
+pub trait SessionViewAccess: Send + Sync + 'static {
+    /// Whether `viewer` may currently view `session`.
+    fn can_view<'a>(
+        &'a self,
+        viewer: &'a MacroUserIdStr<'static>,
+        session: AgentSessionId,
+    ) -> Pin<Box<dyn Future<Output = Result<bool>> + Send + 'a>>;
+}
+
+/// Only materialized grants count: a process with no entity-access service,
+/// or a test, never discovers inherited access.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoInheritedSessionAccess;
+
+impl SessionViewAccess for NoInheritedSessionAccess {
+    fn can_view<'a>(
+        &'a self,
+        _viewer: &'a MacroUserIdStr<'static>,
+        _session: AgentSessionId,
+    ) -> Pin<Box<dyn Future<Output = Result<bool>> + Send + 'a>> {
+        Box::pin(async { Ok(false) })
+    }
+}

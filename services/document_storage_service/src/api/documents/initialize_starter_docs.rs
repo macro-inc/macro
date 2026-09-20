@@ -7,7 +7,8 @@ use axum::{
 use channels::domain::{models::CreateEntityMentionOptions, ports::ChannelService};
 use documents_hex::domain::{
     create::{MarkdownSubtype, NewDocumentMetadata, NewMarkdownTextDocument},
-    models::DocumentError,
+    models::{DocumentError, PropertyInput},
+    starter::seed_starter_documents,
 };
 use entity_access::domain::{
     models::{BotAccessScope, EditAccessLevel, ViewAccessLevel},
@@ -25,8 +26,7 @@ use models_properties::api::{AddPropertyOptionRequest, AddStringOptionRequest, S
 use models_properties::service::property_option::PropertyOptionValue;
 use properties::{PropertiesService as _, domain::model::TagScope};
 use reqwest::StatusCode;
-use std::collections::HashSet;
-use system_properties::{PriorityOption, SystemPropertyKey};
+use system_properties::{PriorityOption, StatusOption, SystemPropertyKey};
 
 /// Also the name `get_starter_docs` resolves the guide by, so the two stay in
 /// sync from one definition.
@@ -44,7 +44,7 @@ struct StarterTask {
     template: &'static str,
     id_placeholder: &'static str,
     name_placeholder: &'static str,
-    /// Priority set after creation, so the reading order (High → Low) shows
+    /// Initial priority, so the reading order (High → Low) shows
     /// in the default priority-sorted task list.
     priority: PriorityOption,
 }
@@ -73,9 +73,10 @@ const STARTER_TASKS: [StarterTask; 3] = [
     },
 ];
 
-/// Gateway push sent once the starter set — the guide favorite included — is
-/// fully seeded. Seeding is fire-and-forget from signup, so a fresh account's
-/// app is often already open with empty Soup and favorites lists cached; the
+/// Gateway push sent after each attempt publishes its available starter content,
+/// including the guide favorite when available. Signup seeding is fire-and-forget,
+/// so a fresh account's app is often already open with empty Soup and favorites
+/// lists cached; the
 /// web client invalidates those lists and provisioned properties on this
 /// message.
 const STARTER_DOCS_INITIALIZED_MESSAGE_TYPE: &str = "starter_docs_initialized";
@@ -132,7 +133,7 @@ async fn resolve_docs_tag(
 
     state
         .properties_service
-        .add_property_option(
+        .get_or_create_property_option(
             user_id,
             None,
             definition_id,
@@ -184,8 +185,20 @@ pub async fn handler(
         .collect();
     let guide_id = starter_doc_id(user_id, HOW_TO_GUIDE_NAME).to_string();
 
+    // The guide needs real tag IDs; independent tasks can still be created
+    // if resolution fails. Report incomplete seeding only after publishing
+    // the content that was successfully created, so the caller can retry.
+    let docs_tag = resolve_docs_tag(&state, user_id).await;
+    let mut incomplete = docs_tag.is_none();
     let fill = |template: &str| {
         let mut filled = template.to_string();
+        if let Some((tag_definition_id, tag_option_id)) = docs_tag {
+            filled = filled
+                .replace("DOCS_TAG_OPTION_ID", &tag_option_id.to_string())
+                .replace("DOCS_TAG_DEFINITION_ID", &tag_definition_id.to_string())
+                .replace("DOCS_TAG_LABEL", DOCS_TAG_LABEL)
+                .replace("DOCS_TAG_COLOR", DOCS_TAG_COLOR);
+        }
         for (task, id) in STARTER_TASKS.iter().zip(&task_ids) {
             filled = filled
                 .replace(task.id_placeholder, id)
@@ -194,67 +207,129 @@ pub async fn handler(
         filled
     };
 
-    // Ids created by THIS call: backlinks and decorations run once, on the
-    // call that created the document.
-    let mut created_now: HashSet<String> = HashSet::new();
+    let organization_id = user_context
+        .authorization
+        .user
+        .user_context
+        .organization_id
+        .map(i64::from);
+    // Await each tag attempt before the next create, but do not let a tag
+    // failure prevent the remaining documents from becoming available.
+    let state_ref = &state;
+    let tag_document = |id: uuid::Uuid| async move {
+        let state = state_ref;
+        let document_id = id.to_string();
+        let Some((tag_definition_id, tag_option_id)) = docs_tag else {
+            return Err(DocumentError::Internal(anyhow::anyhow!(
+                "failed to resolve starter doc tag"
+            )));
+        };
+        let receipt = state
+            .entity_access_service
+            .generate_bot_entity_access_receipt::<EditAccessLevel>(
+                bot_id::MACRO_SYSTEM_BOT_ID,
+                BotAccessScope::User {
+                    user_id: user_id.clone(),
+                    user_org_id: organization_id,
+                },
+                &document_id,
+                EntityType::Document,
+            )
+            .await
+            .map_err(|e| {
+                tracing::error!(error=?e, document_id, "failed to authorize starter doc tag");
+                DocumentError::Internal(anyhow::anyhow!(e))
+            })?;
+        state
+            .properties_service
+            .add_entity_property_option(&receipt, tag_definition_id, tag_option_id)
+            .await
+            .map_err(|e| {
+                tracing::error!(error=?e, document_id, "failed to tag starter doc");
+                DocumentError::Internal(anyhow::anyhow!(e))
+            })
+    };
 
-    for (task, id) in STARTER_TASKS.iter().zip(&task_ids) {
-        let created = state
-            .documents_state
-            .creator
-            .create_markdown_text(
-                user_id.clone(),
+    let mut documents: Vec<_> = STARTER_TASKS
+        .iter()
+        .map(|task| {
+            let id = starter_doc_id(user_id, task.name);
+            (
+                id,
                 NewMarkdownTextDocument {
                     metadata: NewDocumentMetadata::builder(task.name)
-                        .id(starter_doc_id(user_id, task.name))
+                        .id(id)
                         .attribution(system_for_user.clone())
                         .build(),
                     markdown: fill(task.template),
                     subtype: MarkdownSubtype::Task {
-                        property_values: None,
+                        // Providing properties replaces the task defaults, so include
+                        // the normal assignee and status alongside the initial priority.
+                        property_values: Some(vec![
+                            PropertyInput {
+                                property_id: SystemPropertyKey::ASSIGNEES_UUID.to_string(),
+                                value: SetPropertyValue::MultiEntityReference {
+                                    references: vec![models_properties::EntityReference {
+                                        entity_id: user_id.as_ref().to_string(),
+                                        entity_type: models_properties::EntityType::User,
+                                        specific_message_id: None,
+                                    }],
+                                },
+                            },
+                            PropertyInput {
+                                property_id: SystemPropertyKey::STATUS_UUID.to_string(),
+                                value: SetPropertyValue::SelectOption {
+                                    option_id: StatusOption::NotStarted.uuid(),
+                                },
+                            },
+                            PropertyInput {
+                                property_id: SystemPropertyKey::PRIORITY_UUID.to_string(),
+                                value: SetPropertyValue::SelectOption {
+                                    option_id: task.priority.uuid(),
+                                },
+                            },
+                        ]),
                         share_with_team: false,
                         team_id: None,
                     },
                 },
             )
-            .await;
-        match created {
-            Ok(_) => {
-                created_now.insert(id.clone());
-            }
-            Err(DocumentError::Conflict(_)) => {}
-            Err(e) => {
-                tracing::error!(error=?e, task_name=%task.name, "failed to create starter task");
-                return Err(internal_error("failed to create starter task"));
-            }
-        }
-    }
-
-    let created = state
-        .documents_state
-        .creator
-        .create_markdown_text(
-            user_id.clone(),
+        })
+        .collect();
+    let guide_uuid = starter_doc_id(user_id, HOW_TO_GUIDE_NAME);
+    if docs_tag.is_some() {
+        documents.push((
+            guide_uuid,
             NewMarkdownTextDocument {
                 metadata: NewDocumentMetadata::builder(HOW_TO_GUIDE_NAME)
-                    .id(starter_doc_id(user_id, HOW_TO_GUIDE_NAME))
+                    .id(guide_uuid)
                     .attribution(system_for_user.clone())
                     .build(),
                 markdown: fill(HOW_TO_GUIDE_TEMPLATE),
                 subtype: MarkdownSubtype::Note,
             },
-        )
-        .await;
-    match created {
-        Ok(_) => {
-            created_now.insert(guide_id.clone());
-        }
-        Err(DocumentError::Conflict(_)) => {}
-        Err(e) => {
-            tracing::error!(error=?e, "failed to create how to guide document");
-            return Err(internal_error("failed to create how to guide document"));
-        }
+        ));
     }
+    let seeded = seed_starter_documents(
+        documents,
+        |document| async move {
+            state_ref
+                .documents_state
+                .creator
+                .create_markdown_text(user_id.clone(), document)
+                .await
+                .map(|_| ())
+        },
+        tag_document,
+    )
+    .await;
+    incomplete |= seeded.incomplete;
+    let guide_available = seeded.available.contains(&guide_uuid);
+    let created_now: std::collections::HashSet<_> = seeded
+        .created
+        .into_iter()
+        .map(|id| id.to_string())
+        .collect();
 
     // Record mention backlinks (the References panel) for the starter set.
     // The mention graph is derived from the templates themselves: a source
@@ -300,114 +375,40 @@ pub async fn handler(
             });
     }
 
-    // Decorate the documents created by this call: each task's priority,
-    // plus the personal "docs" tag. Best-effort like the mention backlinks
-    // — a decoration failure on an existing document could never be retried
-    // into success, so log and continue instead of failing the request.
-    let docs_tag = if created_now.is_empty() {
-        None
-    } else {
-        resolve_docs_tag(&state, user_id).await
-    };
-    let organization_id = user_context
-        .authorization
-        .user
-        .user_context
-        .organization_id
-        .map(i64::from);
-    let starter_docs = STARTER_TASKS
-        .iter()
-        .zip(&task_ids)
-        .map(|(task, id)| (id.clone(), Some(task.priority)))
-        .chain(std::iter::once((guide_id.clone(), None)))
-        .filter(|(id, _)| created_now.contains(id));
-    for (document_id, priority) in starter_docs {
-        // One Edit receipt per doc covers both property writes; the
-        // properties service takes its authorization as this typed receipt.
-        let receipt = match state
-            .entity_access_service
-            .generate_bot_entity_access_receipt::<EditAccessLevel>(
-                bot_id::MACRO_SYSTEM_BOT_ID,
-                BotAccessScope::User {
-                    user_id: user_context.authorization.user.macro_user_id.clone(),
-                    user_org_id: organization_id,
-                },
-                &document_id,
-                EntityType::Document,
-            )
-            .await
-        {
-            Ok(receipt) => receipt,
-            Err(e) => {
-                tracing::error!(
-                    error=?e,
-                    document_id=%document_id,
-                    "failed to authorize starter doc decoration"
-                );
-                continue;
-            }
-        };
-
-        if let Some(priority) = priority {
-            let _ = state
-                .properties_service
-                .set_entity_property(
-                    &receipt,
-                    SystemPropertyKey::PRIORITY_UUID,
-                    Some(SetPropertyValue::SelectOption {
-                        option_id: priority.uuid(),
-                    }),
-                )
-                .await
-                .inspect_err(|e| {
-                    tracing::error!(
-                        error=?e,
-                        document_id=%document_id,
-                        "failed to set starter task priority"
-                    );
-                });
-        }
-
-        if let Some((tag_definition_id, tag_option_id)) = docs_tag {
-            let _ = state
-                .properties_service
-                .add_entity_property_option(&receipt, tag_definition_id, tag_option_id)
-                .await
-                .inspect_err(|e| {
-                    tracing::error!(
-                        error=?e,
-                        document_id=%document_id,
-                        "failed to tag starter doc"
-                    );
-                });
-        }
-    }
-
     // Runs on every call, not just document creation: `add_favorite` is an
     // upsert, and re-favoriting reconciles a prior attempt that created the
     // guide but failed before the favorite was written.
-    let how_to_guide_receipt = state
-        .entity_access_service
-        .generate_entity_access_receipt::<ViewAccessLevel>(
-            user_id,
-            organization_id,
-            &guide_id,
-            EntityType::Document,
-        )
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "failed to authorize how to guide document favorite");
-            internal_error("failed to favorite how to guide document")
-        })?;
+    if guide_available {
+        let favorite_result = async {
+            let how_to_guide_receipt = state
+                .entity_access_service
+                .generate_entity_access_receipt::<ViewAccessLevel>(
+                    user_id,
+                    organization_id,
+                    &guide_id,
+                    EntityType::Document,
+                )
+                .await
+                .map_err(|e| {
+                    tracing::error!(error=?e, "failed to authorize how to guide document favorite");
+                    internal_error("failed to favorite how to guide document")
+                })?;
 
-    state
-        .favorites_service
-        .add_favorite(&how_to_guide_receipt)
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "failed to favorite how to guide document");
-            internal_error("failed to favorite how to guide document")
-        })?;
+            state
+                .favorites_service
+                .add_favorite(&how_to_guide_receipt)
+                .await
+                .map_err(|e| {
+                    tracing::error!(error=?e, "failed to favorite how to guide document");
+                    internal_error("failed to favorite how to guide document")
+                })?;
+            Ok::<(), Response>(())
+        }
+        .await;
+        if favorite_result.is_err() {
+            incomplete = true;
+        }
+    }
 
     // Best-effort: a missed push just means the sidebar catches up on the
     // next favorites refetch instead of live.
@@ -423,6 +424,12 @@ pub async fn handler(
         .inspect_err(|e| {
             tracing::warn!(error=?e, "failed to push starter docs initialized");
         });
+
+    if incomplete {
+        return Err(internal_error(
+            "starter document initialization incomplete; retry required",
+        ));
+    }
 
     Ok((
         StatusCode::OK,

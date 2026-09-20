@@ -2,6 +2,10 @@ import { openMacroMcpSetupModal } from '@app/features/integrations/mcp-setup/Mac
 import type { SplitFileMenuAction } from '@components/app/split-layout/context';
 import { editorStateAsMarkdown } from '@core/component/LexicalMarkdown/utils';
 import { toast } from '@core/component/Toast/Toast';
+import {
+  enableUnifiedDocumentDiscussions,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { macroIdToEmail, tryMacroId } from '@core/user';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import ClaudeIcon from '@icon/wide-claude.svg';
@@ -13,8 +17,10 @@ import CopyIcon from '@phosphor/copy.svg';
 import GitBranch from '@phosphor/git-branch.svg';
 import PlugIcon from '@phosphor/plug.svg';
 import TerminalWindowIcon from '@phosphor/terminal-window.svg';
+import { fetchDocumentThreads } from '@queries/messages/document-messages';
 import { storageServiceClient } from '@service-storage/client';
 import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
+import type { MessageThread } from '@service-storage/messages';
 import { createCallback } from '@solid-primitives/rootless';
 import { makePersisted } from '@solid-primitives/storage';
 import { Button, ButtonGroup, Dropdown } from '@ui';
@@ -29,11 +35,57 @@ import { useMarkdownName } from './MarkdownNameProvider';
 
 const LAST_USED_KEY = 'dispatch-agent-last-used';
 
+type PromptComment = {
+  author: string;
+  createdAt?: string | null;
+  text: string;
+};
+type PromptThread = { threadId: string | number; comments: PromptComment[] };
+
+function legacyPromptThreads(threads: CommentThread[]): PromptThread[] {
+  return threads.map((thread) => ({
+    threadId: thread.thread.threadId,
+    comments: [...thread.comments]
+      .sort(sortComments)
+      .filter((comment) => comment.text && !comment.deletedAt)
+      .map((comment) => ({
+        author: comment.sender ?? comment.owner,
+        createdAt: comment.createdAt,
+        text: comment.text,
+      })),
+  }));
+}
+
+function messagePromptThreads(threads: MessageThread[]): PromptThread[] {
+  return threads.map((thread) => ({
+    threadId: thread.state.root_id,
+    comments: [thread.root, ...thread.replies]
+      .filter((message) => message.content && !message.deleted_at)
+      .map((message) => ({
+        author: message.imported_author?.name?.trim() || message.sender_id,
+        createdAt: message.created_at,
+        text: message.content,
+      })),
+  }));
+}
+
+/** Copy/export needs full discussions, not the timeline's bounded reply previews. */
+async function fetchMessagePromptThreads(
+  documentId: string
+): Promise<PromptThread[]> {
+  const threads = await fetchDocumentThreads({
+    type: 'document',
+    id: documentId,
+  });
+  threads.reverse();
+  return messagePromptThreads(threads);
+}
+
 async function generateTaskPrompt(
   documentId: string,
   documentName: string,
   content: string,
-  threads: CommentThread[]
+  threads: PromptThread[]
 ): Promise<string> {
   const result = await storageServiceClient.getDocumentBranchName({
     documentId,
@@ -62,20 +114,16 @@ async function generateTaskPrompt(
   if (threads.length > 0) {
     lines.push('');
     for (const thread of threads) {
-      const sorted = [...thread.comments].sort(sortComments);
-      lines.push(`<comment-thread thread-id="${thread.thread.threadId}">`);
-      for (const comment of sorted) {
-        if (comment.text && !comment.deletedAt) {
-          const userId = comment.sender ?? comment.owner;
-          const macroId = tryMacroId(userId);
-          const author = macroId ? macroIdToEmail(macroId) : userId;
-          const createdAt = comment.createdAt
-            ? ` created-at="${comment.createdAt}"`
-            : '';
-          lines.push(
-            `<comment author="${author}"${createdAt}>${comment.text}</comment>`
-          );
-        }
+      lines.push(`<comment-thread thread-id="${thread.threadId}">`);
+      for (const comment of thread.comments) {
+        const macroId = tryMacroId(comment.author);
+        const author = macroId ? macroIdToEmail(macroId) : comment.author;
+        const createdAt = comment.createdAt
+          ? ` created-at="${comment.createdAt}"`
+          : '';
+        lines.push(
+          `<comment author="${author}"${createdAt}>${comment.text}</comment>`
+        );
       }
       lines.push('</comment-thread>');
     }
@@ -171,11 +219,13 @@ export function useDispatchAgentAction() {
   const lastUsed = () =>
     ALL_ACTIONS.find((a) => a.key === lastUsedKey()) ?? COPY_ACTION;
 
-  const buildPrompt = createCallback(() => {
+  const buildPrompt = createCallback(async () => {
     const docName = name() ?? '';
     const editor = state.editor.md.editor;
     const content = editor ? editorStateAsMarkdown(editor, 'external') : '';
-    const threads = discussionThreads() ?? [];
+    const threads = isFeatureEnabled(enableUnifiedDocumentDiscussions)
+      ? await fetchMessagePromptThreads(blockId)
+      : legacyPromptThreads(discussionThreads() ?? []);
     return generateTaskPrompt(blockId, docName, content, threads);
   });
 

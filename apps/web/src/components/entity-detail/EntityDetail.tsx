@@ -26,6 +26,7 @@ export type EntityDetailProps = {
   target: EntityDetailTarget;
   shareOpen?: boolean;
   onShareOpenChange?: (open: boolean) => void;
+  previewHeaderLeading?: JSX.Element;
   children?: (context: EntityDetailContext) => JSX.Element;
 };
 
@@ -38,6 +39,7 @@ function PreviewPanelEntityDetail(props: EntityDetailProps) {
       selectedEntity={props.target}
       orchestrator={orchestrator}
       splitPanelContext={panel}
+      headerLeading={props.previewHeaderLeading}
     />
   );
 }
@@ -64,6 +66,7 @@ export function entityDetailBlockType(
     blockType === 'snippet' ||
     blockType === 'skill' ||
     blockType === 'canvas' ||
+    blockType === 'spreadsheet' ||
     blockType === 'code' ||
     blockType === 'csv' ||
     blockType === 'image' ||
@@ -203,7 +206,10 @@ export function EntityDetail(props: EntityDetailProps) {
         </UnknownDetail>
       </Match>
       <Match when={true}>
-        <PreviewPanelEntityDetail target={props.target} />
+        <PreviewPanelEntityDetail
+          target={props.target}
+          previewHeaderLeading={props.previewHeaderLeading}
+        />
       </Match>
     </Switch>
   );

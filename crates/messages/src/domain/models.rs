@@ -77,6 +77,15 @@ impl MessageParent {
     pub fn is_discussion(&self) -> bool {
         !matches!(self, Self::Channel(_))
     }
+
+    /// Entity type whose permissions govern messages on this parent.
+    #[cfg(feature = "ports")]
+    pub fn access_entity_type(&self) -> entity_access::domain::models::EntityType {
+        match self {
+            Self::Channel(_) => entity_access::domain::models::EntityType::Channel,
+            Self::Document(_) => entity_access::domain::models::EntityType::Document,
+        }
+    }
 }
 
 /// A thread's location within its document. Geometry remains annotation-owned.

@@ -64,6 +64,13 @@ pub struct Config {
     pub codex_oauth_kms_key_id: CodexOauthKmsKeyId,
     /// Comma-separated Kafka bootstrap servers.
     pub kafka_brokers: KafkaBrokers,
+    /// Which committed-post topic feeds the in-process trigger: `messages`
+    /// (the default, channel and document posts) or `channels` (the
+    /// pre-parent channel event, kept until its producer retires it). Never
+    /// both: every channel post is on both topics, so both would evaluate
+    /// each mention twice.
+    #[macro_config_default(agent_trigger::domain::sources::TriggerEventSource::default())]
+    pub agent_trigger_event_source: agent_trigger::domain::sources::TriggerEventSource,
     /// MacroDB connection string; `agent_sessions` lives here.
     pub database_url: DatabaseUrl,
     /// Shared Redis used for cross-replica command forwarding.
@@ -168,6 +175,11 @@ pub struct Config {
     pub macro_api_token_private_secret_key: LocalOrRemoteSecret<MacroApiTokenPrivateSecretKey>,
     /// Issuer stamped into minted Macro API tokens.
     pub macro_api_token_issuer: MacroApiTokenIssuer,
+    /// S3 bucket the Changes pane's patches are stored in, one object per
+    /// capture under `agent-sessions/{session}/changes/`. Required: a
+    /// harness that cannot store a patch cannot show a session's changes,
+    /// and that is worth failing at boot rather than on the first capture.
+    pub agent_session_changes_bucket: String,
     /// Client id of the GitHub App installation tokens are minted for.
     pub github_sync_app_client_id: String,
     /// PEM private key of that App.

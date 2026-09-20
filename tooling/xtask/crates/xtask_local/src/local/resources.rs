@@ -253,6 +253,11 @@ pub const BUCKETS: &[Bucket] = &[
         name: "macro-call-recording-local",
         env_key: "CALL_RECORDING_BUCKET_NAME",
     },
+    Bucket {
+        // The patch behind each agent session's Changes pane.
+        name: "agent-session-changes",
+        env_key: "AGENT_SESSION_CHANGES_BUCKET",
+    },
 ];
 
 /// Every local DynamoDB table and the env var that references it.

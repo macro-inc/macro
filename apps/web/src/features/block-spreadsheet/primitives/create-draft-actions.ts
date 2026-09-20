@@ -1,6 +1,6 @@
 import { createSignal, onCleanup } from 'solid-js';
 
-type DraftAction = 'share' | 'ask';
+type DraftAction = 'share' | 'ask' | 'edit';
 
 /** Save a local draft once, await durability, then hand it to sharing or chat. */
 export function createDraftActions(options: {
@@ -47,5 +47,10 @@ export function createDraftActions(options: {
     }
   }
 
-  return { pending, share: () => run('share'), ask: () => run('ask') };
+  return {
+    pending,
+    share: () => run('share'),
+    ask: () => run('ask'),
+    edit: () => run('edit'),
+  };
 }

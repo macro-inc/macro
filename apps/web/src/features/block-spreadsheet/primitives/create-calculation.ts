@@ -1,3 +1,4 @@
+import type { AxisChange } from '@macro-inc/spreadsheet/workbook-structure';
 import {
   type Accessor,
   createEffect,
@@ -61,6 +62,7 @@ export function createCalculation(
           name: sheet.name,
           cells: sheet.cells,
           rowCount: sheet.layout.rowCount,
+          metadata: sheet.metadata,
         })) ?? [],
         previous
       ),
@@ -139,6 +141,12 @@ export function createCalculation(
         ...(workbookOptions ? { context: context() } : {}),
       });
       return result.type === 'complete' ? result.context : undefined;
+    },
+    async changeAxis(sheets: SpreadsheetWorkbookSheet[], change: AxisChange) {
+      const result = await copier.run({ type: 'change-axis', sheets, change });
+      if (result.type !== 'change-axis')
+        throw new Error('Unable to change sheet structure.');
+      return result.sheets;
     },
     async copy(copies: CellCopy[]) {
       const result = await copier.run({

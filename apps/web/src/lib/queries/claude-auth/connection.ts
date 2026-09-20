@@ -4,19 +4,27 @@ import { useQuery, useQueryClient } from '@tanstack/solid-query';
 import type { ClaudeConnectionSource } from '../../../features/claude-connection/core/connection';
 import { claudeAuthKeys } from './keys';
 
+/** Safe per-owner Claude status, shared by settings and connection prompts. */
+export function useClaudeConnectionStatusQuery(
+  owner: () => string | undefined,
+  enabled: () => boolean = () => true
+) {
+  return useQuery(() => ({
+    queryKey: claudeAuthKeys.status(owner()).queryKey,
+    queryFn: ({ signal }) => throwOnErr(() => claudeAuthClient.status(signal)),
+    enabled: !!owner() && enabled(),
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
+  }));
+}
+
 /** Only safe status is cached. One-time codes never enter a mutation cache. */
 export function useClaudeConnectionSource(
   owner: () => string | undefined
 ): ClaudeConnectionSource {
   const client = useQueryClient();
-  const query = useQuery(() => ({
-    queryKey: claudeAuthKeys.status(owner()).queryKey,
-    queryFn: ({ signal }) => throwOnErr(() => claudeAuthClient.status(signal)),
-    enabled: !!owner(),
-    staleTime: 0,
-    gcTime: 0,
-    retry: false,
-  }));
+  const query = useClaudeConnectionStatusQuery(owner);
   const refresh = async () => {
     await Promise.all([
       client.invalidateQueries({ queryKey: claudeAuthKeys._def }),

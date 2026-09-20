@@ -1,4 +1,5 @@
 import {
+  type EntityDetailNavigationOptions,
   entityDetailTarget,
   useEntityDetailNavigationStack,
 } from '@app/components/entity-detail/EntityDetailNavigationStack';
@@ -71,7 +72,11 @@ export type TasksViewContext = {
       >
     ) => void
   ) => void;
-  openTask: (task: TaskDetailTarget) => void;
+  /** Returns false when inline detail is unavailable so the caller opens a split instead. */
+  openTask: (
+    task: TaskDetailTarget,
+    options?: EntityDetailNavigationOptions
+  ) => boolean;
   closeTask: () => void;
   setTab: (tab: TaskTab) => void;
   setFacets: (facets: TasksViewState['facets']) => void;
@@ -175,7 +180,19 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     };
   };
 
-  const openTask = (task: TaskDetailTarget) => {
+  const openTask = (
+    task: TaskDetailTarget,
+    options?: EntityDetailNavigationOptions
+  ) => {
+    const target = entityDetailTarget.document({
+      id: task.id,
+      fileType: 'md',
+      subType: { type: 'task' },
+      fallbackName: task.fallbackName,
+    });
+    if (!navigationStack.shouldNavigate(target, options)) return false;
+    // A refused reset already alerted; there is nothing to fall back to.
+    if (!navigationStack.reset(target)) return true;
     const row = source
       .items()
       .find((item) => item.kind === 'entity' && item.entity.id === task.id);
@@ -184,14 +201,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       list.selection.setAnchor(row.id);
     }
 
-    navigationStack.reset(
-      entityDetailTarget.document({
-        id: task.id,
-        fileType: 'md',
-        subType: { type: 'task' },
-        fallbackName: task.fallbackName,
-      })
-    );
+    return true;
   };
   const closeTask = navigationStack.clear;
 

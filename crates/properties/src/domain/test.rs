@@ -4519,3 +4519,76 @@ async fn merge_tag_rejects_merging_a_label_into_itself() {
         .unwrap_err();
     assert!(matches!(err, PropertiesErr::Validation(_)));
 }
+
+#[tokio::test]
+async fn get_or_create_option_publishes_only_for_new_options() {
+    for created in [true, false] {
+        let definition_id = Uuid::from_u128(0xD0C);
+        let option_id = Uuid::from_u128(0xD0C1);
+        let definition = property_definition_for_event(definition_id, "Tags", DataType::Tag, true);
+        let option = property_option_for_event(
+            option_id,
+            definition_id,
+            7,
+            PropertyOptionValue::String("docs".into()),
+            Some("#0091FF"),
+        );
+        let mut repo = MockPropertiesRepo::new();
+        expect_owned_modifiable_definition(&mut repo, definition);
+        repo.expect_get_or_create_property_option()
+            .times(1)
+            .return_once(move |_, _, _, _| {
+                Box::pin(async move {
+                    Ok(crate::domain::model::GetOrCreatePropertyOptionResult { option, created })
+                })
+            });
+        let broker = RecordingEventBroker::default();
+        let service = service_with_event_broker(repo, broker.clone());
+        let option = service
+            .get_or_create_property_option(
+                &caller_user_id(),
+                None,
+                definition_id,
+                &AddPropertyOptionRequest::SelectString {
+                    option: AddStringOptionRequest {
+                        display_order: 0,
+                        value: "docs".into(),
+                        color: Some("#0091FF".into()),
+                    },
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(option.id, option_id);
+        assert_eq!(option.display_order, 7);
+        assert_eq!(broker.events().len(), usize::from(created));
+    }
+}
+
+#[tokio::test]
+async fn get_or_create_option_rejects_unowned_definition() {
+    let definition_id = Uuid::from_u128(0xD0C);
+    let definition = property_definition_for_event(definition_id, "Tags", DataType::Tag, true);
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_get_property_definition()
+        .return_once(move |_| Box::pin(async move { Ok(Some(definition)) }));
+    repo.expect_get_property_definition_with_owner()
+        .return_once(|_, _, _| Box::pin(async { Ok(None) }));
+    repo.expect_get_or_create_property_option().never();
+    let service = service_with_event_broker(repo, RecordingEventBroker::default());
+    let result = service
+        .get_or_create_property_option(
+            &caller_user_id(),
+            None,
+            definition_id,
+            &AddPropertyOptionRequest::SelectString {
+                option: AddStringOptionRequest {
+                    display_order: 0,
+                    value: "docs".into(),
+                    color: Some("#0091FF".into()),
+                },
+            },
+        )
+        .await;
+    assert!(matches!(result, Err(PropertiesErr::NotFound)));
+}

@@ -176,22 +176,58 @@ pub enum CursorClientError {
 /// remedy is the same connect flow, which is why both map to one error.
 ///
 /// Deliberately excluded: `repository_required` (the request sent no repo, a
-/// bug here, not the user's), `validation_error` (a malformed url is ours to
-/// fix), and `unauthorized`/`plan_required` (about the key, not the repo).
+/// bug here, not the user's), `validation_error` in general (a malformed url
+/// is ours to fix; the one branch-verification wording is matched separately
+/// by [`classify_repository_rejection`]), and `unauthorized`/`plan_required`
+/// (about the key, not the repo).
 const REPOSITORY_ACCESS_CODES: [&str; 2] = ["repository_access", "integration_not_connected"];
 
-/// Whether a create-agent failure means Cursor cannot reach the repository.
+/// The wording Cursor uses when its GitHub-side check could not confirm the
+/// starting ref. Filed under the generic `validation_error` code, so the
+/// message is the only handle. Seen in production for a `main` that existed,
+/// and reported on Cursor's forum as intermittent for unchanged inputs.
+const BRANCH_UNVERIFIABLE_MESSAGE: &str = "Failed to verify existence of branch";
+
+/// How long to wait before each retry of a create that Cursor answered with
+/// [`BRANCH_UNVERIFIABLE_MESSAGE`]; its length is the retry budget.
 ///
-/// Matches only the documented envelope, `{"error": {"code": "…"}}`, and only
-/// on a 4xx: an unrecognized body — a different code, a proxy's HTML, a 5xx —
-/// is left to the generic path so a new failure mode is never mislabelled as
-/// a repository the user must go connect.
-fn repository_is_inaccessible(status: reqwest::StatusCode, body: &str) -> bool {
+/// Retrying is safe here and nowhere else in create: the 400 proves no agent
+/// was minted, so a second POST cannot duplicate work on cursor.com. Two
+/// retries and ~7s is enough to ride out a flake without holding a chat
+/// turn open for long when the repository genuinely is not visible.
+const BRANCH_UNVERIFIABLE_RETRY_BACKOFF: [std::time::Duration; 2] = [
+    std::time::Duration::from_secs(2),
+    std::time::Duration::from_secs(5),
+];
+
+/// Which repository refusal, if any, a create-agent failure is.
+///
+/// Matches only the documented envelope, `{"error": {"code", "message"}}`,
+/// and only on a 4xx: an unrecognized body — a different code, a proxy's
+/// HTML, a 5xx — is left to the generic path so a new failure mode is never
+/// mislabelled as a repository the user must go connect.
+fn classify_repository_rejection(
+    status: reqwest::StatusCode,
+    body: &str,
+    starting_ref: &str,
+) -> Option<crate::domain::error::RepositoryRejection> {
+    use crate::domain::error::RepositoryRejection;
+
     if !status.is_client_error() || status == reqwest::StatusCode::REQUEST_TIMEOUT {
-        return false;
+        return None;
     }
-    serde_json::from_str::<crate::api::wire::ApiErrorEnvelope>(body)
-        .is_ok_and(|envelope| REPOSITORY_ACCESS_CODES.contains(&envelope.error.code.as_str()))
+    let envelope = serde_json::from_str::<crate::api::wire::ApiErrorEnvelope>(body).ok()?;
+    if REPOSITORY_ACCESS_CODES.contains(&envelope.error.code.as_str()) {
+        return Some(RepositoryRejection::Inaccessible);
+    }
+    if envelope.error.code == "validation_error"
+        && envelope.error.message.contains(BRANCH_UNVERIFIABLE_MESSAGE)
+    {
+        return Some(RepositoryRejection::BranchUnverifiable {
+            starting_ref: starting_ref.to_owned(),
+        });
+    }
+    None
 }
 
 /// The Cursor cloud API client.
@@ -199,6 +235,10 @@ fn repository_is_inaccessible(status: reqwest::StatusCode, body: &str) -> bool {
 pub struct CursorClient {
     http: reqwest::Client,
     config: CursorConfig,
+    /// Delays before each retry of a branch-unverifiable create; see
+    /// [`BRANCH_UNVERIFIABLE_RETRY_BACKOFF`]. Overridable so a test can
+    /// exercise the retry without sleeping through the production schedule.
+    branch_retry_backoff: Vec<std::time::Duration>,
 }
 
 impl CursorClient {
@@ -222,7 +262,19 @@ impl CursorClient {
         let http = reqwest::Client::builder()
             .connect_timeout(std::time::Duration::from_secs(10))
             .build()?;
-        Ok(Self { http, config })
+        Ok(Self {
+            http,
+            config,
+            branch_retry_backoff: BRANCH_UNVERIFIABLE_RETRY_BACKOFF.to_vec(),
+        })
+    }
+
+    /// Replace the retry schedule for branch-unverifiable creates. An empty
+    /// schedule disables the retry.
+    #[must_use]
+    pub fn with_branch_retry_backoff(mut self, backoff: Vec<std::time::Duration>) -> Self {
+        self.branch_retry_backoff = backoff;
+        self
     }
 
     fn url(&self, path: &str) -> String {
@@ -442,7 +494,14 @@ impl CursorClient {
 }
 
 impl CursorAgents for CursorClient {
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(
+        skip(self),
+        err,
+        fields(
+            cursor.poll.status = tracing::field::Empty,
+            cursor.poll.rate_limited = tracing::field::Empty,
+        )
+    )]
     async fn raw_result(
         &self,
         agent: &CursorAgentId,
@@ -456,8 +515,33 @@ impl CursorAgents for CursorClient {
             .await
             .map_err(|e| rootcause::report!(e))?;
         let status = response.status();
+        let retry_after = response
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned);
         let text = response.text().await.map_err(|e| rootcause::report!(e))?;
+        let span = tracing::Span::current();
+        span.record("cursor.poll.status", status.as_u16());
+        span.record(
+            "cursor.poll.rate_limited",
+            status == reqwest::StatusCode::TOO_MANY_REQUESTS,
+        );
         if !status.is_success() {
+            // The rate limit is per API key and shared by every session this
+            // deployment drives, so one session's 429 is a fact about the
+            // fleet, not about this run. Logged in its own right: until now
+            // it existed only inside an error chain that reached the reader
+            // and nothing else, so "are we over the limit" was unanswerable
+            // from telemetry.
+            if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                tracing::warn!(
+                    %agent,
+                    %run,
+                    retry_after = retry_after.as_deref().unwrap_or("unset"),
+                    "Cursor run poll was rate limited"
+                );
+            }
             return Err(rootcause::report!(
                 "Cursor run poll failed: {status}: {text}"
             ));
@@ -492,18 +576,41 @@ impl CursorAgents for CursorClient {
             // whatever the caller asked for.
             auto_create_pr: open_pull_request && repo.is_some(),
         };
-        let (status, text) = self.post_for_text("/v1/agents", &request).await?;
-        if let Some(repo) = repo
-            && repository_is_inaccessible(status, &text)
-        {
+        let mut retries = self.branch_retry_backoff.iter();
+        let (status, text) = loop {
+            let (status, text) = self.post_for_text("/v1/agents", &request).await?;
+            let Some(repo) = repo else {
+                break (status, text);
+            };
+            let Some(reason) =
+                classify_repository_rejection(status, &text, &self.config.starting_ref)
+            else {
+                break (status, text);
+            };
+            if matches!(
+                reason,
+                crate::domain::error::RepositoryRejection::BranchUnverifiable { .. }
+            ) && let Some(delay) = retries.next()
+            {
+                tracing::warn!(
+                    repo = %repo,
+                    starting_ref = %self.config.starting_ref,
+                    retry_in_ms = delay.as_millis() as u64,
+                    detail = %text,
+                    "cursor could not verify the starting ref; retrying the create"
+                );
+                tokio::time::sleep(*delay).await;
+                continue;
+            }
             return Err(
                 rootcause::report!(crate::domain::error::RepositoryUnavailable {
                     repo: repo.clone(),
+                    reason,
                     detail: text,
                 })
                 .into_dynamic(),
             );
-        }
+        };
         let reply: CreateAgentResponse = Self::decode_post("/v1/agents", status, &text)?;
         tracing::info!(agent = %reply.agent.id, url = %reply.agent.url, "cursor agent created");
         Ok((

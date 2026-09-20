@@ -1,20 +1,24 @@
+import { AgentSession } from '@core/agent-session/AgentSession';
+import { noteSessionActivity } from '@core/agent-session/session-turn';
 import {
   enableGraphqlSoup,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { WebsocketEvent } from '@macro-inc/collaboration/websocket';
+import { handleAgentSessionChanges } from '@queries/agent-session/changes-sync';
 import { handleAgentSessionQueue } from '@queries/agent-session/queue-sync';
 import {
+  AGENT_SESSION_CHANGES_EVENT,
   AGENT_SESSION_LOG_EVENT,
   AGENT_SESSION_QUEUE_EVENT,
   AGENT_SESSION_RENAMED_EVENT,
   AGENT_SESSION_UPDATED_EVENT,
+  type AgentSessionChangesEvent,
   type AgentSessionLogEvent,
   type AgentSessionQueueEvent,
   type AgentSessionRenamedEvent,
   type AgentSessionUpdatedEvent,
 } from '@queries/agent-session/realtime-protocol';
-import { handleAgentSessionLog } from '@queries/agent-session/session-fold';
 import {
   handleAgentSessionRenamed,
   handleAgentSessionUpdated,
@@ -24,15 +28,10 @@ import {
   handleChannelPictureChanged,
   invalidateChannelPictures,
 } from '@queries/channel/picture';
-import {
-  handleCommsAttachment,
-  handleCommsMessage,
-  handleCommsReaction,
-} from '@queries/channel/sync';
-import { handleCommsTyping } from '@queries/channel/typing';
 import { invalidateContacts } from '@queries/contacts/contacts';
 import { handleRefreshEmail } from '@queries/email/sync';
 import { invalidateFavorites } from '@queries/favorites/favorites';
+import { handleMessageEvent } from '@queries/messages/sync';
 import {
   applyNotificationStatusUpdate,
   notificationStatusUpdatePayloadSchema,
@@ -97,8 +96,12 @@ export function QuerySyncProvider(props: SyncProviderProps) {
       .with({ type: 'contacts_invalidation' }, () => {
         invalidateContacts();
       })
-      .with({ type: 'comms_message' }, () => {
-        withParsedWebsocketPayload(data.type, data.data, handleCommsMessage);
+      .with({ type: 'message_update' }, () => {
+        withParsedWebsocketPayload<Parameters<typeof handleMessageEvent>[0]>(
+          data.type,
+          data.data,
+          (event) => handleMessageEvent(event, props.userId())
+        );
       })
       .with({ type: 'comms_channel_picture' }, () => {
         withParsedWebsocketPayload(
@@ -114,7 +117,12 @@ export function QuerySyncProvider(props: SyncProviderProps) {
         withParsedWebsocketPayload<AgentSessionLogEvent>(
           data.type,
           data.data,
-          handleAgentSessionLog
+          (event) => {
+            AgentSession.ingest(event);
+            if (!AgentSession.get(event.agentSessionId)) {
+              noteSessionActivity(event.agentSessionId);
+            }
+          }
         );
       })
       .with({ type: AGENT_SESSION_UPDATED_EVENT }, () => {
@@ -131,6 +139,17 @@ export function QuerySyncProvider(props: SyncProviderProps) {
           handleAgentSessionRenamed
         );
       })
+      // A session's captured changes moved (capture started, landed, or
+      // failed). The event carries no body; the changes summary refetches.
+      .with({ type: AGENT_SESSION_CHANGES_EVENT }, () => {
+        withParsedWebsocketPayload<AgentSessionChangesEvent>(
+          data.type,
+          data.data,
+          (event) => {
+            void handleAgentSessionChanges(event);
+          }
+        );
+      })
       // A session's whole action queue after a change. Full snapshot every
       // time: once one has arrived on this socket, the socket is the queue's
       // only writer and the last event wins unconditionally.
@@ -139,23 +158,6 @@ export function QuerySyncProvider(props: SyncProviderProps) {
           data.type,
           data.data,
           handleAgentSessionQueue
-        );
-      })
-      .with({ type: 'comms_reaction' }, () => {
-        withParsedWebsocketPayload(data.type, data.data, handleCommsReaction);
-      })
-      .with({ type: 'comms_attachment' }, () => {
-        withParsedWebsocketPayload(data.type, data.data, handleCommsAttachment);
-      })
-      .with({ type: 'comms_typing' }, () => {
-        const userId = props.userId();
-        if (!userId) return;
-        withParsedWebsocketPayload<Parameters<typeof handleCommsTyping>[0]>(
-          data.type,
-          data.data,
-          (payload) => {
-            handleCommsTyping(payload, userId);
-          }
         );
       })
       .with({ type: 'notification_status_updated' }, () => {

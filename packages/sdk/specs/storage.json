@@ -4253,7 +4253,7 @@
     "/channels/{channel_id}/profile_picture": {
       "put": {
         "tags": ["channels::inbound::axum_router::profile_picture"],
-        "summary": "Set a channel or group chat profile picture. Requires rename permission.",
+        "summary": "Set a channel or group chat profile picture. Requires channel admin or owner access.",
         "operationId": "set_channel_picture",
         "parameters": [
           {
@@ -14287,6 +14287,10 @@
           "mcp"
         ],
         "properties": {
+          "auto_accept_permissions": {
+            "type": ["boolean", "null"],
+            "description": "Whether the agent's sessions approve ACP permission requests without\nasking. `None` means always prompt. Bypass also requires the harness's opt-in."
+          },
           "bot": {
             "$ref": "#/components/schemas/Bot",
             "description": "The bot identity used for mentions and channel participation."
@@ -14335,7 +14339,7 @@
       "AgentActionId": {
         "type": "string",
         "format": "uuid",
-        "description": "Identifies one accepted [`AgentAction`] end to end: returned by the\ncontrol endpoint, written as the JSON-RPC request id on the action's wire\nframe, and read back off that frame as `request_id` on the folded message\nit derives.\n\nMinted only by the server at accept time, as a v7 uuid so ids sort by mint\ntime. On the wire and in JSON it is the bare uuid, and a uuid-shaped\nrequest id is the whole ownership test: the server is the only writer of\nruntime-bound frames. The machine's own handshake request ids\n(`agent_session:{session}:{n}`) are not uuids and stay `None`."
+        "description": "Identifies one accepted [`AgentAction`] end to end: returned by the\ncontrol endpoint, written as the JSON-RPC request id on the action's wire\nframe, and read back off that frame as `request_id` on the folded message\nit derives.\n\nA v7 uuid, so ids sort by mint time. Minted by the server at accept time,\nor by a client that speculated the action and named it in the control\nrequest - either way the server is the only writer of runtime-bound\nframes, so a uuid-shaped request id remains the whole ownership test. The\nmachine's own handshake request ids (`agent_session:{session}:{n}`) are\nnot uuids and stay `None`."
       },
       "AgentChannelScope": {
         "type": "string",
@@ -15861,6 +15865,10 @@
         "type": "object",
         "description": "Request to approve a pairing and register the harness.",
         "properties": {
+          "allow_permission_bypass": {
+            "type": "boolean",
+            "description": "Whether agents may bypass ACP permission requests on this harness."
+          },
           "name": {
             "type": ["string", "null"],
             "description": "Display name override. Defaults to the daemon's requested name."
@@ -16118,6 +16126,17 @@
               "type": {
                 "type": "string",
                 "enum": ["skill"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The description document of an initiative",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["initiative_description"]
               }
             }
           }
@@ -18617,6 +18636,10 @@
           "channel_scope"
         ],
         "properties": {
+          "auto_accept_permissions": {
+            "type": ["boolean", "null"],
+            "description": "Whether the agent's sessions approve ACP permission requests without\nasking. Omit to always prompt."
+          },
           "avatar_url": {
             "type": ["string", "null"],
             "description": "Optional avatar URL or data URL."
@@ -19148,7 +19171,7 @@
         "properties": {
           "description": {
             "type": ["string", "null"],
-            "description": "Optional description."
+            "description": "Initial markdown for the description document. Not stored on the initiative; later\nedits happen in the document editor."
           },
           "memberIds": {
             "type": ["array", "null"],
@@ -19224,6 +19247,10 @@
         "description": "Request to open a pairing: the daemon asks for a code the user approves.\n\nThe daemon serializes this, so both derives are used.",
         "required": ["name"],
         "properties": {
+          "allow_permission_bypass": {
+            "type": ["boolean", "null"],
+            "description": "Daemon operator consent ceiling. Omitted by older clients; web approval decides."
+          },
           "host": {
             "type": ["string", "null"],
             "description": "Display-only description of the machine, e.g. `eric@macbook / darwin`."
@@ -20327,6 +20354,11 @@
           }
         ]
       },
+      "DescriptionDocumentId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "Id of the markdown document that holds an initiative's description."
+      },
       "DocumentBasic": {
         "type": "object",
         "description": "Returns basic information of a document used for some db queries",
@@ -20984,6 +21016,17 @@
                 "enum": ["skill"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "The description document of an initiative",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["initiative_description"]
+              }
+            }
           }
         ],
         "description": "The sub type of a document preview with associated properties.\nTask-related properties are encoded within the variant to ensure valid states."
@@ -21130,8 +21173,8 @@
       },
       "DocumentSubType": {
         "type": "string",
-        "description": "The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.",
-        "enum": ["task", "snippet", "skill"]
+        "description": "The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.\n\nWire, database, and `Display` spellings are all `snake_case` so a\nmulti-word variant serializes identically in every system.",
+        "enum": ["task", "snippet", "skill", "initiative_description"]
       },
       "DocumentSyncContentUpdatedMetadata": {
         "type": "object",
@@ -23802,6 +23845,10 @@
           "connected"
         ],
         "properties": {
+          "allow_permission_bypass": {
+            "type": "boolean",
+            "description": "Whether agents may bypass ACP permission requests on this harness."
+          },
           "connected": {
             "type": "boolean",
             "description": "Whether the daemon currently holds a runtime connection."
@@ -24060,6 +24107,7 @@
         "required": [
           "id",
           "name",
+          "descriptionDocumentId",
           "ownerId",
           "memberIds",
           "taskIds",
@@ -24074,9 +24122,9 @@
             "format": "date-time",
             "description": "When the initiative was created."
           },
-          "description": {
-            "type": ["string", "null"],
-            "description": "Optional description."
+          "descriptionDocumentId": {
+            "$ref": "#/components/schemas/DescriptionDocumentId",
+            "description": "The markdown document holding the description; open it in the editor."
           },
           "id": {
             "$ref": "#/components/schemas/InitiativeId",
@@ -24141,11 +24189,11 @@
       "InitiativeSummary": {
         "type": "object",
         "description": "List-row view of an initiative.",
-        "required": ["id", "name", "updatedAt"],
+        "required": ["id", "name", "descriptionDocumentId", "updatedAt"],
         "properties": {
-          "description": {
-            "type": ["string", "null"],
-            "description": "Optional description."
+          "descriptionDocumentId": {
+            "$ref": "#/components/schemas/DescriptionDocumentId",
+            "description": "The markdown document holding the description; open it in the editor."
           },
           "id": {
             "$ref": "#/components/schemas/InitiativeId",
@@ -25121,6 +25169,10 @@
           "host": {
             "type": ["string", "null"],
             "description": "Display-only description of the machine."
+          },
+          "requested_allow_permission_bypass": {
+            "type": ["boolean", "null"],
+            "description": "Daemon operator consent ceiling; false forbids bypass at approval."
           },
           "requested_name": {
             "type": "string",
@@ -28377,6 +28429,17 @@
                 "enum": ["skill"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "The description document of an initiative",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["initiative_description"]
+              }
+            }
           }
         ],
         "description": "Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task."
@@ -29589,18 +29652,22 @@
       },
       "ThreadOrigin": {
         "type": "object",
-        "description": "The channel thread a session was opened from, when it was.",
-        "required": ["channel_id", "thread_id", "originating_message_id"],
+        "description": "The thread a session was opened from, when it was.",
+        "required": ["parent", "thread_id", "originating_message_id"],
         "properties": {
           "channel_id": {
-            "type": "string",
+            "type": ["string", "null"],
             "format": "uuid",
-            "description": "Channel the thread lives in."
+            "description": "Channel the thread lives in, for channel parents only. Kept beside\n`parent` for consumers written when every origin was a channel."
           },
           "originating_message_id": {
             "type": "string",
             "format": "uuid",
             "description": "The message whose mention opened the session."
+          },
+          "parent": {
+            "$ref": "#/components/schemas/MessageParent",
+            "description": "Entity owning the thread: the channel or document it was posted in."
           },
           "thread_id": {
             "type": "string",
@@ -29994,6 +30061,10 @@
           "channel_scope"
         ],
         "properties": {
+          "auto_accept_permissions": {
+            "type": ["boolean", "null"],
+            "description": "Whether the agent's sessions approve ACP permission requests without\nasking. Omit to always prompt."
+          },
           "avatar_url": {
             "type": ["string", "null"],
             "description": "Optional avatar URL or data URL."
@@ -30137,12 +30208,8 @@
       },
       "UpdateInitiativeRequest": {
         "type": "object",
-        "description": "Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`\npresent is a full replace.",
+        "description": "Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`\npresent is a full replace. The description is edited in its document, not here.",
         "properties": {
-          "description": {
-            "type": ["string", "null"],
-            "description": "Replacement description. `Some(\"\")` clears it after trim."
-          },
           "memberIds": {
             "type": ["array", "null"],
             "items": {

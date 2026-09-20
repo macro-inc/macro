@@ -4,6 +4,9 @@ import { schema } from '@loro-mirror/core';
 // cell concurrently. Separate properties also let formatting and value edits
 // merge independently. Calculated values are deliberately never persisted.
 export const SPREADSHEET_LORO_SCHEMA = schema({
+  spreadsheetSheetMetadata: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
   spreadsheetSheetNames: schema.LoroMap(
     {} as Record<string, ReturnType<typeof schema.String>>
   ),
@@ -24,6 +27,36 @@ export const SPREADSHEET_LORO_SCHEMA = schema({
   ),
   spreadsheetBold: schema.LoroMap(
     {} as Record<string, ReturnType<typeof schema.Boolean>>
+  ),
+  spreadsheetFontNames: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  spreadsheetBorderTopStyles: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  spreadsheetBorderTopColors: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  spreadsheetBorderRightStyles: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  spreadsheetBorderRightColors: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  spreadsheetBorderBottomStyles: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  spreadsheetBorderBottomColors: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  spreadsheetBorderLeftStyles: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  spreadsheetBorderLeftColors: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  spreadsheetNumberFormats: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
   ),
   spreadsheetFormats: schema.LoroMap(
     {} as Record<string, ReturnType<typeof schema.String>>

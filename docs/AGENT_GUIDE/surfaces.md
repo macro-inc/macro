@@ -1,5 +1,13 @@
 # Other Surfaces
 
+## Canvas colors
+
+To check the default canvas color, create a rectangle and a text box without
+changing the swatch. The rectangle should have a light neutral fill and a dark
+outline; the text should be dark and visible. Also check the neutral swatch after
+selecting another color. Neutral colors use an OKLCH `none` hue, which must render
+as gray rather than transparent.
+
 ## Live updates in flat Soup lists
 
 With browser or native Tauri GraphQL caching enabled, locally supported flat lists reconcile their
@@ -65,12 +73,18 @@ Touch devices render the legacy Notifications view without waiting for the new a
 views feature flag. Desktop waits for flag readiness before choosing the new Home
 view or its legacy fallback.
 
+GraphQL-attached notification rows share the global feed's local seen/done
+overrides: Mark Done and Undo reflect local intent without waiting for an older
+cached notification snapshot to be replaced. These display overrides do not turn
+incomplete predicate-index facts into authoritative membership evidence.
+
 On desktop with the new app views enabled, Home defaults to a Signal feed merging
 notifications with Activity's `touched_by_me` recents, including sent emails and
 AI chats. Each entity appears once, ordered by its latest notification or own
 action. On desktop, the funnel button to the right of **Home** opens **Filter Home**.
 The menu shares the legacy compact submenus: **Status** offers **Unread**, **Read**,
-and **All**, and **Type** contains the entity checkboxes. Status closes the menu
+and **All** as single-select radio items with a checkmark on the right of the selected
+option, and **Type** contains the entity checkboxes. Status closes the menu
 after selection; type selections leave it open. Press **f** to open the menu.
 Entity type checkboxes start checked. Unchecking **Email** hides received
 and sent mail. **Channels** controls
@@ -116,7 +130,11 @@ hover states use the same semantic colors as other app surfaces.
 Type in “Type @ to reference / for skills”, use the attachment button for
 attachments and the model menu to choose a model, then press Enter or Send to
 create and open an AI chat. If chat creation fails, the submitted text and attachments
-are restored, including before a chat-limit paywall opens. The input stays 32px above the vertical center as suggestions load. Up to three cached AI
+are restored, including before a chat-limit paywall opens. With agents disabled,
+the input stays 32px above the vertical center as suggestions load. With agents
+enabled, the composer uses the same topbar offset and 24/64 padding as the
+Agents new-conversation page so the two inputs share a baseline; suggestions
+still load below it without moving the input. Up to three cached AI
 suggestions appear below the
 composer, using the existing fast/smart recommendation projections. Compact rows
 use one line: reason — Phosphor icon and item name, followed by Open, all at the same font size. Clicking a
@@ -127,7 +145,13 @@ are isolated from the input. If generation stalls for 45 seconds, the shimmer
 is replaced with a retry action; a late result still appears automatically.
 Generation status updates do not extend that deadline. Retry starts a fresh
 45-second wait. Shift+Enter adds a line. Selecting a Home row replaces
-the composer with its preview. Mobile continues to show the activity list alone.
+the composer with its preview. Home uses the shared 256px sidebar and collapses
+navigation below 720px. The hamburger or `Cmd+.` opens the full feed as a
+slide-over. Activating a row or **New chat** closes that overlay to show content;
+arrow-key browsing keeps it open. Preview headers start with **Home >**. Clicking
+**Home** clears the preview and returns to the starting pane without changing
+sidebar visibility. Use the hamburger to reopen the feed. Mobile continues to
+show the activity list alone.
 
 AI chat, agent, and channel message bodies use 15px text, including thread replies.
 Desktop AI chats, agents, and channel composers share Home's rounded composer
@@ -227,6 +251,21 @@ Email Status and Done are single choices that close the menu; attachment filters
 stay open for multiple selections. Tags supports search, pins selected tags first
 on opening, and is omitted when no tags exist. **f** opens the filter menu.
 
+### Read state and trash
+
+With GraphQL Soup enabled, **Mark read/unread** updates the normalized email row
+optimistically. Permanent server errors roll it back; retryable transport failures
+can leave the action in the durable queue. Mark unread sends only the thread ID;
+the server resolves that inbox's UNREAD label and returns the canonical thread
+(`__typename`, `id`, `isRead`) to reconcile the cache. The row should flip immediately
+even when the client labels cache is missing or stale—no label fetch precedes the
+optimistic update. Queued read/unread writes retain revalidation descriptors for
+active flat and grouped lists, including loaded continuation pages. Once replay
+commits (even after a reload), those queries refresh from the server; they should
+not refetch over the optimistic state merely because a write was queued. Trash
+and its Undo refresh mounted GraphQL lists after the server operation finishes.
+The GraphQL-disabled REST path is unchanged.
+
 ### Cached Mail filtering
 
 With GraphQL caching enabled (browser or native Tauri) and the email metadata backfill synchronized,
@@ -293,7 +332,11 @@ Shift-click opens a standalone split at `/app/email/<thread-id>`, which remains
 the destination for direct links and legacy surfaces. Click a message header to
 expand or collapse it; `Show N hidden messages` reveals the collapsed middle of
 a longer conversation. A standalone link with
-`?email_message_id=<message-id>` reveals that message.
+`?email_message_id=<message-id>` loads older pages as needed, expands the target,
+scrolls it into view, and briefly highlights it. For navigation regressions,
+exercise both a recent message and one outside the first page. Open another
+target while loading or highlighting: the previous request must not scroll the
+new thread or clear its highlight. Closing the split cancels pending positioning.
 Collapsed thread cards use a compact text snippet; expanding mounts the message
 body and its attachments. On phones, messages form flat rows with horizontal
 separators and 16px side gutters; collapsed previews show one line. Desktop
@@ -392,7 +435,14 @@ mobile navigation even when `enable-new-app-views` is enabled.
 
 On desktop, with `enable-new-app-views` enabled, Files opens **Drive** using the
 same shell as Tasks. The sidebar contains `New file or folder`, `My Files`, `Recent`,
-`Shared with me`, collapsible Favorites, and a searchable folder hierarchy.
+`Shared with me`, collapsible Favorites, a searchable folder hierarchy, and a
+collapsible Tags section beneath the folders. Tags lists every tag you can apply,
+nested by `/` in the tag name, with a `New tag` action in its header. Choosing a
+tag shows only that tag's files within the current tab or folder and exits any
+inline file detail; choosing the highlighted tag again clears it, and the same
+selection appears under the **Filter** menu's Tags submenu. Navigating to another
+tab or folder clears tag filters. A folder with no files matching the active tag
+shows the list's no-match state rather than `This folder is empty`.
 Drive omits split-history back/forward buttons in both wide and narrow layouts;
 the split close button remains available when multiple splits are open.
 Files opened in place from Drive show a return link labeled with their originating
@@ -415,6 +465,8 @@ search remains available. Right-click any Drive view, the Drive folder overview,
 or a folder at any depth for **Open in new split**, **Open in current split**, and
 **Open fullscreen** (when multiple splits are open). Folder menus also offer
 Favorite/Unfavorite, Move to folder, Copy Link, and owner-only Rename and Delete.
+A folder's Share dialog, when the owner belongs to a team, has Team access
+(None, View, Comment, or Edit) without a Link sharing card or Link tab.
 Favorites use the same open actions and **Remove from favorites** menu as Tasks.
 The **Filter** menu reuses the
 legacy **Type**, searchable **Tags**, and **Created by** submenus alongside **Files**
@@ -430,18 +482,13 @@ breadcrumb to return to the list; choosing an ancestor file drops newer detail
 entries. Opening a list row or sidebar favorite starts a new detail path; only
 navigation originating inside a detail appends to that path. Modified clicks
 retain existing split navigation. On narrow layouts, use `Select Drive view` for tabs, favorites,
-and folders. Navigation state and expanded folders are restored when returning
+folders, and tags. Navigation state and expanded folders are restored when returning
 from an opened file.
 
 ## Calendar — `/app/calendar/view`
 
 Calendars default to Day on phones and Week on desktop. The selected view is
 remembered locally on each device.
-
-Primary-calendar event pills share the chat composer's surface: charcoal with a
-glass rim/shadow in dark mode, pale with a fine outline and soft shadows in light
-mode. Other calendars use subtle source-color tints of that surface; selection
-adds an accent outline. Month-view timed events keep their compact dots.
 
 Calendar event creation and editing open in a bottom sheet on touch devices,
 with scrollable content above the keyboard. Desktop retains the centered dialog.
@@ -512,6 +559,10 @@ and summaries appear here; empty state notes "Calls are available to agents."
 
 On phones, recorded call headers omit the **Call Again** action.
 
+If a recording fails to play, reload the page to obtain a fresh recording link,
+or use **Open or download recording**. The playback warning does not assume
+that the failure is caused by an unsupported media format.
+
 ### Sharing a call
 
 A call's **Share** dialog has a `Team access` control (None or View) for the same canonical
@@ -527,7 +578,7 @@ Team sharing is independent of channel access and of link sharing.
 
 ## Customers (CRM) — `/app/component/companies`
 
-The 216px local sidebar uses the same navigation primitives as Email and Tasks.
+On desktop, the local sidebar uses the same navigation primitives as Email and Tasks.
 Board and List share a horizontal segmented toggle at the top of the sidebar; the
 main header has no layout toggle. People is not available. Views include All companies, My companies
 (Owner = current user), Needs follow-up (has a stage other than Churned and last
@@ -543,7 +594,14 @@ View descriptions appear in sidebar tooltips, not above the main board or list.
 The `Search companies` field uses the shared Email/Tasks search bar. Command-F
 focuses it, `Clear search` resets it, and Escape leaves the field.
 
-Clicking a company in Board or List (or pressing Enter on a focused list row)
+On touch devices, Customers uses the same full-frame list layout as the other
+mobile views: floating CRM-navigation and filter buttons with Board/List pills,
+List as the fresh default, and the global **+ Company** action above the dock.
+The navigation button opens the CRM views and lists; the desktop toolbar and
+embedded detail stack stay out of the mobile flow, so selecting a row navigates
+in place.
+
+On desktop, clicking a company in Board or List (or pressing Enter on a focused list row)
 opens its details inside the CRM workspace, keeping the left navigation visible.
 The top breadcrumb reads `<current view or list> > <company>`; click the first
 segment to return with the same filters, layout, and list scroll position. Selecting
@@ -678,12 +736,18 @@ but unconnected app gets a tool result saying so, and the agent's reply renders 
 
 `Agents` → `Create agent` (or edit an existing agent) opens runtime selectors.
 The model list is loaded live and independently for In-memory, connected Cursor, and every
-registered macrod harness. A harness can show `Loading models…`, an unsupported message, or
+registered macrod harness. The selected harness stays selected when the list refreshes.
+A paired macrod connects on startup, so models can load before any agents are bound.
+A harness can show `Loading models…`, an unsupported message, or
 a retryable error without hiding the other harnesses. Editing preserves a saved model that
 is no longer offered and labels it `saved, unavailable`. A macrod with no responding runtime
 can remain loading until the 10-second discovery timeout; use Retry after reconnecting it.
+New macrod sessions use the agent's saved model before sending the first prompt.
+Changing that default applies to new sessions; existing sessions keep their selected model.
+If the runtime rejects the saved model, the prompt fails instead of using a different model.
 
-`Harness` configures Cursor, Codex, and paired macrod runtimes. Cursor's default-model picker uses
+`Harness` shows Cursor, Claude, Codex, and paired macrod runtimes to every user.
+Connection chips in agent replies open this page, including before any account is connected. Cursor's default-model picker uses
 the same live model discovery and retains its existing save action.
 
 The Codex row uses the OpenAI logo and the same icon, button, and status styling

@@ -2,7 +2,6 @@ import { openEntityInSplit } from '@app/features/activity/open-entity-in-split';
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import { parseAgentsRoute } from '@app/features/agents-view/core/route';
 import { AgentsView } from '@app/features/agents-view/views/AgentsView';
-import { ComposeAgentSession } from '@app/features/block-agent/component/ComposeAgentSession';
 import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
@@ -414,18 +413,19 @@ function RegisteredAgentsView(params: ComponentParams) {
   usePageViewTracking('agents');
   const panel = useSplitPanelOrThrow();
   const agentsFlag = useFeatureFlag(enableChatV3Agents);
+  const useAgentsWorkspace = () => agentsFlag().enabled && !isTouchDevice();
 
   createRenderEffect(() => {
     if (agentsFlag().loading) return;
     panel.handle.updateMeta?.({
-      splitPanelLayout: agentsFlag().enabled ? 'composable' : 'legacy',
+      splitPanelLayout: useAgentsWorkspace() ? 'composable' : 'legacy',
     });
   });
 
   return (
     <Show when={!agentsFlag().loading} fallback={<LoadingBlock />}>
       <Show
-        when={agentsFlag().enabled}
+        when={useAgentsWorkspace()}
         fallback={
           route ? (
             <RedirectSplit
@@ -614,6 +614,12 @@ registerComponent(
       return <RedirectSplit to={{ type: 'component', id: 'inbox' }} />;
     }
     usePageViewTracking('companies');
+    const panel = useSplitPanelOrThrow();
+    createRenderEffect(() => {
+      panel.handle.updateMeta?.({
+        splitPanelLayout: isTouchDevice() ? 'legacy' : 'composable',
+      });
+    });
     const preset = getViewPreset('companies');
     // Share links land here as `/companies?crmView=<encoded config>` — the
     // param carries the full view state (never data), decoded client-side.
@@ -632,8 +638,7 @@ registerComponent(
         initialCrmView={initialCrmView}
       />
     );
-  }),
-  { splitPanelLayout: 'composable' }
+  })
 );
 
 registerComponent(
@@ -769,12 +774,10 @@ registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');
   return <ComposeTask {...params} />;
 });
-registerComponent('agent-session-compose', (params) => {
-  usePageViewTracking('agent-session-compose');
-  return (
-    <ComposeAgentSession preferNewSplit={params?.preferNewSplit === true} />
-  );
-});
+// Restore old composer URLs into the shared Agents page.
+registerComponent('agent-session-compose', () => (
+  <RedirectSplit to={{ type: 'component', id: 'agents' }} />
+));
 registerComponent('calendar-event-compose', (params) => {
   usePageViewTracking('calendar-event-compose');
   return (
@@ -908,6 +911,11 @@ if (LOCAL_ONLY) {
   registerComponent(
     'agent-replay',
     lazy(() => import('@app/features/block-agent/debug/replay/Replay'))
+  );
+
+  registerComponent(
+    'agent-changes-ui',
+    lazy(() => import('@app/features/agent-changes/debug/Gallery'))
   );
 
   registerComponent(

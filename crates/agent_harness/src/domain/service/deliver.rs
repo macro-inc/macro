@@ -32,7 +32,7 @@ where
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
-    PromptContext: ChannelPromptContext,
+    PromptContext: MessagePromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
     Lifecycle: AgentSessionLifecyclePublisher,
@@ -67,15 +67,26 @@ where
             // Nothing is attached, so get this session onto a transport and
             // retry against it. Same id: the first attempt never reached the
             // wire.
+            Err(error @ AgentSessionError::Disconnected(_))
+                if matches!(action, AgentAction::RespondToPermission(_)) =>
+            {
+                return Err(error.into());
+            }
             Err(AgentSessionError::Disconnected(_)) => {
                 let session = self.sessions.get_session(session_id).await?;
+                let permission_policy = self.permission_policy_for(session.bot_id).await;
                 if AgentKind::for_session(session.bot_id, &session.harness).is_managed() {
                     let container = self.containers.resume(session_id).await?;
                     let mcp_servers = self
                         .resumed_mcp_servers(session_id, &session.owner_id, &session.mcp_servers)
                         .await?;
                     self.sessions
-                        .attach_session(session_id, container.mcp_servers(mcp_servers))
+                        .attach_session(
+                            session_id,
+                            container
+                                .mcp_servers(mcp_servers)
+                                .permission_policy(permission_policy),
+                        )
                         .await?;
                 } else {
                     // An external runtime is not ours to start - only its
@@ -84,7 +95,7 @@ where
                     // yet. That is the ordinary case: sessions bind when they
                     // are prompted, not when the runtime dials, so the first
                     // prompt after a reconnect is what restores the session.
-                    let Some(attachment) = self.runtimes.bind(session.bot_id, session_id).await
+                    let Some(mut attachment) = self.runtimes.bind(session.bot_id, session_id).await
                     else {
                         // Kept in the session vocabulary so transports report
                         // it as a disconnect, not an internal error.
@@ -92,6 +103,9 @@ where
                             session_id,
                         )));
                     };
+                    if session.harness == harness_id::MACROD_HARNESS_SLUG {
+                        attachment = attachment.initial_model(session.model.clone());
+                    }
                     let egress = self
                         .egress
                         .provision(
@@ -108,7 +122,9 @@ where
                     self.sessions
                         .attach_session(
                             session_id,
-                            attachment.mcp_servers(vec![egress.sandbox.internal_mcp_server()]),
+                            attachment
+                                .permission_policy(permission_policy)
+                                .mcp_servers(vec![egress.sandbox.internal_mcp_server()]),
                         )
                         .await?;
                 }
@@ -123,9 +139,10 @@ where
 
     /// Compose a prompt in place. Compact and other actions are left as-is.
     ///
-    /// Channel context is loaded when the prompt named an origin; a lookup
-    /// failure still composes, with empty history, so a transient context
-    /// outage cannot eat the prompt.
+    /// Message context is loaded when the prompt named an origin. The actor's
+    /// current access to that origin gates composition; a failed history read
+    /// still composes, with empty history, so a transient context outage
+    /// cannot eat the prompt.
     pub(super) async fn compose_action(
         &self,
         action: &mut AgentAction,
@@ -137,49 +154,51 @@ where
         };
         let raw_prompt = prompt.prompt.clone();
         let prior_messages = if let Some(origin) = announce {
-            Some(
-                self.load_prompt_context(origin.channel_id, origin.message_id, actor)
-                    .await,
-            )
+            Some(self.load_prompt_context(origin, actor).await?)
         } else {
             None
         };
         prompt.prompt = self
             .prompt_composer
-            .compose(&raw_prompt, prior_messages.as_deref())
+            .compose(
+                &raw_prompt,
+                announce.map(|origin| &origin.parent),
+                prior_messages.as_deref(),
+            )
             .await?;
         prompt.set_name_source(raw_prompt);
         Ok(())
     }
 
+    /// Recheck the actor's access to the origin, then read the history before
+    /// it. Authorization is not optional: a prompt that names an origin was
+    /// posted by a user, and one who may no longer write there sends nothing.
     pub(super) async fn load_prompt_context(
         &self,
-        channel_id: macro_uuid::Uuid,
-        message_id: macro_uuid::Uuid,
+        origin: &AnnounceOrigin,
         actor: Option<&MacroUserIdStr<'static>>,
-    ) -> Vec<crate::domain::model::PriorChannelMessage> {
-        async {
-            if let Some(actor) = actor {
-                self.prompt_context
-                    .authorize_member(actor, channel_id)
-                    .await?;
-            }
-            self.prompt_context
-                .preceding_messages(channel_id, message_id)
-                .await
-        }
-        .await
-        .inspect_err(|error| {
-            // Trigger events are admitted at-most-once. Context is useful,
-            // but a transient lookup failure must not discard the prompt.
-            tracing::warn!(
-                error = ?error,
-                %channel_id,
-                %message_id,
-                "sending agent prompt without channel history"
-            );
-        })
-        .unwrap_or_default()
+    ) -> Result<Vec<crate::domain::model::PriorMessage>> {
+        let actor = actor.ok_or_else(|| {
+            HarnessError::PromptContext(rootcause::report!(
+                "message prompts require an acting user"
+            ))
+        })?;
+        self.prompt_context.authorize_origin(actor, origin).await?;
+        Ok(self
+            .prompt_context
+            .preceding_messages(actor, origin)
+            .await
+            .inspect_err(|error| {
+                // Trigger events are admitted at-most-once. Context is useful,
+                // but a transient lookup failure must not discard the prompt.
+                tracing::warn!(
+                    error = ?error,
+                    parent = ?origin.parent,
+                    message_id = %origin.message_id,
+                    "sending agent prompt without conversation history"
+                );
+            })
+            .unwrap_or_default())
     }
 
     /// Who, if anyone, should be told that this landed.
@@ -208,7 +227,7 @@ where
         Ok(Some(SessionAnnouncement {
             session_id,
             bot_id: session.bot_id,
-            origin_channel_id: origin.channel_id,
+            origin_parent: origin.parent,
             origin_thread_id: origin.thread_id,
             origin_message_id: origin.message_id,
             prompted_message_id,

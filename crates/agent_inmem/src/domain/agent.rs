@@ -16,7 +16,8 @@ use std::time::Duration;
 use agent::types::{AssistantMessagePart, ChatMessage};
 use agent::{StreamAccumulator, StreamPart, ToolResponse};
 use agent_client_protocol::schema::v1::{
-    AgentCapabilities, BooleanPropertySchema, CancelNotification, ContentBlock, ContentChunk,
+    AgentCapabilities, AvailableCommand, AvailableCommandInput, AvailableCommandsUpdate,
+    BooleanPropertySchema, CancelNotification, ContentBlock, ContentChunk,
     CreateElicitationRequest, ElicitationAction, ElicitationFormMode, ElicitationPropertySchema,
     ElicitationSchema, ElicitationSessionScope, EnumOption, Implementation, InitializeRequest,
     InitializeResponse, IntegerPropertySchema, Meta, NewSessionRequest, NewSessionResponse,
@@ -25,7 +26,7 @@ use agent_client_protocol::schema::v1::{
     SessionId, SessionNotification, SessionResumeCapabilities, SessionUpdate,
     SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, StopReason, StringFormat,
     StringPropertySchema, ToolCall as AcpToolCall, ToolCallId, ToolCallStatus, ToolCallUpdate,
-    ToolCallUpdateFields, ToolKind,
+    ToolCallUpdateFields, ToolKind, UnstructuredCommandInput,
 };
 use agent_client_protocol::{
     Agent, Channel as AcpChannel, Client, ConnectionTo, Error as AcpError,
@@ -42,7 +43,7 @@ use tracing::Instrument as _;
 
 use crate::domain::engine::{AgentIdentity, TurnEngine, TurnRequest};
 use crate::domain::mcp::{DynMcpToolConnector, dialable_servers};
-use crate::domain::session::{HistoryEntry, SessionStore, messages_for_turn};
+use crate::domain::session::{HistoryEntry, SessionStore, UserPrompt, messages_for_turn};
 use crate::domain::user_input::{
     SharedUserInputRequester, UserInputError, UserInputOutcome, UserInputRequest,
     UserInputRequester,
@@ -196,7 +197,7 @@ impl AgentState {
 
     /// Everything from the session's state that a turn answering `prompt`
     /// runs from.
-    fn turn_input(&self, prompt: &str) -> TurnInput {
+    fn turn_input(&self, prompt: &UserPrompt) -> TurnInput {
         self.store.get(&self.session_id).map_or_else(
             || TurnInput {
                 messages: messages_for_turn(&[], prompt),
@@ -213,7 +214,7 @@ impl AgentState {
         )
     }
 
-    fn push_turn(&self, prompt: String, parts: Vec<AssistantMessagePart>) {
+    fn push_turn(&self, prompt: UserPrompt, parts: Vec<AssistantMessagePart>) {
         if let Some(mut state) = self.store.get_mut(&self.session_id) {
             state.history.push(HistoryEntry::User(prompt));
             if !parts.is_empty() {
@@ -516,15 +517,17 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
         .on_receive_request(
             {
                 let state = Arc::clone(&state);
-                async move |request: NewSessionRequest, responder, _connection| {
+                async move |request: NewSessionRequest, responder, connection| {
                     let state = Arc::clone(&state);
                     let acp_id = SessionId::new(macro_uuid::generate_uuid_v7().to_string());
                     state.bind_acp_session(acp_id.clone(), false);
                     state.connect_mcp(request.mcp_servers).await;
-                    responder.respond(
-                        NewSessionResponse::new(acp_id)
+                    let responded = responder.respond(
+                        NewSessionResponse::new(acp_id.clone())
                             .config_options(state.model_config_options()),
-                    )
+                    );
+                    advertise_commands(&state, &connection, acp_id);
+                    responded
                 }
             },
             agent_client_protocol::on_receive_request!(),
@@ -532,17 +535,19 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
         .on_receive_request(
             {
                 let state = Arc::clone(&state);
-                async move |request: ResumeSessionRequest, responder, _connection| {
+                async move |request: ResumeSessionRequest, responder, connection| {
                     let state = Arc::clone(&state);
                     // Kept when the state already belongs to this ACP id -
                     // either this process served the session, or a cold
                     // attach replayed the frame log back into it (see
                     // `domain::replay`).
-                    state.bind_acp_session(request.session_id, true);
+                    state.bind_acp_session(request.session_id.clone(), true);
                     state.connect_mcp(request.mcp_servers).await;
-                    responder.respond(
+                    let responded = responder.respond(
                         ResumeSessionResponse::new().config_options(state.model_config_options()),
-                    )
+                    );
+                    advertise_commands(&state, &connection, request.session_id);
+                    responded
                 }
             },
             agent_client_protocol::on_receive_request!(),
@@ -562,8 +567,8 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                         gen_ai.conversation.id = %state.session_id,
                     );
                     genai_telemetry::propagation::set_parent(&span, request.meta.as_ref());
-                    let prompt = prompt_text(&request);
-                    if prompt.trim() == COMPACT_COMMAND {
+                    let prompt = UserPrompt::from_request(&request);
+                    if prompt.is_compact_command() {
                         state.clear_history();
                         let _ = connection.send_notification(SessionNotification::new(
                             request.session_id,
@@ -576,7 +581,7 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                         return responder.respond(PromptResponse::new(StopReason::EndTurn));
                     }
                     if state.enable_dev_commands
-                        && let Some(question) = prompt.trim().strip_prefix(ASK_COMMAND)
+                        && let Some(question) = prompt.text.trim().strip_prefix(ASK_COMMAND)
                     {
                         let question = question.trim().to_owned();
                         let cancel = state.begin_turn();
@@ -669,7 +674,7 @@ async fn run_turn(
     state: &AgentState,
     connection: &ConnectionTo<Client>,
     acp_session_id: SessionId,
-    prompt: String,
+    prompt: UserPrompt,
     cancel: CancellationToken,
 ) -> StopReason {
     let _turn = state.turn_lock.lock().await;
@@ -773,7 +778,7 @@ async fn run_ask(
     state: &AgentState,
     connection: &ConnectionTo<Client>,
     acp_session_id: SessionId,
-    prompt: String,
+    prompt: UserPrompt,
     question: String,
     cancel: CancellationToken,
 ) -> StopReason {
@@ -817,6 +822,45 @@ async fn run_ask(
     } else {
         StopReason::EndTurn
     }
+}
+
+/// The slash commands this agent handles itself, as ACP advertises them:
+/// bare names, no leading slash. `/ask` only while the host enables
+/// development commands, since the prompt handler ignores it otherwise.
+fn available_commands(state: &AgentState) -> Vec<AvailableCommand> {
+    let name = |command: &str| command.trim_start_matches('/').to_owned();
+    let mut commands = vec![AvailableCommand::new(
+        name(COMPACT_COMMAND),
+        "Drop the earlier conversation from the model's context",
+    )];
+    if state.enable_dev_commands {
+        commands.push(
+            AvailableCommand::new(
+                name(ASK_COMMAND),
+                "Ask the user a question through a form instead of running the model",
+            )
+            .input(AvailableCommandInput::Unstructured(
+                UnstructuredCommandInput::new("<question> | <option> | <option>"),
+            )),
+        );
+    }
+    commands
+}
+
+/// Tell the client which slash commands this session accepts. Sent after
+/// the open/resume response, the way the Claude Code adapter does, so the
+/// fold has the session before the update names it.
+fn advertise_commands(
+    state: &AgentState,
+    connection: &ConnectionTo<Client>,
+    acp_session_id: SessionId,
+) {
+    let _ = connection.send_notification(SessionNotification::new(
+        acp_session_id,
+        SessionUpdate::AvailableCommandsUpdate(AvailableCommandsUpdate::new(available_commands(
+            state,
+        ))),
+    ));
 }
 
 /// Split `/ask`'s argument into the question and its options: everything
@@ -917,18 +961,6 @@ fn tool_kind(name: &str) -> ToolKind {
     } else {
         ToolKind::Other
     }
-}
-
-/// The prompt's text content, other block types ignored.
-fn prompt_text(request: &PromptRequest) -> String {
-    request
-        .prompt
-        .iter()
-        .filter_map(|block| match block {
-            ContentBlock::Text(text) => Some(text.text.as_str()),
-            _ => None,
-        })
-        .collect()
 }
 
 /// Close tool calls that never got a response - a cancelled or failed turn
