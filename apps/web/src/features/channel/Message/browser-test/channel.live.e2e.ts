@@ -19,6 +19,10 @@ test('live channel: delayed enrichment, draft, removal and server persistence', 
     data: { skipped: true },
   });
   expect(onboarding.ok()).toBe(true);
+  const tutorial = await page.request.patch('/auth/user/tutorial', {
+    data: { tutorialComplete: true },
+  });
+  expect(tutorial.ok()).toBe(true);
   const channelResponse = await page.request.post('/dss/channels', {
     data: {
       channel_type: 'private',
@@ -87,9 +91,18 @@ test('live channel: delayed enrichment, draft, removal and server persistence', 
       `[data-input-id="channel-input-${channelId}"] [contenteditable="true"]`
     )
     .first();
+  const openComposer = async () => {
+    const collapsed = page.locator(
+      `[data-input-id="channel-input-${channelId}"] [data-collapsed-input-preview]`
+    );
+    if (await collapsed.isVisible()) await collapsed.click();
+  };
+  await openComposer();
   await composer.fill('Draft stays here while previews load');
-  const before = await message.boundingBox();
+  // Let the intentional mobile composer expansion settle before measuring
+  // changes caused by metadata and images.
   await page.waitForTimeout(1800);
+  const before = await message.boundingBox();
   ready = true;
   await Promise.all(waiting.splice(0).map(respond));
   await expect(
@@ -162,6 +175,7 @@ test('live channel: delayed enrichment, draft, removal and server persistence', 
   expect(persisted.content).toContain(`\`${url}\``);
   expect(persisted.edited_at).toBeNull();
   await expect(composer).toHaveText('Draft stays here while previews load');
+  await openComposer();
   await composer.fill('');
   // Prove persistence comes from server content, independent of optimistic storage.
   await page.evaluate(() =>
@@ -172,6 +186,7 @@ test('live channel: delayed enrichment, draft, removal and server persistence', 
   await expect(cards).toHaveCount(1);
   await page.waitForTimeout(1800);
   const sentText = 'Posted from Chrome: https://example.com/verification-c';
+  await openComposer();
   await composer.fill(sentText);
   await page
     .locator(

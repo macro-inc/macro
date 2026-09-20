@@ -12,6 +12,18 @@ export default defineConfig({
   timeout: 120_000,
   workers: 1,
   reporter: 'line',
+  projects: [
+    { name: 'desktop' },
+    {
+      name: 'mobile',
+      use: {
+        viewport: { width: 375, height: 812 },
+        isMobile: true,
+        hasTouch: true,
+        video: { mode: 'on', size: { width: 375, height: 812 } },
+      },
+    },
+  ],
   use: {
     baseURL,
     channel: 'chrome',
