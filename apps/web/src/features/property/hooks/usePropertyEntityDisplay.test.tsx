@@ -1,3 +1,4 @@
+import { QueryClient, useQuery } from '@tanstack/solid-query';
 import { createRoot, createSignal, onCleanup } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -67,6 +68,7 @@ describe('usePropertyEntityDisplay subscription ownership', () => {
   it('settles a live GraphQL preview batch without reacquiring itself', () => {
     vi.useFakeTimers();
     let starts = 0;
+    const queryClient = new QueryClient();
     const disposeBatch = vi.fn();
     const batcher = createLivePreviewBatcher<string, unknown>({
       start: () => {
@@ -87,6 +89,16 @@ describe('usePropertyEntityDisplay subscription ownership', () => {
       const [preview, setPreview] = createSignal<unknown>();
       const subscription = batcher.acquire('entity-1', 'entity-1', setPreview);
       onCleanup(subscription.dispose);
+      // The real preview hook also constructs a disabled REST fallback.
+      // TanStack reads these options during construction, before any result.
+      useQuery(
+        () => ({
+          queryKey: ['preview-rest-fallback', Boolean(preview())],
+          queryFn: async () => null,
+          enabled: false,
+        }),
+        () => queryClient
+      );
       return preview;
     };
     const display = setup('DOCUMENT');
@@ -95,6 +107,7 @@ describe('usePropertyEntityDisplay subscription ownership', () => {
     expect(display.isLoading()).toBe(false);
     expect(starts).toBe(1);
     disposals.pop()?.();
+    queryClient.clear();
     expect(disposeBatch).toHaveBeenCalledTimes(1);
   });
 

@@ -6,7 +6,7 @@ import { useChannelName } from '@core/context/channels';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { type Accessor, createMemo, type JSX } from 'solid-js';
+import { type Accessor, createMemo, type JSX, untrack } from 'solid-js';
 import { match } from 'ts-pattern';
 import { entityTypeToItemType } from '../utils';
 
@@ -66,10 +66,13 @@ export function usePropertyEntityDisplay(
     const eType = entityType();
     const pType = previewType();
     if (isPreviewable(eType)) {
-      return useItemPreview(() => ({
-        id: entityId(),
-        type: pType,
-      }))[0];
+      return untrack(
+        () =>
+          useItemPreview(() => ({
+            id: entityId(),
+            type: pType,
+          }))[0]
+      );
     }
   });
   // Keep subscription ownership separate from its value: a live result must
