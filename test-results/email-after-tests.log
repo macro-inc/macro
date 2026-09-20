@@ -1,0 +1,9 @@
+$ bunx vitest run --project email src/features/email-thread/primitives
+
+ RUN  v5.0.1 /tmp/macro-machine-proof/email-navigation/apps/web
+
+
+ Test Files  7 passed (7)
+      Tests  56 passed (56)
+   Start at  23:37:04
+   Duration  436ms (environment 66%, transform 17%, tests 8%, import 7%, worker 1%)

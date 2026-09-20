@@ -1,0 +1,30 @@
+{
+  "assertions": {
+    "origin": "http://localhost:3004",
+    "phases": [
+      {
+        "name": "winner closed",
+        "at": 1789861995628
+      },
+      {
+        "name": "answered",
+        "at": 1789862001451
+      }
+    ],
+    "initial": [
+      1,
+      2
+    ],
+    "winnerIndex": 1,
+    "takeover": {
+      "before": 1,
+      "after": 3
+    },
+    "answer": {
+      "answered": 3,
+      "final": 3
+    },
+    "pass": true
+  },
+  "pageErrors": []
+}

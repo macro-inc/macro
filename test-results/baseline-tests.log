@@ -1,0 +1,9 @@
+$ bunx vitest run --project email --project channel src/features/email-thread/primitives/thread-navigation.test.ts src/features/email-thread/primitives/email-thread-state.test.ts src/features/channel/Call/tests
+
+ RUN  v5.0.1 /home/teo/.herdr/worktrees/macro/machine/apps/web
+
+
+ Test Files  10 passed (10)
+      Tests  69 passed (69)
+   Start at  22:48:40
+   Duration  1.36s (environment 40%, transform 29%, import 23%, tests 8%, worker 1%)

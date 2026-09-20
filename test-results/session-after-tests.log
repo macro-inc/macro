@@ -1,0 +1,9 @@
+$ bunx vitest run --project channel src/features/channel/Call/tests
+
+ RUN  v5.0.1 /tmp/macro-machine-proof/call-session/apps/web
+
+
+ Test Files  9 passed (9)
+      Tests  85 passed (85)
+   Start at  23:37:04
+   Duration  1.57s (environment 35%, transform 28%, import 26%, tests 10%, worker 1%)

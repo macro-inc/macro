@@ -1,0 +1,34 @@
+{
+  "baselineCommit": "65cce71dad0ba3dc98c5636e84ea5fd90abe3a17",
+  "baseBranch": "main",
+  "baseCommit": "fb311529664c27e10c1ab4d3cd19a4a9ca928eb3",
+  "cases": {
+    "email": {
+      "pullRequest": "https://github.com/macro-inc/macro/pull/6665",
+      "branch": "synoet/machine-email-navigation",
+      "headCommit": "3b0437bdc3c030c2a97c162177422a42cdfe01e6",
+      "video": "email-before-after.mp4",
+      "durationSeconds": 25.994667,
+      "afterStartsAtSeconds": 15.333333,
+      "sha256": "d413571155c2835df09de22dcb0eb0d372932005e4a78dc2d529f3f5f19ff6d5"
+    },
+    "ringing": {
+      "pullRequest": "https://github.com/macro-inc/macro/pull/6666",
+      "branch": "synoet/machine-call-ringing",
+      "headCommit": "781fdad3fba8fd1b2842577a70f96ce68e3abbcb",
+      "video": "ringing-before-after.mp4",
+      "durationSeconds": 38.087125,
+      "afterStartsAtSeconds": 19.059,
+      "sha256": "5fc3da74cbac6700f57f367b4b34c64d44a15fd57e4911ba5cd2926fd6337328"
+    },
+    "calls": {
+      "pullRequest": "https://github.com/macro-inc/macro/pull/6667",
+      "branch": "synoet/machine-call-session",
+      "headCommit": "8cd380370bcef2cb1961062dd1a689b9f2b21dab",
+      "video": "calls-before-after.mp4",
+      "durationSeconds": 93.041016,
+      "afterStartsAtSeconds": 39.52,
+      "sha256": "c2c2ba7820b81623bf8b27a610e7d06f4101990f50a55118af976ae913ae3fc2"
+    }
+  }
+}

@@ -1,0 +1,9 @@
+$ bunx vitest run --project channel src/features/channel/Call/tests/ring-coordination.test.ts
+
+ RUN  v5.0.1 /tmp/macro-machine-proof/call-ringing/apps/web
+
+
+ Test Files  1 passed (1)
+      Tests  16 passed (16)
+   Start at  23:25:34
+   Duration  340ms (environment 66%, tests 20%, transform 9%, import 3%, worker 1%)

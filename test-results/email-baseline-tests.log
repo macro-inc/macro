@@ -1,0 +1,9 @@
+$ bunx vitest run --project email src/features/email-thread/primitives/thread-navigation-target.test.ts
+
+ RUN  v5.0.1 /tmp/macro-machine-proof/email-navigation/apps/web
+
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  22:52:08
+   Duration  376ms (environment 56%, transform 25%, tests 12%, import 6%, worker 1%)
