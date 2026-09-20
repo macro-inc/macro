@@ -1,6 +1,9 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { usePdfDocument } from '@block-pdf/context/pdf-document-context';
-import type { PdfRootLayout } from '@block-pdf/type/comments';
+import {
+  isPdfDraftThreadId,
+  type PdfRootLayout,
+} from '@block-pdf/type/comments';
 import {
   type CommentId,
   type DeleteCommentInfo,
@@ -46,7 +49,7 @@ export function useCreateComment() {
       analytics.track('comment_create', { blockType: 'pdf' });
       const { threadId, text, mentions } = info;
 
-      if (threadId === -1) {
+      if (isPdfDraftThreadId(threadId)) {
         const comment = comments().find((c) => c.threadId === threadId);
         if (!comment) {
           console.error('Unable to comment');
@@ -137,7 +140,7 @@ export function useDeleteComment() {
   return createCallback(async (info: DeleteCommentInfo) => {
     const commentId = info.commentId;
 
-    if (commentId === -1) {
+    if (isPdfDraftThreadId(commentId)) {
       deleteNewComments();
       return false;
     }

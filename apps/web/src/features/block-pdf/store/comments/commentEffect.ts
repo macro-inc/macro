@@ -1,4 +1,5 @@
 import { usePdfCommentRealtimeBehavior } from '@block-pdf/store/commentsResource';
+import { isPdfDraftThreadId } from '@block-pdf/type/comments';
 import { createEffect, createMemo } from 'solid-js';
 import { usePdfComments } from '../../context/pdf-comments-context';
 import {
@@ -12,7 +13,7 @@ const useDeleteNewCommentEffect = () => {
 
   createEffect(() => {
     const activeThreadId = activeCommentThreadId();
-    if (!activeThreadId || activeThreadId !== -1) {
+    if (!isPdfDraftThreadId(activeThreadId)) {
       deleteNewComments();
     }
   });

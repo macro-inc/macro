@@ -1,8 +1,9 @@
-import type {
-  PdfComment,
-  PdfReply,
-  PdfRoot,
-  ViewerCommentType,
+import {
+  createPdfDraftThreadId,
+  type PdfComment,
+  type PdfReply,
+  type PdfRoot,
+  type ViewerCommentType,
 } from '@block-pdf/type/comments';
 import {
   type IThreadPlaceable,
@@ -175,9 +176,13 @@ export const useFreeComments = () => {
           console.error('User ID not found');
           continue;
         }
+        const draftThreadId = createPdfDraftThreadId(
+          'free',
+          commentPlaceable.internalId
+        );
         const rootComment: PdfRoot = {
-          id: -1,
-          rootId: -1,
+          id: draftThreadId,
+          rootId: draftThreadId,
           type: 'free',
           text: '',
           owner: currentUserId,
@@ -185,7 +190,7 @@ export const useFreeComments = () => {
           createdAt: new Date(),
           isNew: true,
           children: [],
-          threadId: -1,
+          threadId: draftThreadId,
           anchorId: commentPlaceable.internalId,
         };
         out.push({ ...rootComment, layout });

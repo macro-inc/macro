@@ -5,6 +5,7 @@ import {
   useDeleteComment,
   useDeleteNewComments,
 } from '@block-pdf/store/comments/commentOperations';
+import { createPdfDraftThreadId } from '@block-pdf/type/comments';
 import type { Annotation, ShapeType } from '@block-pdf/type/pdfJs';
 import {
   type IPlaceable,
@@ -620,7 +621,9 @@ export function useCreatePlaceable() {
       if (!isThreadPlaceable(placeable)) {
         pdf.model.commands.appendPlaceable(placeable);
       } else {
-        comments.activateThread(-1);
+        comments.activateThread(
+          createPdfDraftThreadId('free', placeable.internalId)
+        );
       }
       pdf.markup.commands.activate(placeable.internalId);
       pdf.markup.commands.setDraft(placeable);

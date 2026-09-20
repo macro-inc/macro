@@ -1,10 +1,11 @@
 import { useHighlightSelection } from '@block-pdf/component/UserHighlight';
 import { useCurrentPageViewport } from '@block-pdf/signal/pdfViewer';
-import type {
-  PdfComment,
-  PdfReply,
-  PdfRoot,
-  ViewerCommentType,
+import {
+  createPdfDraftThreadId,
+  type PdfComment,
+  type PdfReply,
+  type PdfRoot,
+  type ViewerCommentType,
 } from '@block-pdf/type/comments';
 import { getHighlightsFromSelection } from '@block-pdf/util/pdfjsUtils';
 import { useUserId } from '@core/context/user';
@@ -111,9 +112,13 @@ export const useHighlightComments = () => {
             console.error('User ID not found');
             continue;
           }
+          const draftThreadId = createPdfDraftThreadId(
+            'highlight',
+            highlight.uuid
+          );
           const rootComment: PdfRoot = {
-            id: -1,
-            rootId: -1,
+            id: draftThreadId,
+            rootId: draftThreadId,
             type: 'highlight',
             text: '',
             owner: currentUserId,
@@ -121,7 +126,7 @@ export const useHighlightComments = () => {
             createdAt: new Date(),
             isNew: true,
             children: [],
-            threadId: -1,
+            threadId: draftThreadId,
             anchorId: highlight.uuid,
           };
           out.push({ ...rootComment, layout });
@@ -144,23 +149,18 @@ export const useDeleteNewHighlightComment = () => {
   const handleHighlightSelection = useHighlightSelection();
   const pdf = usePdfDocument();
   const annotations = pdf.annotations;
-  const commentsById = usePdfComments().byId;
 
   return () => {
-    const highlightUuid = commentsById().get(-1)?.anchorId;
-    if (!highlightUuid) return;
-    const highlight = annotations.highlightsByUuid()[highlightUuid];
-    if (!highlight) return;
+    for (const highlight of Object.values(annotations.highlightsByUuid())) {
+      if (!highlight?.hasTempThread) continue;
 
-    if (!highlight.hasTempThread) {
-      console.error('This method should only be used for temporary highlights');
-      return;
-    }
-
-    const restoredExistingHighlight =
-      annotations.commands.cancelTemporaryHighlightCommentDraft(highlight.uuid);
-    if (restoredExistingHighlight) {
-      setTimeout(() => handleHighlightSelection(highlight.uuid));
+      const restoredExistingHighlight =
+        annotations.commands.cancelTemporaryHighlightCommentDraft(
+          highlight.uuid
+        );
+      if (restoredExistingHighlight) {
+        setTimeout(() => handleHighlightSelection(highlight.uuid));
+      }
     }
   };
 };
@@ -181,8 +181,12 @@ export function useCreateHighlightCommentAtSelection() {
       const highlightUnderSelection =
         annotationSelection().selectedHighlights.at(0);
       if (highlightUnderSelection) {
+        const draftThreadId = createPdfDraftThreadId(
+          'highlight',
+          highlightUnderSelection.uuid
+        );
         batch(() => {
-          comments.activateThread(-1);
+          comments.activateThread(draftThreadId);
           pdf.annotations.commands.beginExistingHighlightCommentDraft(
             highlightUnderSelection
           );
@@ -213,8 +217,15 @@ export function useCreateHighlightCommentAtSelection() {
         highlights.push(highlight);
       }
 
-      pdf.annotations.commands.beginNewHighlightCommentDrafts(highlights);
-      comments.activateThread(-1);
+      const activeHighlight = highlights.at(0);
+      if (!activeHighlight) return;
+
+      batch(() => {
+        pdf.annotations.commands.beginNewHighlightCommentDrafts(highlights);
+        comments.activateThread(
+          createPdfDraftThreadId('highlight', activeHighlight.uuid)
+        );
+      });
     });
   });
 }
