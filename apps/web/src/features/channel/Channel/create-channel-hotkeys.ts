@@ -154,6 +154,18 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
 
   registerHotkey({
     scopeId: messageListScope,
+    hotkey: 'e',
+    description: 'Keep edit shortcut on selected message',
+    registrationType: 'add',
+    hide: true,
+    condition: canRunSelectionActionHotkeys,
+    // The real edit command runs first when available. A selected incoming
+    // message still owns E; otherwise it reaches Home's Mark done shortcut.
+    keyDownHandler: () => true,
+  });
+
+  registerHotkey({
+    scopeId: messageListScope,
     hotkey: 'backspace',
     hotkeyToken: TOKENS.channel.deleteMessage,
     description: 'Delete message',

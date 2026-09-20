@@ -251,6 +251,11 @@ document should update to its fetched title afterward.
 
 Message and reply links reveal the target inside its thread. Keyboard message
 navigation scrolls only when the selected message is outside the usable viewport.
+With a message selected, `E` edits your own message and does nothing on someone
+else's message. Check both root messages and thread replies from a Home split:
+an incoming selection must not mark the Home item done or edit the thread root.
+Press `Escape` to clear selection; the parent Home shortcut is then available
+again. Typing `e` in the composer or inline editor should still enter text.
 Returning through split navigation restores the saved message position and expanded
 threads. Switching channel tabs currently opens Messages at latest. The `Scroll to bottom` control appears when scrolling down through history;
 it returns to the latest page even after opening a link into old history.
