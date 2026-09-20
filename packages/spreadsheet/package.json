@@ -10,7 +10,8 @@
     "@ironcalc/wasm": "0.8.4",
     "@loro-mirror/core": "workspace:*",
     "loro-crdt": "catalog:",
-    "ssf": "0.11.2"
+    "ssf": "0.11.2",
+    "ts-pattern": "^5.9.0"
   },
   "scripts": {
     "type-check": "tsc --noEmit --project tsconfig.json",

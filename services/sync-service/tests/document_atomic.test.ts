@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LoroDoc, VersionVector } from "loro-crdt";
@@ -14,7 +14,7 @@ import { createTestUser, getTokenForDocument, setupMiniflare } from "./utils";
 type User = Awaited<ReturnType<typeof createTestUser>>;
 let mf: Miniflare;
 const users: User[] = [];
-const persistPath = mkdtempSync(join(tmpdir(), "spreadsheet-atomic-"));
+const persistPath = mkdtempSync(join(tmpdir(), "document-atomic-"));
 beforeAll(async () => {
 	mf = await setupMiniflare({ persistPath });
 }, 60_000);
@@ -24,12 +24,19 @@ afterAll(async () => {
 	await mf?.dispose();
 	rmSync(persistPath, { recursive: true, force: true });
 });
-const auth = (id: string, permission: "owner" | "edit" | "view" = "edit") => ({
+const auth = (
+	id: string,
+	permission: "owner" | "edit" | "comment" | "view" = "edit",
+) => ({
 	Authorization: `Bearer ${getTokenForDocument(id, "actor", permission)}`,
 });
 const url = (id: string, action: string) =>
-	`http://localhost/document/${id}/spreadsheet-${action}`;
+	`http://localhost/document/${id}/${action === "snapshot" ? "state" : action}`;
 async function seed() {
+	const doc = new LoroDoc();
+	doc.getMap("metadata").set("title", "Document");
+	const bytes = doc.export({ mode: "snapshot" });
+	doc.free();
 	const id = crypto.randomUUID();
 	const response = await mf.dispatchFetch(
 		`http://localhost/document/${id}/initialize`,
@@ -37,9 +44,7 @@ async function seed() {
 			method: "POST",
 			headers: auth(id),
 			body: InitializeFromSnapshotRequest.encode({
-				snapshot: new Uint8Array(
-					readFileSync("../../static_assets/spreadsheet-golden.1.bin"),
-				),
+				snapshot: bytes,
 			}),
 		},
 	);
@@ -68,7 +73,7 @@ function edit(
 	value = "42",
 ) {
 	const from = source.doc.version();
-	source.doc.getMap("spreadsheetValues").set(address, value);
+	source.doc.getMap("properties").set(address, value);
 	source.doc.commit();
 	return {
 		expectedRevision: source.revision,
@@ -90,12 +95,13 @@ async function post(
 	});
 }
 
-describe("atomic native spreadsheet API", () => {
+describe("atomic document API", () => {
 	it("returns a coherent authorized snapshot and rejects viewers, wrong-document grants, missing and invalid tokens", async () => {
 		const id = await seed();
 		const source = await snapshot(id);
 		const update = edit(source);
 		expect((await post(id, update, auth(id, "view"))).status).toBe(403);
+		expect((await post(id, update, auth(id, "comment"))).status).toBe(403);
 		expect((await post(id, update, auth("wrong-document"))).status).toBe(401);
 		expect(
 			(await post(id, update, { "x-internal-auth-key": "local" })).status,
@@ -116,7 +122,7 @@ describe("atomic native spreadsheet API", () => {
 			).status,
 		).toBe(401);
 		expect(
-			(await snapshot(id)).doc.getMap("spreadsheetValues").get("A1"),
+			(await snapshot(id)).doc.getMap("properties").get("A1"),
 		).toBeUndefined();
 	});
 
@@ -142,7 +148,7 @@ describe("atomic native spreadsheet API", () => {
 				break;
 			}
 		}
-		expect(observer.doc.getMap("spreadsheetValues").get("A1")).toBe("42");
+		expect(observer.doc.getMap("properties").get("A1")).toBe("42");
 		const retry = await post(id, request);
 		expect(retry.status).toBe(200);
 		expect(await retry.json()).toEqual({
@@ -172,7 +178,7 @@ describe("atomic native spreadsheet API", () => {
 		expect(responses.map((response) => response.status).sort()).toEqual([
 			200, 409,
 		]);
-		const state = (await snapshot(id)).doc.getMap("spreadsheetValues").toJSON();
+		const state = (await snapshot(id)).doc.getMap("properties").toJSON();
 		expect(state).toEqual(
 			responses[0].status === 200 ? { A1: "left" } : { B1: "right" },
 		);
@@ -186,7 +192,7 @@ describe("atomic native spreadsheet API", () => {
 			permissionLevel: "edit",
 		});
 		users.push(writer);
-		writer.doc.getMap("spreadsheetValues").set("A1", "human");
+		writer.doc.getMap("properties").set("A1", "human");
 		writer.doc.commit();
 		const operationId = crypto.randomUUID();
 		writer.send(
@@ -201,34 +207,13 @@ describe("atomic native spreadsheet API", () => {
 				break;
 		}
 		expect((await post(id, request)).status).toBe(409);
-		expect(
-			(await snapshot(id)).doc.getMap("spreadsheetValues").toJSON(),
-		).toEqual({ A1: "human" });
+		expect((await snapshot(id)).doc.getMap("properties").toJSON()).toEqual({
+			A1: "human",
+		});
 	});
 
-	it("rejects unsupported roots, schemas, snapshot bodies, malformed input, and oversized payloads atomically", async () => {
+	it("rejects snapshot bodies, malformed input, and oversized payloads atomically", async () => {
 		const id = await seed();
-		for (const [root, key, value] of [
-			["root", "content", "no"],
-			["spreadsheetValues", "AA1", "no"],
-			["spreadsheetValues", "A1", "x".repeat(10_001)],
-			["spreadsheetFormats", "A1", "unsupported"],
-		]) {
-			const source = await snapshot(id);
-			const from = source.doc.version();
-			source.doc.getMap(root).set(key, value);
-			source.doc.commit();
-			expect(
-				(
-					await post(id, {
-						expectedRevision: source.revision,
-						update: Buffer.from(
-							source.doc.export({ mode: "update", from }),
-						).toString("base64"),
-					})
-				).status,
-			).toBe(400);
-		}
 		const original = await snapshot(id);
 		expect(
 			(
@@ -250,27 +235,22 @@ describe("atomic native spreadsheet API", () => {
 			).status,
 		).toBe(413);
 		expect((await snapshot(id)).revision).toBe(original.revision);
-		const plainId = crypto.randomUUID();
-		const initialized = await mf.dispatchFetch(
-			`http://localhost/document/${plainId}/initialize`,
-			{
-				method: "POST",
-				headers: auth(plainId),
-				body: InitializeFromSnapshotRequest.encode({
-					snapshot: new Uint8Array(
-						readFileSync("../../static_assets/markdown-golden.1.bin"),
-					),
-				}),
-			},
-		);
-		expect(initialized.status).toBe(200);
-		expect(
-			(
-				await mf.dispatchFetch(url(plainId, "snapshot"), {
-					headers: auth(plainId),
-				})
-			).status,
-		).toBe(400);
+	});
+
+	it("accepts markdown and arbitrary nested CRDT content without interpreting it", async () => {
+		const id = await seed();
+		const source = await snapshot(id);
+		const from = source.doc.version();
+		source.doc.getText("content").insert(0, "markdown text");
+		source.doc.getMap("arbitrary").set("nested", { values: [1, 2, 3] });
+		const response = await post(id, {
+			expectedRevision: source.revision,
+			update: Buffer.from(source.doc.export({ mode: "update", from })).toString(
+				"base64",
+			),
+		});
+		expect(response.status).toBe(200);
+		expect((await snapshot(id)).doc.toJSON()).toEqual(source.doc.toJSON());
 	});
 
 	it("stores signed actor metadata with the oplog and ignores body attribution", async () => {
@@ -282,7 +262,7 @@ describe("atomic native spreadsheet API", () => {
 				document_id: id,
 				user_id: "macro|real-user",
 				access_level: "edit",
-				actor: "bot|spreadsheet",
+				actor: "bot|document-agent",
 				exp: Math.floor(Date.now() / 1000) + 60,
 			},
 			"local",
@@ -298,7 +278,7 @@ describe("atomic native spreadsheet API", () => {
 		const records = (await response.json()) as [string, number[]][];
 		expect(records).toHaveLength(1);
 		expect(JSON.parse(Buffer.from(records[0][1]).toString())).toEqual({
-			actor: "bot|spreadsheet",
+			actor: "bot|document-agent",
 			on_behalf_of: "macro|real-user",
 		});
 	});
@@ -309,7 +289,7 @@ describe("atomic native spreadsheet API", () => {
 		const from = source.doc.version();
 		for (let row = 1; row <= 100; row++)
 			source.doc
-				.getMap("spreadsheetValues")
+				.getMap("properties")
 				.set(`A${row}`, `${row}:` + "a".repeat(3000));
 		source.doc.commit();
 		const update = source.doc.export({ mode: "update", from });
@@ -319,9 +299,9 @@ describe("atomic native spreadsheet API", () => {
 			update: Buffer.from(update).toString("base64"),
 		});
 		expect(response.status).toBe(200);
-		expect(
-			(await snapshot(id)).doc.getMap("spreadsheetValues").get("A100"),
-		).toBe("100:" + "a".repeat(3000));
+		expect((await snapshot(id)).doc.getMap("properties").get("A100")).toBe(
+			"100:" + "a".repeat(3000),
+		);
 	});
 
 	it("persists an acknowledged CAS update across worker restart", async () => {
@@ -335,9 +315,7 @@ describe("atomic native spreadsheet API", () => {
 		await mf.dispose();
 		mf = await setupMiniflare({ persistPath, migrate: false });
 		const restored = await snapshot(id);
-		expect(restored.doc.getMap("spreadsheetValues").get("Z999")).toBe(
-			"=SUM(A1:B2)",
-		);
+		expect(restored.doc.getMap("properties").get("Z999")).toBe("=SUM(A1:B2)");
 		const retry = await post(id, request);
 		expect(await retry.json()).toEqual({ ...saved, applied: false });
 	}, 30_000);

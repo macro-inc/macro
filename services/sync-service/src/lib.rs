@@ -3,6 +3,7 @@ mod auth;
 mod cf_worker;
 mod constants;
 mod d1;
+mod domain;
 mod dss_internal;
 mod durable_object;
 mod error;
@@ -11,9 +12,6 @@ pub mod keepalive;
 mod metrics;
 mod mutex;
 mod secrets;
-mod spreadsheet;
-#[cfg(feature = "search-service")]
-mod sps;
 mod state;
 mod storage;
 mod tags;

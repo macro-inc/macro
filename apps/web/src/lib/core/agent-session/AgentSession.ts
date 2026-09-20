@@ -34,6 +34,7 @@ import type {
   SessionBot,
 } from '@service-agent-harness/generated/schemas';
 import { v7 as uuidv7 } from 'uuid';
+import { SessionLoadTrace, traceAcquire } from './load-telemetry';
 import { publishSessionTurn } from './session-turn';
 
 export type AgentSessionListener = (events: FoldedStreamEvent[]) => void;
@@ -47,6 +48,21 @@ export type AgentSessionRecord = {
 export type IssueResult = Awaited<
   ReturnType<typeof agentHarnessServiceClient.control>
 >;
+
+/**
+ * The load was abandoned because every surface holding the session let go
+ * before it finished.
+ *
+ * Its own type because it is not a fault: a row that scrolls out of the list
+ * mid-fetch is ordinary, and a caller that cannot tell it apart from a failed
+ * fetch either reports a phantom error or hides a real one.
+ */
+export class AgentSessionReleased extends Error {
+  constructor(readonly sessionId: string) {
+    super(`agent session released: ${sessionId}`);
+    this.name = 'AgentSessionReleased';
+  }
+}
 
 /**
  * Whether this action takes the turn, rather than riding alongside one. ACP
@@ -66,9 +82,11 @@ export class AgentSession {
    * machine and drops the subscriptions.
    */
   static acquire(id: string): AgentSession {
-    const session = AgentSession.open.get(id) ?? new AgentSession(id);
+    const open = AgentSession.open.get(id);
+    const session = open ?? new AgentSession(id);
     AgentSession.open.set(id, session);
     session.references += 1;
+    traceAcquire(id, open === undefined, session.references);
     return session;
   }
 
@@ -106,6 +124,8 @@ export class AgentSession {
   private chain: Promise<void> = Promise.resolve();
   private loading: Promise<AgentSessionRecord>;
   private loadFailed = false;
+  /** The span for the attempt in flight, ended by whatever settles it. */
+  private trace: SessionLoadTrace;
   /**
    * The fold's turn state, tracked off the same events listeners see. What
    * {@link issue} reads to know whether an action will reach the runtime or
@@ -126,6 +146,7 @@ export class AgentSession {
     this.unsubscribeSocket = subscribeSocketSessionStarted(() => {
       void this.resync();
     });
+    this.trace = new SessionLoadTrace(id);
     this.loading = this.startLoad();
   }
 
@@ -137,6 +158,7 @@ export class AgentSession {
   load(): Promise<AgentSessionRecord> {
     if (this.loadFailed) {
       this.loadFailed = false;
+      this.trace = new SessionLoadTrace(this.id);
       this.loading = this.startLoad();
     }
     return this.loading;
@@ -287,16 +309,29 @@ export class AgentSession {
     if (AgentSession.open.get(this.id) === this)
       AgentSession.open.delete(this.id);
     this.closed = true;
+    // Ended here rather than where the load notices: a fetch that never
+    // answers never reaches that check, and an unended span never reports.
+    this.trace.end('released');
     this.listeners.clear();
     this.unsubscribeSocket();
     closeSession(this.id);
   }
 
   private startLoad(): Promise<AgentSessionRecord> {
-    return this.fetchAndFold().catch((error: unknown) => {
-      this.loadFailed = true;
-      throw error;
-    });
+    return this.fetchAndFold().then(
+      (record) => {
+        this.trace.end('loaded');
+        return record;
+      },
+      (error: unknown) => {
+        this.loadFailed = true;
+        this.trace.end(
+          error instanceof AgentSessionReleased ? 'released' : 'failed',
+          error
+        );
+        throw error;
+      }
+    );
   }
 
   private async fetchAndFold(): Promise<AgentSessionRecord> {
@@ -310,8 +345,10 @@ export class AgentSession {
     if (log.isErr()) {
       throw new Error(`agent session log could not be fetched: ${this.id}`);
     }
-    if (this.closed) throw new Error(`agent session released: ${this.id}`);
+    if (this.closed) throw new AgentSessionReleased(this.id);
+    this.trace.fetched(log.value.entries.length);
 
+    const foldStartedAt = performance.now();
     await this.apply([{ kind: 'snapshot', rows: log.value.entries }]);
     // Inputs can keep arriving while each push is in flight; drain until a
     // check finds nothing, then flip ready so the next one goes straight in.
@@ -321,6 +358,7 @@ export class AgentSession {
       await this.apply(inputs);
     }
     this.ready = true;
+    this.trace.folded(foldStartedAt);
     this.setTurn((await readSession(this.id)).metadata.turn);
     return { session: session.value, bot: log.value.bot };
   }

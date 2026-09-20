@@ -333,6 +333,7 @@
         "@loro-mirror/core": "workspace:*",
         "loro-crdt": "catalog:",
         "ssf": "0.11.2",
+        "ts-pattern": "^5.9.0",
       },
       "devDependencies": {
         "typescript": "^5.9.3",

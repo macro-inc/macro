@@ -1302,7 +1302,14 @@ pub struct AgentSessionLogResponse {
 ///
 /// An unknown session is an error: the response has to name the session's
 /// agent, and a session that never existed has none to name.
-#[tracing::instrument(skip_all, fields(session_id = %session_id), err(Debug))]
+#[tracing::instrument(
+    skip_all,
+    fields(
+        session_id = %session_id,
+        agent.session.log.rows = tracing::field::Empty,
+    ),
+    err(Debug)
+)]
 pub async fn get_agent_session_log_handler<
     T: AgentSessionService,
     Access: EntityAccessService,
@@ -1316,6 +1323,12 @@ pub async fn get_agent_session_log_handler<
         .service
         .session_log(AgentSessionId::new_from_uuid(session_id))
         .await?;
+
+    // How much history this response carries. Without it the endpoint's
+    // latency cannot be read against the size of the session that produced
+    // it, and "is this slow because the session is huge" costs a trip to the
+    // database to answer.
+    tracing::Span::current().record("agent.session.log.rows", log.entries.len());
 
     Ok(Json(AgentSessionLogResponse {
         bot: log.bot,

@@ -4876,7 +4876,7 @@ export type DocumentSyncContentUpdatedMetadata = {
      */
     document_version_id?: string | null;
     /**
-     * File type of the sync document (markdown today).
+     * File type of the sync document, resolved by the document backend.
      */
     file_type: FileType;
     on_behalf_of?: null | MacroUserIdStr;

@@ -10,7 +10,7 @@ import type {
 } from '@macro-inc/spreadsheet/ai-types';
 import { LoroDoc } from 'loro-crdt';
 import { Miniflare, type WebSocket } from 'miniflare';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   FromPeer,
   FromRemote,
@@ -26,6 +26,8 @@ let mf: Miniflare;
 // Miniflare's conditional Fetcher replacement conflicts with Bun's global
 // Request types. Keep the exercised service-binding surface explicit here.
 let sync: { fetch(input: string, init: RequestInit): Promise<Response> };
+const notifications: { path: string; auth: string | null; body: unknown }[] =
+  [];
 
 function token(
   id: string,
@@ -95,10 +97,21 @@ beforeAll(async () => {
           INTERNAL_API_SECRET: 'local',
           SPS_API_SECRET_KEY: 'local',
           SPS_URL: 'http://discard.test',
+          DSS_URL: 'https://dss.test',
+          DSS_INTERNAL_AUTH_KEY: 'local',
           local: true,
         },
         // All telemetry/indexing outbound calls remain inside this fixture.
-        outboundService: async () => new Response(null, { status: 204 }),
+        outboundService: async (request) => {
+          const path = new URL(request.url).pathname;
+          if (path.endsWith('/sync-content-updated'))
+            notifications.push({
+              path,
+              auth: request.headers.get('x-document-storage-service-auth-key'),
+              body: await request.json(),
+            });
+          return new Response(null, { status: 200 });
+        },
       },
     ],
   });
@@ -199,6 +212,72 @@ async function success(
 }
 
 describe('real spreadsheet editing worker and sync Durable Object', () => {
+  it('publishes content changes to the document backend without assigning a file type', async () => {
+    const id = await create();
+    const initial = await success(id, { action: 'read' });
+    await success(id, {
+      action: 'edit',
+      expectedRevision: initial.revision,
+      operations: [{ type: 'add_sheet', name: 'Notification' }],
+    });
+    await vi.waitFor(() =>
+      expect(notifications).toContainEqual({
+        path: `/internal/documents/${id}/sync-content-updated`,
+        auth: 'local',
+        body: {
+          actor: 'spreadsheet-test-agent',
+          on_behalf_of: 'macro|spreadsheet-test@example.com',
+        },
+      })
+    );
+  });
+
+  it('validates spreadsheet state in the editing backend after generic sync accepts it', async () => {
+    const id = await create();
+    const response = await sync.fetch(
+      `https://sync.test/document/${id}/state`,
+      {
+        headers: { Authorization: `Bearer ${token(id)}` },
+      }
+    );
+    expect(response.status).toBe(200);
+    const source = (await response.json()) as {
+      snapshot: string;
+      revision: string;
+    };
+    const doc = new LoroDoc();
+    try {
+      doc.import(Buffer.from(source.snapshot, 'base64'));
+      const from = doc.version();
+      doc.getMap('spreadsheetValues').set('AA1', 'outside the supported grid');
+      const committed = await sync.fetch(
+        `https://sync.test/document/${id}/update`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token(id)}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            expectedRevision: source.revision,
+            update: Buffer.from(doc.export({ mode: 'update', from })).toString(
+              'base64'
+            ),
+          }),
+        }
+      );
+      expect(committed.status).toBe(200);
+      const rejected = await request(id, { action: 'read' });
+      expect(rejected.status).toBe(400);
+      expect(await rejected.json()).toEqual({
+        error:
+          'Only native spreadsheet maps with supported values may be edited.',
+      });
+    } finally {
+      doc.free();
+    }
+  });
+
   it('edits with no browser, broadcasts to an open collaborator, and refuses to overwrite their newer edit', async () => {
     const id = await create();
     const initial = await success(id, { action: 'read' });

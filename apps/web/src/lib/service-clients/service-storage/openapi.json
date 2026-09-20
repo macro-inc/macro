@@ -21195,7 +21195,7 @@
           },
           "file_type": {
             "$ref": "#/components/schemas/FileType",
-            "description": "File type of the sync document (markdown today)."
+            "description": "File type of the sync document, resolved by the document backend."
           },
           "on_behalf_of": {
             "oneOf": [
