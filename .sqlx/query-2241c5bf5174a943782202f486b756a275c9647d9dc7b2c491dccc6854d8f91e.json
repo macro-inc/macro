@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_backfill_jobs (id, link_id, fusionauth_user_id, status)\n        VALUES ($1, $2, $3, 'Complete')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2241c5bf5174a943782202f486b756a275c9647d9dc7b2c491dccc6854d8f91e"
+}

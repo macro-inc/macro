@@ -34,6 +34,7 @@ pub fn message_from_row(
     body_replyless: Option<String>,
 ) -> Message {
     Message {
+        calendar_invitations: row.calendar_invitations,
         db_id: row.db_id,
         provider_id: row.provider_id,
         thread_db_id: row.thread_db_id,

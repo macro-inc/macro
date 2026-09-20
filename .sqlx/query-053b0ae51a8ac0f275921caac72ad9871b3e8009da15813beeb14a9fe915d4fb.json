@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_message_calendar_extraction(message_id, status, parser_version, retry_after)\n            SELECT m.id, 'unprocessed', 0, now() FROM email_messages m\n            JOIN email_threads t ON t.id = m.thread_id\n            WHERE t.has_calendar_attachment AND NOT m.is_draft AND m.provider_id IS NOT NULL\n              AND m.created_at >= now() - interval '90 days'\n              AND NOT EXISTS (SELECT 1 FROM email_message_calendar_extraction e WHERE e.message_id = m.id)\n            ORDER BY m.created_at DESC LIMIT 16 ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "053b0ae51a8ac0f275921caac72ad9871b3e8009da15813beeb14a9fe915d4fb"
+}

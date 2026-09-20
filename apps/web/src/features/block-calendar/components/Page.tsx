@@ -379,6 +379,9 @@ function CalendarPageHost(props: {
     props.grid.chipMounts();
     const target = calendarFocus.pendingTarget();
     if (!target || !isActive()) return;
+    // Cached occurrences can resolve before onMount registers this page.
+    // Wait reactively so a no-op navigation cannot consume the request.
+    if (!pager.activePage()?.api()) return;
     const dateInfo = props.grid.dateInfo();
     if (!dateInfo) return;
     if (target.date < dateInfo.start || target.date >= dateInfo.end) {

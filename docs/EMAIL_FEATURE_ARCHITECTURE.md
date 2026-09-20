@@ -431,3 +431,59 @@ Use `bun run --cwd packages/email-renderer viewer` to inspect fixtures without a
 account or backend. Do not regenerate visual expectations simply to make a
 refactor pass: reproduce the baseline in the same browser and explain each
 remaining difference before accepting it.
+
+## Calendar invitation snapshots
+
+Calendar MIME extraction belongs to the email domain. `email_message_calendar_invites`
+stores immutable components; `email_message_calendar_extraction` stores parser version,
+status, leased retries, and refresh delivery. Email insertion schedules recovery in the
+same transaction. Live sync consumes already fetched inline bytes and saves attachment
+IDs for the worker. The worker also resumes recent (90-day) calendar-flagged history in
+batches of 16. Historical inline-only mail needs an explicit MIME reinspection backfill;
+opening a message never fetches provider MIME or parses ICS.
+Extraction completion emits `refresh_email/calendar_invitations_updated`. Mounted
+REST and GraphQL thread hosts refresh their messages; inactive REST caches become
+stale. A completion received during the initial read triggers a follow-up read.
+Snapshot changes invalidate calendar resolutions, immediately withdrawing stale
+actions. During RSVP, revalidation waits until all responses settle so an email
+refresh cannot overwrite the optimistic attendee response.
+
+Scheduling revisions are reconciled separately for each original occurrence and
+its series master. A lower-sequence master cancellation still cancels an instance
+with a higher independent sequence. RSVP carries the displayed responding address;
+the calendar domain verifies inbox ownership before passing only that address to
+Google. Optimistic responses and rollback ownership are scoped to that attendee.
+
+
+The parser compatibility corpus is in `crates/email/fixtures/calendar`. `ical` 0.11
+handles folded properties, parameters, and embedded VTIMEZONE syntax. `chrono-tz`
+resolves unambiguous IANA times. Windows/custom zones, floating times, and DST gaps or
+ambiguities remain explicitly unresolved, with their original timezone definitions
+retained. Limits are 512 KiB per part and 32 components/parts per message. Date-only
+ends remain exclusive; recurrence IDs retain the original occurrence identity.
+
+Thread reads batch-load snapshots, expose them through REST and GraphQL, and preserve
+them in the cached message projection. GraphQL JSON is validated at its transport
+adapter. `email-message` owns the typed card and groups recurrence components by UID.
+Original bodies and attachments remain accessible. The original-body disclosure starts
+open: unverified provider templates, forwarding, and organizer commentary must not be
+hidden based on PRODID, subject, or a meeting URL alone.
+
+`email-thread/calendar-invitation.tsx` composes the refreshable calendar query, shared
+RSVP controller, and agenda. `queries/calendar-invitation.ts` maps transport data to
+small presentation values. The body renderer has no calendar dependencies.
+`block-email` injects calendar navigation with both the original identity and current
+occurrence time, including when an instance has moved to another day.
+
+The resolution endpoint first authorizes the thread, then derives identities from
+stored snapshots. The calendar domain independently limits lookup to owned, connected
+Google-backed copies, prefers the owning inbox, and withholds ambiguous, read-only,
+stale, cancelled, mismatched-organizer, or unresolved-instance responses. Saved newer
+scheduling revisions suppress stale actions while calendar sync catches up. Exception
+revisions are preserved independently of the master. Reads never create calendar events.
+
+RSVP uses the existing provider write-through mutation. Its writer revisions cover both
+occurrence and invitation caches, including email-only views. Failed older requests
+cannot roll back a newer selection or replace its feedback. Settlement revalidates both
+projections. The on-demand local-day agenda shares occurrence queries and handles DST
+boundaries and exclusive all-day ends without mounting a calendar grid.

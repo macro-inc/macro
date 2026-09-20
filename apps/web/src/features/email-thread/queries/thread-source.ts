@@ -1,6 +1,7 @@
+import { invalidateInvitationScheduling } from '@queries/calendar/invitations';
 import type { ThreadQueryData, ThreadQueryResult } from '@queries/email/thread';
 import type { ApiThread } from '@service-email/generated/schemas';
-import { type Accessor, createMemo } from 'solid-js';
+import { type Accessor, createEffect, createMemo, on } from 'solid-js';
 import type { EmailThreadSource } from '../context/email-thread-context';
 import type { EmailThread } from '../core/email-thread';
 
@@ -14,6 +15,7 @@ export function toEmailThread(thread: ApiThread): EmailThread {
     latest_inbound_message_ts: thread.latest_inbound_message_ts,
     link_id: thread.link_id,
     messages: thread.messages.map((message) => ({
+      calendar_invitations: message.calendar_invitations,
       attachments: message.attachments.map((attachment) => ({
         content_id: attachment.content_id,
         db_id: attachment.db_id,
@@ -96,6 +98,23 @@ export function createEmailThreadSource(
     const data = query.data?.thread;
     return data?.db_id === threadId() ? toEmailThread(data) : undefined;
   });
+  // Memo equality prevents ordinary email refreshes from revalidating calendar state.
+  const scheduling = createMemo(() =>
+    JSON.stringify(
+      (thread()?.messages ?? [])
+        .filter((message) => message.calendar_invitations?.invitations.length)
+        .map((message) => [message.db_id, message.calendar_invitations])
+    )
+  );
+  createEffect(
+    on(
+      scheduling,
+      () => {
+        void invalidateInvitationScheduling();
+      },
+      { defer: true }
+    )
+  );
   return {
     id: threadId,
     thread,
@@ -108,7 +127,11 @@ export function createEmailThreadSource(
       await query.fetchNextPage();
     },
     refresh: async () => {
+      // With no cached data, query libraries may join the initial request instead
+      // of replacing it. Follow it with a request that starts after the change.
+      const pendingInitialRead = query.isLoading;
       await query.refetch();
+      if (pendingInitialRead) await query.refetch();
     },
   };
 }

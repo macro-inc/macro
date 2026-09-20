@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_threads t\n        SET has_calendar_attachment = calc.has_cal\n        FROM (\n            SELECT EXISTS (\n                SELECT 1\n                FROM email_messages m\n                JOIN email_attachments a ON a.message_id = m.id\n                WHERE m.thread_id = $1\n                  AND (a.filename ILIKE '%.ics'\n                       OR a.mime_type = 'text/calendar'\n                       OR a.mime_type = 'application/ics')\n            ) OR EXISTS (\n                SELECT 1 FROM email_messages m\n                JOIN email_message_calendar_invites i ON i.message_id = m.id\n                WHERE m.thread_id = $1\n            ) AS has_cal\n        ) calc\n        WHERE t.id = $1\n          AND t.has_calendar_attachment IS DISTINCT FROM calc.has_cal\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7b5885f173278f25215e98a70727b040737bf4953bd4ff66ac96a3adce8f8335"
+}

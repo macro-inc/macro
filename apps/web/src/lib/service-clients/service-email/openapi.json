@@ -3226,6 +3226,66 @@
         }
       }
     },
+    "/email/threads/{thread_id}/calendar-invitations": {
+      "get": {
+        "tags": ["email"],
+        "operationId": "handler",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Authorized email thread",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": ["integer", "null"],
+              "format": "int64"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": ["integer", "null"],
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/InvitationResolution"
+                  },
+                  "propertyNames": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/email/threads/{thread_id}/project": {
       "patch": {
         "tags": ["Threads"],
@@ -3861,6 +3921,9 @@
           },
           "body_text": {
             "type": ["string", "null"]
+          },
+          "calendar_invitations": {
+            "$ref": "#/components/schemas/MessageCalendarInvitations"
           },
           "cc": {
             "type": "array",
@@ -4721,6 +4784,189 @@
           }
         }
       },
+      "CalendarInvitation": {
+        "type": "object",
+        "description": "Display snapshot of one meaningful VEVENT, owned by the email domain.",
+        "required": [
+          "id",
+          "source_part",
+          "content_hash",
+          "parser_version",
+          "uid",
+          "method",
+          "sequence",
+          "attendees",
+          "recurrence",
+          "files",
+          "timezones",
+          "limitations"
+        ],
+        "properties": {
+          "attachment_id": {
+            "type": ["string", "null"],
+            "description": "Attachment to download when the original invitation is needed."
+          },
+          "attendees": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvitationParticipant"
+            },
+            "description": "Historical attendee identities and participation metadata."
+          },
+          "comment": {
+            "type": ["string", "null"],
+            "description": "Reply or counter-proposal comment."
+          },
+          "conference_url": {
+            "type": ["string", "null"],
+            "description": "Validated HTTP(S) conferencing URL; never fetched during rendering."
+          },
+          "content_hash": {
+            "type": "string",
+            "description": "SHA-256 of the decoded calendar part."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Plaintext description, retaining passwords and dial-in instructions."
+          },
+          "dtstamp": {
+            "type": ["string", "null"],
+            "description": "Scheduling timestamp in its original spelling."
+          },
+          "duration": {
+            "type": ["string", "null"],
+            "description": "Original DURATION when no explicit end was supplied."
+          },
+          "end": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InvitationDateTime",
+                "description": "Exclusive typed end, if supplied."
+              }
+            ]
+          },
+          "event_url": {
+            "type": ["string", "null"],
+            "description": "Validated HTTP(S) event URL."
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "External file references; never fetched during rendering."
+          },
+          "id": {
+            "type": "string",
+            "description": "Content-derived component identity, stable across repeated extraction."
+          },
+          "last_modified": {
+            "type": ["string", "null"],
+            "description": "Last modification timestamp in its original spelling."
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Bounded, non-content reason codes describing incomplete interpretation."
+          },
+          "location": {
+            "type": ["string", "null"],
+            "description": "Plaintext event location."
+          },
+          "method": {
+            "$ref": "#/components/schemas/InvitationMethod",
+            "description": "Original scheduling method."
+          },
+          "organizer": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InvitationParticipant",
+                "description": "Organizer identity from the scheduling component."
+              }
+            ]
+          },
+          "parser_version": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Version of the parser and policy producing this snapshot.",
+            "minimum": 0
+          },
+          "prodid": {
+            "type": ["string", "null"],
+            "description": "Producer identifier; format recognition grants no permission."
+          },
+          "recurrence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Unexpanded RRULE/RDATE/EXDATE properties and parameters."
+          },
+          "recurrence_id": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InvitationDateTime",
+                "description": "Original occurrence start, even when the instance moved."
+              }
+            ]
+          },
+          "recurrence_id_raw": {
+            "type": ["string", "null"],
+            "description": "Original recurrence identifier spelling and parameters."
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Scheduling revision, distinct from delivery order.",
+            "minimum": 0
+          },
+          "source_part": {
+            "type": "string",
+            "description": "Original provider MIME part identifier."
+          },
+          "start": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InvitationDateTime",
+                "description": "Original typed start, if supplied."
+              }
+            ]
+          },
+          "status": {
+            "type": ["string", "null"],
+            "description": "Original event status."
+          },
+          "timezones": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Preserved VTIMEZONE definitions for unresolved timezone interpretation."
+          },
+          "title": {
+            "type": ["string", "null"],
+            "description": "Event summary."
+          },
+          "uid": {
+            "type": "string",
+            "description": "iCalendar UID; never a Google provider event ID."
+          }
+        }
+      },
       "CalendarMutationApiError": {
         "type": "object",
         "description": "HTTP error body returned by calendar mutation endpoints.",
@@ -4751,6 +4997,34 @@
           "retryable",
           "persist_failed"
         ]
+      },
+      "CalendarOccurrence": {
+        "type": "object",
+        "description": "A materialized recurrence instance optimized for range queries.",
+        "required": ["eventId", "occurrenceKey", "time", "isCancelled"],
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Owning event entity."
+          },
+          "isCancelled": {
+            "type": "boolean",
+            "description": "Whether the instance was cancelled."
+          },
+          "occurrenceKey": {
+            "type": "string",
+            "description": "Stable key within the event."
+          },
+          "recurrenceId": {
+            "type": ["string", "null"],
+            "description": "Provider recurrence identifier, when applicable."
+          },
+          "time": {
+            "$ref": "#/components/schemas/EventTime",
+            "description": "Instance time."
+          }
+        }
       },
       "CalendarRsvpScopeParam": {
         "type": "string",
@@ -5255,6 +5529,219 @@
           }
         }
       },
+      "InvitationDateTime": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Calendar date. DTEND remains exclusive.",
+            "required": ["value", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["date"]
+              },
+              "value": {
+                "type": "string",
+                "description": "ISO calendar date."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Unambiguous instant with the original timezone retained.",
+            "required": ["value", "time_zone", "local", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["zoned"]
+              },
+              "local": {
+                "type": "string",
+                "description": "Original local wall time."
+              },
+              "time_zone": {
+                "type": "string",
+                "description": "Original TZID, or UTC."
+              },
+              "value": {
+                "type": "string",
+                "description": "RFC3339 instant."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Floating, ambiguous, nonexistent, or unknown-zone wall time.",
+            "required": ["value", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["unresolved"]
+              },
+              "time_zone": {
+                "type": ["string", "null"],
+                "description": "Original TZID if present."
+              },
+              "value": {
+                "type": "string",
+                "description": "ISO local wall time, without an offset."
+              }
+            }
+          }
+        ],
+        "description": "Preserve date-only and unresolved times without manufacturing UTC instants."
+      },
+      "InvitationExtractionStatus": {
+        "type": "string",
+        "description": "Extraction lifecycle, independent from calendar connectivity.",
+        "enum": ["unprocessed", "pending", "ready", "absent", "unsupported"]
+      },
+      "InvitationMethod": {
+        "type": "string",
+        "description": "Original scheduling method, including methods unsupported for actions.",
+        "enum": ["request", "reply", "cancel", "counter", "publish", "unknown"]
+      },
+      "InvitationParticipant": {
+        "type": "object",
+        "description": "Scheduling participant; saved responses are historical, not current RSVP.",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Participant calendar address."
+          },
+          "kind": {
+            "type": ["string", "null"],
+            "description": "Original CUTYPE, including resources and rooms."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Sender-supplied display name."
+          },
+          "participation_status": {
+            "type": ["string", "null"],
+            "description": "Original PARTSTAT, retaining extensions."
+          },
+          "role": {
+            "type": ["string", "null"],
+            "description": "Original ROLE, including optional and non-participants."
+          }
+        }
+      },
+      "InvitationResolution": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Viewer has no active owned Google-backed calendar.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["disconnected"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An active calendar is still ingesting this event.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["still_syncing"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A saved scheduling cancellation precedes removal from the synced projection.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["cancelled"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Original occurrence identity cannot safely be interpreted.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["unavailable"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "No independently authorized matching copy has synced.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["no_match"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "More than one owned account could respond; never guess.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["ambiguous"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Current authorized event and explicit capabilities.",
+            "required": [
+              "event",
+              "occurrence",
+              "responding_email",
+              "can_respond",
+              "can_join",
+              "is_stale",
+              "kind"
+            ],
+            "properties": {
+              "can_join": {
+                "type": "boolean",
+                "description": "Whether the conference link belongs to the reconciled scheduling target."
+              },
+              "can_respond": {
+                "type": "boolean",
+                "description": "Whether a response is currently allowed."
+              },
+              "event": {
+                "$ref": "#/components/schemas/CalendarEvent",
+                "description": "Current occurrence-specific content."
+              },
+              "is_stale": {
+                "type": "boolean",
+                "description": "Whether the provider projection trails the email revision."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["resolved"]
+              },
+              "occurrence": {
+                "$ref": "#/components/schemas/CalendarOccurrence",
+                "description": "Original occurrence identity and current time."
+              },
+              "responding_email": {
+                "type": "string",
+                "description": "Connected address that would respond."
+              }
+            }
+          }
+        ],
+        "description": "Refreshable result, distinct from the immutable email contents."
+      },
       "Label": {
         "type": "object",
         "required": ["link_id", "provider_label_id", "created_at"],
@@ -5679,6 +6166,24 @@
           }
         }
       },
+      "MessageCalendarInvitations": {
+        "type": "object",
+        "description": "Saved invitation data accompanying an email through every transport.",
+        "required": ["status", "invitations"],
+        "properties": {
+          "invitations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CalendarInvitation"
+            },
+            "description": "Distinct scheduling components, including recurrence overrides."
+          },
+          "status": {
+            "$ref": "#/components/schemas/InvitationExtractionStatus",
+            "description": "Whether extraction ran and whether it needs retrying."
+          }
+        }
+      },
       "MessageListVisibility": {
         "type": "string",
         "enum": ["Show", "Hide"]
@@ -5974,6 +6479,21 @@
                 "format": "int32"
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Saved calendar snapshots changed; refresh message data without a new-mail notification.",
+            "required": ["link_id", "event"],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": ["calendar_invitations_updated"]
+              },
+              "link_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
           }
         ],
         "description": "Payload for the `refresh_email` connection gateway event: identifies the\ninbox that changed and the kind of change."
@@ -6007,6 +6527,10 @@
           "recurrenceId": {
             "type": ["string", "null"],
             "description": "Original-start key of the occurrence the response targets."
+          },
+          "respondingEmail": {
+            "type": ["string", "null"],
+            "description": "The owned connected address whose attendance is changed. Validated by the domain."
           },
           "response": {
             "$ref": "#/components/schemas/AttendeeResponseStatus",

@@ -32,6 +32,8 @@ import type {
   GetThreadMessagesHandlerParams,
   GetThreadParams,
   GetThreadResponse,
+  Handler200,
+  HandlerParams,
   InitErrorCodeResponse,
   InitResponse,
   InitUserParams,
@@ -3360,6 +3362,62 @@ export const getThread = async (
     status: res.status,
     headers: res.headers,
   } as getThreadResponse;
+};
+
+export type handlerResponse200 = {
+  data: Handler200;
+  status: 200;
+};
+
+export type handlerResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type handlerResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type handlerResponseSuccess = handlerResponse200 & {
+  headers: Headers;
+};
+export type handlerResponseError = (handlerResponse401 | handlerResponse403) & {
+  headers: Headers;
+};
+
+export type handlerResponse = handlerResponseSuccess | handlerResponseError;
+
+export const getHandlerUrl = (threadId: string, params?: HandlerParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/email/threads/${threadId}/calendar-invitations?${stringifiedParams}`
+    : `/email/threads/${threadId}/calendar-invitations`;
+};
+
+export const handler = async (
+  threadId: string,
+  params?: HandlerParams,
+  options?: RequestInit
+): Promise<handlerResponse> => {
+  const res = await fetch(getHandlerUrl(threadId, params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: handlerResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as handlerResponse;
 };
 
 /**

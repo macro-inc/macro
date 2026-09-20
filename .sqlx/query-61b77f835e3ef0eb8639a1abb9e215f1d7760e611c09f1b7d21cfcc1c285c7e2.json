@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_links (\n            id, macro_id, fusionauth_user_id, email_address, provider\n        )\n        VALUES ($1, $2, $2, 'calendar-binds-soup@example.com', 'GMAIL')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "61b77f835e3ef0eb8639a1abb9e215f1d7760e611c09f1b7d21cfcc1c285c7e2"
+}

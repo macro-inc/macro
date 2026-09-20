@@ -227,6 +227,12 @@ async fn main() -> anyhow::Result<()> {
         ConnectionGatewayCalendarRefresh::new(connection_gateway_client, db.clone()),
     ));
     let api_result = api::setup_and_serve(ApiContext {
+        invitation_snapshots: email::outbound::invitation_pg::InvitationPgRepository(db.clone()),
+        invitation_resolver: Arc::new(
+            calendar_events::domain::invitations::CalendarInvitationResolver(
+                PgCalendarRepository::new(db.clone()),
+            ),
+        ),
         db,
         internal_api_key: config.internal_api_key.clone(),
         config: Arc::new(config),

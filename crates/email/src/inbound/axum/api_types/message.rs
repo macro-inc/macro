@@ -167,6 +167,9 @@ impl From<AttachmentForwarded> for ApiAttachmentForwarded {
 #[derive(Debug, Serialize, ToSchema)]
 #[cfg_attr(feature = "ai_schema", derive(schemars::JsonSchema))]
 pub struct ApiMessage {
+    #[schema(required = false)]
+    pub calendar_invitations:
+        crate::domain::models::calendar_invitation::MessageCalendarInvitations,
     pub db_id: Uuid,
     pub provider_id: Option<String>,
     pub thread_db_id: Uuid,
@@ -207,6 +210,7 @@ pub struct ApiMessage {
 impl From<Message> for ApiMessage {
     fn from(m: Message) -> Self {
         ApiMessage {
+            calendar_invitations: m.calendar_invitations,
             db_id: m.db_id,
             provider_id: m.provider_id,
             thread_db_id: m.thread_db_id,

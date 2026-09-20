@@ -5,6 +5,7 @@ import { err, ok } from 'neverthrow';
 import type { JSX } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { invalidateInvitationScheduling } from '../invitations';
 import { calendarKeys } from '../keys';
 import {
   useDeleteCalendarEventMutation,
@@ -659,4 +660,200 @@ describe('useUpdateCalendarEventMutation', () => {
     expect(descriptionAt(keys[1])).toBe('shared notes');
     expect(descriptionAt(keys[2])).toBe('shared notes');
   });
+});
+
+it('updates and rolls back invitation projections with no calendar viewport loaded', async () => {
+  testQueryClient.removeQueries({ queryKey: calendarKeys.occurrences._def });
+  const item = standaloneItem();
+  const key = calendarKeys.invitations('thread').queryKey;
+  const initial = {
+    invite: {
+      kind: 'resolved' as const,
+      ...item,
+      responding_email: 'self@example.com',
+      can_respond: true,
+      is_stale: false,
+    },
+  };
+  testQueryClient.setQueryData(key, initial);
+  const response = () =>
+    testQueryClient
+      .getQueryData<typeof initial>(key)
+      ?.invite.event.attendees.find((a) => a.isSelf)?.responseStatus;
+  const first = deferredResult();
+  const second = deferredResult();
+  rsvpCalendarEventMock
+    .mockReturnValueOnce(first.promise)
+    .mockReturnValueOnce(second.promise);
+  const rsvp = renderHook(() => useRsvpCalendarEventMutation());
+  const earlier = rsvp
+    .mutateAsync({ eventId: 'event-1', response: 'accepted' })
+    .catch(() => {});
+  await vi.waitFor(() => expect(response()).toBe('accepted'));
+  const later = rsvp.mutateAsync({ eventId: 'event-1', response: 'tentative' });
+  await vi.waitFor(() => expect(response()).toBe('tentative'));
+  first.resolve(failure());
+  await earlier;
+  expect(response()).toBe('tentative');
+  second.resolve(ok(item.event));
+  await later;
+  expect(response()).toBe('tentative');
+  rsvpCalendarEventMock.mockResolvedValueOnce(failure());
+  await expect(
+    rsvp.mutateAsync({ eventId: 'event-1', response: 'declined' })
+  ).rejects.toThrow();
+  expect(response()).toBe('tentative');
+});
+
+it('binds provider writes and optimistic rollback to one address across both hosts', async () => {
+  const item = standaloneItem();
+  item.event.attendees[1].isSelf = true;
+  const viewportKey = calendarKeys.occurrences('user', viewportA).queryKey;
+  testQueryClient.setQueryData(viewportKey, {
+    items: [item],
+    syncStatus: 'ready',
+  });
+  const inviteKey = calendarKeys.invitations('thread').queryKey;
+  const initial = {
+    invite: {
+      kind: 'resolved' as const,
+      ...item,
+      responding_email: 'other@example.com',
+      can_respond: true,
+      is_stale: false,
+    },
+  };
+  testQueryClient.setQueryData(inviteKey, initial);
+  const first = deferredResult();
+  const second = deferredResult();
+  rsvpCalendarEventMock
+    .mockReturnValueOnce(first.promise)
+    .mockReturnValueOnce(second.promise);
+  const mutation = renderHook(() => useRsvpCalendarEventMutation());
+  const response = (email: string) =>
+    testQueryClient
+      .getQueryData<typeof initial>(inviteKey)
+      ?.invite.event.attendees.find((attendee) => attendee.email === email)
+      ?.responseStatus;
+  const firstCall = mutation
+    .mutateAsync({
+      eventId: 'event-1',
+      respondingEmail: 'other@example.com',
+      response: 'accepted',
+    })
+    .catch(() => {});
+  await vi.waitFor(() =>
+    expect(response('other@example.com')).toBe('accepted')
+  );
+  expect(response('self@example.com')).toBe('needs_action');
+  expect(
+    viewportData(viewportA)?.items[0].event.attendees[1].responseStatus
+  ).toBe('accepted');
+  expect(rsvpCalendarEventMock).toHaveBeenCalledWith(
+    'event-1',
+    expect.objectContaining({ respondingEmail: 'other@example.com' })
+  );
+  const secondCall = mutation.mutateAsync({
+    eventId: 'event-1',
+    respondingEmail: 'self@example.com',
+    response: 'tentative',
+  });
+  await vi.waitFor(() =>
+    expect(response('self@example.com')).toBe('tentative')
+  );
+  first.resolve(failure());
+  await firstCall;
+  expect(response('other@example.com')).toBe('declined');
+  expect(response('self@example.com')).toBe('tentative');
+  second.resolve(ok(item.event));
+  await secondCall;
+});
+
+it('withdraws stale actions on email changes without refetching over a pending response', async () => {
+  testQueryClient.removeQueries({ queryKey: calendarKeys.occurrences._def });
+  const key = calendarKeys.invitations('thread').queryKey;
+  const item = standaloneItem();
+  const initial = {
+    invite: {
+      kind: 'resolved' as const,
+      ...item,
+      responding_email: 'self@example.com',
+      can_respond: true,
+      can_join: true,
+      is_stale: false,
+    },
+  };
+  testQueryClient.setQueryData(key, initial);
+  const response = deferredResult();
+  rsvpCalendarEventMock.mockReturnValueOnce(response.promise);
+  const invalidate = vi.spyOn(testQueryClient, 'invalidateQueries');
+  const rsvp = renderHook(() => useRsvpCalendarEventMutation());
+  const pending = rsvp.mutateAsync({
+    eventId: 'event-1',
+    respondingEmail: 'self@example.com',
+    response: 'accepted',
+  });
+  await vi.waitFor(() =>
+    expect(
+      testQueryClient.getQueryData<typeof initial>(key)?.invite.event
+        .attendees[0].responseStatus
+    ).toBe('accepted')
+  );
+  await invalidateInvitationScheduling();
+  expect(invalidate).toHaveBeenCalledWith({
+    queryKey: calendarKeys.invitations._def,
+    refetchType: 'none',
+  });
+  expect(
+    testQueryClient.getQueryData<typeof initial>(key)?.invite
+  ).toMatchObject({ can_respond: false, can_join: false });
+  expect(
+    testQueryClient.getQueryData<typeof initial>(key)?.invite.event.attendees[0]
+      .responseStatus
+  ).toBe('accepted');
+  response.resolve(ok(item.event));
+  await pending;
+  expect(invalidate).toHaveBeenCalledWith({
+    queryKey: calendarKeys.invitations._def,
+  });
+});
+
+it('drains a scheduling refresh received during the final RSVP settlement', async () => {
+  const occurrenceRefresh = Promise.withResolvers<void>();
+  const originalInvalidate =
+    testQueryClient.invalidateQueries.bind(testQueryClient);
+  const invalidate = vi
+    .spyOn(testQueryClient, 'invalidateQueries')
+    .mockImplementation((filters, options) => {
+      if (
+        JSON.stringify(filters?.queryKey) ===
+        JSON.stringify(calendarKeys.occurrences._def)
+      )
+        return occurrenceRefresh.promise;
+      return originalInvalidate(filters, options);
+    });
+  rsvpCalendarEventMock.mockResolvedValue(ok(standaloneItem().event));
+  const rsvp = renderHook(() => useRsvpCalendarEventMutation());
+  const pending = rsvp.mutateAsync({
+    eventId: 'event-1',
+    response: 'accepted',
+  });
+  await vi.waitFor(() =>
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: calendarKeys.occurrences._def,
+    })
+  );
+  await invalidateInvitationScheduling();
+  expect(invalidate).toHaveBeenLastCalledWith({
+    queryKey: calendarKeys.invitations._def,
+    refetchType: 'none',
+  });
+  invalidate.mockClear();
+  occurrenceRefresh.resolve();
+  await pending;
+  await vi.waitFor(() =>
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: calendarKeys.invitations._def,
+    })
+  );
 });

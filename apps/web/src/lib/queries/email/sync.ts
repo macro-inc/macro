@@ -1,5 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_INBOX_SYNC_STATUS } from '@core/constant/featureFlags';
+import { invalidateInvitationScheduling } from '@queries/calendar/invitations';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import {
   BackfillStatus,
@@ -14,6 +15,7 @@ import {
   setBackfillProgress,
 } from './backfill';
 import { invalidateEmailLinks } from './link';
+import { refreshEmailThreads } from './thread-refresh';
 
 const BACKFILL_SOUP_REFRESH_INTERVAL = 5_000;
 
@@ -37,8 +39,10 @@ function asRefreshEmailEvent(payload: unknown): RefreshEmailEvent | undefined {
  * Handles `refresh_email` websocket events. Steady-state mutations
  * (`upsert_message`, `update_labels`, `delete_message`) already invalidate soup
  * through the notification-driven path, and reacting to them again would
- * double-refetch, so only `backfill_progress`, `backfill`, `link_removed`, and
- * `photo_synced` act here.
+ * double-refetch soup. `upsert_message` still invalidates calendar resolutions;
+ * extraction's `calendar_invitations_updated` also refreshes saved message data.
+ * `backfill_progress`, `backfill`, `link_removed`, and `photo_synced` handle
+ * inbox-wide state.
  *
  * Backfill produces no notifications, so these are its only refresh signals.
  * `backfill_progress` carries live progress: it refetches soup (throttled,
@@ -51,6 +55,20 @@ function asRefreshEmailEvent(payload: unknown): RefreshEmailEvent | undefined {
 export function handleRefreshEmail(payload: unknown): void {
   const event = asRefreshEmailEvent(payload);
   if (!event) return;
+
+  if (
+    event.event === 'calendar_invitations_updated' &&
+    typeof event.link_id === 'string'
+  ) {
+    refreshEmailThreads(event.link_id);
+    void invalidateInvitationScheduling();
+    return;
+  }
+  // A scheduling update can affect cards in other threads with the same UID.
+  if (event.event === 'upsert_message' && typeof event.link_id === 'string') {
+    void invalidateInvitationScheduling();
+    return;
+  }
 
   // An inbox finished its async teardown — drop its now-deleted threads and
   // settle its links row. This is the only reliable signal that teardown is

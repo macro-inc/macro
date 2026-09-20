@@ -1,3 +1,4 @@
+mod calendar_invitations;
 use anyhow::Context;
 use axum::Router;
 use calendar_events::inbound::mutation_router::CalendarMutationRouterState;
@@ -82,6 +83,10 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
         calendar_watch::router()
     };
     Router::new()
+        .route(
+            "/email/threads/{thread_id}/calendar-invitations",
+            axum::routing::get(calendar_invitations::handler),
+        )
         .nest("/email", email::router(state))
         .nest("/gmail", gmail::router())
         .nest("/internal", internal::router())

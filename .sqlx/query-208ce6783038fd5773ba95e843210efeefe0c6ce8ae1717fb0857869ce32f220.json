@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT COUNT(*) AS \"count!\"\n        FROM \"UserHistory\"\n        WHERE \"itemId\" = $1 AND \"itemType\" = 'agent_session'\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "208ce6783038fd5773ba95e843210efeefe0c6ce8ae1717fb0857869ce32f220"
+}

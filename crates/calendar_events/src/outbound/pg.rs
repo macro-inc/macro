@@ -1,4 +1,5 @@
 //! PostgreSQL implementation of the calendar repository port.
+mod invitations;
 
 use std::collections::{HashMap, HashSet};
 
@@ -3378,9 +3379,9 @@ async fn replace_overrides(
             INSERT INTO calendar_event_overrides (
                 event_id, recurrence_id, original_starts_at, original_start_date,
                 starts_at, ends_at, start_date, end_date,
-                title, description, location, status, attendees_overridden
+                title, description, location, status, attendees_overridden, sequence, source_updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
             "#,
             event_id,
             &event_override.recurrence_id,
@@ -3395,6 +3396,8 @@ async fn replace_overrides(
             event_override.location.as_deref(),
             event_override.status.map(EventStatus::as_str),
             event_override.attendees.is_some(),
+            event_override.sequence.map(db_sequence).transpose()?,
+            event_override.source_updated_at,
         )
         .execute(&mut **tx)
         .await

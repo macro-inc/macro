@@ -6,14 +6,21 @@ import { useContacts } from '@core/user';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { clearSavedDraftThreadCache } from '@queries/email/draft-cache';
 import { useThreadQuery } from '@queries/email/thread';
+import { onEmailThreadRefresh } from '@queries/email/thread-refresh';
 import { createEffect, createMemo, onCleanup } from 'solid-js';
+import { useCalendarPreferences } from '../calendar/utils/preferences';
 import { createEmailComposeContext } from '../email-compose/compose-adapter';
 import { createEmailComposeHost } from '../email-compose/compose-host-adapter';
 import { convertContactInfoToEmailRecipient } from '../email-compose/core/recipient-conversion';
 import { createEmailAttachmentOpener } from '../email-message/attachment-action-adapter';
+import type { CalendarInvitation } from '../email-message/core/calendar-invitation';
 import type { EmailMessage } from '../email-message/core/email-message';
 import { createEmailRenderingContext } from '../email-message/rendering-adapter';
 import { EmailSenderIcon } from '../email-message/sender-icon-adapter';
+import {
+  type CalendarInvitationOpenTarget,
+  EmailCalendarInvitation,
+} from './calendar-invitation';
 import type { EmailThreadContext } from './context/email-thread-context';
 import { createEmailThreadSource } from './queries/thread-source';
 import { createThreadActionAdapter } from './thread-action-adapter';
@@ -22,10 +29,9 @@ import {
   type EmailThreadSurfaceProps,
 } from './views/email-thread-surface';
 
-export type EmailThreadProps = Omit<
-  EmailThreadSurfaceProps,
-  'context' | 'emailRendering'
->;
+export type EmailThreadProps = {
+  openCalendar?: (target: CalendarInvitationOpenTarget) => void;
+} & Omit<EmailThreadSurfaceProps, 'context' | 'emailRendering'>;
 
 /** App-facing composition. Import the surface or primitives for isolated tests. */
 export function EmailThread(props: EmailThreadProps) {
@@ -33,6 +39,7 @@ export function EmailThread(props: EmailThreadProps) {
     enabled: !!props.threadId(),
   }));
   const source = createEmailThreadSource(props.threadId, query);
+  const [calendarPreferences] = useCalendarPreferences();
   const contacts = useContacts();
   const viewerEmail = useEmail();
   const user = useUserContext();
@@ -62,12 +69,46 @@ export function EmailThread(props: EmailThreadProps) {
     compose,
     composeHost: createEmailComposeHost(),
     rendering: {
+      renderInvitation: (
+        message: EmailMessage,
+        invitation: CalendarInvitation
+      ) => (
+        <EmailCalendarInvitation
+          threadId={props.threadId()}
+          messageId={message.db_id}
+          offset={
+            Math.floor(
+              Math.max(
+                0,
+                source
+                  .thread()
+                  ?.messages.findIndex((m) => m.db_id === message.db_id) ?? 0
+              ) / 100
+            ) * 100
+          }
+          invitation={invitation}
+          hour12={calendarPreferences.timeFormat !== '24-hour'}
+          openCalendar={props.openCalendar}
+        />
+      ),
       openAttachment: createEmailAttachmentOpener(),
       renderAvatar: (message: EmailMessage) => (
         <EmailSenderIcon message={message} />
       ),
     },
   };
+  onCleanup(
+    onEmailThreadRefresh((linkId) => {
+      const thread = source.thread();
+      if (
+        !thread ||
+        thread.link_id === linkId ||
+        thread?.messages.some((message) => message.link_id === linkId)
+      ) {
+        void source.refresh().catch(compose.notices.reportError);
+      }
+    })
+  );
   const rendering = createEmailRenderingContext();
   createEffectOnEntityTypeNotification(
     useGlobalNotificationSource(),

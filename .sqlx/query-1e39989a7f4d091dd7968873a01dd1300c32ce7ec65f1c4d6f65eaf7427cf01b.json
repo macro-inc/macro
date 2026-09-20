@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO email_message_calendar_extraction(message_id, status, parser_version, pending_parts, retry_after, notification_pending)\n            VALUES ($1, CASE WHEN $2 THEN 'pending' WHEN EXISTS (SELECT 1 FROM email_message_calendar_invites WHERE message_id = $1) THEN 'ready' WHEN $3 THEN 'unsupported' ELSE 'absent' END, $4, $5, now() + interval '1 minute', true)\n            ON CONFLICT (message_id) DO UPDATE SET status = EXCLUDED.status,\n                parser_version = EXCLUDED.parser_version, pending_parts = EXCLUDED.pending_parts, notification_pending = true,\n                generation = email_message_calendar_extraction.generation + CASE WHEN $6::bigint IS NULL THEN 1 ELSE 0 END,\n                retry_after = now() + interval '1 minute' * LEAST(60, 1 + email_message_calendar_extraction.attempts), updated_at = now()\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Bool",
+        "Int2",
+        "Jsonb",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1e39989a7f4d091dd7968873a01dd1300c32ce7ec65f1c4d6f65eaf7427cf01b"
+}

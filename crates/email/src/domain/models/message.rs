@@ -7,6 +7,8 @@ use super::label::MessageLabel;
 /// A raw message record without assembled sub-types.
 #[derive(Debug, Clone)]
 pub struct MessageRow {
+    /// Saved scheduling snapshots, batch-loaded with the thread page.
+    pub calendar_invitations: super::calendar_invitation::MessageCalendarInvitations,
     /// Database ID of the message.
     pub db_id: uuid::Uuid,
     /// Provider message ID.
@@ -109,6 +111,8 @@ pub struct SimpleMessage {
 /// A fully assembled message with all sub-types resolved.
 #[derive(Debug, Clone)]
 pub struct Message {
+    /// Immutable email-owned scheduling details.
+    pub calendar_invitations: super::calendar_invitation::MessageCalendarInvitations,
     /// Database ID of the message.
     pub db_id: uuid::Uuid,
     /// Provider message ID.

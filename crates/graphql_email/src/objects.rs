@@ -20,6 +20,7 @@ const FULL_MESSAGE_FIELDS: &[&str] = &[
     "attachments",
     "attachmentsDraft",
     "attachmentsForwarded",
+    "calendarInvitations",
 ];
 
 /// Whether the selected message fields require fully hydrated email messages.
@@ -82,6 +83,16 @@ impl GraphqlSoupEmailMessage {
 /// An adaptively hydrated email content projection for Soup queries.
 #[Object]
 impl GraphqlSoupEmailMessage {
+    /// Immutable scheduling snapshots; JSON keeps both transports identical.
+    async fn calendar_invitations(
+        &self,
+    ) -> async_graphql::Result<
+        async_graphql::Json<email::domain::models::calendar_invitation::MessageCalendarInvitations>,
+    > {
+        Ok(async_graphql::Json(
+            self.full()?.calendar_invitations.clone(),
+        ))
+    }
     /// The unique message identifier.
     async fn id(&self) -> ID {
         ID(self.parsed().db_id.to_string())

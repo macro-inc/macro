@@ -4908,6 +4908,10 @@ An adaptively hydrated email content projection for Soup queries.
 """
 type GraphqlSoupEmailMessage {
 	"""
+	Immutable scheduling snapshots; JSON keeps both transports identical.
+	"""
+	calendarInvitations: JSON!
+	"""
 	The unique message identifier.
 	"""
 	id: ID!

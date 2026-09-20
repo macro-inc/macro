@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_threads SET has_calendar_attachment = true\n            WHERE id = (SELECT thread_id FROM email_messages WHERE id = $1)\n              AND EXISTS (SELECT 1 FROM email_message_calendar_invites WHERE message_id = $1)\n              AND NOT has_calendar_attachment",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1688613a1c0154403e603695cc5a13e8811672d0e8922be916245177c5e57f3b"
+}

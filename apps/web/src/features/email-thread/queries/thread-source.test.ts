@@ -2,6 +2,12 @@ import type { ThreadQueryData, ThreadQueryResult } from '@queries/email/thread';
 import type { ApiMessage, ApiThread } from '@service-email/generated/schemas';
 import { batch, createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
+import { invitationFixture } from '../../email-message/core/calendar-invitation-fixtures';
+
+const invalidateInvitations = vi.hoisted(() => vi.fn());
+vi.mock('@queries/calendar/invitations', () => ({
+  invalidateInvitationScheduling: invalidateInvitations,
+}));
 
 function message(id: string, overrides: Partial<ApiMessage> = {}): ApiMessage {
   return {
@@ -41,6 +47,17 @@ function thread(messages: ApiMessage[]): ApiThread {
 import { createEmailThreadSource, toEmailThread } from './thread-source';
 
 describe('thread query adaptation', () => {
+  it('preserves saved invitations through the explicit cached message projection', () => {
+    const invitations = {
+      status: 'ready' as const,
+      invitations: [invitationFixture],
+    };
+    expect(
+      toEmailThread(
+        thread([message('invite', { calendar_invitations: invitations })])
+      ).messages[0].calendar_invitations
+    ).toEqual(invitations);
+  });
   it('guards resource reads, retains available data during refresh errors, and clears it when switching threads', () =>
     createRoot((dispose) => {
       try {
@@ -232,4 +249,130 @@ it('keeps rendering and attachment identities while excluding transport metadata
   expect(wire.messages[0].attachments_forwarded[0].filename).toBe(
     'forward.txt'
   );
+});
+
+it('revalidates capabilities when newer scheduling snapshots arrive in a fresh thread', async () => {
+  const { setData, dispose } = createRoot((dispose) => {
+    const [data, setData] = createSignal<ThreadQueryData>({
+      thread: thread([
+        message('old', {
+          calendar_invitations: {
+            status: 'ready',
+            invitations: [invitationFixture],
+          },
+        }),
+      ]),
+      hasMore: false,
+    });
+    createEmailThreadSource(() => 'thread', {
+      isSuccess: true,
+      isError: false,
+      get data() {
+        return data();
+      },
+    } as ThreadQueryResult<ThreadQueryData>);
+    return { setData, dispose };
+  });
+  try {
+    invalidateInvitations.mockClear();
+    setData({
+      thread: thread([
+        message('old', {
+          calendar_invitations: {
+            status: 'ready',
+            invitations: [invitationFixture],
+          },
+        }),
+        message('cancel', {
+          calendar_invitations: {
+            status: 'ready',
+            invitations: [
+              { ...invitationFixture, method: 'cancel', sequence: 2 },
+            ],
+          },
+        }),
+      ]),
+      hasMore: false,
+    });
+    await vi.waitFor(() =>
+      expect(invalidateInvitations).toHaveBeenCalledOnce()
+    );
+  } finally {
+    dispose();
+  }
+});
+
+it('refreshes again when extraction completes during the initial message request', async () => {
+  const initial = Promise.withResolvers<void>();
+  const refetch = vi
+    .fn()
+    .mockReturnValueOnce(initial.promise)
+    .mockResolvedValue(undefined);
+  const { source, dispose } = createRoot((dispose) => ({
+    dispose,
+    source: createEmailThreadSource(() => 'thread', {
+      isLoading: true,
+      isSuccess: false,
+      isError: false,
+      refetch,
+    } as unknown as ThreadQueryResult<ThreadQueryData>),
+  }));
+  try {
+    const completed = source.refresh();
+    expect(refetch).toHaveBeenCalledOnce();
+    initial.resolve();
+    await completed;
+    expect(refetch).toHaveBeenCalledTimes(2);
+  } finally {
+    dispose();
+  }
+});
+
+it('does not revalidate capabilities for unchanged snapshots or ordinary email changes', async () => {
+  const { setData, dispose } = createRoot((dispose) => {
+    const [data, setData] = createSignal<ThreadQueryData>({
+      thread: thread([message('plain')]),
+      hasMore: false,
+    });
+    createEmailThreadSource(() => 'thread', {
+      isSuccess: true,
+      isError: false,
+      get data() {
+        return data();
+      },
+    } as ThreadQueryResult<ThreadQueryData>);
+    return { setData, dispose };
+  });
+  try {
+    invalidateInvitations.mockClear();
+    setData({
+      thread: thread([message('plain', { body_text: 'Changed body' })]),
+      hasMore: false,
+    });
+    await Promise.resolve();
+    expect(invalidateInvitations).not.toHaveBeenCalled();
+    const calendar_invitations = {
+      status: 'ready' as const,
+      invitations: [invitationFixture],
+    };
+    setData({
+      thread: thread([message('invite', { calendar_invitations })]),
+      hasMore: false,
+    });
+    await vi.waitFor(() =>
+      expect(invalidateInvitations).toHaveBeenCalledOnce()
+    );
+    setData({
+      thread: thread([
+        message('invite', {
+          calendar_invitations: structuredClone(calendar_invitations),
+        }),
+      ]),
+      hasMore: false,
+    });
+    await Promise.resolve();
+    expect(invalidateInvitations).toHaveBeenCalledOnce();
+  } finally {
+    dispose();
+  }
 });

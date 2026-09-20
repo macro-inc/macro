@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)\n        VALUES (\n            $1,\n            $2,\n            'TASK',\n            $3,\n            jsonb_build_object('type', 'SelectOption', 'value', jsonb_build_array($4::text))\n        )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ce4fce07a7540bcec0b2ca6b07d12967dd415596082a3101701e290147a944bc"
+}

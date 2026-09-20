@@ -97,7 +97,7 @@ document_storage_service_client = { path = "../../crates/document_storage_servic
 doppleganger = { workspace = true }
 doppler-config = { workspace = true }
 ego-tree = { workspace = true }
-email = { path = "../../crates/email", features = ["axum", "gmail_token", "inbound", "outbound"] }
+email = { path = "../../crates/email", features = ["axum", "gmail_token", "inbound", "outbound", "calendar_parser", "calendar_resolution"] }
 entity_access = { path = "../../crates/entity_access", default-features = false, features = ["outbound"] }
 entity_access_management = { path = "../../crates/entity_access_management" }
 email_api_client = { path = "../../crates/email_api_client", features = ["ports", "outbound-gmail"] }
