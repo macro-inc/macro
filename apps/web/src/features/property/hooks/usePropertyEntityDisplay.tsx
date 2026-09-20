@@ -62,7 +62,7 @@ export function usePropertyEntityDisplay(
 ): PropertyEntityDisplayResult {
   const previewType = () => entityTypeToItemType(entityType());
 
-  const previewWrapper = () => {
+  const previewSource = createMemo(() => {
     const eType = entityType();
     const pType = previewType();
     if (isPreviewable(eType)) {
@@ -71,16 +71,18 @@ export function usePropertyEntityDisplay(
         type: pType,
       }))[0];
     }
-  };
-  const preview = createMemo(() => previewWrapper()?.());
+  });
+  // Keep subscription ownership separate from its value: a live result must
+  // not dispose and reacquire the preview that produced it.
+  const preview = () => previewSource()?.();
 
-  const channelNameWrapper = () => {
+  const channelNameSource = createMemo(() => {
     const eType = entityType();
     if (eType === 'CHANNEL') {
       return useChannelName(entityId());
     }
-  };
-  const channelName = createMemo(() => channelNameWrapper()?.());
+  });
+  const channelName = () => channelNameSource()?.();
 
   const userNameWrapper = () => {
     const eType = entityType();

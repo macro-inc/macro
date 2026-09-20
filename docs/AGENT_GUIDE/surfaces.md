@@ -666,6 +666,11 @@ Requires authentication and the `enable-activity-feed` flag. Direct navigation a
 restored splits wait for flags to load; when disabled, they redirect to Home
 (`/app/component/inbox`) without loading the activity feed.
 
+When checking Activity, enable GraphQL Soup as well as the activity flag. Verify
+that an initial visit resolves entity names in both the feed and Most active,
+then reload and scroll through another page. Preview loading and live name
+updates should keep the page responsive without repeatedly fetching previews.
+
 GitHub-style actions heatmap (one a11y node per day — makes snapshots huge; prefer saving the
 snapshot to a file), then a `Most active` section header (styled like the feed's day headers)
 over a wrapping row of pill chips (entity icon, name, action count; click opens the entity,
