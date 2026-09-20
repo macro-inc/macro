@@ -229,7 +229,11 @@ TypeScript · `[ui]` UI / UX conventions
   (#3692)
 - **FE-19** `[ts]` Trust `match` narrowing — an exhaustive `ts-pattern` match already
   narrows the type inside each closure; a manual `Extract<>` alias is redundant. (#4201)
-- **FE-20** `[ts]` Exhaustive branching uses `match` from `ts-pattern`. (also: AGENTS.md)
+- **FE-20** `[ts]` Use `match` from `ts-pattern` instead of `switch`, with
+  `.exhaustive()` for closed unions and `.otherwise()` for open inputs.
+  (enforced: ast-grep `ts-no-switch` / `tsx-no-switch`; new or modified statements
+  fail `just check` and Conventions CI via `tooling/scripts/check-new-switches.ts`.
+  Untouched legacy statements and generated/vendor code are excluded.)
 - **FE-21** `[ts]` No `any` — proper types or `unknown` + type guards. (also: AGENTS.md)
 - **FE-22** `[ui]` Pending or permission-gated actions render as a dimmed version of the
   real UI with inline accept/reject controls — not a generic placeholder icon. (#4201)

@@ -1,0 +1,18 @@
+id: tsx-no-switch
+language: tsx
+# Twin of ts-no-switch; ast-grep rules are single-language.
+severity: warning
+message: "FE-20: Use match from ts-pattern instead of switch."
+note: |-
+  Use .exhaustive() for a closed union, or .otherwise() for an open input.
+  New or modified statements fail just check and CI via check-new-switches.ts.
+  See docs/STYLE_GUIDE.md FE-20.
+ignores:
+  - "**/generated/**"
+  - "**/__generated__/**"
+  - "**/*.gen.tsx"
+  - "**/*.generated.tsx"
+  - "**/vendor/**"
+  - "**/vendored/**"
+rule:
+  kind: switch_statement

@@ -52,8 +52,11 @@ check *ARGS:
     fi
     if [ -n "$sg" ]; then
       echo "── ast-grep code rules (rule ids map to docs/STYLE_GUIDE.md)"
-      bunx --yes @ast-grep/cli@0.44.1 scan --report-style=short $sg || fail=1
+      bunx --yes @ast-grep/cli@0.44.1 scan --report-style=short \
+        --off=ts-no-switch --off=tsx-no-switch $sg || fail=1
     fi
+    echo "── ts-pattern (FE-20: new or modified switch statements)"
+    CHECK_BASE="$base" bun tooling/scripts/check-new-switches.ts || fail=1
     if [ "{{ ARGS }}" = "full" ]; then
       if [ -n "$js" ]; then
         echo "── tsc (apps/web)"

@@ -1,4 +1,5 @@
 import { type LoroDoc, LoroMap } from 'loro-crdt';
+import { match } from 'ts-pattern';
 import {
   isSpreadsheetStyleEntry,
   MAX_COLUMN_WIDTH,
@@ -73,25 +74,33 @@ function retainedSheet(key: string, value: unknown): boolean {
 }
 
 function validEntry(root: string, key: string, value: unknown): boolean {
-  switch (root) {
-    case 'spreadsheetMeta':
-      return key === 'formatVersion' && value === SPREADSHEET_FORMAT_VERSION;
-    case 'spreadsheetSheetMetadata':
-      return isSpreadsheetSheetId(key) && !!parseWorkbookMetadata(value);
-    case 'spreadsheetSheetNames':
-      return isSpreadsheetSheetId(key) && sheetName(value);
-    case 'spreadsheetSheetOrder':
-      return isSpreadsheetSheetId(key) && Number.isFinite(value);
-    case 'spreadsheetDeletedSheets':
-      return isSpreadsheetSheetId(key) && typeof value === 'boolean';
-    case 'spreadsheetSheetRevivals':
-      return (
-        textEncoder.encode(key).length <= 200 && isSpreadsheetSheetId(value)
-      );
-    case 'spreadsheetSheetRetentions':
-      return retainedSheet(key, value);
-  }
-  return validCellEntry(root, key, value);
+  return match(root)
+    .with(
+      'spreadsheetMeta',
+      () => key === 'formatVersion' && value === SPREADSHEET_FORMAT_VERSION
+    )
+    .with(
+      'spreadsheetSheetMetadata',
+      () => isSpreadsheetSheetId(key) && !!parseWorkbookMetadata(value)
+    )
+    .with(
+      'spreadsheetSheetNames',
+      () => isSpreadsheetSheetId(key) && sheetName(value)
+    )
+    .with(
+      'spreadsheetSheetOrder',
+      () => isSpreadsheetSheetId(key) && Number.isFinite(value)
+    )
+    .with(
+      'spreadsheetDeletedSheets',
+      () => isSpreadsheetSheetId(key) && typeof value === 'boolean'
+    )
+    .with(
+      'spreadsheetSheetRevivals',
+      () => textEncoder.encode(key).length <= 200 && isSpreadsheetSheetId(value)
+    )
+    .with('spreadsheetSheetRetentions', () => retainedSheet(key, value))
+    .otherwise(() => validCellEntry(root, key, value));
 }
 
 function validCellEntry(root: string, key: string, value: unknown): boolean {
