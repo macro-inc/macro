@@ -33,6 +33,7 @@ import {
   replaceReplyIdInThreadPreview,
   restoreReplyToThreadPreview,
 } from './thread-preview';
+import { preserveLiveTimelinePages } from './timeline-pagination';
 
 export type MessageTimelineData = InfiniteData<
   MessageTimelinePage,
@@ -241,6 +242,11 @@ export function messageTimelineQueryOptions(
 ) {
   return {
     queryKey: messageKeys.messages(parent, loadAroundMessageId).queryKey,
+    // Rebase after InfiniteQuery assembles all pages, before its cache write.
+    // A page queryFn alone cannot update the old pages captured by TanStack.
+    persister: preserveLiveTimelinePages,
+    // A persister otherwise changes TanStack's default to offlineFirst.
+    networkMode: 'online' as const,
     queryFn: async ({
       pageParam,
     }: {
