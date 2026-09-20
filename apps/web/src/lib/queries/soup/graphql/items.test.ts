@@ -765,6 +765,257 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }
   });
 
+  describe('loaded Mail pages across cache revisions', () => {
+    function setupMailPages(limit = 2) {
+      const fake = makeFakeClient();
+      let revision = REVISION_0;
+      let ids = Array.from({ length: limit * 4 }, (_, i) => `mail-${i}`);
+      let notifyRevision!: (revision: string) => void;
+      let notifyGeneration!: () => void;
+      const [filter, setFilter] = createSignal(false);
+      const record = (id: string) => ({
+        __typename: 'GraphqlSoupEmailThread',
+        id,
+        name: revision,
+        mailAllPreview: {
+          id: `${id}-preview`,
+          subject: id,
+          snippet: 'canonical',
+          isDraft: false,
+          senderEmail: null,
+          senderName: null,
+          senderPhotoUrl: null,
+        },
+        mailDraftPreview: null,
+        mailSentPreview: null,
+      });
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      getGraphqlSoupCacheHostMock.mockReturnValue({
+        currentRevision: async () => revision,
+        entityFilter: entityFilterMock,
+        onCacheChanged: (callback: typeof notifyRevision) => {
+          notifyRevision = callback;
+          return () => {};
+        },
+        onCacheGenerationChanged: (callback: typeof notifyGeneration) => {
+          notifyGeneration = callback;
+          return () => {};
+        },
+      });
+      makeGraphqlSoupInputMock.mockImplementation(({ cursor }) =>
+        cursor
+          ? { continuation: { cursor } }
+          : {
+              initial: {
+                emailView: 'INBOX',
+                sortMethod: 'UPDATED_AT',
+                limit,
+                filters: filter() ? { emailFilter: { read: true } } : {},
+              },
+            }
+      );
+      entityFilterMock.mockImplementation(async (args) => {
+        expect(args.limit).toBe(limit);
+        const [cursorRevision, offset] = args.mail.cursor?.split(':') ?? [
+          revision,
+          '0',
+        ];
+        if (cursorRevision !== revision)
+          return { kind: 'stale-cursor', revision };
+        const start = Number(offset);
+        const page = ids.slice(start, start + limit);
+        return {
+          kind: 'mail-page',
+          revision,
+          keys: page.map((id) => `GraphqlSoupEmailThread:${id}`),
+          sortTimestamps: page.map(() => '2026-01-01T00:00:00Z'),
+          nextCursor:
+            start + limit < ids.length ? `${revision}:${start + limit}` : null,
+          optimistic: false,
+        };
+      });
+      readRecordsByKeysMock.mockImplementation(
+        async (_host, _selection, keys: string[]) => ({
+          revision,
+          records: keys.map((key) => ({
+            recordKey: key,
+            record: record(key.split(':')[1]),
+          })),
+        })
+      );
+      const { query, dispose } = createRoot((dispose) => ({
+        dispose,
+        query: createGraphqlSoupAstItemsQuery(
+          () => ({ params: {}, body: {} }),
+          () => ({ enabled: true })
+        ),
+      }));
+      return {
+        fake,
+        query,
+        dispose,
+        record,
+        setFilter,
+        notifyGeneration: () => notifyGeneration(),
+        ids: () => query.data()?.entities.map((entity) => entity.id),
+        revision: () => revision,
+        update: (nextIds: string[], notify = true) => {
+          ids = nextIds;
+          revision = String(Number(revision) + 1);
+          if (notify) notifyRevision(revision);
+        },
+      };
+    }
+
+    it.each(['server', 'cache'] as const)(
+      'retains three loaded %s pages beyond the per-request limit after an unrelated revision',
+      async (source) => {
+        const fixture = setupMailPages(200);
+        const { query, fake, dispose, record } = fixture;
+        const ids = Array.from({ length: 800 }, (_, i) => `mail-${i}`);
+        try {
+          await vi.waitFor(() =>
+            expect(query.data()?.entities).toHaveLength(200)
+          );
+          if (source === 'server') {
+            fake.executions[0].next(
+              graphqlSoupPage({
+                items: ids.slice(0, 200).map(record),
+                next_cursor: 'server-200',
+              })
+            );
+            for (const offset of [200, 400]) {
+              const next = query.fetchNextPage();
+              await vi.waitFor(() =>
+                expect(fake.executions).toHaveLength(offset / 200 + 1)
+              );
+              fake.executions.at(-1)?.next(
+                graphqlSoupPage({
+                  items: ids.slice(offset, offset + 200).map(record),
+                  next_cursor: `server-${offset + 200}`,
+                })
+              );
+              await next;
+            }
+            // Match the first network page's revision before advancing it.
+            fixture.update(ids, false);
+          } else {
+            await query.fetchNextPage();
+            await query.fetchNextPage();
+          }
+          expect(query.data()?.entities).toHaveLength(600);
+          fixture.update(ids);
+          await vi.waitFor(() => {
+            expect(query.data()?.cachedMail).toBe(true);
+            expect(query.data()?.entities[0]?.name).toBe(fixture.revision());
+            expect(fixture.ids()).toEqual(ids.slice(0, 600));
+          });
+          expect(entityFilterMock.mock.calls.at(-1)?.[0].mail.cursor).toMatch(
+            /:400$/
+          );
+          await query.fetchNextPage();
+          expect(fixture.ids()).toEqual(ids);
+          expect(query.hasNextPage()).toBe(false);
+          query.resetToInitialPage();
+          await vi.waitFor(() =>
+            expect(query.data()?.entities).toHaveLength(200)
+          );
+        } finally {
+          dispose();
+        }
+      }
+    );
+
+    it('rebuilds loaded pages from matching records, and resets depth for filters and cache generations', async () => {
+      const fixture = setupMailPages();
+      const { query, dispose } = fixture;
+      try {
+        await vi.waitFor(() => expect(query.data()?.entities).toHaveLength(2));
+        await query.fetchNextPage();
+        await query.fetchNextPage();
+        expect(query.data()?.entities).toHaveLength(6);
+        // The first two rows were deleted or stopped matching the filter.
+        fixture.update(['mail-2', 'mail-3', 'mail-4', 'mail-5', 'new']);
+        await vi.waitFor(() =>
+          expect(fixture.ids()).toEqual([
+            'mail-2',
+            'mail-3',
+            'mail-4',
+            'mail-5',
+            'new',
+          ])
+        );
+        expect(query.hasNextPage()).toBe(false);
+        fixture.setFilter(true);
+        await vi.waitFor(() =>
+          expect(fixture.ids()).toEqual(['mail-2', 'mail-3'])
+        );
+        await query.fetchNextPage();
+        expect(query.data()?.entities).toHaveLength(4);
+        fixture.notifyGeneration();
+        await vi.waitFor(() =>
+          expect(fixture.ids()).toEqual(['mail-2', 'mail-3'])
+        );
+      } finally {
+        dispose();
+      }
+    });
+
+    it('retains loaded depth while recovering a stale continuation cursor before its change notification', async () => {
+      const fixture = setupMailPages();
+      const { query, dispose } = fixture;
+      try {
+        await vi.waitFor(() => expect(query.data()?.entities).toHaveLength(2));
+        await query.fetchNextPage();
+        fixture.update(['new-0', 'new-1', 'new-2', 'new-3', 'new-4'], false);
+        await query.fetchNextPage();
+        await vi.waitFor(() =>
+          expect(fixture.ids()).toEqual(['new-0', 'new-1', 'new-2', 'new-3'])
+        );
+        await query.fetchNextPage();
+        expect(fixture.ids()).toEqual([
+          'new-0',
+          'new-1',
+          'new-2',
+          'new-3',
+          'new-4',
+        ]);
+      } finally {
+        dispose();
+      }
+    });
+
+    it('restarts all loaded pages when their revision changes between reads', async () => {
+      const fixture = setupMailPages();
+      const { query, dispose } = fixture;
+      try {
+        await vi.waitFor(() => expect(query.data()?.entities).toHaveLength(2));
+        await query.fetchNextPage();
+        const readPage = entityFilterMock.getMockImplementation();
+        entityFilterMock.mockImplementationOnce(async (args) => {
+          const result = await readPage?.(args);
+          fixture.update(['new-0', 'new-1', 'new-2', 'new-3', 'new-4'], false);
+          return result;
+        });
+        fixture.update(['old-0', 'old-1', 'old-2', 'old-3', 'old-4']);
+        await vi.waitFor(() =>
+          expect(fixture.ids()).toEqual(['new-0', 'new-1', 'new-2', 'new-3'])
+        );
+        expect(entityFilterMock.mock.calls.at(-1)?.[0].mail.cursor).toBe('2:2');
+        await query.fetchNextPage();
+        expect(fixture.ids()).toEqual([
+          'new-0',
+          'new-1',
+          'new-2',
+          'new-3',
+          'new-4',
+        ]);
+      } finally {
+        dispose();
+      }
+    });
+  });
+
   it.each([
     { mail: true, kind: 'mail-page' },
     { mail: true, kind: 'incomplete' },
