@@ -925,6 +925,7 @@ function notificationEntityTypeToSoupTag(
     .with('foreign_entity', () => 'foreignEntity' as const)
     .with('reminder', () => 'reminder' as const)
     .with('calendar_event', () => 'calendarEvent' as const)
+    .with('agent_session', () => 'agentSession' as const)
     .with(
       P.union(
         'user',
@@ -935,7 +936,6 @@ function notificationEntityTypeToSoupTag(
         'crm_company',
         'crm_contact',
         'skill',
-        'agent_session',
         'scheduled_action',
         'initiative'
       ),

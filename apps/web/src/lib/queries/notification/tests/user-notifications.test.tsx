@@ -935,6 +935,43 @@ describe('optimisticInsertNotification', () => {
     expect(mockRefetchSoupEntity).not.toHaveBeenCalled();
   });
 
+  it('restores an agent-session row on an agent notification', () => {
+    // An agent-session row marked done left the inbox; the next settled /
+    // waiting-for-input notification has to bring it back like any other
+    // notification-backed entity.
+    mockHasSoupEntity.mockReturnValue(true);
+    seedQueryCache([createMockNotificationPage([])]);
+
+    const agentNotification = createMockNotification({
+      entity_type: 'agent_session',
+      entity_id: 'session-1',
+      created_at: '2024-01-01T00:00:00.000Z',
+      notification_event_type: 'agent_session_settled',
+      notification_metadata: {
+        tag: 'agent_session_settled',
+        content: {
+          sessionName: 'Fix mark done',
+          excerpt: 'Done.',
+        },
+      },
+    } as unknown as Partial<UnifiedNotification>);
+
+    optimisticInsertNotification(agentNotification);
+
+    expect(mockOptimisticUpdateSoupItemUpdatedAt).toHaveBeenCalledWith(
+      'session-1',
+      'agentSession',
+      '2024-01-01T00:00:00.000Z'
+    );
+    expect(vi.mocked(bumpSoupEntityNotifiedAt)).toHaveBeenCalledWith(
+      'session-1',
+      '2024-01-01T00:00:00.000Z'
+    );
+    expect(
+      vi.mocked(restoreSoupEntityToDoneFilteredQueries)
+    ).toHaveBeenCalledWith('session-1', 'unseen');
+  });
+
   it('should skip soup update for unsupported entity types', () => {
     seedQueryCache([createMockNotificationPage([])]);
 
