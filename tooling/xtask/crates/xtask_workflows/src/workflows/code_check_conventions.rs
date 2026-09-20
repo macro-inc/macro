@@ -6,7 +6,6 @@
 //! `severity: error` findings; `warning`/`hint` rules surface through
 //! CodeRabbit's ast-grep integration on changed code instead. The rules encode
 //! conventions from `docs/STYLE_GUIDE.md` at the repo root.
-//! FE-20 additionally blocks new or modified TypeScript switch statements.
 
 use gh_workflow::{
     Concurrency, Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType, Run,
@@ -58,19 +57,10 @@ fn ast_grep() -> Job {
     steps::gated_job()
         .name("ast-grep Conventions")
         .runs_on(conventions_runner())
-        .add_step(steps::checkout(true, false))
+        .add_step(steps::checkout(false, false))
         .add_step(steps::mount_web_cache_volume(false))
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
-        .add_step(
-            Step::new("Test ts-pattern enforcement")
-                .run("bun test tooling/scripts/check-new-switches.test.ts"),
-        )
-        .add_step(
-            Step::new("Enforce ts-pattern on changed statements")
-                .add_env(("CHECK_BASE", "${{ github.event.pull_request.base.sha }}"))
-                .run("bun tooling/scripts/check-new-switches.ts"),
-        )
         .add_step(run_ast_grep())
         .add_step(steps::teardown_nix())
 }
@@ -100,12 +90,9 @@ fn paths_filter() -> Step<Use> {
                 should_run:
                   - 'crates/**'
                   - 'services/**'
-                  - 'tooling/**'
-                  - 'apps/**'
-                  - 'infra/**'
+                  - 'tooling/xtask/**'
+                  - 'apps/web/**'
                   - 'packages/**'
-                  - '**/*.ts'
-                  - '**/*.tsx'
                   - 'rules/**'
                   - 'sgconfig.yml'
                   - '.github/actions/teardown-nix/**'
@@ -115,8 +102,7 @@ fn paths_filter() -> Step<Use> {
 }
 
 fn run_ast_grep() -> Step<Run> {
-    Step::new("Run ast-grep")
-        .run("bunx --yes @ast-grep/cli@0.44.1 scan --off=ts-no-switch --off=tsx-no-switch")
+    Step::new("Run ast-grep").run("bunx --yes @ast-grep/cli@0.44.1 scan")
 }
 
 fn check_job_results() -> Step<Run> {

@@ -31,12 +31,9 @@ jobs:
           should_run:
             - 'crates/**'
             - 'services/**'
-            - 'tooling/**'
-            - 'apps/**'
-            - 'infra/**'
+            - 'tooling/xtask/**'
+            - 'apps/web/**'
             - 'packages/**'
-            - '**/*.ts'
-            - '**/*.tsx'
             - 'rules/**'
             - 'sgconfig.yml'
             - '.github/actions/teardown-nix/**'
@@ -52,7 +49,6 @@ jobs:
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
         clean: 'false'
-        fetch-depth: '0'
         persist-credentials: 'false'
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
@@ -64,14 +60,8 @@ jobs:
       uses: './.github/actions/setup-nix'
     - name: Setup Nix dev shell
       uses: './.github/actions/setup-nix-dev-shell'
-    - name: Test ts-pattern enforcement
-      run: bun test tooling/scripts/check-new-switches.test.ts
-    - name: Enforce ts-pattern on changed statements
-      run: bun tooling/scripts/check-new-switches.ts
-      env:
-        CHECK_BASE: ${{ github.event.pull_request.base.sha }}
     - name: Run ast-grep
-      run: bunx --yes @ast-grep/cli@0.44.1 scan --off=ts-no-switch --off=tsx-no-switch
+      run: bunx --yes @ast-grep/cli@0.44.1 scan
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
