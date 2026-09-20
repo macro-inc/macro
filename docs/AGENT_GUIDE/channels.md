@@ -365,6 +365,9 @@ not restore the old call or remove the new call's end handler.
 An empty native snapshot before the first media update must not cancel a new
 join. Once native has reported the session, disconnecting or ending it must
 cancel pending connection/recovery and allow a new join.
+Cancelling after a token is issued must also remove server membership, even if
+media has not connected yet. Repeated end events share that cleanup; a newer
+native call must survive while cleanup for the cancelled attempt finishes.
 
 ## Channel tabs
 

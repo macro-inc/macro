@@ -214,6 +214,61 @@ describe('shared call lifecycle', () => {
     expect(ports.onJoined).not.toHaveBeenCalled();
   });
 
+  it.each([0, 300])(
+    'leaves server membership when native cancels %s ms after requesting a token',
+    async (elapsed) => {
+      const { lifecycle, ports } = setup();
+      let participantRegistered = false;
+      ports.requestToken.mockImplementationOnce(async () => {
+        participantRegistered = true;
+        return token;
+      });
+      ports.leave.mockImplementationOnce(async () => {
+        participantRegistered = false;
+      });
+      const connection = deferred<void>();
+      ports.connect.mockReturnValueOnce(connection.promise);
+      const cancelled = expect(lifecycle.join(call.channelId)).rejects.toThrow(
+        'cancelled'
+      );
+      await vi.advanceTimersByTimeAsync(elapsed);
+      expect(participantRegistered).toBe(true);
+      lifecycle.syncSession(undefined);
+      lifecycle.syncSession(undefined);
+      await cancelled;
+      await vi.advanceTimersByTimeAsync(0);
+      expect(ports.disconnect).toHaveBeenCalledExactlyOnceWith({
+        endNativeCall: false,
+      });
+      expect(ports.leave).toHaveBeenCalledExactlyOnceWith(call.channelId);
+      expect(participantRegistered).toBe(false);
+      expect(lifecycle.getState().t).toBe('idle');
+      connection.resolve();
+      await vi.advanceTimersByTimeAsync(JOIN_TIMEOUT_MS);
+      expect(ports.onJoined).not.toHaveBeenCalled();
+      expect(ports.leave).toHaveBeenCalledOnce();
+    }
+  );
+
+  it('leaves server membership even if native cancellation disconnect fails', async () => {
+    const { lifecycle, ports } = setup();
+    const failure = new Error('transport cleanup failed');
+    ports.disconnect.mockRejectedValueOnce(failure);
+    const connection = deferred<void>();
+    ports.connect.mockReturnValueOnce(connection.promise);
+    const cancelled = expect(lifecycle.join(call.channelId)).rejects.toThrow(
+      'cancelled'
+    );
+    await vi.advanceTimersByTimeAsync(300);
+    lifecycle.syncSession(undefined);
+    await cancelled;
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ports.leave).toHaveBeenCalledExactlyOnceWith(call.channelId);
+    expect(ports.reportError).toHaveBeenCalledExactlyOnceWith(failure);
+    expect(lifecycle.getState().t).toBe('idle');
+    connection.resolve();
+  });
+
   it('detaches the session listener before explicit leave and shares duplicate leaves', async () => {
     const { lifecycle, ports, unwatch, disconnect, join } = setup();
     await join();

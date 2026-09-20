@@ -231,7 +231,12 @@ describe('native snapshot events and call ownership', () => {
       native.setSnapshot({ ...first, connectionState });
       native.setSnapshot(null);
       await cancelled;
+      await vi.advanceTimersByTimeAsync(0);
       expect(lifecycle.getState()).toEqual({ t: 'idle' });
+      expect(ports.disconnect).toHaveBeenCalledExactlyOnceWith({
+        endNativeCall: false,
+      });
+      expect(ports.leave).toHaveBeenCalledExactlyOnceWith(first.channelId);
       pending.resolve();
       await vi.advanceTimersByTimeAsync(0);
       expect(ports.onJoined).not.toHaveBeenCalled();
@@ -239,6 +244,53 @@ describe('native snapshot events and call ownership', () => {
       await vi.advanceTimersByTimeAsync(300);
       await retry;
       expect(ports.requestToken).toHaveBeenCalledTimes(2);
+    }
+  );
+
+  it.each(['resolve', 'reject', 'timeout'] as const)(
+    'preserves a new native call when cancelled-join cleanup finishes with %s',
+    async (completion) => {
+      const { native, lifecycle, ports } = setup(null);
+      const connection = deferred();
+      const cleanup = deferred();
+      ports.connect.mockReturnValueOnce(connection.promise);
+      ports.leave.mockReturnValueOnce(cleanup.promise);
+      const cancelled = expect(lifecycle.join(first.channelId)).rejects.toThrow(
+        'cancelled'
+      );
+      await vi.advanceTimersByTimeAsync(300);
+      native.setSnapshot({ ...first, connectionState: 'connecting' });
+      native.setSnapshot(null);
+      await cancelled;
+      await vi.advanceTimersByTimeAsync(0);
+      expect(lifecycle.getState().t).toBe('leaving');
+      expect(ports.leave).toHaveBeenCalledExactlyOnceWith(first.channelId);
+      native.setSnapshot(second);
+      if (completion === 'resolve') cleanup.resolve();
+      else if (completion === 'reject') cleanup.reject(new Error('offline'));
+      else await vi.advanceTimersByTimeAsync(LEAVE_TIMEOUT_MS);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(lifecycle.getState()).toEqual({
+        t: 'active',
+        call: identity(second),
+      });
+      expect(ports.watch).toHaveBeenCalledExactlyOnceWith(
+        identity(second),
+        expect.any(Function),
+        expect.any(Function)
+      );
+      expect(ports.reportError).toHaveBeenCalledTimes(
+        completion === 'resolve' ? 0 : 1
+      );
+      connection.resolve();
+      cleanup.resolve();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(ports.onJoined).not.toHaveBeenCalled();
+      expect(ports.leave).toHaveBeenCalledOnce();
+      expect(lifecycle.getState()).toEqual({
+        t: 'active',
+        call: identity(second),
+      });
     }
   );
 
@@ -282,6 +334,8 @@ describe('native snapshot events and call ownership', () => {
         call: identity(first),
       });
       expect(ports.onJoined).toHaveBeenCalledExactlyOnceWith(identity(first));
+      expect(ports.disconnect).not.toHaveBeenCalled();
+      expect(ports.leave).not.toHaveBeenCalled();
     }
   );
 

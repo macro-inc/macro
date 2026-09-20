@@ -70,7 +70,6 @@ const definition: MachineDef<CallLifecycleState, Event> = {
             error,
           } as const,
         }))
-        .with({ t: 'finish' }, () => ({ state: { t: 'idle' } as const }))
         .with({ t: 'leave' }, ({ request }) => ({
           state: { t: 'leaving', request } as const,
         }))
@@ -250,14 +249,6 @@ export function createCallLifecycle(options: {
       active: ({ call }, dispatch) => {
         options.setError(null);
         let active = true;
-        async function endNativeSession() {
-          if (!active) return;
-          try {
-            await leave(call.channelId, { endNativeCall: false });
-          } catch (error) {
-            options.reportError(error);
-          }
-        }
         const unwatch = options.watch(
           call,
           (reason) => {
@@ -266,7 +257,9 @@ export function createCallLifecycle(options: {
             dispatch({ t: 'disconnected', retry, at: Date.now() });
             if (!retry) notifyLeft(call.channelId);
           },
-          () => void endNativeSession()
+          () => {
+            if (active) void leaveEndedNativeSession(call.channelId);
+          }
         );
         return () => {
           active = false;
@@ -441,6 +434,14 @@ export function createCallLifecycle(options: {
     return request.promise;
   }
 
+  async function leaveEndedNativeSession(channelId: string) {
+    try {
+      await leave(channelId, { endNativeCall: false });
+    } catch (error) {
+      options.reportError(error);
+    }
+  }
+
   return {
     join,
     leave,
@@ -452,9 +453,15 @@ export function createCallLifecycle(options: {
         machine.dispatch({ t: 'adopt', call });
         return;
       }
-      const channelId = match(machine.getState())
+      const state = machine.getState();
+      if (state.t === 'joining') {
+        // Requesting a token can register a server participant before media
+        // connects. Cancellation must complete the normal leave cleanup.
+        void leaveEndedNativeSession(state.request.channelId);
+        return;
+      }
+      const channelId = match(state)
         .with({ t: 'active' }, ({ call }) => call.channelId)
-        .with({ t: 'joining' }, ({ request }) => request.channelId)
         .with(
           { t: 'retry-wait' },
           { t: 'checking' },
