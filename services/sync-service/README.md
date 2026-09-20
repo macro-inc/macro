@@ -144,8 +144,6 @@ and HTTP bodies are bounded while streaming. Signed actor/user attribution is
 bounded and stored beside the existing operation log; request bodies cannot
 specify attribution.
 
-The former `/spreadsheet-snapshot` and `/spreadsheet-update` URLs remain routing
-aliases for independently deployed callers. They have the same generic behavior.
 The existing binary `/snapshot` endpoint is unchanged.
 
 Content notifications go to DSS's internal
@@ -155,5 +153,4 @@ lets search choose its supported extractor. Sync no longer infers Markdown from
 CRDT roots or labels updates as Markdown. The `search-service` feature continues
 to control these notifications for compatibility with existing build commands.
 
-Deploy DSS first, then Sync, then the AI editing worker. Legacy URL aliases allow
-old editing workers to keep working while the new generic URLs roll out.
+Deploy DSS first, then roll out Sync and the AI editing worker together.

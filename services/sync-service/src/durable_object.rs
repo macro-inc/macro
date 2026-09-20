@@ -1050,13 +1050,6 @@ pub static ROUTER: LazyLock<Router<&str>> = LazyLock::new(|| {
     router
         .insert("/document/{document_id}/update", path::UPDATE)
         .unwrap();
-    // Compatibility aliases for callers deployed before the generic document API.
-    router
-        .insert("/document/{document_id}/spreadsheet-snapshot", path::STATE)
-        .unwrap();
-    router
-        .insert("/document/{document_id}/spreadsheet-update", path::UPDATE)
-        .unwrap();
     router
         .insert("/document/{document_id}/peer/{peer_id}", path::PEER)
         .unwrap();

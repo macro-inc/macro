@@ -253,30 +253,6 @@ describe("atomic document API", () => {
 		expect((await snapshot(id)).doc.toJSON()).toEqual(source.doc.toJSON());
 	});
 
-	it("keeps legacy URLs as aliases to the generic document API", async () => {
-		const id = await seed();
-		const source = await snapshot(id);
-		const response = await mf.dispatchFetch(
-			`http://localhost/document/${id}/spreadsheet-update`,
-			{
-				method: "POST",
-				headers: { ...auth(id), "Content-Type": "application/json" },
-				body: JSON.stringify(edit(source)),
-			},
-		);
-		expect(response.status).toBe(200);
-		const legacy = await mf.dispatchFetch(
-			`http://localhost/document/${id}/spreadsheet-snapshot`,
-			{
-				headers: auth(id, "view"),
-			},
-		);
-		expect(legacy.status).toBe(200);
-		expect(((await legacy.json()) as { revision: string }).revision).toBe(
-			(await snapshot(id)).revision,
-		);
-	});
-
 	it("stores signed actor metadata with the oplog and ignores body attribution", async () => {
 		const id = await seed();
 		const request = edit(await snapshot(id));
