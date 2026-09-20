@@ -1,7 +1,8 @@
 //! Permission requests and their answers.
 
 use crate::domain::model::{
-    MessagePart, PermissionOption, PermissionOptionKind, PermissionOutcome, ToolUseId,
+    MessagePart, PendingInteraction, PendingPermission, PermissionOption, PermissionOptionKind,
+    PermissionOutcome, ToolUseId,
 };
 use agent_client_protocol::RawJsonRpcParams;
 use agent_client_protocol::schema::v1::{
@@ -9,7 +10,7 @@ use agent_client_protocol::schema::v1::{
 };
 
 use super::convert::deserialize_params;
-use super::state::{Changed, FoldState};
+use super::state::{Changed, FoldState, ToolPath};
 
 impl FoldState {
     /// Handle a `session/request_permission`: add a permission part and record
@@ -18,10 +19,10 @@ impl FoldState {
         &mut self,
         request_id: &RequestId,
         params: Option<&RawJsonRpcParams>,
-    ) -> Option<Changed> {
+    ) -> Option<(Changed, bool)> {
         let request = deserialize_params::<RequestPermissionRequest>(params)?;
         let tool_call = ToolUseId(request.tool_call.tool_call_id.0.to_string());
-        let options = request
+        let options: Vec<PermissionOption> = request
             .options
             .into_iter()
             .map(|option| PermissionOption {
@@ -31,20 +32,28 @@ impl FoldState {
             })
             .collect();
 
-        // Recorded even with no turn open, so a late response is still
-        // recognized as an answer rather than an uncorrelated frame.
-        self.pending_permissions
-            .insert(request_id.clone(), tool_call.clone());
-
         let (changed, position) = self.push_agent_part(MessagePart::Permission {
+            request_id: request_id.into(),
             tool_call: tool_call.clone(),
-            options,
+            options: options.clone(),
             outcome: PermissionOutcome::Pending,
         })?;
-        self.open_turn()
-            .permission_positions
-            .insert(tool_call, position);
-        Some(changed)
+        self.pending_permissions.insert(
+            request_id.clone(),
+            ToolPath {
+                message: changed.message,
+                path: vec![position],
+            },
+        );
+        self.metadata
+            .pending_interactions
+            .push(PendingInteraction::Permission(PendingPermission {
+                request_id: request_id.into(),
+                turn: self.messages[changed.message].id.0,
+                tool_call,
+                options,
+            }));
+        Some((changed, true))
     }
 
     /// Handle the response to a permission request.
@@ -52,8 +61,8 @@ impl FoldState {
         &mut self,
         response_id: &RequestId,
         value: Option<&serde_json::Value>,
-    ) -> Option<Changed> {
-        let tool_call = self.pending_permissions.remove(response_id)?;
+    ) -> Option<(Changed, bool)> {
+        let at = self.pending_permissions.remove(response_id)?;
 
         let outcome = match value {
             // A JSON-RPC error, not a result: the harness failed to answer
@@ -78,15 +87,20 @@ impl FoldState {
             }
         };
 
-        let position = *self.turn.as_ref()?.permission_positions.get(&tool_call)?;
-        let (message, parts) = self.agent_parts_mut()?;
         if let Some(MessagePart::Permission {
             outcome: existing, ..
-        }) = parts.get_mut(position)
+        }) = self.part_at_mut(&at)
         {
             *existing = outcome;
         }
-        Some(Changed::updated(message))
+        let before = self.metadata.pending_interactions.len();
+        self.metadata.pending_interactions.retain(|pending| {
+            !matches!(pending, PendingInteraction::Permission(permission) if permission.request_id == response_id.into())
+        });
+        Some((
+            Changed::updated(at.message),
+            before != self.metadata.pending_interactions.len(),
+        ))
     }
 }
 

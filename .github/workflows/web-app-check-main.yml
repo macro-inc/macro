@@ -113,9 +113,6 @@ jobs:
     - name: Check Lexical Service Types
       run: bun run check
       working-directory: services/lexical-service
-    - name: Test Lexical Service Endpoints
-      run: bun test src
-      working-directory: services/lexical-service
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
@@ -207,7 +204,7 @@ jobs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Build
-    runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10

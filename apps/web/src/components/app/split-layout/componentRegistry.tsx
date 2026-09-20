@@ -914,6 +914,11 @@ if (LOCAL_ONLY) {
   );
 
   registerComponent(
+    'agent-changes-ui',
+    lazy(() => import('@app/features/agent-changes/debug/Gallery'))
+  );
+
+  registerComponent(
     'linked-conversation',
     withAuth(lazy(() => import('@core/linked-conversation/debug/Demo')))
   );

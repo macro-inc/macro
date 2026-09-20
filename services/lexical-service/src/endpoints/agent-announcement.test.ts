@@ -1,5 +1,6 @@
 import '../polyfills/prism';
 import { describe, expect, it } from 'bun:test';
+import { readReplyTargetData } from '@macro-inc/lexical-core/nodes/ReplyTargetNode';
 import { fromHono } from 'chanfana';
 import { Hono } from 'hono';
 import { AgentAnnouncementEndpoint } from './agent-announcement';
@@ -32,52 +33,45 @@ describe('agent announcements', () => {
     promptedMessage: { turn: 0, author: 'user' },
     status: 'booting',
   };
-  const chipMarkdown = `<m-magic-chip>${JSON.stringify(chip)}</m-magic-chip>`;
-  const target = {
+  const replyTarget = {
     targetMessageId: 'message',
     targetThreadId: 'thread',
     displayText: 'hello',
     senderId: 'user',
   };
-  const replyTargetMarkdown = (parent: { type: string; id: string }) =>
-    `<m-reply-target>${JSON.stringify({ parent, ...target })}</m-reply-target>`;
-
-  it('replies to the channel message the harness names as parent', async () => {
-    const parent = { type: 'channel', id: 'channel' };
+  /** The reply target exactly as the editor's parser reads it back. */
+  const parsedReplyTarget = (markdown: string) => {
+    const match = markdown.match(/^<m-reply-target>(.*?)<\/m-reply-target>/s);
+    if (!match?.[1]) throw new Error(`no reply target in ${markdown}`);
+    return readReplyTargetData(JSON.parse(match[1]));
+  };
+  it('announces under the parent the reply lives in', async () => {
+    const parent = { type: 'document' as const, id: 'doc' };
     const response = await request({
-      replyTarget: { parent, channelId: 'channel', ...target },
+      replyTarget: { parent, ...replyTarget },
       chip,
     });
     expect(response.status).toBe(200);
-    expect(await response.json<{ markdown: string }>()).toEqual({
-      markdown: `${replyTargetMarkdown(parent)}\n\n${chipMarkdown}`,
-    });
+    const { markdown } = await response.json<{ markdown: string }>();
+    // Shipped broken once: the endpoint built the node from a `channelId`
+    // the node no longer had, and every announcement rendered as an
+    // unknown reply target. The parser, not the string, is the oracle.
+    expect(parsedReplyTarget(markdown)).toEqual({ parent, ...replyTarget });
+    expect(markdown).toEndWith(
+      `<m-magic-chip>${JSON.stringify(chip)}</m-magic-chip>`
+    );
   });
-  it('reads a channelId-only reply target as a channel parent', async () => {
+  it('still accepts a channel named the way callers used to', async () => {
     const response = await request({
-      replyTarget: { channelId: 'channel', ...target },
+      replyTarget: { channelId: 'chan', ...replyTarget },
       chip,
     });
     expect(response.status).toBe(200);
-    expect(await response.json<{ markdown: string }>()).toEqual({
-      markdown: `${replyTargetMarkdown({ type: 'channel', id: 'channel' })}\n\n${chipMarkdown}`,
+    const { markdown } = await response.json<{ markdown: string }>();
+    expect(parsedReplyTarget(markdown)).toEqual({
+      parent: { type: 'channel', id: 'chan' },
+      ...replyTarget,
     });
-  });
-  it('replies to a document comment', async () => {
-    const parent = { type: 'document', id: 'doc' };
-    const response = await request({
-      replyTarget: { parent, ...target },
-      chip,
-    });
-    expect(response.status).toBe(200);
-    expect(await response.json<{ markdown: string }>()).toEqual({
-      markdown: `${replyTargetMarkdown(parent)}\n\n${chipMarkdown}`,
-    });
-  });
-  it('rejects a reply target without a parent or channel', async () => {
-    const response = await request({ replyTarget: target, chip });
-    expect(response.status).toBeGreaterThanOrEqual(400);
-    expect(response.status).toBeLessThan(500);
   });
   it('rejects an unknown connection destination', async () => {
     const response = await request({

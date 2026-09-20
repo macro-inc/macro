@@ -130,7 +130,11 @@ hover states use the same semantic colors as other app surfaces.
 Type in “Type @ to reference / for skills”, use the attachment button for
 attachments and the model menu to choose a model, then press Enter or Send to
 create and open an AI chat. If chat creation fails, the submitted text and attachments
-are restored, including before a chat-limit paywall opens. The input stays 32px above the vertical center as suggestions load. Up to three cached AI
+are restored, including before a chat-limit paywall opens. With agents disabled,
+the input stays 32px above the vertical center as suggestions load. With agents
+enabled, the composer uses the same topbar offset and 24/64 padding as the
+Agents new-conversation page so the two inputs share a baseline; suggestions
+still load below it without moving the input. Up to three cached AI
 suggestions appear below the
 composer, using the existing fast/smart recommendation projections. Compact rows
 use one line: reason — Phosphor icon and item name, followed by Open, all at the same font size. Clicking a
@@ -328,7 +332,11 @@ Shift-click opens a standalone split at `/app/email/<thread-id>`, which remains
 the destination for direct links and legacy surfaces. Click a message header to
 expand or collapse it; `Show N hidden messages` reveals the collapsed middle of
 a longer conversation. A standalone link with
-`?email_message_id=<message-id>` reveals that message.
+`?email_message_id=<message-id>` loads older pages as needed, expands the target,
+scrolls it into view, and briefly highlights it. For navigation regressions,
+exercise both a recent message and one outside the first page. Open another
+target while loading or highlighting: the previous request must not scroll the
+new thread or clear its highlight. Closing the split cancels pending positioning.
 Collapsed thread cards use a compact text snippet; expanding mounts the message
 body and its attachments. On phones, messages form flat rows with horizontal
 separators and 16px side gutters; collapsed previews show one line. Desktop
@@ -551,6 +559,10 @@ and summaries appear here; empty state notes "Calls are available to agents."
 
 On phones, recorded call headers omit the **Call Again** action.
 
+If a recording fails to play, reload the page to obtain a fresh recording link,
+or use **Open or download recording**. The playback warning does not assume
+that the failure is caused by an unsupported media format.
+
 ### Sharing a call
 
 A call's **Share** dialog has a `Team access` control (None or View) for the same canonical
@@ -730,6 +742,9 @@ A harness can show `Loading models…`, an unsupported message, or
 a retryable error without hiding the other harnesses. Editing preserves a saved model that
 is no longer offered and labels it `saved, unavailable`. A macrod with no responding runtime
 can remain loading until the 10-second discovery timeout; use Retry after reconnecting it.
+New macrod sessions use the agent's saved model before sending the first prompt.
+Changing that default applies to new sessions; existing sessions keep their selected model.
+If the runtime rejects the saved model, the prompt fails instead of using a different model.
 
 `Harness` shows Cursor, Claude, Codex, and paired macrod runtimes to every user.
 Connection chips in agent replies open this page, including before any account is connected. Cursor's default-model picker uses

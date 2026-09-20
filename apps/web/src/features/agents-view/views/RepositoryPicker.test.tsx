@@ -97,19 +97,30 @@ describe('RepositoryPicker', () => {
     expect(handlers.onSelectRepository).toHaveBeenCalledWith(macro.url);
   });
 
-  it('offers an unlisted GitHub repository typed by hand, canonicalized', () => {
+  it('does not offer an unlisted repository typed by hand', () => {
     const handlers = picker();
     openRepositories();
     fireEvent.input(search(), {
       target: { value: 'https://github.com/macro-inc/other.git' },
     });
-    expect(optionNames()).toEqual(['Use macro-inc/other']);
-    fireEvent.click(
-      screen.getByRole('option', { name: 'Use macro-inc/other' })
+    expect(screen.queryAllByRole('option')).toHaveLength(0);
+    expect(screen.getByText(/No repositories match/).textContent).toContain(
+      'macro-inc/other'
     );
-    expect(handlers.onSelectRepository).toHaveBeenCalledWith(
-      'https://github.com/macro-inc/other'
-    );
+    expect(handlers.onSelectRepository).not.toHaveBeenCalled();
+  });
+
+  it('does not offer a recent the listing no longer carries', () => {
+    picker({
+      recentRepositories: ['https://github.com/macro-inc/gone'],
+    });
+    openRepositories();
+    expect(optionNames()).toEqual([
+      'Choose automatically',
+      'macro-inc/macro',
+      'macro-inc/infra',
+    ]);
+    expect(screen.queryByRole('option', { name: /gone/ })).toBeNull();
   });
 
   it('does not duplicate a listed repository typed in full', () => {

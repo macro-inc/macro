@@ -85,6 +85,7 @@
     "@macro-inc/collaboration": "workspace:*",
     "@macro-inc/email-renderer": "workspace:*",
     "@macro-inc/lexical-core": "workspace:*",
+    "@macro-inc/machine": "workspace:*",
     "@macro-inc/observability": "workspace:*",
     "@macro-inc/spreadsheet": "workspace:*",
     "@normy/query-core": "^0.21.0",

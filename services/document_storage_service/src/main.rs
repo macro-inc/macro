@@ -656,8 +656,7 @@ async fn run() -> anyhow::Result<()> {
                     .document_storage_service_cloudfront_signer_private_key
                     .as_ref()
                     .to_string(),
-                presigned_url_expiry_seconds: config
-                    .document_storage_service_presigned_url_expiry_seconds,
+                presigned_url_expiry_seconds: config::CALL_RECORDING_PRESIGNED_URL_EXPIRY_SECONDS,
             };
             Some(S3RecordingStorage::new(egress_config.bucket.clone(), cloudfront_config).await)
         }

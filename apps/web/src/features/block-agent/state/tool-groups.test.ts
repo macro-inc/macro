@@ -13,6 +13,7 @@ const tool = (): MessagePart => ({
 const thought = (): MessagePart => ({ kind: 'thought', text: 'thinking...' });
 const permission = (): MessagePart => ({
   kind: 'permission',
+  requestId: 'permission-test',
   toolCall: 'call',
   options: [],
   outcome: { kind: 'pending' },

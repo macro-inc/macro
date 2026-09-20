@@ -164,6 +164,13 @@ PR status in an open Magic Chip updates from connection-gateway events after
 webhook sync. Reconnecting refreshes active PR lookups to recover missed updates.
 A late webhook does not require reloading the page.
 
+When the agent requests permission, the Magic Chip replaces its loading state
+with the action and `Allow once`, `Deny`, and `More options` controls. Permission
+requests and questions share the chip's pending-interaction state and apply only
+to its anchored turn. Session editors and owners can answer directly in the chip;
+viewers and commenters see a waiting notice. Answering clears the request in both
+the chip and the open session, and the chip follows the agent's next activity.
+
 Coding agents use `macro_internal.set_pull_request` to register an existing or
 new GitHub PR with their session. Macro Internal MCP is hosted by the harness
 service at `/mcp/internal` on its egress listener, separately from workspace MCP.
@@ -349,6 +356,14 @@ instead.
 - Team access: `Team channel` switch (disabled until you belong to a team).
 - Bots: `New bot`, `Search existing bots…` combobox, `Invite bot` — webhook-powered channel
   participants.
+
+## Incoming call ringing
+
+For cross-tab ringing checks, sign the recipient into two tabs and start a call
+from another account. Both tabs may show the incoming call; only one should play
+the chime. Closing the audible tab lets the other take over while the call is
+still ringing. Answering or dismissing stops ringing across tabs. An unanswered
+call stops ringing after 30 seconds, including after a tab takes over.
 
 ## Onboarding channel
 

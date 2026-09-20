@@ -9,6 +9,8 @@
  * transcript that let each message decide showed every one of them working.
  */
 
+import { useUserId } from '@core/context/user';
+import { idToDisplayName } from '@core/user/util';
 import { messageSendMotion } from '@core/util/message-send-motion';
 import type {
   FoldedMessage,
@@ -27,6 +29,7 @@ import {
   ToolGroup,
   WorkingLine,
 } from '../ui';
+import { AttachmentPart } from './parts/AttachmentPart';
 import { ControlPart } from './parts/ControlPart';
 import { ElicitationPart } from './parts/ElicitationPart';
 import { PermissionPart } from './parts/PermissionPart';
@@ -34,6 +37,14 @@ import { PlanPart } from './parts/PlanPart';
 import { type ToolUsePart, toolCallDetail, toolLabel } from './parts/shared';
 import { TextPart } from './parts/TextPart';
 import { ToolCallPart } from './parts/ToolCallPart';
+
+/**
+ * What a turn the runtime errored asks of the reader. Every such failure
+ * leaves the session usable - the next message starts a fresh turn - so the
+ * instruction is the same whatever the runtime said went wrong.
+ */
+const TURN_FAILED_LABEL =
+  'An error was encountered with your session. Send another message to continue';
 
 function AgentMessagePart(props: {
   part: MessagePart;
@@ -47,6 +58,7 @@ function AgentMessagePart(props: {
     .with({ kind: 'text' }, (part) => (
       <TextPart text={part.text} inFlight={props.inFlight} />
     ))
+    .with({ kind: 'attachment' }, (part) => <AttachmentPart part={part} />)
     .with({ kind: 'thought' }, (part) => (
       <Thought
         text={part.text}
@@ -73,7 +85,9 @@ function AgentMessagePart(props: {
     .with({ kind: 'permission' }, (part) => <PermissionPart part={part} />)
     .with({ kind: 'plan' }, (part) => <PlanPart part={part} />)
     .with({ kind: 'control' }, (part) => <ControlPart part={part} />)
-    .with({ kind: 'elicitation' }, (part) => <ElicitationPart part={part} />)
+    .with({ kind: 'elicitation' }, (part) => (
+      <ElicitationPart part={part} turn={props.message.turn} />
+    ))
     .exhaustive();
 }
 
@@ -159,14 +173,41 @@ function workingLabel(message: FoldedMessage): string {
 }
 
 /**
+ * The display name of whoever sent a prompt, when that is somebody other
+ * than the viewer. A session is shared, so a prompt may be another
+ * participant's; one's own prompts (and unattributed ones) need no byline,
+ * matching the queued-prompt list in `AgentComposer`. Attribution waits
+ * until the viewer id is known — `useUserId` is undefined while user-info
+ * is still loading, and a missing viewer must not look like another person.
+ */
+function promptAuthorName(
+  author: FoldedMessage['author'],
+  viewerId: string | undefined
+): string | undefined {
+  if (
+    author.kind !== 'user' ||
+    author.userId === null ||
+    viewerId === undefined
+  )
+    return undefined;
+  return author.userId === viewerId
+    ? undefined
+    : idToDisplayName(author.userId);
+}
+
+/**
  * A prompt, in the chat block's user-bubble treatment
  * (`@core/component/AI/component/message/UserMessage.tsx`): right-aligned,
- * rounded, filled surface shared with production chat.
+ * rounded, filled surface shared with production chat. A prompt another
+ * participant sent carries their name above the bubble.
  */
 function UserMessage(props: { message: FoldedMessage }) {
+  const userId = useUserId();
+  const authorName = () => promptAuthorName(props.message.author, userId());
+
   return (
     <div
-      class="flex w-full transition-opacity"
+      class="flex w-full flex-col items-end gap-0.5 transition-opacity"
       // Still on the wire: the fold shows the prompt before the log confirms
       // it, and the confirmation clears this in place.
       classList={{ 'opacity-60': props.message.pending }}
@@ -179,6 +220,13 @@ function UserMessage(props: { message: FoldedMessage }) {
         )
       }
     >
+      <Show when={authorName()}>
+        {(name) => (
+          <div class="text-xs text-ink-extra-muted" data-testid="prompt-author">
+            {name()}
+          </div>
+        )}
+      </Show>
       <UserMessageBubble>
         <For each={props.message.parts}>
           {(part, index) => (
@@ -249,11 +297,13 @@ export function Message(props: {
           </Show>
           {/* A turn the runtime errored is something that happened to the
               session, like a model change or a stop — so it reads as one,
-              at the foot of whatever the agent managed to say first. */}
+              at the foot of whatever the agent managed to say first. The
+              line says what to do about it; the runtime's own account of
+              what happened is the detail. */}
           <Show when={failure()}>
             {(message) => (
               <ActionLine
-                label={`The agent couldn't answer — ${message()}`}
+                label={`${TURN_FAILED_LABEL} — ${message()}`}
                 detail={message()}
                 failed
               />

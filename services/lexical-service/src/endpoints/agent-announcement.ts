@@ -101,12 +101,13 @@ export class AgentAnnouncementEndpoint extends OpenAPIRoute {
         });
       }
       const { parent, channelId, ...target } = body.replyTarget;
-      // Callers that predate message parents name only a `channelId`.
-      const replyTargetParent: ReplyTargetParent | undefined =
+      // Callers that predate message parents send only `channelId`; the
+      // node itself references any parent the reply lives under.
+      const replyParent: ReplyTargetParent | undefined =
         parent ?? (channelId ? { type: 'channel', id: channelId } : undefined);
       const markdown = composeAgentSessionAnnouncement({
-        replyTarget: replyTargetParent
-          ? { ...target, parent: replyTargetParent }
+        replyTarget: replyParent
+          ? { ...target, parent: replyParent }
           : undefined,
         chip: body.chip,
       });

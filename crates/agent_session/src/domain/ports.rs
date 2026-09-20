@@ -51,7 +51,7 @@ pub struct BotFacts {
     pub selected_channels: bool,
 }
 
-/// Runtime settings snapshotted when a managed persona opens a session.
+/// Runtime settings snapshotted when a persisted agent opens a session.
 #[derive(Debug, Clone)]
 pub struct ManagedAgentProfile {
     /// Model configured as this persona's default.
@@ -194,6 +194,8 @@ pub struct SessionThread {
 pub struct OpenExternalAgentSession {
     /// The bot the session runs for.
     pub bot_id: BotId,
+    /// Persisted agent settings resolved by the authenticated entry point.
+    pub profile: Option<ManagedAgentProfile>,
     /// Absolute directory the bot's harness runs in on its runtime.
     pub workspace: String,
     /// Repository nominally checked out at `workspace`, when stated.
@@ -536,6 +538,26 @@ pub trait AgentSessionLogRepo: Send + Sync + 'static {
         boundary: Option<HistoryBoundary>,
     ) -> impl Future<Output = Result<StoredAgentSessionLog>> + Send;
 
+    /// Append a run of plain frames in one write, under the current
+    /// ownership fence, and return them stamped as the log stored them.
+    ///
+    /// Plain means: nothing the store projects - no system event, no load
+    /// boundary, no Cursor checkpoint. Those keep going through
+    /// [`create_fenced_with_boundary`](Self::create_fenced_with_boundary)
+    /// one at a time; this is the fast path for the streamed output that is
+    /// the bulk of every session. Entries carry their ids already - the
+    /// writer hands them out at append time so a caller has a durable
+    /// identity before the flush lands - and arrive in append order, which
+    /// the store must preserve in `(created_at, id)` order for readers.
+    ///
+    /// Every entry must belong to `claim`'s session. An empty batch is a
+    /// no-op.
+    fn create_batch_fenced(
+        &self,
+        entries: Vec<StoredAgentSessionLog>,
+        claim: &SessionClaim,
+    ) -> impl Future<Output = Result<Vec<StoredAgentSessionLog>>> + Send;
+
     /// List effective ACP history in deterministic `(created_at, id)` order.
     /// Starts at the latest successfully loaded initialization, or the beginning.
     /// Raw failed/partial replay frames remain; consumers must stage load attempts.
@@ -623,6 +645,11 @@ pub struct Appended {
 }
 
 /// Sequential live log writer owned by one session actor.
+///
+/// A writer may hold streamed frames back and both write and publish them in
+/// runs: `append` returning `Ok` means the frame is durable *or buffered*,
+/// and [`flush_deadline`](Self::flush_deadline) tells the owning actor when
+/// the buffer must next be forced out with [`flush`](Self::flush).
 pub trait AgentSessionLogWriter: Send + 'static {
     /// Persist and fold one frame into this connection's live projection.
     fn append(&mut self, log: AgentSessionLog) -> impl Future<Output = Result<Appended>> + Send {
@@ -637,6 +664,19 @@ pub trait AgentSessionLogWriter: Send + 'static {
         log: AgentSessionLog,
         boundary: Option<HistoryBoundary>,
     ) -> impl Future<Output = Result<Appended>> + Send;
+
+    /// Durably write any frames still held back, then push everything
+    /// stored but unpublished to the session's viewers. A writer that holds
+    /// nothing back has nothing to do.
+    fn flush(&mut self) -> impl Future<Output = Result<()>> + Send {
+        async { Ok(()) }
+    }
+
+    /// When held frames must be flushed by - `None` while nothing is held,
+    /// so an idle writer never wakes its owner.
+    fn flush_deadline(&self) -> Option<tokio::time::Instant> {
+        None
+    }
 }
 
 /// A session's queue changed; this is the whole queue as it stands now.
@@ -661,7 +701,7 @@ pub struct AgentSessionQueueChanged {
 /// they reload, and the log it was derived from is already durable - so an
 /// implementation may drop, and callers must not fail an append over it.
 pub trait AgentSessionRealtime {
-    /// Publish one appended frame to the session's viewers.
+    /// Publish a run of appended frames to the session's viewers.
     fn publish(
         &self,
         event: LogAppended,
@@ -688,6 +728,15 @@ pub trait AgentSessionRealtime {
     fn publish_queue_changed(
         &self,
         _event: AgentSessionQueueChanged,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send {
+        async { Ok(()) }
+    }
+
+    /// Tell viewers the session's captured changes moved: a capture started,
+    /// finished, or failed. Viewers refetch the changes summary.
+    fn publish_changes_updated(
+        &self,
+        _session: AgentSessionId,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send {
         async { Ok(()) }
     }
@@ -766,6 +815,21 @@ impl<T: SessionTurnObserver + ?Sized> SessionTurnObserver for std::sync::Arc<T> 
 
     fn session_stopped(&self, id: AgentSessionId, reason: StopReason) {
         (**self).session_stopped(id, reason);
+    }
+}
+
+/// Two observers told the same facts, in order. How the composition root
+/// fans one session service's signals out to the harness (which drains its
+/// queue on them) and to anything else that wants to know a turn ended.
+impl<A: SessionTurnObserver, B: SessionTurnObserver> SessionTurnObserver for (A, B) {
+    fn signal(&self, id: AgentSessionId, signal: TurnSignal) {
+        self.0.signal(id, signal.clone());
+        self.1.signal(id, signal);
+    }
+
+    fn session_stopped(&self, id: AgentSessionId, reason: StopReason) {
+        self.0.session_stopped(id, reason.clone());
+        self.1.session_stopped(id, reason);
     }
 }
 
