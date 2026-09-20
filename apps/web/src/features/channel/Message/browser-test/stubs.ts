@@ -1,6 +1,21 @@
+import { useMutation } from '@tanstack/solid-query';
+
 /** Network and app-session adapters; rendering, unfurl batching and scrolling are real. */
 export const useUserId = () => () => 'fixture-user';
-export const useRemoveLinkPreviewMutation = () => ({ mutate: () => {} });
+type Removal = { channelID: string; messageID: string; url: string };
+export const useRemoveLinkPreviewMutation = (callbacks: {
+  onError?: (error: Error, variables: Removal) => void;
+}) =>
+  useMutation(() => ({
+    mutationFn: async (variables: Removal) => {
+      const response = await fetch('/__remove-preview', {
+        method: 'PATCH',
+        body: JSON.stringify(variables),
+      });
+      if (!response.ok) throw new Error('Preview removal failed');
+    },
+    onError: callbacks.onError,
+  }));
 export const openExternalUrl = () => {};
 export const extractDomain = (url: string) => new URL(url).hostname;
 export const getWebOrigin = () => window.location.origin;

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id,\n                channel_id,\n                sender_id,\n                triggered_by_user_id,\n                content,\n                created_at,\n                updated_at,\n                thread_id,\n                edited_at::timestamptz AS \"edited_at?\",\n                deleted_at::timestamptz AS \"deleted_at?\"\n            FROM comms_messages\n            WHERE id = $1 AND channel_id = $2\n            FOR UPDATE\n            ",
+  "query": "\n            SELECT\n                id,\n                channel_id AS \"channel_id!\",\n                sender_id,\n                triggered_by_user_id,\n                content,\n                created_at,\n                updated_at,\n                thread_id,\n                edited_at::timestamptz AS \"edited_at?\",\n                deleted_at::timestamptz AS \"deleted_at?\"\n            FROM comms_messages\n            WHERE id = $1 AND channel_id = $2\n            FOR UPDATE\n            ",
   "describe": {
     "columns": [
       {
@@ -10,7 +10,7 @@
       },
       {
         "ordinal": 1,
-        "name": "channel_id",
+        "name": "channel_id!",
         "type_info": "Uuid"
       },
       {
@@ -62,7 +62,7 @@
     },
     "nullable": [
       false,
-      false,
+      true,
       false,
       true,
       false,
@@ -73,5 +73,5 @@
       null
     ]
   },
-  "hash": "f45fa355913f2c9a136efe62a3d3baf0286554ea1d40b3c950c07f425e5a2a7e"
+  "hash": "abc6e6c78cf98eef376ac808a7fa8fcc060cbdc363693752bdf9931065bfef41"
 }

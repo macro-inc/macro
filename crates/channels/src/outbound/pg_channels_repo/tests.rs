@@ -3377,3 +3377,46 @@ async fn channel_picture_round_trips_through_batched_previews(pool: Pool<Postgre
         assert!(previews[0].has_access);
     }
 }
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn preview_removals_preserve_channel_identity_content_and_edit_marker(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    for message_id in [MSG1, REPLY1] {
+        let original = repo
+            .patch_message(
+                CH1,
+                message_id,
+                "Read https://example.com/a. https://example.com/b `https://example.com/a`".into(),
+            )
+            .await?;
+        let (first, second) = tokio::join!(
+            repo.remove_link_preview(CH1, message_id, "https://example.com/a".into()),
+            repo.remove_link_preview(CH1, message_id, "https://example.com/b".into()),
+        );
+        first?;
+        second?;
+        let settled = repo
+            .remove_link_preview(CH1, message_id, "https://example.com/a".into())
+            .await?;
+        assert_eq!(settled.channel_id, CH1);
+        assert_eq!(settled.thread_id, original.thread_id);
+        assert_eq!(settled.edited_at, original.edited_at);
+        assert_eq!(settled.content.matches("\"preview\":false").count(), 2);
+        assert!(settled.content.contains("</m-link>."));
+        assert!(settled.content.contains("`https://example.com/a`"));
+        let unchanged = repo.remove_link_preview(CH1, message_id, "".into()).await?;
+        assert_eq!(unchanged.updated_at, settled.updated_at);
+        assert_eq!(unchanged.content, settled.content);
+        assert!(
+            repo.remove_link_preview(CH2, message_id, "https://example.com/b".into())
+                .await
+                .is_err()
+        );
+    }
+    Ok(())
+}

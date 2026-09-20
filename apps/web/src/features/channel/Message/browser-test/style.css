@@ -8,3 +8,7 @@ h1 { font-size: 24px; font-weight: 600; }
 .fixture-message > p { margin: 8px 0; }
 label { display: flex; gap: 12px; align-items: center; }
 input { border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px; flex: 1; }
+
+.fixture-controls { display: flex; gap: 16px; margin-bottom: 12px; font-size: 12px; }
+.fixture-controls input { flex: none; }
+.fixture-controls button { padding: 6px; border: 1px solid #cbd5e1; border-radius: 4px; }

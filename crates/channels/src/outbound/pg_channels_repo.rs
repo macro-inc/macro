@@ -3594,7 +3594,7 @@ impl ChannelRepo for PgChannelsRepo {
             r#"
             SELECT
                 id,
-                channel_id,
+                channel_id AS "channel_id!",
                 sender_id,
                 triggered_by_user_id,
                 content,
@@ -3630,7 +3630,7 @@ impl ChannelRepo for PgChannelsRepo {
             WHERE id = $2 AND channel_id = $3
             RETURNING
                 id,
-                channel_id,
+                channel_id AS "channel_id!",
                 sender_id,
                 triggered_by_user_id,
                 content,
