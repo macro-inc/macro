@@ -13,7 +13,8 @@ for a read-only PR viewer. Clipboard, external navigation, and notifications are
 host callbacks.
 
 The source owns fetching, cache identity, and conversion into the feature's core
-changeset types. A PR entity adapter should resolve its GitHub owner/repository/PR
+changeset types. `file` loads a captured path at the base or head revision so
+Pierre can expand unchanged context. A PR entity adapter should resolve its GitHub owner/repository/PR
 number and implement this same contract using shared queries. It does not need to
 construct an agent session. That adapter and its backend endpoint are not yet wired.
 

@@ -67,6 +67,7 @@ function setup() {
     refresh: async () => {
       refreshes += 1;
     },
+    file: async (path, side) => `${side}:${path}`,
   };
   const model = createChangesModel({ source, changesVisible: visible });
   return {
@@ -123,6 +124,47 @@ describe('createChangesModel', () => {
       setSummary({ ...ready, capturing: true });
       expect(model.state().kind).toBe('capturing');
       expect(model.changeset()?.id).toBe('cs');
+      dispose();
+    });
+  });
+
+  it('loads both file sides so a patch diff can expand', async () => {
+    await createRoot(async (dispose) => {
+      const { model, setSummary } = setup();
+      setSummary(summaryWith(['a.ts']));
+      const loaded = await model.loadDiffFiles({
+        name: 'a.ts',
+        type: 'change',
+        hunks: [],
+        splitLineCount: 0,
+        unifiedLineCount: 0,
+        isPartial: true,
+        deletionLines: [],
+        additionLines: [],
+      });
+      expect(loaded.oldFile?.contents).toBe('base:a.ts');
+      expect(loaded.newFile.contents).toBe('head:a.ts');
+      dispose();
+    });
+  });
+
+  it('loads only the new side for a pure rename', async () => {
+    await createRoot(async (dispose) => {
+      const { model, setSummary } = setup();
+      setSummary(summaryWith(['b.ts']));
+      const loaded = await model.loadDiffFiles({
+        name: 'b.ts',
+        prevName: 'a.ts',
+        type: 'rename-pure',
+        hunks: [],
+        splitLineCount: 0,
+        unifiedLineCount: 0,
+        isPartial: true,
+        deletionLines: [],
+        additionLines: [],
+      });
+      expect(loaded.oldFile).toBeNull();
+      expect(loaded.newFile.contents).toBe('head:b.ts');
       dispose();
     });
   });

@@ -3,6 +3,7 @@ import { fetchWithToken } from '@core/util/fetchWithToken';
 import type { ErrorResponseHandler } from '@core/util/safeFetch';
 import type {
   AgentRepositoriesResponse,
+  AgentSessionChangesFileResponse,
   AgentSessionChangesPatchResponse,
   AgentSessionChangesResponse,
   AgentSessionLogResponse,
@@ -12,6 +13,7 @@ import type {
   ControlResponse,
   CreateAgentSessionRequest,
   CreateAgentSessionResponse,
+  FileSideDto,
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
   PreviewAgentSessionsResponse,
@@ -20,6 +22,8 @@ import type {
 } from './generated/schemas';
 
 export type { SandboxSize, SandboxSizeBody };
+
+export type AgentSessionChangesFileSide = FileSideDto;
 
 const agentHarnessHost = SERVER_HOSTS['agent-harness'];
 
@@ -204,6 +208,22 @@ export const agentHarnessServiceClient = {
   getChangesPatch(sessionId: string) {
     return fetchWithToken<AgentSessionChangesPatchResponse>(
       `${agentHarnessHost}/agent-sessions/${sessionId}/changes/patch`,
+      { method: 'GET' }
+    );
+  },
+
+  /**
+   * The text of a captured file at the base or head revision, for expanding
+   * collapsed unchanged context. 400 when the path is not in the changeset.
+   */
+  getChangesFile(
+    sessionId: string,
+    path: string,
+    side: AgentSessionChangesFileSide
+  ) {
+    const params = new URLSearchParams({ path, side });
+    return fetchWithToken<AgentSessionChangesFileResponse>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/changes/file?${params}`,
       { method: 'GET' }
     );
   },

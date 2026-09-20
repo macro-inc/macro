@@ -4,6 +4,7 @@ import type {
   AgentSessionLogResponse,
   AgentSessionResponse,
   ControlResponse,
+  FileSideDto,
   PromptAttachment,
   SandboxSize,
 } from '../../../generated/agent-harness/types.gen';
@@ -52,7 +53,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   /** Create a managed session, optionally delivering its first prompt. */
   static async createManaged(
     client: MacroClient,
-    opts?: CreateManagedSessionOptions,
+    opts?: CreateManagedSessionOptions
   ): Promise<AgentSession> {
     const { session } = unwrap(
       await client.agentHarness.createAgentSession({
@@ -62,7 +63,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
           repoUrl: opts?.repoUrl,
           repoBranch: opts?.repoBranch,
         },
-      }),
+      })
     );
     return new AgentSession(client, session.id, session);
   }
@@ -74,10 +75,10 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
    * nowhere they reach.
    */
   static async repositories(
-    client: MacroClient,
+    client: MacroClient
   ): Promise<SelectableRepository[]> {
     const { repositories } = unwrap(
-      await client.agentHarness.listAgentRepositories(),
+      await client.agentHarness.listAgentRepositories()
     );
     return repositories.map((repository) => ({
       url: repository.url,
@@ -89,7 +90,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     return unwrap(
       await this.client.agentHarness.getAgentSession({
         path: { session_id: this.id },
-      }),
+      })
     );
   }
 
@@ -132,7 +133,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
       client.agentHarness.renameAgentSession({
         path: { session_id: this.id },
         body: { name },
-      }),
+      })
     );
   }
 
@@ -142,7 +143,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
       client.agentHarness.putAgentSessionSandboxSize({
         path: { session_id: this.id },
         body: { size },
-      }),
+      })
     );
     return next;
   }
@@ -155,12 +156,12 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   /** Set the caller's default sandbox size for the next `@coder` mention. */
   static async setDefaultSandboxSize(
     client: MacroClient,
-    size: SandboxSize,
+    size: SandboxSize
   ): Promise<SandboxSize> {
     return unwrap(
       await client.agentHarness.putAgentSandboxSize({
         body: { size },
-      }),
+      })
     ).size;
   }
 
@@ -177,7 +178,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
       client.agentHarness.controlAgentSession({
         path: { session_id: this.id },
         body: action,
-      }),
+      })
     );
   }
 
@@ -190,7 +191,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
    */
   prompt(
     text: string,
-    attachments?: PromptAttachment[],
+    attachments?: PromptAttachment[]
   ): Promise<ControlResponse> {
     return this.control({
       type: 'prompt',
@@ -207,10 +208,10 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     const { entries } = unwrap(
       await this.client.agentHarness.getAgentSessionQueue({
         path: { session_id: this.id },
-      }),
+      })
     );
     return entries.map((entry) =>
-      QueuedAction.from(this.client, this.id, entry),
+      QueuedAction.from(this.client, this.id, entry)
     );
   }
 
@@ -219,7 +220,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     return unwrap(
       await this.client.agentHarness.getAgentSessionChanges({
         path: { session_id: this.id },
-      }),
+      })
     );
   }
 
@@ -228,8 +229,21 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     return unwrap(
       await this.client.agentHarness.getAgentSessionChangesPatch({
         path: { session_id: this.id },
-      }),
+      })
     ).patch;
+  }
+
+  /**
+   * Read one captured file at the pull request's base or head revision,
+   * so a diff viewer can expand unchanged context.
+   */
+  async changesFile(path: string, side: FileSideDto): Promise<string> {
+    return unwrap(
+      await this.client.agentHarness.getAgentSessionChangesFile({
+        path: { session_id: this.id },
+        query: { path, side },
+      })
+    ).contents;
   }
 
   /** Request a fresh capture and return the current state while it runs. */
@@ -237,7 +251,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     return this.mutate((client) =>
       client.agentHarness.refreshAgentSessionChanges({
         path: { session_id: this.id },
-      }),
+      })
     );
   }
 
@@ -246,7 +260,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     return unwrap(
       await this.client.agentHarness.getAgentSessionLog({
         path: { session_id: this.id },
-      }),
+      })
     );
   }
 
@@ -255,7 +269,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     await this.mutate((client) =>
       client.agentHarness.deleteAgentSession({
         path: { session_id: this.id },
-      }),
+      })
     );
   }
 }

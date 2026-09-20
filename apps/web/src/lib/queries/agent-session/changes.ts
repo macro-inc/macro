@@ -9,7 +9,10 @@
  */
 
 import { throwOnErr } from '@core/util/result';
-import { agentHarnessServiceClient } from '@service-agent-harness/client';
+import {
+  type AgentSessionChangesFileSide,
+  agentHarnessServiceClient,
+} from '@service-agent-harness/client';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { invalidateAgentSessionChanges } from './changes-sync';
@@ -67,11 +70,20 @@ export function useAgentSessionChangesPatchQuery(
 }
 
 /**
- * Ask the server to capture the session's changes again. The answer is the
- * state as it stood when the capture started; the summary is invalidated so
- * the pane shows "capturing" at once, and the realtime event lands the
- * result.
+ * The text of one captured file at `side`. Cached per changeset: a SHA's
+ * contents never change, and a newer capture has a new id.
  */
+export async function fetchAgentSessionChangesFile(
+  sessionId: string,
+  path: string,
+  side: AgentSessionChangesFileSide
+): Promise<string> {
+  const response = await throwOnErr(() =>
+    agentHarnessServiceClient.getChangesFile(sessionId, path, side)
+  );
+  return response.contents;
+}
+
 export function useRefreshAgentSessionChangesMutation() {
   return useMutation(() => ({
     retry: false,

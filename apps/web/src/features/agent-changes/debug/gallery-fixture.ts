@@ -98,6 +98,95 @@ index 0000000..7777777
 +    WHERE archived_at IS NULL;
 `;
 
+/** Full file sides for the gallery's modified files, so expand up/down works. */
+export const GALLERY_FILES: Readonly<
+  Record<string, { base?: string; head?: string }>
+> = {
+  'apps/web/src/components/app/sidebar-next/queries/use-sidebar-unread.ts': {
+    base: `import { createMemo } from 'solid-js';
+
+import { useAgentSessionsQuery } from '@queries/agent/sessions';
+import type { AgentSessionSummary } from '@service-agent-fold/generated/types';
+
+import type { SidebarItemId } from '../nav-items';
+
+const DOTTED: readonly SidebarItemId[] = ['inbox', 'channels', 'agents'];
+
+export function useSidebarUnread(): (id: SidebarItemId) => boolean {
+  const sessions = useAgentSessionsQuery();
+
+  // Activity after the read marker lights the dot.
+  const agentsUnread = createMemo(() =>
+    (sessions.data ?? []).some(
+      (session: AgentSessionSummary) => session.lastEventAt > session.lastReadAt
+    )
+  );
+
+  return (id) => (id === 'agents' ? agentsUnread() : false);
+}
+`,
+    head: `import { createMemo } from 'solid-js';
+
+import { useAgentSessionsQuery } from '@queries/agent/sessions';
+import { hasUnreadActivity } from '@block-agent/state/unread';
+import type { AgentSessionSummary } from '@service-agent-fold/generated/types';
+
+import type { SidebarItemId } from '../nav-items';
+
+const DOTTED: readonly SidebarItemId[] = ['inbox', 'channels', 'agents'];
+
+export function useSidebarUnread(): (id: SidebarItemId) => boolean {
+  const sessions = useAgentSessionsQuery();
+
+  // Archiving takes a session off the inbox, so its activity stops being
+  // news. The rail has to ask the same question the agents list asks,
+  // through the same predicate.
+  const agentsUnread = createMemo(() =>
+    (sessions.data ?? []).some((session: AgentSessionSummary) =>
+      hasUnreadActivity(session)
+    )
+  );
+
+  return (id) => (id === 'agents' ? agentsUnread() : false);
+}
+`,
+  },
+  'crates/macro_agent_sessions/src/service.rs': {
+    base: `${'use chrono::Utc;\n'.repeat(80)}impl SessionService {
+    #[instrument(skip(self), fields(session_id = %id))]
+    pub async fn archive(&self, id: AgentSessionId) -> Result<(), ArchiveError> {
+        self.repo.set_archived(id, Utc::now()).await?;
+        Ok(())
+    }
+
+    #[instrument(skip(self), fields(owner = %owner))]
+    pub async fn list(&self, owner: UserId) -> Result<Vec<Session>, ListError> {
+        self.repo.list(owner).await
+    }
+}
+`,
+    head: `${'use chrono::Utc;\n'.repeat(80)}impl SessionService {
+    #[instrument(skip(self), fields(session_id = %id))]
+    pub async fn archive(&self, id: AgentSessionId) -> Result<(), ArchiveError> {
+        let now = Utc::now();
+        let mut tx = self.repo.begin().await?;
+
+        self.repo.set_archived(&mut tx, id, now).await?;
+        self.repo.mark_read(&mut tx, id, now).await?;
+
+        tx.commit().await?;
+        Ok(())
+    }
+
+    #[instrument(skip(self), fields(owner = %owner))]
+    pub async fn list(&self, owner: UserId) -> Result<Vec<Session>, ListError> {
+        self.repo.list(owner).await
+    }
+}
+`,
+  },
+};
+
 export function gallerySummary(): SessionChanges {
   return {
     capturing: false,

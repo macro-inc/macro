@@ -81,6 +81,7 @@ export function createMockAgentChangesContext(
   options: {
     summary?: SessionChanges;
     patch?: string;
+    files?: Readonly<Record<string, { base?: string; head?: string }>>;
     canSend?: boolean;
     sessionId?: string;
   } = {}
@@ -106,6 +107,13 @@ export function createMockAgentChangesContext(
     }),
     refresh: async () => {
       refreshes += 1;
+    },
+    file: async (path, side) => {
+      const contents = options.files?.[path]?.[side];
+      if (contents === undefined) {
+        throw new Error(`No ${side} contents for ${path}`);
+      }
+      return contents;
     },
   };
   const host: ChangesHost & { agent: ChangesAgent } = {

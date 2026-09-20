@@ -67,6 +67,15 @@ fn errors_answer_with_the_status_the_pane_branches_on() {
     assert_eq!(forbidden.status(), StatusCode::FORBIDDEN);
     let missing = AgentChangesApiError::from(ChangesError::NoChangeset).into_response();
     assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+    let invalid = AgentChangesApiError::from(ChangesError::InvalidPath).into_response();
+    assert_eq!(invalid.status(), StatusCode::BAD_REQUEST);
+    let unknown = AgentChangesApiError::from(ChangesError::FileNotInChangeset).into_response();
+    assert_eq!(unknown.status(), StatusCode::BAD_REQUEST);
+    let unavailable = AgentChangesApiError::from(ChangesError::FileUnavailable(
+        "That file is not available at the captured revision.".to_owned(),
+    ))
+    .into_response();
+    assert_eq!(unavailable.status(), StatusCode::UNPROCESSABLE_ENTITY);
     let storage = AgentChangesApiError::from(ChangesError::Storage(rootcause::report!("down")))
         .into_response();
     assert_eq!(storage.status(), StatusCode::INTERNAL_SERVER_ERROR);

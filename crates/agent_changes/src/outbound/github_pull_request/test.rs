@@ -37,3 +37,27 @@ fn inaccessible_or_oversized_diffs_map_to_unavailable_states() {
         CompareError::Other(_)
     ));
 }
+
+#[test]
+fn contents_urls_percent_encode_each_path_segment() {
+    assert_eq!(
+        contents_url(
+            "https://api.github.com",
+            "owner",
+            "repo",
+            "apps/web/a file.ts",
+            "abc123"
+        ),
+        "https://api.github.com/repos/owner/repo/contents/apps/web/a%20file.ts?ref=abc123"
+    );
+    assert_eq!(
+        contents_url(
+            "https://api.github.com",
+            "owner",
+            "repo",
+            "src/lib.rs",
+            "agent/work"
+        ),
+        "https://api.github.com/repos/owner/repo/contents/src/lib.rs?ref=agent%2Fwork"
+    );
+}

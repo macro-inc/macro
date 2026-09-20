@@ -50,6 +50,52 @@ fn enums_round_trip_through_their_wire_strings() {
         ChangesetSource::GithubPullRequest
     );
     assert_eq!(AttemptOutcome::NotReady.to_string(), "not_ready");
+    assert_eq!(FileSide::Base.to_string(), "base");
+    assert_eq!("head".parse::<FileSide>().unwrap(), FileSide::Head);
+}
+
+#[test]
+fn changeset_file_paths_reject_traversal_and_empty_segments() {
+    assert_eq!(changeset_file_path("src/lib.rs"), Some("src/lib.rs"));
+    assert_eq!(changeset_file_path(".gitignore"), Some(".gitignore"));
+    for path in [
+        "",
+        "/src/lib.rs",
+        "src//lib.rs",
+        "src/./lib.rs",
+        "src/../secret.rs",
+        "src/\0lib.rs",
+    ] {
+        assert_eq!(changeset_file_path(path), None, "{path:?}");
+    }
+}
+
+#[test]
+fn a_changeset_includes_rename_sources() {
+    let changeset = Changeset {
+        id: ChangesetId::new(),
+        session: AgentSessionId::TEST_A,
+        source: ChangesetSource::GithubPullRequest,
+        range: ChangesetRange::default(),
+        files: vec![ChangedFile {
+            path: "b.rs".to_owned(),
+            previous_path: Some("a.rs".to_owned()),
+            kind: FileChangeKind::Renamed,
+            additions: 0,
+            deletions: 0,
+            binary: false,
+            patch_omitted: false,
+        }],
+        additions: 0,
+        deletions: 0,
+        patch_bytes: 0,
+        truncated: false,
+        captured_at: chrono::Utc::now(),
+    };
+    assert!(changeset.contains_path("a.rs"));
+    assert!(changeset.contains_path("b.rs"));
+    assert!(!changeset.contains_path("c.rs"));
+    assert_eq!(changeset.rev_for(FileSide::Head), None);
 }
 
 #[test]

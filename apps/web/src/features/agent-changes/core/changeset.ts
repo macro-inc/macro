@@ -30,6 +30,9 @@ export type GitRef = {
   sha?: string;
 };
 
+/** Which side of a captured comparison a file is read from. */
+export type FileSide = 'base' | 'head';
+
 /** One capture of a session's changes. */
 export type Changeset = {
   /** Changes with every capture, so it doubles as a cache key for the patch. */

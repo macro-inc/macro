@@ -9,7 +9,7 @@
  */
 
 import type { Accessor } from 'solid-js';
-import type { SessionChanges } from '../core/changeset';
+import type { FileSide, SessionChanges } from '../core/changeset';
 
 export type QueryStatus = 'idle' | 'pending' | 'error' | 'success';
 
@@ -35,6 +35,11 @@ export type ChangesSource = {
   ) => PatchRead;
   /** Ask for a fresh capture. Resolves once the request is accepted. */
   refresh: () => Promise<void>;
+  /**
+   * The text of a captured file at `side`, so Pierre can expand collapsed
+   * unchanged context. Rejects when the file cannot be read.
+   */
+  file: (path: string, side: FileSide) => Promise<string>;
 };
 
 /** Optional review-note handoff supplied by an agent host. */

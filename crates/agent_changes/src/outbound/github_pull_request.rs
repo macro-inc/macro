@@ -17,8 +17,9 @@ use crate::domain::ports::{PullRequestDiff, PullRequestDiffReader};
 mod test;
 
 const GITHUB_API_BASE_URL: &str = "https://api.github.com";
-const READ_PERMISSIONS: &[(&str, &str)] = &[("pull_requests", "read")];
+const READ_PERMISSIONS: &[(&str, &str)] = &[("contents", "read"), ("pull_requests", "read")];
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+const MAX_FILE_BYTES: usize = 1_000_000;
 
 /// GitHub REST adapter for a linked pull request's diff.
 pub struct GithubPullRequestDiff<Installations, Client> {
@@ -71,6 +72,39 @@ impl<Installations: GithubSyncRepo, Client: GithubSyncClient>
         }
         Ok(body)
     }
+}
+
+/// `GET /repos/{owner}/{name}/contents/{path}?ref={rev}` with each path
+/// segment percent-encoded so spaces and reserved characters survive.
+pub(crate) fn contents_url(
+    api_base_url: &str,
+    owner: &str,
+    name: &str,
+    path: &str,
+    rev: &str,
+) -> String {
+    let encoded_path = path
+        .split('/')
+        .map(encode_path_segment)
+        .collect::<Vec<_>>()
+        .join("/");
+    format!(
+        "{api_base_url}/repos/{owner}/{name}/contents/{encoded_path}?ref={}",
+        encode_path_segment(rev)
+    )
+}
+
+fn encode_path_segment(segment: &str) -> String {
+    let mut out = String::with_capacity(segment.len());
+    for byte in segment.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(byte as char);
+            }
+            _ => out.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    out
 }
 
 #[derive(Deserialize)]
@@ -134,6 +168,38 @@ impl<Installations: GithubSyncRepo, Client: GithubSyncClient> PullRequestDiffRea
                 head: metadata.head.into(),
             },
         })
+    }
+
+    async fn read_file(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        pull_request: &PullRequestRef,
+        path: &str,
+        rev: &str,
+    ) -> Result<String, CompareError> {
+        let repository = &pull_request.repository;
+        let token = self
+            .tokens
+            .for_repository(user, &repository.owner, &repository.name, READ_PERMISSIONS)
+            .await
+            .map_err(|error| match error {
+                GithubError::RepositoryUnavailable => CompareError::Unavailable,
+                other => CompareError::Other(rootcause::report!("github token: {other}")),
+            })?;
+        let url = contents_url(
+            &self.api_base_url,
+            &repository.owner,
+            &repository.name,
+            path,
+            rev,
+        );
+        let body = self
+            .get(&url, &token.token, "application/vnd.github.raw")
+            .await?;
+        if body.len() > MAX_FILE_BYTES || body.contains('\0') {
+            return Err(CompareError::TooLarge);
+        }
+        Ok(body)
     }
 }
 

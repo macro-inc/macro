@@ -11,6 +11,7 @@
 import {
   type DiffLineAnnotation,
   FileDiff,
+  type FileDiffLoadedFiles,
   type FileDiffMetadata,
   type FileDiffOptions,
   type SelectedLineRange,
@@ -70,6 +71,8 @@ export function PierreFileDiff(props: {
   onCancelNote: () => void;
   onAddNote: (anchor: NoteAnchor, text: string) => void;
   onRemoveNote: (id: string) => void;
+  /** Hydrate a patch-parsed diff so expand up / expand down can run. */
+  loadDiffFiles?: (fileDiff: FileDiffMetadata) => Promise<FileDiffLoadedFiles>;
 }) {
   let container!: HTMLDivElement;
   let instance: FileDiff<string> | undefined;
@@ -146,6 +149,7 @@ export function PierreFileDiff(props: {
     renderAnnotation,
     enableGutterUtility: props.onOpenNote !== undefined,
     onGutterUtilityClick: props.onOpenNote ? onGutterUtilityClick : undefined,
+    loadDiffFiles: props.loadDiffFiles,
   });
 
   onMount(() => {

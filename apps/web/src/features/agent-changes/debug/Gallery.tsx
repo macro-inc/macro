@@ -17,12 +17,17 @@ import {
   ChangesToggle,
   ReviewNotesDock,
 } from '../views/SessionChangesControls';
-import { GALLERY_PATCH, gallerySummary } from './gallery-fixture';
+import {
+  GALLERY_FILES,
+  GALLERY_PATCH,
+  gallerySummary,
+} from './gallery-fixture';
 
 export default function AgentChangesGallery() {
   const context = createMockAgentChangesContext({
     summary: gallerySummary(),
     patch: GALLERY_PATCH,
+    files: GALLERY_FILES,
     sessionId: 'gallery-session',
   });
   const urlState = createUrlDiffState(context.host.scopeKey);

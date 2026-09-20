@@ -492,6 +492,115 @@
         }
       }
     },
+    "/agent-sessions/{session_id}/changes/file": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "The text of one captured file at the base or head revision, used to\nexpand collapsed unchanged context in the diff.",
+        "operationId": "get_agent_session_changes_file",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "Repository-relative path of a captured file",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "side",
+            "in": "query",
+            "description": "Which side of the comparison to read",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/FileSideDto"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSessionChangesFileResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-sessions/{session_id}/changes/patch": {
       "get": {
         "tags": ["agent-sessions"],
@@ -1490,6 +1599,25 @@
         ],
         "description": "Answer an elicitation the agent is waiting on."
       },
+      "AgentSessionChangesFileResponse": {
+        "type": "object",
+        "description": "Response body for `GET /agent-sessions/{session_id}/changes/file`.\n\nClients deserialize this, so both derives are used.",
+        "required": ["path", "side", "contents"],
+        "properties": {
+          "contents": {
+            "type": "string",
+            "description": "The file's text at the captured revision."
+          },
+          "path": {
+            "type": "string",
+            "description": "The requested path."
+          },
+          "side": {
+            "$ref": "#/components/schemas/FileSideDto",
+            "description": "Which side was read."
+          }
+        }
+      },
       "AgentSessionChangesPatchResponse": {
         "type": "object",
         "description": "Response body for `GET /agent-sessions/{session_id}/changes/patch`.\n\nClients deserialize this, so both derives are used.",
@@ -2306,6 +2434,11 @@
         "type": "string",
         "description": "What happened to a file, on the wire.",
         "enum": ["added", "modified", "deleted", "renamed"]
+      },
+      "FileSideDto": {
+        "type": "string",
+        "description": "Which side of the captured comparison a file is read from.",
+        "enum": ["base", "head"]
       },
       "GitRefDto": {
         "type": "object",

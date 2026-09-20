@@ -139,6 +139,26 @@ export type AgentRespondElicitationAction = ElicitationAnswer & {
 };
 
 /**
+ * Response body for `GET /agent-sessions/{session_id}/changes/file`.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type AgentSessionChangesFileResponse = {
+    /**
+     * The file's text at the captured revision.
+     */
+    contents: string;
+    /**
+     * The requested path.
+     */
+    path: string;
+    /**
+     * Which side was read.
+     */
+    side: FileSideDto;
+};
+
+/**
  * Response body for `GET /agent-sessions/{session_id}/changes/patch`.
  *
  * Clients deserialize this, so both derives are used.
@@ -765,6 +785,11 @@ export type ExternalSessionResponse = {
 export type FileChangeKindDto = 'added' | 'modified' | 'deleted' | 'renamed';
 
 /**
+ * Which side of the captured comparison a file is read from.
+ */
+export type FileSideDto = 'base' | 'head';
+
+/**
  * One end of the compared range.
  */
 export type GitRefDto = {
@@ -1310,6 +1335,44 @@ export type GetAgentSessionChangesResponses = {
 };
 
 export type GetAgentSessionChangesResponse = GetAgentSessionChangesResponses[keyof GetAgentSessionChangesResponses];
+
+export type GetAgentSessionChangesFileData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query: {
+        /**
+         * Repository-relative path of a captured file
+         */
+        path: string;
+        /**
+         * Which side of the comparison to read
+         */
+        side: FileSideDto;
+    };
+    url: '/agent-sessions/{session_id}/changes/file';
+};
+
+export type GetAgentSessionChangesFileErrors = {
+    400: string;
+    401: string;
+    403: string;
+    404: string;
+    422: string;
+    500: string;
+};
+
+export type GetAgentSessionChangesFileError = GetAgentSessionChangesFileErrors[keyof GetAgentSessionChangesFileErrors];
+
+export type GetAgentSessionChangesFileResponses = {
+    200: AgentSessionChangesFileResponse;
+};
+
+export type GetAgentSessionChangesFileResponse = GetAgentSessionChangesFileResponses[keyof GetAgentSessionChangesFileResponses];
 
 export type GetAgentSessionChangesPatchData = {
     body?: never;

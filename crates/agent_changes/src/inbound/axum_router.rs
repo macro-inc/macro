@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use axum::{
     Json, Router,
-    extract::{FromRef, State},
+    extract::{FromRef, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -29,7 +29,7 @@ use utoipa::ToSchema;
 use crate::domain::error::ChangesError;
 use crate::domain::model::{
     AttemptOutcome, CaptureAttempt, ChangedFile, Changeset, ChangesetSource, FileChangeKind,
-    GitRef, SessionChanges,
+    FileSide, GitRef, SessionChanges,
 };
 use crate::domain::service::AgentChanges;
 
@@ -106,6 +106,10 @@ where
         .route(
             "/{session_id}/changes/patch",
             get(get_agent_session_changes_patch_handler::<Changes, Access, Auth>),
+        )
+        .route(
+            "/{session_id}/changes/file",
+            get(get_agent_session_changes_file_handler::<Changes, Access, Auth>),
         )
         .route(
             "/{session_id}/changes/refresh",
@@ -377,6 +381,12 @@ impl IntoResponse for AgentChangesApiError {
             Self::Domain(error @ (ChangesError::NoChangeset | ChangesError::PatchMissing)) => {
                 (StatusCode::NOT_FOUND, error.to_string()).into_response()
             }
+            Self::Domain(
+                error @ (ChangesError::InvalidPath | ChangesError::FileNotInChangeset),
+            ) => (StatusCode::BAD_REQUEST, error.to_string()).into_response(),
+            Self::Domain(ChangesError::FileUnavailable(reason)) => {
+                (StatusCode::UNPROCESSABLE_ENTITY, reason).into_response()
+            }
             Self::Domain(ChangesError::Session(
                 agent_session::domain::error::AgentSessionError::Forbidden,
             )) => (StatusCode::FORBIDDEN, "forbidden").into_response(),
@@ -416,6 +426,48 @@ pub async fn get_agent_session_changes_handler<
     Ok(Json(changes.into()))
 }
 
+/// Which side of the captured comparison a file is read from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum FileSideDto {
+    /// The pull request's target (old file).
+    Base,
+    /// The pull request's source (new file).
+    Head,
+}
+
+impl From<FileSideDto> for FileSide {
+    fn from(side: FileSideDto) -> Self {
+        match side {
+            FileSideDto::Base => Self::Base,
+            FileSideDto::Head => Self::Head,
+        }
+    }
+}
+
+/// Query for `GET /agent-sessions/{session_id}/changes/file`.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, ToSchema)]
+pub struct ChangesFileQuery {
+    /// Repository-relative path of a file in the captured changeset.
+    pub path: String,
+    /// Which side of the comparison to read.
+    pub side: FileSideDto,
+}
+
+/// Response body for `GET /agent-sessions/{session_id}/changes/file`.
+///
+/// Clients deserialize this, so both derives are used.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionChangesFileResponse {
+    /// The requested path.
+    pub path: String,
+    /// Which side was read.
+    pub side: FileSideDto,
+    /// The file's text at the captured revision.
+    pub contents: String,
+}
+
 #[utoipa::path(
     get,
     path = "/agent-sessions/{session_id}/changes/patch",
@@ -442,6 +494,53 @@ pub async fn get_agent_session_changes_patch_handler<
 ) -> Result<Json<AgentSessionChangesPatchResponse>, AgentChangesApiError> {
     let patch = state.service.patch(&access.entity_access_receipt).await?;
     Ok(Json(AgentSessionChangesPatchResponse { patch }))
+}
+
+#[utoipa::path(
+    get,
+    path = "/agent-sessions/{session_id}/changes/file",
+    tag = "agent-sessions",
+    operation_id = "get_agent_session_changes_file",
+    params(
+        ("session_id" = Uuid, Path, description = "ID of the agent session"),
+        ("path" = String, Query, description = "Repository-relative path of a captured file"),
+        ("side" = FileSideDto, Query, description = "Which side of the comparison to read"),
+    ),
+    responses(
+        (status = 200, body = AgentSessionChangesFileResponse),
+        (status = 400, body = String),
+        (status = 401, body = String),
+        (status = 403, body = String),
+        (status = 404, body = String),
+        (status = 422, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// The text of one captured file at the base or head revision, used to
+/// expand collapsed unchanged context in the diff.
+#[tracing::instrument(skip_all, fields(agent.session.id = %access.entity_access_receipt.entity().entity_id), err(Debug))]
+pub async fn get_agent_session_changes_file_handler<
+    Changes: AgentChanges,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: AgentSessionAccessLevelExtractor<ViewAccessLevel, Access, Auth>,
+    Query(query): Query<ChangesFileQuery>,
+    State(state): State<AgentChangesRouterState<Changes, Access, Auth>>,
+) -> Result<Json<AgentSessionChangesFileResponse>, AgentChangesApiError> {
+    let contents = state
+        .service
+        .file(
+            &access.entity_access_receipt,
+            &query.path,
+            query.side.into(),
+        )
+        .await?;
+    Ok(Json(AgentSessionChangesFileResponse {
+        path: query.path,
+        side: query.side,
+        contents,
+    }))
 }
 
 #[utoipa::path(

@@ -4,6 +4,7 @@
  * resolved values to the components.
  */
 
+import { Resize } from '@core/component/Resize';
 import CircleNotchIcon from '@phosphor/circle-notch.svg';
 import WarningCircleIcon from '@phosphor/warning-circle.svg';
 import { Button } from '@ui';
@@ -25,6 +26,7 @@ import { PierreFileDiff } from '../components/PierreFileDiff';
 import { ReviewBar } from '../components/ReviewBar';
 import { useAgentChanges } from '../context/agent-changes-controller';
 import { type ChangesState, describeRange } from '../core/changeset';
+import { MAX_TREE_WIDTH, MIN_TREE_WIDTH } from '../core/layout';
 import type { FileDiffEntry } from '../core/patch';
 import { notesForFile } from '../core/review-notes';
 import { createThemeType } from '../primitives/create-theme-type';
@@ -32,7 +34,7 @@ import { createThemeType } from '../primitives/create-theme-type';
 const FLASH_MS = 900;
 
 function DiffStack(props: { entries: FileDiffEntry[] }) {
-  const { review, diffStyle, copyPath, context } = useAgentChanges();
+  const { review, diffStyle, copyPath, context, model } = useAgentChanges();
   const themeType = createThemeType();
   const cards = new Map<string, HTMLElement>();
   const [flashing, setFlashing] = createSignal<string>();
@@ -82,6 +84,7 @@ function DiffStack(props: { entries: FileDiffEntry[] }) {
                       themeType={themeType()}
                       notes={notesForFile(review.notes(), path())}
                       composing={composing()}
+                      loadDiffFiles={model.loadDiffFiles}
                       onOpenNote={
                         context.host.agent ? review.openNote : undefined
                       }
@@ -245,39 +248,56 @@ export function ChangesPane() {
                 text="Some diffs were left out to fit the size budget; the file list is complete."
               />
             </Show>
-            <div class="flex min-h-0 flex-1">
-              <FileTree
-                nodes={model.tree()}
-                fileCount={model.files().length}
-                active={review.active()}
-                onSelect={review.activate}
-              />
-              <Switch>
-                <Match when={model.patchStatus() === 'error'}>
-                  <div class="flex flex-1 flex-col items-center justify-center gap-2 text-center">
-                    <WarningCircleIcon class="size-6 text-ink-placeholder" />
-                    <p class="text-sm font-medium text-ink">
-                      The diff could not be loaded
-                    </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={model.retryPatch}
-                    >
-                      Try again
-                    </Button>
+            <div class="min-h-0 flex-1">
+              <Resize.Zone direction="horizontal" gutter={1} resizable>
+                <Resize.Panel
+                  id="changes-file-tree"
+                  minSize={MIN_TREE_WIDTH}
+                  maxSize={MAX_TREE_WIDTH}
+                  index={0}
+                  target={{ kind: 'px', px: layout.treeWidth() }}
+                  onSizeChangeEnd={layout.setTreeWidth}
+                >
+                  <div class="h-full min-w-0 overflow-hidden">
+                    <FileTree
+                      nodes={model.tree()}
+                      fileCount={model.files().length}
+                      active={review.active()}
+                      onSelect={review.activate}
+                    />
                   </div>
-                </Match>
-                <Match when={model.entries()}>
-                  {(entries) => <DiffStack entries={entries()} />}
-                </Match>
-                <Match when={true}>
-                  <div class="flex flex-1 items-center justify-center gap-2 text-xs text-ink-placeholder">
-                    <CircleNotchIcon class="size-4 animate-spin" />
-                    Loading the diff…
+                </Resize.Panel>
+                <Resize.Panel id="changes-diff-stack" minSize={280} index={1}>
+                  <div class="flex h-full min-w-0 flex-col overflow-hidden">
+                    <Switch>
+                      <Match when={model.patchStatus() === 'error'}>
+                        <div class="flex flex-1 flex-col items-center justify-center gap-2 text-center">
+                          <WarningCircleIcon class="size-6 text-ink-placeholder" />
+                          <p class="text-sm font-medium text-ink">
+                            The diff could not be loaded
+                          </p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={model.retryPatch}
+                          >
+                            Try again
+                          </Button>
+                        </div>
+                      </Match>
+                      <Match when={model.entries()}>
+                        {(entries) => <DiffStack entries={entries()} />}
+                      </Match>
+                      <Match when={true}>
+                        <div class="flex flex-1 items-center justify-center gap-2 text-xs text-ink-placeholder">
+                          <CircleNotchIcon class="size-4 animate-spin" />
+                          Loading the diff…
+                        </div>
+                      </Match>
+                    </Switch>
                   </div>
-                </Match>
-              </Switch>
+                </Resize.Panel>
+              </Resize.Zone>
             </div>
           </Show>
         </Match>

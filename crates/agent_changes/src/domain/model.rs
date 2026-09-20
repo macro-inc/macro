@@ -109,6 +109,25 @@ impl GitRef {
             sha: None,
         }
     }
+
+    /// The commit SHA when known, otherwise the branch name.
+    #[must_use]
+    pub fn rev(&self) -> Option<&str> {
+        self.sha.as_deref().or(self.name.as_deref())
+    }
+}
+
+/// Which side of a captured comparison a file is read from.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::Display, strum::EnumString,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum FileSide {
+    /// The pull request's target (old file).
+    Base,
+    /// The pull request's source (new file).
+    Head,
 }
 
 /// What was compared with what.
@@ -182,6 +201,42 @@ impl Changeset {
     pub fn has_patch(&self) -> bool {
         self.patch_bytes > 0
     }
+
+    /// Whether `path` is one of this capture's files, including a rename's
+    /// previous path so the old side can be hydrated.
+    #[must_use]
+    pub fn contains_path(&self, path: &str) -> bool {
+        self.files
+            .iter()
+            .any(|file| file.path == path || file.previous_path.as_deref() == Some(path))
+    }
+
+    /// The revision to read `side` at, SHA preferred over branch name.
+    #[must_use]
+    pub fn rev_for(&self, side: FileSide) -> Option<&str> {
+        match side {
+            FileSide::Base => self.range.base.rev(),
+            FileSide::Head => self.range.head.rev(),
+        }
+    }
+}
+
+/// A repository-relative file path the pane may fetch. Rejects traversal,
+/// absolute paths, empty segments, and NULs so the GitHub contents call
+/// cannot be pointed at another file.
+#[must_use]
+pub fn changeset_file_path(path: &str) -> Option<&str> {
+    if path.is_empty() || path.starts_with('/') || path.contains('\0') {
+        return None;
+    }
+    let mut segments = 0usize;
+    for segment in path.split('/') {
+        if segment.is_empty() || segment == "." || segment == ".." {
+            return None;
+        }
+        segments += 1;
+    }
+    (segments > 0).then_some(path)
 }
 
 /// How the latest capture attempt ended.

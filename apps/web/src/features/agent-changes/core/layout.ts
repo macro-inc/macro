@@ -14,6 +14,11 @@ export const DEFAULT_CHANGES_SHARE = 58;
 export const MIN_CHANGES_SHARE = 22;
 export const MAX_CHANGES_SHARE = 74;
 
+/** Pixel width of the changed-files tree when the pane first opens. */
+export const DEFAULT_TREE_WIDTH = 232;
+export const MIN_TREE_WIDTH = 128;
+export const MAX_TREE_WIDTH = 520;
+
 export function isChangesVisible(layout: PaneLayout): boolean {
   return layout !== 'agent-only';
 }
@@ -40,4 +45,9 @@ export function ensureChangesVisible(layout: PaneLayout): PaneLayout {
 export function clampChangesShare(share: number): number {
   if (!Number.isFinite(share)) return DEFAULT_CHANGES_SHARE;
   return Math.min(MAX_CHANGES_SHARE, Math.max(MIN_CHANGES_SHARE, share));
+}
+
+export function clampTreeWidth(width: number): number {
+  if (!Number.isFinite(width)) return DEFAULT_TREE_WIDTH;
+  return Math.min(MAX_TREE_WIDTH, Math.max(MIN_TREE_WIDTH, width));
 }

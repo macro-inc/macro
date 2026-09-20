@@ -5,6 +5,7 @@
  */
 
 import {
+  fetchAgentSessionChangesFile,
   useAgentSessionChangesPatchQuery,
   useAgentSessionChangesQuery,
   useRefreshAgentSessionChangesMutation,
@@ -123,6 +124,7 @@ export function createSessionChangesSource(
     };
   };
 
+  const files = new Map<string, Promise<string>>();
   return {
     summary,
     summaryStatus: () => queryStatus(summaryQuery),
@@ -131,6 +133,19 @@ export function createSessionChangesSource(
       const id = sessionId();
       if (!id) return;
       await refresh.mutateAsync(id);
+    },
+    file: (path, side) => {
+      const id = sessionId();
+      const changeset = summary()?.changeset?.id;
+      if (!id || !changeset) {
+        return Promise.reject(new Error('No captured changes to expand.'));
+      }
+      const key = `${changeset}:${side}:${path}`;
+      const cached = files.get(key);
+      if (cached) return cached;
+      const pending = fetchAgentSessionChangesFile(id, path, side);
+      files.set(key, pending);
+      return pending;
     },
   };
 }

@@ -44,4 +44,39 @@ impl<Reader: PullRequestDiffReader> ChangesetExtractor for PullRequestChanges<Re
             truncated: false,
         })
     }
+
+    async fn read_file(
+        &self,
+        session: &AgentSession,
+        path: &str,
+        rev: &str,
+    ) -> Result<String, ExtractError> {
+        let url = session.pull_request_url.as_deref().ok_or_else(|| {
+            ExtractError::NotReady(
+                "Link a GitHub pull request to this session to review its changes.".to_owned(),
+            )
+        })?;
+        let pull_request = PullRequestRef::parse(url).ok_or_else(|| {
+            ExtractError::NotReady("The linked URL is not a GitHub pull request.".to_owned())
+        })?;
+        self.reader
+            .read_file(&session.owner_id, &pull_request, path, rev)
+            .await
+            .map_err(map_file_error)
+    }
+}
+
+fn map_file_error(error: CompareError) -> ExtractError {
+    match error {
+        CompareError::NotFound => ExtractError::NotReady(
+            "That file is not available at the captured revision.".to_owned(),
+        ),
+        CompareError::TooLarge => ExtractError::NotReady(
+            "That file is too large to expand here. Review it on GitHub.".to_owned(),
+        ),
+        CompareError::Unavailable => ExtractError::NotReady(
+            "Macro's GitHub App cannot read this file. Check its repository access.".to_owned(),
+        ),
+        CompareError::Other(report) => ExtractError::Failed(report),
+    }
 }

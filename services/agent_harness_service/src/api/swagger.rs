@@ -1,9 +1,9 @@
 //! OpenAPI document for the agent harness service's session routes.
 
 use agent_changes::inbound::axum_router::{
-    self as changes_router, AgentSessionChangesPatchResponse, AgentSessionChangesResponse,
-    CaptureAttemptDto, CaptureOutcomeDto, ChangedFileDto, ChangesetDto, ChangesetSourceDto,
-    FileChangeKindDto, GitRefDto,
+    self as changes_router, AgentSessionChangesFileResponse, AgentSessionChangesPatchResponse,
+    AgentSessionChangesResponse, CaptureAttemptDto, CaptureOutcomeDto, ChangedFileDto,
+    ChangesetDto, ChangesetSourceDto, FileChangeKindDto, FileSideDto, GitRefDto,
 };
 use agent_harness::inbound::model_load::{
     self, AgentModelDto, AgentModelsStatusDto, LoadAgentModelsRequest, LoadAgentModelsResponse,
@@ -65,6 +65,7 @@ impl Modify for SecurityAddon {
         repositories::list_agent_repositories_handler,
         changes_router::get_agent_session_changes_handler,
         changes_router::get_agent_session_changes_patch_handler,
+        changes_router::get_agent_session_changes_file_handler,
         changes_router::refresh_agent_session_changes_handler,
     ),
     components(schemas(
@@ -108,6 +109,8 @@ impl Modify for SecurityAddon {
         AgentRepositoryDto,
         AgentSessionChangesResponse,
         AgentSessionChangesPatchResponse,
+        AgentSessionChangesFileResponse,
+        FileSideDto,
         ChangesetDto,
         ChangedFileDto,
         GitRefDto,

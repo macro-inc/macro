@@ -16,6 +16,15 @@ pub trait ChangesetExtractor: Send + Sync + 'static {
         &self,
         session: &AgentSession,
     ) -> impl Future<Output = Result<ExtractedChangeset, ExtractError>> + Send;
+
+    /// The text of `path` at `rev` in the session's linked pull request.
+    /// `rev` is a commit SHA or branch name from the captured range.
+    fn read_file(
+        &self,
+        session: &AgentSession,
+        path: &str,
+        rev: &str,
+    ) -> impl Future<Output = Result<String, ExtractError>> + Send;
 }
 
 /// Where a stored patch lives in the blob store.
@@ -136,4 +145,13 @@ pub trait PullRequestDiffReader: Send + Sync + 'static {
         user: &macro_user_id::user_id::MacroUserIdStr<'static>,
         pull_request: &super::model::PullRequestRef,
     ) -> impl Future<Output = Result<PullRequestDiff, super::error::CompareError>> + Send;
+
+    /// The text of `path` at `rev` in the pull request's repository.
+    fn read_file(
+        &self,
+        user: &macro_user_id::user_id::MacroUserIdStr<'static>,
+        pull_request: &super::model::PullRequestRef,
+        path: &str,
+        rev: &str,
+    ) -> impl Future<Output = Result<String, super::error::CompareError>> + Send;
 }

@@ -4,6 +4,7 @@
  * or has failed), its files as a tree, and the parsed diff for each file.
  */
 
+import type { FileDiffLoadedFiles, FileDiffMetadata } from '@pierre/diffs';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import type {
   ChangesSource,
@@ -35,6 +36,11 @@ export type ChangesModel = {
   refresh: () => Promise<void>;
   refreshing: Accessor<boolean>;
   refreshError: Accessor<string | undefined>;
+  /**
+   * Full file sides for a patch-parsed diff, so Pierre can expand collapsed
+   * unchanged context. Added and deleted files are not asked for.
+   */
+  loadDiffFiles: (fileDiff: FileDiffMetadata) => Promise<FileDiffLoadedFiles>;
 };
 
 export function createChangesModel(options: {
@@ -104,6 +110,42 @@ export function createChangesModel(options: {
     }
   };
 
+  const loadDiffFiles = async (
+    fileDiff: FileDiffMetadata
+  ): Promise<FileDiffLoadedFiles> => {
+    const oldPath = fileDiff.prevName ?? fileDiff.name;
+    const newPath = fileDiff.name;
+    const cacheKey = changeset()?.id ?? 'changeset';
+    // Pure renames have no content change; Pierre only needs the new side.
+    if (fileDiff.type === 'rename-pure') {
+      const contents = await source.file(newPath, 'head');
+      return {
+        oldFile: null,
+        newFile: {
+          name: newPath,
+          contents,
+          cacheKey: `${cacheKey}:new:${newPath}`,
+        },
+      };
+    }
+    const [oldContents, newContents] = await Promise.all([
+      source.file(oldPath, 'base'),
+      source.file(newPath, 'head'),
+    ]);
+    return {
+      oldFile: {
+        name: oldPath,
+        contents: oldContents,
+        cacheKey: `${cacheKey}:old:${oldPath}`,
+      },
+      newFile: {
+        name: newPath,
+        contents: newContents,
+        cacheKey: `${cacheKey}:new:${newPath}`,
+      },
+    };
+  };
+
   return {
     state,
     changeset,
@@ -115,5 +157,6 @@ export function createChangesModel(options: {
     refresh,
     refreshing,
     refreshError,
+    loadDiffFiles,
   };
 }

@@ -434,9 +434,13 @@ segmented control (`aria-label="Diff layout"`), a refresh button, the
 changes pane**. Below it is a **Collapse all / Expand all** button.
 The body is a file tree (`nav[aria-label="Changed files"]`, directories
 compressed along single-child chains, status letters A/M/D/R and +/− counts)
-next to a scrollable stack of file cards. Expanded cards keep their full height;
+next to a scrollable stack of file cards. Drag the 1px divider between the
+tree and the diffs to widen the tree and read full file names; the width
+stays local to the session. Expanded cards keep their full height;
 **Collapse all / Expand all** hides or restores their bodies. Each card's header has a disclosure
-caret, the path, `+adds −dels`, and **Copy path**. Diffs render with Pierre; hover a
+caret, the path, `+adds −dels`, and **Copy path**. Diffs render with Pierre.
+Hunk separators offer **expand up** / **expand down** to reveal more unchanged
+context from the captured file. Hover a
 line and click the accent **+** in the gutter (drag for a range) to leave a
 review note for the agent (`aria-label="Review note"`; `Cmd/Ctrl+Enter` adds,
 `Escape` cancels). Notes hang under their line as "queued for the agent" and a

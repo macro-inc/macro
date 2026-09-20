@@ -6,7 +6,9 @@
 import type { Accessor } from 'solid-js';
 import {
   clampChangesShare,
+  clampTreeWidth,
   DEFAULT_CHANGES_SHARE,
+  DEFAULT_TREE_WIDTH,
   ensureChangesVisible,
   isChangesVisible,
   isSessionVisible,
@@ -23,6 +25,9 @@ export type PaneLayoutController = {
   /** Percent of the width the changes pane takes in the split. */
   changesShare: Accessor<number>;
   setChangesShare: (share: number) => void;
+  /** Pixel width of the changed-files tree. */
+  treeWidth: Accessor<number>;
+  setTreeWidth: (width: number) => void;
   toggle: () => void;
   spotlight: () => void;
   open: () => void;
@@ -30,17 +35,20 @@ export type PaneLayoutController = {
   backToSplit: () => void;
 };
 
-type StoredLayout = { layout: PaneLayout; share: number };
+type StoredLayout = { layout: PaneLayout; share: number; treeWidth: number };
 
 const LAYOUTS: readonly PaneLayout[] = ['split', 'agent-only', 'changes-only'];
 
 function parseStored(raw: unknown): StoredLayout | undefined {
   if (typeof raw !== 'object' || raw === null) return undefined;
-  const { layout, share } = raw as Partial<StoredLayout>;
+  const { layout, share, treeWidth } = raw as Partial<StoredLayout>;
   if (!layout || !LAYOUTS.includes(layout)) return undefined;
   return {
     layout,
     share: clampChangesShare(typeof share === 'number' ? share : Number.NaN),
+    treeWidth: clampTreeWidth(
+      typeof treeWidth === 'number' ? treeWidth : DEFAULT_TREE_WIDTH
+    ),
   };
 }
 
@@ -52,7 +60,11 @@ export function createPaneLayout(options: {
   const [stored, setStored] = createPersistedSessionState<StoredLayout>({
     sessionId: options.sessionId,
     namespace: 'agent-changes:layout',
-    initial: () => ({ layout: 'agent-only', share: DEFAULT_CHANGES_SHARE }),
+    initial: () => ({
+      layout: 'agent-only',
+      share: DEFAULT_CHANGES_SHARE,
+      treeWidth: DEFAULT_TREE_WIDTH,
+    }),
     parse: parseStored,
     storage: options.storage,
   });
@@ -72,6 +84,12 @@ export function createPaneLayout(options: {
       setStored((previous) => ({
         ...previous,
         share: clampChangesShare(share),
+      })),
+    treeWidth: () => stored().treeWidth,
+    setTreeWidth: (width) =>
+      setStored((previous) => ({
+        ...previous,
+        treeWidth: clampTreeWidth(width),
       })),
     toggle: () => setLayout(toggleChanges),
     spotlight: () => setLayout(toggleSpotlight),

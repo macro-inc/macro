@@ -23,7 +23,10 @@ use macro_uuid::Uuid;
 use tracing::Instrument as _;
 
 use super::error::{ChangesError, ExtractError, Result};
-use super::model::{AgentSessionId, AttemptOutcome, Changeset, ChangesetId, SessionChanges};
+use super::model::{
+    AgentSessionId, AttemptOutcome, Changeset, ChangesetId, FileSide, SessionChanges,
+    changeset_file_path,
+};
 use super::patch::{self, MAX_FILE_PATCH_BYTES, MAX_PATCH_BYTES};
 use super::ports::{ChangesetBlobStore, ChangesetExtractor, ChangesetRepo, PatchBlobKey};
 
@@ -65,6 +68,14 @@ pub trait AgentChanges: Send + Sync + 'static {
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
     ) -> impl Future<Output = Result<SessionChanges>> + Send;
+
+    /// The text of a captured file at `side`, for expanding collapsed hunks.
+    fn file(
+        &self,
+        access: &EntityAccessReceipt<ViewAccessLevel>,
+        path: &str,
+        side: FileSide,
+    ) -> impl Future<Output = Result<String>> + Send;
 }
 
 struct Inner<Sessions, Extractor, Repo, Blobs, Realtime> {
@@ -136,6 +147,38 @@ where
             .get(session)
             .await
             .map_err(ChangesError::Storage)
+    }
+
+    /// The text of a captured file at `side`, for expanding collapsed hunks.
+    async fn read_file(
+        &self,
+        access: &EntityAccessReceipt<ViewAccessLevel>,
+        path: &str,
+        side: FileSide,
+    ) -> Result<String> {
+        let path = changeset_file_path(path).ok_or(ChangesError::InvalidPath)?;
+        let session = session_of(access)?;
+        let changes = self
+            .inner
+            .repo
+            .get(session)
+            .await
+            .map_err(ChangesError::Storage)?;
+        let changeset = changes.changeset.ok_or(ChangesError::NoChangeset)?;
+        if !changeset.contains_path(path) {
+            return Err(ChangesError::FileNotInChangeset);
+        }
+        let rev = changeset
+            .rev_for(side)
+            .ok_or(ChangesError::FileUnavailable(
+                "The captured revision for that side is unknown.".to_owned(),
+            ))?;
+        let row = self.inner.sessions.get(session).await?;
+        self.inner
+            .extractor
+            .read_file(&row, path, rev)
+            .await
+            .map_err(map_file_extract_error)
     }
 
     /// The stored patch for the session the receipt names.
@@ -393,6 +436,27 @@ where
         access: &EntityAccessReceipt<EditAccessLevel>,
     ) -> Result<SessionChanges> {
         self.start_capture(access).await
+    }
+
+    async fn file(
+        &self,
+        access: &EntityAccessReceipt<ViewAccessLevel>,
+        path: &str,
+        side: FileSide,
+    ) -> Result<String> {
+        self.read_file(access, path, side).await
+    }
+}
+
+fn map_file_extract_error(error: ExtractError) -> ChangesError {
+    match error {
+        ExtractError::NotReady(reason) => ChangesError::FileUnavailable(reason),
+        ExtractError::Failed(report) => {
+            tracing::warn!(error = ?report, "reading a captured file failed");
+            ChangesError::FileUnavailable(
+                "The file could not be read from GitHub. Try again in a moment.".to_owned(),
+            )
+        }
     }
 }
 

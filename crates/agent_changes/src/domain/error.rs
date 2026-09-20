@@ -23,6 +23,15 @@ pub enum ChangesError {
     /// The summary store or the blob store failed.
     #[error("changes storage failed: {0}")]
     Storage(rootcause::Report),
+    /// The requested path is not a file path the pane may fetch.
+    #[error("the file path is not valid")]
+    InvalidPath,
+    /// The path is not one of the captured files.
+    #[error("that file is not in the captured changes")]
+    FileNotInChangeset,
+    /// GitHub could not return the file at the captured revision.
+    #[error("{0}")]
+    FileUnavailable(String),
 }
 
 /// Why an extractor could not hand back a changeset.

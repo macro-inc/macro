@@ -6,6 +6,7 @@
  */
 import type {
   AgentRepositoriesResponse,
+  AgentSessionChangesFileResponse,
   AgentSessionChangesPatchResponse,
   AgentSessionChangesResponse,
   AgentSessionLogResponse,
@@ -18,6 +19,7 @@ import type {
   CreateAgentSessionResponse,
   EditQueuedActionRequest,
   EmptyRequest,
+  GetAgentSessionChangesFileParams,
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
   PreviewAgentSessionsRequest,
@@ -623,6 +625,105 @@ export const getAgentSessionChanges = async (
     status: res.status,
     headers: res.headers,
   } as getAgentSessionChangesResponse;
+};
+
+/**
+ * @summary The text of one captured file at the base or head revision, used to
+expand collapsed unchanged context in the diff.
+ */
+export type getAgentSessionChangesFileResponse200 = {
+  data: AgentSessionChangesFileResponse;
+  status: 200;
+};
+
+export type getAgentSessionChangesFileResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type getAgentSessionChangesFileResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getAgentSessionChangesFileResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type getAgentSessionChangesFileResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type getAgentSessionChangesFileResponse422 = {
+  data: string;
+  status: 422;
+};
+
+export type getAgentSessionChangesFileResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type getAgentSessionChangesFileResponseSuccess =
+  getAgentSessionChangesFileResponse200 & {
+    headers: Headers;
+  };
+export type getAgentSessionChangesFileResponseError = (
+  | getAgentSessionChangesFileResponse400
+  | getAgentSessionChangesFileResponse401
+  | getAgentSessionChangesFileResponse403
+  | getAgentSessionChangesFileResponse404
+  | getAgentSessionChangesFileResponse422
+  | getAgentSessionChangesFileResponse500
+) & {
+  headers: Headers;
+};
+
+export type getAgentSessionChangesFileResponse =
+  | getAgentSessionChangesFileResponseSuccess
+  | getAgentSessionChangesFileResponseError;
+
+export const getGetAgentSessionChangesFileUrl = (
+  sessionId: string,
+  params: GetAgentSessionChangesFileParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/agent-sessions/${sessionId}/changes/file?${stringifiedParams}`
+    : `/agent-sessions/${sessionId}/changes/file`;
+};
+
+export const getAgentSessionChangesFile = async (
+  sessionId: string,
+  params: GetAgentSessionChangesFileParams,
+  options?: RequestInit
+): Promise<getAgentSessionChangesFileResponse> => {
+  const res = await fetch(getGetAgentSessionChangesFileUrl(sessionId, params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentSessionChangesFileResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentSessionChangesFileResponse;
 };
 
 /**
