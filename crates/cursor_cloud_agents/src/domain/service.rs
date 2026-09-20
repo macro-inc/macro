@@ -59,12 +59,54 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-/// How often the fallback poll asks after a run's outcome.
+/// How often a wait that is not about the run's outcome asks again: the
+/// busy-agent queue, and a poll retried after a transport error.
 const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
 
-/// Polls before a turn is abandoned — fifteen minutes, comfortably past any
-/// run in the recorded corpus while still an ending.
-const POLL_ATTEMPTS: usize = 450;
+/// The fallback poll's cadence: quick at first, when a run that has just gone
+/// quiet is most likely about to end, then settling at [`POLL_INTERVAL_CEILING`].
+///
+/// Two facts from the journals set the shape. `GET /v1/agents/{id}/runs/{run}`
+/// is limited to 300 requests a minute per API key, shared by every session
+/// this deployment drives, and a two-second poll from a dozen stalled
+/// sessions was enough to draw a 429 (dev, 2026-09-19). And a run's record
+/// carries no liveness signal while it is `RUNNING` — `updatedAt` moves only
+/// on status transitions — so asking more often learns nothing sooner.
+const POLL_DELAYS: [std::time::Duration; 11] = [
+    std::time::Duration::from_secs(2),
+    std::time::Duration::from_secs(2),
+    std::time::Duration::from_secs(2),
+    std::time::Duration::from_secs(2),
+    std::time::Duration::from_secs(2),
+    std::time::Duration::from_secs(3),
+    std::time::Duration::from_secs(5),
+    std::time::Duration::from_secs(8),
+    std::time::Duration::from_secs(12),
+    std::time::Duration::from_secs(20),
+    std::time::Duration::from_secs(30),
+];
+
+/// Where the poll cadence settles: two requests a minute per waiting session.
+const POLL_INTERVAL_CEILING: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Polls before a turn stops waiting — about two hours along [`POLL_DELAYS`].
+///
+/// This is a ceiling for a run that Cursor still calls `RUNNING`, not an
+/// estimate of how long one takes. The old fifteen-minute budget was sized
+/// to a recorded corpus of short runs; live, a run that opened its pull
+/// request at 19:55 had its turn abandoned at 19:54, and every "gave up
+/// waiting" in three days of production logs was a run that was merely
+/// slow. A turn that stops waiting cannot be resumed, so the budget errs
+/// long: the chip shows the session working the whole time.
+const POLL_ATTEMPTS: usize = 250;
+
+/// How long the fallback poll sleeps before its `attempt`-th ask.
+fn poll_delay(attempt: usize) -> std::time::Duration {
+    POLL_DELAYS
+        .get(attempt)
+        .copied()
+        .unwrap_or(POLL_INTERVAL_CEILING)
+}
 
 /// Consecutive poll failures tolerated before the turn takes the error.
 const POLL_ERROR_TOLERANCE: usize = 5;
@@ -73,10 +115,28 @@ const POLL_ERROR_TOLERANCE: usize = 5;
 /// final text arrives and the stream then hangs open, its terminal `result`
 /// minutes behind — and the client shows a turn still "writing" long after
 /// the answer is on screen. Long enough to never fire during ordinary
-/// streaming; short enough that a finished run closes its turn promptly. A
-/// still-running run (quiet tool work) just costs one status read per
-/// interval.
+/// streaming; short enough that a finished run closes its turn promptly.
 const STREAM_QUIET_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// How long a stream that has already been found quiet waits between the
+/// next checks of its run's record. Slower than the first check on purpose:
+/// the record endpoint's rate limit is shared by every session (see
+/// [`POLL_DELAYS`]), and a run that was still going ten seconds ago is most
+/// likely still going now.
+const STREAM_QUIET_RECHECK: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Silence on an open stream before its connection is replaced.
+///
+/// Cursor does not heartbeat an open stream: the journals show runs saying
+/// nothing for many minutes while their record stays `RUNNING` — a tool call
+/// waiting on CI (`await`, `blockUntilMs: 120000`), a long build — and every
+/// reconnect in that window resumed zero records. So silence on a run the
+/// record still calls live is the agent working, and the connection is
+/// kept. Only silence this long buys a fresh connection, as insurance
+/// against a socket that died without saying so, and it costs nothing
+/// from the reconnect budget: that budget is for a transport that is
+/// failing, and this one merely has nothing to say.
+const STREAM_SILENCE_BEFORE_RECONNECT: std::time::Duration = std::time::Duration::from_secs(120);
 
 /// Backoff before each reconnect of an interrupted stream.
 ///
@@ -153,6 +213,25 @@ async fn sleep_unless_cancelled(
         biased;
         () = cancel.cancelled() => true,
         () = tokio::time::sleep(duration) => false,
+    }
+}
+
+/// Why a stream connection ended without the run's outcome.
+struct Interruption {
+    reason: String,
+    /// Whether a fresh connection could still deliver the run.
+    recoverable: bool,
+    /// The connection was replaced for saying nothing, not for failing.
+    quiet: bool,
+}
+
+impl Interruption {
+    fn failed(reason: String) -> Self {
+        Self {
+            reason,
+            recoverable: true,
+            quiet: false,
+        }
     }
 }
 
@@ -1293,8 +1372,12 @@ where
                 }
                 // Past the retention window there is no stream left to resume,
                 // so the run record is the only remaining account of the run.
-                Err(StreamConnectError::Expired(detail)) => Some((detail, false)),
-                Err(error) => Some((error.to_string(), true)),
+                Err(StreamConnectError::Expired(detail)) => Some(Interruption {
+                    reason: detail,
+                    recoverable: false,
+                    quiet: false,
+                }),
+                Err(error) => Some(Interruption::failed(error.to_string())),
                 Ok(connected) => {
                     let resumed = resuming.is_some();
                     ever_connected = true;
@@ -1304,20 +1387,31 @@ where
                     let mut received = 0usize;
                     let mut received_content = 0usize;
                     let mut sticky_status_pending = resumed;
+                    // How long this connection has said nothing, across the
+                    // record checks that found its run still going.
+                    let mut silence = std::time::Duration::ZERO;
                     let interruption = loop {
-                        let record = match tokio::time::timeout(
-                            STREAM_QUIET_TIMEOUT,
-                            records.next(),
-                        )
-                        .await
+                        let quiet_timeout = if silence.is_zero() {
+                            STREAM_QUIET_TIMEOUT
+                        } else {
+                            STREAM_QUIET_RECHECK
+                        };
+                        let record = match tokio::time::timeout(quiet_timeout, records.next()).await
                         {
-                            Ok(Some(Ok(record))) => record,
-                            Ok(Some(Err(error))) => break Some((error.to_string(), true)),
+                            Ok(Some(Ok(record))) => {
+                                silence = std::time::Duration::ZERO;
+                                record
+                            }
+                            Ok(Some(Err(error))) => {
+                                break Some(Interruption::failed(error.to_string()));
+                            }
                             // Cursor closes the stream after `done`, which
                             // breaks below with an outcome. Reaching here
                             // without one is a close mid-run.
                             Ok(None) if terminal.is_some() => break None,
-                            Ok(None) => break Some(("stream closed".to_owned(), true)),
+                            Ok(None) => {
+                                break Some(Interruption::failed("stream closed".to_owned()));
+                            }
                             Err(_) if strict => break None,
                             Err(_) => {
                                 // Quiet streams are checked through the exact same raw
@@ -1332,17 +1426,18 @@ where
                                 if cancel.is_cancelled() {
                                     break None;
                                 }
-                                // Cursor heartbeats an open stream, so a
-                                // gap this long on a run that has not
-                                // ended is a connection that stopped
-                                // delivering rather than an agent thinking.
-                                break Some((
-                                    format!(
-                                        "no records for {} seconds",
-                                        STREAM_QUIET_TIMEOUT.as_secs()
-                                    ),
-                                    true,
-                                ));
+                                silence += quiet_timeout;
+                                if silence < STREAM_SILENCE_BEFORE_RECONNECT {
+                                    // The run is going and the connection is
+                                    // open: an agent at work, not a stream
+                                    // that stopped delivering.
+                                    continue;
+                                }
+                                break Some(Interruption {
+                                    reason: format!("no records for {} seconds", silence.as_secs()),
+                                    recoverable: true,
+                                    quiet: true,
+                                });
                             }
                         };
                         if let Some(id) = &record.id {
@@ -1451,7 +1546,12 @@ where
                     interruption
                 }
             };
-            let Some((reason, recoverable)) = interruption else {
+            let Some(Interruption {
+                reason,
+                recoverable,
+                quiet,
+            }) = interruption
+            else {
                 break;
             };
             fell_back_to_poll = true;
@@ -1488,7 +1588,11 @@ where
             .await?;
             // Hydration verifies the whole captured prefix against a stream it
             // reads from the beginning, which a resumed stream cannot offer.
-            let resumable = recoverable && !strict && attempt <= STREAM_RECONNECT_ATTEMPTS as u32;
+            // A connection replaced for silence alone spends nothing: the
+            // budget rations a transport that is failing, and this one is
+            // still the only thing that can deliver the run live.
+            let resumable =
+                recoverable && !strict && (quiet || attempt <= STREAM_RECONNECT_ATTEMPTS as u32);
             if !resumable {
                 tracing::warn!(
                     cursor.run.id = %run,
@@ -1511,7 +1615,9 @@ where
             if sleep_unless_cancelled(cancel, delay).await {
                 break;
             }
-            reconnects = attempt;
+            if !quiet {
+                reconnects = attempt;
+            }
             resume_from = last_event_id.clone();
             fell_back_to_poll = false;
         }
@@ -1558,7 +1664,7 @@ where
                         return Err(error);
                     }
                 }
-                sleep_unless_cancelled(cancel, POLL_INTERVAL).await;
+                sleep_unless_cancelled(cancel, poll_delay(attempt)).await;
             }
         }
         let Some(status) = terminal else {
@@ -1572,8 +1678,10 @@ where
                 "gave up waiting; Cursor still reports a non-terminal status"
             );
             return Err(SessionError::Rejected(
-                "Cursor has not reported a result for this run, and has stopped saying \
-                 anything about it. Prompting again starts fresh and abandons this run."
+                "Cursor has been working on this for over two hours and Macro stopped \
+                 waiting. Send another message to continue: if Cursor has finished by \
+                 then, that message picks up what it did, and if not, the run is \
+                 cancelled and the conversation starts fresh from there."
                     .into(),
             ));
         };
@@ -1617,7 +1725,7 @@ where
     /// heartbeat a Cursor turn has, and a turn that stops polling is the
     /// first evidence that something took it down.
     ///
-    /// `debug` because the loop runs every [`POLL_INTERVAL`]; the turn span
+    /// `debug` because the loop runs as often as [`POLL_DELAYS`] says; the turn span
     /// above carries the outcome, this carries the liveness.
     #[tracing::instrument(
         name = "cursor.run.poll",

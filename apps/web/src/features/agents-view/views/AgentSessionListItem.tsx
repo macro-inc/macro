@@ -1,16 +1,22 @@
 import { ViewSidebar } from '@app/components/view-shell';
-import { AgentPullRequestIcon } from '@app/features/block-agent/component/AgentPullRequestChip';
+import {
+  AgentPullRequestIcon,
+  AgentPullRequestLink,
+} from '@app/features/block-agent/component/AgentPullRequestChip';
 import { parseGithubPrUrl, prHtmlUrl } from '@app/features/block-pr/util/prKey';
+import { useSessionTurn } from '@core/agent-session/use-session-turn';
 import type { AgentSessionEntity } from '@entity';
 import ChatIcon from '@phosphor/chat-circle.svg';
 import CodeIcon from '@phosphor/code.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
 import { useAgentSessionQuery } from '@queries/agent-session/session';
 import { useAgentsQuery } from '@queries/agents/agents';
 import { cn, pressHandlers } from '@ui';
 import { ErrorBoundary, Show, Suspense } from 'solid-js';
 import { kindForHarness, modeForKind, systemBotKind } from '../core/agent-kind';
-import { conversationState } from '../core/conversation-state';
+import {
+  conversationState,
+  conversationStateLabel,
+} from '../core/conversation-state';
 import { compactAge } from '../core/format-age';
 import type { AgentsMode } from '../core/mode';
 import { conversationTimestamp } from '../core/recent-conversations';
@@ -50,7 +56,11 @@ function SessionListItem(props: Props) {
       : (props.mode ?? modeForKind(systemBotKind(botId()) ?? 'agent'));
   };
   const title = () => props.entity.name || session()?.name || 'Untitled chat';
-  const state = () => conversationState(props.entity.status);
+  const turn = useSessionTurn(() => props.entity.id);
+  const state = () => conversationState(props.entity.status, turn());
+  const busy = () => state() === 'starting' || state() === 'working';
+  const label = () =>
+    busy() ? `${title()}, ${conversationStateLabel(state())}` : title();
   const pullRequest = () => parseGithubPrUrl(session()?.pullRequestUrl ?? '');
   const pullRequestUrl = () => {
     const pr = pullRequest();
@@ -67,6 +77,7 @@ function SessionListItem(props: Props) {
       )}
       data-agent-session-row={props.entity.id}
       data-kind={mode()}
+      data-session-state={state()}
     >
       <a
         href={agentsRouteHref({
@@ -74,7 +85,7 @@ function SessionListItem(props: Props) {
           conversation: { type: 'agent_session', id: props.entity.id },
         })}
         class="absolute inset-0 rounded-lg outline-none focus-visible:outline-2 focus-visible:outline-accent"
-        aria-label={title()}
+        aria-label={label()}
         aria-current={props.active ? 'page' : undefined}
         title={title()}
         {...pressHandlers((event) => {
@@ -85,7 +96,7 @@ function SessionListItem(props: Props) {
       />
       <ViewSidebar.Icon class="pointer-events-none relative">
         <Show
-          when={state() === 'starting'}
+          when={busy()}
           fallback={
             <Show when={mode() === 'code'} fallback={<ChatIcon />}>
               <Show when={pullRequestUrl()} fallback={<CodeIcon />}>
@@ -100,7 +111,14 @@ function SessionListItem(props: Props) {
             </Show>
           }
         >
-          <SpinnerIcon class="motion-safe:animate-spin" />
+          <span
+            aria-hidden="true"
+            class="agent-working-wave flex size-4 items-center justify-center gap-[2px] text-ink-muted"
+          >
+            <span class="size-[3px] rounded-full bg-current" />
+            <span class="size-[3px] rounded-full bg-current" />
+            <span class="size-[3px] rounded-full bg-current" />
+          </span>
         </Show>
       </ViewSidebar.Icon>
       <span class="pointer-events-none relative min-w-0 flex-1">
@@ -116,17 +134,13 @@ function SessionListItem(props: Props) {
             />
           </Show>
         </span>
-        <Show when={pullRequest()}>
-          {(pr) => (
-            <a
-              href={prHtmlUrl(pr())}
-              target="_blank"
-              rel="noreferrer"
-              class="pointer-events-auto block truncate text-xs leading-4 text-ink-extra-muted hover:text-ink hover:underline focus-visible:outline-2 focus-visible:outline-accent"
-              onClick={(event) => event.stopPropagation()}
-            >
-              View PR #{pr().number} in GitHub
-            </a>
+        <Show when={pullRequestUrl()}>
+          {(url) => (
+            <ErrorBoundary fallback={null}>
+              <Suspense>
+                <AgentPullRequestLink url={url()} />
+              </Suspense>
+            </ErrorBoundary>
           )}
         </Show>
       </span>

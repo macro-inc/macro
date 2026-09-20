@@ -15,13 +15,21 @@
   of chats and coding sessions, newest first, with one search across both.
   Chat rows use a chat icon; coding rows use `</>` (the PR status icon when a
   pull request is linked). Home and the Agents sidebar share these agent rows.
-  Rows have no agent or runtime-status subtext. Sessions with a linked PR show
-  **View PR #<number> in GitHub** beneath the title; clicking it opens GitHub in
-  a new tab without opening the session. The leading icon reflects the PR status. Changing the composer mode does not filter the sidebar.
+  Rows have no agent or runtime-status subtext. A session that is starting or
+  whose turn is still running (the agent is working, writing code, or stopping)
+  shows the same three-dot working wave as the transcript in place of the
+  leading icon; the row's accessible name appends `Starting` or `Working`.
+  Sessions with a linked PR show
+  **View PR #<number> in GitHub** beneath the title; clicking it opens the synced
+  GitHub PR entity in a split (the same destination as the session header chip
+  and Magic Chip). Until GitHub has synced the entity it opens GitHub in a new
+  tab. Either click leaves the session unopened. The leading icon reflects the PR status. Changing the composer mode does not filter the sidebar.
   Selecting a row opens its own mode and updates the URL to that session
   (`/app/agents/<id>`, `/app/coders/<id>`, or `/app/agent-chats/<id>`), so
   reload and back/forward restore it. Home agent-session rows do the same
   instead of previewing in place. Shift-click opens it in a new split.
+  Right-click (or long-press on mobile) opens the same entity menu as Home:
+  Rename, Favorite, Copy link, Share, Delete, and the other session actions.
 - The starting page has a compact composer that starts at one line and grows
   with longer prompts or Shift+Enter. Lists, quotes, headings, and other
   non-paragraph blocks expand immediately, even with short text. This also applies
@@ -66,13 +74,15 @@
   (**Choose repository** until one is picked) opens a searchable list:
   **Choose automatically**, then the repositories the signed-in user reaches
   through Macro's GitHub App (`GET /agent-repositories` on the agent harness),
-  recently used ones first. Typing filters the list; an unlisted GitHub
-  `owner/repo` or URL adds a **Use owner/repo** row. Arrow keys move the
-  highlight and Enter or a click picks it; there is no separate confirm
-  button. Someone who reaches no repository sees a hint with **Connect
-  GitHub**, which opens Settings → Connected. The last repository picked is
-  remembered per user in local storage and preselected next time. Once
-  selected, **Branch** shows the repository's default branch (`main` when it
+  recently used ones first. A new conversation always starts on **Choose
+  repository** (Automatic); the last used repository is not preselected.
+  Typing filters the list to those reachable repositories. Unlisted GitHub
+  URLs and recents the listing no longer carries are not offered. Arrow keys
+  move the highlight and Enter or a click picks it; there is no separate
+  confirm button. Someone who reaches no repository sees a hint with **Connect
+  GitHub**, which opens Settings → Connected. Listed recents are remembered
+  per user in local storage and offered first, without changing the Automatic
+  default. Once selected, **Branch** shows the repository's default branch (`main` when it
   has none) and opens a starting-branch field confirmed with **Use branch**;
   picking a different repository resets the branch to that repository's
   default. Omitting the branch on the create-session API likewise starts on
@@ -433,10 +443,14 @@ caret, the path, `+adds −dels`, and **Copy path**. Diffs render with Pierre; h
 line and click the accent **+** in the gutter (drag for a range) to leave a
 review note for the agent (`aria-label="Review note"`; `Cmd/Ctrl+Enter` adds,
 `Escape` cancels). Notes hang under their line as "queued for the agent" and a
-**N review notes queued · Send to agent** chip appears above the composer;
-sending posts one prompt listing every note by file and line and marks them
-"sent to agent". Notes never go to GitHub. Collapsed files and unsent notes
-persist per session in localStorage; a new capture expands all files.
+**N review notes queued · Send to agent** chip appears above the composer.
+The chip's count row expands (`aria-expanded`) to show each queued note's
+file, line, and text so the reviewer can read or edit them before sending;
+**Send to agent** then posts one prompt listing every non-empty note by file
+and line and marks them "sent to agent". Clicking a note's path opens that
+file in the Changes pane. Notes never go to GitHub. Collapsed files and
+unsent notes persist per session in localStorage; a new capture expands all
+files.
 
 While the pane is closed and a capture has files, a **Changes ready to
 review** card sits above the composer with **Review changes**, **Pull request

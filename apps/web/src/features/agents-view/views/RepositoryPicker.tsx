@@ -17,7 +17,6 @@ import { match } from 'ts-pattern';
 import {
   filterRepositories,
   orderRepositories,
-  parseRepositoryInput,
   type ReachableRepository,
   repositoryLabel,
   sameRepository,
@@ -25,17 +24,13 @@ import {
 } from '../core/repository';
 
 /** One row of the repository list. */
-type RepositoryChoice =
-  | { kind: 'automatic' }
-  | { kind: 'listed'; url: string }
-  /** Named by hand rather than listed; the service decides whether it may be used. */
-  | { kind: 'typed'; url: string };
+type RepositoryChoice = { kind: 'automatic' } | { kind: 'listed'; url: string };
 
 /** Explicit, portaled repository/branch controls shared by Home and Agents. */
 export function RepositoryPicker(props: {
   repoUrl?: string;
   branch: string;
-  /** Every repository the signed-in user reaches through Macro's GitHub App. */
+  /** Repositories the signed-in user can hand a coder through Macro's GitHub App. */
   repositories: ReachableRepository[];
   repositoriesLoading: boolean;
   repositoriesError: boolean;
@@ -64,13 +59,6 @@ export function RepositoryPicker(props: {
     const choices: RepositoryChoice[] = text ? [] : [{ kind: 'automatic' }];
     for (const repository of listed) {
       choices.push({ kind: 'listed', url: repository.url });
-    }
-    const typed = parseRepositoryInput(text);
-    if (
-      typed?.startsWith('https://github.com/') &&
-      !listed.some((repository) => sameRepository(repository.url, typed))
-    ) {
-      choices.push({ kind: 'typed', url: typed });
     }
     return choices;
   });
@@ -101,7 +89,6 @@ export function RepositoryPicker(props: {
     match(choice)
       .with({ kind: 'automatic' }, () => 'Choose automatically')
       .with({ kind: 'listed' }, ({ url }) => repositoryLabel(url))
-      .with({ kind: 'typed' }, ({ url }) => `Use ${repositoryLabel(url)}`)
       .exhaustive();
   const nothingReachable = () =>
     !props.repositoriesLoading &&

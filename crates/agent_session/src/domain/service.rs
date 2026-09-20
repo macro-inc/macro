@@ -32,7 +32,6 @@ use agent_client_protocol::schema::v1::{
     RequestId, Response, SessionId, SetSessionConfigOptionResponse,
 };
 use agent_fold::domain::lifecycle::LifecycleFold;
-use agent_fold::domain::model::TurnSignal;
 use agent_fold::domain::model_selection::model_selection;
 use agent_fold::domain::ports::FoldedMessageRepo;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, AgentSetModelAction};
@@ -60,6 +59,7 @@ use super::model::{
     AuthorKind, ClaimOutcome, CreateAgentSessionParams, LogAppended, MAX_AGENT_SESSION_NAME_CHARS,
     MAX_PREVIEW_SESSION_IDS, Message, MessageId, ReplicaId, SandboxSize, SessionClaim, SessionLog,
     SessionManagement, SessionPreviewCandidate, StoredAgentSessionLog, ThreadSession,
+    cursor_run_checkpoint,
 };
 use super::ports::{
     AgentConnector, AgentSessionLifecyclePublisher, AgentSessionLogRepo, AgentSessionLogWriter,
@@ -1089,8 +1089,31 @@ fn validate_agent_session_name(raw: &str) -> Result<&str> {
     Ok(name)
 }
 
+/// How long a streamed frame may sit buffered before it must be written and
+/// pushed to viewers. The crash window - a process dying loses at most this
+/// much of the *tail* of a session's streamed output; flushes happen in
+/// append order, so a lost suffix never punches a hole in the middle - and
+/// the latency a viewer sees on streamed output.
+const LOG_FLUSH_INTERVAL: std::time::Duration = std::time::Duration::from_millis(1500);
+/// How many frames may accumulate before a flush happens regardless of age,
+/// bounding memory, the size of one insert and one publish, and what a crash
+/// could lose.
+const MAX_PENDING_LOG_FRAMES: usize = 256;
+
 /// The [`AgentSessionLogRepo`] a session's actor writes through: the durable
 /// append, then the push to whoever is watching the session right now.
+///
+/// Writes and pushes are batched. Streamed output - the overwhelming bulk of
+/// a live session's frames, and the whole of a `session/load` replay - is
+/// buffered under a claim and, [`MAX_PENDING_LOG_FRAMES`] at a time or every
+/// [`LOG_FLUSH_INTERVAL`], written as one fenced insert and pushed to viewers
+/// as one publish, instead of costing a transaction, an audience lookup and
+/// a gateway round trip each. Only plain to-server notifications take that
+/// path: anything the store projects (system events, a load boundary, a
+/// Cursor checkpoint) or the runtime will act on writes the buffer out
+/// first and then lands at once through the single-frame path, exactly as
+/// before, so history never lacks or reorders a frame the rest of the system
+/// reacted to. A writer without a claim writes every frame at once.
 ///
 /// This is also where a writer's fold lives, and the fold is what makes
 /// re-attaching correct: [`TurnId`](agent_fold::domain::model::TurnId)s are a
@@ -1116,6 +1139,46 @@ pub struct LiveSessionLogWriter<R, Rt> {
     /// default reported by session/new replaces it even when selection fails.
     initial_model: Option<String>,
     initial_model_request: Option<RequestId>,
+    /// Frames appended under the claim but not yet written, with the ids
+    /// they were handed at append time, in append order.
+    buffer: Vec<BufferedFrame>,
+    /// Stored frames not yet pushed to viewers, in log order.
+    pending: Vec<StoredAgentSessionLog>,
+    /// When the oldest buffered or pending frame must be flushed by; `None`
+    /// while there is none, so an idle writer never wakes its actor.
+    flush_due: Option<tokio::time::Instant>,
+    /// The model last projected onto the session row, so a thousand streamed
+    /// frames under one model cost one `UPDATE`, not a thousand.
+    projected_model: Option<String>,
+}
+
+/// One frame waiting for the next write.
+struct BufferedFrame {
+    id: Uuid,
+    log: AgentSessionLog,
+}
+
+/// Frames that may wait for the batch: to-server notifications the store
+/// projects nothing from. Everything else - requests and responses (the
+/// handshake), system events, checkpoints - is durable before `append`
+/// returns, through the single-frame path.
+fn batches(content: &Message) -> bool {
+    matches!(
+        content,
+        Message::ToServer(ToServerMessage::Acp(AcpMessage(
+            RawJsonRpcMessage::Notification(_)
+        )))
+    ) && cursor_run_checkpoint(content).is_none()
+}
+
+/// Frames viewers must see as soon as they are stored rather than with the
+/// next batch: anything the runtime will act on, and anything that projects
+/// onto the session's status.
+fn flushes_through(content: &Message) -> bool {
+    matches!(
+        content,
+        Message::ToRuntime(_) | Message::ToServer(ToServerMessage::Event { .. })
+    )
 }
 
 impl<R, Rt> LiveSessionLogWriter<R, Rt> {
@@ -1133,6 +1196,10 @@ impl<R, Rt> LiveSessionLogWriter<R, Rt> {
             claim: None,
             initial_model: None,
             initial_model_request: None,
+            buffer: Vec::new(),
+            pending: Vec::new(),
+            flush_due: None,
+            projected_model: None,
         }
     }
 
@@ -1146,6 +1213,10 @@ impl<R, Rt> LiveSessionLogWriter<R, Rt> {
             claim: Some(claim),
             initial_model: None,
             initial_model_request: None,
+            buffer: Vec::new(),
+            pending: Vec::new(),
+            flush_due: None,
+            projected_model: None,
         }
     }
 
@@ -1182,40 +1253,81 @@ where
             );
         }
 
-        // Durable first: projections are rebuildable, but a frame omitted from
-        // session history is not.
-        let stored = match &self.claim {
-            Some(claim) => {
-                self.repo
-                    .create_fenced_with_boundary(log.clone(), claim, boundary)
-                    .await?
-            }
-            None if boundary.is_some() => return Err(AgentSessionError::FencedOut(session)),
-            None => AgentSessionLogRepo::create(&self.repo, log.clone()).await?,
-        };
-
-        let signals = if let Some(fold) = &mut self.fold {
-            fold.push(log.clone()).signals
-        } else {
+        // Fold before anything is written: the fold is in memory, so its
+        // signals are exact whether the frame lands now or with the batch,
+        // and a first frame catches the fold up on everything stored plus
+        // everything still buffered before it.
+        if self.fold.is_none() {
             match self.catch_up(session).await {
-                Ok((fold, signals)) => {
-                    self.fold = Some(fold);
-                    signals
-                }
+                Ok(fold) => self.fold = Some(fold),
                 Err(error) => {
                     tracing::error!(
                         error = ?error,
                         %session,
                         "failed to fold agent session frame"
                     );
-                    Vec::new()
                 }
+            }
+        }
+        let signals = self
+            .fold
+            .as_mut()
+            .map(|fold| fold.push(log.clone()).signals)
+            .unwrap_or_default();
+
+        let log_id = match &self.claim {
+            Some(_) if boundary.is_none() && batches(&log.content) => {
+                let id = macro_uuid::generate_uuid_v7();
+                self.buffer.push(BufferedFrame {
+                    id,
+                    log: log.clone(),
+                });
+                self.flush_due
+                    .get_or_insert_with(|| tokio::time::Instant::now() + LOG_FLUSH_INTERVAL);
+                if self.buffer.len() >= MAX_PENDING_LOG_FRAMES {
+                    AgentSessionLogWriter::flush(self).await?;
+                }
+                id
+            }
+            Some(claim) => {
+                // Whatever is buffered lands first, so history keeps append
+                // order around a frame the rest of the system reacts to.
+                let claim = *claim;
+                self.flush_writes().await?;
+                let stored = self
+                    .repo
+                    .create_fenced_with_boundary(log.clone(), &claim, boundary)
+                    .await?;
+                let id = stored.id;
+                let flush_now = flushes_through(&stored.entry.content);
+                self.pending.push(stored);
+                self.flush_due
+                    .get_or_insert_with(|| tokio::time::Instant::now() + LOG_FLUSH_INTERVAL);
+                if flush_now || self.pending.len() >= MAX_PENDING_LOG_FRAMES {
+                    AgentSessionLogWriter::flush(self).await?;
+                }
+                id
+            }
+            None if boundary.is_some() => return Err(AgentSessionError::FencedOut(session)),
+            // Unclaimed writers are outside any live contest and write every
+            // frame at once - the batch exists for streamed output under a
+            // claim, nothing else.
+            None => {
+                let stored = AgentSessionLogRepo::create(&self.repo, log.clone()).await?;
+                let id = stored.id;
+                let flush_now = flushes_through(&stored.entry.content);
+                self.pending.push(stored);
+                self.flush_due
+                    .get_or_insert_with(|| tokio::time::Instant::now() + LOG_FLUSH_INTERVAL);
+                if flush_now || self.pending.len() >= MAX_PENDING_LOG_FRAMES {
+                    AgentSessionLogWriter::flush(self).await?;
+                }
+                id
             }
         };
 
-        // Projected on every frame - idempotent, rebuildable from the log,
-        // and best-effort like the stream below, so a failed write must not
-        // fail the append. Batch if the write rate ever matters.
+        // Projected when it changes - idempotent, rebuildable from the log,
+        // and best-effort, so a failed write must not fail the append.
         let model = self
             .fold
             .as_ref()
@@ -1248,27 +1360,84 @@ where
         }
         if self.initial_model.is_none()
             && let Some(model) = model
-            && let Err(error) = self.repo.set_model(session, &model).await
+            && self.projected_model.as_ref() != Some(&model)
         {
-            tracing::error!(
-                error = ?error,
-                %session,
-                "failed to project agent session model"
-            );
+            match self.repo.set_model(session, &model).await {
+                Ok(()) => self.projected_model = Some(model),
+                Err(error) => {
+                    tracing::error!(
+                        error = ?error,
+                        %session,
+                        "failed to project agent session model"
+                    );
+                }
+            }
         }
 
-        // Best-effort once the durable append has succeeded: the port drops
-        // frames by contract, and the log this was derived from is already
-        // durable, so the worst a failure costs is a viewer who has to reload.
-        let log_id = stored.id;
-        if let Err(error) = self.stream(session, stored).await {
+        Ok(Appended { log_id, signals })
+    }
+
+    async fn flush(&mut self) -> Result<()> {
+        self.flush_writes().await?;
+        if self.pending.is_empty() {
+            self.flush_due = None;
+            return Ok(());
+        }
+        let entries = std::mem::take(&mut self.pending);
+        self.flush_due = None;
+        let session = entries[0].entry.agent_session_id;
+        // Best-effort: the port drops frames by contract, and every frame
+        // here is already durable, so the worst a failure costs is a viewer
+        // who has to reload.
+        if let Err(error) = self.stream(session, entries).await {
             tracing::error!(
                 error = ?error,
                 %session,
-                "failed to stream agent session frame"
+                "failed to stream agent session frames"
             );
         }
-        Ok(Appended { log_id, signals })
+        Ok(())
+    }
+
+    fn flush_deadline(&self) -> Option<tokio::time::Instant> {
+        self.flush_due
+    }
+}
+
+impl<R, Rt> LiveSessionLogWriter<R, Rt>
+where
+    R: AgentSessionRepo + AgentSessionLogRepo + Clone,
+    Rt: AgentSessionRealtime + Send + Sync + 'static,
+{
+    /// Land every buffered frame in one fenced write, leaving them pending
+    /// publication.
+    ///
+    /// The buffer is taken, not borrowed: a failed batch is not retried. Its
+    /// commit may have landed, and a retry would duplicate every frame in
+    /// it, so a failed flush loses its frames the way a failed per-frame
+    /// write used to lose its one - and the actor tears the session down
+    /// over the error either way.
+    async fn flush_writes(&mut self) -> Result<()> {
+        if self.buffer.is_empty() {
+            return Ok(());
+        }
+        let Some(claim) = self.claim else {
+            // Nothing is ever buffered without a claim; see `append_with_boundary`.
+            return Ok(());
+        };
+        let entries = std::mem::take(&mut self.buffer)
+            .into_iter()
+            .map(|frame| StoredAgentSessionLog {
+                id: frame.id,
+                // Placeholder; the store stamps the row and hands the real
+                // time back.
+                created_at: chrono::Utc::now(),
+                entry: frame.log,
+            })
+            .collect();
+        let stored = self.repo.create_batch_fenced(entries, &claim).await?;
+        self.pending.extend(stored);
+        Ok(())
     }
 }
 
@@ -1386,16 +1555,17 @@ where
 {
     /// Push the frame just appended out to whoever is watching the session.
     ///
-    /// The frame's kind rides along because this span is the only per-frame
-    /// signal a session emits: a status event here is what moves the
-    /// composer's whole notion of whether the agent is working, and without
-    /// naming it "a frame was published" answers nothing.
+    /// The last frame's kind rides along because this span is the only
+    /// per-flush signal a session emits: a status event here is what moves
+    /// the composer's whole notion of whether the agent is working, and
+    /// without naming it "frames were published" answers nothing.
     #[tracing::instrument(
         name = "agent.session.realtime.publish",
         err,
-        skip(self, agent_session_id, entry),
+        skip(self, agent_session_id, entries),
         fields(
             agent.session.id = %agent_session_id,
+            agent.log.frame_count = entries.len(),
             agent.log.frame_kind = tracing::field::Empty,
             agent.log.event = tracing::field::Empty,
         )
@@ -1403,30 +1573,32 @@ where
     async fn stream(
         &mut self,
         agent_session_id: AgentSessionId,
-        entry: StoredAgentSessionLog,
+        entries: Vec<StoredAgentSessionLog>,
     ) -> std::result::Result<(), rootcause::Report> {
         let span = tracing::Span::current();
-        let (frame_kind, event) = frame_telemetry(&entry.entry.content);
-        span.record("agent.log.frame_kind", frame_kind);
-        if let Some(event) = event {
-            span.record("agent.log.event", event);
+        if let Some(last) = entries.last() {
+            let (frame_kind, event) = frame_telemetry(&last.entry.content);
+            span.record("agent.log.frame_kind", frame_kind);
+            if let Some(event) = event {
+                span.record("agent.log.event", event);
+            }
         }
         self.realtime
             .publish(LogAppended {
                 agent_session_id,
-                entry,
+                entries,
             })
             .await
     }
 
-    /// Walk this connection's fold through the session's stored log, so it
-    /// starts from where the session actually is rather than from nothing.
+    /// Walk this connection's fold through the session's stored log and then
+    /// through anything still buffered, so it starts from where the session
+    /// actually is rather than from nothing.
     ///
-    /// Runs once per connection, on its first frame - by which point that
-    /// frame is already in the log. Everything before it is history: folded,
-    /// and whatever it signalled discarded, because a reconnect must not
-    /// announce past turns again. The frame itself is live, so its signals
-    /// are returned like any later frame's.
+    /// Runs once per connection, before its first frame is folded. Everything
+    /// it folds is history, and whatever that signalled is discarded, because
+    /// a reconnect must not announce past turns again. The caller then pushes
+    /// the first frame itself, live, and gets that frame's signals.
     ///
     /// This is what makes re-attaching correct.
     /// [`TurnId`](agent_fold::domain::model::TurnId)s are a counter over the
@@ -1437,20 +1609,19 @@ where
     async fn catch_up(
         &self,
         session: AgentSessionId,
-    ) -> std::result::Result<(LifecycleFold, Vec<TurnSignal>), rootcause::Report> {
-        let mut log = AgentSessionLogRepo::list_by_session(&self.repo, session)
+    ) -> std::result::Result<LifecycleFold, rootcause::Report> {
+        let log = AgentSessionLogRepo::list_by_session(&self.repo, session)
             .await
             .map_err(|error| rootcause::report!(error))?;
 
         let mut fold = LifecycleFold::new();
-        let just_appended = log.pop();
         for stored in log {
             let _ = fold.push(stored.entry);
         }
-        let signals = just_appended
-            .map(|stored| fold.push(stored.entry).signals)
-            .unwrap_or_default();
-        Ok((fold, signals))
+        for frame in &self.buffer {
+            let _ = fold.push(frame.log.clone());
+        }
+        Ok(fold)
     }
 }
 

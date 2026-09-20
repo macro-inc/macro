@@ -33,6 +33,26 @@ export default function AgentChangesGallery() {
     diffStyle: [urlState.diffStyle, urlState.setDiffStyle],
     dismissed: [dismissed, setDismissed],
   });
+  if (controller.review.queued().length === 0) {
+    controller.review.addNote(
+      {
+        path: 'apps/web/src/features/block-agent/state/unread.ts',
+        side: 'additions',
+        lineNumber: 8,
+        endLineNumber: 8,
+      },
+      'Keep archived sessions off the unread rail.'
+    );
+    controller.review.addNote(
+      {
+        path: 'crates/macro_agent_sessions/src/service.rs',
+        side: 'additions',
+        lineNumber: 88,
+        endLineNumber: 92,
+      },
+      'Mark the session read in the same transaction as the archive.'
+    );
+  }
   const [transcript, setTranscript] = createSignal<string[]>([]);
   // The mock host records prompts; surface them like a transcript would.
   const originalSend = context.host.agent.send;

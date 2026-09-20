@@ -38,6 +38,14 @@ import { type ToolUsePart, toolCallDetail, toolLabel } from './parts/shared';
 import { TextPart } from './parts/TextPart';
 import { ToolCallPart } from './parts/ToolCallPart';
 
+/**
+ * What a turn the runtime errored asks of the reader. Every such failure
+ * leaves the session usable - the next message starts a fresh turn - so the
+ * instruction is the same whatever the runtime said went wrong.
+ */
+const TURN_FAILED_LABEL =
+  'An error was encountered with your session. Send another message to continue';
+
 function AgentMessagePart(props: {
   part: MessagePart;
   message: FoldedMessage;
@@ -289,11 +297,13 @@ export function Message(props: {
           </Show>
           {/* A turn the runtime errored is something that happened to the
               session, like a model change or a stop — so it reads as one,
-              at the foot of whatever the agent managed to say first. */}
+              at the foot of whatever the agent managed to say first. The
+              line says what to do about it; the runtime's own account of
+              what happened is the detail. */}
           <Show when={failure()}>
             {(message) => (
               <ActionLine
-                label={`The agent couldn't answer — ${message()}`}
+                label={`${TURN_FAILED_LABEL} — ${message()}`}
                 detail={message()}
                 failed
               />

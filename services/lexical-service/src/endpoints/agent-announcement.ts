@@ -3,6 +3,7 @@ import {
   MAGIC_CHIP_AUTHORS,
   MAGIC_CHIP_STATUSES,
 } from '@macro-inc/lexical-core/nodes/MagicChipNode';
+import type { ReplyTargetParent } from '@macro-inc/lexical-core/nodes/ReplyTargetNode';
 import { composeAgentSessionAnnouncement } from '@macro-inc/lexical-core/utils/agent-announcement';
 import { composeAgentConnectionPrompt } from '@macro-inc/lexical-core/utils/agent-connection-prompt';
 import { OpenAPIRoute } from 'chanfana';
@@ -100,13 +101,14 @@ export class AgentAnnouncementEndpoint extends OpenAPIRoute {
         });
       }
       const { parent, channelId, ...target } = body.replyTarget;
-      // The reply-target node still references channels only; a document
-      // discussion announces with the chip alone until the node learns
-      // message parents.
-      const channel =
-        channelId ?? (parent?.type === 'channel' ? parent.id : undefined);
+      // Callers that predate message parents send only `channelId`; the
+      // node itself references any parent the reply lives under.
+      const replyParent: ReplyTargetParent | undefined =
+        parent ?? (channelId ? { type: 'channel', id: channelId } : undefined);
       const markdown = composeAgentSessionAnnouncement({
-        replyTarget: channel ? { ...target, channelId: channel } : undefined,
+        replyTarget: replyParent
+          ? { ...target, parent: replyParent }
+          : undefined,
         chip: body.chip,
       });
       return c.json({ markdown });

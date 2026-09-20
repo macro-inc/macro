@@ -142,6 +142,8 @@ selector on the right. Choosing a coding agent reveals the repository drawer;
 there is no Chat/Code switch. New sessions use the selected agent's default model
 and the URL for its kind. Opening an existing row restores its own kind and URL.
 Home agent-session rows use the same session URLs instead of previewing in place.
+Right-click a conversation for Rename, Favorite, Copy link, Share, Delete, and
+the other entity actions used on Home.
 
 Home's inner rail starts with a full-width **New chat** plus button that returns
 to Home's starting pane without creating a chat. Email and Tasks use the same

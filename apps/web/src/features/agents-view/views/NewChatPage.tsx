@@ -49,10 +49,8 @@ export function NewChatPage(props: {
   const options = () => props.roster;
   const [agentId, setAgentId] = createSignal<string>();
   const [modelOverride, setModelOverride] = createSignal<string>();
-  // The last repository handed to a coder is where the next one starts.
-  const [repoUrl, setRepoUrl] = createSignal<string | undefined>(
-    repositories.urls()[0]
-  );
+  // A new conversation starts on Automatic until the caller picks a repository.
+  const [repoUrl, setRepoUrl] = createSignal<string | undefined>();
   const [localDraft, setLocalDraft] = createSignal('');
   const draft = () => props.draft ?? localDraft();
   const setDraft = (text: string) =>

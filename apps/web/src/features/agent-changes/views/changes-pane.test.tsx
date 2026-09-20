@@ -263,9 +263,39 @@ describe('session controls', () => {
       'Use a constant'
     );
     expect(screen.getByText(/review note/).textContent).toContain('1');
+    fireEvent.click(
+      screen.getByRole('button', { name: /1 review note queued/ })
+    );
+    const editor = screen.getByLabelText(
+      'Review note on apps/web/src/a.ts, line 2 (new)'
+    ) as HTMLTextAreaElement;
+    expect(editor.value).toBe('Use a constant');
+    fireEvent.input(editor, { target: { value: 'Use a named constant' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send to agent' }));
     expect(context.sent[0]).toContain('`apps/web/src/a.ts`, line 2 (new)');
-    expect(context.sent[0]).toContain('Use a constant');
+    expect(context.sent[0]).toContain('Use a named constant');
     expect(screen.queryByText(/review note/)).toBeNull();
+  });
+
+  it("opens the note's file from the expanded dock", () => {
+    const context = readyContext();
+    const { controller } = mount(context, () => <ReviewNotesDock />);
+    controller().review.addNote(
+      {
+        path: 'apps/web/src/a.ts',
+        side: 'additions',
+        lineNumber: 2,
+        endLineNumber: 2,
+      },
+      'Use a constant'
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: /1 review note queued/ })
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: /apps\/web\/src\/a.ts/ })
+    );
+    expect(controller().layout.changesVisible()).toBe(true);
+    expect(controller().review.active()).toBe('apps/web/src/a.ts');
   });
 });
