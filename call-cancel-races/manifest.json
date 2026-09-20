@@ -1,0 +1,20 @@
+{
+  "pull_request": 6667,
+  "before": "8e785ffe4dd00cd52350752907b057cbefa19711",
+  "after": "464a805f3d93e3a60c704029af7a8467d7df10de",
+  "focused_tests": 84,
+  "broader_tests": 433,
+  "qc": {
+    "code": true,
+    "simplification": true,
+    "consistency": true,
+    "robustness": true,
+    "scope": true
+  },
+  "browser": "Temporary local Chrome; shared CDP9222 timed out. Same existing isolated backend.",
+  "native": "Event harness driving production modules; not physical iOS.",
+  "sha256": {
+    "before-after.mp4": "988a53a76092f80996c9ad4a6c73c521066660fa3ab09a4e66ac3a70b2781897",
+    "call-lifecycle.mp4": "6388e635772a8062ae73f09cbe26e1a0ed04d9181a0c4b7df35e11b2c30222c4"
+  }
+}

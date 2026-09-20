@@ -1,0 +1,178 @@
+$ bunx vitest run --project channel src/features/channel/Call/tests/call-lifecycle.test.ts src/features/channel/Call/tests/native-call-lifecycle.test.ts
+
+ RUN  v5.0.1 /tmp/macro-machine-proof/call-session/apps/web
+
+ ❯ |channel| src/features/channel/Call/tests/native-call-lifecycle.test.ts (28 tests | 5 failed) 34ms
+   ❯ native snapshot events and call ownership (28)
+     × keeps restored membership in call-1 when native cancellation cleanup is superseded 4ms
+     × keeps restored membership in replacement when native cancellation cleanup is superseded 1ms
+     × accepts a retry while native cancellation transport cleanup is still pending 2ms
+     × accepts a retry after an already-sent cancellation leave completes with resolve 2ms
+     × accepts a retry after an already-sent cancellation leave completes with reject 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |channel| src/features/channel/Call/tests/native-call-lifecycle.test.ts > native snapshot events and call ownership > keeps restored membership in call-1 when native cancellation cleanup is superseded
+ FAIL  |channel| src/features/channel/Call/tests/native-call-lifecycle.test.ts > native snapshot events and call ownership > keeps restored membership in replacement when native cancellation cleanup is superseded
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/features/channel/Call/tests/native-call-lifecycle.test.ts:316:22
+    314|       connection.resolve();
+    315|       await vi.advanceTimersByTimeAsync(0);
+    316|       expect(member).toBe(true);
+       |                      ^
+    317|       expect(ports.leave).not.toHaveBeenCalled();
+    318|       expect(lifecycle.getState()).toEqual({ t: 'active', call: identi…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  |channel| src/features/channel/Call/tests/native-call-lifecycle.test.ts > native snapshot events and call ownership > accepts a retry while native cancellation transport cleanup is still pending
+AssertionError: promise rejected "Error: Call is still leaving" instead of resolving
+ ❯ src/features/channel/Call/tests/native-call-lifecycle.test.ts:336:57
+    334|     native.setSnapshot(null);
+    335|     await cancelled;
+    336|     const retry = expect(lifecycle.join(first.channelId)).resolves.toB…
+       |                                                         ^
+    337|     await vi.advanceTimersByTimeAsync(300);
+    338|     await retry;
+
+Caused by: Error: Call is still leaving
+ ❯ Object.join src/features/channel/Call/call-lifecycle.ts:399:29
+ ❯ src/features/channel/Call/tests/native-call-lifecycle.test.ts:336:36
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  |channel| src/features/channel/Call/tests/native-call-lifecycle.test.ts > native snapshot events and call ownership > accepts a retry after an already-sent cancellation leave completes with resolve
+ FAIL  |channel| src/features/channel/Call/tests/native-call-lifecycle.test.ts > native snapshot events and call ownership > accepts a retry after an already-sent cancellation leave completes with reject
+AssertionError: expected Promise{…} to be Promise{…} // Object.is equality
+
+If it should pass with deep equality, replace "toBe" with "toStrictEqual"
+
+Expected: Promise{…}
+Received: serializes to the same string
+
+
+Compared values have no visual difference.
+
+ ❯ src/features/channel/Call/tests/native-call-lifecycle.test.ts:365:47
+    363|       const retry = lifecycle.join(first.channelId);
+    364|       const joined = expect(retry).resolves.toBeUndefined();
+    365|       expect(lifecycle.join(first.channelId)).toBe(retry);
+       |                                               ^
+    366|       await vi.advanceTimersByTimeAsync(300);
+    367|       expect(ports.requestToken).toHaveBeenCalledOnce();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  |channel| src/features/channel/Call/tests/native-call-lifecycle.test.ts > native snapshot events and call ownership > accepts a retry after an already-sent cancellation leave completes with resolve
+ FAIL  |channel| src/features/channel/Call/tests/native-call-lifecycle.test.ts > native snapshot events and call ownership > accepts a retry after an already-sent cancellation leave completes with reject
+Error: Promise returned by `expect(actual).resolves.toBeUndefined()` was not awaited. This assertion is asynchronous and must be awaited; otherwise, it is not guaranteed to complete before the test finishes:
+
+await expect(actual).resolves.toBeUndefined()
+
+ ❯ src/features/channel/Call/tests/native-call-lifecycle.test.ts:364:34
+    362|       expect(ports.leave).toHaveBeenCalledOnce();
+    363|       const retry = lifecycle.join(first.channelId);
+    364|       const joined = expect(retry).resolves.toBeUndefined();
+       |                                  ^
+    365|       expect(lifecycle.join(first.channelId)).toBe(retry);
+    366|       await vi.advanceTimersByTimeAsync(300);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+⎯⎯⎯⎯⎯⎯ Unhandled Errors ⎯⎯⎯⎯⎯⎯
+
+Vitest caught 5 unhandled errors during the test run.
+This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.
+
+⎯⎯⎯⎯ Unhandled Rejection ⎯⎯⎯⎯⎯
+AssertionError: promise rejected "Error: Call is still leaving" instead of resolving
+ ❯ _Assertion.__VITEST_RESOLVES__ ../../../../../home/teo/.herdr/worktrees/macro/machine/node_modules/vitest/dist/chunks/index.m3L2HgmY.js:2424:33
+ ❯ _Assertion.propertyGetter ../../../../../home/teo/.herdr/worktrees/macro/machine/node_modules/chai/index.js:1570:27
+ ❯ Object.proxyGetter [as get] ../../../../../home/teo/.herdr/worktrees/macro/machine/node_modules/chai/index.js:1659:22
+ ❯ src/features/channel/Call/tests/native-call-lifecycle.test.ts:336:57
+ ❯ ../../../../../home/teo/.herdr/worktrees/macro/machine/node_modules/vitest/dist/chunks/run.C5UmxDPh.js:2783:20
+
+This error originated in "src/features/channel/Call/tests/native-call-lifecycle.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The last test to run before this error was "accepts a retry while native cancellation transport cleanup is still pending". This means either:
+- the error was thrown while Vitest was running this test, or
+- the error was thrown after the test completed, and this was the most recent test at that point.
+Caused by: Error: Call is still leaving
+ ❯ Object.join src/features/channel/Call/call-lifecycle.ts:399:29
+ ❯ src/features/channel/Call/tests/native-call-lifecycle.test.ts:336:36
+ ❯ ../../../../../home/teo/.herdr/worktrees/macro/machine/node_modules/vitest/dist/chunks/run.C5UmxDPh.js:2783:20
+
+
+⎯⎯⎯⎯ Unhandled Rejection ⎯⎯⎯⎯⎯
+Error: Call is still leaving
+ ❯ Object.join src/features/channel/Call/call-lifecycle.ts:399:29
+ ❯ src/features/channel/Call/tests/native-call-lifecycle.test.ts:365:24
+ ❯ ../../../../../home/teo/.herdr/worktrees/macro/machine/node_modules/vitest/dist/chunks/run.C5UmxDPh.js:2783:20
+
+This error originated in "src/features/channel/Call/tests/native-call-lifecycle.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The last test to run before this error was "accepts a retry after an already-sent cancellation leave completes with reject". This means either:
+- the error was thrown while Vitest was running this test, or
+- the error was thrown after the test completed, and this was the most recent test at that point.
+
+⎯⎯⎯⎯ Unhandled Rejection ⎯⎯⎯⎯⎯
+AssertionError: promise rejected "Error: Call is still leaving" instead of resolving
+ ❯ _Assertion.__VITEST_RESOLVES__ ../../../../../home/teo/.herdr/worktrees/macro/machine/node_modules/vitest/dist/chunks/index.m3L2HgmY.js:2424:33
+ ❯ _Assertion.propertyGetter ../../../../../home/teo/.herdr/worktrees/macro/machine/node_modules/chai/index.js:1570:27
+ ❯ Object.proxyGetter [as get] ../../../../../home/teo/.herdr/worktrees/macro/machine/node_modules/chai/index.js:1659:22
+ ❯ src/features/channel/Call/tests/native-call-lifecycle.test.ts:364:34
+ ❯ ../../../../../home/teo/.herdr/worktrees/macro/machine/node_modules/vitest/dist/chunks/run.C5UmxDPh.js:2783:20
+
+This error originated in "src/features/channel/Call/tests/native-call-lifecycle.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The last test to run before this error was "accepts a retry after an already-sent cancellation leave completes with reject". This means either:
+- the error was thrown while Vitest was running this test, or
+- the error was thrown after the test completed, and this was the most recent test at that point.
+Caused by: Error: Call is still leaving
+ ❯ Object.join src/features/channel/Call/call-lifecycle.ts:399:29
+ ❯ src/features/channel/Call/tests/native-call-lifecycle.test.ts:363:31
+ ❯ ../../../../../home/teo/.herdr/worktrees/macro/machine/node_modules/vitest/dist/chunks/run.C5UmxDPh.js:2783:20
+
+
+⎯⎯⎯⎯ Unhandled Rejection ⎯⎯⎯⎯⎯
+Error: Call is still leaving
+ ❯ Object.join src/features/channel/Call/call-lifecycle.ts:399:29
+ ❯ src/features/channel/Call/tests/native-call-lifecycle.test.ts:365:24
+ ❯ ../../../../../home/teo/.herdr/worktrees/macro/machine/node_modules/vitest/dist/chunks/run.C5UmxDPh.js:2783:20
+
+This error originated in "src/features/channel/Call/tests/native-call-lifecycle.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The last test to run before this error was "adopts a native replacement before the old start transaction resolves". This means either:
+- the error was thrown while Vitest was running this test, or
+- the error was thrown after the test completed, and this was the most recent test at that point.
+
+⎯⎯⎯⎯ Unhandled Rejection ⎯⎯⎯⎯⎯
+AssertionError: promise rejected "Error: Call is still leaving" instead of resolving
+ ❯ _Assertion.__VITEST_RESOLVES__ ../../../../../home/teo/.herdr/worktrees/macro/machine/node_modules/vitest/dist/chunks/index.m3L2HgmY.js:2424:33
+ ❯ _Assertion.propertyGetter ../../../../../home/teo/.herdr/worktrees/macro/machine/node_modules/chai/index.js:1570:27
+ ❯ Object.proxyGetter [as get] ../../../../../home/teo/.herdr/worktrees/macro/machine/node_modules/chai/index.js:1659:22
+ ❯ src/features/channel/Call/tests/native-call-lifecycle.test.ts:364:34
+ ❯ ../../../../../home/teo/.herdr/worktrees/macro/machine/node_modules/vitest/dist/chunks/run.C5UmxDPh.js:2783:20
+
+This error originated in "src/features/channel/Call/tests/native-call-lifecycle.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The last test to run before this error was "adopts a native replacement before the old start transaction resolves". This means either:
+- the error was thrown while Vitest was running this test, or
+- the error was thrown after the test completed, and this was the most recent test at that point.
+Caused by: Error: Call is still leaving
+ ❯ Object.join src/features/channel/Call/call-lifecycle.ts:399:29
+ ❯ src/features/channel/Call/tests/native-call-lifecycle.test.ts:363:31
+ ❯ ../../../../../home/teo/.herdr/worktrees/macro/machine/node_modules/vitest/dist/chunks/run.C5UmxDPh.js:2783:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  5 failed | 56 passed (61)
+     Errors  5 errors
+   Start at  21:38:58
+   Duration  393ms (environment 60%, transform 23%, tests 10%, import 6%, worker 1%)
+
+error: script "test" exited with code 1

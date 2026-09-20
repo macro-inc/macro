@@ -1,0 +1,341 @@
+{
+  "errors": [],
+  "responses": [
+    {
+      "url": "http://localhost:3009/src/lib/queries/messages/message-sender.ts",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941480365
+    },
+    {
+      "url": "http://localhost:3009/src/lib/queries/call/call.ts",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941480499
+    },
+    {
+      "url": "http://localhost:3009/src/lib/queries/messages/sync.ts?t=1789941436328",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941480656
+    },
+    {
+      "url": "http://localhost:3009/src/lib/queries/call/keys.ts",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941480998
+    },
+    {
+      "url": "http://localhost:3009/src/lib/queries/messages/mutations.ts?t=1789941436328",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941481071
+    },
+    {
+      "url": "http://localhost:3009/src/lib/queries/messages/keys.ts",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941481210
+    },
+    {
+      "url": "http://localhost:3009/src/lib/queries/messages/reconcile.ts?t=1789941436328",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941481216
+    },
+    {
+      "url": "http://localhost:3009/src/lib/queries/messages/thread-replies.ts?t=1789941436328",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941481236
+    },
+    {
+      "url": "http://localhost:3009/src/lib/queries/messages/timeline.ts?t=1789941436328",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941481237
+    },
+    {
+      "url": "http://localhost:3009/src/lib/queries/messages/typing.ts",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941481237
+    },
+    {
+      "url": "http://localhost:3009/src/lib/queries/messages/subscription.ts?t=1789941436328",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941481802
+    },
+    {
+      "url": "http://localhost:3009/src/lib/queries/messages/thread-preview.ts",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941481803
+    },
+    {
+      "url": "http://localhost:3009/src/lib/queries/messages/reactions.ts?t=1789941436328",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941481924
+    },
+    {
+      "url": "http://localhost:3009/src/lib/core/messages/configured-message-editor.ts?t=1789941436328",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941482025
+    },
+    {
+      "url": "http://localhost:3009/src/lib/core/messages/create-message-composer.ts",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941482028
+    },
+    {
+      "url": "http://localhost:3009/src/lib/queries/messages/document-messages.ts?t=1789941436328",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941482563
+    },
+    {
+      "url": "http://localhost:3009/src/lib/core/messages/DocumentConversation.tsx?t=1789941436328",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941483103
+    },
+    {
+      "url": "http://localhost:3009/src/lib/core/messages/MessageThread.tsx?t=1789941436328",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941483360
+    },
+    {
+      "url": "http://localhost:3009/src/lib/queries/messages/references.ts?t=1789941436328",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941483361
+    },
+    {
+      "url": "http://localhost:31409/dss/call/5eedd269-41ae-8e1b-b5b1-c430237fa3c3/active",
+      "status": 204,
+      "method": "GET",
+      "at": 1789941485022
+    },
+    {
+      "url": "http://localhost:31409/dss/messages/channel/5eedd269-41ae-8e1b-b5b1-c430237fa3c3?selection=%7B%22limit%22%3A50%2C%22direction%22%3A%22older%22%2C%22around%22%3Anull%2C%22include_deleted_threads%22%3Afalse%7D",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941485024
+    },
+    {
+      "url": "http://localhost:31409/dss/call/active",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941485030
+    },
+    {
+      "url": "http://localhost:31409/dss/call/5eedd269-41ae-8e1b-b5b1-c430237fa3c3",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941485380
+    },
+    {
+      "url": "http://localhost:31409/dss/call/5eedd269-41ae-8e1b-b5b1-c430237fa3c3/active",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941485382
+    },
+    {
+      "url": "http://localhost:31409/dss/call/active",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941485383
+    },
+    {
+      "url": "http://localhost:31409/dss/call/record/01a0c0d3-8f23-7f21-9449-d7a9b675e470",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941485510
+    },
+    {
+      "url": "http://localhost:31409/dss/call/5eedd269-41ae-8e1b-b5b1-c430237fa3c3",
+      "status": 200,
+      "method": "DELETE",
+      "at": 1789941485547
+    },
+    {
+      "url": "http://localhost:31409/dss/call/record/01a0c0d3-8f23-7f21-9449-d7a9b675e470",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941485587
+    },
+    {
+      "url": "http://localhost:31409/dss/call/5eedd269-41ae-8e1b-b5b1-c430237fa3c3",
+      "status": 200,
+      "method": "DELETE",
+      "at": 1789941485642
+    },
+    {
+      "url": "http://localhost:31409/dss/call/5eedd269-41ae-8e1b-b5b1-c430237fa3c3",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941487365
+    },
+    {
+      "url": "http://localhost:31409/dss/call/record/01a0c0d3-8f23-7f21-9449-d7a9b675e470",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941487662
+    },
+    {
+      "url": "http://localhost:31409/dss/call/record/01a0c0d3-8f23-7f21-9449-d7a9b675e470",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941487699
+    },
+    {
+      "url": "http://localhost:31409/dss/call/5eedd269-41ae-8e1b-b5b1-c430237fa3c3",
+      "status": 200,
+      "method": "DELETE",
+      "at": 1789941487755
+    },
+    {
+      "url": "http://localhost:31409/dss/call/5eedd269-41ae-8e1b-b5b1-c430237fa3c3",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941489480
+    },
+    {
+      "url": "http://localhost:31409/dss/call/record/01a0c0d3-8f23-7f21-9449-d7a9b675e470",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941489772
+    },
+    {
+      "url": "http://localhost:31409/dss/call/5eedd269-41ae-8e1b-b5b1-c430237fa3c3",
+      "status": 200,
+      "method": "DELETE",
+      "at": 1789941489819
+    },
+    {
+      "url": "http://localhost:31409/dss/call/record/01a0c0d3-8f23-7f21-9449-d7a9b675e470",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941489969
+    },
+    {
+      "url": "http://localhost:31409/dss/call/5eedd269-41ae-8e1b-b5b1-c430237fa3c3",
+      "status": 200,
+      "method": "DELETE",
+      "at": 1789941490026
+    },
+    {
+      "url": "http://localhost:31409/dss/call/5eedd269-41ae-8e1b-b5b1-c430237fa3c3",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941491744
+    },
+    {
+      "url": "http://localhost:31409/dss/call/record/01a0c0d3-8f23-7f21-9449-d7a9b675e470",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941492040
+    },
+    {
+      "url": "http://localhost:31409/dss/call/5eedd269-41ae-8e1b-b5b1-c430237fa3c3",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941492082
+    },
+    {
+      "url": "http://localhost:31409/dss/call/record/01a0c0d3-8f23-7f21-9449-d7a9b675e470",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941492376
+    },
+    {
+      "url": "http://localhost:31409/dss/call/5eedd269-41ae-8e1b-b5b1-c430237fa3c3",
+      "status": 200,
+      "method": "DELETE",
+      "at": 1789941492433
+    },
+    {
+      "url": "http://localhost:31409/dss/call/5eedd269-41ae-8e1b-b5b1-c430237fa3c3",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941494150
+    },
+    {
+      "url": "http://localhost:31409/dss/call/record/01a0c0d3-8f23-7f21-9449-d7a9b675e470",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941494590
+    },
+    {
+      "url": "http://localhost:31409/dss/call/5eedd269-41ae-8e1b-b5b1-c430237fa3c3",
+      "status": 200,
+      "method": "DELETE",
+      "at": 1789941494626
+    },
+    {
+      "url": "http://localhost:31409/dss/call/record/01a0c0d3-8f23-7f21-9449-d7a9b675e470",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941494666
+    },
+    {
+      "url": "http://localhost:31409/dss/call/5eedd269-41ae-8e1b-b5b1-c430237fa3c3",
+      "status": 200,
+      "method": "DELETE",
+      "at": 1789941494721
+    },
+    {
+      "url": "http://localhost:31409/dss/call/5eedd269-41ae-8e1b-b5b1-c430237fa3c3",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941496442
+    },
+    {
+      "url": "http://localhost:31409/dss/call/record/01a0c0d3-8f23-7f21-9449-d7a9b675e470",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941496733
+    },
+    {
+      "url": "http://localhost:31409/dss/call/5eedd269-41ae-8e1b-b5b1-c430237fa3c3",
+      "status": 200,
+      "method": "DELETE",
+      "at": 1789941496901
+    },
+    {
+      "url": "http://localhost:31409/dss/call/5eedd269-41ae-8e1b-b5b1-c430237fa3c3/active",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941496907
+    },
+    {
+      "url": "http://localhost:31409/dss/call/5eedd269-41ae-8e1b-b5b1-c430237fa3c3",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941496916
+    },
+    {
+      "url": "http://localhost:31409/dss/call/record/01a0c0d3-8f23-7f21-9449-d7a9b675e470",
+      "status": 200,
+      "method": "GET",
+      "at": 1789941497091
+    },
+    {
+      "url": "http://localhost:31409/dss/call/5eedd269-41ae-8e1b-b5b1-c430237fa3c3",
+      "status": 200,
+      "method": "DELETE",
+      "at": 1789941497147
+    }
+  ],
+  "videos": [
+    "/tmp/macro-machine-proof/evidence/calls-cancel-races/page-0.webm"
+  ],
+  "pageCreatedAt": [
+    1789941479878
+  ]
+}

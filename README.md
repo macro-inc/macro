@@ -74,3 +74,5 @@ No JavaScript page errors were captured in any of the six passing runs.
 The relevant captured output is under [test-results](test-results). Web CI for the final heads checks Build, Biome, Typecheck, Test, and Cycles Import Check: [email](https://github.com/macro-inc/macro/actions/runs/35480215318), [ringing](https://github.com/macro-inc/macro/actions/runs/35480215268), and [calls](https://github.com/macro-inc/macro/actions/runs/35480277143). Local broad call tests use the repository configuration with an extra Vite filesystem allow path for the shared node_modules symlink; no test logic or expectations are overridden.
 
 The assertions and videos are evidence of the listed scenarios, not a claim of exhaustive UI or device coverage.
+
+Latest call cancellation and restoration proof: [review fixes and recordings](call-cancel-races/README.md).

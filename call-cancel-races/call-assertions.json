@@ -1,0 +1,63 @@
+{
+  "origin": "http://localhost:3009",
+  "phases": [
+    {
+      "name": "timeout recovered; retry enabled",
+      "at": 1789941577449
+    },
+    {
+      "name": "signaling recovered",
+      "at": 1789941586799
+    }
+  ],
+  "callId": "01a0c0d4-ba6c-73a1-bd5e-76c8a2742fb4",
+  "connectedParticipants": [
+    {
+      "identity": "macro|machine-bob@seed.macro.local",
+      "state": "ACTIVE"
+    },
+    {
+      "identity": "macro|machine-alice@seed.macro.local",
+      "state": "ACTIVE"
+    }
+  ],
+  "microphoneToggle": true,
+  "recoveredParticipants": [
+    {
+      "identity": "macro|machine-bob@seed.macro.local",
+      "state": "ACTIVE"
+    },
+    {
+      "identity": "macro|machine-alice@seed.macro.local",
+      "state": "ACTIVE"
+    }
+  ],
+  "messageTabParticipants": [
+    {
+      "identity": "macro|machine-bob@seed.macro.local",
+      "state": "ACTIVE"
+    },
+    {
+      "identity": "macro|machine-alice@seed.macro.local",
+      "state": "ACTIVE"
+    }
+  ],
+  "afterLeaveParticipants": [
+    {
+      "identity": "macro|machine-bob@seed.macro.local",
+      "state": "ACTIVE"
+    }
+  ],
+  "rejoinedParticipants": [
+    {
+      "identity": "macro|machine-alice@seed.macro.local",
+      "state": "ACTIVE"
+    },
+    {
+      "identity": "macro|machine-bob@seed.macro.local",
+      "state": "ACTIVE"
+    }
+  ],
+  "joinAttempts": 3,
+  "pass": true
+}
