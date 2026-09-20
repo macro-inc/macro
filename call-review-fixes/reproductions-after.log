@@ -1,0 +1,10 @@
+$ bunx vitest run --project channel src/features/channel/Call/tests/review-native-reproduction.test.ts src/features/channel/Call/tests/review-recovery-reproduction.test.ts
+
+ RUN  v5.0.1 /tmp/macro-machine-proof/call-session/apps/web
+
+
+ Test Files  2 passed (2)
+      Tests  5 passed (5)
+   Start at  18:36:18
+   Duration  333ms (environment 67%, transform 22%, import 5%, tests 4%, worker 2%)
+

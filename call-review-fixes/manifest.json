@@ -1,0 +1,27 @@
+{
+  "headCommit": "314ce36928004d2a8d676edf009cded7954eeef3",
+  "pullRequest": "https://github.com/macro-inc/macro/pull/6667",
+  "testsPassed": 410,
+  "focusedTestsPassed": 50,
+  "previousFailingReproductionsNowPassing": 5,
+  "typecheckExitCode": 0,
+  "qualityGateExitCode": 0,
+  "qualityReviews": {
+    "code": true,
+    "simplification": true,
+    "consistency": true,
+    "robustness": true,
+    "scope": true
+  },
+  "videos": {
+    "call-lifecycle.mp4": {
+      "sha256": "02fc8f592ec0ef3e4e81f57804ac779c350428e0bf1b784d0c1ff44079b610bb",
+      "durationSeconds": 39.375
+    },
+    "error-handling.mp4": {
+      "sha256": "0cb51119faa56c93ecb97b640c7886d47cae63c6e31dc95a87be757bac6e57e8",
+      "durationSeconds": 23.041667
+    }
+  },
+  "browserPageErrors": []
+}

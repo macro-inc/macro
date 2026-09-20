@@ -1,0 +1,116 @@
+$ bunx vitest run --project channel src/features/channel/Call/tests/review-native-reproduction.test.ts src/features/channel/Call/tests/review-recovery-reproduction.test.ts
+
+ RUN  v5.0.1 /tmp/macro-machine-proof/call-session/apps/web
+
+ ❯ |channel| src/features/channel/Call/tests/review-recovery-reproduction.test.ts (2 tests | 2 failed) 10ms
+   ❯ PR review reproductions: native recovery clear (2)
+     × cancels recovery when native has ended during retry-wait 8ms
+     × cancels recovery when native has ended during checking 1ms
+ ❯ |channel| src/features/channel/Call/tests/review-native-reproduction.test.ts (3 tests | 3 failed) 13ms
+   ❯ PR review reproductions: native bridge (3)
+     × keeps a successful join after a redundant null snapshot during start 9ms
+     × starts a real join when the native snapshot is disconnecting 1ms
+     × clears the join error when a native replacement is adopted after failure 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |channel| src/features/channel/Call/tests/review-native-reproduction.test.ts > PR review reproductions: native bridge > keeps a successful join after a redundant null snapshot during start
+AssertionError: expected { t: 'idle' } to deeply equal { t: 'active', call: { …(2) } }
+
+- Expected
++ Received
+
+  {
+-   "call": {
+-     "callId": "call-1",
+-     "channelId": "channel-1",
+-   },
+-   "t": "active",
++   "t": "idle",
+  }
+
+ ❯ src/features/channel/Call/tests/review-native-reproduction.test.ts:101:34
+     99|     pending.resolve();
+    100|     await joining;
+    101|     expect(lifecycle.getState()).toEqual({ t: 'active', call: identity…
+       |                                  ^
+    102|     expect(ports.onJoined).toHaveBeenCalledOnce();
+    103|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  |channel| src/features/channel/Call/tests/review-native-reproduction.test.ts > PR review reproductions: native bridge > starts a real join when the native snapshot is disconnecting
+AssertionError: expected "vi.fn()" to be called once with arguments: [ 'channel-1' ]
+
+Number of calls: 0
+
+ ❯ src/features/channel/Call/tests/review-native-reproduction.test.ts:111:32
+    109|     await vi.advanceTimersByTimeAsync(300);
+    110|     await joining;
+    111|     expect(ports.requestToken).toHaveBeenCalledExactlyOnceWith(first.c…
+       |                                ^
+    112|     expect(ports.connect).toHaveBeenCalledOnce();
+    113|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  |channel| src/features/channel/Call/tests/review-native-reproduction.test.ts > PR review reproductions: native bridge > clears the join error when a native replacement is adopted after failure
+AssertionError: expected last "vi.fn()" call to have been called with [ null ]
+
+- Expected
++ Received
+
+  [
+-   null,
++   "Unable to join the call. Please check your connection.",
+  ]
+
+ ❯ src/features/channel/Call/tests/review-native-reproduction.test.ts:127:28
+    125|     await rejected;
+    126|     expect(lifecycle.getState()).toEqual({ t: 'active', call: identity…
+    127|     expect(ports.setError).toHaveBeenLastCalledWith(null);
+       |                            ^
+    128|   });
+    129| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  |channel| src/features/channel/Call/tests/review-recovery-reproduction.test.ts > PR review reproductions: native recovery clear > cancels recovery when native has ended during retry-wait
+AssertionError: expected 'retry-wait' to be 'idle' // Object.is equality
+
+Expected: "idle"
+Received: "retry-wait"
+
+ ❯ src/features/channel/Call/tests/review-recovery-reproduction.test.ts:89:38
+     87|       expect(lifecycle.getState().t).toBe(phase);
+     88|       lifecycle.syncSession(undefined);
+     89|       expect(lifecycle.getState().t).toBe('idle');
+       |                                      ^
+     90|       lookup.resolve({ callId: call.callId });
+     91|       await vi.advanceTimersByTimeAsync(AUTO_REJOIN_DELAY_MS + 300);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  |channel| src/features/channel/Call/tests/review-recovery-reproduction.test.ts > PR review reproductions: native recovery clear > cancels recovery when native has ended during checking
+AssertionError: expected 'checking' to be 'idle' // Object.is equality
+
+Expected: "idle"
+Received: "checking"
+
+ ❯ src/features/channel/Call/tests/review-recovery-reproduction.test.ts:89:38
+     87|       expect(lifecycle.getState().t).toBe(phase);
+     88|       lifecycle.syncSession(undefined);
+     89|       expect(lifecycle.getState().t).toBe('idle');
+       |                                      ^
+     90|       lookup.resolve({ callId: call.callId });
+     91|       await vi.advanceTimersByTimeAsync(AUTO_REJOIN_DELAY_MS + 300);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  5 failed (5)
+   Start at  18:25:59
+   Duration  344ms (environment 70%, transform 20%, import 4%, tests 4%, worker 1%)
+
+error: script "test" exited with code 1

@@ -1,0 +1,8 @@
+{
+  "joinRequests": 4,
+  "leaveFailures": 1,
+  "conflict": true,
+  "retryFailure": true,
+  "leaveHandled": true,
+  "recordingJoinHandled": true
+}

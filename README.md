@@ -1,5 +1,7 @@
 # Machine migration verification
 
+Latest call lifecycle follow-up: [review fixes, refreshed browser videos, and regression proof](call-review-fixes/README.md) at commit `314ce3692`.
+
 Three independent PRs, each targeting `main`, with the same browser scenarios run before and after its migration. The AFTER recordings and assertions were refreshed after the effect-removal review. Recordings use the local stack started with `--with-chrome`, local test accounts and fixtures, and a real local LiveKit server.
 
 | Change | PR | Before / after video | After starts | Tests after |
