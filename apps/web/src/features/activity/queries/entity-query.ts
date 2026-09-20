@@ -1,4 +1,5 @@
 import { createUrqlQuery } from '@app/lib/urql-solid/create-urql-query';
+import { registerActivityRevalidator } from '@queries/activity/push-registry';
 import { buildEntityPropertiesInput } from '@queries/properties/graphql/entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import {
@@ -6,20 +7,15 @@ import {
   type EntityActivityQuery,
   type EntityActivityQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
-import { type Accessor, createMemo } from 'solid-js';
+import { type Accessor, createMemo, onCleanup } from 'solid-js';
 import type { ActivityContext } from '../context/activity-context';
 import {
   type EntityActivityResult,
   selectEntityActivity,
 } from './select-entity-activity';
-import { ENTITY_ACTIVITY_PREVIEW_LIMIT } from '@queries/activity/constants';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
-import { onCleanup } from 'solid-js';
-import { registerEntityActivityRevalidator } from '@queries/activity/push-registry';
 
-
-
-export { ENTITY_ACTIVITY_PREVIEW_LIMIT };
+/** Rows shown in an entity activity preview. */
+export const ENTITY_ACTIVITY_PREVIEW_LIMIT = 20;
 
 type EntityActivityQueryOptions = {
   entityType: Accessor<EntityType>;
@@ -44,6 +40,7 @@ export function createEntityActivityQuery(
     return buildEntityPropertiesInput(options.entityType(), entityId);
   });
 
+  const client = createMemo(context.graphql);
   const result = createUrqlQuery<
     EntityActivityQuery,
     EntityActivityQueryVariables,
@@ -54,7 +51,7 @@ export function createEntityActivityQuery(
 
     return {
       query: EntityActivityDocument,
-      client: context.graphql(),
+      client: client(),
       variables: {
         input: currentInput!,
         limit: options.limit ?? ENTITY_ACTIVITY_PREVIEW_LIMIT,
@@ -66,25 +63,17 @@ export function createEntityActivityQuery(
     };
   });
 
-  // Realtime: a push naming this entity re-executes the exact live variant
-  // network-only; the shared client's cache write re-emits the query above.
-  // Registering per mounted query scopes push refetches to open panels.
   onCleanup(
-    registerEntityActivityRevalidator((entityIds) => {
-      const currentInput = input();
-      if (currentInput === undefined || !entityIds.has(options.entityId())) {
-        return;
-      }
-      void getGraphqlSoupClient()
-        .query<EntityActivityQuery, EntityActivityQueryVariables>(
-          EntityActivityDocument,
-          {
-            input: currentInput,
-            limit: options.limit ?? ENTITY_ACTIVITY_PREVIEW_LIMIT,
-          },
-          { requestPolicy: 'network-only' }
+    registerActivityRevalidator({
+      client,
+      refresh: (entities) => {
+        if (
+          input() === undefined ||
+          (entities !== null && !entities.has(options.entityId()))
         )
-        .toPromise();
+          return;
+        return result.refetch({ requestPolicy: 'network-only' });
+      },
     })
   );
 

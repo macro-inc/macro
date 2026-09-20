@@ -1,29 +1,34 @@
-/**
- * Registry connecting realtime activity pushes to mounted entity-activity
- * queries. A leaf module: the push handler lives under the soup client (which
- * the query factories transitively import), so neither side can import the
- * other directly without a cycle.
- *
- * Cache inspection cannot recover an EntityActivity variant — `$limit` is an
- * argument of a deeper field than the inspectable `soup` selection and the
- * engine refuses the inspection outright — so instead each mounted query
- * registers its own revalidator, which also scopes refetches to panels that
- * are actually on screen.
- */
+import type { Client } from '@urql/core';
 
-type EntityActivityRevalidator = (entityIds: ReadonlySet<string>) => void;
+/** Null means every mounted activity query needs a fresh authorized read. */
+export type ActivityInvalidation = ReadonlySet<string> | null;
+type Revalidator = {
+  client: () => Client | undefined;
+  refresh: (entities: ActivityInvalidation) => Promise<unknown> | void;
+};
+const revalidators = new Set<Revalidator>();
 
-const revalidators = new Set<EntityActivityRevalidator>();
-
-/** Registers a mounted entity-activity query; returns its unregister. */
-export function registerEntityActivityRevalidator(
-  revalidator: EntityActivityRevalidator
+/** Registers a mounted query, scoped to the client that owns its session. */
+export function registerActivityRevalidator(
+  revalidator: Revalidator
 ): () => void {
   revalidators.add(revalidator);
   return () => revalidators.delete(revalidator);
 }
 
-/** Fans a batch of pushed entity ids out to every mounted query. */
-export function notifyEntityActivityPush(entityIds: ReadonlySet<string>): void {
-  for (const revalidator of revalidators) revalidator(entityIds);
+/** Each mounted observer recovers its own variables and pagination chain. */
+export async function revalidateActivityQueries(
+  client: Pick<Client, 'subscription' | 'query'>,
+  entities: ActivityInvalidation
+): Promise<void> {
+  await Promise.all(
+    [...revalidators].map(async (entry) => {
+      if (!revalidators.has(entry) || entry.client() !== client) return;
+      try {
+        await entry.refresh(entities);
+      } catch (error) {
+        console.warn('Activity query revalidation failed', error);
+      }
+    })
+  );
 }

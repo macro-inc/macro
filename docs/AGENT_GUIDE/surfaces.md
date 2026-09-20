@@ -671,6 +671,14 @@ that an initial visit resolves entity names in both the feed and Most active,
 then reload and scroll through another page. Preview loading and live name
 updates should keep the page responsive without repeatedly fetching previews.
 
+Activity refreshes live after recorded actions. With two pages loaded, make an
+action in another tab and verify the feed retains its page-boundary rows while
+the action count and heatmap update. An open entity activity panel should also
+refresh for actions by another authorized user. After disconnecting and
+reconnecting the websocket, verify recovery without requiring another action.
+Hidden tabs defer refresh until visible; purges refresh all mounted activity
+queries through the normal access checks.
+
 GitHub-style actions heatmap (one a11y node per day — makes snapshots huge; prefer saving the
 snapshot to a file), then a `Most active` section header (styled like the feed's day headers)
 over a wrapping row of pill chips (entity icon, name, action count; click opens the entity,

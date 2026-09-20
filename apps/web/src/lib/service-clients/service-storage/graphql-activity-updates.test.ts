@@ -1,163 +1,144 @@
-import { registerEntityActivityRevalidator } from '@queries/activity/push-registry';
+import { registerActivityRevalidator } from '@queries/activity/push-registry';
+import type { Client } from '@urql/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  ACTIVITY_PUSH_DEBOUNCE_MS,
-  ACTIVITY_PUSH_JITTER_MS,
-  createActivityUpdatesHandler,
-} from './graphql-activity-updates';
+import { createActivityUpdatesHandler } from './graphql-activity-updates';
 
-/** Advances past the debounce plus the worst-case jitter. */
-const MAX_FLUSH_DELAY_MS = ACTIVITY_PUSH_DEBOUNCE_MS + ACTIVITY_PUSH_JITTER_MS;
-
-const DOC_ID = '11111111-1111-4111-8111-111111111111';
-const OTHER_ID = '22222222-2222-4222-8222-222222222222';
-
-function pushedEvent(entityId: string) {
-  return {
+const cleanups: Array<() => void> = [];
+function setup() {
+  const client = { query: vi.fn(), subscription: vi.fn() } as unknown as Client;
+  const handler = createActivityUpdatesHandler(client);
+  cleanups.push(handler.dispose);
+  const refresh = vi.fn();
+  cleanups.push(registerActivityRevalidator({ client: () => client, refresh }));
+  return { client, handler, refresh };
+}
+const push = (id: string) =>
+  ({
     data: {
-      activityUpdates: {
-        __typename: 'GraphqlActivityEvent' as const,
-        id: '33333333-3333-4333-8333-333333333333',
-        actorId: 'macro|teo@example.com',
-        subjectId: 'macro|teo@example.com',
-        entityType: 'DOCUMENT' as const,
-        entityId,
-        occurredAt: '2026-08-15T00:00:00Z',
-        action: { __typename: 'GraphqlActivityEdited' as const },
-      },
+      activityUpdates: { __typename: 'GraphqlActivityEvent', entityId: id },
     },
-  } as never;
-}
+  }) as never;
+const flush = () => vi.advanceTimersByTimeAsync(1001);
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
+});
+afterEach(() => {
+  for (const cleanup of cleanups.splice(0)) cleanup();
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+});
 
-function fakeHost(variantsByOperation: Record<string, unknown[]>) {
-  return {
-    disabled: false,
-    inspectQueryVariants: vi.fn(
-      async ({ operationName }: { operationName: string }) =>
-        variantsByOperation[operationName] ?? []
-    ),
-  } as never;
-}
-
-function fakeClient() {
-  return {
-    query: vi.fn(() => ({ toPromise: () => Promise.resolve({}) })),
-  };
-}
-
-describe('createActivityUpdatesHandler', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
+describe('activity connection revalidation', () => {
+  it('coalesces events and keeps clients isolated', async () => {
+    const one = setup(),
+      two = setup();
+    one.handler.onResult(push('one'));
+    one.handler.onResult(push('two'));
+    one.handler.onResult(push('one'));
+    await flush();
+    expect(one.refresh).toHaveBeenCalledExactlyOnceWith(
+      new Set(['one', 'two'])
+    );
+    expect(two.refresh).not.toHaveBeenCalled();
   });
-  afterEach(() => {
-    vi.useRealTimers();
+  it('recovers all queries on reconnect without requiring a later push', async () => {
+    const { handler, refresh } = setup();
+    handler.reconnect();
+    await flush();
+    expect(refresh).toHaveBeenCalledExactlyOnceWith(null);
   });
-
-  it('coalesces a burst into one page-0 refetch and one registry notification', async () => {
-    const client = fakeClient();
-    const host = fakeHost({
-      MyActivity: [
-        { variables: { input: { limit: 50, cursor: null } } },
-        { variables: { input: { limit: 50, cursor: 'deeper-page' } } },
-      ],
-    });
-    const handler = createActivityUpdatesHandler({
-      client: client as never,
-      host,
-    });
-    const revalidator = vi.fn();
-    const unregister = registerEntityActivityRevalidator(revalidator);
-    try {
-      handler(pushedEvent(DOC_ID));
-      handler(pushedEvent(DOC_ID));
-      handler(pushedEvent(OTHER_ID));
-      expect(client.query).not.toHaveBeenCalled();
-      expect(revalidator).not.toHaveBeenCalled();
-
-      await vi.advanceTimersByTimeAsync(MAX_FLUSH_DELAY_MS + 1);
-
-      // One feed page-0 refetch (the deeper page is skipped), network-only.
-      expect(client.query).toHaveBeenCalledTimes(1);
-      const calls = client.query.mock.calls as unknown as Array<
-        [unknown, Record<string, unknown>, { requestPolicy: string }]
-      >;
-      expect(calls[0]?.[2]).toMatchObject({ requestPolicy: 'network-only' });
-      expect(JSON.stringify(calls[0]?.[1])).not.toContain('deeper-page');
-      // Mounted entity panels hear about the whole burst exactly once.
-      expect(revalidator).toHaveBeenCalledTimes(1);
-      expect(revalidator).toHaveBeenCalledWith(new Set([DOC_ID, OTHER_ID]));
-    } finally {
-      unregister();
-    }
-  });
-
-  it('ignores cache deletions', async () => {
-    const client = fakeClient();
-    const host = fakeHost({});
-    const handler = createActivityUpdatesHandler({
-      client: client as never,
-      host,
-    });
-
-    handler({
+  it('recovers purge invalidations through fresh authorized reads', async () => {
+    const { handler, refresh } = setup();
+    handler.onResult({
       data: {
         activityUpdates: {
-          __typename: 'GraphqlCacheDeletion' as const,
-          graphqlTypeName: 'GraphqlActivityEvent',
-          entityId: DOC_ID,
+          __typename: 'GraphqlActivityInvalidation',
+          refresh: true,
         },
       },
     } as never);
-
-    await vi.advanceTimersByTimeAsync(MAX_FLUSH_DELAY_MS + 1);
-    expect(client.query).not.toHaveBeenCalled();
+    await flush();
+    expect(refresh).toHaveBeenCalledExactlyOnceWith(null);
   });
-
-  it('defers the refetch while the tab is hidden and flushes on visibility', async () => {
-    const client = fakeClient();
-    const host = fakeHost({
-      MyActivity: [{ variables: { input: { limit: 50, cursor: null } } }],
-    });
-    const handler = createActivityUpdatesHandler({
-      client: client as never,
-      host,
-    });
-
-    let hidden = true;
-    Object.defineProperty(document, 'hidden', {
-      configurable: true,
-      get: () => hidden,
-    });
-    try {
-      handler(pushedEvent(DOC_ID));
-      await vi.advanceTimersByTimeAsync(MAX_FLUSH_DELAY_MS + 1);
-      expect(client.query).not.toHaveBeenCalled();
-
-      // Further pushes while hidden still don't refetch.
-      handler(pushedEvent(OTHER_ID));
-      await vi.advanceTimersByTimeAsync(MAX_FLUSH_DELAY_MS + 1);
-      expect(client.query).not.toHaveBeenCalled();
-
-      hidden = false;
-      document.dispatchEvent(new Event('visibilitychange'));
-      await vi.advanceTimersByTimeAsync(MAX_FLUSH_DELAY_MS + 1);
-      expect(client.query).toHaveBeenCalledTimes(1);
-    } finally {
-      // Restore the prototype getter so other tests see the real value.
-      Reflect.deleteProperty(document, 'hidden');
-    }
+  it('holds hidden-tab updates until visible', async () => {
+    const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
+    const { handler, refresh } = setup();
+    handler.onResult(push('one'));
+    await flush();
+    document.dispatchEvent(new Event('visibilitychange'));
+    await flush();
+    expect(refresh).not.toHaveBeenCalled();
+    hidden.mockReturnValue(false);
+    document.dispatchEvent(new Event('visibilitychange'));
+    await flush();
+    expect(refresh).toHaveBeenCalledExactlyOnceWith(new Set(['one']));
   });
-
-  it('does nothing when the cache host is disabled', async () => {
-    const client = fakeClient();
-    const host = { disabled: true, inspectQueryVariants: vi.fn() } as never;
-    const handler = createActivityUpdatesHandler({
-      client: client as never,
-      host,
+  it('cleans up timers, hidden-tab listeners, and late callbacks', async () => {
+    const { handler, refresh } = setup();
+    handler.onResult(push('one'));
+    handler.dispose();
+    handler.onResult(push('two'));
+    handler.reconnect();
+    document.dispatchEvent(new Event('visibilitychange'));
+    await flush();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+  it('runs a trailing refresh for pushes received during an ongoing refresh', async () => {
+    const { handler, refresh } = setup();
+    let finish!: () => void;
+    refresh.mockImplementationOnce(
+      () =>
+        new Promise<void>((r) => {
+          finish = r;
+        })
+    );
+    handler.onResult(push('one'));
+    await flush();
+    handler.onResult(push('two'));
+    await flush();
+    expect(refresh).toHaveBeenCalledTimes(1);
+    finish();
+    await flush();
+    expect(refresh).toHaveBeenNthCalledWith(2, new Set(['two']));
+  });
+  it('does not schedule a trailing refresh after disposal', async () => {
+    const { handler, refresh } = setup();
+    let finish!: () => void;
+    refresh.mockImplementationOnce(
+      () =>
+        new Promise<void>((r) => {
+          finish = r;
+        })
+    );
+    handler.onResult(push('one'));
+    await flush();
+    handler.onResult(push('two'));
+    handler.dispose();
+    finish();
+    await flush();
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+  it('ignores unmounted queries and still refreshes siblings after errors', async () => {
+    const { handler, client, refresh } = setup();
+    const stale = vi.fn();
+    const unregister = registerActivityRevalidator({
+      client: () => client,
+      refresh: stale,
     });
-
-    handler(pushedEvent(DOC_ID));
-    await vi.advanceTimersByTimeAsync(MAX_FLUSH_DELAY_MS + 1);
-    expect(client.query).not.toHaveBeenCalled();
+    unregister();
+    cleanups.push(
+      registerActivityRevalidator({
+        client: () => client,
+        refresh: () => {
+          throw Error('unavailable');
+        },
+      })
+    );
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    handler.onResult(push('one'));
+    await flush();
+    expect(stale).not.toHaveBeenCalled();
+    expect(refresh).toHaveBeenCalledOnce();
   });
 });
