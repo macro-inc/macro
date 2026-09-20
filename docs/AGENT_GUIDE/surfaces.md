@@ -734,6 +734,12 @@ but unconnected app gets a tool result saying so, and the agent's reply renders 
 `Connect <app>` chip that opens Settings → Connections for that app.
 `Back to app` returns to the previous surface. Open via user-email button menu or `Ctrl+;`.
 
+`Account` → **Profile Picture**: the circle (or `Edit profile picture` → `Upload new
+picture`) opens an image file picker. Pictures over 2048px on their longest edge, or over
+16 MB, are downscaled in the browser before upload, so a full-resolution phone photo
+works. GIFs and SVGs are never resized; only a file still over 16 MB after that shows
+`Image size too large`. `Remove picture` asks for confirmation.
+
 `Agents` → `Create agent` (or edit an existing agent) opens runtime selectors.
 The model list is loaded live and independently for In-memory, connected Cursor, and every
 registered macrod harness. The selected harness stays selected when the list refreshes.

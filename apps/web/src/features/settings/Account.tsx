@@ -23,6 +23,7 @@ import {
   useProfilePictureUrl,
 } from '@core/signal/profilePicture';
 import { createStaticFile } from '@core/util/create';
+import { downscaleImageForUpload } from '@core/util/downscaleImage';
 import { openFilePicker } from '@core/util/upload';
 import { type BundleUpdateStatus, useTauri } from '@macro/tauri';
 import {
@@ -71,10 +72,21 @@ import {
 
 // 16 megabytes
 const MAX_PROFILE_PICTURE_SIZE = 16 * 1000 * 1000;
+// The largest variant the static file service serves is 1080px (see
+// `staticFileSizes`), so 2048px keeps a crisp 2x asset while turning a
+// multi-megapixel phone photo into a small upload.
+const MAX_PROFILE_PICTURE_EDGE = 2048;
 
 async function uploadProfilePicture(
-  file: File
+  picked: File
 ): Promise<{ id: string; url: string } | void> {
+  // Downscale in the browser first: a high-resolution photo would otherwise
+  // trip the size cap below. GIFs and files this browser cannot decode pass
+  // through unchanged and still get the cap check.
+  const file = await downscaleImageForUpload(picked, {
+    maxEdge: MAX_PROFILE_PICTURE_EDGE,
+    maxBytes: MAX_PROFILE_PICTURE_SIZE,
+  });
   if (file.size > MAX_PROFILE_PICTURE_SIZE) {
     return toast.failure('Image size too large');
   }
