@@ -15,6 +15,14 @@
   "native": "Event harness driving production modules; not physical iOS.",
   "sha256": {
     "before-after.mp4": "988a53a76092f80996c9ad4a6c73c521066660fa3ab09a4e66ac3a70b2781897",
-    "call-lifecycle.mp4": "6388e635772a8062ae73f09cbe26e1a0ed04d9181a0c4b7df35e11b2c30222c4"
+    "call-lifecycle.mp4": "6388e635772a8062ae73f09cbe26e1a0ed04d9181a0c4b7df35e11b2c30222c4",
+    "main-integration.mp4": "f357468f2812157bdaff928c584b6a7d3137f2a4131e172dcd579f67b59b1d03"
+  },
+  "integration_revision": "afb7020f0a991fa3e142af0e175d1be1a11a805a",
+  "main_revision": "303d1c0b9a6e71dd55f67422fa370fb241b3b1c5",
+  "integration_tests": {
+    "call_channel_machine": 439,
+    "email": 202,
+    "total": 641
   }
 }

@@ -31,3 +31,9 @@ The shared Chrome CDP connection timed out during this run. Verification used a 
 - No new `createEffect` or switch statements.
 
 [Exact revisions and video hashes](manifest.json). The [earlier cancellation proof](../call-cancel-cleanup/README.md) records removal of an orphaned member when there is no replacement or retry.
+
+## Integration with current main
+
+`afb7020f0a991fa3e142af0e175d1be1a11a805a` merges main `303d1c0b9a6e71dd55f67422fa370fb241b3b1c5` cleanly, including the already merged email (#6665) and ringing (#6666) machine PRs. The call fix itself is unchanged.
+
+[641 integration tests pass](main-tests.log): 439 call/channel/machine tests and [202 email tests](main-email-tests.log). [Type-check](main-typecheck.log) and [repository checks](main-check.log) pass. The full two-person [LiveKit recording after the merge](main-integration.mp4) and [server assertions](main-call-assertions.json) also pass.

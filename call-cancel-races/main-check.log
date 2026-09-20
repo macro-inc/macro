@@ -1,0 +1,40 @@
+warning: Git tree '/tmp/macro-machine-proof/call-session' is dirty
+── cargo fmt (root workspace)
+── biome (changed JS/TS format + lint, same flags as CI)
+Checked 77 files in 375ms. No fixes applied.
+── oxlint (warn-only; docs/STYLE_GUIDE.md FE-12)
+Saved lockfile
+src/features/entity/composed/list-entity/wide-layout.tsx:65:8: warning eslint(complexity): function `WideLayout` has a complexity of 28. Maximum allowed is 20.
+src/lib/core/agent-session/AgentSession.ts:392:28: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/core/agent-session/AgentSession.ts:401:22: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/features/channel/Call/CallStartedNotifier.tsx:149:22: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/features/channel/Call/CallStartedNotifier.tsx:158:24: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/core/agent-session/use-session-turn.ts:43:25: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/features/entity/composed/ListEntity.tsx:93:8: warning eslint(complexity): function `ListEntity` has a complexity of 21. Maximum allowed is 20.
+src/features/email-thread/primitives/thread-navigation.ts:343:42: warning eslint(complexity): function has a complexity of 22. Maximum allowed is 20.
+/tmp/macro-machine-proof/call-session/packages/spreadsheet/src/ai-workbook.ts:388:8: warning eslint(complexity): function `prepareSpreadsheetEdit` has a complexity of 30. Maximum allowed is 20.
+src/components/app/split-layout/componentRegistry.tsx:329:59: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/components/app/split-layout/componentRegistry.tsx:870:54: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/features/channel/Call/call-lifecycle.ts:230:9: warning eslint(complexity): async function `connect` has a complexity of 22. Maximum allowed is 20.
+src/features/block-md/component/MarkdownEditor.tsx:204:8: warning eslint(complexity): function `MarkdownEditor` has a complexity of 21. Maximum allowed is 20.
+src/features/block-md/component/MarkdownEditor.tsx:874:31: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/features/channel/Call/CallContext.tsx:500:3: warning eslint(complexity): function `logMicAudioProcessing` has a complexity of 25. Maximum allowed is 20.
+src/features/channel/Call/CallContext.tsx:584:36: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/features/channel/Call/CallContext.tsx:585:30: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/features/channel/Call/CallContext.tsx:598:3: warning eslint(complexity): async function `applyNoiseSuppressionToMicTrack` has a complexity of 31. Maximum allowed is 20.
+src/features/channel/Call/CallContext.tsx:737:3: warning eslint(complexity): async function `ensureBackgroundEffectOnCameraTrack` has a complexity of 21. Maximum allowed is 20.
+src/features/channel/Call/CallContext.tsx:837:23: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/features/channel/Call/CallContext.tsx:845:22: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/features/channel/Call/CallContext.tsx:1172:8: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/features/channel/Call/CallContext.tsx:1165:8: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/components/app/app-sidebar/sidebar.tsx:1144:27: warning eslint(complexity): function has a complexity of 24. Maximum allowed is 20.
+── ast-grep code rules (rule ids map to docs/STYLE_GUIDE.md)
+Saved lockfile
+[warn] postinstall script did not run; falling back to runtime binary resolution.
+Enable postinstall to avoid the per-invocation overhead.
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/DocumentCard.tsx:31:37: warning[tsx-no-service-client-outside-queries]: Don't import a service client outside the queries package — wrap the call in a query/mutation under queries/ and import that instead.
+crates/documents/src/inbound/axum_router.rs:62:1: warning[rust-no-sqlx-in-inbound]: Inbound adapters must not run database queries — call a domain service backed by an outbound repository instead.
+crates/documents/src/inbound/axum_router.rs:62:5: warning[rust-no-sqlx-in-inbound]: Inbound adapters must not run database queries — call a domain service backed by an outbound repository instead.
+apps/web/src/lib/core/agent-session/AgentSession.ts:29:43: warning[ts-no-service-client-outside-queries]: Don't import a service client outside the queries package — wrap the call in a query/mutation under queries/ and import that instead.
+
+OK
