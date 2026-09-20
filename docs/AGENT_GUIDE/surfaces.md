@@ -186,6 +186,12 @@ source shows a retry notice while the other source stays usable. Document typing
 alone is not yet attributed by Activity; Home reflects the actions the existing
 Activity system records.
 
+Calendar reminder rows use the reminder delivery time for Home's date section,
+including on a cold GraphQL load with notification sorting disabled. Verify that
+an older reminder stays in its older section after the event's metadata syncs;
+opening its details should show the expected occurrence. A newer reminder or your
+own later activity can move the row forward, but a calendar sync alone should not.
+
 On mobile, this route always renders the original Notifications soup view,
 regardless of the new-app-views flag. The dock and search scope use the bell icon
 and **Notifications** label; Home is desktop-only. Notifications uses the existing
