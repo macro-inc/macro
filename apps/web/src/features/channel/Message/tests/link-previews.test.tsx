@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 
+import { enableRichLinkPreviews } from '@core/constant/featureFlags';
 import type { MessageData } from '@core/messages/types';
 import type { useRemoveLinkPreviewMutation } from '@queries/messages/mutations';
 import { render, waitFor } from '@solidjs/testing-library';
@@ -12,7 +13,7 @@ import {
 } from '@tanstack/solid-query';
 import userEvent from '@testing-library/user-event';
 import { createResource, Suspense } from 'solid-js';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LinkPreviews } from '../LinkPreviews';
 import {
   hideLinkPreview,
@@ -47,15 +48,34 @@ const unfurlFactories = new Map<
 >();
 const unfurlResults = new Map<string, MockUnfurlData>();
 const suppressMutate = vi.fn();
+let previewFlag: boolean | undefined = true;
+const useUnfurl = vi.fn((url: string) => [
+  unfurlFactories.get(url)?.() ?? (() => unfurlResults.get(url)),
+  { refetch: () => undefined },
+]);
+
+vi.mock('@app/lib/analytics', () => ({
+  analytics: {
+    posthog: {
+      isFeatureEnabled: (key: string) => {
+        expect(key).toBe(enableRichLinkPreviews.key);
+        return previewFlag;
+      },
+    },
+  },
+}));
+
+beforeEach(() => {
+  previewFlag = true;
+  useUnfurl.mockClear();
+});
+
 const suppressRequest = vi.fn<() => Promise<never>>(
   () => new Promise(() => {})
 );
 
 vi.mock('@core/signal/unfurl', () => ({
-  useUnfurl: (url: string) => [
-    unfurlFactories.get(url)?.() ?? (() => unfurlResults.get(url)),
-    { refetch: () => undefined },
-  ],
+  useUnfurl: (url: string) => useUnfurl(url),
 }));
 
 vi.mock('@service-unfurl/client', () => ({
@@ -239,6 +259,35 @@ function renderPreviews(
 }
 
 describe('LinkPreviews', () => {
+  it('keeps rollout eligibility stable until the message remounts', () => {
+    previewFlag = undefined;
+    const first = renderPreviews('https://example.com/late-flag');
+    previewFlag = true;
+    // Recompute the URL list through the user preference to prove it retains
+    // the initial rollout decision even when other reactive inputs change.
+    setShowLinkPreviews(false);
+    setShowLinkPreviews(true);
+    expect(first.container.querySelector('[data-link-preview]')).toBeNull();
+    expect(useUnfurl).not.toHaveBeenCalled();
+    first.unmount();
+
+    const second = renderPreviews('https://example.com/late-flag');
+    expect(
+      second.container.querySelector('[data-link-preview]')
+    ).not.toBeNull();
+  });
+
+  it.each([false, undefined])(
+    'does not render or unfurl when the rollout flag is %s',
+    (flag) => {
+      previewFlag = flag;
+      const { container } = renderPreviews('https://example.com/flagged');
+
+      expect(container.querySelector('[data-link-preview]')).toBeNull();
+      expect(useUnfurl).not.toHaveBeenCalled();
+    }
+  );
+
   it('renders a card once the unfurl succeeds', () => {
     const url = 'https://example.com/article';
     unfurlResults.set(url, {

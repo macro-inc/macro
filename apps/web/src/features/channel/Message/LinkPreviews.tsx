@@ -1,4 +1,8 @@
 import { isOwnMessage } from '@channel/Thread/utils/message-actions';
+import {
+  enableRichLinkPreviews,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useUnfurl } from '@core/signal/unfurl';
 import { extractDomain, openExternalUrl } from '@core/util/url';
@@ -164,6 +168,9 @@ type LinkPreviewsProps = {
  * never resize the message. Explicitly suppressed links render nothing.
  */
 export function LinkPreviews(props: LinkPreviewsProps) {
+  // Keep rollout eligibility stable for this mount: a late PostHog response
+  // must not insert cards after the channel has measured the message.
+  const previewsEnabled = isFeatureEnabled(enableRichLinkPreviews);
   const message = useMessage();
   const userId = useUserId();
   const removePreview = useRemoveLinkPreviewMutation({
@@ -177,7 +184,7 @@ export function LinkPreviews(props: LinkPreviewsProps) {
     message().deleted_at ? [] : extractUnfurlableUrls(message().content ?? '')
   );
   const urls = createMemo(() =>
-    showLinkPreviews()
+    previewsEnabled && showLinkPreviews()
       ? previewable().filter((url) => !isLinkPreviewHidden(message().id, url))
       : []
   );

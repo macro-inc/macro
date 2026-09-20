@@ -1,8 +1,10 @@
+import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   setShowLinkPreviews,
   showLinkPreviews,
 } from '@channel/Message/link-preview-visibility';
 import { toast } from '@core/component/Toast/Toast';
+import { enableRichLinkPreviews } from '@core/constant/featureFlags';
 import { DropdownMenu as KobalteDropdownMenu } from '@kobalte/core/dropdown-menu';
 import CheckIcon from '@phosphor/check.svg';
 import ClipboardIcon from '@phosphor/clipboard.svg';
@@ -706,16 +708,18 @@ export function Appearance() {
                 checked={tooltipsEnabled()}
               />
             </SettingsRow>
-            <SettingsRow
-              label="Show link previews"
-              description="Show rich previews of links shared in messages."
-            >
-              <ToggleSwitch
-                size="md"
-                onChange={setShowLinkPreviews}
-                checked={showLinkPreviews()}
-              />
-            </SettingsRow>
+            <ShowFeatureFlag flag={enableRichLinkPreviews}>
+              <SettingsRow
+                label="Show link previews"
+                description="Show rich previews of links shared in messages."
+              >
+                <ToggleSwitch
+                  size="md"
+                  onChange={setShowLinkPreviews}
+                  checked={showLinkPreviews()}
+                />
+              </SettingsRow>
+            </ShowFeatureFlag>
           </SettingsCard>
         </SettingsSection>
       </SettingsPage>

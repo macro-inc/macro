@@ -227,6 +227,12 @@ thread past the chat's right edge.
 
 ## Link previews
 
+Preview cards and the Appearance setting require the PostHog flag
+`enable-rich-link-previews`. They stay hidden when the flag is off or unknown.
+For local verification, use `VITE_ENABLE_RICH_LINK_PREVIEWS=true`.
+Messages keep their initial rollout decision until remount so a late flag response
+cannot add or remove cards while reading. Reopen the channel after changing the flag.
+
 External links reserve fixed-height preview cards below a message as soon as its
 content renders. Titles, descriptions, and thumbnails fill that space without
 resizing the message. Missing or failed metadata keeps a URL card. With delayed
