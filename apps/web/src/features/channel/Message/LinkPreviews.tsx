@@ -15,6 +15,7 @@ import {
   For,
   type JSX,
   Show,
+  Suspense,
 } from 'solid-js';
 import { useMessage } from './context';
 import {
@@ -38,26 +39,29 @@ function openLink(url: string): JSX.EventHandler<HTMLElement, MouseEvent> {
 }
 
 function LinkPreviewCard(props: {
-  unfurled: GetUnfurlResponse;
+  url: string;
+  unfurled?: GetUnfurlResponse;
+  loading?: boolean;
   onHide?: () => void;
 }) {
   const [faviconFailed, setFaviconFailed] = createSignal(false);
   const [imageFailed, setImageFailed] = createSignal(false);
-  const domain = () => extractDomain(props.unfurled.url);
+  const domain = () => extractDomain(props.url);
 
   return (
     <div
-      class="group/preview mb-2 flex min-w-0 flex-col gap-0.5 border-l-2 border-edge py-0.5 pl-3"
-      data-link-preview={props.unfurled.url}
+      class="group/preview relative mb-2 flex h-32 min-w-0 shrink-0 flex-col gap-0.5 overflow-hidden border-l-2 border-edge py-0.5 pl-3"
+      data-link-preview={props.url}
+      aria-busy={props.loading ?? false}
     >
       <div class="flex min-w-0 items-center gap-1.5">
         <Show
-          when={props.unfurled.favicon_url && !faviconFailed()}
+          when={!faviconFailed() ? props.unfurled?.favicon_url : undefined}
           fallback={<GlobeIcon class="size-3.5 shrink-0 text-ink-muted" />}
         >
-          {(_) => (
+          {(faviconUrl) => (
             <img
-              src={proxyResource(props.unfurled.favicon_url!)}
+              src={proxyResource(faviconUrl())}
               class="size-3.5 shrink-0 rounded-xs object-cover"
               crossorigin="anonymous"
               alt=""
@@ -80,34 +84,48 @@ function LinkPreviewCard(props: {
           </button>
         </Show>
       </div>
-      <a
-        href={props.unfurled.url}
-        target="_blank"
-        rel="noopener"
-        class="line-clamp-2 wrap-break-word text-sm font-medium text-accent hover:underline"
-        draggable={false}
-        onClick={openLink(props.unfurled.url)}
-      >
-        {props.unfurled.title || domain()}
-      </a>
-      <Show when={props.unfurled.description}>
-        <p class="line-clamp-3 wrap-break-word text-xs text-ink-muted">
-          {props.unfurled.description}
-        </p>
-      </Show>
-      <Show when={props.unfurled.image_url && !imageFailed()}>
-        {(_) => (
-          <img
-            src={proxyResource(props.unfurled.image_url!)}
-            class="mt-1 max-h-64 w-auto max-w-full cursor-pointer self-start rounded-md border border-edge-muted"
-            crossorigin="anonymous"
-            alt={props.unfurled.title}
+      <div class="flex min-h-0 flex-1 gap-3">
+        <div class="min-w-0 flex-1 overflow-hidden">
+          <a
+            href={props.url}
+            target="_blank"
+            rel="noopener"
+            class="line-clamp-2 wrap-break-word text-sm leading-5 font-medium text-accent hover:underline"
             draggable={false}
-            onClick={openLink(props.unfurled.url)}
-            on:error={() => setImageFailed(true)}
-          />
-        )}
-      </Show>
+            onClick={openLink(props.url)}
+          >
+            {props.unfurled?.title || props.url}
+          </a>
+          <Show when={props.unfurled?.description}>
+            <p class="m-0 line-clamp-3 wrap-break-word text-xs leading-4 text-ink-muted">
+              {props.unfurled?.description}
+            </p>
+          </Show>
+        </div>
+        <Show when={!imageFailed() ? props.unfurled?.image_url : undefined}>
+          {(imageUrl) => (
+            <a
+              href={props.url}
+              target="_blank"
+              rel="noopener"
+              class="size-20 shrink-0 overflow-hidden rounded-md border border-edge-muted"
+              aria-label={props.unfurled?.title || props.url}
+              onClick={openLink(props.url)}
+            >
+              <img
+                src={proxyResource(imageUrl())}
+                class="size-full object-cover"
+                width={80}
+                height={80}
+                crossorigin="anonymous"
+                alt=""
+                draggable={false}
+                on:error={() => setImageFailed(true)}
+              />
+            </a>
+          )}
+        </Show>
+      </div>
     </div>
   );
 }
@@ -124,11 +142,12 @@ function LinkPreview(props: {
   });
 
   return (
-    <Show when={renderable()}>
-      {(unfurled) => (
-        <LinkPreviewCard unfurled={unfurled()} onHide={props.onRemove} />
-      )}
-    </Show>
+    <LinkPreviewCard
+      url={props.url}
+      unfurled={renderable()}
+      loading={!unfurlData() || unfurlData()?.type === 'loading'}
+      onHide={props.onRemove}
+    />
   );
 }
 
@@ -140,9 +159,9 @@ type LinkPreviewsProps = {
 
 /**
  * Slack-style rich previews for external links in the message body, rendered
- * below the content. Previews pop in once the unfurl service responds; links
- * with no usable metadata, and links whose sender removed the preview
- * (`preview: false` on the link node), render nothing.
+ * below the content. Every eligible URL reserves its final height immediately.
+ * Missing metadata keeps a useful URL card, so enrichment and image failures
+ * never resize the message. Explicitly suppressed links render nothing.
  */
 export function LinkPreviews(props: LinkPreviewsProps) {
   const message = useMessage();
@@ -188,18 +207,32 @@ export function LinkPreviews(props: LinkPreviewsProps) {
 
   return (
     <Show when={urls().length > 0}>
-      {/* Spacing lives on the cards: with every unfurl still loading or
-          failed this container is empty and must take up no height. */}
+      {/* URL extraction is synchronous; card count and height are known
+          before the channel virtualizer measures the message. */}
       <div
         class={cn('flex min-w-0 max-w-md flex-col', props.class)}
         data-message-link-previews
       >
         <For each={urls()}>
           {(url) => (
-            <LinkPreview
-              url={url}
-              onRemove={canRemove() ? () => removeForEveryone(url) : undefined}
-            />
+            <Suspense
+              fallback={
+                <LinkPreviewCard
+                  url={url}
+                  loading
+                  onHide={
+                    canRemove() ? () => removeForEveryone(url) : undefined
+                  }
+                />
+              }
+            >
+              <LinkPreview
+                url={url}
+                onRemove={
+                  canRemove() ? () => removeForEveryone(url) : undefined
+                }
+              />
+            </Suspense>
           )}
         </For>
       </div>

@@ -227,7 +227,11 @@ thread past the chat's right edge.
 
 ## Link previews
 
-External links can show preview cards below a message. The sender can hover a
+External links reserve fixed-height preview cards below a message as soon as its
+content renders. Titles, descriptions, and thumbnails fill that space without
+resizing the message. Missing or failed metadata keeps a URL card. With delayed
+metadata and images, verify that nearby messages stay in place both at the bottom
+and while reading older history, and that the channel and draft remain mounted. The sender can hover a
 card and click `Remove link preview` to hide that URL's preview for everyone.
 Removing a preview preserves the message's code examples and surrounding
 punctuation. If a removal request fails, its card returns, including when several

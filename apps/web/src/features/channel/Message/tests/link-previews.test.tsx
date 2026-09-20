@@ -11,6 +11,7 @@ import {
   useMutation,
 } from '@tanstack/solid-query';
 import userEvent from '@testing-library/user-event';
+import { createResource, Suspense } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { LinkPreviews } from '../LinkPreviews';
 import {
@@ -40,6 +41,10 @@ type MockUnfurlData =
       _createdAt: Date;
     };
 
+const unfurlFactories = new Map<
+  string,
+  () => () => MockUnfurlData | undefined
+>();
 const unfurlResults = new Map<string, MockUnfurlData>();
 const suppressMutate = vi.fn();
 const suppressRequest = vi.fn<() => Promise<never>>(
@@ -48,7 +53,7 @@ const suppressRequest = vi.fn<() => Promise<never>>(
 
 vi.mock('@core/signal/unfurl', () => ({
   useUnfurl: (url: string) => [
-    () => unfurlResults.get(url),
+    unfurlFactories.get(url)?.() ?? (() => unfurlResults.get(url)),
     { refetch: () => undefined },
   ],
 }));
@@ -256,7 +261,7 @@ describe('LinkPreviews', () => {
     expect(getByText('example.com')).not.toBeNull();
   });
 
-  it('renders no card while loading or after an error', () => {
+  it('keeps URL cards while loading or after an error', () => {
     const loading = 'https://example.com/loading';
     const errored = 'https://example.com/errored';
     unfurlResults.set(loading, { type: 'loading', _createdAt: new Date() });
@@ -264,10 +269,12 @@ describe('LinkPreviews', () => {
 
     const { container } = renderPreviews(`${loading} ${errored}`);
 
-    expect(container.querySelector('[data-link-preview]')).toBeNull();
+    expect(container.querySelectorAll('[data-link-preview]')).toHaveLength(2);
+    expect(container.textContent).toContain(loading);
+    expect(container.textContent).toContain(errored);
   });
 
-  it('renders no card for an unfurl with no usable metadata', () => {
+  it('keeps a URL card for an unfurl with no usable metadata', () => {
     const url = 'https://example.com/bare';
     unfurlResults.set(url, {
       type: 'success',
@@ -277,7 +284,42 @@ describe('LinkPreviews', () => {
 
     const { container } = renderPreviews(url);
 
-    expect(container.querySelector('[data-link-preview]')).toBeNull();
+    expect(container.querySelector('[data-link-preview]')).not.toBeNull();
+    expect(container.textContent).toContain(url);
+  });
+
+  it('contains a suspending unfurl inside the card without replacing the message', async () => {
+    const url = 'https://example.com/suspending';
+    let resolve!: (data: MockUnfurlData) => void;
+    const pending = new Promise<MockUnfurlData>((done) => {
+      resolve = done;
+    });
+    unfurlFactories.set(url, () => {
+      const [data] = createResource(() => pending);
+      return data;
+    });
+    const view = render(() => (
+      <QueryClientProvider client={new QueryClient()}>
+        <Suspense fallback={<div data-testid="outer-fallback" />}>
+          <Root message={{ ...baseMessage, content: url }}>
+            <input aria-label="Message draft" />
+            <LinkPreviews />
+          </Root>
+        </Suspense>
+      </QueryClientProvider>
+    ));
+    const draft = view.getByRole('textbox');
+    expect(view.queryByTestId('outer-fallback')).toBeNull();
+    expect(view.container.querySelector('[data-link-preview]')).not.toBeNull();
+    resolve({
+      type: 'success',
+      data: { url, title: 'Resolved title' },
+      _createdAt: new Date(),
+    });
+    await waitFor(() => expect(view.getByText('Resolved title')).toBeTruthy());
+    expect(view.getByRole('textbox')).toBe(draft);
+    expect(view.queryByTestId('outer-fallback')).toBeNull();
+    unfurlFactories.delete(url);
   });
 
   it('renders nothing at all for messages without external links', () => {
