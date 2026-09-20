@@ -21,6 +21,13 @@ export const JOIN_TIMEOUT_MS = 15_000;
 export const LEAVE_TIMEOUT_MS = 10_000;
 export type CallIdentity = { channelId: string; callId: string | null };
 
+function sameCall(first: CallIdentity | undefined, second: CallIdentity) {
+  return (
+    first?.channelId === second.channelId &&
+    first.callId?.toLowerCase() === second.callId?.toLowerCase()
+  );
+}
+
 function deferred() {
   let resolve!: () => void;
   let reject!: (error: unknown) => void;
@@ -33,11 +40,13 @@ function deferred() {
 type Join = ReturnType<typeof deferred> & {
   channelId: string;
   onJoin?: () => void;
+  restoredCall?: CallIdentity;
 };
 type Leave = ReturnType<typeof deferred> & {
   channelId: string;
   startedAt: number;
   options?: CallSessionDisconnectOptions;
+  skipServerLeave?: boolean;
 };
 export type CallLifecycleState =
   | { t: 'idle' }
@@ -87,8 +96,7 @@ const definition: MachineDef<CallLifecycleState, Event> = {
             : ({ t: 'idle' } as const),
         }))
         .with({ t: 'adopt' }, ({ call }) =>
-          call.channelId === state.call.channelId &&
-          call.callId === state.call.callId
+          sameCall(state.call, call)
             ? undefined
             : { state: { t: 'active', call } as const }
         )
@@ -102,8 +110,22 @@ const definition: MachineDef<CallLifecycleState, Event> = {
   },
   checking: { on: (_state, event) => changeIntent(event) },
   leaving: {
-    on: (_state, event) =>
-      event.t === 'finish' ? { state: { t: 'idle' } } : undefined,
+    on: (state, event) =>
+      match(event)
+        .with({ t: 'finish' }, changeIntent)
+        .with({ t: 'adopt' }, ({ call }) =>
+          state.request.options?.endNativeCall === false &&
+          state.request.channelId === call.channelId
+            ? changeIntent(event)
+            : undefined
+        )
+        .with({ t: 'join' }, ({ request }) =>
+          state.request.options?.endNativeCall === false &&
+          state.request.channelId === request.channelId
+            ? changeIntent(event)
+            : undefined
+        )
+        .otherwise(() => undefined),
   },
   failed: { on: (_state, event) => changeIntent(event) },
 };
@@ -158,6 +180,16 @@ export function createCallLifecycle(options: {
   reportError: (error: unknown) => void;
 }) {
   let disposed = false;
+  const pendingServerLeaves = new Set<Promise<unknown>>();
+  async function leaveServer(channelId: string) {
+    const pending = options.leave(channelId);
+    pendingServerLeaves.add(pending);
+    try {
+      await pending;
+    } finally {
+      pendingServerLeaves.delete(pending);
+    }
+  }
   const leaveListeners = new Set<(channelId: string) => void>();
   const notifyLeft = (channelId: string) => {
     for (const listener of [...leaveListeners]) {
@@ -198,14 +230,50 @@ export function createCallLifecycle(options: {
         async function connect() {
           try {
             request.onJoin?.();
+            // A sent leave cannot be cancelled. Register the retry only after
+            // it settles, so the old request cannot remove the new membership.
+            const renewMembership = pendingServerLeaves.size > 0;
+            if (renewMembership) {
+              await Promise.allSettled(pendingServerLeaves);
+              if (!active) return;
+            }
+            if (request.restoredCall) {
+              let activeCall: ActiveCallLookup;
+              try {
+                activeCall = await options.lookup(request.channelId);
+              } catch (error) {
+                if (!active) return;
+                options.reportError(error);
+                activeCall = 'unavailable';
+              }
+              if (!active) return;
+              if (
+                checkAutoRejoinTarget({
+                  attempt: { ...request.restoredCall, scheduledAt: Date.now() },
+                  activeCall,
+                })
+              ) {
+                await releaseStaleNativeSession(request.restoredCall, true);
+                return;
+              }
+            }
             let call = options.currentCall();
-            if (options.shouldRequestToken(request.channelId)) {
+            const needsConnection = options.shouldRequestToken(
+              request.channelId
+            );
+            if (needsConnection || renewMembership) {
               const [token] = await Promise.all([
                 options.requestToken(request.channelId),
                 delay,
               ]);
               if (!active) return;
-              await options.connect(token);
+              if (!needsConnection && call && !sameCall(call, token)) {
+                // The server ended the session native still reports. Release
+                // the newly issued membership and the stale native session.
+                await releaseStaleNativeSession(call);
+                return;
+              }
+              if (needsConnection) await options.connect(token);
               call = { channelId: token.channelId, callId: token.callId };
             } else {
               // Let the joining scope finish mounting before dispatching its
@@ -224,11 +292,7 @@ export function createCallLifecycle(options: {
             dispatch({ t: 'connected', call: connected });
             try {
               const current = machine.getState();
-              if (
-                current.t === 'active' &&
-                current.call.channelId === connected.channelId &&
-                current.call.callId === connected.callId
-              )
+              if (current.t === 'active' && sameCall(current.call, connected))
                 options.onJoined(connected);
             } catch (error) {
               options.reportError(error);
@@ -337,7 +401,7 @@ export function createCallLifecycle(options: {
           }
           if (!active) return;
           try {
-            await options.leave(channelId);
+            await leaveServer(channelId);
           } catch (error) {
             options.reportError(error);
           }
@@ -371,18 +435,24 @@ export function createCallLifecycle(options: {
               notifyLeft(request.channelId);
               options.onLeft(request.channelId);
             } finally {
-              if (active) await options.leave(request.channelId);
+              if (active && !request.skipServerLeave)
+                await leaveServer(request.channelId);
             }
             finish();
           } catch (error) {
-            finish(error);
+            if (active) finish(error);
+            else options.reportError(error);
           }
         }
         void disconnect();
         return () => {
           active = false;
           clearTimeout(timeout);
-          if (!settled) request.reject(new Error('Call leave cancelled'));
+          if (!settled) {
+            // Native end cleanup yields to a restored session or a new join.
+            if (request.options?.endNativeCall === false) request.resolve();
+            else request.reject(new Error('Call leave cancelled'));
+          }
         };
       },
     },
@@ -395,7 +465,11 @@ export function createCallLifecycle(options: {
       return state.request.channelId === channelId
         ? state.request.promise
         : Promise.reject(new Error('Already joining another call'));
-    if (state.t === 'leaving')
+    if (
+      state.t === 'leaving' &&
+      (state.request.options?.endNativeCall !== false ||
+        state.request.channelId !== channelId)
+    )
       return Promise.reject(new Error('Call is still leaving'));
     if (state.t === 'active' && state.call.channelId === channelId) {
       try {
@@ -424,11 +498,20 @@ export function createCallLifecycle(options: {
         return state.request.promise;
       machine.dispatch({ t: 'finish' });
     }
+    return startLeave(channelId, leaveOptions);
+  }
+
+  function startLeave(
+    channelId: string,
+    leaveOptions?: CallSessionDisconnectOptions,
+    skipServerLeave = false
+  ) {
     const request: Leave = {
       ...deferred(),
       channelId,
       startedAt: Date.now(),
       options: leaveOptions,
+      skipServerLeave,
     };
     machine.dispatch({ t: 'leave', request });
     return request.promise;
@@ -442,6 +525,43 @@ export function createCallLifecycle(options: {
     }
   }
 
+  async function releaseStaleNativeSession(
+    call: CallIdentity,
+    skipServerLeave = false
+  ) {
+    const current = options.currentCall();
+    if (current?.channelId === call.channelId && !sameCall(current, call)) {
+      // Another native session now owns this channel; its membership must stay.
+      machine.dispatch({ t: 'connected', call: current });
+      return;
+    }
+    try {
+      await startLeave(
+        call.channelId,
+        {
+          endNativeCall: sameCall(current, call),
+        },
+        skipServerLeave
+      );
+    } catch (error) {
+      options.reportError(error);
+    }
+  }
+
+  async function restoreAfterLeave(call: CallIdentity) {
+    const request: Join = {
+      ...deferred(),
+      channelId: call.channelId,
+      restoredCall: call,
+    };
+    machine.dispatch({ t: 'join', request });
+    try {
+      await request.promise;
+    } catch (error) {
+      options.reportError(error);
+    }
+  }
+
   return {
     join,
     leave,
@@ -450,13 +570,25 @@ export function createCallLifecycle(options: {
     syncSession: (call: CallIdentity | undefined) => {
       if (disposed) return;
       if (call) {
+        const state = machine.getState();
+        if (
+          state.t === 'leaving' &&
+          state.request.options?.endNativeCall === false &&
+          state.request.channelId === call.channelId &&
+          pendingServerLeaves.size > 0
+        ) {
+          // The native transport may already be restored, but the old DELETE
+          // is still authoritative for membership until it settles.
+          void restoreAfterLeave(call);
+          return;
+        }
         machine.dispatch({ t: 'adopt', call });
         return;
       }
       const state = machine.getState();
       if (state.t === 'joining') {
         // Requesting a token can register a server participant before media
-        // connects. Cancellation must complete the normal leave cleanup.
+        // connects. Clean up unless a new session supersedes this attempt.
         void leaveEndedNativeSession(state.request.channelId);
         return;
       }

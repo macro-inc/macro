@@ -368,6 +368,10 @@ cancel pending connection/recovery and allow a new join.
 Cancelling after a token is issued must also remove server membership, even if
 media has not connected yet. Repeated end events share that cleanup; a newer
 native call must survive while cleanup for the cancelled attempt finishes.
+Restore the same channel while transport cleanup is pending and check that no
+server leave is sent for the restored session. Join must also accept a retry
+during cancellation cleanup. If a server leave was already sent, the retry
+shows Connecting and waits for that request before registering again.
 
 ## Channel tabs
 

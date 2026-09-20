@@ -1,5 +1,6 @@
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ActiveCallLookup } from '../auto-rejoin';
 import { createCallLifecycle, LEAVE_TIMEOUT_MS } from '../call-lifecycle';
 import { bindNativeCallLifecycle } from '../native-call-lifecycle';
 import {
@@ -46,7 +47,7 @@ function setup(initial: NativeCallSnapshot | null = first) {
     native.setSnapshot(initial);
     const unwatch = vi.fn();
     const ports = {
-      shouldRequestToken: () => true,
+      shouldRequestToken: vi.fn((_channelId: string) => true),
       requestToken: vi.fn(async () => ({
         ...identity(first),
         roomName: 'room-1',
@@ -54,11 +55,15 @@ function setup(initial: NativeCallSnapshot | null = first) {
         serverUrl: 'ws://localhost',
       })),
       connect: vi.fn(async () => {}),
-      disconnect: vi.fn(async () => {
+      disconnect: vi.fn<
+        Parameters<typeof createCallLifecycle>[0]['disconnect']
+      >(async () => {
         native.setSnapshot(null);
       }),
       leave: vi.fn(async () => {}),
-      lookup: vi.fn(),
+      lookup: vi.fn<() => Promise<ActiveCallLookup>>(async () => ({
+        callId: first.callId,
+      })),
       currentCall: () => {
         const snapshot = native.snapshot();
         return snapshot ? identity(snapshot) : undefined;
@@ -293,6 +298,332 @@ describe('native snapshot events and call ownership', () => {
       });
     }
   );
+
+  it.each([first, { ...first, callId: 'replacement' }])(
+    'keeps restored membership in $callId when native cancellation cleanup is superseded',
+    async (restored) => {
+      const { native, lifecycle, ports } = setup(null);
+      const connection = deferred();
+      const cleanup = deferred();
+      let member = true;
+      ports.connect.mockReturnValueOnce(connection.promise);
+      ports.disconnect.mockReturnValueOnce(cleanup.promise);
+      ports.leave.mockImplementationOnce(async () => {
+        member = false;
+      });
+      const cancelled = expect(lifecycle.join(first.channelId)).rejects.toThrow(
+        'cancelled'
+      );
+      await vi.advanceTimersByTimeAsync(300);
+      native.setSnapshot({ ...first, connectionState: 'connecting' });
+      native.setSnapshot(null);
+      await cancelled;
+      native.setSnapshot(restored);
+      cleanup.resolve();
+      connection.resolve();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(member).toBe(true);
+      expect(ports.leave).not.toHaveBeenCalled();
+      expect(lifecycle.getState()).toEqual({
+        t: 'active',
+        call: identity(restored),
+      });
+      expect(ports.watch).toHaveBeenCalledOnce();
+      expect(ports.onJoined).not.toHaveBeenCalled();
+      expect(ports.reportError).not.toHaveBeenCalled();
+    }
+  );
+
+  it('accepts a retry while native cancellation transport cleanup is still pending', async () => {
+    const { native, lifecycle, ports } = setup(null);
+    const connection = deferred();
+    const cleanup = deferred();
+    ports.connect.mockReturnValueOnce(connection.promise);
+    ports.disconnect.mockReturnValueOnce(cleanup.promise);
+    const cancelled = expect(lifecycle.join(first.channelId)).rejects.toThrow(
+      'cancelled'
+    );
+    await vi.advanceTimersByTimeAsync(300);
+    native.setSnapshot({ ...first, connectionState: 'connecting' });
+    native.setSnapshot(null);
+    await cancelled;
+    const retry = expect(
+      lifecycle.join(first.channelId)
+    ).resolves.toBeUndefined();
+    await vi.advanceTimersByTimeAsync(300);
+    await retry;
+    cleanup.resolve();
+    connection.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ports.requestToken).toHaveBeenCalledTimes(2);
+    expect(ports.leave).not.toHaveBeenCalled();
+    expect(ports.onJoined).toHaveBeenCalledOnce();
+    expect(ports.reportError).not.toHaveBeenCalled();
+  });
+
+  it.each(['resolve', 'reject'] as const)(
+    'accepts a retry after an already-sent cancellation leave completes with %s',
+    async (completion) => {
+      const { native, lifecycle, ports } = setup(null);
+      const connection = deferred();
+      const cleanup = deferred();
+      ports.connect.mockReturnValueOnce(connection.promise);
+      ports.leave.mockReturnValueOnce(cleanup.promise);
+      const cancelled = expect(lifecycle.join(first.channelId)).rejects.toThrow(
+        'cancelled'
+      );
+      await vi.advanceTimersByTimeAsync(300);
+      native.setSnapshot({ ...first, connectionState: 'connecting' });
+      native.setSnapshot(null);
+      await cancelled;
+      await vi.advanceTimersByTimeAsync(0);
+      expect(ports.leave).toHaveBeenCalledOnce();
+      const retry = lifecycle.join(first.channelId);
+      const joined = expect(retry).resolves.toBeUndefined();
+      expect(lifecycle.join(first.channelId)).toBe(retry);
+      await vi.advanceTimersByTimeAsync(300);
+      expect(ports.requestToken).toHaveBeenCalledOnce();
+      if (completion === 'resolve') cleanup.resolve();
+      else cleanup.reject(new Error('offline'));
+      await joined;
+      expect(ports.requestToken).toHaveBeenCalledTimes(2);
+      expect(ports.onJoined).toHaveBeenCalledOnce();
+      connection.resolve();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(ports.onJoined).toHaveBeenCalledOnce();
+    }
+  );
+
+  it.each([
+    { manualRetry: false, callId: first.callId },
+    { manualRetry: true, callId: first.callId },
+    { manualRetry: false, callId: '01991b2a-f4e0-7000-a000-111111111111' },
+  ])(
+    'renews restored native membership after a sent leave (manual retry: $manualRetry, call: $callId)',
+    async ({ manualRetry, callId }) => {
+      const { native, lifecycle, ports } = setup(null);
+      const restored = { ...first, callId: callId.toUpperCase() };
+      ports.lookup.mockResolvedValue({ callId });
+      const connection = deferred();
+      const cleanup = deferred();
+      let member = false;
+      ports.shouldRequestToken.mockImplementation((channelId) => {
+        const snapshot = native.snapshot();
+        return (
+          !snapshot ||
+          snapshot.channelId !== channelId ||
+          snapshot.connectionState === 'disconnected' ||
+          snapshot.connectionState === 'disconnecting'
+        );
+      });
+      ports.requestToken.mockImplementation(async () => {
+        member = true;
+        return {
+          ...identity(first),
+          callId,
+          roomName: 'room-1',
+          token: 'token',
+          serverUrl: 'ws://localhost',
+        };
+      });
+      ports.connect.mockReturnValueOnce(connection.promise);
+      ports.leave.mockImplementationOnce(async () => {
+        await cleanup.promise;
+        member = false;
+      });
+      const cancelled = expect(lifecycle.join(first.channelId)).rejects.toThrow(
+        'cancelled'
+      );
+      await vi.advanceTimersByTimeAsync(300);
+      native.setSnapshot({ ...first, connectionState: 'connecting' });
+      native.setSnapshot(null);
+      await cancelled;
+      await vi.advanceTimersByTimeAsync(0);
+      const retry = manualRetry ? lifecycle.join(first.channelId) : undefined;
+      native.setSnapshot(restored);
+      await vi.advanceTimersByTimeAsync(300);
+      expect(ports.requestToken).toHaveBeenCalledOnce();
+      cleanup.resolve();
+      await retry;
+      await vi.advanceTimersByTimeAsync(0);
+      expect(member).toBe(true);
+      expect(ports.requestToken).toHaveBeenCalledTimes(2);
+      expect(ports.connect).toHaveBeenCalledOnce();
+      expect(lifecycle.getState()).toEqual({
+        t: 'active',
+        call: { ...identity(first), callId },
+      });
+      expect(ports.watch).toHaveBeenCalledOnce();
+      connection.resolve();
+    }
+  );
+
+  it('cleans up if renewal returns a different call from the restored native session', async () => {
+    const { native, lifecycle, ports } = setup(null);
+    const connection = deferred();
+    const cleanup = deferred();
+    ports.connect.mockReturnValueOnce(connection.promise);
+    ports.leave.mockReturnValueOnce(cleanup.promise);
+    const cancelled = expect(lifecycle.join(first.channelId)).rejects.toThrow(
+      'cancelled'
+    );
+    await vi.advanceTimersByTimeAsync(300);
+    native.setSnapshot({ ...first, connectionState: 'connecting' });
+    native.setSnapshot(null);
+    await cancelled;
+    await vi.advanceTimersByTimeAsync(0);
+    ports.shouldRequestToken.mockReturnValue(false);
+    ports.requestToken.mockResolvedValueOnce({
+      ...identity(first),
+      callId: 'new-server-call',
+      roomName: 'room-1',
+      token: 'new-token',
+      serverUrl: 'ws://localhost',
+    });
+    native.setSnapshot(first);
+    cleanup.resolve();
+    await vi.advanceTimersByTimeAsync(300);
+    expect(lifecycle.getState().t).toBe('idle');
+    expect(native.snapshot()).toBeNull();
+    expect(ports.connect).toHaveBeenCalledOnce();
+    expect(ports.leave).toHaveBeenCalledTimes(2);
+    expect(ports.disconnect).toHaveBeenLastCalledWith({ endNativeCall: true });
+    expect(ports.watch).not.toHaveBeenCalled();
+    expect(ports.onJoined).not.toHaveBeenCalled();
+    connection.resolve();
+  });
+
+  it.each([
+    null,
+    'unavailable',
+    { callId: 'replacement' },
+    new Error('lookup offline'),
+  ] as const)(
+    'never recreates a native call when automatic renewal lookup returns %j',
+    async (result) => {
+      const { native, lifecycle, ports } = setup(null);
+      const connection = deferred();
+      const cleanup = deferred();
+      ports.connect.mockReturnValueOnce(connection.promise);
+      ports.leave.mockReturnValueOnce(cleanup.promise);
+      if (result instanceof Error) ports.lookup.mockRejectedValueOnce(result);
+      else ports.lookup.mockResolvedValueOnce(result);
+      const cancelled = expect(lifecycle.join(first.channelId)).rejects.toThrow(
+        'cancelled'
+      );
+      await vi.advanceTimersByTimeAsync(300);
+      native.setSnapshot({ ...first, connectionState: 'connecting' });
+      native.setSnapshot(null);
+      await cancelled;
+      await vi.advanceTimersByTimeAsync(0);
+      native.setSnapshot(first);
+      cleanup.resolve();
+      await vi.advanceTimersByTimeAsync(300);
+      expect(ports.requestToken).toHaveBeenCalledOnce();
+      expect(ports.connect).toHaveBeenCalledOnce();
+      expect(ports.onJoined).not.toHaveBeenCalled();
+      expect(ports.leave).toHaveBeenCalledOnce();
+      expect(lifecycle.getState().t).toBe('idle');
+      connection.resolve();
+    }
+  );
+
+  it('does not end a different native channel that arrives during a renewal request', async () => {
+    const { native, lifecycle, ports } = setup(null);
+    const connection = deferred();
+    const cleanup = deferred();
+    const renewal = deferred();
+    ports.connect.mockReturnValueOnce(connection.promise);
+    ports.leave.mockReturnValueOnce(cleanup.promise);
+    const cancelled = expect(lifecycle.join(first.channelId)).rejects.toThrow(
+      'cancelled'
+    );
+    await vi.advanceTimersByTimeAsync(300);
+    native.setSnapshot({ ...first, connectionState: 'connecting' });
+    native.setSnapshot(null);
+    await cancelled;
+    await vi.advanceTimersByTimeAsync(0);
+    ports.shouldRequestToken.mockReturnValue(false);
+    ports.requestToken.mockImplementationOnce(async () => {
+      await renewal.promise;
+      return {
+        ...identity(first),
+        callId: 'new-server-call',
+        roomName: 'room-1',
+        token: 'new-token',
+        serverUrl: 'ws://localhost',
+      };
+    });
+    ports.disconnect.mockImplementationOnce(async (options) => {
+      if (options?.endNativeCall !== false) native.setSnapshot(null);
+    });
+    native.setSnapshot(first);
+    cleanup.resolve();
+    await vi.advanceTimersByTimeAsync(300);
+    native.setSnapshot(second);
+    renewal.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ports.disconnect).toHaveBeenLastCalledWith({ endNativeCall: false });
+    expect(native.snapshot()).toEqual(second);
+    expect(ports.leave).toHaveBeenLastCalledWith(first.channelId);
+    expect(lifecycle.getState()).toEqual({
+      t: 'active',
+      call: identity(second),
+    });
+    connection.resolve();
+  });
+
+  it('does not renew a restored session that ends while its old leave is pending', async () => {
+    const { native, lifecycle, ports } = setup(null);
+    const connection = deferred();
+    const cleanup = deferred();
+    ports.connect.mockReturnValueOnce(connection.promise);
+    ports.leave.mockReturnValueOnce(cleanup.promise);
+    const cancelled = expect(lifecycle.join(first.channelId)).rejects.toThrow(
+      'cancelled'
+    );
+    await vi.advanceTimersByTimeAsync(300);
+    native.setSnapshot({ ...first, connectionState: 'connecting' });
+    native.setSnapshot(null);
+    await cancelled;
+    await vi.advanceTimersByTimeAsync(0);
+    native.setSnapshot(first);
+    native.setSnapshot(null);
+    cleanup.resolve();
+    connection.resolve();
+    await vi.advanceTimersByTimeAsync(300);
+    expect(ports.requestToken).toHaveBeenCalledOnce();
+    expect(ports.onJoined).not.toHaveBeenCalled();
+    expect(lifecycle.getState().t).toBe('idle');
+  });
+
+  it('finishes the old channel cleanup before following a different native channel', async () => {
+    const { native, lifecycle, ports } = setup(null);
+    const connection = deferred();
+    const cleanup = deferred();
+    ports.connect.mockReturnValueOnce(connection.promise);
+    ports.disconnect.mockReturnValueOnce(cleanup.promise);
+    const cancelled = expect(lifecycle.join(first.channelId)).rejects.toThrow(
+      'cancelled'
+    );
+    await vi.advanceTimersByTimeAsync(300);
+    native.setSnapshot({ ...first, connectionState: 'connecting' });
+    native.setSnapshot(null);
+    await cancelled;
+    await expect(lifecycle.join(second.channelId)).rejects.toThrow(
+      'still leaving'
+    );
+    native.setSnapshot(second);
+    cleanup.resolve();
+    connection.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ports.leave).toHaveBeenCalledExactlyOnceWith(first.channelId);
+    expect(ports.requestToken).toHaveBeenCalledOnce();
+    expect(lifecycle.getState()).toEqual({
+      t: 'active',
+      call: identity(second),
+    });
+  });
 
   it('adopts a native replacement before the old start transaction resolves', async () => {
     const { native, lifecycle, ports } = setup(null);

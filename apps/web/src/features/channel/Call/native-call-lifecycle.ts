@@ -14,7 +14,7 @@ export function bindNativeCallLifecycle(
         nativeSessionObserved = true;
         lifecycle.syncSession({
           channelId: snapshot.channelId,
-          callId: snapshot.callId,
+          callId: snapshot.callId.toLowerCase(),
         });
       })
       .with({ connectionState: P.union('connecting', 'reconnecting') }, () => {
