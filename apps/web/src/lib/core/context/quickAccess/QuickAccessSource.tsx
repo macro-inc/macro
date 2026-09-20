@@ -432,16 +432,28 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const viewedAtMap = soupViewedAtMap();
     const allEntries: IndexEntry[] = [];
 
-    // The GraphQL cache is authoritative while enabled. Otherwise preserve the
-    // existing channel-list source unchanged.
-    const channelData = cacheHost
-      ? (cachedChannelsQuery.data ?? [])
-      : channels().map(apiChannelToQuickAccessChannel);
-    for (const sourceChannel of channelData) {
-      const viewedAt = cacheHost
-        ? sourceChannel.viewedAt
-        : (viewedAtMap.get(sourceChannel.id) ?? sourceChannel.viewedAt);
-      const channel = { ...sourceChannel, viewedAt };
+    // The cache can contain only the first backfill pages, and hydration does
+    // not invalidate this list. Keep the complete channel-list source available
+    // to search, then overlay cached metadata for channels it already knows.
+    const channelData = new Map<string, CachedGraphqlChannel>(
+      channels().map((source) => {
+        const channel = apiChannelToQuickAccessChannel(source);
+        return [
+          channel.id,
+          {
+            ...channel,
+            viewedAt: viewedAtMap.get(channel.id) ?? channel.viewedAt,
+          },
+        ] as const;
+      })
+    );
+    if (cacheHost && cachedChannelsQuery.isSuccess) {
+      for (const channel of cachedChannelsQuery.data ?? []) {
+        channelData.set(channel.id, channel);
+      }
+    }
+    for (const channel of channelData.values()) {
+      const viewedAt = channel.viewedAt;
       const version = getChannelVersion(channel, viewedAt);
       const cached = itemCache.get(channel.id);
 
