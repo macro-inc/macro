@@ -41,6 +41,22 @@ impl DomainActivity for CallStartedActivity {
     }
 }
 
+/// Channel-targeted completion of a call.
+struct CallEndedActivity {
+    channel_id: String,
+    end: ::activity::domain::models::CallEnd,
+}
+
+impl DomainActivity for CallEndedActivity {
+    const ENTITY_TYPE: EntityType = EntityType::Channel;
+    fn entity_id(&self) -> &str {
+        &self.channel_id
+    }
+    fn into_action(self) -> Action {
+        Action::CallEnded(self.end)
+    }
+}
+
 impl ActivitySource for CallTopicEvent {
     /// Maps one `macro.calls` event to its ingest outcome.
     ///
@@ -48,6 +64,23 @@ impl ActivitySource for CallTopicEvent {
     /// until someone classifies it or explicitly drops it.
     fn ingest(&self, event_id: Uuid) -> Ingest {
         match self {
+            CallTopicEvent::RecordArchived(m) => Ingest::Insert(vec![Activity::from_domain(
+                event_id,
+                0,
+                Actor::new_from_user(m.created_by.clone()),
+                None,
+                CallEndedActivity {
+                    channel_id: m.channel_id.to_string(),
+                    end: ::activity::domain::models::CallEnd {
+                        call_id: m.call_id.to_string(),
+                        duration_ms: m
+                            .duration_ms
+                            .unwrap_or_else(|| (m.ended_at - m.started_at).num_milliseconds())
+                            .max(0),
+                    },
+                },
+                m.ended_at,
+            )]),
             // Two activities: the call happened in the channel (timeline/feed),
             // and the call itself is a new entity (soup item).
             CallTopicEvent::Started(m) => {
@@ -82,8 +115,7 @@ impl ActivitySource for CallTopicEvent {
                 Ingest::Purge(vec![(EntityType::Call, m.call_id.to_string())])
             }
             // Archival/processing pipeline, not user activity.
-            CallTopicEvent::RecordArchived(_)
-            | CallTopicEvent::RecordUpdated(_)
+            CallTopicEvent::RecordUpdated(_)
             | CallTopicEvent::RecordSummarized(_)
             | CallTopicEvent::RecordingReady(_) => Ingest::Ignore,
         }

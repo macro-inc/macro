@@ -32,6 +32,9 @@ mod source {
 }
 pub(crate) use source::ActivitySourceEvent;
 
+mod timeline;
+pub(crate) use timeline::TimelineObserver;
+
 /// Dispatches one decoded event to its domain's [`ActivitySource`] impl —
 /// every arm is the identical expression; all semantics live with the
 /// domains.

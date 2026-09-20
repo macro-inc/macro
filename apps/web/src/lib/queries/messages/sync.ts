@@ -28,6 +28,37 @@ import {
 } from './timeline';
 import { handleCommsTyping } from './typing';
 
+const awaitingInitialActivityRead = new WeakSet<object>();
+
+/** A committed activity must also refresh windows whose initial response is in flight. */
+export function handleTimelineActivityUpdated(parent: MessageParent) {
+  const queries = queryClient.getQueryCache().findAll({
+    queryKey: getMessageTimelineQueryKeyPrefix(parent),
+  });
+  for (const query of queries) {
+    const refetch = () =>
+      queryClient.invalidateQueries({ queryKey: query.queryKey, exact: true });
+    const inFlight = query.promise;
+    if (query.state.data || !inFlight) {
+      void refetch();
+      continue;
+    }
+    if (awaitingInitialActivityRead.has(query)) continue;
+    awaitingInitialActivityRead.add(query);
+    async function afterInitialRead() {
+      try {
+        await inFlight;
+      } catch {
+        // The query owns its error state; the committed event still needs a fresh read.
+      } finally {
+        awaitingInitialActivityRead.delete(query);
+      }
+      await refetch();
+    }
+    void afterInitialRead();
+  }
+}
+
 type ThreadStateListener = (
   parent: MessageParent,
   state: MessageThread['state']
@@ -190,14 +221,19 @@ export function applyThreadState(
         ...data,
         pages: data.pages.map((page) => ({
           ...page,
-          items: page.items
+          entries: page.entries
             .filter(
               (item) =>
+                item.type !== 'message' ||
                 parent.type === 'document' ||
                 !state.deleted_at ||
-                item.id !== state.root_id
+                item.message.id !== state.root_id
             )
-            .map(update),
+            .map((entry) =>
+              entry.type === 'message'
+                ? { ...entry, message: update(entry.message) }
+                : entry
+            ),
         })),
       }
   );

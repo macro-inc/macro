@@ -63,10 +63,18 @@ impl MessageRepository for Repo {
         &self,
         parent: &MessageParent,
         query: MessageTimelineQuery,
-    ) -> Result<MessagePage, MessageError> {
+    ) -> Result<MessageRootPage, MessageError> {
         let included = self.message.parent == *parent
-            && (query.ids.is_empty() || query.ids.contains(&self.message.id));
-        Ok(MessagePage {
+            && (query.ids.is_empty() || query.ids.contains(&self.message.id))
+            && query.cursor.as_ref().is_none_or(|cursor| {
+                let key = (self.message.created_at, self.message.id);
+                let boundary = (cursor.created_at, cursor.id);
+                match query.direction {
+                    MessageDirection::Older => key < boundary,
+                    MessageDirection::Newer => key > boundary,
+                }
+            });
+        Ok(MessageRootPage {
             items: if included {
                 vec![MessageListItem {
                     message: self.message.clone(),
@@ -1073,7 +1081,7 @@ impl MessageRepository for StrictRepo {
         &self,
         parent: &MessageParent,
         query: MessageTimelineQuery,
-    ) -> Result<MessagePage, MessageError> {
+    ) -> Result<MessageRootPage, MessageError> {
         self.inner.timeline(parent, query).await
     }
     async fn create(&self, command: CreateMessage) -> Result<Message, MessageError> {
@@ -1320,4 +1328,182 @@ async fn display_only_mention_kinds_are_stored_without_authorization() {
         *checks.checked.lock().unwrap(),
         vec![(EntityType::AgentSession, Uuid::from_u128(10).to_string())]
     );
+}
+
+#[derive(Clone)]
+struct TimelineFacts(Vec<activity::domain::timeline::TimelineActivity>);
+impl activity::domain::timeline::ActivityTimeline for TimelineFacts {
+    fn read<'a>(
+        &'a self,
+        query: activity::domain::timeline::ActivityTimelineQuery,
+    ) -> std::pin::Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        Vec<activity::domain::timeline::TimelineActivity>,
+                        activity::domain::timeline::TimelineReadError,
+                    >,
+                > + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(async move {
+            assert_eq!(query.entity_type, activity::EntityType::Channel);
+            assert_eq!(query.entity_id, Uuid::from_u128(20).to_string());
+            assert!(!query.actions.contains(&"messaged"));
+            let mut rows: Vec<_> = self
+                .0
+                .iter()
+                .filter(|row| {
+                    query.cursor.is_none_or(|cursor| {
+                        let key = (row.occurred_at, row.id);
+                        if query.newer {
+                            key > cursor
+                        } else {
+                            key < cursor
+                        }
+                    })
+                })
+                .cloned()
+                .collect();
+            rows.sort_by_key(|row| (row.occurred_at, row.id));
+            if !query.newer {
+                rows.reverse();
+            }
+            rows.truncate(usize::from(query.limit));
+            Ok(rows)
+        })
+    }
+}
+
+#[tokio::test]
+async fn centered_mixed_timeline_preserves_anchor_and_pages_to_both_ends() {
+    let mut repo = fixture();
+    repo.message.parent = MessageParent::Channel(Uuid::from_u128(20));
+    repo.state.anchor = None;
+    let facts: Vec<_> = [-2, -1, 1, 2]
+        .into_iter()
+        .enumerate()
+        .map(
+            |(id, seconds)| activity::domain::timeline::TimelineActivity {
+                id: Uuid::from_u128(100 + id as u128),
+                actor_id: "macro|author@example.com".into(),
+                occurred_at: repo.message.created_at + chrono::Duration::seconds(seconds),
+                action: "picture_changed".into(),
+                payload: None,
+            },
+        )
+        .collect();
+    let service = MessageService::new(repo.clone(), Events::default())
+        .with_activity(TimelineFacts(facts.clone()));
+    let view = || {
+        channel_access()
+            .try_into_requirement::<MessageView>()
+            .unwrap()
+    };
+    let center = service
+        .timeline(
+            view(),
+            MessageTimelineQuery {
+                include_activity: true,
+                around: Some(repo.message.id),
+                limit: Some(3),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(center.entries.len(), 3);
+    assert_eq!(
+        center
+            .entries
+            .iter()
+            .map(|e| e.position().1)
+            .collect::<Vec<_>>(),
+        [facts[2].id, repo.message.id, facts[1].id]
+    );
+    let older = service
+        .timeline(
+            view(),
+            MessageTimelineQuery {
+                include_activity: true,
+                cursor: center.next_cursor,
+                limit: Some(3),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(older.entries.len(), 1);
+    assert_eq!(older.entries[0].position().1, facts[0].id);
+    assert!(older.next_cursor.is_none());
+    let newer = service
+        .timeline(
+            view(),
+            MessageTimelineQuery {
+                include_activity: true,
+                direction: MessageDirection::Newer,
+                cursor: center.previous_cursor,
+                limit: Some(3),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(newer.entries[0].position().1, facts[3].id);
+    assert!(newer.previous_cursor.is_none());
+    let anchor = service
+        .timeline(
+            view(),
+            MessageTimelineQuery {
+                include_activity: true,
+                around: Some(repo.message.id),
+                limit: Some(1),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(anchor.entries.len(), 1);
+    assert!(matches!(
+        anchor.entries[0],
+        MessageTimelineEntry::Message { .. }
+    ));
+    assert!(anchor.next_cursor.is_some() && anchor.previous_cursor.is_some());
+}
+
+#[tokio::test]
+async fn system_timeline_rejects_message_filters_and_keeps_discussions_message_only() {
+    let service =
+        MessageService::new(fixture(), Events::default()).with_activity(TimelineFacts(vec![]));
+    let result = service
+        .timeline(
+            channel_access()
+                .try_into_requirement::<MessageView>()
+                .unwrap(),
+            MessageTimelineQuery {
+                include_activity: true,
+                ids: vec![Uuid::from_u128(1)],
+                ..Default::default()
+            },
+        )
+        .await;
+    assert!(matches!(result, Err(MessageError::Invalid(_))));
+    let result = service
+        .timeline(
+            access("macro|author@example.com", "doc", AccessLevel::Comment)
+                .try_into_requirement::<MessageView>()
+                .unwrap(),
+            MessageTimelineQuery {
+                include_activity: true,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(result.entries.len(), 1);
+    assert!(matches!(
+        result.entries[0],
+        MessageTimelineEntry::Message { .. }
+    ));
 }

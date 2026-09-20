@@ -9,6 +9,39 @@ use super::*;
 use crate::domain::events::{CallRecordDeletedMetadata, CallStartedMetadata};
 
 #[test]
+fn archived_calls_record_duration_without_requiring_a_recording() {
+    for duration_ms in [Some(480_000), None, Some(-1)] {
+        let ended_at = Utc::now();
+        let event = Event::with_event_id(
+            Uuid::now_v7(),
+            CallTopicEvent::RecordArchived(crate::domain::events::CallRecordArchivedMetadata {
+                call_id: Uuid::from_u128(5),
+                channel_id: Uuid::from_u128(6),
+                created_by: "macro|rahul@example.com".to_string().try_into().unwrap(),
+                started_at: ended_at - chrono::Duration::minutes(8),
+                ended_at,
+                duration_ms,
+                participant_count: 2,
+                has_recording: false,
+                archive_reason: crate::domain::events::CallArchiveReason::LastParticipantLeft,
+            }),
+        );
+        let Ingest::Insert(rows) = event.event.ingest(event.event_id) else {
+            panic!("expected completed call");
+        };
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].occurred_at, ended_at);
+        assert_eq!(
+            rows[0].action,
+            Action::CallEnded(::activity::domain::models::CallEnd {
+                call_id: Uuid::from_u128(5).to_string(),
+                duration_ms: duration_ms.unwrap_or(480_000).max(0),
+            })
+        );
+    }
+}
+
+#[test]
 fn call_started_yields_channel_and_call_activities() {
     let call_id = Uuid::from_u128(5);
     let channel_id = Uuid::from_u128(6);

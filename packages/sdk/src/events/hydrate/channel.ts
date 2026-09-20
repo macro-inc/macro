@@ -35,7 +35,7 @@ export function hydrateChannelEvent(client: MacroClient, event: ChannelEvent) {
       channel: Channel.byId(client, metadata.channel_id),
       actor: userFromPrincipal(client, metadata.actor),
       participants: metadata.participant_user_ids.map((userId) =>
-        User.byId(client, userId),
+        User.byId(client, userId)
       ),
     }))
     .with({ event_type: 'channel.updated' }, ({ metadata }) => ({
@@ -58,7 +58,7 @@ export function hydrateChannelEvent(client: MacroClient, event: ChannelEvent) {
         client,
         metadata.channel_id,
         metadata.message_id,
-        metadata.mentions,
+        metadata.mentions
       ),
       sender: userFromPrincipal(client, metadata.sender),
       thread: metadata.thread_id
@@ -73,7 +73,7 @@ export function hydrateChannelEvent(client: MacroClient, event: ChannelEvent) {
         client,
         metadata.channel_id,
         metadata.message_id,
-        [],
+        []
       ),
       sender: userFromPrincipal(client, metadata.sender),
       thread: metadata.thread_id
@@ -88,7 +88,7 @@ export function hydrateChannelEvent(client: MacroClient, event: ChannelEvent) {
         client,
         metadata.channel_id,
         metadata.message_id,
-        [],
+        []
       ),
       actor: userFromPrincipal(client, metadata.actor),
       thread: metadata.thread_id
@@ -103,7 +103,7 @@ export function hydrateChannelEvent(client: MacroClient, event: ChannelEvent) {
         client,
         metadata.channel_id,
         metadata.message_id,
-        [],
+        []
       ),
       actor: userFromPrincipal(client, metadata.actor),
       thread: metadata.thread_id
@@ -120,10 +120,10 @@ export function hydrateChannelEvent(client: MacroClient, event: ChannelEvent) {
           client,
           metadata.channel_id,
           metadata.message_id,
-          [],
+          []
         ),
         actor: userFromPrincipal(client, metadata.actor),
-      }),
+      })
     )
     .with(
       { event_type: 'channel.message_attachment_removed' },
@@ -135,18 +135,24 @@ export function hydrateChannelEvent(client: MacroClient, event: ChannelEvent) {
           client,
           metadata.channel_id,
           metadata.message_id,
-          [],
+          []
         ),
         actor: userFromPrincipal(client, metadata.actor),
-      }),
+      })
     )
+    .with({ event_type: 'channel.picture_changed' }, ({ metadata }) => ({
+      event_type: 'channel.picture_changed' as const,
+      metadata,
+      channel: Channel.byId(client, metadata.channel_id),
+      actor: userFromPrincipal(client, metadata.actor),
+    }))
     .with({ event_type: 'channel.participant_added' }, ({ metadata }) => ({
       event_type: 'channel.participant_added' as const,
       metadata,
       channel: Channel.byId(client, metadata.channel_id),
       addedBy: userFromPrincipal(client, metadata.added_by),
       addedUsers: metadata.added_user_ids.map((userId) =>
-        User.byId(client, userId),
+        User.byId(client, userId)
       ),
     }))
     .with({ event_type: 'channel.participant_removed' }, ({ metadata }) => ({
@@ -155,7 +161,7 @@ export function hydrateChannelEvent(client: MacroClient, event: ChannelEvent) {
       channel: Channel.byId(client, metadata.channel_id),
       removedBy: User.byId(client, metadata.removed_by),
       removedUsers: metadata.removed_user_ids.map((userId) =>
-        User.byId(client, userId),
+        User.byId(client, userId)
       ),
     }))
     .exhaustive();

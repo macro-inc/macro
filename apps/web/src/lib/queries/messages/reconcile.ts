@@ -25,6 +25,7 @@ import {
   findTopLevelMessageSnapshotInMessageTimeline,
   insertThreadReplyIntoMessageTimeline,
   insertTopLevelMessageIntoMessageTimeline,
+  mapMessageTimelineItems,
   removeThreadReplyFromMessageTimeline,
   removeTopLevelMessageFromMessageTimeline,
   replaceThreadReplyIdInMessageTimeline,
@@ -330,23 +331,18 @@ export function patchTargetMessage(
   setMessageTimelineData(
     parent,
     (data) =>
-      data && {
-        ...data,
-        pages: data.pages.map((page) => ({
-          ...page,
-          items: page.items.map((root) =>
-            root.id !== rootId
-              ? root
-              : {
-                  ...update(root),
-                  thread: {
-                    ...root.thread,
-                    preview: root.thread.preview.map(update),
-                  },
-                }
-          ),
-        })),
-      }
+      data &&
+      mapMessageTimelineItems(data, (root) =>
+        root.id !== rootId
+          ? root
+          : {
+              ...update(root),
+              thread: {
+                ...root.thread,
+                preview: root.thread.preview.map(update),
+              },
+            }
+      )
   );
   queryClient.setQueryData<MessageThread>(
     getThreadRepliesQueryKey(parent, rootId),

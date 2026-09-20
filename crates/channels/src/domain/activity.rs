@@ -23,6 +23,10 @@ use super::broker_events::ChannelTopicEvent;
 pub enum ChannelAction {
     /// A message was posted in the channel.
     Messaged,
+    /// A channel's display name changed.
+    Renamed(::activity::domain::models::NameChange),
+    /// A channel's profile picture changed.
+    PictureChanged,
     /// A principal was added to the channel.
     ParticipantAdded {
         /// The added principal.
@@ -55,6 +59,8 @@ impl DomainActivity for ChannelActivity {
     fn into_action(self) -> Action {
         match self.action {
             ChannelAction::Messaged => Action::Messaged,
+            ChannelAction::Renamed(change) => Action::Renamed(change),
+            ChannelAction::PictureChanged => Action::PictureChanged,
             ChannelAction::ParticipantAdded { participant } => {
                 Action::ParticipantAdded(ParticipantChange { participant })
             }
@@ -147,12 +153,28 @@ impl ActivitySource for ChannelTopicEvent {
                 CommonAction::Created,
                 now(),
             )]),
-            ChannelTopicEvent::Updated(m) => common(
+            ChannelTopicEvent::Updated(m) if m.previous_name == m.channel_name => Ingest::Ignore,
+            ChannelTopicEvent::Updated(m) => Ingest::Insert(vec![exclusive(
+                event_id,
+                0,
                 Actor::new_from_user(m.actor.clone()),
-                CommonAction::Edited,
+                None,
                 m.channel_id,
+                ChannelAction::Renamed(::activity::domain::models::NameChange {
+                    from: m.previous_name.clone(),
+                    to: m.channel_name.clone(),
+                }),
                 now(),
-            ),
+            )]),
+            ChannelTopicEvent::PictureChanged(m) => Ingest::Insert(vec![exclusive(
+                event_id,
+                0,
+                Actor::new_from_user(m.actor.clone()),
+                None,
+                m.channel_id,
+                ChannelAction::PictureChanged,
+                now(),
+            )]),
             ChannelTopicEvent::Deleted(m) => {
                 common(m.actor.clone(), CommonAction::Deleted, m.channel_id, now())
             }

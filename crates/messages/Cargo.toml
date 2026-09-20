@@ -26,10 +26,11 @@ inbound = [
 json-schema = ["dep:schemars"]
 outbound = ["dep:macro_uuid", "dep:sqlx", "ports"]
 ports = ["dep:async-trait", "dep:entity_access", "dep:rootcause", "entity_access/ports"]
-schema = ["channel_sender/schema", "dep:utoipa"]
+schema = ["channel_sender/schema", "dep:utoipa", "activity/schema"]
 test-utils = ["dep:mockall", "ports"]
 
 [dependencies]
+activity = { path = "../activity", default-features = false }
 async-trait = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 bot_id = { path = "../bot_id" }

@@ -14,6 +14,18 @@
 Channels are invite-only ("Only people you invite can see this channel"). A DM is just a
 channel between two users.
 
+Channel timelines show system updates alongside messages: participant additions
+and removals, renames, profile picture changes, and completed calls with their
+duration. These rows have no reply, edit, or reaction actions. Long descriptions
+stay on one line; hover to read the full text. Dates, message navigation, and
+scrolling through older history include these updates. A call's completed row
+appears when the call ends; active calls retain their existing live indicator.
+To verify live updates, scroll into history and change the channel from another
+session. The visible message should stay at the same position. Return to latest
+and reload to verify that the system entry persists in chronological order.
+Also reload a short channel containing mostly system updates. Every entry should
+remain visible when the entire timeline fits without scrolling.
+
 ## Agent session entities
 
 The Agents list includes owned and shared sessions. Rows show the shared agent
@@ -251,6 +263,8 @@ document should update to its fetched title afterward.
 
 Message and reply links reveal the target inside its thread. Keyboard message
 navigation scrolls only when the selected message is outside the usable viewport.
+Verify a message link in a fresh browser tab as well as inside an open channel:
+the initial page should center the requested message, including older history.
 Returning through split navigation restores the saved message position and expanded
 threads. Switching channel tabs currently opens Messages at latest. The `Scroll to bottom` control appears when scrolling down through history;
 it returns to the latest page even after opening a link into old history.

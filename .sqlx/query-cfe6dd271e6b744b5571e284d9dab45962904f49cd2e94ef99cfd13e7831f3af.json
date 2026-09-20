@@ -1,0 +1,51 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                        SELECT event.id AS \"id!\", event.actor_id AS \"actor_id!\",\n                               event.occurred_at AS \"occurred_at!\", event.action AS \"action!\", event.payload\n                        FROM unnest($3::text[]) selected(action)\n                        CROSS JOIN LATERAL (\n                            SELECT id, actor_id, occurred_at, action, action_payload AS payload\n                            FROM activity_events\n                            WHERE entity_type = $1 AND entity_id = $2 AND action = selected.action\n                              AND (occurred_at, id) < ($4, $5)\n                            ORDER BY occurred_at DESC, id DESC LIMIT $6\n                        ) event\n                        ORDER BY event.occurred_at DESC, event.id DESC LIMIT $6\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "actor_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "occurred_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "action!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "payload",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "TextArray",
+        "Timestamptz",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "cfe6dd271e6b744b5571e284d9dab45962904f49cd2e94ef99cfd13e7831f3af"
+}

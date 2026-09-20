@@ -4,16 +4,17 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { MessageListItem } from './messageListItem';
+
 import type { MessagePageNextCursor } from './messagePageNextCursor';
 import type { MessagePagePreviousCursor } from './messagePagePreviousCursor';
+import type { MessageTimelineEntry } from './messageTimelineEntry';
 
 /**
- * Bidirectional, bounded timeline page, ordered newest root first.
+ * A bounded, newest-first chronological window with shared pagination boundaries.
  */
 export interface MessagePage {
-  /** Root messages with bounded previews. */
-  items: MessageListItem[];
+  /** Messages and selected system activity in server-defined order. */
+  entries: MessageTimelineEntry[];
   next_cursor?: MessagePageNextCursor;
   previous_cursor?: MessagePagePreviousCursor;
 }

@@ -1675,14 +1675,18 @@ where
             .get_participants(channel_id)
             .await
             .map_err(|error| ChannelMutationErr::Repo(error.into()))?;
-        self.repo
+        let changed = self
+            .repo
             .set_channel_picture(channel_id, picture_id)
             .await
             .map_err(|error| ChannelMutationErr::Repo(error.into()))?;
-        self.events.dispatch(ChannelEvent::PictureChanged {
-            channel_id,
-            recipients: participant_ids(&participants),
-        });
+        if changed {
+            self.events.dispatch(ChannelEvent::PictureChanged {
+                actor: actor.clone(),
+                channel_id,
+                recipients: participant_ids(&participants),
+            });
+        }
         Ok(())
     }
 

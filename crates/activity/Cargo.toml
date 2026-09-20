@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [features]
+schema = ["dep:utoipa"]
 ai_tools = ["dep:ai_toolset", "dep:async-trait", "dep:schemars", "dep:tracing"]
 consumer = [
   "dep:kafka_util",
@@ -19,6 +20,7 @@ default = ["consumer", "outbound"]
 outbound = ["dep:sqlx", "dep:tracing"]
 
 [dependencies]
+utoipa = { workspace = true, optional = true }
 ai_toolset = { path = "../ai_toolset", optional = true }
 async-trait = { workspace = true, optional = true }
 channel_sender = { path = "../channel_sender" }

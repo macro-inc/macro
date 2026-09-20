@@ -1697,16 +1697,16 @@ impl ChannelRepo for PgChannelsRepo {
         &self,
         channel_id: Uuid,
         picture_id: Option<Uuid>,
-    ) -> Result<(), Self::Err> {
-        sqlx::query!(
-            "UPDATE comms_channels SET profile_picture_id = $2, updated_at = NOW() WHERE id = $1",
+    ) -> Result<bool, Self::Err> {
+        let result = sqlx::query!(
+            "UPDATE comms_channels SET profile_picture_id = $2, updated_at = NOW() WHERE id = $1 AND profile_picture_id IS DISTINCT FROM $2",
             channel_id,
             picture_id,
         )
         .execute(&self.pool)
         .await
         .context("unable to update channel picture")?;
-        Ok(())
+        Ok(result.rows_affected() > 0)
     }
 
     type Err = anyhow::Error;

@@ -84,6 +84,15 @@ pub trait ActivityRepo {
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
+/// Notification after facts have been durably materialized, never before.
+pub trait ActivityObserver: Send + Sync {
+    /// Notify interested timelines. Failures are best effort; storage remains committed.
+    fn persisted<'a>(
+        &'a self,
+        activities: &'a [Activity],
+    ) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send + 'a>>;
+}
+
 /// Reads activities. Rows come back newest-first (`occurred_at DESC, id
 /// DESC` — the stored keyset order), decoded forward-tolerantly: rows whose
 /// action this reader doesn't know surface as

@@ -495,6 +495,7 @@ where
             ChannelEvent::PictureChanged {
                 channel_id,
                 recipients,
+                ..
             } => {
                 if let Err(error) = self
                     .realtime
@@ -1275,6 +1276,14 @@ fn contact_sync_users_for_event(event: &ChannelEvent) -> Option<HashSet<MacroUse
 /// Ephemeral events (typing) and reaction changes publish nothing.
 fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
     match event {
+        ChannelEvent::PictureChanged {
+            channel_id, actor, ..
+        } => vec![ChannelMacroEvent::picture_changed(
+            super::broker_events::ChannelPictureChangedMetadata {
+                channel_id: *channel_id,
+                actor: actor.clone(),
+            },
+        )],
         ChannelEvent::ChannelCreated {
             channel_id,
             actor,
@@ -1487,9 +1496,7 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
                 removed_user_ids: removed_user_ids.clone(),
             },
         )],
-        ChannelEvent::ReactionChanged { .. }
-        | ChannelEvent::TypingChanged { .. }
-        | ChannelEvent::PictureChanged { .. } => Vec::new(),
+        ChannelEvent::ReactionChanged { .. } | ChannelEvent::TypingChanged { .. } => Vec::new(),
         ChannelEvent::EntityMentionCreated { .. } | ChannelEvent::EntityMentionDeleted { .. } => {
             Vec::new()
         }

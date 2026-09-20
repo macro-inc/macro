@@ -197,6 +197,7 @@ export type AppEvents = {
     channelId: string;
     path: 'catch_up' | 'full';
     reason:
+      | 'activity_refresh'
       | 'watermark'
       | 'list_ahead'
       | 'no_cache'

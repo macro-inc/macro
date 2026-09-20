@@ -23,8 +23,8 @@ export function handleChannelPictureChanged(payload: { channel_id: string }) {
 }
 
 async function waitForPictureUpload(fileId: string) {
-  // S3 completion is recorded asynchronously by the static-file service.
-  const maxAttempts = 30;
+  // Allow the static-file consumer's 20-second queue retry plus processing time.
+  const maxAttempts = 90;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const metadata = await throwOnErr(() =>
       staticFileClient.getMetadata({ file_id: fileId })

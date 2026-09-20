@@ -23,9 +23,19 @@ export type MessageListItem =
   };
 export type MessageTimelinePage = Omit<
   import('./generated/schemas/messagePage').MessagePage,
-  'items'
-> & { items: MessageListItem[] };
+  'entries'
+> & { entries: MessageTimelineEntry[] };
+export type MessageTimelineEntry =
+  | (Extract<
+      import('./generated/schemas/messageTimelineEntry').MessageTimelineEntry,
+      { type: 'message' }
+    > & { message: MessageListItem })
+  | Extract<
+      import('./generated/schemas/messageTimelineEntry').MessageTimelineEntry,
+      { type: 'activity' }
+    >;
 export type { MessageTimelineQuery } from './generated/schemas/messageTimelineQuery';
+export type { TimelineActivity } from './generated/schemas/timelineActivity';
 
 import type { MessageTimelineQuery } from './generated/schemas/messageTimelineQuery';
 

@@ -19,6 +19,23 @@ fn every_action_maps_to_stable_columns() {
         (Action::Deleted, "deleted", None),
         (Action::Messaged, "messaged", None),
         (Action::Sent, "sent", None),
+        (Action::PictureChanged, "picture_changed", None),
+        (
+            Action::Renamed(NameChange {
+                from: Some("Old".into()),
+                to: Some("New".into()),
+            }),
+            "renamed",
+            Some(json!({"from":"Old", "to":"New"})),
+        ),
+        (
+            Action::CallEnded(CallEnd {
+                call_id: "call-1".into(),
+                duration_ms: 480_000,
+            }),
+            "call_ended",
+            Some(json!({"call_id":"call-1", "duration_ms":480_000})),
+        ),
         (
             Action::PropertyChanged(PropertyChange {
                 property: "prop-1".to_string(),
@@ -73,12 +90,13 @@ fn every_action_maps_to_stable_columns() {
 fn unknown_tags_decode_to_recorded_unknown_preserving_the_row() {
     let payload = Some(json!({ "novel": true }));
 
-    let (recorded, error) = RecordedAction::from_columns("renamed".to_string(), payload.clone());
+    let (recorded, error) =
+        RecordedAction::from_columns("future_action".to_string(), payload.clone());
 
     assert_eq!(
         recorded,
         RecordedAction::Unknown {
-            tag: "renamed".to_string(),
+            tag: "future_action".to_string(),
             payload,
         }
     );

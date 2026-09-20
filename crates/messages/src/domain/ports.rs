@@ -25,9 +25,9 @@ pub enum MessageError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct MessageCursor {
-    /// Last root creation time.
+    /// Last message creation time or activity occurrence time.
     pub created_at: DateTime<Utc>,
-    /// Last root UUID, used to break timestamp ties.
+    /// Last entry UUID, used to break timestamp ties across both sources.
     pub id: Uuid,
 }
 
@@ -47,6 +47,9 @@ pub enum MessageDirection {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct MessageTimelineQuery {
+    /// Merge the parent's selected system activity into the same bounded page.
+    #[serde(default)]
+    pub include_activity: bool,
     /// Stable creation-time and UUID cursor.
     pub cursor: Option<MessageCursor>,
     /// Which side of the cursor to fetch.
@@ -72,16 +75,76 @@ pub struct MessageTimelineQuery {
 
 pub use super::models::{MessageListItem, MessageThreadPreview};
 
-/// Bidirectional, bounded timeline page, ordered newest root first.
+/// One chronological entry in a parent timeline.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub enum MessageTimelineEntry {
+    /// A root message with its bounded thread preview.
+    Message {
+        /// The message and thread state.
+        message: Box<MessageListItem>,
+    },
+    /// A system event from the activity owner.
+    Activity {
+        /// The recorded activity fact.
+        activity: activity::domain::timeline::TimelineActivity,
+    },
+}
+
+impl MessageTimelineEntry {
+    /// Stable ordering shared by message and activity sources.
+    pub fn position(&self) -> (DateTime<Utc>, Uuid) {
+        match self {
+            Self::Message { message } => (message.message.created_at, message.message.id),
+            Self::Activity { activity } => (activity.occurred_at, activity.id),
+        }
+    }
+
+    /// Continue reading on either side of this entry.
+    pub fn cursor(&self) -> MessageCursor {
+        let (created_at, id) = self.position();
+        MessageCursor { created_at, id }
+    }
+}
+
+/// A bounded, newest-first chronological window with shared pagination boundaries.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct MessagePage {
-    /// Root messages with bounded previews.
+    /// Messages and selected system activity in server-defined order.
+    pub entries: Vec<MessageTimelineEntry>,
+    /// Continue to older entries.
+    pub next_cursor: Option<MessageCursor>,
+    /// Continue to newer entries.
+    pub previous_cursor: Option<MessageCursor>,
+}
+
+/// Message repository results before composing the parent timeline.
+#[derive(Debug, Clone)]
+pub struct MessageRootPage {
+    /// Root messages with bounded previews, newest first.
     pub items: Vec<MessageListItem>,
     /// Continue to older roots.
     pub next_cursor: Option<MessageCursor>,
     /// Continue to newer roots.
     pub previous_cursor: Option<MessageCursor>,
+}
+
+impl From<MessageRootPage> for MessagePage {
+    fn from(page: MessageRootPage) -> Self {
+        Self {
+            entries: page
+                .items
+                .into_iter()
+                .map(|message| MessageTimelineEntry::Message {
+                    message: Box::new(message),
+                })
+                .collect(),
+            next_cursor: page.next_cursor,
+            previous_cursor: page.previous_cursor,
+        }
+    }
 }
 
 /// A source channel thread that mentions the requested document.
@@ -298,7 +361,7 @@ pub trait MessageRepository: Send + Sync + 'static {
         &self,
         parent: &MessageParent,
         query: MessageTimelineQuery,
-    ) -> impl Future<Output = Result<MessagePage, MessageError>> + Send;
+    ) -> impl Future<Output = Result<MessageRootPage, MessageError>> + Send;
 
     /// Atomically create a message, its initial references, and any new thread state.
     fn create(
@@ -443,3 +506,12 @@ impl MessageGroupRecipients for NoMessageGroups {
         ))
     }
 }
+
+/// Channel facts displayed inline; message/view actions would duplicate content.
+pub const CHANNEL_TIMELINE_ACTIONS: &[&str] = &[
+    "renamed",
+    "picture_changed",
+    "participant_added",
+    "participant_removed",
+    "call_ended",
+];

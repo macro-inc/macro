@@ -32,6 +32,7 @@ dependencies = [
  "strum 0.27.2",
  "tokio",
  "tracing",
+ "utoipa",
  "uuid",
  "workspace-hack",
 ]
@@ -10864,6 +10865,7 @@ dependencies = [
 name = "messages"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "async-trait",
  "axum",
  "bot_id",

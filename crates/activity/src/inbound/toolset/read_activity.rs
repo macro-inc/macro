@@ -141,6 +141,15 @@ impl ToolActivityAction {
             RecordedAction::Known(Action::CallStarted(start)) => Self::CallStarted {
                 call_id: start.call_id,
             },
+            RecordedAction::Known(
+                action @ (Action::Renamed(_) | Action::PictureChanged | Action::CallEnded(_)),
+            ) => {
+                let (tag, payload) = action.to_columns();
+                Self::Unknown {
+                    tag: tag.to_owned(),
+                    payload,
+                }
+            }
             RecordedAction::Unknown { tag, payload } => Self::Unknown { tag, payload },
         }
     }

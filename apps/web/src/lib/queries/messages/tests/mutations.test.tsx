@@ -88,7 +88,13 @@ describe.each(['channel', 'document'] as const)('%s reply deletion', (type) => {
       const threadKey = getThreadRepliesQueryKey(parent, 'root');
       testQueryClient.setQueryData<MessageTimelineData>(timelineKey, {
         pageParams: [null],
-        pages: [{ items: [root], next_cursor: null, previous_cursor: null }],
+        pages: [
+          {
+            entries: [{ type: 'message', message: root }],
+            next_cursor: null,
+            previous_cursor: null,
+          },
+        ],
       });
       testQueryClient.setQueryData(selectedKey, [root]);
       testQueryClient.setQueryData<MessageThread>(threadKey, {
@@ -128,8 +134,11 @@ describe.each(['channel', 'document'] as const)('%s reply deletion', (type) => {
       if (echoTiming === 'after response') echo();
 
       expect(
-        testQueryClient.getQueryData<MessageTimelineData>(timelineKey)!.pages[0]
-          .items[0].thread.reply_count
+        testQueryClient
+          .getQueryData<MessageTimelineData>(timelineKey)!
+          .pages[0].entries.flatMap((entry) =>
+            entry.type === 'message' ? [entry.message] : []
+          )[0].thread.reply_count
       ).toBe(1);
       expect(
         testQueryClient.getQueryData<MessageListItem[]>(selectedKey)![0].thread
