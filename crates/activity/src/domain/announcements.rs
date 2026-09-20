@@ -41,7 +41,7 @@ impl<P: ActivityEventPublisher, A: ActivityAudienceExpander> ActivityAnnouncemen
         let mut audiences = HashMap::new();
         let mut recipients = Vec::with_capacity(rows.len());
         for &(kind, id, subject) in rows {
-            if !audiences.contains_key(&(kind, id)) {
+            if let std::collections::hash_map::Entry::Vacant(entry) = audiences.entry((kind, id)) {
                 let users = match self.audience.entity_audience(kind, id).await {
                     Ok(users) => users,
                     Err(error) => {
@@ -49,7 +49,7 @@ impl<P: ActivityEventPublisher, A: ActivityAudienceExpander> ActivityAnnouncemen
                         Vec::new()
                     }
                 };
-                audiences.insert((kind, id), users);
+                entry.insert(users);
             }
             let mut row_recipients: BTreeSet<String> = audiences[&(kind, id)]
                 .iter()
