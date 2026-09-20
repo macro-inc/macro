@@ -17,6 +17,7 @@ import {
 import { err, ok, type Result } from 'neverthrow';
 import { onCleanup } from 'solid-js';
 import type { ResultError } from '../internal/result';
+import { importLoroUpdate } from './import';
 import { logSyncService } from './logger';
 import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
 import {
@@ -241,7 +242,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     let importStatus: ImportStatus;
 
     try {
-      importStatus = this._doc.import(update);
+      importStatus = importLoroUpdate(this._doc, update);
     } catch (e) {
       logSyncService({
         documentId: this.options.documentId,
@@ -437,7 +438,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
 
     let importStatus: ImportStatus;
     try {
-      importStatus = newDoc.import(snapshot);
+      importStatus = importLoroUpdate(newDoc, snapshot);
     } catch (e) {
       logSyncService({
         documentId: this.options.documentId,

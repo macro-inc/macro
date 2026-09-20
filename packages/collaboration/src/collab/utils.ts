@@ -1,10 +1,11 @@
 import type { LoroDoc } from 'loro-crdt';
+import { importLoroUpdate } from './import';
 import { createLoroDoc } from './manager';
 import type { RawUpdate } from './shared';
 
 export function loroDocFromSnapshot(snapshot: RawUpdate): LoroDoc {
   const loroDoc = createLoroDoc();
-  loroDoc.import(snapshot);
+  importLoroUpdate(loroDoc, snapshot);
   return loroDoc;
 }
 

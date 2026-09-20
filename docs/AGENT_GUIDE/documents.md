@@ -293,6 +293,14 @@ The a11y snapshot exposes the entire body as the contenteditable's `value` and a
 nodes — use the snapshot itself to verify content. For formatting checks, run
 `evaluate_script` over `[contenteditable] strong` etc.
 
+To verify a saved document loads, open its `/app/md/<uuid>` link in a fresh local
+browser session without cached document state. Wait for the body text and an
+editable contenteditable, then type an edit and reload to confirm it persists.
+The editor should leave its loading skeleton even when its collaboration history
+contains independent concurrent edits. A `before the shallow history's start
+version` console error means snapshot initialization failed; capture it with the
+document URL and do not replace the document with blank content to recover.
+
 Body placeholder advertises: `/` for block commands, `@` to reference files, `;` for snippets.
 Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote).
 
