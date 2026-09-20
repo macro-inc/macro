@@ -555,6 +555,10 @@ and summaries appear here; empty state notes "Calls are available to agents."
 
 On phones, recorded call headers omit the **Call Again** action.
 
+If a recording fails to play, reload the page to obtain a fresh recording link,
+or use **Open or download recording**. The playback warning does not assume
+that the failure is caused by an unsupported media format.
+
 ### Sharing a call
 
 A call's **Share** dialog has a `Team access` control (None or View) for the same canonical
