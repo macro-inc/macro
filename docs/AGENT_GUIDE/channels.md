@@ -370,6 +370,11 @@ must not start a replacement call if the original ended, or rejoin after the
 user chose Leave. A failed join must restore the Try again control even if
 background cleanup is slow.
 
+On iOS, ending a call during connection must leave Join usable. If CallKit
+restores or answers another call while an earlier join or leave finishes, the
+controls must follow the current native call; finishing the old operation must
+not restore the old call or remove the new call's end handler.
+
 ## Onboarding channel
 
 New users get `Macro Support x <name>` seeded with a welcome message that @mentions them —

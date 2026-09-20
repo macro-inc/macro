@@ -125,6 +125,7 @@ describe('shared call lifecycle', () => {
     expect(ports.requestToken).not.toHaveBeenCalled();
     expect(ports.connect).not.toHaveBeenCalled();
     expect(lifecycle.getState()).toEqual({ t: 'active', call });
+    expect(ports.onJoined).toHaveBeenCalledExactlyOnceWith(call);
     expect(vi.getTimerCount()).toBe(0);
   });
 

@@ -20,7 +20,6 @@ import type {
 } from 'livekit-client';
 import {
   createContext,
-  createEffect,
   createSignal,
   onCleanup,
   type ParentProps,
@@ -42,6 +41,7 @@ import {
   loadKrisp,
   loadLivekit,
 } from './livekit-loader';
+import { bindNativeCallLifecycle } from './native-call-lifecycle';
 import {
   type NativeCallConnectionState,
   useMaybeNativeCallState,
@@ -1460,23 +1460,10 @@ function createCallState() {
     setLifecycleSnapshot(state)
   );
 
-  // Native sessions can be restored without a web join request. Adopt the
-  // connected transport into the same lifecycle that owns browser sessions.
-  createEffect(() => {
-    const connection = currentConnectionState();
-    const channelId = currentActiveChannelId();
-    const callId = currentActiveCallId();
-    if (connection === LK_CONNECTION_STATE.Connected && channelId) {
-      lifecycle.syncSession({ channelId, callId });
-    } else if (
-      isNativeIosCallKitEnabled() &&
-      connection === LK_CONNECTION_STATE.Disconnected
-    ) {
-      // Foreground reconciliation clears snapshots for native end events
-      // missed while suspended; it does not replay the CallKit callback.
-      lifecycle.syncSession(undefined);
-    }
-  });
+  const unsubscribeNative =
+    isNativeIosCallKitEnabled() && nativeCall
+      ? bindNativeCallLifecycle(nativeCall, lifecycle)
+      : undefined;
 
   // --- cleanup ---
 
@@ -1486,6 +1473,7 @@ function createCallState() {
   window.addEventListener('beforeunload', handleBeforeUnload);
 
   onCleanup(() => {
+    unsubscribeNative?.();
     unsubscribeLifecycle();
     lifecycle.dispose();
     disposed = true;

@@ -197,6 +197,10 @@ export function createCallLifecycle(options: {
               if (!active) return;
               await options.connect(token);
               call = { channelId: token.channelId, callId: token.callId };
+            } else {
+              // Let the joining scope finish mounting before dispatching its
+              // completion, just as the token/connect path does.
+              await Promise.resolve();
             }
             if (!active) return;
             options.rollbackJoin();
@@ -209,7 +213,13 @@ export function createCallLifecycle(options: {
             };
             dispatch({ t: 'connected', call: connected });
             try {
-              options.onJoined(connected);
+              const current = machine.getState();
+              if (
+                current.t === 'active' &&
+                current.call.channelId === connected.channelId &&
+                current.call.callId === connected.callId
+              )
+                options.onJoined(connected);
             } catch (error) {
               options.reportError(error);
             }
