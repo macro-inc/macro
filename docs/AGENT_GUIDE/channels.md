@@ -340,23 +340,6 @@ and DMs section headers.
 On touch layouts, the `Recent`, `Channels`, and `DMs` pill tabs each retain
 their own loaded pages and load more as their active list approaches the end.
 
-## Channel tabs
-
-Radio group at the top of the channel pane: `Messages` / `Attachments` / `Participants`,
-plus `Ask Macro` and `Call` buttons. `Ask Macro` opens a new chat pane with the channel
-already @mentioned as context (see ai-chat.md). On mobile it lives in the channel title's
-`...` drawer instead. Clicking the radio input can time out — click the adjacent label text
-instead.
-
-`Participants` tab:
-- `Copy invite link`, participant search box.
-- Add: combobox `name@company.com` + `Add Participant` button.
-- Each row: `<name> Member|Owner` with a `Remove participant` button (owner shows
-  `Cannot remove participant`, disabled).
-- Team access: `Team channel` switch (disabled until you belong to a team).
-- Bots: `New bot`, `Search existing bots…` combobox, `Invite bot` — webhook-powered channel
-  participants.
-
 ## Call lifecycle
 
 The channel's call tab and floating call controls share one session. Repeated
@@ -374,6 +357,23 @@ On iOS, ending a call during connection must leave Join usable. If CallKit
 restores or answers another call while an earlier join or leave finishes, the
 controls must follow the current native call; finishing the old operation must
 not restore the old call or remove the new call's end handler.
+
+## Channel tabs
+
+Radio group at the top of the channel pane: `Messages` / `Attachments` / `Participants`,
+plus `Ask Macro` and `Call` buttons. `Ask Macro` opens a new chat pane with the channel
+already @mentioned as context (see ai-chat.md). On mobile it lives in the channel title's
+`...` drawer instead. Clicking the radio input can time out — click the adjacent label text
+instead.
+
+`Participants` tab:
+- `Copy invite link`, participant search box.
+- Add: combobox `name@company.com` + `Add Participant` button.
+- Each row: `<name> Member|Owner` with a `Remove participant` button (owner shows
+  `Cannot remove participant`, disabled).
+- Team access: `Team channel` switch (disabled until you belong to a team).
+- Bots: `New bot`, `Search existing bots…` combobox, `Invite bot` — webhook-powered channel
+  participants.
 
 ## Onboarding channel
 
