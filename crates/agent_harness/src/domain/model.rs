@@ -186,6 +186,20 @@ impl AgentKind {
         }
     }
 
+    /// The slug written onto a session of this kind.
+    ///
+    /// Cursor sessions are always `cursor`. Every other kind keeps the slug
+    /// it was given — the sandboxed coder's is deployment configuration
+    /// (`opencode` today), and an external runtime's is the harness it
+    /// dialed in as.
+    #[must_use]
+    pub fn persist_harness(self, harness: &str) -> &str {
+        match self {
+            Self::Cursor => "cursor",
+            _ => harness,
+        }
+    }
+
     /// Whether a deployment provisions this kind's runtimes itself.
     ///
     /// Membership is about who provisions, not whether *this* deployment is

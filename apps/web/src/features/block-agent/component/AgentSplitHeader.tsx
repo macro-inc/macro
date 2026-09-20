@@ -34,7 +34,10 @@ import {
   sessionOriginThread,
 } from '../context/origin-thread';
 import { AgentPullRequestChip } from './AgentPullRequestChip';
-import { harnessTitle } from './compose-agent-session-options';
+import {
+  harnessTitle,
+  sessionHarnessTitle,
+} from './compose-agent-session-options';
 
 export { harnessTitle };
 
@@ -45,7 +48,7 @@ export function agentSessionTitle(
 ): string {
   const name = session?.name;
   if (name && name !== 'Agent Session') return name;
-  return transcriptTitle ?? name ?? harnessTitle(session?.harness);
+  return transcriptTitle ?? name ?? sessionHarnessTitle(session ?? {});
 }
 
 /**

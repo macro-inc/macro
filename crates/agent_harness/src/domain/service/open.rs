@@ -181,6 +181,7 @@ where
             ),
         };
         let kind = AgentKind::for_session(bot_id, &harness);
+        let harness = kind.persist_harness(&harness).to_owned();
         if kind == AgentKind::CodexCloud {
             mcp_servers = AgentMcpServers::Selected {
                 servers: Vec::new(),
@@ -482,7 +483,7 @@ where
                 thread_id: Some(origin.thread_id),
                 originating_message_id: Some(origin.message_id),
                 model: runtime.model.clone(),
-                harness: runtime.harness.clone(),
+                harness: runtime.kind.persist_harness(&runtime.harness).to_owned(),
                 repo_url: defaults
                     .repo_url
                     .as_ref()

@@ -1,4 +1,5 @@
 use super::*;
+use bot_id::CURSOR_BOT_ID;
 
 #[test]
 fn only_external_runtimes_prompt_by_default() {
@@ -99,6 +100,20 @@ fn registered_harness_limit_wins_over_runtime_kind_and_persona_choice() {
             PermissionPolicy::Prompt
         );
     }
+}
+
+#[test]
+fn cursor_sessions_are_always_stored_as_cursor() {
+    assert_eq!(AgentKind::Cursor.persist_harness("opencode"), "cursor");
+    assert_eq!(AgentKind::Cursor.persist_harness("cursor"), "cursor");
+    assert_eq!(
+        AgentKind::SandboxedCoder.persist_harness("opencode"),
+        "opencode"
+    );
+    assert_eq!(
+        AgentKind::for_session(CURSOR_BOT_ID, "opencode").persist_harness("opencode"),
+        "cursor"
+    );
 }
 
 /// The URL survives verbatim - it is what a session's row carries, and

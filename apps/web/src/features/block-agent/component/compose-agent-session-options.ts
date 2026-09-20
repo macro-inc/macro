@@ -1,3 +1,5 @@
+import { isCursorBotId } from '@core/constant/cursorAgent';
+
 /** 'claude-code' → 'Claude Code'; the fallback when nothing names a harness. */
 export function harnessTitle(harness: string | undefined): string {
   if (!harness) return 'Agent session';
@@ -6,6 +8,19 @@ export function harnessTitle(harness: string | undefined): string {
     .filter(Boolean)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
+}
+
+/**
+ * The harness label a session should show. Cursor sessions are always
+ * Cursor, even when an older row was stamped with the sandboxed-coder
+ * default (`opencode`).
+ */
+export function sessionHarnessTitle(session: {
+  harness?: string;
+  botId?: string;
+}): string {
+  if (isCursorBotId(session.botId)) return harnessTitle('cursor');
+  return harnessTitle(session.harness);
 }
 
 /**

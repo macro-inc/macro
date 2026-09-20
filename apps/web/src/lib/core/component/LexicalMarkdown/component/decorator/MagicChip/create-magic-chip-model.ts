@@ -11,6 +11,7 @@ import type { InteractionController } from '@app/features/block-agent/context/in
 import { createInteractionController } from '@app/features/block-agent/primitives/create-interaction-controller';
 import { AgentSession } from '@core/agent-session/AgentSession';
 import { toast } from '@core/component/Toast/Toast';
+import { isCursorBotId } from '@core/constant/cursorAgent';
 import {
   MAGIC_CHIP_STATUSES,
   type MagicChipData,
@@ -51,7 +52,11 @@ type SessionIdentity = {
  * by "Agent" (`Macro Agent`, `Cursor Agent`), a titled slug for a runtime
  * the composer does not name.
  */
-function agentName(harness: string | undefined): string | undefined {
+function agentName(session: {
+  harness?: string;
+  botId?: string;
+}): string | undefined {
+  const harness = isCursorBotId(session.botId) ? 'cursor' : session.harness;
   if (!harness) return undefined;
   const known = harnessDisplayName(harness);
   return `${known === harness ? harnessTitle(harness) : known} Agent`;
@@ -206,7 +211,8 @@ export function createMagicChipModel(props: MagicChipData): {
   });
 
   const header = createMemo((): MagicChipHeader | undefined => {
-    const agent = agentName(session()?.harness);
+    const current = session();
+    const agent = current ? agentName(current) : undefined;
     const model = modelName(metadata(), session());
     const pullRequestUrl = session()?.pullRequestUrl ?? undefined;
     return agent || model || pullRequestUrl
