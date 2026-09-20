@@ -1,0 +1,13 @@
+warning: Git tree '/tmp/macro-machine-proof/call-ringing' is dirty
+── biome (changed JS/TS format + lint, same flags as CI)
+Checked 3 files in 332ms. No fixes applied.
+── oxlint (warn-only; docs/STYLE_GUIDE.md FE-12)
+Saved lockfile
+src/features/channel/Call/CallStartedNotifier.tsx:149:22: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/features/channel/Call/CallStartedNotifier.tsx:158:24: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+── ast-grep code rules (rule ids map to docs/STYLE_GUIDE.md)
+Saved lockfile
+[warn] postinstall script did not run; falling back to runtime binary resolution.
+Enable postinstall to avoid the per-invocation overhead.
+
+OK

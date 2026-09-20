@@ -4,14 +4,14 @@
     "phases": [
       {
         "name": "timeout recovered; retry enabled",
-        "at": 1789862591971
+        "at": 1789865836549
       },
       {
         "name": "signaling recovered",
-        "at": 1789862599076
+        "at": 1789865843385
       }
     ],
-    "callId": "01a0bc1f-8159-7622-8402-0a92d0eff10b",
+    "callId": "01a0bc51-0344-77f3-92a9-ad04693a90d7",
     "connectedParticipants": [
       {
         "identity": "macro|machine-bob@seed.macro.local",
@@ -35,11 +35,11 @@
     ],
     "messageTabParticipants": [
       {
-        "identity": "macro|machine-bob@seed.macro.local",
+        "identity": "macro|machine-alice@seed.macro.local",
         "state": "ACTIVE"
       },
       {
-        "identity": "macro|machine-alice@seed.macro.local",
+        "identity": "macro|machine-bob@seed.macro.local",
         "state": "ACTIVE"
       }
     ],

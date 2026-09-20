@@ -1,0 +1,23 @@
+$ bunx vitest run --project email
+
+ RUN  v5.0.1 /tmp/macro-machine-proof/email-navigation/apps/web
+
+12:47:58 AM [vite] (client) warning: The JSX import source cannot be set without also enabling React's "automatic" JSX transform
+1570|
+1571|  /**
+1572|   * @jsxImportSource solid-js
+   |                      ^
+1573|   */
+1574|  /**
+
+  Plugin: vite:esbuild
+  File: /home/teo/.herdr/worktrees/macro/machine/node_modules/virtua/lib/solid/index.jsx
+
+ Test Files  34 passed (34)
+      Tests  202 passed (202)
+   Start at  00:47:56
+   Duration  3.43s (transform 58%, environment 22%, import 16%, tests 4%)
+
+  Transform  |email| transforming modules took 23.91s · 58% of tracked time, re-done on every run
+             persist transforms across runs with fsModuleCache: true
+             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns

@@ -6,29 +6,69 @@
     "email": {
       "pullRequest": "https://github.com/macro-inc/macro/pull/6665",
       "branch": "synoet/machine-email-navigation",
-      "headCommit": "3b0437bdc3c030c2a97c162177422a42cdfe01e6",
+      "headCommit": "99d40071af7b366fcf74dde73dec58609b09984c",
       "video": "email-before-after.mp4",
-      "durationSeconds": 25.994667,
+      "durationSeconds": 29.479329,
       "afterStartsAtSeconds": 15.333333,
-      "sha256": "d413571155c2835df09de22dcb0eb0d372932005e4a78dc2d529f3f5f19ff6d5"
+      "sha256": "b7c1aef6995c88cce005da01370d051c62ef5d93e1697c24a5394b92decb3535",
+      "testsPassed": 202,
+      "typecheckExitCode": 0,
+      "qualityGateExitCode": 0,
+      "webCiRun": "https://github.com/macro-inc/macro/actions/runs/35480215318"
     },
     "ringing": {
       "pullRequest": "https://github.com/macro-inc/macro/pull/6666",
       "branch": "synoet/machine-call-ringing",
-      "headCommit": "781fdad3fba8fd1b2842577a70f96ce68e3abbcb",
+      "headCommit": "20e490004c7769104c747499a92f03175a1e65af",
       "video": "ringing-before-after.mp4",
-      "durationSeconds": 38.087125,
+      "durationSeconds": 38.162679,
       "afterStartsAtSeconds": 19.059,
-      "sha256": "5fc3da74cbac6700f57f367b4b34c64d44a15fd57e4911ba5cd2926fd6337328"
+      "sha256": "365d16f29089c1b4e8057f7a755d203661ce683e0ddbe5bf17620ec14a86a21f",
+      "testsPassed": 364,
+      "typecheckExitCode": 0,
+      "qualityGateExitCode": 0,
+      "webCiRun": "https://github.com/macro-inc/macro/actions/runs/35480215268"
     },
     "calls": {
       "pullRequest": "https://github.com/macro-inc/macro/pull/6667",
       "branch": "synoet/machine-call-session",
-      "headCommit": "8cd380370bcef2cb1961062dd1a689b9f2b21dab",
+      "headCommit": "9c651452097b09bab8d2646d0929585068636fdf",
       "video": "calls-before-after.mp4",
-      "durationSeconds": 93.041016,
+      "durationSeconds": 79.421333,
       "afterStartsAtSeconds": 39.52,
-      "sha256": "c2c2ba7820b81623bf8b27a610e7d06f4101990f50a55118af976ae913ae3fc2"
+      "sha256": "36fc4519492579abb7c41650c84010c5c848a50694436b341a81b2d20b16bf47",
+      "testsPassed": 398,
+      "typecheckExitCode": 0,
+      "qualityGateExitCode": 0,
+      "webCiRun": "https://github.com/macro-inc/macro/actions/runs/35480277143"
+    }
+  },
+  "integration": {
+    "mergedLocally": true,
+    "mergeCommit": "b73ef3bbaf80de5444955d58b44750ec60b6c1c9",
+    "testsPassed": 604,
+    "testFilesPassed": 95,
+    "typecheckExitCode": 0
+  },
+  "qualityReviews": {
+    "code": true,
+    "simplification": true,
+    "consistency": true,
+    "robustness": true,
+    "scope": true
+  },
+  "createEffectCounts": {
+    "emailNavigation": {
+      "before": 4,
+      "after": 1
+    },
+    "callCoordinator": {
+      "before": 1,
+      "after": 0
+    },
+    "ringingMachine": {
+      "before": 0,
+      "after": 0
     }
   }
 }

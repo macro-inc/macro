@@ -1,0 +1,12 @@
+warning: Git tree '/tmp/macro-machine-proof/email-navigation' is dirty
+── biome (changed JS/TS format + lint, same flags as CI)
+Checked 5 files in 307ms. No fixes applied.
+── oxlint (warn-only; docs/STYLE_GUIDE.md FE-12)
+Saved lockfile
+src/features/email-thread/primitives/thread-navigation.ts:343:42: warning eslint(complexity): function has a complexity of 22. Maximum allowed is 20.
+── ast-grep code rules (rule ids map to docs/STYLE_GUIDE.md)
+Saved lockfile
+[warn] postinstall script did not run; falling back to runtime binary resolution.
+Enable postinstall to avoid the per-invocation overhead.
+
+OK
