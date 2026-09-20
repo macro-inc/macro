@@ -391,6 +391,16 @@ type GraphqlActivityEvent {
 }
 
 """
+A content-free signal to refresh activity through authorized queries.
+"""
+type GraphqlActivityInvalidation {
+	"""
+	True when mounted activity queries need a fresh read.
+	"""
+	refresh: Boolean!
+}
+
+"""
 A message was sent in the entity.
 """
 type GraphqlActivityMessaged {
@@ -478,10 +488,9 @@ type GraphqlActivityParticipantRemoved {
 }
 
 """
-Realtime activity patch: a recorded event, or a cache deletion for a
-purged one.
+Realtime activity patch: a recorded event or a purge invalidation.
 """
-union GraphqlActivityPatch = GraphqlActivityEvent | GraphqlCacheDeletion
+union GraphqlActivityPatch = GraphqlActivityEvent | GraphqlActivityInvalidation
 
 """
 A property value changed on the entity.

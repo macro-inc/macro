@@ -111,7 +111,7 @@ async fn activity_updates_streams_recorded_events() {
 }
 
 #[tokio::test]
-async fn activity_updates_streams_cache_deletions() {
+async fn activity_updates_streams_content_free_invalidation() {
     let user_id = MacroUserIdStr::parse_from_str("macro|user@example.com").unwrap();
     let (sender, subscription) = subscription(ActivitySubscriptionExit::Closed);
     let service = TestSubscriptionService {
@@ -120,14 +120,13 @@ async fn activity_updates_streams_cache_deletions() {
     let schema = Schema::new(Query, EmptyMutation, ActivitySubscriptionRoot::new(service));
     let mut responses = Box::pin(schema.execute_stream(
         async_graphql::Request::new(
-            "subscription { activityUpdates { __typename ... on GraphqlCacheDeletion { graphqlTypeName entityId } } }",
+            "subscription { activityUpdates { __typename ... on GraphqlActivityInvalidation { refresh } } }",
         )
         .data(user_id),
     ));
 
-    let activity_id = Uuid::from_u128(42);
     sender
-        .send(ActivitySubscriptionUpdate::Deleted(activity_id))
+        .send(ActivitySubscriptionUpdate::Invalidated)
         .await
         .expect("subscription remains open");
 
@@ -138,13 +137,9 @@ async fn activity_updates_streams_cache_deletions() {
     let data = response.data.into_json().expect("response data is JSON");
     assert_eq!(
         data["activityUpdates"]["__typename"],
-        "GraphqlCacheDeletion"
+        "GraphqlActivityInvalidation"
     );
-    assert_eq!(
-        data["activityUpdates"]["graphqlTypeName"],
-        "GraphqlActivityEvent"
-    );
-    assert_eq!(data["activityUpdates"]["entityId"], activity_id.to_string());
+    assert_eq!(data["activityUpdates"]["refresh"], true);
 }
 
 #[tokio::test]

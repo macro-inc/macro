@@ -12,9 +12,6 @@
 //! host supervisor restarts the consumer from the last committed offset;
 //! deterministic activity ids make the replayed inserts idempotent.
 
-#[cfg(test)]
-mod test;
-
 use std::future::Future;
 use std::marker::PhantomData;
 
@@ -43,9 +40,8 @@ impl GroupName for ActivityConsumerGroup {
 /// is the host's dispatch from a decoded event to the owning domain's
 /// mapping.
 pub struct ActivityConsumer<R, C, F, P> {
-    repo: R,
+    materializer: crate::domain::materializer::ActivityMaterializer<R, P>,
     ingest: F,
-    realtime: P,
     _events: PhantomData<fn() -> C>,
 }
 
@@ -60,9 +56,8 @@ where
     /// a realtime announcer for durably inserted rows.
     pub fn new(repo: R, ingest: F, realtime: P) -> Self {
         Self {
-            repo,
+            materializer: crate::domain::materializer::ActivityMaterializer::new(repo, realtime),
             ingest,
-            realtime,
             _events: PhantomData,
         }
     }
@@ -75,15 +70,7 @@ where
     /// insert, and the announcement is published again; duplicates are
     /// idempotent for subscribers (records keyed by id).
     async fn apply(&self, event: &C) -> Result<(), R::Err> {
-        match (self.ingest)(event) {
-            Ingest::Insert(activities) => {
-                self.repo.insert_activities(&activities).await?;
-                self.realtime.publish_recorded(&activities).await;
-                Ok(())
-            }
-            Ingest::Purge(entities) => self.repo.purge_entities(&entities).await,
-            Ingest::Ignore => Ok(()),
-        }
+        self.materializer.apply((self.ingest)(event)).await
     }
 
     /// Runs the consumer until `shutdown` resolves.
@@ -146,10 +133,12 @@ where
                     // forever. Returning Err restarts the consumer from the
                     // last committed offset; deterministic activity ids make
                     // the replay idempotent.
-                    self.apply(&event)
-                        .instrument(span)
-                        .await
-                        .context("failed to store activities")?;
+                    tokio::select! {
+                        _ = &mut shutdown => break,
+                        result = self.apply(&event).instrument(span) => {
+                            result.context("failed to store activities")?;
+                        }
+                    }
                     commit_logged(&consumer, kafka_message);
                 }
             }

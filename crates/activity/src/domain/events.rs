@@ -92,6 +92,20 @@ pub enum ActivityTopicEvent {
         /// The recorded rows this recipient may see.
         activities: Vec<ActivityWireRow>,
     },
+    /// Stored activity changed after a purge. Contains no entity or user data:
+    /// even former viewers must refresh through authorized read paths.
+    #[serde(rename = "activity.invalidated")]
+    Invalidated,
+}
+
+impl ActivityTopicEvent {
+    /// The partition key for addressed updates or global invalidation.
+    pub fn key(&self) -> &str {
+        match self {
+            Self::Recorded { recipient_id, .. } => recipient_id,
+            Self::Invalidated => "activity-invalidated",
+        }
+    }
 }
 
 impl TopicEvent for ActivityTopicEvent {
@@ -107,19 +121,6 @@ pub struct ActivityMacroEvent {
 }
 
 impl ActivityMacroEvent {
-    /// Creates an event addressed to one recipient, keyed by that recipient
-    /// so a user's updates preserve publish order.
-    pub fn recorded(recipient_id: impl Into<String>, activities: Vec<ActivityWireRow>) -> Self {
-        let recipient_id = recipient_id.into();
-        Self {
-            key: recipient_id.clone(),
-            event: Event::new(ActivityTopicEvent::Recorded {
-                recipient_id,
-                activities,
-            }),
-        }
-    }
-
     /// Returns the topic event carried by this event.
     pub fn into_topic_event(self) -> ActivityTopicEvent {
         self.event.event

@@ -37,21 +37,18 @@ pub use domain::overview::{
     ActivityOverview, ActivityOverviewError, ActivityWindow, ActivityWindowError, DayCount,
     EntityRank, MAX_ACTIVITY_WINDOW_DAYS, TOP_ENTITY_LIMIT, trailing_year,
 };
+pub use domain::ports::{ActivityAudienceExpander, ActivityRealtimePublisher};
 pub use domain::ports::{ActivityFeedPage, ActivityRange, ActivityReads, EntityActivityMap};
-#[cfg(feature = "ai_tools")]
-pub use domain::{
-    ports::{ActivityMetadataResolver, ActivityPropertyMetadata},
-    service::{ActivityReadService, NoopActivityMetadataResolver, ResolvedActivityRange},
-};
-pub use domain::ports::{
-    ActivityAudienceExpander, ActivityRealtimePublisher,
-    NoOpActivityAudienceExpander, NoOpActivityRealtimePublisher,
-};
 #[cfg(feature = "realtime")]
 pub use domain::realtime::{
     ActivityRealtimeConsumerService, ActivitySubscription, ActivitySubscriptionExit,
     ActivitySubscriptionService, ActivitySubscriptionUpdate, ActivityTopicEventConsumer,
     NoOpActivitySubscriptionService,
+};
+#[cfg(feature = "ai_tools")]
+pub use domain::{
+    ports::{ActivityMetadataResolver, ActivityPropertyMetadata},
+    service::{ActivityReadService, NoopActivityMetadataResolver, ResolvedActivityRange},
 };
 #[cfg(all(feature = "consumer", feature = "realtime"))]
 pub use outbound::activity_topic_consumer::ActivityTopicConsumer;

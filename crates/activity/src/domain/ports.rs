@@ -68,13 +68,15 @@ pub struct ActivityRange {
 
 /// Announces durably recorded activities to realtime subscribers.
 ///
-/// Fire-and-forget: implementations log failures instead of returning them,
-/// because delivery is best-effort by design — a missed push is recovered by
-/// the source event replaying (uncommitted offset) or by the client's next
-/// fetch, and the write path must not fail on announcement problems.
+/// Best-effort: implementations bound delivery time and log failures instead
+/// of failing the durable write. Clients refetch on reconnect to recover
+/// missed pushes. Uncommitted source offsets may also replay announcements.
 pub trait ActivityRealtimePublisher: Send + Sync {
-    /// Announces recorded activities, grouped per subject by the adapter.
+    /// Announces recorded activities to their subjects and current accessors.
     fn publish_recorded(&self, activities: &[Activity]) -> impl Future<Output = ()> + Send;
+
+    /// Announces the durable removal of activity rows.
+    fn publish_invalidated(&self) -> impl Future<Output = ()> + Send;
 }
 
 /// Resolves who may currently see an entity's activity.
@@ -94,28 +96,15 @@ pub trait ActivityAudienceExpander: Send + Sync {
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Self::Err>> + Send;
 }
 
-/// Expander reporting an empty audience: delivery to the subject only.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct NoOpActivityAudienceExpander;
-
-impl ActivityAudienceExpander for NoOpActivityAudienceExpander {
-    type Err = std::convert::Infallible;
-
-    async fn entity_audience(
+/// Publishes an already addressed activity announcement.
+pub trait ActivityEventPublisher: Send + Sync {
+    /// The transport's error type.
+    type Err: std::fmt::Debug + Send + Sync + 'static;
+    /// Delivers a domain event without deciding its recipients.
+    fn publish(
         &self,
-        _entity_type: EntityType,
-        _entity_id: &str,
-    ) -> Result<Vec<MacroUserIdStr<'static>>, Self::Err> {
-        Ok(Vec::new())
-    }
-}
-
-/// Publisher that announces nothing.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct NoOpActivityRealtimePublisher;
-
-impl ActivityRealtimePublisher for NoOpActivityRealtimePublisher {
-    async fn publish_recorded(&self, _activities: &[Activity]) {}
+        event: super::events::ActivityTopicEvent,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Persists activities.

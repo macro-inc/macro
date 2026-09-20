@@ -14,9 +14,8 @@ use entity_mutation::{EntityMutationService, UnavailableEntityMutationService};
 use favorites::domain::ports::FavoritesMutationService;
 use graphql_activity::{
     ActivityFeedInput, ActivityOverviewInput, ActivityReader, ActivitySubscriptionRoot,
-    ActivitySubscriptionService, GraphqlActivityOverview, GraphqlActivityPage,
-    NoOpActivityReader, NoOpActivitySubscriptionService, resolve_activity_feed,
-    resolve_activity_overview,
+    ActivitySubscriptionService, GraphqlActivityOverview, GraphqlActivityPage, NoOpActivityReader,
+    NoOpActivitySubscriptionService, resolve_activity_feed, resolve_activity_overview,
 };
 use graphql_channel::{
     ChannelActivityAuthorizer, ChannelActivityMutationService, ChannelMutationRoot,
@@ -141,11 +140,12 @@ where
 /// mutation service, `NR` the notification edge reader, `PR` the property edge
 /// reader, `ER` the email-content edge reader, `FR` the favorite edge reader,
 /// `AR` the access edge reader, and `AcR` the activity reader.
-pub type SoupSchema<S, R, NS, AS, E, EAS, Auth, St, W, M, FM, C, N, NR, PR, ER, FR, AR, AcR> = Schema<
-    SoupQueryRoot<S, E, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>,
-    CompleteMutationRoot<W, M, FM, SoupEdges<NR, PR, ER, FR, AR, AcR>, C, N, EAS, E>,
-    CompleteSubscriptionRoot<R, NS, AS, Auth, St, NR, PR, ER, FR, AR, AcR>,
->;
+pub type SoupSchema<S, R, NS, AS, E, EAS, Auth, St, W, M, FM, C, N, NR, PR, ER, FR, AR, AcR> =
+    Schema<
+        SoupQueryRoot<S, E, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>,
+        CompleteMutationRoot<W, M, FM, SoupEdges<NR, PR, ER, FR, AR, AcR>, C, N, EAS, E>,
+        CompleteSubscriptionRoot<R, NS, AS, Auth, St, NR, PR, ER, FR, AR, AcR>,
+    >;
 
 /// GraphQL Soup schema type backed by shared query and realtime services.
 pub type SharedSoupSchema<S, R, NS, AS, E, EAS, Auth, St, W, M, FM, C, N, NR, PR, ER, FR, AR, AcR> =
@@ -474,7 +474,27 @@ where
 
 /// Build a GraphQL schema backed by `Arc`-shared query and realtime services.
 #[allow(clippy::type_complexity)]
-pub fn build_schema_from_arcs<S, R, NS, AS, E, EAS, Auth, St, W, M, FM, C, N, NR, PR, ER, FR, AR, AcR>(
+pub fn build_schema_from_arcs<
+    S,
+    R,
+    NS,
+    AS,
+    E,
+    EAS,
+    Auth,
+    St,
+    W,
+    M,
+    FM,
+    C,
+    N,
+    NR,
+    PR,
+    ER,
+    FR,
+    AR,
+    AcR,
+>(
     service: Arc<S>,
     realtime_service: Arc<R>,
     notification_subscription_service: Arc<NS>,

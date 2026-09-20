@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use chrono::Utc;
-use macro_event_broker::{Event, EventBrokerError, MacroEvent};
+
 use uuid::Uuid;
 
 use super::*;
@@ -10,35 +10,22 @@ use crate::domain::events::ActivityTopicEvent;
 use crate::domain::models::{Actor, CommonAction};
 
 #[derive(Clone, Default)]
-struct RecordingBroker {
-    published: Arc<Mutex<Vec<(String, serde_json::Value)>>>,
+struct RecordingPublisher {
+    published: Arc<Mutex<Vec<(String, ActivityTopicEvent)>>>,
 }
-
-impl RecordingBroker {
+impl RecordingPublisher {
     fn recorded_events(&self) -> Vec<(String, ActivityTopicEvent)> {
-        self.published
-            .lock()
-            .expect("published lock")
-            .iter()
-            .map(|(key, value)| {
-                let event: Event<ActivityTopicEvent> =
-                    serde_json::from_value(value.clone()).expect("decodes");
-                (key.clone(), event.event)
-            })
-            .collect()
+        self.published.lock().unwrap().clone()
     }
 }
-
-impl MacroEventBroker for RecordingBroker {
-    fn send_event<E: MacroEvent + ?Sized>(
-        &self,
-        event: &E,
-    ) -> Result<tokio::task::JoinHandle<Result<(), EventBrokerError>>, EventBrokerError> {
-        self.published.lock().expect("published lock").push((
-            event.key().to_string(),
-            serde_json::to_value(event.event())?,
-        ));
-        Ok(tokio::spawn(async { Ok(()) }))
+impl ActivityEventPublisher for RecordingPublisher {
+    type Err = std::io::Error;
+    async fn publish(&self, event: ActivityTopicEvent) -> Result<(), Self::Err> {
+        self.published
+            .lock()
+            .unwrap()
+            .push((event.key().to_owned(), event));
+        Ok(())
     }
 }
 
@@ -99,7 +86,10 @@ fn rows_for<'a>(
             let ActivityTopicEvent::Recorded {
                 recipient_id,
                 activities,
-            } = event;
+            } = event
+            else {
+                return None;
+            };
             assert_eq!(recipient_id, key, "events are keyed by their recipient");
             (recipient_id == recipient).then_some(activities.as_slice())
         })
@@ -110,8 +100,8 @@ fn rows_for<'a>(
 async fn delivers_to_the_subject_and_the_entity_audience() {
     let teo = user("teo");
     let watcher = user("watcher");
-    let broker = RecordingBroker::default();
-    let publisher = KafkaActivityRealtimePublisher::new(
+    let broker = RecordingPublisher::default();
+    let publisher = ActivityAnnouncements::new(
         broker.clone(),
         FakeAudience {
             by_entity: HashMap::from([("doc-1".to_string(), vec![teo.clone(), watcher.clone()])]),
@@ -138,8 +128,8 @@ async fn delivers_to_the_subject_and_the_entity_audience() {
 async fn bot_subject_rows_reach_the_entity_audience_only() {
     let watcher = user("watcher");
     let bot = Actor::new_from_bot(bot_id::BotId::new_from_uuid(Uuid::from_u128(42)));
-    let broker = RecordingBroker::default();
-    let publisher = KafkaActivityRealtimePublisher::new(
+    let broker = RecordingPublisher::default();
+    let publisher = ActivityAnnouncements::new(
         broker.clone(),
         FakeAudience {
             by_entity: HashMap::from([("doc-1".to_string(), vec![watcher.clone()])]),
@@ -160,8 +150,8 @@ async fn bot_subject_rows_reach_the_entity_audience_only() {
 #[tokio::test]
 async fn expansion_failure_degrades_to_subject_only_delivery() {
     let teo = user("teo");
-    let broker = RecordingBroker::default();
-    let publisher = KafkaActivityRealtimePublisher::new(broker.clone(), FailingAudience);
+    let broker = RecordingPublisher::default();
+    let publisher = ActivityAnnouncements::new(broker.clone(), FailingAudience);
 
     publisher
         .publish_recorded(&[edited(0, Actor::new_from_user(teo.clone()), "doc-1")])
@@ -170,4 +160,56 @@ async fn expansion_failure_degrades_to_subject_only_delivery() {
     let events = broker.recorded_events();
     assert_eq!(events.len(), 1);
     assert_eq!(rows_for(&events, teo.as_ref()).len(), 1);
+}
+
+struct StalledPublisher {
+    started: std::sync::atomic::AtomicUsize,
+}
+
+impl ActivityEventPublisher for StalledPublisher {
+    type Err = std::io::Error;
+    async fn publish(&self, _event: ActivityTopicEvent) -> Result<(), Self::Err> {
+        self.started
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        std::future::pending().await
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn bounds_total_delivery_latency_and_concurrency_for_a_large_audience() {
+    let publisher = ActivityAnnouncements::new(
+        StalledPublisher { started: 0.into() },
+        FakeAudience {
+            by_entity: HashMap::from([(
+                "doc-1".into(),
+                (0..1000).map(|i| user(&format!("watcher-{i}"))).collect(),
+            )]),
+        },
+    );
+    let before = tokio::time::Instant::now();
+    publisher
+        .publish_recorded(&[edited(0, Actor::new_from_user(user("subject")), "doc-1")])
+        .await;
+    assert_eq!(before.elapsed(), ANNOUNCEMENT_BUDGET);
+    assert_eq!(
+        publisher
+            .publisher
+            .started
+            .load(std::sync::atomic::Ordering::SeqCst),
+        MAX_CONCURRENT_DELIVERIES
+    );
+}
+
+#[tokio::test]
+async fn purge_invalidation_needs_no_deleted_entity_audience() {
+    let publisher = RecordingPublisher::default();
+    let announcements = ActivityAnnouncements::new(publisher.clone(), FailingAudience);
+    announcements.publish_invalidated().await;
+    assert_eq!(
+        publisher.recorded_events(),
+        vec![(
+            "activity-invalidated".into(),
+            ActivityTopicEvent::Invalidated
+        )]
+    );
 }

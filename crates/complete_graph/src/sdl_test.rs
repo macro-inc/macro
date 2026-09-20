@@ -120,7 +120,7 @@ fn soup_response_schema_exposes_frontend_fields() {
         "notification: GraphqlNotification!",
         "type GraphqlUpdatedNotification {",
         "activityUpdates: GraphqlActivityPatch!",
-        "union GraphqlActivityPatch = GraphqlActivityEvent | GraphqlCacheDeletion",
+        "union GraphqlActivityPatch = GraphqlActivityEvent | GraphqlActivityInvalidation",
         "type GraphqlNotification {",
         "metadata: GraphqlNotifEvent!",
     ] {

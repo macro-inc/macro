@@ -4,21 +4,30 @@
 mod test;
 
 use activity::{ActivitySubscriptionExit, ActivitySubscriptionService, ActivitySubscriptionUpdate};
-use async_graphql::{Context, ID, OutputType, Subscription, Union};
-use graphql_common::{GraphqlCacheDeletion, require_authenticated_user};
+use async_graphql::{Context, SimpleObject, Subscription, Union};
+use graphql_common::require_authenticated_user;
 use tokio_stream::Stream;
 
 use crate::GraphqlActivityEvent;
 
-/// Realtime activity patch: a recorded event, or a cache deletion for a
-/// purged one.
-#[allow(clippy::large_enum_variant)] // Updates dominate; deletions are rare purge signals.
+/// A content-free signal to refresh activity through authorized queries.
+#[derive(SimpleObject)]
+pub struct GraphqlActivityInvalidation {
+    /// True when mounted activity queries need a fresh read.
+    pub refresh: bool,
+}
+
+/// Realtime activity patch: a recorded event or a purge invalidation.
+#[expect(
+    clippy::large_enum_variant,
+    reason = "recorded rows dominate; invalidations carry no data"
+)]
 #[derive(Union)]
 pub enum GraphqlActivityPatch {
     /// An activity event that was durably recorded.
     Updated(GraphqlActivityEvent),
-    /// A normalized activity record that must be deleted.
-    Deleted(GraphqlCacheDeletion),
+    /// Activity queries must refresh after a purge.
+    Invalidated(GraphqlActivityInvalidation),
 }
 
 impl From<ActivitySubscriptionUpdate> for GraphqlActivityPatch {
@@ -27,17 +36,14 @@ impl From<ActivitySubscriptionUpdate> for GraphqlActivityPatch {
             ActivitySubscriptionUpdate::Updated(record) => {
                 Self::Updated(GraphqlActivityEvent::from(record.as_ref().clone()))
             }
-            ActivitySubscriptionUpdate::Deleted(activity_id) => {
-                Self::Deleted(GraphqlCacheDeletion::new(
-                    <GraphqlActivityEvent as OutputType>::type_name(),
-                    ID(activity_id.to_string()),
-                ))
+            ActivitySubscriptionUpdate::Invalidated => {
+                Self::Invalidated(GraphqlActivityInvalidation { refresh: true })
             }
         }
     }
 }
 
-/// Subscribe to realtime activity whose subject is the authenticated user.
+/// Subscribe to realtime activity addressed to the authenticated user.
 pub fn subscribe_to_activity<S: ActivitySubscriptionService>(
     service: &S,
     ctx: &Context<'_>,

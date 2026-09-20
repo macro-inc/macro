@@ -180,3 +180,65 @@ async fn reports_slow_consumer_subscription_exit() {
         ActivitySubscriptionExit::SlowConsumer
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn purge_invalidates_unrelated_subscribers_without_entity_access_data() {
+    let consumer = FakeConsumer {
+        messages: Mutex::new(VecDeque::from([
+            Ok(ActivityTopicEvent::Invalidated),
+            Ok(ActivityTopicEvent::Invalidated),
+        ])),
+        calls: Arc::new(AtomicUsize::new(0)),
+    };
+    let service = Arc::new(ActivityRealtimeConsumerService::new(consumer));
+    let mut one = service.subscribe(user("former-viewer"));
+    let mut two = service.subscribe(user("other-viewer"));
+    let task = tokio::spawn({
+        let service = service.clone();
+        async move { service.run().await }
+    });
+    task.await.unwrap().expect_err("test consumer stops");
+    assert!(matches!(
+        one.recv().await,
+        Some(ActivitySubscriptionUpdate::Invalidated)
+    ));
+    assert!(matches!(
+        two.recv().await,
+        Some(ActivitySubscriptionUpdate::Invalidated)
+    ));
+    assert!(
+        tokio::time::timeout(Duration::from_millis(1), one.recv())
+            .await
+            .is_err(),
+        "bursts coalesce"
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn large_recorded_batch_refreshes_without_disconnect() {
+    let viewer = user("viewer");
+    let consumer = FakeConsumer {
+        messages: Mutex::new(VecDeque::from([Ok(recorded(
+            viewer.as_ref(),
+            (0..100).map(|_| wire_row(&viewer, "doc-1")).collect(),
+        ))])),
+        calls: Arc::new(AtomicUsize::new(0)),
+    };
+    let service = Arc::new(ActivityRealtimeConsumerService::new(consumer));
+    let mut receiver = service.subscribe(viewer);
+    let task = tokio::spawn({
+        let service = service.clone();
+        async move { service.run().await }
+    });
+    task.await.unwrap().expect_err("test consumer stops");
+    assert!(matches!(
+        receiver.recv().await,
+        Some(ActivitySubscriptionUpdate::Invalidated)
+    ));
+    assert!(
+        tokio::time::timeout(Duration::from_millis(1), receiver.recv())
+            .await
+            .is_err(),
+        "subscription remains open"
+    );
+}

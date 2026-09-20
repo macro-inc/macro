@@ -1279,6 +1279,7 @@ async fn activity_updates_subscribes_as_the_authenticated_user() {
         SchemaOnlyState,
         NoOpEntityPropertyWriter,
         UnavailableEntityMutationService,
+        NoOpFavoriteMutationService,
         NoOpChannelActivityMutationService,
         NoOpNotificationMutationService,
         NoOpSoupNotificationEdgeReader,

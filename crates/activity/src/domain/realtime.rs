@@ -39,8 +39,8 @@ fn receive_retry_strategy() -> impl Iterator<Item = Duration> {
 pub enum ActivitySubscriptionUpdate {
     /// An activity row was durably recorded.
     Updated(Arc<ActivityRecord>),
-    /// A recorded activity was purged and must leave caches.
-    Deleted(uuid::Uuid),
+    /// Refresh mounted activity queries through authorized reads.
+    Invalidated,
 }
 
 /// Why an activity subscription ended after its messages were drained.
@@ -61,6 +61,7 @@ pub enum ActivitySubscriptionExit {
 pub struct ActivitySubscription {
     receiver: tokio::sync::mpsc::Receiver<ActivitySubscriptionUpdate>,
     exit_reason: tokio::sync::oneshot::Receiver<ActivitySubscriptionExit>,
+    invalidations: Option<tokio::sync::watch::Receiver<()>>,
 }
 
 impl ActivitySubscription {
@@ -72,12 +73,24 @@ impl ActivitySubscription {
         Self {
             receiver,
             exit_reason,
+            invalidations: None,
         }
     }
 
     /// Receives the next buffered update.
     pub async fn recv(&mut self) -> Option<ActivitySubscriptionUpdate> {
-        self.receiver.recv().await
+        loop {
+            let Some(invalidations) = &mut self.invalidations else {
+                return self.receiver.recv().await;
+            };
+            tokio::select! {
+                update = self.receiver.recv() => return update,
+                changed = invalidations.changed() => {
+                    if changed.is_ok() { return Some(ActivitySubscriptionUpdate::Invalidated); }
+                    self.invalidations = None;
+                }
+            }
+        }
     }
 
     /// Returns why the forwarding task stopped, after messages are drained.
@@ -122,6 +135,7 @@ pub trait ActivityTopicEventConsumer: Send + Sync + 'static {
 /// Service distributing received activity rows to user-scoped subscribers.
 pub struct ActivityRealtimeConsumerService<C> {
     consumer: C,
+    invalidations: tokio::sync::watch::Sender<()>,
     broadcasts:
         BroadcastManager<GlobalSpawner, MacroUserIdStr<'static>, ActivitySubscriptionUpdate>,
 }
@@ -131,6 +145,7 @@ impl<C: ActivityTopicEventConsumer> ActivityRealtimeConsumerService<C> {
     pub fn new(consumer: C) -> Self {
         Self {
             consumer,
+            invalidations: tokio::sync::watch::channel(()).0,
             broadcasts: BroadcastManager::new(GlobalSpawner, BROADCAST_BUFFER_CAPACITY),
         }
     }
@@ -157,7 +172,9 @@ impl<C: ActivityTopicEventConsumer> ActivityRealtimeConsumerService<C> {
             };
             let _ = exit_reason_sender.send(reason);
         });
-        ActivitySubscription::from_parts(receiver, exit_reason)
+        let mut subscription = ActivitySubscription::from_parts(receiver, exit_reason);
+        subscription.invalidations = Some(self.invalidations.subscribe());
+        subscription
     }
 
     /// Receives topic events and distributes updates until reception fails.
@@ -179,29 +196,28 @@ impl<C: ActivityTopicEventConsumer> ActivityRealtimeConsumerService<C> {
             let ActivityTopicEvent::Recorded {
                 recipient_id,
                 activities,
-            } = event;
+            } = event
+            else {
+                self.invalidations.send_replace(());
+                continue;
+            };
             let Ok(recipient) = MacroUserIdStr::parse_from_str(&recipient_id) else {
                 continue;
             };
             let recipient = recipient.into_owned();
-            for row in activities {
-                let Some(record) = row.into_record() else {
-                    continue;
-                };
-                match self.broadcasts.publish(
+            // A single large source event must not overflow healthy subscribers.
+            // One invalidation recovers the whole batch with authorized reads.
+            if activities.len() > SUBSCRIBER_BUFFER_CAPACITY.get() {
+                let _ = self
+                    .broadcasts
+                    .publish(&recipient, ActivitySubscriptionUpdate::Invalidated);
+                continue;
+            }
+            for record in activities.into_iter().filter_map(|row| row.into_record()) {
+                let _ = self.broadcasts.publish(
                     &recipient,
                     ActivitySubscriptionUpdate::Updated(Arc::new(record)),
-                ) {
-                    Ok(subscriber_count) => tracing::trace!(
-                        subscriber_count,
-                        recipient = %recipient,
-                        "distributed activity update"
-                    ),
-                    Err(_) => tracing::trace!(
-                        recipient = %recipient,
-                        "dropping activity update without subscribers"
-                    ),
-                }
+                );
             }
         }
     }
