@@ -1,5 +1,7 @@
 //! Document service implementation.
 
+mod content_events;
+
 #[cfg(test)]
 mod tests;
 
@@ -53,9 +55,8 @@ use crate::domain::models::{
 use super::branch_name::{build_task_branch_name, user_branch_prefix};
 use super::content::{DocumentContent, DocumentContentLocation, DocumentContentState};
 use super::events::{
-    DocumentContentUploadedMetadata, DocumentCopiedMetadata, DocumentCreatedMetadata,
-    DocumentDeletedMetadata, DocumentInteractionMetadata, DocumentMacroEvent,
-    DocumentUpdatedMetadata, InteractionReason,
+    DocumentCopiedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata,
+    DocumentInteractionMetadata, DocumentMacroEvent, DocumentUpdatedMetadata, InteractionReason,
 };
 use super::models::{
     CloudFrontConfig, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
@@ -877,45 +878,6 @@ impl<
     #[tracing::instrument(skip(self))]
     async fn cleanup_created_document(&self, document_id: &str) {
         self.cleanup_document(document_id).await;
-    }
-}
-
-impl<
-    R: DocumentRepo,
-    U: PresignedUploadUrlPort,
-    T: TaskPropertiesPort,
-    C: ConnectionService,
-    Eam: EntityAccessManagementService,
-    F: ForeignEntityService,
-    B: MacroEventBroker,
-    S: DocumentSyncPort,
-> DocumentContentEventService for DocumentServiceImpl<R, U, T, C, Eam, F, B, S>
-{
-    #[tracing::instrument(err, skip(self))]
-    async fn publish_content_uploaded(
-        &self,
-        document_id: &str,
-        file_type: FileType,
-        document_version_id: Option<String>,
-    ) -> Result<(), DocumentError> {
-        let document = self
-            .repo
-            .get_basic_document(document_id)
-            .await
-            .map_err(|error| map_basic_document_error(document_id, error.into()))?;
-
-        self.macro_event_broker
-            .send_event(&DocumentMacroEvent::content_uploaded(
-                document_id,
-                DocumentContentUploadedMetadata {
-                    document_id: document_id.to_string(),
-                    owner: document.owner,
-                    file_type,
-                    document_version_id,
-                },
-            ))
-            .map(|_| ())
-            .map_err(|error| DocumentError::Internal(error.into()))
     }
 }
 

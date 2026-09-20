@@ -16,6 +16,8 @@ use crate::domain::ports::{DocumentContentEventService, MockDocumentRepo};
 use super::*;
 use activity::{Actor, Attribution};
 
+mod sync_content;
+
 fn make_test_metadata() -> DocumentMetadata {
     DocumentMetadata {
         document_id: "doc-1".to_string(),

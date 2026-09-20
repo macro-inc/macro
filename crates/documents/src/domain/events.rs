@@ -126,7 +126,7 @@ pub struct DocumentContentUploadedMetadata {
 pub struct DocumentSyncContentUpdatedMetadata {
     /// The id of the live-collab document whose content changed.
     pub document_id: String,
-    /// File type of the sync document (markdown today).
+    /// File type of the sync document, resolved by the document backend.
     pub file_type: FileType,
     /// Version marker for the sync snapshot, when the caller supplies one.
     pub document_version_id: Option<String>,

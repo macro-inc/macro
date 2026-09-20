@@ -1,13 +1,13 @@
-//! HTTP adapter for the native spreadsheet snapshot/update service.
+//! HTTP adapter for the document snapshot/update service.
 use base64::{Engine, engine::general_purpose::STANDARD};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 
-use super::spreadsheet_effects::WorkerSpreadsheetEffects;
+use super::document_effects::WorkerDocumentEffects;
 use super::*;
 use crate::{
-    spreadsheet::{self, MAX_BINARY_BYTES, MAX_REVISION_BYTES, SpreadsheetError},
-    storage::SpreadsheetUpdateStorage,
+    domain::document::{self, DocumentError, MAX_BINARY_BYTES, MAX_REVISION_BYTES},
+    storage::DocumentUpdateStorage,
 };
 
 const MAX_BODY_BYTES: usize = (MAX_BINARY_BYTES + MAX_REVISION_BYTES).div_ceil(3) * 4 + 1024;
@@ -31,15 +31,15 @@ struct UpdateResponse {
     applied: bool,
 }
 
-fn error_response(error: SpreadsheetError) -> Result<Response> {
+fn error_response(error: DocumentError) -> Result<Response> {
     let status = match error {
-        SpreadsheetError::Unauthorized => 401,
-        SpreadsheetError::Forbidden => 403,
-        SpreadsheetError::Conflict => 409,
-        SpreadsheetError::TooLarge => 413,
-        SpreadsheetError::Invalid(_) => 400,
-        SpreadsheetError::Persistence => 503,
-        SpreadsheetError::Notification => 500,
+        DocumentError::Unauthorized => 401,
+        DocumentError::Forbidden => 403,
+        DocumentError::Conflict => 409,
+        DocumentError::TooLarge => 413,
+        DocumentError::Invalid(_) => 400,
+        DocumentError::Persistence => 503,
+        DocumentError::Notification => 500,
     };
     Ok(
         Response::from_json(&serde_json::json!({ "error": error.to_string() }))?
@@ -48,17 +48,17 @@ fn error_response(error: SpreadsheetError) -> Result<Response> {
 }
 
 impl DocumentSyncSession {
-    pub(super) async fn spreadsheet_handler(
+    pub(super) async fn document_handler(
         &self,
         mut req: Request,
         document_id: &str,
+        is_update: bool,
     ) -> Result<Response> {
         // A shared internal key never bypasses the user/document permission JWT.
-        let (access, claims) = match crate::auth::spreadsheet_access(&req, &self.env, document_id) {
+        let (access, claims) = match crate::auth::document_access(&req, &self.env, document_id) {
             Ok(access) => access,
             Err(error) => return error_response(error),
         };
-        let is_update = req.path().ends_with("/spreadsheet-update");
         if req.method() != if is_update { Method::Post } else { Method::Get } {
             return Ok(response(405));
         }
@@ -70,7 +70,7 @@ impl DocumentSyncSession {
         }
         if !is_update {
             let state = self.document_state().await?;
-            return match spreadsheet::snapshot(&access, &state.loro_doc) {
+            return match document::snapshot(&access, &state.loro_doc) {
                 Ok((snapshot, revision)) => Response::from_json(&SnapshotResponse {
                     snapshot: STANDARD.encode(snapshot),
                     revision: STANDARD.encode(revision),
@@ -84,33 +84,31 @@ impl DocumentSyncSession {
             .and_then(|length| length.parse::<usize>().ok())
             .is_some_and(|length| length > MAX_BODY_BYTES)
         {
-            return error_response(SpreadsheetError::TooLarge);
+            return error_response(DocumentError::TooLarge);
         }
         let mut bytes = Vec::new();
         let mut stream = req.stream()?;
         while let Some(chunk) = stream.next().await {
             let chunk = chunk?;
             if bytes.len().saturating_add(chunk.len()) > MAX_BODY_BYTES {
-                return error_response(SpreadsheetError::TooLarge);
+                return error_response(DocumentError::TooLarge);
             }
             bytes.extend_from_slice(&chunk);
         }
         let body: UpdateRequest = match serde_json::from_slice(&bytes) {
             Ok(body) => body,
-            Err(_) => return error_response(SpreadsheetError::Invalid("Invalid update request.")),
+            Err(_) => return error_response(DocumentError::Invalid("Invalid update request.")),
         };
         if body.update.len() > MAX_BINARY_BYTES.div_ceil(3) * 4
             || body.expected_revision.len() > MAX_REVISION_BYTES.div_ceil(3) * 4
         {
-            return error_response(SpreadsheetError::TooLarge);
+            return error_response(DocumentError::TooLarge);
         }
         let (Ok(update), Ok(revision)) = (
             STANDARD.decode(body.update),
             STANDARD.decode(body.expected_revision),
         ) else {
-            return error_response(SpreadsheetError::Invalid(
-                "Invalid base64 update or revision.",
-            ));
+            return error_response(DocumentError::Invalid("Invalid base64 update or revision."));
         };
         let state = self.document_state().await?;
         let storage = self.session_storage().await?;
@@ -118,7 +116,7 @@ impl DocumentSyncSession {
             .actor
             .as_ref()
             .map(|actor| {
-                spreadsheet::SpreadsheetAttribution::from_signed_claims(
+                document::DocumentAttribution::from_signed_claims(
                     actor.clone(),
                     claims.user_id.clone(),
                 )
@@ -128,12 +126,12 @@ impl DocumentSyncSession {
             Ok(attribution) => attribution,
             Err(error) => return error_response(error),
         };
-        let port = SpreadsheetUpdateStorage {
+        let port = DocumentUpdateStorage {
             document_state: &state,
             storage: &storage,
             attribution: attribution.as_ref(),
         };
-        let effects = WorkerSpreadsheetEffects {
+        let effects = WorkerDocumentEffects {
             session: self,
             document_state: &state,
             document_id,
@@ -141,8 +139,7 @@ impl DocumentSyncSession {
         };
         // The service synchronously compares + validates + imports before its
         // first storage await, just like a websocket update in this isolate.
-        let prepared = match spreadsheet::update(&access, &port, &effects, &revision, &update).await
-        {
+        let prepared = match document::update(&access, &port, &effects, &revision, &update).await {
             Ok(prepared) => prepared,
             Err(error) => return error_response(error),
         };

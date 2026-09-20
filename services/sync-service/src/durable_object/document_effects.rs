@@ -1,31 +1,29 @@
-//! Worker notification adapter for the spreadsheet update use case.
+//! Worker notification adapter for the document update use case.
 
 use bebop::{Record, SubRecord};
 use tracing::{error, warn};
 
-use super::{
-    DocumentSyncSession, EditAttribution, bump_alarm, report_interaction, report_new_doc_state,
-};
+use super::{DocumentSyncSession, bump_alarm, report_interaction, report_new_doc_state};
 use crate::{
+    domain::document::{DocumentAttribution, DocumentError, DocumentUpdateEffects},
     dss_internal::InteractionReason,
-    spreadsheet::{SpreadsheetAttribution, SpreadsheetError, SpreadsheetUpdateEffects},
     state::DocumentState,
 };
 
-pub(super) struct WorkerSpreadsheetEffects<'a> {
+pub(super) struct WorkerDocumentEffects<'a> {
     pub session: &'a DocumentSyncSession,
     pub document_state: &'a DocumentState,
     pub document_id: &'a str,
-    pub attribution: Option<&'a SpreadsheetAttribution>,
+    pub attribution: Option<&'a DocumentAttribution>,
 }
 
-fn notification_error(error: impl std::fmt::Debug) -> SpreadsheetError {
-    error!(error = ?error, "failed to notify spreadsheet update");
-    SpreadsheetError::Notification
+fn notification_error(error: impl std::fmt::Debug) -> DocumentError {
+    error!(error = ?error, "failed to notify document update");
+    DocumentError::Notification
 }
 
-impl SpreadsheetUpdateEffects for WorkerSpreadsheetEffects<'_> {
-    fn broadcast(&self, update: &[u8]) -> Result<(), SpreadsheetError> {
+impl DocumentUpdateEffects for WorkerDocumentEffects<'_> {
+    fn broadcast(&self, update: &[u8]) -> Result<(), DocumentError> {
         let message = crate::generated::schema::FromRemote::RemoteUpdate {
             update: bebop::SliceWrapper::Raw(update),
         };
@@ -35,17 +33,14 @@ impl SpreadsheetUpdateEffects for WorkerSpreadsheetEffects<'_> {
             .map_err(notification_error)?;
         for socket in self.session.get_websockets() {
             if let Err(error) = socket.send_with_bytes(&message_bytes) {
-                warn!(error = ?error, "failed to broadcast spreadsheet update; continuing");
+                warn!(error = ?error, "failed to broadcast document update; continuing");
             }
         }
         Ok(())
     }
 
-    fn publish_changed_document(&self) -> Result<(), SpreadsheetError> {
-        let attribution = self.attribution.as_ref().map(|claims| EditAttribution {
-            actor: claims.actor.clone(),
-            on_behalf_of: claims.on_behalf_of.clone(),
-        });
+    fn publish_changed_document(&self) -> Result<(), DocumentError> {
+        let attribution = self.attribution.cloned();
         let snapshot = self
             .document_state
             .export_shallow_snapshot()
@@ -53,13 +48,13 @@ impl SpreadsheetUpdateEffects for WorkerSpreadsheetEffects<'_> {
         let env = self.session.env.clone();
         let document_id = self.document_id.to_owned();
         self.session.state.wait_until(async move {
-            report_new_doc_state(&document_id, &snapshot, false, &env, attribution).await;
+            report_new_doc_state(&document_id, &snapshot, &env, attribution).await;
             report_interaction(&document_id, &env, InteractionReason::Edited).await;
         });
         Ok(())
     }
 
-    async fn keep_alive(&self) -> Result<(), SpreadsheetError> {
+    async fn keep_alive(&self) -> Result<(), DocumentError> {
         bump_alarm(&self.session.state)
             .await
             .map_err(notification_error)

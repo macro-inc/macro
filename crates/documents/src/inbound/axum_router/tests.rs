@@ -43,6 +43,8 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 use super::{DocumentRouterState, content_uploaded::content_uploaded_handler, documents_router};
+
+mod sync_content;
 use crate::{
     domain::{
         content::DocumentContent,
@@ -102,6 +104,13 @@ struct ContentUploadedCall {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+struct SyncContentCall {
+    document_id: String,
+    actor: Option<String>,
+    on_behalf_of: Option<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct TeamSlugCall {
     team_id: String,
     user_id: String,
@@ -121,6 +130,7 @@ struct FakeDocumentService {
     import_calls: Mutex<Vec<ImportEmailAttachmentCall>>,
     upload_snapshot_calls: Mutex<Vec<UploadSnapshotCall>>,
     content_uploaded_calls: Mutex<Vec<ContentUploadedCall>>,
+    sync_content_calls: Mutex<Vec<SyncContentCall>>,
     internal_get_calls: Mutex<Vec<String>>,
     team_slug_calls: Mutex<Vec<TeamSlugCall>>,
     team_slug_result: Mutex<Option<TeamSlugResult>>,
@@ -439,6 +449,23 @@ impl DocumentService for FakeDocumentService {
 }
 
 impl DocumentContentEventService for FakeDocumentService {
+    async fn publish_sync_content_updated(
+        &self,
+        document_id: &str,
+        actor: Option<String>,
+        on_behalf_of: Option<String>,
+    ) -> Result<(), DocumentError> {
+        self.sync_content_calls
+            .lock()
+            .unwrap()
+            .push(SyncContentCall {
+                document_id: document_id.to_string(),
+                actor,
+                on_behalf_of,
+            });
+        Ok(())
+    }
+
     async fn publish_content_uploaded(
         &self,
         document_id: &str,
@@ -862,6 +889,16 @@ fn test_router() -> (
         "/{document_id}/content-uploaded",
         axum::routing::post(
             content_uploaded_handler::<
+                FakeDocumentService,
+                FakeEntityAccessService,
+                FakeAuthorizationService,
+            >,
+        ),
+    )
+    .route(
+        "/{document_id}/sync-content-updated",
+        axum::routing::post(
+            super::sync_content_updated::sync_content_updated_handler::<
                 FakeDocumentService,
                 FakeEntityAccessService,
                 FakeAuthorizationService,
