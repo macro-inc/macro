@@ -353,10 +353,18 @@ must not start a replacement call if the original ended, or rejoin after the
 user chose Leave. A failed join must restore the Try again control even if
 background cleanup is slow.
 
+If another call prevents joining, the error should say to leave the current
+call first. A restored live session must clear any earlier join or recovery
+error. Failed Join, Call Again, and Leave actions must not produce unhandled
+promise rejections.
+
 On iOS, ending a call during connection must leave Join usable. If CallKit
 restores or answers another call while an earlier join or leave finishes, the
 controls must follow the current native call; finishing the old operation must
 not restore the old call or remove the new call's end handler.
+An empty native snapshot before the first media update must not cancel a new
+join. Once native has reported the session, disconnecting or ending it must
+cancel pending connection/recovery and allow a new join.
 
 ## Channel tabs
 

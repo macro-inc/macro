@@ -1,3 +1,4 @@
+import { ThrownResultError } from '@core/util/result';
 import type { CallTokenResponse } from '@service-call/client';
 import type { DisconnectReason } from 'livekit-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -169,6 +170,50 @@ describe('shared call lifecycle', () => {
     expect(lifecycle.getState().t).toBe('idle');
   });
 
+  it.each([
+    {
+      error: new ThrownResultError([
+        { code: 'CONFLICT', message: 'Already in another call' },
+      ]),
+      message:
+        "You're already in another call. Leave your current call before joining a new one.",
+    },
+    {
+      error: new Error('Network unavailable'),
+      message: 'Unable to join the call. Please check your connection.',
+    },
+  ])(
+    'preserves join failures and displays $message',
+    async ({ error, message }) => {
+      const { lifecycle, ports } = setup();
+      ports.requestToken.mockRejectedValueOnce(error);
+      await expect(lifecycle.join(call.channelId)).rejects.toBe(error);
+      expect(lifecycle.getState()).toEqual({
+        t: 'failed',
+        channelId: call.channelId,
+        error,
+      });
+      expect(ports.setError).toHaveBeenLastCalledWith(message);
+    }
+  );
+
+  it('cancels a pending join when native confirms the session ended', async () => {
+    const { lifecycle, ports } = setup();
+    const pending = deferred<CallTokenResponse>();
+    ports.requestToken.mockReturnValueOnce(pending.promise);
+    const cancelled = expect(lifecycle.join(call.channelId)).rejects.toThrow(
+      'cancelled'
+    );
+    lifecycle.syncSession(undefined);
+    await cancelled;
+    expect(lifecycle.getState().t).toBe('idle');
+    expect(ports.setError).toHaveBeenLastCalledWith(null);
+    pending.resolve(token);
+    await vi.advanceTimersByTimeAsync(JOIN_TIMEOUT_MS);
+    expect(ports.connect).not.toHaveBeenCalled();
+    expect(ports.onJoined).not.toHaveBeenCalled();
+  });
+
   it('detaches the session listener before explicit leave and shares duplicate leaves', async () => {
     const { lifecycle, ports, unwatch, disconnect, join } = setup();
     await join();
@@ -253,6 +298,44 @@ describe('shared call lifecycle', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(ports.requestToken).toHaveBeenCalledOnce();
     expect(lifecycle.getState().t).toBe('idle');
+  });
+
+  it.each(['retry-wait', 'checking'] as const)(
+    'cancels recovery when native ends during %s',
+    async (phase) => {
+      const { lifecycle, ports, disconnect, join } = setup();
+      await join();
+      const lookup = deferred<ActiveCallLookup>();
+      ports.lookup.mockReturnValueOnce(lookup.promise);
+      const onLeave = vi.fn();
+      lifecycle.onLeave(onLeave);
+      disconnect();
+      if (phase === 'checking')
+        await vi.advanceTimersByTimeAsync(AUTO_REJOIN_DELAY_MS);
+      expect(lifecycle.getState().t).toBe(phase);
+      lifecycle.syncSession(undefined);
+      lifecycle.syncSession(undefined);
+      expect(lifecycle.getState().t).toBe('idle');
+      expect(ports.setError).toHaveBeenLastCalledWith(null);
+      expect(onLeave).toHaveBeenCalledExactlyOnceWith(call.channelId);
+      lookup.resolve({ callId: call.callId });
+      await vi.advanceTimersByTimeAsync(AUTO_REJOIN_DELAY_MS + 300);
+      expect(ports.requestToken).toHaveBeenCalledOnce();
+    }
+  );
+
+  it('clears the recovery error when a live native session is adopted', async () => {
+    const { lifecycle, ports, disconnect, join } = setup();
+    await join();
+    disconnect();
+    expect(ports.setError).toHaveBeenLastCalledWith(
+      'Call disconnected. Reconnecting…'
+    );
+    lifecycle.syncSession(call);
+    expect(lifecycle.getState()).toEqual({ t: 'active', call });
+    expect(ports.setError).toHaveBeenLastCalledWith(null);
+    await vi.advanceTimersByTimeAsync(AUTO_REJOIN_DELAY_MS);
+    expect(ports.lookup).not.toHaveBeenCalled();
   });
 
   it('refuses recovery after sleep, including a lookup frozen in flight', async () => {

@@ -1,3 +1,4 @@
+import { thrownResultErrorHasCode } from '@core/util/result';
 import {
   type Cleanup,
   createMachine,
@@ -45,13 +46,14 @@ export type CallLifecycleState =
   | { t: 'retry-wait'; attempt: AutoRejoinAttempt }
   | { t: 'checking'; attempt: AutoRejoinAttempt }
   | { t: 'leaving'; request: Leave }
-  | { t: 'failed'; channelId: string };
+  | { t: 'failed'; channelId: string; error: unknown };
 type Event =
   | { t: 'join'; request: Join }
   | { t: 'leave'; request: Leave }
   | { t: 'connected' | 'adopt'; call: CallIdentity }
   | { t: 'disconnected'; retry: boolean; at: number }
-  | { t: 'retry' | 'finish' | 'fail' };
+  | { t: 'fail'; error: unknown }
+  | { t: 'retry' | 'finish' };
 
 const definition: MachineDef<CallLifecycleState, Event> = {
   idle: { on: (_state, event) => changeIntent(event) },
@@ -61,9 +63,14 @@ const definition: MachineDef<CallLifecycleState, Event> = {
         .with({ t: 'connected' }, ({ call }) => ({
           state: { t: 'active', call } as const,
         }))
-        .with({ t: 'fail' }, () => ({
-          state: { t: 'failed', channelId: state.request.channelId } as const,
+        .with({ t: 'fail' }, ({ error }) => ({
+          state: {
+            t: 'failed',
+            channelId: state.request.channelId,
+            error,
+          } as const,
         }))
+        .with({ t: 'finish' }, () => ({ state: { t: 'idle' } as const }))
         .with({ t: 'leave' }, ({ request }) => ({
           state: { t: 'leaving', request } as const,
         }))
@@ -166,6 +173,10 @@ export function createCallLifecycle(options: {
     initial: { t: 'idle' },
     def: definition,
     scopes: {
+      idle: () => {
+        options.rollbackJoin();
+        options.setError(null);
+      },
       joining: ({ request }, dispatch) => {
         let active = true;
         let settled = false;
@@ -173,7 +184,7 @@ export function createCallLifecycle(options: {
           if (!active) return;
           settled = true;
           request.reject(error);
-          dispatch({ t: 'fail' });
+          dispatch({ t: 'fail', error });
         };
         const timeout = setTimeout(
           () => fail(new Error('Connection timed out')),
@@ -237,6 +248,7 @@ export function createCallLifecycle(options: {
         };
       },
       active: ({ call }, dispatch) => {
+        options.setError(null);
         let active = true;
         async function endNativeSession() {
           if (!active) return;
@@ -315,10 +327,12 @@ export function createCallLifecycle(options: {
           active = false;
         };
       },
-      failed: ({ channelId }) => {
+      failed: ({ channelId, error }) => {
         options.rollbackJoin();
         options.setError(
-          'Unable to join the call. Please check your connection.'
+          thrownResultErrorHasCode(error, 'CONFLICT')
+            ? "You're already in another call. Leave your current call before joining a new one."
+            : 'Unable to join the call. Please check your connection.'
         );
         let active = true;
         // Recovery must not keep Try again pending, or tear down a newer join.
@@ -438,10 +452,18 @@ export function createCallLifecycle(options: {
         machine.dispatch({ t: 'adopt', call });
         return;
       }
-      const state = machine.getState();
-      if (state.t === 'active') {
-        machine.dispatch({ t: 'disconnected', retry: false, at: Date.now() });
-        notifyLeft(state.call.channelId);
+      const channelId = match(machine.getState())
+        .with({ t: 'active' }, ({ call }) => call.channelId)
+        .with({ t: 'joining' }, ({ request }) => request.channelId)
+        .with(
+          { t: 'retry-wait' },
+          { t: 'checking' },
+          ({ attempt }) => attempt.channelId
+        )
+        .otherwise(() => undefined);
+      if (channelId !== undefined) {
+        machine.dispatch({ t: 'finish' });
+        notifyLeft(channelId);
       }
     },
     onLeave: (listener: (channelId: string) => void) => {

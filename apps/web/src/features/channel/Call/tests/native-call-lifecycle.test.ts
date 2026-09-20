@@ -219,28 +219,89 @@ describe('native snapshot events and call ownership', () => {
     expect(listener).toHaveBeenCalledOnce();
   });
 
-  it.each([null, second])(
-    'replays a native end or replacement before the start transaction resolves (%j)',
-    async (latest) => {
+  it.each(['connecting', 'connected'] as const)(
+    'cancels a native %s session that ends before start resolves',
+    async (connectionState) => {
+      const { native, lifecycle, ports } = setup(null);
+      const pending = deferred();
+      ports.connect.mockReturnValueOnce(pending.promise);
+      const joining = lifecycle.join(first.channelId);
+      const cancelled = expect(joining).rejects.toThrow('cancelled');
+      await vi.advanceTimersByTimeAsync(300);
+      native.setSnapshot({ ...first, connectionState });
+      native.setSnapshot(null);
+      await cancelled;
+      expect(lifecycle.getState()).toEqual({ t: 'idle' });
+      pending.resolve();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(ports.onJoined).not.toHaveBeenCalled();
+      const retry = lifecycle.join(first.channelId);
+      await vi.advanceTimersByTimeAsync(300);
+      await retry;
+      expect(ports.requestToken).toHaveBeenCalledTimes(2);
+    }
+  );
+
+  it('adopts a native replacement before the old start transaction resolves', async () => {
+    const { native, lifecycle, ports } = setup(null);
+    const pending = deferred();
+    ports.connect.mockReturnValueOnce(pending.promise);
+    const joining = lifecycle.join(first.channelId);
+    await vi.advanceTimersByTimeAsync(300);
+    native.setSnapshot(first);
+    native.setSnapshot(second);
+    pending.resolve();
+    await joining;
+    expect(lifecycle.getState()).toEqual({
+      t: 'active',
+      call: identity(second),
+    });
+    expect(ports.onJoined).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    null,
+    { ...second, connectionState: 'disconnected' as const },
+    { ...second, connectionState: 'disconnecting' as const },
+  ])(
+    'ignores an empty or stale ended snapshot while native start is pending (%j)',
+    async (snapshot) => {
       const { native, lifecycle, ports } = setup(null);
       const pending = deferred();
       ports.connect.mockReturnValueOnce(pending.promise);
       const joining = lifecycle.join(first.channelId);
       await vi.advanceTimersByTimeAsync(300);
-      native.setSnapshot(first);
-      native.setSnapshot(latest);
+      native.setSnapshot(snapshot);
       pending.resolve();
       await joining;
-      expect(lifecycle.getState()).toEqual(
-        latest ? { t: 'active', call: identity(latest) } : { t: 'idle' }
+      // Start can resolve before the first media snapshot, so another empty
+      // notification must not end the acknowledged call either.
+      native.setSnapshot(snapshot);
+      expect(lifecycle.getState()).toEqual({
+        t: 'active',
+        call: identity(first),
+      });
+      expect(ports.onJoined).toHaveBeenCalledExactlyOnceWith(identity(first));
+    }
+  );
+
+  it.each(['disconnected', 'disconnecting'] as const)(
+    'allows a real new join while the old native snapshot is %s',
+    async (connectionState) => {
+      const { native, lifecycle, ports } = setup();
+      native.setSnapshot({ ...first, connectionState });
+      expect(lifecycle.getState().t).toBe('idle');
+      const joining = lifecycle.join(first.channelId);
+      await vi.advanceTimersByTimeAsync(300);
+      await joining;
+      expect(ports.requestToken).toHaveBeenCalledExactlyOnceWith(
+        first.channelId
       );
-      expect(ports.onJoined).not.toHaveBeenCalled();
-      if (!latest) {
-        const retry = lifecycle.join(first.channelId);
-        await vi.advanceTimersByTimeAsync(300);
-        await retry;
-        expect(ports.requestToken).toHaveBeenCalledTimes(2);
-      }
+      expect(ports.connect).toHaveBeenCalledOnce();
+      expect(lifecycle.getState()).toEqual({
+        t: 'active',
+        call: identity(first),
+      });
     }
   );
 
@@ -274,5 +335,6 @@ describe('native snapshot events and call ownership', () => {
     });
     expect(ports.watch).toHaveBeenCalledOnce();
     expect(ports.leave).not.toHaveBeenCalled();
+    expect(ports.setError).toHaveBeenLastCalledWith(null);
   });
 });

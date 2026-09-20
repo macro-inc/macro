@@ -1,3 +1,4 @@
+import { match, P } from 'ts-pattern';
 import type { createCallLifecycle } from './call-lifecycle';
 import type { NativeCallState } from './native-call-state';
 
@@ -6,35 +7,42 @@ export function bindNativeCallLifecycle(
   nativeCall: Pick<NativeCallState, 'snapshot' | 'onSnapshot'>,
   lifecycle: ReturnType<typeof createCallLifecycle>
 ) {
-  let snapshotChangedDuringJoin = false;
+  let nativeSessionObserved = false;
   const sync = () => {
-    const snapshot = nativeCall.snapshot();
-    if (snapshot?.connectionState === 'connected') {
-      lifecycle.syncSession({
-        channelId: snapshot.channelId,
-        callId: snapshot.callId,
-      });
-    } else if (!snapshot || snapshot.connectionState === 'disconnected') {
-      lifecycle.syncSession(undefined);
-    }
+    match(nativeCall.snapshot())
+      .with({ connectionState: 'connected' }, (snapshot) => {
+        nativeSessionObserved = true;
+        lifecycle.syncSession({
+          channelId: snapshot.channelId,
+          callId: snapshot.callId,
+        });
+      })
+      .with({ connectionState: P.union('connecting', 'reconnecting') }, () => {
+        nativeSessionObserved = true;
+      })
+      .with(
+        null,
+        { connectionState: P.union('disconnected', 'disconnecting') },
+        () => {
+          // CallKit acknowledges start before media snapshots necessarily
+          // arrive. An empty snapshot only ends an observed native session.
+          if (nativeSessionObserved) lifecycle.syncSession(undefined);
+        }
+      )
+      .exhaustive();
   };
   const unsubscribeState = lifecycle.subscribe((state) => {
+    if (state.t === 'joining') nativeSessionObserved = false;
     if (
+      state.t === 'joining' ||
       state.t === 'idle' ||
       state.t === 'failed' ||
-      (state.t === 'active' && snapshotChangedDuringJoin)
+      state.t === 'active'
     ) {
-      snapshotChangedDuringJoin = false;
       sync();
     }
   });
-  const unsubscribeSnapshot = nativeCall.onSnapshot(() => {
-    // A CallKit transaction acknowledges the start request separately from
-    // media events. Replay an observed end/replacement after that join settles;
-    // the initial null snapshot alone does not mean the new call has ended.
-    if (lifecycle.getState().t === 'joining') snapshotChangedDuringJoin = true;
-    sync();
-  });
+  const unsubscribeSnapshot = nativeCall.onSnapshot(sync);
   return () => {
     unsubscribeSnapshot();
     unsubscribeState();
