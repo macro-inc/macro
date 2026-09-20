@@ -1,6 +1,6 @@
 # Machine migration verification
 
-Latest call lifecycle follow-up: [review fixes, refreshed browser videos, and regression proof](call-review-fixes/README.md) at commit `314ce3692`.
+Latest call lifecycle follow-up: [native cancellation server cleanup, before/after video and regression proof](call-cancel-cleanup/README.md) at commit `8e785ffe4`.
 
 Three independent PRs, each targeting `main`, with the same browser scenarios run before and after its migration. The AFTER recordings and assertions were refreshed after the effect-removal review. Recordings use the local stack started with `--with-chrome`, local test accounts and fixtures, and a real local LiveKit server.
 

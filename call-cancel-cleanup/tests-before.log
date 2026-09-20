@@ -1,0 +1,91 @@
+$ bunx vitest run --project channel src/features/channel/Call/tests/call-lifecycle.test.ts src/features/channel/Call/tests/native-call-lifecycle.test.ts
+
+ RUN  v5.0.1 /tmp/macro-machine-proof/call-session/apps/web
+
+ ❯ |channel| src/features/channel/Call/tests/call-lifecycle.test.ts (33 tests | 3 failed) 31ms
+   ❯ shared call lifecycle (33)
+     × leaves server membership when native cancels 0 ms after requesting a token 4ms
+     × leaves server membership when native cancels 300 ms after requesting a token 1ms
+     × leaves server membership even if native cancellation disconnect fails 1ms
+ ❯ |channel| src/features/channel/Call/tests/native-call-lifecycle.test.ts (23 tests | 5 failed) 28ms
+   ❯ native snapshot events and call ownership (23)
+     × cancels a native connecting session that ends before start resolves 3ms
+     × cancels a native connected session that ends before start resolves 1ms
+     × preserves a new native call when cancelled-join cleanup finishes with resolve 3ms
+     × preserves a new native call when cancelled-join cleanup finishes with reject 1ms
+     × preserves a new native call when cancelled-join cleanup finishes with timeout 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |channel| src/features/channel/Call/tests/call-lifecycle.test.ts > shared call lifecycle > leaves server membership when native cancels 0 ms after requesting a token
+ FAIL  |channel| src/features/channel/Call/tests/call-lifecycle.test.ts > shared call lifecycle > leaves server membership when native cancels 300 ms after requesting a token
+AssertionError: expected "vi.fn()" to be called once with arguments: [ { endNativeCall: false } ]
+
+Number of calls: 0
+
+ ❯ src/features/channel/Call/tests/call-lifecycle.test.ts:240:32
+    238|       await cancelled;
+    239|       await vi.advanceTimersByTimeAsync(0);
+    240|       expect(ports.disconnect).toHaveBeenCalledExactlyOnceWith({
+       |                                ^
+    241|         endNativeCall: false,
+    242|       });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  |channel| src/features/channel/Call/tests/call-lifecycle.test.ts > shared call lifecycle > leaves server membership even if native cancellation disconnect fails
+AssertionError: expected "vi.fn()" to be called once with arguments: [ 'channel-1' ]
+
+Number of calls: 0
+
+ ❯ src/features/channel/Call/tests/call-lifecycle.test.ts:266:25
+    264|     await cancelled;
+    265|     await vi.advanceTimersByTimeAsync(0);
+    266|     expect(ports.leave).toHaveBeenCalledExactlyOnceWith(call.channelId…
+       |                         ^
+    267|     expect(ports.reportError).toHaveBeenCalledExactlyOnceWith(failure);
+    268|     expect(lifecycle.getState().t).toBe('idle');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+ FAIL  |channel| src/features/channel/Call/tests/native-call-lifecycle.test.ts > native snapshot events and call ownership > cancels a native connecting session that ends before start resolves
+ FAIL  |channel| src/features/channel/Call/tests/native-call-lifecycle.test.ts > native snapshot events and call ownership > cancels a native connected session that ends before start resolves
+AssertionError: expected "vi.fn()" to be called once with arguments: [ { endNativeCall: false } ]
+
+Number of calls: 0
+
+ ❯ src/features/channel/Call/tests/native-call-lifecycle.test.ts:236:32
+    234|       await vi.advanceTimersByTimeAsync(0);
+    235|       expect(lifecycle.getState()).toEqual({ t: 'idle' });
+    236|       expect(ports.disconnect).toHaveBeenCalledExactlyOnceWith({
+       |                                ^
+    237|         endNativeCall: false,
+    238|       });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
+
+ FAIL  |channel| src/features/channel/Call/tests/native-call-lifecycle.test.ts > native snapshot events and call ownership > preserves a new native call when cancelled-join cleanup finishes with resolve
+ FAIL  |channel| src/features/channel/Call/tests/native-call-lifecycle.test.ts > native snapshot events and call ownership > preserves a new native call when cancelled-join cleanup finishes with reject
+ FAIL  |channel| src/features/channel/Call/tests/native-call-lifecycle.test.ts > native snapshot events and call ownership > preserves a new native call when cancelled-join cleanup finishes with timeout
+AssertionError: expected 'idle' to be 'leaving' // Object.is equality
+
+Expected: "leaving"
+Received: "idle"
+
+ ❯ src/features/channel/Call/tests/native-call-lifecycle.test.ts:266:38
+    264|       await cancelled;
+    265|       await vi.advanceTimersByTimeAsync(0);
+    266|       expect(lifecycle.getState().t).toBe('leaving');
+       |                                      ^
+    267|       expect(ports.leave).toHaveBeenCalledExactlyOnceWith(first.channe…
+    268|       native.setSnapshot(second);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  8 failed | 48 passed (56)
+   Start at  21:06:24
+   Duration  386ms (environment 62%, transform 22%, tests 10%, import 5%, worker 1%)
+
+error: script "test" exited with code 1

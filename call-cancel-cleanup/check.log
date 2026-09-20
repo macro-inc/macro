@@ -1,0 +1,20 @@
+warning: Git tree '/tmp/macro-machine-proof/call-session' is dirty
+── biome (changed JS/TS format + lint, same flags as CI)
+Checked 13 files in 317ms. No fixes applied.
+── oxlint (warn-only; docs/STYLE_GUIDE.md FE-12)
+Saved lockfile
+src/features/channel/Call/CallContext.tsx:500:3: warning eslint(complexity): function `logMicAudioProcessing` has a complexity of 25. Maximum allowed is 20.
+src/features/channel/Call/CallContext.tsx:584:36: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/features/channel/Call/CallContext.tsx:585:30: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/features/channel/Call/CallContext.tsx:598:3: warning eslint(complexity): async function `applyNoiseSuppressionToMicTrack` has a complexity of 31. Maximum allowed is 20.
+src/features/channel/Call/CallContext.tsx:737:3: warning eslint(complexity): async function `ensureBackgroundEffectOnCameraTrack` has a complexity of 21. Maximum allowed is 20.
+src/features/channel/Call/CallContext.tsx:837:23: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/features/channel/Call/CallContext.tsx:845:22: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/features/channel/Call/CallContext.tsx:1172:8: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/features/channel/Call/CallContext.tsx:1165:8: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+── ast-grep code rules (rule ids map to docs/STYLE_GUIDE.md)
+Saved lockfile
+[warn] postinstall script did not run; falling back to runtime binary resolution.
+Enable postinstall to avoid the per-invocation overhead.
+
+OK

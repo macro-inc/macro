@@ -1,0 +1,10 @@
+$ bunx vitest run --project channel src/features/channel/Call/tests/call-lifecycle.test.ts src/features/channel/Call/tests/native-call-lifecycle.test.ts
+
+ RUN  v5.0.1 /tmp/macro-machine-proof/call-session/apps/web
+
+
+ Test Files  2 passed (2)
+      Tests  56 passed (56)
+   Start at  21:07:00
+   Duration  388ms (environment 61%, transform 20%, import 10%, tests 9%, worker 1%)
+

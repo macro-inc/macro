@@ -1,0 +1,28 @@
+[
+  {
+    "phase": "before",
+    "callId": "01a0c0a8-431e-78c1-bbc1-fb30a5b17e20",
+    "beforeMembers": 1,
+    "afterMembers": 1,
+    "activeAfter": true,
+    "leaves": 0,
+    "disconnects": 0,
+    "joined": 0,
+    "outcome": "Error: Call join cancelled",
+    "state": "idle",
+    "errors": []
+  },
+  {
+    "phase": "after",
+    "callId": "01a0c0a8-431e-78c1-bbc1-fb30a5b17e20",
+    "beforeMembers": 1,
+    "afterMembers": 0,
+    "activeAfter": true,
+    "leaves": 1,
+    "disconnects": 1,
+    "joined": 0,
+    "outcome": "Error: Call join cancelled",
+    "state": "idle",
+    "errors": []
+  }
+]
