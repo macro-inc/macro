@@ -95,6 +95,7 @@ import { decodeSystemActivity } from '../queries/system-activity';
 import { SystemActivity } from '../SystemActivity';
 import { ChannelThread } from '../Thread';
 import { ThreadRow } from '../Thread/ThreadRow';
+import { ThreadTypingIndicator } from '../Thread/ThreadTypingIndicator';
 import { buildReplyTargetValue } from '../Thread/utils/message-actions';
 import { isUnifiedInputMode } from '../unified-input-mode';
 import { ActiveCallMessage } from './ActiveCallMessage';
@@ -269,6 +270,8 @@ export function Channel(props: ChannelProps) {
     )
   );
   const timelineKeys = createMemo(() => timeline().map((entry) => entry.key));
+  const isNewestTimelineEntry = (key: string) =>
+    !messagesQuery.hasPreviousPage && key === timelineKeys().at(-1);
   const timelineByKey = createMemo(
     () =>
       new Map(
@@ -769,6 +772,7 @@ export function Channel(props: ChannelProps) {
                               return;
                             return (
                               36 +
+                              (isNewestTimelineEntry(key) ? 28 : 0) +
                               (isDateDividerVisible(
                                 row.createdAt,
                                 activityListMeta(key)
@@ -825,6 +829,17 @@ export function Channel(props: ChannelProps) {
                                       listMeta={activityListMeta(item.id)}
                                     >
                                       <SystemActivity event={activity()} />
+                                      <Show
+                                        when={isNewestTimelineEntry(item.id)}
+                                      >
+                                        <ThreadTypingIndicator
+                                          parent={{
+                                            type: 'channel',
+                                            id: props.channelId,
+                                          }}
+                                          threadId={null}
+                                        />
+                                      </Show>
                                     </ThreadRow>
                                   )}
                                 </Show>
@@ -835,7 +850,7 @@ export function Channel(props: ChannelProps) {
                               item.id
                             );
                             const isNewestThread = () =>
-                              item.id === messageIndex.keys.at(-1);
+                              isNewestTimelineEntry(item.id);
 
                             return (
                               <Show when={message()}>
