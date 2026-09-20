@@ -1,0 +1,20 @@
+{
+  "pull_request": 6667,
+  "before": "afb7020f0a991fa3e142af0e175d1be1a11a805a",
+  "after": "c36cf49c76b09116fa2b7746b3ab4180cf38e114",
+  "focused_tests": 88,
+  "broader_tests": 443,
+  "test_files": 62,
+  "qc": {
+    "code": true,
+    "simplification": true,
+    "consistency": true,
+    "robustness": true,
+    "scope": true
+  },
+  "browser": "Owned local Chrome against the isolated local backend; real LiveKit connections, synthetic microphone, optional noise suppression off.",
+  "native": "Adopted-session and error-view unit regressions; not physical iOS.",
+  "sha256": {
+    "before-after.mp4": "9ace9809444a7899349de03d70ae4815a36629ac1d0668862d06540e2af2b28c"
+  }
+}

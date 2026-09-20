@@ -1,0 +1,36 @@
+$ bunx vitest run --project channel src/features/channel/Call/tests/use-call.test.ts
+
+ RUN  v5.0.1 /tmp/macro-machine-proof/call-session/apps/web
+
+ ❯ |channel| src/features/channel/Call/tests/use-call.test.ts (2 tests | 1 failed) 5ms
+   ❯ call view errors (2)
+     × keeps the active call overlay visible when another channel cannot join 4ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |channel| src/features/channel/Call/tests/use-call.test.ts > call view errors > keeps the active call overlay visible when another channel cannot join
+AssertionError: expected 'You\'re already in another call. Leav…' to be null
+
+- Expected:
+null
+
++ Received:
+"You're already in another call. Leave your current call before joining a new one."
+
+ ❯ src/features/channel/Call/tests/use-call.test.ts:28:32
+     26|     error = "You're already in another call. Leave your current call b…
+     27|     expect(active.isInThisChannel()).toBe(true);
+     28|     expect(active.joinError()).toBeNull();
+       |                                ^
+     29|     expect(other.isInThisChannel()).toBe(false);
+     30|     expect(other.joinError()).toBe(error);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  22:15:35
+   Duration  286ms (environment 79%, transform 12%, import 5%, tests 2%, worker 2%)
+
+error: script "test" exited with code 1

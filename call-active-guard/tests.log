@@ -1,0 +1,23 @@
+
+ RUN  v5.0.1 /tmp/macro-machine-proof/call-session/apps/web
+
+10:21:21 PM [vite] (client) warning: The JSX import source cannot be set without also enabling React's "automatic" JSX transform
+1570|  
+1571|  /**
+1572|   * @jsxImportSource solid-js
+   |                      ^
+1573|   */
+1574|  /**
+
+  Plugin: vite:esbuild
+  File: /home/teo/.herdr/worktrees/macro/machine/node_modules/virtua/lib/solid/index.jsx
+
+ Test Files  62 passed (62)
+      Tests  443 passed (443)
+   Start at  22:21:19
+   Duration  15.94s (transform 63%, environment 22%, import 12%, tests 3%)
+
+  Transform  |channel| transforming modules took 64.07s · 63% of tracked time, re-done on every run
+             persist transforms across runs with fsModuleCache: true
+             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns
+

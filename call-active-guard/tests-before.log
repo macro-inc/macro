@@ -1,0 +1,54 @@
+$ bunx vitest run --project channel src/features/channel/Call/tests/call-lifecycle.test.ts
+
+ RUN  v5.0.1 /tmp/macro-machine-proof/call-session/apps/web
+
+ ❯ |channel| src/features/channel/Call/tests/call-lifecycle.test.ts (35 tests | 2 failed) 33ms
+   ❯ shared call lifecycle (35)
+     × preserves the joined live call when another channel tries to join 7ms
+     × preserves the adopted live call when another channel tries to join 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |channel| src/features/channel/Call/tests/call-lifecycle.test.ts > shared call lifecycle > preserves the joined live call when another channel tries to join
+ FAIL  |channel| src/features/channel/Call/tests/call-lifecycle.test.ts > shared call lifecycle > preserves the adopted live call when another channel tries to join
+AssertionError: expected { t: 'failed', …(2) } to deeply equal { t: 'active', call: { …(2) } }
+
+- Expected
++ Received
+
+  {
+-   "call": {
+-     "callId": "call-1",
+-     "channelId": "channel-1",
++   "channelId": "channel-2",
++   "error": ThrownResultError {
++     "message": "Already in another call",
++     "errors": [
++       {
++         "code": "CONFLICT",
++         "message": "Already in another call",
++       },
++     ],
++     "name": "ThrownResultError",
+    },
+-   "t": "active",
++   "t": "failed",
+  }
+
+ ❯ src/features/channel/Call/tests/call-lifecycle.test.ts:148:36
+    146|       await expect(lifecycle.join('channel-2', onJoin)).rejects.toThro…
+    147|       await vi.advanceTimersByTimeAsync(300);
+    148|       expect(lifecycle.getState()).toEqual({ t: 'active', call });
+       |                                    ^
+    149|       expect(ports.requestToken).toHaveBeenCalledTimes(tokenRequests);
+    150|       expect(ports.disconnect).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 33 passed (35)
+   Start at  22:12:58
+   Duration  367ms (environment 59%, transform 24%, tests 11%, import 5%, worker 1%)
+
+error: script "test" exited with code 1

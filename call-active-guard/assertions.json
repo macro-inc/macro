@@ -1,0 +1,35 @@
+{
+  "races": [
+    {
+      "phase": "before",
+      "outcome": "ThrownResultError: Resource conflict",
+      "transport": "disconnected",
+      "lifecycle": "failed",
+      "tokens": 2,
+      "disconnects": 1,
+      "unwatches": 1,
+      "left": 0,
+      "leaves": [
+        "01a0c0f9-63b0-7994-8297-49d0eed7d4e0"
+      ],
+      "message": "You're already in another call. Leave your current call before joining a new one."
+    },
+    {
+      "phase": "after",
+      "outcome": "Error: You're already in another call. Leave your current call before joining a new one.",
+      "transport": "connected",
+      "lifecycle": "active",
+      "tokens": 1,
+      "disconnects": 0,
+      "unwatches": 0,
+      "left": 0,
+      "leaves": [],
+      "message": "You're already in another call. Leave your current call before joining a new one."
+    }
+  ],
+  "ui": {
+    "leaveControls": 1,
+    "otherTokens": 0,
+    "guidanceVisible": true
+  }
+}
