@@ -153,6 +153,48 @@ describe('makeMarkDoneAction', () => {
     mocks.toNotificationEntityRef.mockReset();
   });
 
+  it('allows mark done on agent-session rows', () => {
+    const { action, dispose } = createAction();
+
+    expect(
+      action.canExecute({
+        type: 'agent_session',
+        id: 'session-1',
+      } as EntityData)
+    ).toBe(true);
+    expect(
+      action.canExecute({ type: 'channel_message', id: 'msg-1' } as EntityData)
+    ).toBe(false);
+    dispose();
+  });
+
+  it('uses the agent-session entity target while GraphQL Soup is enabled', async () => {
+    mocks.graphqlSoupEnabled.mockReturnValue(true);
+    mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
+      emailIds: [],
+      notificationIds: ['agent-notification'],
+      reminderIds: [],
+    });
+    mocks.toNotificationEntityRef.mockReturnValue({
+      type: 'agent_session',
+      id: 'session-1',
+    });
+    const session = { type: 'agent_session', id: 'session-1' } as EntityData;
+    const { action, dispose } = createAction();
+
+    await action.execute([session]);
+
+    expect(mocks.toNotificationEntityRef).toHaveBeenCalledWith(session);
+    expect(mocks.mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        exactNotificationIds: { current: [] },
+        notificationEntities: [{ type: 'agent_session', id: 'session-1' }],
+        optimisticNotificationIds: ['agent-notification'],
+      })
+    );
+    dispose();
+  });
+
   it('opens the next focused entity in an engaged Preview Controller', async () => {
     const { soup, focusSet } = createSoup();
     const { action, dispose } = createAction();
