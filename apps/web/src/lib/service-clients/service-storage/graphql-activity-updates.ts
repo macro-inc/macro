@@ -1,8 +1,8 @@
+import type { Client, OperationResult } from '@urql/core';
 import {
   type ActivityInvalidation,
   revalidateActivityQueries,
-} from '@queries/activity/push-registry';
-import type { Client, OperationResult } from '@urql/core';
+} from '../../queries/activity/push-registry';
 import type { ActivityUpdatesSubscription } from './graphql/generated/graphql';
 
 export const ACTIVITY_PUSH_DEBOUNCE_MS = 300;

@@ -1,6 +1,6 @@
-import { registerActivityRevalidator } from '@queries/activity/push-registry';
 import type { Client } from '@urql/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { registerActivityRevalidator } from '../../queries/activity/push-registry';
 import { createActivityUpdatesHandler } from './graphql-activity-updates';
 
 const cleanups: Array<() => void> = [];

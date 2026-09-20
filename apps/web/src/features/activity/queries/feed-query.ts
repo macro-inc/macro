@@ -1,11 +1,11 @@
 import { createUrqlInfiniteQuery } from '@app/lib/urql-solid/create-urql-infinite-query';
-import { registerActivityRevalidator } from '@queries/activity/push-registry';
 import {
   MyActivityDocument,
   type MyActivityQuery,
   type MyActivityQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
 import { type Accessor, createMemo, onCleanup } from 'solid-js';
+import { registerActivityRevalidator } from '../../../lib/queries/activity/push-registry';
 import type { ActivityContext } from '../context/activity-context';
 import type { ActivityEvent } from '../core/event';
 import { decodeActivityEvent } from './decode';

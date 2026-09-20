@@ -1,11 +1,11 @@
 import { createUrqlQuery } from '@app/lib/urql-solid/create-urql-query';
-import { registerActivityRevalidator } from '@queries/activity/push-registry';
 import {
   MyActivityOverviewDocument,
   type MyActivityOverviewQuery,
   type MyActivityOverviewQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
 import { type Accessor, createMemo, onCleanup } from 'solid-js';
+import { registerActivityRevalidator } from '../../../lib/queries/activity/push-registry';
 import type { ActivityContext } from '../context/activity-context';
 import type { ActivityOverview } from '../core/event';
 import { decodeActivityOverview } from './decode';

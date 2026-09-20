@@ -1,6 +1,6 @@
-import { revalidateActivityQueries } from '@queries/activity/push-registry';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it } from 'vitest';
+import { revalidateActivityQueries } from '../../../lib/queries/activity/push-registry';
 import { createMockGraphql } from '../tests/mock-graphql';
 import { feedPage, overviewPage } from '../tests/wire';
 import { createMyActivityQuery } from './feed-query';

@@ -1,5 +1,4 @@
 import { createUrqlQuery } from '@app/lib/urql-solid/create-urql-query';
-import { registerActivityRevalidator } from '@queries/activity/push-registry';
 import { buildEntityPropertiesInput } from '@queries/properties/graphql/entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import {
@@ -8,6 +7,7 @@ import {
   type EntityActivityQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
 import { type Accessor, createMemo, onCleanup } from 'solid-js';
+import { registerActivityRevalidator } from '../../../lib/queries/activity/push-registry';
 import type { ActivityContext } from '../context/activity-context';
 import {
   type EntityActivityResult,
