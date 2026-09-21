@@ -404,7 +404,9 @@ select people or channels and send the session with an optional message using
 the same Share dialog and mobile drawer as documents. Sessions also support
 **Share** from entity list menus and the entity sharing shortcut. People receive it through a direct or
 group message. Recipients can view and control the session; there is no access
-level selector. Cancel closes the composer without sending.
+level selector. The owner sees the standard recipient-and-message form without
+an extra session notice or Copy Link footer; **Copy Share Link** remains in
+the header. Cancel closes the composer without sending.
 
 Other participants can copy a link for people who already have access, but
 cannot grant access. Copying a link alone never changes permissions. New,
