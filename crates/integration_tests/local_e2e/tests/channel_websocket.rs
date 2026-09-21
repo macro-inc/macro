@@ -59,11 +59,6 @@ async fn channel_message_posts_to_http_and_delivers_to_websocket() -> anyhow::Re
         .await
         .context("failed to decode post message response")?;
 
-    ensure!(
-        posted.nonce.as_deref() == Some(nonce.as_str()),
-        "post response did not echo nonce; response={posted:?}"
-    );
-
     let delivered = wait_for_posted_message(&mut websocket_read, &posted.id, &nonce).await?;
     let message = delivered
         .get("change")
@@ -127,10 +122,10 @@ async fn channel_message_posts_to_http_and_delivers_to_websocket() -> anyhow::Re
     Ok(())
 }
 
+/// The shared message record; the nonce travels on the realtime event, not the response.
 #[derive(Debug, Deserialize)]
 struct PostMessageResponse {
     id: String,
-    nonce: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
