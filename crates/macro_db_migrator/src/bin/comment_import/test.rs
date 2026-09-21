@@ -100,15 +100,15 @@ async fn imports_roots_replies_empty_threads_anchors_and_remaps(pool: PgPool) {
     assert_eq!(
         summary,
         Summary {
-            documents: 2,
+            documents: 3,
             batches: 1,
-            comment_mappings_allocated: 5,
-            thread_mappings_allocated: 5,
-            // Five comments and one structural root for the empty thread.
-            messages_inserted: 6,
+            comment_mappings_allocated: 6,
+            thread_mappings_allocated: 6,
+            // Six comments and one structural root for the empty thread.
+            messages_inserted: 7,
             messages_updated: 0,
             messages_tombstoned: 0,
-            threads_written: 5,
+            threads_written: 6,
             threads_tombstoned: 0,
             anchors_linked: 2,
             notifications_remapped: 3,
@@ -125,13 +125,13 @@ async fn imports_roots_replies_empty_threads_anchors_and_remaps(pool: PgPool) {
     assert!(
         summary
             .to_string()
-            .contains("messages inserted:          6")
+            .contains("messages inserted:          7")
     );
 
     let comments = mappings(&mut connection).await;
     let threads = thread_mappings(&mut connection).await;
-    assert_eq!(comments.len(), 5);
-    assert_eq!(threads.len(), 5);
+    assert_eq!(comments.len(), 6);
+    assert_eq!(threads.len(), 6);
     assert!(comments.iter().all(|(_, id)| id.get_version_num() == 7));
     assert!(threads.iter().all(|(_, id)| id.get_version_num() == 7));
     // Roots follow legacy order: the deleted root keeps its identity as the thread root.
@@ -139,6 +139,7 @@ async fn imports_roots_replies_empty_threads_anchors_and_remaps(pool: PgPool) {
     assert_eq!(mapped(&threads, 3), mapped(&comments, 12));
     assert_eq!(mapped(&threads, 4), mapped(&comments, 13));
     assert_eq!(mapped(&threads, 5), mapped(&comments, 14));
+    assert_eq!(mapped(&threads, 6), mapped(&comments, 17));
 
     let root = message(&mut connection, mapped(&comments, 10)).await;
     assert_eq!(
@@ -187,6 +188,20 @@ async fn imports_roots_replies_empty_threads_anchors_and_remaps(pool: PgPool) {
         StoredThread {
             resolved: false,
             anchor: None,
+            deleted: false,
+        }
+    );
+    // A spreadsheet range stored in legacy thread metadata becomes a spreadsheet anchor.
+    assert_eq!(
+        thread(&mut connection, mapped(&threads, 6)).await,
+        StoredThread {
+            resolved: false,
+            anchor: Some(json!({
+                "type": "spreadsheet",
+                "sheet_id": "sheet-1",
+                "sheet_name": "Budget",
+                "range": "B2:D4"
+            })),
             deleted: false,
         }
     );
@@ -261,7 +276,7 @@ async fn imports_roots_replies_empty_threads_anchors_and_remaps(pool: PgPool) {
         .fetch_one(&mut connection)
         .await
         .unwrap();
-    assert_eq!(legacy_count, 5);
+    assert_eq!(legacy_count, 6);
     let channel_messages: Vec<(String, Option<Uuid>)> = sqlx::query!(
         "SELECT content, thread_id FROM comms_messages WHERE parent_entity_type = 'channel' ORDER BY id"
     )
@@ -298,7 +313,7 @@ async fn imports_roots_replies_empty_threads_anchors_and_remaps(pool: PgPool) {
     // A second run finds nothing to do and keeps every id.
     let again = run(&mut connection, Options::default()).await.unwrap();
     assert!(again.is_noop(), "{again:?}");
-    assert_eq!(again.documents, 2);
+    assert_eq!(again.documents, 3);
     assert!(again.to_string().starts_with("Nothing to import"));
     assert_eq!(again.warnings.unmapped_notifications, 1);
     assert_eq!(mappings(&mut connection).await, comments);
@@ -314,7 +329,7 @@ async fn imports_roots_replies_empty_threads_anchors_and_remaps(pool: PgPool) {
         Pending {
             comments_without_mapping: 0,
             threads_without_mapping: 0,
-            documents_with_legacy_comments: 2,
+            documents_with_legacy_comments: 3,
         }
     );
 }
@@ -359,8 +374,8 @@ async fn delta_runs_carry_new_edited_and_deleted_legacy_comments(pool: PgPool) {
     assert_eq!(delta.warnings.root_order_drift, 1);
 
     let after = mappings(&mut connection).await;
-    assert_eq!(after.len(), 7);
-    assert!(after.starts_with(&comments));
+    assert_eq!(after.len(), 8);
+    assert!(comments.iter().all(|mapping| after.contains(mapping)));
     assert_eq!(thread_mappings(&mut connection).await, threads);
 
     let late = message(&mut connection, mapped(&after, 15)).await;
@@ -619,7 +634,7 @@ async fn failed_batch_rolls_back_and_can_retry(pool: PgPool) {
         .fetch_one(&mut connection)
         .await
         .unwrap();
-    assert_eq!(legacy_count, 5);
+    assert_eq!(legacy_count, 6);
 
     sqlx::query!(
         "UPDATE comms_message_threads SET anchor = NULL WHERE root_id = $1",
@@ -629,8 +644,8 @@ async fn failed_batch_rolls_back_and_can_retry(pool: PgPool) {
     .await
     .unwrap();
     let summary = run(&mut connection, Options::default()).await.unwrap();
-    assert_eq!(summary.comment_mappings_allocated, 5);
-    assert_eq!(summary.thread_mappings_allocated, 5);
+    assert_eq!(summary.comment_mappings_allocated, 6);
+    assert_eq!(summary.thread_mappings_allocated, 6);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -659,11 +674,11 @@ async fn mappings_cross_batch_boundaries_and_keep_ids_on_retry(pool: PgPool) {
         documents_per_batch: 1,
     };
     let summary = run(&mut connection, options).await.unwrap();
-    assert_eq!(summary.batches, 2);
-    assert_eq!(summary.documents, 2);
-    assert_eq!(summary.comment_mappings_allocated, MAPPING_CHUNK as u64 + 6);
+    assert_eq!(summary.batches, 3);
+    assert_eq!(summary.documents, 3);
+    assert_eq!(summary.comment_mappings_allocated, MAPPING_CHUNK as u64 + 7);
     let first = mappings(&mut connection).await;
-    assert_eq!(first.len(), MAPPING_CHUNK + 6);
+    assert_eq!(first.len(), MAPPING_CHUNK + 7);
     assert!(run(&mut connection, options).await.unwrap().is_noop());
     assert_eq!(mappings(&mut connection).await, first);
     let count: i64 = sqlx::query_scalar!(
@@ -672,7 +687,7 @@ async fn mappings_cross_batch_boundaries_and_keep_ids_on_retry(pool: PgPool) {
     .fetch_one(&mut connection)
     .await
     .unwrap();
-    assert_eq!(count, MAPPING_CHUNK as i64 + 6);
+    assert_eq!(count, MAPPING_CHUNK as i64 + 7);
 }
 
 #[test]

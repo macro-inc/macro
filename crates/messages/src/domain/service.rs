@@ -788,5 +788,31 @@ fn validate_post(parent: &MessageParent, input: &PostMessage) -> Result<(), Mess
     {
         return Err(MessageError::Invalid("invalid PDF comment geometry"));
     }
+    if let Some(NewThreadAnchor::Spreadsheet {
+        sheet_id, range, ..
+    }) = &input.anchor
+        && (sheet_id.is_empty() || !is_cell_range(range))
+    {
+        return Err(MessageError::Invalid("invalid spreadsheet comment range"));
+    }
     Ok(())
+}
+
+/// One or two A1-style cell addresses (`B2` or `B2:D4`), the form the spreadsheet editor stores.
+fn is_cell_range(range: &str) -> bool {
+    fn is_address(address: &str) -> bool {
+        let row_start = address
+            .find(|c: char| !c.is_ascii_uppercase())
+            .unwrap_or(address.len());
+        let (column, row) = address.split_at(row_start);
+        !column.is_empty()
+            && row.starts_with(|c: char| ('1'..='9').contains(&c))
+            && row.chars().all(|c| c.is_ascii_digit())
+    }
+    let mut addresses = range.splitn(3, ':');
+    match (addresses.next(), addresses.next(), addresses.next()) {
+        (Some(start), None, None) => is_address(start),
+        (Some(start), Some(end), None) => is_address(start) && is_address(end),
+        _ => false,
+    }
 }

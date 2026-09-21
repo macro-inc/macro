@@ -364,7 +364,7 @@ impl PgMessageRepository {
                     anchor_id, command.parent.entity_id(), command.actor.as_ref(), root_id, page,
                     x_pct, y_pct, width_pct, height_pct).execute(&mut **tx).await.map_err(database_error)?;
             }
-            Some(NewThreadAnchor::Markdown { .. }) | None => {}
+            Some(NewThreadAnchor::Markdown { .. } | NewThreadAnchor::Spreadsheet { .. }) | None => {}
         }
         Ok(())
     }

@@ -27,6 +27,8 @@ const PREFLIGHT_SAMPLE: i64 = 20;
 const UUID_PATTERN: &str =
     "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$";
 const DISCUSSION_MARK_PREFIX: &str = "DISCUSSION:";
+/// Spreadsheet comment ranges the editor stores: one or two A1 cell addresses.
+const CELL_RANGE_PATTERN: &str = "^[A-Z]+[1-9][0-9]*(:[A-Z]+[1-9][0-9]*)?$";
 const COMMENT_NOTIFICATION_TYPES: [&str; 3] = [
     "commented_on_document",
     "replied_to_document_comment_thread",
@@ -482,6 +484,16 @@ async fn upsert_thread_state(
                        THEN jsonb_build_object('type', 'pdf_highlight', 'anchor_id', ph.uuid)
                    WHEN t.metadata->>'markId' ~ $3
                        THEN jsonb_build_object('type', 'markdown', 'mark_id', (t.metadata->>'markId')::uuid)
+                   WHEN jsonb_typeof(t.metadata->'spreadsheet') = 'object'
+                       AND jsonb_typeof(t.metadata->'spreadsheet'->'sheetId') = 'string'
+                       AND t.metadata->'spreadsheet'->>'sheetId' <> ''
+                       AND jsonb_typeof(t.metadata->'spreadsheet'->'sheetName') = 'string'
+                       AND t.metadata->'spreadsheet'->>'range' ~ $4
+                       THEN jsonb_build_object(
+                           'type', 'spreadsheet',
+                           'sheet_id', t.metadata->'spreadsheet'->>'sheetId',
+                           'sheet_name', t.metadata->'spreadsheet'->>'sheetName',
+                           'range', t.metadata->'spreadsheet'->>'range')
                END,
                t.metadata, t."createdAt" AT TIME ZONE 'UTC', t."updatedAt" AT TIME ZONE 'UTC',
                CASE
@@ -522,6 +534,7 @@ async fn upsert_thread_state(
         documents,
         new_roots,
         UUID_PATTERN,
+        CELL_RANGE_PATTERN,
     )
     .execute(&mut **tx)
     .await?;

@@ -6,21 +6,58 @@ import { createSignal, onCleanup, type ParentProps } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DocumentDiscussion } from './DocumentDiscussion';
 
-const mocks = vi.hoisted(() => ({ mount: vi.fn(), unmount: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  mount: vi.fn(),
+  unmount: vi.fn(),
+  conversation: vi.fn(),
+}));
 
+vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  isFeatureEnabled: () => true,
+}));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => true }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanel: () => undefined,
 }));
-vi.mock('@core/messages/DocumentConversation', () => ({
-  DocumentConversation: () => null,
+vi.mock('../context/markdown-document-context', () => ({
+  useMarkdownDocument: () => ({
+    documentId: () => 'document',
+    kind: () => 'task',
+    permissions: {
+      canComment: () => true,
+      isOwner: () => false,
+    },
+  }),
 }));
-vi.mock('@core/signal/permissions', () => ({
-  useCanComment: () => () => true,
-  useIsDocumentOwner: () => () => false,
+vi.mock('@core/messages/DocumentConversation', () => ({
+  DocumentConversation: (props: {
+    parent: { type: string; id: string };
+    canWrite: boolean;
+    canManage: boolean;
+    buildLink: (message: { id: string }) => string;
+    hideComposer?: boolean;
+    hideWhenEmpty?: boolean;
+  }) => {
+    mocks.conversation(props);
+    return null;
+  },
+  DocumentConversationComposer: () => {
+    mocks.mount();
+    onCleanup(mocks.unmount);
+    return <textarea aria-label="Comment draft" />;
+  },
 }));
 vi.mock('@core/component/ParamsProvider', () => ({
   useUrlParams: () => ({ commentId: () => null }),
+}));
+vi.mock('@channel/Input/ChannelInputContainer', () => ({
+  ChannelInputContainer: (props: ParentProps) => props.children,
+}));
+vi.mock('@core/comments/discussion', () => ({
+  DiscussionProvider: (props: ParentProps) => props.children,
+  Discussion: () => null,
+  DiscussionComposer: () => null,
 }));
 vi.mock('../comments/documentDiscussionSource', () => ({
   createDocumentDiscussionSource: () => ({
@@ -34,15 +71,6 @@ vi.mock(
     StaticMarkdownContext: (props: ParentProps) => props.children,
   })
 );
-vi.mock('@core/comments/discussion', () => ({
-  DiscussionProvider: (props: ParentProps) => props.children,
-  Discussion: () => null,
-  DiscussionComposer: () => {
-    mocks.mount();
-    onCleanup(mocks.unmount);
-    return <textarea aria-label="Comment draft" />;
-  },
-}));
 
 afterEach(() => {
   cleanup();
@@ -66,7 +94,32 @@ function setup() {
   return { input, setEditorHasFocus };
 }
 
-describe('mobile document discussion accessory', () => {
+describe('mobile document discussion accessory behind the flag', () => {
+  it('moves the composer to the accessory and hides an empty conversation', () => {
+    setup();
+    expect(mocks.conversation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        parent: { type: 'document', id: 'document' },
+        canWrite: true,
+        canManage: false,
+        hideComposer: true,
+        hideWhenEmpty: true,
+      })
+    );
+    expect(mocks.mount).toHaveBeenCalledOnce();
+  });
+
+  it('builds links from the markdown document kind without a block context', () => {
+    setup();
+    const conversationProps = mocks.conversation.mock.calls[0][0] as {
+      buildLink: (message: { id: string }) => string;
+    };
+    const link = new URL(conversationProps.buildLink({ id: 'comment' }));
+
+    expect(link.pathname).toBe('/app/task/document');
+    expect(link.searchParams.get('comment_id')).toBe('comment');
+  });
+
   it('hides during document typing and restores the same draft when the keyboard closes', () => {
     const { input, setEditorHasFocus } = setup();
     setEditorHasFocus(true);
@@ -74,25 +127,9 @@ describe('mobile document discussion accessory', () => {
 
     setVirtualKeyboardVisible(true);
     expect(screen.queryByRole('textbox')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Ask AI' })).toBeNull();
     expect(mocks.unmount).not.toHaveBeenCalled();
 
     setVirtualKeyboardVisible(false);
-    expect(screen.getByRole('textbox')).toBe(input);
-    expect(input.value).toBe('Unsent comment');
-    expect(mocks.mount).toHaveBeenCalledOnce();
-  });
-
-  it('stays available for commenting with the keyboard open and responds to focus changes', () => {
-    const { input, setEditorHasFocus } = setup();
-    input.focus();
-    setVirtualKeyboardVisible(true);
-    expect(screen.getByRole('textbox')).toBe(input);
-    expect(document.activeElement).toBe(input);
-
-    setEditorHasFocus(true);
-    expect(screen.queryByRole('textbox')).toBeNull();
-    setEditorHasFocus(false);
     expect(screen.getByRole('textbox')).toBe(input);
     expect(input.value).toBe('Unsent comment');
     expect(mocks.mount).toHaveBeenCalledOnce();

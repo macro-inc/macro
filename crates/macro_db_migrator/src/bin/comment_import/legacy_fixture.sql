@@ -9,19 +9,22 @@ INSERT INTO comms_messages(id, channel_id, thread_id, sender_id, content) VALUES
     ('01990000-0000-7000-8000-000000000007', '01990000-0000-7000-8000-000000000005', '01990000-0000-7000-8000-000000000006', 'macro|migration@example.com', 'Channel reply');
 INSERT INTO "Document"(id, name, owner, "fileType") VALUES
     ('legacy-md', 'Legacy', 'macro|migration@example.com', 'md'),
-    ('legacy-pdf', 'Legacy PDF', 'macro|migration@example.com', 'pdf');
+    ('legacy-pdf', 'Legacy PDF', 'macro|migration@example.com', 'pdf'),
+    ('legacy-sheet', 'Legacy sheet', 'macro|migration@example.com', 'spreadsheet');
 INSERT INTO "Thread"(id, owner, "documentId", resolved, metadata, "createdAt", "updatedAt") VALUES
     (1, 'macro|migration@example.com', 'legacy-md', true, '{"markId":"01990000-0000-7000-8000-000000000002"}', '2020-01-01', '2020-01-02'),
     (2, 'macro|migration@example.com', 'legacy-md', false, '{"markId":"DISCUSSION:legacy"}', '2020-01-05', '2020-01-06'),
     (3, 'macro|migration@example.com', 'legacy-pdf', false, '{}', '2020-01-01', '2020-01-01'),
     (4, 'macro|migration@example.com', 'legacy-pdf', false, '{}', '2020-01-01', '2020-01-01'),
-    (5, 'macro|migration@example.com', 'legacy-md', false, '{"markId":"DISCUSSION:01990000-0000-7000-8000-000000000009"}', '2020-01-07', '2020-01-07');
+    (5, 'macro|migration@example.com', 'legacy-md', false, '{"markId":"DISCUSSION:01990000-0000-7000-8000-000000000009"}', '2020-01-07', '2020-01-07'),
+    (6, 'macro|migration@example.com', 'legacy-sheet', false, '{"spreadsheet":{"sheetId":"sheet-1","sheetName":"Budget","range":"B2:D4"}}', '2020-01-09', '2020-01-09');
 INSERT INTO "Comment"(id, "threadId", owner, sender, text, "order", "createdAt", "updatedAt", "deletedAt") VALUES
     (10, 1, 'macro|migration@example.com', 'Original author', 'Deleted root', 1, '2020-01-01', '2020-01-01', '2020-01-03'),
     (11, 1, 'macro|migration@example.com', null, 'Surviving reply', 2, '2020-01-02', '2020-01-02', null),
     (12, 3, 'macro|migration@example.com', 'PDF Author', 'PDF original', 1, '2020-01-01', '2020-01-01', null),
     (13, 4, 'macro|migration@example.com', null, 'Highlight comment', 1, '2020-01-01', '2020-01-01', null),
-    (14, 5, 'macro|migration@example.com', null, 'Discussion root', null, '2020-01-07', '2020-01-08', null);
+    (14, 5, 'macro|migration@example.com', null, 'Discussion root', null, '2020-01-07', '2020-01-08', null),
+    (17, 6, 'macro|migration@example.com', null, 'Range comment', null, '2020-01-09', '2020-01-09', null);
 INSERT INTO "PdfPlaceableCommentAnchor"(
     uuid, "documentId", owner, page, "wasEdited", "wasDeleted", "shouldLockOnSave",
     "originalPage", "originalIndex", "xPct", "yPct", "widthPct", "heightPct", rotation, "threadId"

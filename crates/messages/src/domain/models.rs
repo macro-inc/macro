@@ -109,6 +109,15 @@ pub enum ThreadAnchor {
         /// Placeable annotation UUID.
         anchor_id: Uuid,
     },
+    /// A cell range on one sheet of a spreadsheet.
+    Spreadsheet {
+        /// Sheet identity within the workbook.
+        sheet_id: String,
+        /// Sheet name when the comment was made, shown when the sheet is gone.
+        sheet_name: String,
+        /// A1-style cell or range, for example `B2` or `B2:D4`.
+        range: String,
+    },
 }
 
 /// Location supplied when creating a document discussion.
@@ -142,15 +151,37 @@ pub enum NewThreadAnchor {
         /// Height as a fraction of the page height.
         height_pct: f64,
     },
+    /// Attach a discussion to a cell range on one sheet of a spreadsheet.
+    Spreadsheet {
+        /// Sheet identity within the workbook.
+        sheet_id: String,
+        /// Sheet name when the comment was made.
+        sheet_name: String,
+        /// A1-style cell or range, for example `B2` or `B2:D4`.
+        range: String,
+    },
 }
 
 impl NewThreadAnchor {
     /// Thread-owned reference after annotation geometry has been persisted.
     pub fn reference(&self) -> ThreadAnchor {
-        match *self {
-            Self::Markdown { mark_id } => ThreadAnchor::Markdown { mark_id },
-            Self::PdfHighlight { anchor_id } => ThreadAnchor::PdfHighlight { anchor_id },
-            Self::PdfPlaceable { anchor_id, .. } => ThreadAnchor::PdfPlaceable { anchor_id },
+        match self {
+            Self::Markdown { mark_id } => ThreadAnchor::Markdown { mark_id: *mark_id },
+            Self::PdfHighlight { anchor_id } => ThreadAnchor::PdfHighlight {
+                anchor_id: *anchor_id,
+            },
+            Self::PdfPlaceable { anchor_id, .. } => ThreadAnchor::PdfPlaceable {
+                anchor_id: *anchor_id,
+            },
+            Self::Spreadsheet {
+                sheet_id,
+                sheet_name,
+                range,
+            } => ThreadAnchor::Spreadsheet {
+                sheet_id: sheet_id.clone(),
+                sheet_name: sheet_name.clone(),
+                range: range.clone(),
+            },
         }
     }
 }

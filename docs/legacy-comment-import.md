@@ -85,8 +85,9 @@ comments are only detected by a real run.
 - `comms_message_threads`: resolution, legacy metadata, and the anchor:
   `pdf_placeable` when a placeable anchor points at the thread, else
   `pdf_highlight` for a live highlight, else `markdown` when the thread's
-  `markId` is a UUID. `DISCUSSION:` marks, missing marks, and marks that are
-  not UUIDs land unanchored. Threads with no comments are marked deleted, so
+  `markId` is a UUID, else `spreadsheet` when the thread metadata carries a
+  well-formed `spreadsheet` range. `DISCUSSION:` marks, missing marks, and
+  marks that are not UUIDs land unanchored. Threads with no comments are marked deleted, so
   the new UI never shows an empty "This message was deleted." discussion.
 - `"PdfPlaceableCommentAnchor".root_id` / `"PdfHighlightAnchor".root_id` from
   the thread mapping; the legacy `"threadId"` column stays until the
