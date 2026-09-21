@@ -58,6 +58,7 @@ const operationMocks = vi.hoisted(() => {
     ),
     invalidateRemindersById: vi.fn(),
     invalidateSoupEntity: vi.fn(async () => {}),
+    openExternalUrl: vi.fn(),
     setReminderCompleted: vi.fn(async () => {}),
     updateNotificationsForEntities: vi.fn(
       async (): Promise<Array<{ id: string }>> => []
@@ -80,6 +81,10 @@ vi.mock('@service-connection/websocket', () => ({
 vi.mock('@queries/email/integration', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@queries/email/integration')>()),
   archiveEmailThread: operationMocks.archive,
+}));
+vi.mock('@core/util/url', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/util/url')>()),
+  openExternalUrl: operationMocks.openExternalUrl,
 }));
 vi.mock('@queries/client', () => ({
   queryClient: {
@@ -146,6 +151,7 @@ import {
   getDocumentCommentTarget,
   getRowClickFallbackLocation,
   markChannelNotificationsSeenOnOpen,
+  openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
   resolveMarkEntitiesDoneVariables,
 } from './utils';
@@ -164,6 +170,46 @@ afterEach(() => {
   setGlobalSplitManager(undefined);
   vi.clearAllMocks();
   vi.mocked(isTouchDevice).mockReturnValue(false);
+});
+
+describe('reminder navigation', () => {
+  const reminder = {
+    type: 'reminder',
+    id: 'reminder-1',
+    name: 'Review reminder navigation',
+  } as EntityData;
+
+  it.each([false, true])(
+    'uses the reminder component for list opening (new split: %s)',
+    async (openInNewSplit) => {
+      const openWithSplit = vi.fn();
+      setGlobalSplitManager({
+        activeSplit: vi.fn(),
+        getOrchestrator: vi.fn(),
+        getSplitByContent: vi.fn(),
+        openWithSplit,
+      } as unknown as SplitManager);
+
+      await openEntityInSplitFromUnifiedList(reminder, { openInNewSplit });
+
+      expect(openWithSplit).toHaveBeenCalledWith(
+        {
+          type: 'component',
+          id: 'reminder-view~reminder-1',
+          params: undefined,
+        },
+        expect.objectContaining({ preferNewSplit: openInNewSplit })
+      );
+    }
+  );
+
+  it('uses the same reminder component URL for a new browser tab', () => {
+    openEntityInNewTab({ entity: reminder });
+
+    expect(operationMocks.openExternalUrl).toHaveBeenCalledExactlyOnceWith(
+      expect.stringMatching(/\/app\/component\/reminder-view~reminder-1$/)
+    );
+  });
 });
 
 describe('agent session search navigation', () => {
