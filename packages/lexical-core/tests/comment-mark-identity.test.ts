@@ -54,7 +54,7 @@ function historicalState(threadId: number) {
 }
 
 describe('comment mark identity', () => {
-  it('loads historical numeric references while keeping the stable mark ID', () => {
+  it('loads historical numeric references and keeps only the stable mark ID', () => {
     const editor = createHeadlessEditor({
       nodes: [CommentNode],
       onError: (error) => {
@@ -71,8 +71,9 @@ describe('comment mark identity', () => {
       expect(mark.getIDs()).toEqual([markId]);
       expect(mark.getTextContent()).toBe('Selected text');
       expect(mark.getIsDraft()).toBe(false);
-      // Legacy readers still locate the annotation thread through this id.
-      expect(mark.getThreadId()).toBe(42);
+      // The discussion lives in the message store under the mark id; the
+      // numeric reference is dropped on import and never written back.
+      expect('threadId' in mark.exportJSON()).toBe(false);
     });
   });
 
@@ -89,8 +90,7 @@ describe('comment mark identity', () => {
         expect(mark.getIsDraft()).toBe(true);
         mark.setIsDraft(false);
         expect(mark.getIDs()).toEqual([markId]);
-        expect(mark.getThreadId()).toBeUndefined();
-        expect(mark.exportJSON().threadId).toBeUndefined();
+        expect('threadId' in mark.exportJSON()).toBe(false);
       },
       { discrete: true }
     );
