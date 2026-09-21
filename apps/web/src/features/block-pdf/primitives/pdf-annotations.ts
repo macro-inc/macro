@@ -1,11 +1,8 @@
-import type { Comment } from '@service-storage/generated/schemas/comment';
-import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
-import type { CreateCommentResponse } from '@service-storage/generated/schemas/createCommentResponse';
+import { useMessageRootsQuery } from '@queries/messages/document-messages';
 import type { CreateUnthreadedAnchorResponse } from '@service-storage/generated/schemas/createUnthreadedAnchorResponse';
-import type { DeleteCommentResponse } from '@service-storage/generated/schemas/deleteCommentResponse';
 import type { DeleteUnthreadedAnchorResponse } from '@service-storage/generated/schemas/deleteUnthreadedAnchorResponse';
 import type { EditAnchorResponse } from '@service-storage/generated/schemas/editAnchorResponse';
-import type { EditCommentResponse } from '@service-storage/generated/schemas/editCommentResponse';
+import type { MessageListItem } from '@service-storage/messages';
 import {
   type Accessor,
   batch,
@@ -16,22 +13,51 @@ import {
 } from 'solid-js';
 import { createStore, produce, reconcile } from 'solid-js/store';
 import type { IHighlight } from '../model/Highlight';
-import { getPdfAnchors, getPdfComments } from '../queries/annotations';
+import { getPdfAnchors } from '../queries/annotations';
+import type { ThreadPayload } from '../type/comments';
 
 export type HighlightUuidMap = Partial<Record<string, IHighlight>>;
 export type HighlightPageMap = Partial<Record<number, HighlightUuidMap>>;
 
+/** The discussion a PDF anchor points at, from the root's timeline entry. */
+export function threadPayload(
+  root: MessageListItem,
+  anchorId: string,
+  page: number
+): ThreadPayload {
+  return {
+    threadId: root.id,
+    rootId: root.id,
+    anchorId,
+    page,
+    comments: [root, ...root.thread.preview],
+    replyCount: root.thread.reply_count,
+    isResolved: root.state.resolved,
+  };
+}
+
+/**
+ * PDF annotation state: anchor geometry from the annotation endpoints joined
+ * with the document's discussion roots from the shared message API. Anchors
+ * reference their discussion by `rootId`.
+ */
 export function createPdfAnnotations(documentId: Accessor<string>) {
   const [highlightsByPage, setHighlightsByPage] = createStore<HighlightPageMap>(
     {}
   );
   const [convertedHighlightDraftId, setConvertedHighlightDraftId] =
     createSignal<string>();
-  const [commentThreadsResource, { mutate: mutateCommentThreads }] =
-    createResource(documentId, getPdfComments);
-  const [anchorsResource, { mutate: mutateAnchors }] = createResource(
-    documentId,
-    getPdfAnchors
+  const [anchorsResource, { mutate: mutateAnchors, refetch: refetchAnchors }] =
+    createResource(documentId, getPdfAnchors);
+  const roots = useMessageRootsQuery(() => ({
+    type: 'document',
+    id: documentId(),
+  }));
+  const threads = createMemo(() =>
+    roots.data.filter((root) => !root.state.deleted_at)
+  );
+  const threadsByRootId = createMemo(
+    () => new Map(threads().map((root) => [root.id, root]))
   );
 
   const highlightsByUuid = createMemo(() => {
@@ -56,16 +82,12 @@ export function createPdfAnnotations(documentId: Accessor<string>) {
     const anchors = anchorsResource();
     if (!anchors || anchors.length === 0) return;
 
-    const commentThreads = commentThreadsResource() ?? [];
-    const highlightAnchors = anchors.filter(
-      (anchor) => anchor.anchorType === 'highlight'
-    );
-
-    const mappedAnchors = highlightAnchors.flatMap((anchor) => {
-      const commentThread = commentThreads.find(
-        (thread) => thread.thread.threadId === anchor.threadId
-      );
-      if (!commentThread && anchor.threadId) return [];
+    const byRootId = threadsByRootId();
+    const mappedAnchors = anchors.flatMap((anchor) => {
+      if (anchor.anchorType !== 'highlight') return [];
+      const root = anchor.rootId ? byRootId.get(anchor.rootId) : undefined;
+      // A threaded highlight renders once its discussion has loaded.
+      if (anchor.rootId && !root) return [];
 
       const highlight: IHighlight = {
         owner: anchor.owner,
@@ -86,16 +108,7 @@ export function createPdfAnnotations(documentId: Accessor<string>) {
           width: anchor.pageViewportWidth,
           height: anchor.pageViewportHeight,
         },
-        thread: commentThread
-          ? {
-              threadId: commentThread.thread.threadId,
-              rootId: commentThread.comments[0].commentId,
-              anchorId: anchor.uuid,
-              page: anchor.page,
-              comments: commentThread.comments,
-              isResolved: commentThread.thread.resolved,
-            }
-          : null,
+        thread: root ? threadPayload(root, anchor.uuid, anchor.page) : null,
       };
 
       return highlight;
@@ -113,19 +126,15 @@ export function createPdfAnnotations(documentId: Accessor<string>) {
 
   const commands = {
     applyCreatedAnchor(response: CreateUnthreadedAnchorResponse) {
-      mutateAnchors((previous) => [...(previous ?? []), response]);
+      mutateAnchors((previous) => [
+        ...(previous ?? []).filter((anchor) => anchor.uuid !== response.uuid),
+        response,
+      ]);
     },
     applyDeletedAnchor(response: DeleteUnthreadedAnchorResponse) {
       mutateAnchors((previous) =>
         (previous ?? []).filter((anchor) => anchor.uuid !== response.uuid)
       );
-      if (response.threadId != null) {
-        mutateCommentThreads((previous) =>
-          (previous ?? []).filter(
-            (thread) => thread.thread.threadId !== response.threadId
-          )
-        );
-      }
     },
     applyEditedAnchor(response: EditAnchorResponse) {
       mutateAnchors((previous) => [
@@ -133,78 +142,26 @@ export function createPdfAnnotations(documentId: Accessor<string>) {
         response,
       ]);
     },
-    applyCreatedComment(response: CreateCommentResponse) {
-      const commentThread: CommentThread = {
-        thread: response.thread,
-        comments: response.comments,
-      };
-      const anchor = response.anchor;
-      batch(() => {
-        if (anchor) {
-          mutateAnchors((previous) => [...(previous ?? []), anchor]);
-        }
-
-        mutateCommentThreads((previous) => {
-          let replacedExistingThread = false;
-          const next = (previous ?? []).map((thread) => {
-            if (thread.thread.threadId !== commentThread.thread.threadId) {
-              return thread;
-            }
-            replacedExistingThread = true;
-            return commentThread;
-          });
-          if (!replacedExistingThread) next.push(commentThread);
-          return next;
-        });
-      });
+    /** Bind an existing anchor to the root just posted on it. */
+    attachAnchorRoot(uuid: string, rootId: string) {
+      mutateAnchors((previous) =>
+        (previous ?? []).map((anchor) =>
+          anchor.uuid === uuid ? { ...anchor, rootId } : anchor
+        )
+      );
     },
-    applyEditedComment(response: EditCommentResponse) {
-      mutateCommentThreads((previous) =>
-        (previous ?? []).map((thread) => {
-          if (thread.thread.threadId !== response.threadId) return thread;
-          return {
-            thread: thread.thread,
-            comments: thread.comments.map((comment) => {
-              if (comment.commentId !== response.commentId) return comment;
-              const editedComment: Comment = response;
-              return editedComment;
-            }),
-          };
+    /** A deleted discussion takes its placeable with it and detaches its highlight. */
+    applyThreadDeleted(rootId: string) {
+      mutateAnchors((previous) =>
+        (previous ?? []).flatMap((anchor) => {
+          if (anchor.rootId !== rootId) return [anchor];
+          if (anchor.anchorType === 'placeable') return [];
+          return [{ ...anchor, rootId: null }];
         })
       );
     },
-    applyDeletedComment(response: DeleteCommentResponse) {
-      batch(() => {
-        if (response.thread.deleted) {
-          mutateCommentThreads((previous) =>
-            (previous ?? []).filter(
-              (thread) => thread.thread.threadId !== response.thread.threadId
-            )
-          );
-        } else {
-          mutateCommentThreads((previous) =>
-            (previous ?? []).map((thread) => {
-              if (thread.thread.threadId !== response.thread.threadId) {
-                return thread;
-              }
-              return {
-                thread: thread.thread,
-                comments: thread.comments.filter(
-                  (comment) => comment.commentId !== response.commentId
-                ),
-              };
-            })
-          );
-        }
-
-        if (response.anchor?.deleted) {
-          mutateAnchors((previous) =>
-            (previous ?? []).filter(
-              (anchor) => anchor.uuid !== response.anchor?.uuid
-            )
-          );
-        }
-      });
+    refetchAnchors() {
+      return refetchAnchors();
     },
     beginExistingHighlightCommentDraft(highlight: IHighlight) {
       batch(() => {
@@ -273,7 +230,9 @@ export function createPdfAnnotations(documentId: Accessor<string>) {
 
   return {
     anchors: () => anchorsResource(),
-    commentThreads: () => commentThreadsResource(),
+    /** Live discussion roots on the document, including unanchored ones. */
+    threads,
+    threadsByRootId,
     highlightsByPage,
     highlightsByUuid,
     hasHighlights,

@@ -18,9 +18,10 @@ import { v7 as uuid7 } from 'uuid';
 import { z } from 'zod';
 import { type IBookmark, IBookmarkSchema } from './Bookmark';
 import {
+  type IModificationPlaceable,
   type IPlaceable,
   IPlaceableSchema,
-  isThreadPlaceable,
+  isModificationPlaceable,
 } from './placeables';
 
 export type {
@@ -59,12 +60,18 @@ export interface IModificationData {
   pinnedTermsNames: string[];
 }
 
-export const IModificationDataSchema: z.ZodType<IModificationData, any> =
-  z.object({
-    bookmarks: z.array(IBookmarkSchema),
-    placeables: z.array(IPlaceableSchema),
-    pinnedTermsNames: z.array(z.string()),
-  });
+export const IModificationDataSchema = z.object({
+  bookmarks: z.array(IBookmarkSchema),
+  placeables: z
+    .array(IPlaceableSchema)
+    .transform((placeables) =>
+      placeables.filter(
+        (placeable): placeable is IModificationPlaceable =>
+          placeable.payloadType !== 'thread'
+      )
+    ),
+  pinnedTermsNames: z.array(z.string()),
+});
 
 export function transformModificationDataToClient(
   data: IModificationDataOnServer
@@ -72,7 +79,12 @@ export function transformModificationDataToClient(
   return {
     bookmarks: data.bookmarks,
     placeables: data.placeables
-      .filter((placeable) => !isThreadPlaceable(placeable as any))
+      .filter(
+        (
+          placeable
+        ): placeable is Exclude<typeof placeable, { payloadType: 'thread' }> =>
+          placeable.payloadType !== 'thread'
+      )
       .map((placeable) => ({ ...placeable, internalId: uuid7() })),
     pinnedTermsNames: data.pinnedTermsNames,
   };
@@ -85,7 +97,7 @@ export function transformModificationDataToServer(
     highlights: null,
     bookmarks: data.bookmarks,
     placeables: data.placeables
-      .filter((placeable) => !isThreadPlaceable(placeable))
+      .filter(isModificationPlaceable)
       .map((placeable) => {
         const { internalId: _, ...serverPlaceable } = placeable;
         return serverPlaceable;

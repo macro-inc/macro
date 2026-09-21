@@ -2,10 +2,9 @@ import { DEFAULT_COLOR, type IColor } from '@block-pdf/model/Color';
 import { PageModel } from '@block-pdf/model/Page';
 import { useIsPopup } from '@block-pdf/signal/pdfViewer';
 import {
-  useDeleteComment,
+  useDeleteCommentThread,
   useDeleteNewComments,
 } from '@block-pdf/store/comments/commentOperations';
-import { createPdfDraftThreadId } from '@block-pdf/type/comments';
 import type { Annotation, ShapeType } from '@block-pdf/type/pdfJs';
 import {
   type IPlaceable,
@@ -19,6 +18,7 @@ import {
 } from '@block-pdf/type/placeables';
 import { normalizeRect } from '@block-pdf/util/pdfjsUtils';
 import { PDF_TO_CSS_UNITS } from '@block-pdf/util/pixelsPerInch';
+import { DRAFT_THREAD_ID } from '@core/comments/commentType';
 import { useUserId } from '@core/context/user';
 import { createCallback } from '@solid-primitives/rootless';
 import type { PageViewport } from 'pdfjs-dist';
@@ -621,9 +621,7 @@ export function useCreatePlaceable() {
       if (!isThreadPlaceable(placeable)) {
         pdf.model.commands.appendPlaceable(placeable);
       } else {
-        comments.activateThread(
-          createPdfDraftThreadId('free', placeable.internalId)
-        );
+        comments.activateThread(DRAFT_THREAD_ID);
       }
       pdf.markup.commands.activate(placeable.internalId);
       pdf.markup.commands.setDraft(placeable);
@@ -678,7 +676,8 @@ export function useDeletePlaceable() {
   const pdf = usePdfDocument();
   const modificationData = pdf.model.modificationData;
   const placeableIdMap = usePlaceableIdMap();
-  const deleteComment = useDeleteComment();
+  const deleteCommentThread = useDeleteCommentThread();
+  const deleteNewComments = useDeleteNewComments();
 
   return createCallback((uuid: string) => {
     const placeable = placeableIdMap()[uuid];
@@ -688,12 +687,12 @@ export function useDeletePlaceable() {
     }
 
     if (isThreadPlaceable(placeable)) {
-      let rootId = placeable.payload?.rootId;
-      if (!rootId) {
-        deleteComment({ commentId: -1 });
+      const threadId = placeable.payload?.threadId;
+      if (!threadId) {
+        deleteNewComments();
         return;
       }
-      deleteComment({ commentId: rootId });
+      void deleteCommentThread(threadId);
       return;
     }
 

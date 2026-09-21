@@ -1,13 +1,8 @@
 import { useHighlightSelection } from '@block-pdf/component/UserHighlight';
 import { useCurrentPageViewport } from '@block-pdf/signal/pdfViewer';
-import {
-  createPdfDraftThreadId,
-  type PdfComment,
-  type PdfReply,
-  type PdfRoot,
-  type ViewerCommentType,
-} from '@block-pdf/type/comments';
+import type { PdfComment, PdfRoot } from '@block-pdf/type/comments';
 import { getHighlightsFromSelection } from '@block-pdf/util/pdfjsUtils';
+import { DRAFT_THREAD_ID } from '@core/comments/commentType';
 import { useUserId } from '@core/context/user';
 import { createCallback } from '@solid-primitives/rootless';
 import { batch, createMemo } from 'solid-js';
@@ -19,8 +14,8 @@ import {
   HighlightType,
   type IHighlight,
 } from '../../model/Highlight';
-import { sortComments } from '../commentsResource';
 import { useDeleteNewComments } from './commentOperations';
+import { anchoredThread } from './freeComments';
 
 const getHighlightPos = (highlight: IHighlight, viewportHeight: number) => {
   try {
@@ -31,52 +26,6 @@ const getHighlightPos = (highlight: IHighlight, viewportHeight: number) => {
     console.error('Error getting highlight pos', e, highlight);
     return null;
   }
-};
-
-const getHighlightThread = (
-  highlight: IHighlight
-): { root: PdfRoot; replies: PdfReply[] } | null => {
-  const commentType: ViewerCommentType = 'highlight';
-
-  const thread = highlight.thread;
-  if (!thread) return null;
-
-  const comments = [...thread.comments].sort(sortComments);
-
-  const rootComment = comments[0];
-
-  const commentBase = {
-    type: commentType,
-    isNew: false,
-    threadId: rootComment.threadId,
-    rootId: rootComment.commentId,
-    anchorId: highlight.uuid,
-  };
-
-  const replies: PdfReply[] = [];
-  for (let i = 1; i < comments.length; i++) {
-    const comment = comments[i];
-    replies.push({
-      ...commentBase,
-      id: comment.commentId,
-      createdAt: comment.createdAt,
-      owner: comment.owner,
-      author: comment.sender || comment.owner,
-      text: comment.text,
-    });
-  }
-
-  const root: PdfRoot = {
-    ...commentBase,
-    id: rootComment.commentId,
-    createdAt: rootComment.createdAt,
-    owner: rootComment.owner,
-    author: rootComment.sender || rootComment.owner,
-    text: rootComment.text,
-    children: replies.map((r) => r.id),
-  };
-
-  return { root, replies };
 };
 
 export const useHighlightComments = () => {
@@ -112,13 +61,9 @@ export const useHighlightComments = () => {
             console.error('User ID not found');
             continue;
           }
-          const draftThreadId = createPdfDraftThreadId(
-            'highlight',
-            highlight.uuid
-          );
           const rootComment: PdfRoot = {
-            id: draftThreadId,
-            rootId: draftThreadId,
+            id: DRAFT_THREAD_ID,
+            rootId: DRAFT_THREAD_ID,
             type: 'highlight',
             text: '',
             owner: currentUserId,
@@ -126,14 +71,16 @@ export const useHighlightComments = () => {
             createdAt: new Date(),
             isNew: true,
             children: [],
-            threadId: draftThreadId,
+            replyCount: 0,
+            threadId: DRAFT_THREAD_ID,
             anchorId: highlight.uuid,
           };
           out.push({ ...rootComment, layout });
           continue;
         }
 
-        const highlightThread = getHighlightThread(highlight);
+        if (!highlight.thread) continue;
+        const highlightThread = anchoredThread('highlight', highlight.thread);
         if (!highlightThread) continue;
 
         const { root, replies } = highlightThread;
@@ -181,12 +128,8 @@ export function useCreateHighlightCommentAtSelection() {
       const highlightUnderSelection =
         annotationSelection().selectedHighlights.at(0);
       if (highlightUnderSelection) {
-        const draftThreadId = createPdfDraftThreadId(
-          'highlight',
-          highlightUnderSelection.uuid
-        );
         batch(() => {
-          comments.activateThread(draftThreadId);
+          comments.activateThread(DRAFT_THREAD_ID);
           pdf.annotations.commands.beginExistingHighlightCommentDraft(
             highlightUnderSelection
           );
@@ -222,9 +165,7 @@ export function useCreateHighlightCommentAtSelection() {
 
       batch(() => {
         pdf.annotations.commands.beginNewHighlightCommentDrafts(highlights);
-        comments.activateThread(
-          createPdfDraftThreadId('highlight', activeHighlight.uuid)
-        );
+        comments.activateThread(DRAFT_THREAD_ID);
       });
     });
   });

@@ -57,7 +57,7 @@ export interface IHighlightObj {
   width: number;
   height: number;
   color: IColor;
-  threadId: number | null;
+  threadId: string | null;
   highlightId: string;
   rectId: string;
   text?: string;

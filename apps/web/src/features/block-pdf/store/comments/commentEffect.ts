@@ -1,5 +1,5 @@
 import { usePdfCommentRealtimeBehavior } from '@block-pdf/store/commentsResource';
-import { isPdfDraftThreadId } from '@block-pdf/type/comments';
+import { isDraftThreadId } from '@core/comments/commentType';
 import { createEffect, createMemo } from 'solid-js';
 import { usePdfComments } from '../../context/pdf-comments-context';
 import {
@@ -13,7 +13,7 @@ const useDeleteNewCommentEffect = () => {
 
   createEffect(() => {
     const activeThreadId = activeCommentThreadId();
-    if (!isPdfDraftThreadId(activeThreadId)) {
+    if (!isDraftThreadId(activeThreadId)) {
       deleteNewComments();
     }
   });
@@ -40,8 +40,7 @@ const useScrollToActiveThreadEffect = () => {
     if (activeThreadId == null) return;
     if (!hasActiveThread()) return;
 
-    if (typeof activeThreadId === 'number')
-      scrollToCommentThread(activeThreadId);
+    if (!isDraftThreadId(activeThreadId)) scrollToCommentThread(activeThreadId);
   });
 };
 

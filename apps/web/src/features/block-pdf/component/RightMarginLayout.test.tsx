@@ -1,5 +1,4 @@
-import { createPdfDraftThreadId } from '@block-pdf/type/comments';
-import type { ThreadId } from '@core/comments/commentType';
+import { DRAFT_THREAD_ID, type ThreadId } from '@core/comments/commentType';
 import { render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { beforeEach, expect, it, vi } from 'vitest';
@@ -23,19 +22,12 @@ vi.mock('@block-pdf/store/comments/commentLayout', () => ({
 
 vi.mock('@block-pdf/store/comments/commentOperations', () => ({
   useCreateComment: () => vi.fn(),
-  useDeleteComment: () => vi.fn(),
-  useUpdateComment: () => vi.fn(),
-}));
-
-vi.mock('@core/context/user', () => ({
-  useUserId: () => () => 'user-id',
 }));
 
 vi.mock('../context/pdf-comments-context', () => ({
   usePdfComments: () => ({
     activeThreadId: () => null,
     selectedThreadId: () => null,
-    byId: () => new Map(),
     activateThread: vi.fn(),
     clearActiveThread: vi.fn(),
     selectThread: vi.fn(),
@@ -91,41 +83,36 @@ beforeEach(() => {
 it('preserves a thread component when its measured layout changes', async () => {
   const [threads, setThreads] = createSignal([
     {
-      threadId: 1,
+      threadId: 'root-1',
       layout: { calculatedYPos: 10 },
     },
   ]);
   state.threads = threads;
 
   render(() => <RightMarginLayout pageIndex={0} />);
-  expect(screen.getByTestId('thread').textContent).toBe('1:10');
+  expect(screen.getByTestId('thread').textContent).toBe('root-1:10');
   expect(state.mounts).toBe(1);
 
   setThreads([
     {
-      threadId: 1,
+      threadId: 'root-1',
       layout: { calculatedYPos: 20 },
     },
   ]);
 
-  expect(screen.getByTestId('thread').textContent).toBe('1:20');
+  expect(screen.getByTestId('thread').textContent).toBe('root-1:20');
   expect(state.mounts).toBe(1);
   expect(state.unmounts).toBe(0);
 });
 
-it('renders drafts with distinct client thread identities', () => {
-  const highlightDraftId = createPdfDraftThreadId(
-    'highlight',
-    'highlight-anchor'
-  );
-  const freeDraftId = createPdfDraftThreadId('free', 'free-anchor');
+it('renders a draft beside the saved threads on its page', () => {
   const [threads] = createSignal([
     {
-      threadId: highlightDraftId,
+      threadId: DRAFT_THREAD_ID,
       layout: { calculatedYPos: 10 },
     },
     {
-      threadId: freeDraftId,
+      threadId: 'root-1',
       layout: { calculatedYPos: 20 },
     },
   ]);
@@ -135,6 +122,6 @@ it('renders drafts with distinct client thread identities', () => {
 
   expect(
     screen.getAllByTestId('thread').map((thread) => thread.textContent)
-  ).toEqual([`${highlightDraftId}:10`, `${freeDraftId}:20`]);
+  ).toEqual([`${DRAFT_THREAD_ID}:10`, 'root-1:20']);
   expect(state.mounts).toBe(2);
 });

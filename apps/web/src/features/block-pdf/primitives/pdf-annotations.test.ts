@@ -1,9 +1,7 @@
-import type { CreateCommentResponse } from '@service-storage/generated/schemas/createCommentResponse';
 import type { CreateUnthreadedAnchorResponse } from '@service-storage/generated/schemas/createUnthreadedAnchorResponse';
-import type { DeleteCommentResponse } from '@service-storage/generated/schemas/deleteCommentResponse';
 import type { DeleteUnthreadedAnchorResponse } from '@service-storage/generated/schemas/deleteUnthreadedAnchorResponse';
 import type { EditAnchorResponse } from '@service-storage/generated/schemas/editAnchorResponse';
-import type { EditCommentResponse } from '@service-storage/generated/schemas/editCommentResponse';
+import type { MessageListItem } from '@service-storage/messages';
 import { waitFor } from '@solidjs/testing-library';
 import { createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,10 +10,32 @@ import { createPdfAnnotations, type PdfAnnotations } from './pdf-annotations';
 
 const annotationQueries = vi.hoisted(() => ({
   getPdfAnchors: vi.fn(async (_documentId: string) => []),
-  getPdfComments: vi.fn(async (_documentId: string) => []),
+}));
+const messageRoots = vi.hoisted(() => ({
+  parents: [] as string[],
+  setRoots: (_roots: MessageListItem[]) => {},
 }));
 
 vi.mock('../queries/annotations', () => annotationQueries);
+vi.mock('@queries/messages/document-messages', async () => {
+  const { createSignal } = await import('solid-js');
+  const [roots, setRoots] = createSignal<MessageListItem[]>([]);
+  messageRoots.setRoots = setRoots;
+  return {
+    useMessageRootsQuery: (parent: () => { type: string; id: string }) => {
+      messageRoots.parents.push(`${parent().type}:${parent().id}`);
+      return {
+        get data() {
+          return roots();
+        },
+        isSuccess: true,
+        isPending: false,
+        isError: false,
+        refetch: vi.fn(),
+      };
+    },
+  };
+});
 
 function setup(documentId: string): {
   annotations: PdfAnnotations;
@@ -30,7 +50,6 @@ function setup(documentId: string): {
 async function waitForInitialResources(annotations: PdfAnnotations) {
   await waitFor(() => {
     expect(annotations.anchors()).toEqual([]);
-    expect(annotations.commentThreads()).toEqual([]);
   });
 }
 
@@ -56,7 +75,7 @@ function createHighlight(
 
 function createServerHighlight(
   uuid: string,
-  threadId?: number
+  rootId?: string
 ): CreateUnthreadedAnchorResponse {
   return {
     uuid,
@@ -73,40 +92,65 @@ function createServerHighlight(
     pageViewportHeight: 800,
     text: 'server highlight',
     owner: 'user-1',
-    threadId,
+    rootId,
   };
 }
 
-function createCommentResponse(
-  threadId: number,
-  commentId: number
-): CreateCommentResponse {
+function createServerPlaceable(
+  uuid: string,
+  rootId: string
+): CreateUnthreadedAnchorResponse {
   return {
+    uuid,
     documentId: 'document-1',
-    thread: {
-      threadId,
-      documentId: 'document-1',
-      owner: 'user-1',
+    anchorType: 'placeable',
+    owner: 'user-1',
+    rootId,
+    page: 1,
+    originalPage: 1,
+    originalIndex: -1,
+    xPct: 0.1,
+    yPct: 0.2,
+    widthPct: 0.05,
+    heightPct: 0.05,
+    rotation: 0,
+    wasEdited: false,
+    wasDeleted: false,
+    shouldLockOnSave: false,
+  };
+}
+
+function root(id: string, content = 'first comment'): MessageListItem {
+  const created_at = '2026-09-09T00:00:00Z';
+  return {
+    id,
+    parent: { type: 'document', id: 'document-1' },
+    sender_id: 'user-1',
+    content,
+    mentions: [],
+    attachments: [],
+    reactions: [],
+    created_at,
+    updated_at: created_at,
+    state: {
+      root_id: id,
+      user_id: 'user-1',
       resolved: false,
+      created_at,
+      updated_at: created_at,
     },
-    comments: [
-      {
-        commentId,
-        threadId,
-        owner: 'user-1',
-        text: 'first comment',
-      },
-    ],
+    thread: { reply_count: 0, preview: [], latest_reply_at: null },
   };
 }
 
 beforeEach(() => {
   annotationQueries.getPdfAnchors.mockClear();
-  annotationQueries.getPdfComments.mockClear();
+  messageRoots.parents.length = 0;
+  messageRoots.setRoots([]);
 });
 
 describe('createPdfAnnotations', () => {
-  it('starts empty, projects highlight indexes, and isolates authorities', async () => {
+  it('starts empty, reads the document discussion, and isolates authorities', async () => {
     const first = setup('document-1');
     const second = setup('document-2');
     await Promise.all([
@@ -121,32 +165,27 @@ describe('createPdfAnnotations', () => {
       anchorQueryDocumentIds: annotationQueries.getPdfAnchors.mock.calls.map(
         ([documentId]) => documentId
       ),
-      commentQueryDocumentIds: annotationQueries.getPdfComments.mock.calls.map(
-        ([documentId]) => documentId
-      ),
+      messageParents: messageRoots.parents,
       firstHighlight: first.annotations.highlightsByUuid()['highlight-1']?.uuid,
       secondHighlights: second.annotations.highlightsByUuid(),
       exposesAnchorMutate: 'mutate' in first.annotations.anchors,
-      exposesCommentThreadMutate: 'mutate' in first.annotations.commentThreads,
     }).toEqual({
       anchorQueryDocumentIds: ['document-1', 'document-2'],
-      commentQueryDocumentIds: ['document-1', 'document-2'],
+      messageParents: ['document:document-1', 'document:document-2'],
       firstHighlight: 'highlight-1',
       secondHighlights: {},
       exposesAnchorMutate: false,
-      exposesCommentThreadMutate: false,
     });
 
     first.dispose();
     second.dispose();
   });
 
-  it('applies resource response transitions in response order', async () => {
+  it('applies anchor transitions in response order', async () => {
     const { annotations, dispose } = setup('document-1');
     await waitForInitialResources(annotations);
     const firstAnchor = createServerHighlight('highlight-1');
     const secondAnchor = createServerHighlight('highlight-2');
-    const createdComment = createCommentResponse(31, 41);
 
     annotations.commands.applyCreatedAnchor(firstAnchor);
     annotations.commands.applyCreatedAnchor(secondAnchor);
@@ -154,63 +193,40 @@ describe('createPdfAnnotations', () => {
       ...firstAnchor,
       text: 'edited highlight',
     } as EditAnchorResponse);
-    annotations.commands.applyCreatedComment(createdComment);
-    annotations.commands.applyEditedComment({
-      ...createdComment.comments[0],
-      documentId: 'document-1',
-      documentName: 'document.pdf',
-      documentOwner: 'user-1',
-      text: 'edited comment',
-    } as EditCommentResponse);
 
-    expect({
-      anchors: annotations.anchors()?.map((anchor) => ({
+    expect(
+      annotations.anchors()?.map((anchor) => ({
         uuid: anchor.uuid,
         text: 'text' in anchor ? anchor.text : null,
-      })),
-      comments: annotations
-        .commentThreads()
-        ?.flatMap((thread) =>
-          thread.comments.map(({ commentId, text }) => ({ commentId, text }))
-        ),
-    }).toEqual({
-      anchors: [
-        { uuid: 'highlight-2', text: 'server highlight' },
-        { uuid: 'highlight-1', text: 'edited highlight' },
-      ],
-      comments: [{ commentId: 41, text: 'edited comment' }],
-    });
+      }))
+    ).toEqual([
+      { uuid: 'highlight-2', text: 'server highlight' },
+      { uuid: 'highlight-1', text: 'edited highlight' },
+    ]);
 
-    annotations.commands.applyDeletedComment({
-      commentId: 41,
-      documentId: 'document-1',
-      thread: { threadId: 31, deleted: false },
-    } satisfies DeleteCommentResponse);
     annotations.commands.applyDeletedAnchor({
       uuid: 'highlight-1',
       documentId: 'document-1',
-      threadId: 31,
+      fileType: 'pdf',
+      anchorType: 'highlight',
     } as DeleteUnthreadedAnchorResponse);
 
-    expect({
-      anchorUuids: annotations.anchors()?.map((anchor) => anchor.uuid),
-      commentThreads: annotations.commentThreads(),
-    }).toEqual({
-      anchorUuids: ['highlight-2'],
-      commentThreads: [],
-    });
+    expect(annotations.anchors()?.map((anchor) => anchor.uuid)).toEqual([
+      'highlight-2',
+    ]);
     dispose();
   });
 
-  it('projects server anchors and threads into highlights', async () => {
+  it('projects anchors and their discussion roots into highlights', async () => {
     const { annotations, dispose } = setup('document-1');
     await waitForInitialResources(annotations);
-    const anchor = createServerHighlight('highlight-1', 31);
+    const anchor = createServerHighlight('highlight-1', 'root-1');
 
     annotations.commands.applyCreatedAnchor(anchor);
+    // A threaded highlight waits for its discussion.
     expect(annotations.highlightsByUuid()).toEqual({});
 
-    annotations.commands.applyCreatedComment(createCommentResponse(31, 41));
+    messageRoots.setRoots([root('root-1')]);
 
     await waitFor(() => {
       expect(annotations.highlightsByUuid()['highlight-1']).toEqual({
@@ -233,21 +249,56 @@ describe('createPdfAnnotations', () => {
         type: 1,
         pageViewport: { width: 600, height: 800 },
         thread: {
-          threadId: 31,
-          rootId: 41,
+          threadId: 'root-1',
+          rootId: 'root-1',
           anchorId: 'highlight-1',
           page: 2,
-          comments: [
-            {
-              commentId: 41,
-              threadId: 31,
-              owner: 'user-1',
-              text: 'first comment',
-            },
-          ],
+          comments: [root('root-1')],
+          replyCount: 0,
           isResolved: false,
         },
       });
+    });
+
+    // A deleted discussion drops out of the join.
+    const deleted = root('root-1');
+    deleted.state = { ...deleted.state, deleted_at: '2026-09-10T00:00:00Z' };
+    messageRoots.setRoots([deleted]);
+    await waitFor(() => {
+      expect(annotations.highlightsByUuid()).toEqual({});
+    });
+    dispose();
+  });
+
+  it('binds a posted root to its anchor and releases anchors of a deleted discussion', async () => {
+    const { annotations, dispose } = setup('document-1');
+    await waitForInitialResources(annotations);
+    messageRoots.setRoots([root('root-1'), root('root-2')]);
+
+    annotations.commands.applyCreatedAnchor(
+      createServerHighlight('highlight-1')
+    );
+    annotations.commands.applyCreatedAnchor(
+      createServerPlaceable('placeable-1', 'root-2')
+    );
+    annotations.commands.attachAnchorRoot('highlight-1', 'root-1');
+
+    await waitFor(() => {
+      expect(
+        annotations.highlightsByUuid()['highlight-1']?.thread?.threadId
+      ).toBe('root-1');
+    });
+
+    annotations.commands.applyThreadDeleted('root-1');
+    annotations.commands.applyThreadDeleted('root-2');
+
+    expect(
+      annotations
+        .anchors()
+        ?.map((anchor) => ({ uuid: anchor.uuid, rootId: anchor.rootId }))
+    ).toEqual([{ uuid: 'highlight-1', rootId: null }]);
+    await waitFor(() => {
+      expect(annotations.highlightsByUuid()['highlight-1']?.thread).toBeNull();
     });
     dispose();
   });
