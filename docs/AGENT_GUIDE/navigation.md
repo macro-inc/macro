@@ -300,7 +300,7 @@ category, Esc closes. The category strip and footer have transparent backgrounds
 
 ## Keyboard model (from the in-app guide; verified partially)
 
-- `Ctrl/Cmd+K` — jump to anything by name.
+- `Ctrl/Cmd+K` — jump to anything by name. Known channels remain searchable while the local cache fills; a channel should not require opening it first or retyping the query.
 - `c` then `d`/`t`/`e`/`m`/`a` — create doc / task / email / channel / AI chat.
   Single-letter shortcuts only work when no editor has focus; press `Escape` first.
 - `/` — search everything. `j`/`k` — move in lists. `e` — mark done.
