@@ -412,6 +412,16 @@ unsaved session drafts do not offer sharing.
 
 Agent sessions in the `@` menu use the shared Quick Access feed, loaded when the app opens. Search matches session titles and agent names. The initial feed covers the 500 most recently updated accessible sessions; it does not load transcripts.
 
+### Replying to selected agent text
+
+On desktop, drag to select transcript prose or expanded **Thought** text, then
+choose **Reply to this** above the selection. The composer inserts a single-line
+**Replying to** preview with the same quote-reply styling as channel replies.
+Click the preview to open the full **Referenced text** viewer. While editable,
+hover the preview for its menu: **Copy**, **Convert to text**, or **Delete**.
+Selecting text in the composer or outside the transcript must not show the reply
+button; clearing the transcript selection dismisses it.
+
 ### Expanded session mentions
 
 Hover an accessible inline `@` session mention in an editable document or
