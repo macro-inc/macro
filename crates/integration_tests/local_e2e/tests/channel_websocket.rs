@@ -41,7 +41,7 @@ async fn channel_message_posts_to_http_and_delivers_to_websocket() -> anyhow::Re
 
     let http = reqwest::Client::new();
     let post_response = http
-        .post(services.post_channel_message_url(&channel.channel_id))
+        .post(services.channel_messages_url(&channel.channel_id))
         .bearer_auth(&token)
         .json(&json!({
             "content": content,
@@ -64,37 +64,43 @@ async fn channel_message_posts_to_http_and_delivers_to_websocket() -> anyhow::Re
         "post response did not echo nonce; response={posted:?}"
     );
 
-    let delivered = wait_for_comms_message(&mut websocket_read, &posted.id, &nonce).await?;
+    let delivered = wait_for_posted_message(&mut websocket_read, &posted.id, &nonce).await?;
+    let message = delivered
+        .get("change")
+        .and_then(|change| change.get("message"))
+        .cloned()
+        .unwrap_or(Value::Null);
     ensure!(
-        delivered.get("content").and_then(Value::as_str) == Some(content.as_str()),
+        message.get("content").and_then(Value::as_str) == Some(content.as_str()),
         "websocket message content mismatch: {delivered}"
     );
     ensure!(
-        delivered.get("channel_id").and_then(Value::as_str) == Some(channel.channel_id.as_str()),
+        delivered
+            .get("parent")
+            .and_then(|parent| parent.get("id"))
+            .and_then(Value::as_str)
+            == Some(channel.channel_id.as_str()),
         "websocket message channel mismatch: {delivered}"
     );
     ensure!(
-        delivered.get("sender_id").and_then(Value::as_str) == Some(user.user_id.as_str()),
+        message.get("sender_id").and_then(Value::as_str) == Some(user.user_id.as_str()),
         "websocket message sender mismatch: {delivered}"
     );
 
     let get_response = http
-        .get(format!(
-            "{}?limit=25",
-            services.get_channel_url(&channel.channel_id)
-        ))
+        .get(services.channel_messages_url(&channel.channel_id))
         .bearer_auth(&token)
         .send()
         .await
-        .context("failed to GET channel")?;
-    let get_response = require_success(get_response, "GET channel").await?;
-    let channel_response: Value = get_response
+        .context("failed to GET channel timeline")?;
+    let get_response = require_success(get_response, "GET channel timeline").await?;
+    let timeline: Value = get_response
         .json()
         .await
-        .context("failed to decode get channel response")?;
+        .context("failed to decode channel timeline response")?;
 
-    let persisted = channel_response
-        .get("messages")
+    let persisted = timeline
+        .get("items")
         .and_then(Value::as_array)
         .and_then(|messages| {
             messages.iter().find(|message| {
@@ -103,7 +109,7 @@ async fn channel_message_posts_to_http_and_delivers_to_websocket() -> anyhow::Re
         })
         .with_context(|| {
             format!(
-                "posted message {} was not returned by GET channel",
+                "posted message {} was not returned by the channel timeline",
                 posted.id
             )
         })?;
@@ -161,7 +167,7 @@ where
     }
 }
 
-async fn wait_for_comms_message<S>(
+async fn wait_for_posted_message<S>(
     websocket_read: &mut S,
     expected_message_id: &str,
     expected_nonce: &str,
@@ -175,7 +181,7 @@ where
         let remaining = deadline.saturating_duration_since(Instant::now());
         ensure!(
             !remaining.is_zero(),
-            "timed out waiting for websocket comms_message {expected_message_id}"
+            "timed out waiting for websocket message_update {expected_message_id}"
         );
 
         let message = next_websocket_message(websocket_read, remaining).await?;
@@ -191,11 +197,17 @@ where
             continue;
         };
 
-        if message_type != "comms_message" {
+        if message_type != "message_update" {
             continue;
         }
 
-        if data.get("id").and_then(Value::as_str) == Some(expected_message_id)
+        let change = data.get("change").unwrap_or(&Value::Null);
+        if change.get("type").and_then(Value::as_str) == Some("posted")
+            && change
+                .get("message")
+                .and_then(|message| message.get("id"))
+                .and_then(Value::as_str)
+                == Some(expected_message_id)
             && data.get("nonce").and_then(Value::as_str) == Some(expected_nonce)
         {
             return Ok(data);

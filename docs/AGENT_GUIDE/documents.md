@@ -242,8 +242,9 @@ open until dismissed so a reply is not lost when moving the pointer.
 
 **Comments** in the document header opens all workbook threads. Range labels
 navigate to the corresponding sheet and cells; deleted-sheet threads remain
-readable. These are the same document annotation comments used by docs/tasks:
-mentions and replies use the existing inbox notifications and comment links.
+readable. These are document discussions on the shared message API, anchored
+to a sheet range: mentions and replies use the same inbox notifications and
+comment links as docs/tasks.
 Opening an inbox notification opens the sidebar and targets its comment/range.
 Comment-only access can post/reply; view-only access can read. Edit/delete applies
 to the author's own comments, and failures retain the input draft. Draft demos
@@ -438,14 +439,12 @@ document should stay visible and the thread should open; loading the document
 with its badges still collapsed does not exercise thread rendering. Comment
 copy links should retain the document/task route and the selected comment.
 
-### Unified document discussions (`enable-unified-document-discussions`)
+### Document discussions
 
-With the PostHog flag `enable-unified-document-discussions` on (locally
-`VITE_ENABLE_UNIFIED_DOCUMENT_DISCUSSIONS=true`), document comments are messages
-read and written through `/dss/messages/document/<id>`, and both comment
-surfaces reuse the channel message components. The legacy annotation comment
-endpoints are not called for that document. Channels are not gated and always
-use the message API.
+Document comments are messages read and written through
+`/dss/messages/document/<id>`, and both comment surfaces reuse the channel
+message components. There is no legacy comment path and no feature flag:
+markdown documents, tasks, PDFs, and spreadsheets all use the message API.
 
 Below the editor, expand `Discussion` to see comments without a text anchor.
 Its `Leave a comment...` composer is the channel composer: `Attach files`,
@@ -492,12 +491,11 @@ editable view removes the retained mark when the document loads. Read-only
 viewers see plain text without a dead comment highlight; the stored document
 and overlapping live comments stay intact.
 
-Unified PDF discussions are deferred: PDFs keep the legacy comment subsystem
-regardless of the flag, so PDF comments (the side-panel `Comments` section,
-anchored margin threads, highlight comments, and placeable comments) behave as
-they do with the flag off. The message-backed PDF path is a follow-up.
-
-With the flag off, documents behave exactly as described above this section.
+PDF comments use the same message threads. A placeable comment posts its root
+together with the annotation geometry; a highlight comment attaches the thread
+to an existing highlight. `Delete discussion` removes a comment-only placeable
+and detaches a highlight, which stays on the page. Moving a placeable edits the
+annotation only and keeps its discussion.
 
 ## Side panel
 
