@@ -2,7 +2,11 @@ import {
   deserializeFacetSelection,
   normalizeFacetSelection,
 } from '@app/features/soup/filters/facets/selection';
-import { defineRoute, routeParams } from '@app/lib/split-router/routes';
+import {
+  defineRoute,
+  defineRoutes,
+  routeParams,
+} from '@app/lib/split-router/routes';
 import {
   type CreateSearchParamsOptions,
   isSafeName,
@@ -10,6 +14,7 @@ import {
   type SplitRouteNavigationTarget,
   type SplitRouteParams,
   type SplitRouterEntry,
+  type SplitRouteUnion,
   takeLast,
 } from '@app/split-router';
 import { URL_PARAMS as MARKDOWN_URL_PARAMS } from '@block-md/constants';
@@ -83,30 +88,35 @@ const tabRoute = defineRoute({
   children: [tabDocument],
 });
 
-export const driveSplitRoute = defineRoute({
-  id: 'drive',
-  path: 'drive',
-  aliases: ['drive/owned', 'drive/tab/owned'],
-  params: z.object({}),
-  // Drive lists are independent workspaces, not singleton content. Only the
-  // document children claim content; returning to a list must stay in its pane.
-  search: ['drive'],
-  externalSearch: (entry: Readonly<SplitRouterEntry>) => {
-    const type = routeParams<DriveRouteParams>(
-      entry.location.route
-    ).documentType;
-    if (
-      type === 'md' ||
-      type === 'task' ||
-      type === 'snippet' ||
-      type === 'skill'
-    ) {
-      return Object.values(MARKDOWN_URL_PARAMS);
-    }
-    return type === 'pdf' ? Object.values(PDF_URL_PARAMS) : [];
-  },
-  children: [folderRoute, tabRoute, rootDocument],
+const driveRoutes = defineRoutes({
+  definitions: [
+    defineRoute({
+      id: 'drive',
+      path: 'drive',
+      aliases: ['drive/owned', 'drive/tab/owned'],
+      params: z.object({}),
+      // Drive lists are independent workspaces, not singleton content. Only the
+      // document children claim content; returning to a list must stay in its pane.
+      search: ['drive'],
+      externalSearch: (entry: Readonly<SplitRouterEntry>) => {
+        const type = routeParams<DriveRouteParams>(
+          entry.location.route
+        ).documentType;
+        if (
+          type === 'md' ||
+          type === 'task' ||
+          type === 'snippet' ||
+          type === 'skill'
+        ) {
+          return Object.values(MARKDOWN_URL_PARAMS);
+        }
+        return type === 'pdf' ? Object.values(PDF_URL_PARAMS) : [];
+      },
+      children: [folderRoute, tabRoute, rootDocument],
+    }),
+  ],
 });
+export const driveSplitRoute = driveRoutes.definitions[0];
 
 export function driveLocationFromParams(
   params: DriveRouteParams
@@ -124,12 +134,7 @@ export function driveDocumentFromParams(
 }
 
 type DriveDestination = SplitRouteNavigationTarget<
-  | typeof driveSplitRoute
-  | typeof folderRoute
-  | typeof tabRoute
-  | typeof rootDocument
-  | typeof folderDocument
-  | typeof tabDocument
+  SplitRouteUnion<typeof driveRoutes>
 >;
 
 /** One typed destination builder for list and detail navigation. */
@@ -137,6 +142,7 @@ export function driveDestination(
   location: DriveLocation,
   document?: DriveDocumentRoute
 ): DriveDestination {
+  const [folder, tab, rootDetail] = driveSplitRoute.children;
   const detail = document && {
     documentId: document.id,
     documentType: document.type,
@@ -147,17 +153,17 @@ export function driveDestination(
       folderId: location.id ?? undefined,
     };
     return detail
-      ? { route: folderDocument, params: { ...params, ...detail } }
-      : { route: folderRoute, params };
+      ? { route: folder.children[0], params: { ...params, ...detail } }
+      : { route: folder, params };
   }
   if (location.tab !== 'owned') {
     const params = { tab: location.tab };
     return detail
-      ? { route: tabDocument, params: { ...params, ...detail } }
-      : { route: tabRoute, params };
+      ? { route: tab.children[0], params: { ...params, ...detail } }
+      : { route: tab, params };
   }
   return detail
-    ? { route: rootDocument, params: detail }
+    ? { route: rootDetail, params: detail }
     : { route: driveSplitRoute, params: {} };
 }
 

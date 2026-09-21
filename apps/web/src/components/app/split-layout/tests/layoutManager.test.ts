@@ -1,5 +1,8 @@
 import { agentsRouteId } from '@app/features/agents-view/core/route';
-import { driveSplitRoute } from '@app/features/drive-view/primitives/drive-route';
+import {
+  driveDestination,
+  driveSplitRoute,
+} from '@app/features/drive-view/primitives/drive-route';
 import {
   getListNavigationSource,
   listNavigationSourceId,
@@ -423,6 +426,24 @@ describe('layoutManager', () => {
             id: 'drive-tab',
             params: { tab: 'shared' },
           });
+          router.navigate(
+            second.id,
+            driveDestination(
+              { kind: 'folder', id: 'another-folder' },
+              { type: 'md', id: 'nested-document' }
+            )
+          );
+          expect(router.route(second.id)?.matches).toEqual([
+            { id: 'drive', params: {} },
+            {
+              id: 'drive-folder',
+              params: { view: 'folder', folderId: 'another-folder' },
+            },
+            {
+              id: 'drive-folder-document',
+              params: { documentType: 'md', documentId: 'nested-document' },
+            },
+          ]);
           expect(router.route(first.id)).toEqual(firstRoute);
           expect(manager.splits()).toHaveLength(2);
           router.dispose();
