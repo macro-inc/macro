@@ -194,9 +194,10 @@ where
     Notifier: AgentSessionNotifier,
 {
     /// Execute where the session's live actor is: locally when nobody (or
-    /// this replica) manages it, on the managing peer otherwise.
+    /// this replica) manages it, on the managing peer otherwise, and nowhere
+    /// at all when this replica is draining.
     /// The routing decision is recorded on the span, not only logged: which of
-    /// the three answers the lease gave, which peer it named, and whether the
+    /// the lease's answers came back, which peer it named, and whether the
     /// command left this process. Those are the fields you group by when a
     /// replica is mishandling commands, and a log line cannot be aggregated.
     #[tracing::instrument(
@@ -215,13 +216,21 @@ where
         command: HarnessCommand,
     ) -> Result<CommandOutcome> {
         let span = tracing::Span::current();
-        // Open creates the row and has no existing manager to route through.
-        if matches!(command, HarnessCommand::Open(_)) {
-            span.record("agent.session.management", "open");
-            span.record("agent.command.forwarded", false);
-            return self.execute(session_id, command).await;
-        }
         let manager = match self.sessions.management(session_id).await? {
+            // First, an open included: a replica on its way out has no
+            // business taking on new work of any shape, and the caller's
+            // retry lands on one that is staying.
+            SessionManagement::Draining => {
+                span.record("agent.session.management", "draining");
+                span.record("agent.command.forwarded", false);
+                return Err(AgentSessionError::Draining(session_id).into());
+            }
+            // Open creates the row and has no existing manager to route through.
+            _ if matches!(command, HarnessCommand::Open(_)) => {
+                span.record("agent.session.management", "open");
+                span.record("agent.command.forwarded", false);
+                return self.execute(session_id, command).await;
+            }
             SessionManagement::Unmanaged => {
                 span.record("agent.session.management", "unmanaged");
                 span.record("agent.command.forwarded", false);

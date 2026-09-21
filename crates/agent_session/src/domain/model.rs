@@ -87,6 +87,23 @@ pub struct SessionManager {
     /// `None` means the manager is live but unreachable - hold the error
     /// rather than execute somewhere the actor is not.
     pub address: Option<ReplicaAddress>,
+    /// Whether the holder has published that it is shutting down. Still
+    /// heartbeating, so still "live" by the lease's own liveness rule, but
+    /// no longer somewhere to send work.
+    pub draining: bool,
+}
+
+/// What the lease says about a session, seen from one replica.
+#[derive(Debug, Clone)]
+pub struct LeaseView {
+    /// The replica holding the lease, when a live one holds it - draining
+    /// or not, because who may take over from a draining holder is the
+    /// reader's decision, not the store's.
+    pub holder: Option<SessionManager>,
+    /// Whether the replica that asked has published that it is draining.
+    /// Asked in the same statement as the holder: a command's routing turns
+    /// on both, and two round trips could straddle the drain.
+    pub asking_replica_draining: bool,
 }
 
 /// Where a session's live actor runs, from one service instance's viewpoint.
@@ -99,6 +116,9 @@ pub enum SessionManagement {
     Ours,
     /// A live peer manages it; commands belong at its address.
     Peer(SessionManager),
+    /// This instance is draining: it is about to stop, so work sent here
+    /// would die with it. Commands belong on a replica that is staying.
+    Draining,
 }
 
 /// A session's takeover counter, bumped by every successful claim.
