@@ -64,6 +64,15 @@ export default defineConfig({
     },
     input: {
       target: './service-email/openapi.json',
+      filters: {
+        mode: 'exclude',
+        // Calendar operations are dead code in the generated client: every
+        // runtime calendar call goes through the hand-written emailClient in
+        // service-email/client.ts. The calendar_events-tagged operations are
+        // excluded here; the calendar component schemas the app still imports
+        // are emitted regardless of operation filtering.
+        tags: ['calendar_events'],
+      },
     },
   },
 

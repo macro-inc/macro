@@ -198,7 +198,6 @@ export * from './createDraftRequestSendTime';
 export * from './createDraftResponse';
 export * from './createLabelRequest';
 export * from './createLabelResponse';
-export * from './deleteCalendarEventParams';
 export * from './emptyResponse';
 export * from './errorResponse';
 export * from './eventReminderOverride';
