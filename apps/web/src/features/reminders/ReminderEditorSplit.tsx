@@ -14,9 +14,17 @@ import {
   optimisticUpdateSoupEntity,
 } from '@queries/soup/cache';
 import type { Reminder } from '@service-storage/generated/schemas/reminder';
-import { createMemo, Match, onMount, Show, Switch } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  Match,
+  onMount,
+  Show,
+  Switch,
+} from 'solid-js';
 import { ReminderForm, type ReminderFormValues } from './ReminderForm';
 import {
+  describeReminderConfirmation,
   reminderEditPatch,
   resolveEditedDescription,
 } from './reminder-schedule';
@@ -69,6 +77,8 @@ export function ReminderEditorSplit(props: { reminderId: string }) {
   onMount(() => panel.handle.setDisplayName('Reminder'));
 
   const query = useReminderQuery(() => props.reminderId);
+  const [updateError, setUpdateError] = createSignal<string>();
+  let focusBeforeSave: HTMLElement | undefined;
 
   // Soup rows come from the normalized soup cache, not the reminders queries, so
   // the mutation's own invalidation leaves the row reading its old description
@@ -85,11 +95,17 @@ export function ReminderEditorSplit(props: { reminderId: string }) {
   });
 
   const reference = createMemo(() => {
-    const reminder = query.data;
+    const reminder = query.isSuccess ? query.data : undefined;
     return reminder ? referenceMention(reminder) : undefined;
   });
 
   const save = async (values: ReminderFormValues, reminder: Reminder) => {
+    if (updateReminder.isPending) return;
+    focusBeforeSave =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : undefined;
+    setUpdateError(undefined);
     const patch = reminderEditPatch(
       {
         description: reminder.description,
@@ -116,11 +132,21 @@ export function ReminderEditorSplit(props: { reminderId: string }) {
       return;
     }
     try {
-      await updateReminder.mutateAsync({ id: reminder.id, patch });
-      toast.success('Reminder updated');
+      const updated = await updateReminder.mutateAsync({
+        id: reminder.id,
+        patch,
+      });
+      toast.success(
+        `Reminder updated · ${describeReminderConfirmation(updated.schedule)}`
+      );
       panel.handle.close();
     } catch {
-      toast.failure('Failed to update reminder');
+      setUpdateError(
+        'We couldn’t save these changes. Your edits are still here—try again.'
+      );
+      queueMicrotask(() => {
+        if (focusBeforeSave?.isConnected) focusBeforeSave.focus();
+      });
     }
   };
 
@@ -128,7 +154,7 @@ export function ReminderEditorSplit(props: { reminderId: string }) {
     <div class="h-full min-h-0 overflow-y-auto bg-panel font-sans">
       <div class="mx-auto w-full max-w-xl p-6">
         <Switch>
-          <Match when={query.data}>
+          <Match when={query.isSuccess ? query.data : undefined}>
             {(reminder) => (
               <ReminderForm
                 initialDescription={reminder().description}
@@ -137,6 +163,7 @@ export function ReminderEditorSplit(props: { reminderId: string }) {
                 placeholder="Reminder description"
                 submitLabel="Save"
                 pending={updateReminder.isPending}
+                error={updateError()}
                 reference={
                   <Show when={reference()}>
                     {(ref) => (
@@ -146,12 +173,7 @@ export function ReminderEditorSplit(props: { reminderId: string }) {
                     )}
                   </Show>
                 }
-                revertOnCancel
-                onCancel={(wasDirty) => {
-                  // Reverting an edit keeps the panel open; a clean cancel
-                  // dismisses the preview.
-                  if (!wasDirty) panel.handle.close();
-                }}
+                onCancel={() => panel.handle.close()}
                 onSubmit={(values) => void save(values, reminder())}
               />
             )}

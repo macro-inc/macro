@@ -99,8 +99,8 @@ describe('reminder composer created handler', () => {
     closeReminderComposer();
   });
 
-  // The composer closes before the create request is awaited, so the follow-up
-  // has to be taken out of here first rather than read after the fact.
+  // The modal takes this only after the create request succeeds, immediately
+  // before closing clears the composer state.
   it('hands the created handler over once', () => {
     const onCreated = vi.fn();
     openReminderComposer(doc('doc-1', 'Q3 Contract'), { onCreated });

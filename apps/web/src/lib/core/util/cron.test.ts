@@ -5,6 +5,7 @@ import {
   type CronParts,
   DEFAULT_TIME,
   describeCron,
+  isCronRepresentable,
   isValidCronParts,
   isValidTime,
   normalizeCron,
@@ -159,6 +160,20 @@ describe('parseCron', () => {
   it('falls back for garbage', () => {
     expect(parseCron('').frequency).toBe('week');
     expect(parseCron('not a cron').time).toBe(DEFAULT_TIME);
+  });
+});
+
+describe('isCronRepresentable', () => {
+  it('accepts schedules the shared picker can round-trip', () => {
+    expect(isCronRepresentable('0 0 9 * * *')).toBe(true);
+    expect(isCronRepresentable('0 30 14 * * 2-6')).toBe(true);
+    expect(isCronRepresentable('0 0 9 15 * *')).toBe(true);
+  });
+
+  it('rejects valid custom fields the shared picker cannot express', () => {
+    expect(isCronRepresentable('0 */15 9 * * *')).toBe(false);
+    expect(isCronRepresentable('0 0 9 1 3 *')).toBe(false);
+    expect(isCronRepresentable('0 0 9 * * 2 2027')).toBe(false);
   });
 });
 
