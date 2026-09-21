@@ -7,6 +7,11 @@ export async function mapConcurrently<T, R>(
   limit: number,
   fn: (item: T) => Promise<R>,
 ): Promise<R[]> {
+  if (!Number.isInteger(limit) || limit < 1) {
+    throw new RangeError(
+      `concurrency limit must be a positive integer, got ${limit}`,
+    );
+  }
   const results = new Array<R>(items.length);
   let next = 0;
   const worker = async () => {
