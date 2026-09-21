@@ -948,6 +948,62 @@ export type MarkdownNode =
       type: 'dssImage';
     };
 /**
+ * A thread's location within its document. Geometry remains annotation-owned.
+ */
+export type ThreadAnchor =
+  | {
+      /**
+       * Mark UUID serialized in the document.
+       */
+      mark_id: string;
+      type: 'markdown';
+    }
+  | {
+      /**
+       * Highlight annotation UUID.
+       */
+      anchor_id: string;
+      type: 'pdf_highlight';
+    }
+  | {
+      /**
+       * Placeable annotation UUID.
+       */
+      anchor_id: string;
+      type: 'pdf_placeable';
+    }
+  | {
+      /**
+       * Sheet identity within the workbook.
+       */
+      sheet_id: string;
+      /**
+       * Sheet name when the comment was made, shown when the sheet is gone.
+       */
+      sheet_name: string;
+      /**
+       * A1-style cell or range, for example `B2` or `B2:D4`.
+       */
+      range: string;
+      type: 'spreadsheet';
+    };
+/**
+ * The entity whose permissions and lifecycle govern a message.
+ */
+export type MessageParent =
+  | {
+      type: 'channel';
+      id: string;
+    }
+  | {
+      type: 'document';
+      id: DocumentId;
+    };
+/**
+ * A validated document identifier. Historical document ids need not be UUIDs.
+ */
+export type DocumentId = string;
+/**
  * API-visible content lifecycle state derived from current document metadata.
  */
 export type DocumentContentState = 'unknown' | 'pending' | 'ready';
@@ -5217,105 +5273,193 @@ export interface ReadContent {
 export interface ReadContentResponse {
   content: Content;
   /**
-   * Any comments on the document
+   * Live discussions on the document, each with its ordered replies
    */
-  comments: CommentThread[];
+  comments: MessageThread[];
 }
 /**
- * A thread bundled together with its ordered comments.
+ * A discussion with its root and ordered replies, including root tombstones.
  */
-export interface CommentThread {
-  thread: Thread;
+export interface MessageThread {
+  state: ThreadState;
+  root: Message;
   /**
-   * The comments in the thread, ordered by `createdAt` ASC.
+   * Replies in display order.
    */
-  comments: Comment[];
+  replies: Message[];
 }
 /**
- * A comment thread attached to a document.
+ * State belonging to a whole thread, keyed by its root message.
  */
-export interface Thread {
+export interface ThreadState {
   /**
-   * The unique id of the thread.
+   * Root message UUID; there is no separate thread identity.
    */
-  threadId: number;
+  root_id: string;
   /**
-   * The user id of the thread owner.
+   * User who owns this discussion, including imported discussions.
    */
-  owner: string;
+  user_id: string;
   /**
-   * Whether the thread has been resolved.
+   * Whether this discussion has been resolved.
    */
   resolved: boolean;
   /**
-   * The document the thread is attached to.
+   * No anchor means a discussion on the entire parent. Deleted Markdown
+   * threads retain their mark identity so closed documents can reconcile it.
    */
-  documentId: string;
+  anchor?: ThreadAnchor | null;
   /**
-   * When the thread was created.
+   * Creation time of the discussion.
    */
-  createdAt?: string | null;
+  created_at: string;
   /**
-   * When the thread was last updated.
+   * Last state change.
    */
-  updatedAt?: string | null;
+  updated_at: string;
   /**
-   * When the thread was deleted, if ever.
+   * Explicit deletion of the entire thread, distinct from root deletion.
    */
-  deletedAt?: string | null;
-  /**
-   * Arbitrary thread metadata.
-   */
-  metadata?: {
-    [k: string]: unknown;
-  };
+  deleted_at?: string | null;
 }
 /**
- * A single comment in a thread.
+ * Shared message representation for channel timelines and entity discussions.
  */
-export interface Comment {
+export interface Message {
   /**
-   * The unique id of the comment.
+   * Message UUID.
    */
-  commentId: number;
+  id: string;
+  parent: MessageParent;
   /**
-   * The thread this comment belongs to.
+   * Root message UUID for replies; absent on roots.
    */
-  threadId: number;
+  thread_id?: string | null;
   /**
-   * Ordering position within the thread.
+   * Authenticated actor or owner of imported content.
    */
-  order?: number | null;
+  sender_id: string;
   /**
-   * The user id of the comment owner.
+   * Original external author, when imported.
    */
-  owner: string;
+  imported_author?: ImportedAuthor | null;
   /**
-   * Sender display string.
+   * Public bot name and avatar for rendering shared message authors.
    */
-  sender?: string | null;
+  bot_profile?: BotSenderProfile | null;
   /**
-   * Comment body.
+   * Tracked mentions, retained when a caller changes attachments only.
    */
-  text: string;
+  mentions: SimpleMention[];
   /**
-   * Arbitrary comment metadata.
+   * User who triggered a bot-authored message.
    */
-  metadata?: {
-    [k: string]: unknown;
-  };
+  triggered_by?: string | null;
   /**
-   * When the comment was created.
+   * Macro Markdown body.
    */
-  createdAt?: string | null;
+  content: string;
   /**
-   * When the comment was last updated.
+   * Creation time.
    */
-  updatedAt?: string | null;
+  created_at: string;
   /**
-   * When the comment was deleted, if ever.
+   * Last persisted update.
    */
-  deletedAt?: string | null;
+  updated_at: string;
+  /**
+   * Last content edit, if any.
+   */
+  edited_at?: string | null;
+  /**
+   * Message tombstone, independent of thread deletion.
+   */
+  deleted_at?: string | null;
+  /**
+   * Attached entities.
+   */
+  attachments: MessageAttachment[];
+  /**
+   * Aggregated reactions.
+   */
+  reactions: CountedReaction[];
+}
+/**
+ * Display attribution for a comment imported from an external document.
+ */
+export interface ImportedAuthor {
+  /**
+   * Original author text; never interpreted as an authenticated principal.
+   */
+  name: string;
+}
+/**
+ * Public bot profile attached to bot-authored messages.
+ */
+export interface BotSenderProfile {
+  /**
+   * Bot display name.
+   */
+  name: string;
+  /**
+   * Bot avatar URL.
+   */
+  avatar_url?: string | null;
+}
+/**
+ * A mention tracked in a message body.
+ */
+export interface SimpleMention {
+  /**
+   * Mentioned entity type.
+   */
+  entity_type: string;
+  /**
+   * Mentioned entity identifier.
+   */
+  entity_id: string;
+}
+/**
+ * An entity attached to a message.
+ */
+export interface MessageAttachment {
+  /**
+   * Attachment UUID.
+   */
+  id: string;
+  /**
+   * Attached entity type.
+   */
+  entity_type: string;
+  /**
+   * Attached entity identifier.
+   */
+  entity_id: string;
+  /**
+   * Optional media width.
+   */
+  width?: number | null;
+  /**
+   * Optional media height.
+   */
+  height?: number | null;
+  /**
+   * When the attachment was added.
+   */
+  created_at: string;
+}
+/**
+ * Reaction emoji and the users who added it.
+ */
+export interface CountedReaction {
+  /**
+   * Emoji being reacted with.
+   */
+  emoji: string;
+  /**
+   * User identifiers.
+   */
+  users: string[];
 }
 /**
  * Retrieve a documents metadata

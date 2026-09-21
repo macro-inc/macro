@@ -10,5 +10,5 @@ export type AnnotationIncrementalUpdateOneOfFourUpdateType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const AnnotationIncrementalUpdateOneOfFourUpdateType = {
-  'create-anchor': 'create-anchor',
+  'edit-anchor': 'edit-anchor',
 } as const;

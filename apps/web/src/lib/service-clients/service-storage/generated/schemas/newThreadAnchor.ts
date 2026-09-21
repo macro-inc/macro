@@ -6,6 +6,7 @@
  */
 import type { NewThreadAnchorOneOf } from './newThreadAnchorOneOf';
 import type { NewThreadAnchorOneOfFive } from './newThreadAnchorOneOfFive';
+import type { NewThreadAnchorOneOfSeven } from './newThreadAnchorOneOfSeven';
 import type { NewThreadAnchorOneOfThree } from './newThreadAnchorOneOfThree';
 
 /**
@@ -14,4 +15,5 @@ import type { NewThreadAnchorOneOfThree } from './newThreadAnchorOneOfThree';
 export type NewThreadAnchor =
   | NewThreadAnchorOneOf
   | NewThreadAnchorOneOfThree
-  | NewThreadAnchorOneOfFive;
+  | NewThreadAnchorOneOfFive
+  | NewThreadAnchorOneOfSeven;

@@ -564,6 +564,7 @@ use utoipa::OpenApi;
             messages::domain::models::ThreadPatch,
             messages::domain::models::PostMessage,
             messages::domain::models::BotSenderProfile,
+            channel_sender::ChannelSender,
             messages::domain::models::ImportedAuthor,
             messages::domain::models::CountedReaction,
             messages::domain::models::MessageAttachment,

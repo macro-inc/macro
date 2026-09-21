@@ -5,15 +5,13 @@
  * OpenAPI spec version: 0.1.0
  */
 
-import type { ApiChannelMessage } from './apiChannelMessage';
 import type { ApiChannelParticipant } from './apiChannelParticipant';
 import type { ChannelType } from './channelType';
 
 /**
- * Channel detail: metadata, active participants, and a recent page of messages.
+ * Channel detail: metadata and active participants.
 
-`messages` is the newest-first first page (size controlled by `limit`); use the
-dedicated `/{channel_id}/messages` endpoint for cursor pagination.
+Messages are read through `/messages/channel/{channel_id}`.
  */
 export interface ApiChannelDetail {
   /** Channel id. */
@@ -22,8 +20,6 @@ export interface ApiChannelDetail {
   channel_name: string;
   /** Channel type. */
   channel_type: ChannelType;
-  /** Recent messages (newest-first first page). */
-  messages: ApiChannelMessage[];
   /** Active participants. */
   participants: ApiChannelParticipant[];
 }

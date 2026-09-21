@@ -4833,40 +4833,196 @@ export const ReadContentResponse = z.object({
   }),
   comments: z.array(
     z.object({
-      thread: z.object({
-        threadId: z.number().int(),
-        owner: z.string(),
+      state: z.object({
+        root_id: z.string().uuid(),
+        user_id: z.string(),
         resolved: z.boolean(),
-        documentId: z.string(),
-        createdAt: z
+        anchor: z
+          .union([
+            z.any().superRefine((x, ctx) => {
+              const schemas = [
+                z
+                  .object({
+                    mark_id: z.string().uuid(),
+                    type: z.literal('markdown'),
+                  })
+                  .strict(),
+                z
+                  .object({
+                    anchor_id: z.string().uuid(),
+                    type: z.literal('pdf_highlight'),
+                  })
+                  .strict(),
+                z
+                  .object({
+                    anchor_id: z.string().uuid(),
+                    type: z.literal('pdf_placeable'),
+                  })
+                  .strict(),
+                z
+                  .object({
+                    sheet_id: z.string(),
+                    sheet_name: z.string(),
+                    range: z.string(),
+                    type: z.literal('spreadsheet'),
+                  })
+                  .strict(),
+              ];
+              const errors = schemas.reduce<z.ZodError[]>(
+                (errors, schema) =>
+                  ((result) =>
+                    result.error ? [...errors, result.error] : errors)(
+                    schema.safeParse(x)
+                  ),
+                []
+              );
+              if (schemas.length - errors.length !== 1) {
+                ctx.addIssue({
+                  path: ctx.path,
+                  code: 'invalid_union',
+                  unionErrors: errors,
+                  message: 'Invalid input: Should pass single schema',
+                });
+              }
+            }),
+            z.null(),
+          ])
+          .optional(),
+        created_at: z.string().datetime({ offset: true }),
+        updated_at: z.string().datetime({ offset: true }),
+        deleted_at: z
           .union([z.string().datetime({ offset: true }), z.null()])
           .optional(),
-        updatedAt: z
-          .union([z.string().datetime({ offset: true }), z.null()])
-          .optional(),
-        deletedAt: z
-          .union([z.string().datetime({ offset: true }), z.null()])
-          .optional(),
-        metadata: z.any().optional(),
       }),
-      comments: z.array(
+      root: z.object({
+        id: z.string().uuid(),
+        parent: z.any().superRefine((x, ctx) => {
+          const schemas = [
+            z.object({ type: z.literal('channel'), id: z.string().uuid() }),
+            z.object({ type: z.literal('document'), id: z.string() }),
+          ];
+          const errors = schemas.reduce<z.ZodError[]>(
+            (errors, schema) =>
+              ((result) => (result.error ? [...errors, result.error] : errors))(
+                schema.safeParse(x)
+              ),
+            []
+          );
+          if (schemas.length - errors.length !== 1) {
+            ctx.addIssue({
+              path: ctx.path,
+              code: 'invalid_union',
+              unionErrors: errors,
+              message: 'Invalid input: Should pass single schema',
+            });
+          }
+        }),
+        thread_id: z.union([z.string().uuid(), z.null()]).optional(),
+        sender_id: z.string(),
+        imported_author: z
+          .union([z.object({ name: z.string() }), z.null()])
+          .optional(),
+        bot_profile: z
+          .union([
+            z.object({
+              name: z.string(),
+              avatar_url: z.union([z.string(), z.null()]).optional(),
+            }),
+            z.null(),
+          ])
+          .optional(),
+        mentions: z.array(
+          z.object({ entity_type: z.string(), entity_id: z.string() })
+        ),
+        triggered_by: z.union([z.string(), z.null()]).optional(),
+        content: z.string(),
+        created_at: z.string().datetime({ offset: true }),
+        updated_at: z.string().datetime({ offset: true }),
+        edited_at: z
+          .union([z.string().datetime({ offset: true }), z.null()])
+          .optional(),
+        deleted_at: z
+          .union([z.string().datetime({ offset: true }), z.null()])
+          .optional(),
+        attachments: z.array(
+          z.object({
+            id: z.string().uuid(),
+            entity_type: z.string(),
+            entity_id: z.string(),
+            width: z.union([z.number().int(), z.null()]).optional(),
+            height: z.union([z.number().int(), z.null()]).optional(),
+            created_at: z.string().datetime({ offset: true }),
+          })
+        ),
+        reactions: z.array(
+          z.object({ emoji: z.string(), users: z.array(z.string()) })
+        ),
+      }),
+      replies: z.array(
         z.object({
-          commentId: z.number().int(),
-          threadId: z.number().int(),
-          order: z.union([z.number().int(), z.null()]).optional(),
-          owner: z.string(),
-          sender: z.union([z.string(), z.null()]).optional(),
-          text: z.string(),
-          metadata: z.any().optional(),
-          createdAt: z
+          id: z.string().uuid(),
+          parent: z.any().superRefine((x, ctx) => {
+            const schemas = [
+              z.object({ type: z.literal('channel'), id: z.string().uuid() }),
+              z.object({ type: z.literal('document'), id: z.string() }),
+            ];
+            const errors = schemas.reduce<z.ZodError[]>(
+              (errors, schema) =>
+                ((result) =>
+                  result.error ? [...errors, result.error] : errors)(
+                  schema.safeParse(x)
+                ),
+              []
+            );
+            if (schemas.length - errors.length !== 1) {
+              ctx.addIssue({
+                path: ctx.path,
+                code: 'invalid_union',
+                unionErrors: errors,
+                message: 'Invalid input: Should pass single schema',
+              });
+            }
+          }),
+          thread_id: z.union([z.string().uuid(), z.null()]).optional(),
+          sender_id: z.string(),
+          imported_author: z
+            .union([z.object({ name: z.string() }), z.null()])
+            .optional(),
+          bot_profile: z
+            .union([
+              z.object({
+                name: z.string(),
+                avatar_url: z.union([z.string(), z.null()]).optional(),
+              }),
+              z.null(),
+            ])
+            .optional(),
+          mentions: z.array(
+            z.object({ entity_type: z.string(), entity_id: z.string() })
+          ),
+          triggered_by: z.union([z.string(), z.null()]).optional(),
+          content: z.string(),
+          created_at: z.string().datetime({ offset: true }),
+          updated_at: z.string().datetime({ offset: true }),
+          edited_at: z
             .union([z.string().datetime({ offset: true }), z.null()])
             .optional(),
-          updatedAt: z
+          deleted_at: z
             .union([z.string().datetime({ offset: true }), z.null()])
             .optional(),
-          deletedAt: z
-            .union([z.string().datetime({ offset: true }), z.null()])
-            .optional(),
+          attachments: z.array(
+            z.object({
+              id: z.string().uuid(),
+              entity_type: z.string(),
+              entity_id: z.string(),
+              width: z.union([z.number().int(), z.null()]).optional(),
+              height: z.union([z.number().int(), z.null()]).optional(),
+              created_at: z.string().datetime({ offset: true }),
+            })
+          ),
+          reactions: z.array(
+            z.object({ emoji: z.string(), users: z.array(z.string()) })
+          ),
         })
       ),
     })

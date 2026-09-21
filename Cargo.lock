@@ -5509,6 +5509,7 @@ dependencies = [
  "calendar_events",
  "call",
  "channel_bots",
+ "channel_sender",
  "channels",
  "chat",
  "chrono",
