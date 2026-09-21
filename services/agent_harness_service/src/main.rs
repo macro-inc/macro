@@ -1043,7 +1043,6 @@ async fn run() -> anyhow::Result<()> {
         pool.clone(),
         config.kafka_brokers.as_ref().to_owned(),
         config.internal_api_key.clone(),
-        config.agent_trigger_event_source,
     ));
 
     let egress_port = config.egress_port;

@@ -36,6 +36,7 @@ ports = [
 [dependencies]
 broadcast = { path = "../broadcast", optional = true }
 channels = { path = "../channels", default-features = false, optional = true }
+messages = { path = "../messages", features = ["broker"] }
 chat = { path = "../chat", default-features = false, optional = true }
 documents = { path = "../documents", default-features = false, features = ["service"], optional = true }
 email = { path = "../email", default-features = false, optional = true }
@@ -60,7 +61,6 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 chrono = { workspace = true }
-messages = { path = "../messages" }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util", "time"] }
 uuid = { workspace = true }

@@ -1,6 +1,5 @@
 use super::*;
 use crate::domain::{
-    events::MessageChangedNotificationContext,
     models::{BotId, EntityMention, ParticipantRole, Sender},
     ports::{
         ChannelEventHandler, ChannelNotificationSender, ChannelRealtimePublisher,
@@ -237,7 +236,7 @@ async fn non_macro_bot_profile_uses_context_lookup() {
 }
 
 #[tokio::test]
-async fn message_posted_derives_realtime_and_notification_effects() {
+async fn message_posted_derives_notification_effects_without_legacy_realtime() {
     let channel_id = Uuid::new_v4();
     let message_id = Uuid::new_v4();
     let sender = user("sender@example.com");
@@ -290,27 +289,13 @@ async fn message_posted_derives_realtime_and_notification_effects() {
             },
             mentions: Vec::new(),
             has_attachments: false,
-            attachments: Vec::new(),
-            nonce: Some("nonce-1".to_string()),
             notification_policy: PostMessageNotificationPolicy::Default,
         })
         .await;
 
-    let realtime_effects = realtime.effects.lock().unwrap();
-    assert_eq!(realtime_effects.len(), 1);
-    let ChannelRealtimeEffect::Message {
-        recipients,
-        message,
-        nonce,
-        ..
-    } = &realtime_effects[0]
-    else {
-        panic!("expected message realtime effect");
-    };
-    assert_eq!(message.id, message_id);
-    assert_eq!(nonce.as_deref(), Some("nonce-1"));
-    assert_eq!(recipients.len(), 2);
-    drop(realtime_effects);
+    // The shared message service sends the common `message_update` payload;
+    // the channel side effects no longer publish message frames of their own.
+    assert!(realtime.effects.lock().unwrap().is_empty());
 
     let notification_effects = notifications.effects.lock().unwrap();
     assert_eq!(notification_effects.len(), 1);
@@ -369,8 +354,6 @@ fn bot_message_posted_event(
         },
         mentions: Vec::new(),
         has_attachments: false,
-        attachments: Vec::new(),
-        nonce: None,
         notification_policy: PostMessageNotificationPolicy::Default,
     }
 }
@@ -428,8 +411,6 @@ async fn silent_message_posted_skips_notifications_only() {
             },
             mentions: Vec::new(),
             has_attachments: false,
-            attachments: Vec::new(),
-            nonce: None,
             notification_policy: PostMessageNotificationPolicy::Silent,
         })
         .await;
@@ -491,8 +472,6 @@ async fn mentions_only_skips_failing_invite_lookup_and_sends_mention() {
             },
             mentions: vec![SimpleMention::user(&mentioned)],
             has_attachments: false,
-            attachments: Vec::new(),
-            nonce: None,
             notification_policy: PostMessageNotificationPolicy::MentionsOnly,
         })
         .await;
@@ -504,80 +483,6 @@ async fn mentions_only_skips_failing_invite_lookup_and_sends_mention() {
         panic!("expected only a user mention notification");
     };
     assert_eq!(recipient_ids, &HashSet::from([mentioned]));
-}
-
-#[tokio::test]
-async fn message_changed_with_posted_notification_context_sends_notification() {
-    let channel_id = Uuid::new_v4();
-    let thread_id = Uuid::new_v4();
-    let message_id = Uuid::new_v4();
-    let recipient = user("recipient@example.com");
-    let parent_sender = user("parent@example.com");
-    let notifications = FakeNotifications::default();
-    let service = ChannelSideEffectService::new(
-        FakeContext {
-            thread_context: ThreadNotificationContext {
-                participants: vec![recipient.clone(), parent_sender.clone()],
-                parent_sender_id: Some(parent_sender.clone()),
-            },
-            ..FakeContext::default()
-        },
-        FakeRealtime::default(),
-        notifications.clone(),
-        FakeContacts::default(),
-    );
-    let now = Utc::now();
-
-    service
-        .handle(ChannelEvent::MessageChanged {
-            channel_id,
-            actor: Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID),
-            message: MutatedMessage {
-                id: message_id,
-                channel_id,
-                thread_id: Some(thread_id),
-                sender_id: Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID),
-                triggered_by: None,
-                content: "final answer".to_string(),
-                created_at: now,
-                updated_at: now,
-                edited_at: Some(now),
-                deleted_at: None,
-            },
-            recipients: vec![recipient.clone(), parent_sender.clone()],
-            nonce: None,
-            posted_notification: Some(MessageChangedNotificationContext {
-                metadata: ChannelMetadata {
-                    channel_type: ChannelType::Private,
-                    channel_name: "Project".to_string(),
-                },
-                participants: Vec::new(),
-                mentions: Vec::new(),
-                has_attachments: false,
-            }),
-        })
-        .await;
-
-    let notification_effects = notifications.effects.lock().unwrap();
-    assert_eq!(notification_effects.len(), 1);
-    let ChannelNotificationEffect::Reply {
-        message_id: notified_message_id,
-        sender,
-        recipient_ids,
-        ..
-    } = &notification_effects[0]
-    else {
-        panic!("expected reply notification effect");
-    };
-    assert_eq!(*notified_message_id, message_id);
-    assert_eq!(
-        *sender,
-        NotificationSender::Bot {
-            name: bot_id::MACRO_AI_NAME.to_string()
-        }
-    );
-    assert!(recipient_ids.contains(&recipient));
-    assert!(recipient_ids.contains(&parent_sender));
 }
 
 #[tokio::test]
@@ -776,165 +681,6 @@ async fn bot_participant_is_never_a_notification_recipient() {
 }
 
 #[tokio::test]
-async fn user_message_with_bot_mention_enqueues_bot_trigger() {
-    let channel_id = Uuid::new_v4();
-    let message_id = Uuid::new_v4();
-    let sender = user("sender@example.com");
-    let recipient = user("recipient@example.com");
-    let (bot_trigger_sender, mut bot_trigger_receiver) = tokio::sync::mpsc::unbounded_channel();
-    let service = ChannelSideEffectService::new(
-        FakeContext::default(),
-        FakeRealtime::default(),
-        FakeNotifications::default(),
-        FakeContacts::default(),
-    )
-    .with_bot_trigger_sender(bot_trigger_sender);
-    let now = Utc::now();
-
-    service
-        .handle(ChannelEvent::MessagePosted {
-            channel_id,
-            metadata: ChannelMetadata {
-                channel_type: ChannelType::Private,
-                channel_name: "Project".to_string(),
-            },
-            participants: vec![
-                ChannelParticipant {
-                    channel_id,
-                    user_id: sender.as_ref().to_string(),
-                    role: ParticipantRole::Member,
-                    joined_at: now,
-                    left_at: None,
-                },
-                ChannelParticipant {
-                    channel_id,
-                    user_id: recipient.as_ref().to_string(),
-                    role: ParticipantRole::Member,
-                    joined_at: now,
-                    left_at: None,
-                },
-                ChannelParticipant {
-                    channel_id,
-                    user_id: bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string(),
-                    role: ParticipantRole::Member,
-                    joined_at: now,
-                    left_at: None,
-                },
-            ],
-            message: MutatedMessage {
-                id: message_id,
-                channel_id,
-                thread_id: None,
-                sender_id: Sender::new_from_user(sender),
-                triggered_by: None,
-                content: "@macro help".to_string(),
-                created_at: now,
-                updated_at: now,
-                edited_at: None,
-                deleted_at: None,
-            },
-            mentions: vec![SimpleMention {
-                entity_type: "user".to_string(),
-                entity_id: bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string(),
-            }],
-            has_attachments: false,
-            attachments: Vec::new(),
-            nonce: None,
-            notification_policy: PostMessageNotificationPolicy::Default,
-        })
-        .await;
-
-    let trigger = bot_trigger_receiver
-        .try_recv()
-        .expect("expected bot trigger");
-    assert_eq!(trigger.channel_id, channel_id);
-    assert_eq!(trigger.message.id, message_id);
-    assert_eq!(trigger.mentioned_bot_ids, vec![bot_id::MACRO_AI_BOT_ID]);
-    assert!(bot_trigger_receiver.try_recv().is_err());
-}
-
-#[tokio::test]
-async fn user_message_with_uninstalled_bot_mention_enqueues_candidate_without_that_bot() {
-    let channel_id = Uuid::new_v4();
-    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
-    let (bot_trigger_sender, mut bot_trigger_receiver) = tokio::sync::mpsc::unbounded_channel();
-    let service = ChannelSideEffectService::new(
-        FakeContext::default(),
-        FakeRealtime::default(),
-        FakeNotifications::default(),
-        FakeContacts::default(),
-    )
-    .with_bot_trigger_sender(bot_trigger_sender);
-    let now = Utc::now();
-
-    service
-        .handle(ChannelEvent::MessagePosted {
-            channel_id,
-            metadata: ChannelMetadata {
-                channel_type: ChannelType::Private,
-                channel_name: "Project".to_string(),
-            },
-            participants: vec![ChannelParticipant {
-                channel_id,
-                user_id: "macro|sender@example.com".to_string(),
-                role: ParticipantRole::Member,
-                joined_at: now,
-                left_at: None,
-            }],
-            message: MutatedMessage {
-                id: Uuid::new_v4(),
-                channel_id,
-                thread_id: None,
-                sender_id: Sender::new_from_user(user("sender@example.com")),
-                triggered_by: None,
-                content: "@bot help".to_string(),
-                created_at: now,
-                updated_at: now,
-                edited_at: None,
-                deleted_at: None,
-            },
-            mentions: vec![mention(
-                BOT_MENTION_ENTITY_TYPE,
-                &bot_id.into_storage_id().to_string(),
-            )],
-            has_attachments: false,
-            attachments: Vec::new(),
-            nonce: None,
-            notification_policy: PostMessageNotificationPolicy::Default,
-        })
-        .await;
-
-    let trigger = bot_trigger_receiver
-        .try_recv()
-        .expect("expected bot trigger candidate");
-    assert!(trigger.mentioned_bot_ids.is_empty());
-}
-
-#[tokio::test]
-async fn bot_message_never_enqueues_bot_trigger() {
-    let channel_id = Uuid::new_v4();
-    let (bot_trigger_sender, mut bot_trigger_receiver) = tokio::sync::mpsc::unbounded_channel();
-    let service = ChannelSideEffectService::new(
-        FakeContext::default(),
-        FakeRealtime::default(),
-        FakeNotifications::default(),
-        FakeContacts::default(),
-    )
-    .with_bot_trigger_sender(bot_trigger_sender);
-
-    service
-        .handle(bot_message_posted_event(
-            channel_id,
-            Uuid::new_v4(),
-            Some(Uuid::new_v4()),
-            &["macro|recipient@example.com"],
-        ))
-        .await;
-
-    assert!(bot_trigger_receiver.try_recv().is_err());
-}
-
-#[tokio::test]
 async fn document_mentions_notify_participants_except_sender() {
     let channel_id = Uuid::new_v4();
     let message_id = Uuid::new_v4();
@@ -1011,8 +757,6 @@ async fn document_mentions_notify_participants_except_sender() {
                 },
             ],
             has_attachments: false,
-            attachments: Vec::new(),
-            nonce: None,
             notification_policy: PostMessageNotificationPolicy::Default,
         })
         .await;
@@ -1150,39 +894,6 @@ fn mention(entity_type: &str, entity_id: &str) -> SimpleMention {
 }
 
 #[test]
-fn bot_mentions_recognize_bot_and_macro_ai_user_tags() {
-    let macro_ai = bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string();
-    let other_bot = BotId::new_from_uuid(Uuid::new_v4());
-    let other_bot_principal = other_bot.into_storage_id().to_string();
-    let mentions = vec![
-        // Macro AI surfaced through the user-mention UI.
-        mention("user", &macro_ai),
-        // Duplicate bot mentions are dispatched once.
-        mention("user", &macro_ai),
-        // A real user mention is ignored.
-        mention("user", "macro|teo@macro.com"),
-        // An explicitly bot-tagged mention.
-        mention(BOT_MENTION_ENTITY_TYPE, &other_bot_principal),
-        mention(BOT_MENTION_ENTITY_TYPE, &other_bot_principal),
-    ];
-
-    let bots = bot_mention_ids(&mentions);
-    assert_eq!(bots, vec![bot_id::MACRO_AI_BOT_ID, other_bot]);
-}
-
-#[test]
-fn bot_mentions_reject_bare_uuid_ids() {
-    // Bare UUIDs are a legacy encoding; producers must send `bot|<uuid>`
-    // and historical content is normalized by migration.
-    let mentions = vec![
-        mention("user", &bot_id::MACRO_AI_BOT_ID.as_uuid().to_string()),
-        mention(BOT_MENTION_ENTITY_TYPE, &Uuid::new_v4().to_string()),
-    ];
-
-    assert!(bot_mention_ids(&mentions).is_empty());
-}
-
-#[test]
 fn macro_ai_user_mention_is_not_a_user_recipient() {
     assert!(is_bot_user_mention(&mention(
         "user",
@@ -1232,26 +943,6 @@ impl MacroEventBroker for TestEventBroker {
     }
 }
 
-#[derive(Clone, Default)]
-struct FailingEventBroker {
-    attempts: Arc<Mutex<usize>>,
-}
-
-impl MacroEventBroker for FailingEventBroker {
-    fn send_event<E: macro_event_broker::MacroEvent + ?Sized>(
-        &self,
-        _event: &E,
-    ) -> Result<
-        tokio::task::JoinHandle<Result<(), macro_event_broker::EventBrokerError>>,
-        macro_event_broker::EventBrokerError,
-    > {
-        *self.attempts.lock().unwrap() += 1;
-        Err(macro_event_broker::EventBrokerError::Publish(
-            "broker unavailable".to_string(),
-        ))
-    }
-}
-
 fn broker_service(
     broker: TestEventBroker,
 ) -> ChannelSideEffectService<
@@ -1268,35 +959,6 @@ fn broker_service(
         FakeContacts::default(),
     )
     .with_macro_event_broker(broker)
-}
-
-fn attachment(channel_id: Uuid, message_id: Uuid) -> MutatedAttachment {
-    MutatedAttachment {
-        id: Uuid::new_v4(),
-        channel_id,
-        message_id,
-        entity_type: "document".to_string(),
-        entity_id: "doc-1".to_string(),
-        width: None,
-        height: None,
-        created_at: Utc::now(),
-    }
-}
-
-fn channel_message(channel_id: Uuid, message_id: Uuid) -> MutatedMessage {
-    let now = Utc::now();
-    MutatedMessage {
-        id: message_id,
-        channel_id,
-        thread_id: None,
-        sender_id: Sender::new_from_user(user("alice@example.com")),
-        triggered_by: None,
-        content: "updated message".to_string(),
-        created_at: now,
-        updated_at: now,
-        edited_at: Some(now),
-        deleted_at: None,
-    }
 }
 
 #[tokio::test]
@@ -1326,167 +988,6 @@ async fn handle_publishes_channel_created_event() {
         published[0].envelope["metadata"]["actor"],
         "macro|alice@example.com"
     );
-}
-
-#[tokio::test]
-async fn handle_publishes_message_posted_and_attachment_created_events() {
-    let broker = TestEventBroker::default();
-    let service = broker_service(broker.clone());
-    let channel_id = Uuid::new_v4();
-    let message_id = Uuid::new_v4();
-    let now = Utc::now();
-
-    service
-        .handle(ChannelEvent::MessagePosted {
-            channel_id,
-            metadata: ChannelMetadata {
-                channel_type: ChannelType::Team,
-                channel_name: "Project".to_string(),
-            },
-            participants: Vec::new(),
-            message: MutatedMessage {
-                id: message_id,
-                channel_id,
-                thread_id: None,
-                sender_id: Sender::new_from_user(user("alice@example.com")),
-                triggered_by: None,
-                content: "hello world".to_string(),
-                created_at: now,
-                updated_at: now,
-                edited_at: None,
-                deleted_at: None,
-            },
-            mentions: Vec::new(),
-            has_attachments: true,
-            attachments: vec![attachment(channel_id, message_id)],
-            nonce: None,
-            notification_policy: PostMessageNotificationPolicy::Default,
-        })
-        .await;
-
-    let published = broker.published.lock().unwrap();
-    assert_eq!(published.len(), 2);
-    assert_eq!(
-        published[0].envelope["event_type"],
-        "channel.message_posted"
-    );
-    assert_eq!(published[0].envelope["metadata"]["content"], "hello world");
-    assert_eq!(published[0].envelope["metadata"]["channel_type"], "team");
-    assert_eq!(
-        published[1].envelope["event_type"],
-        "channel.message_attachment_created"
-    );
-    assert_eq!(
-        published[1].envelope["metadata"]["attachments"]
-            .as_array()
-            .unwrap()
-            .len(),
-        1
-    );
-    for event in published.iter() {
-        assert_eq!(event.key, channel_id.to_string());
-    }
-}
-
-#[tokio::test]
-async fn handle_publishes_attachment_deltas() {
-    let broker = TestEventBroker::default();
-    let service = broker_service(broker.clone());
-    let channel_id = Uuid::new_v4();
-    let message_id = Uuid::new_v4();
-    let added = attachment(channel_id, message_id);
-    let removed = attachment(channel_id, message_id);
-
-    service
-        .handle(ChannelEvent::AttachmentsChanged {
-            channel_id,
-            actor: Sender::new_from_user(user("alice@example.com")),
-            message_id,
-            attachments: vec![added.clone()],
-            added: vec![added.clone()],
-            removed: vec![removed.clone()],
-            recipients: Vec::new(),
-            nonce: None,
-        })
-        .await;
-
-    let published = broker.published.lock().unwrap();
-    assert_eq!(published.len(), 2);
-    assert_eq!(
-        published[0].envelope["event_type"],
-        "channel.message_attachment_created"
-    );
-    assert_eq!(
-        published[0].envelope["metadata"]["attachments"][0]["attachment_id"],
-        added.id.to_string()
-    );
-    assert_eq!(
-        published[1].envelope["event_type"],
-        "channel.message_attachment_removed"
-    );
-    assert_eq!(
-        published[1].envelope["metadata"]["attachments"][0]["attachment_id"],
-        removed.id.to_string()
-    );
-}
-
-#[tokio::test]
-async fn handle_publishes_message_patch_and_delete_events() {
-    let broker = TestEventBroker::default();
-    let service = broker_service(broker.clone());
-    let channel_id = Uuid::new_v4();
-    let message_id = Uuid::new_v4();
-    let actor = Sender::new_from_user(user("alice@example.com"));
-    let patched_message = channel_message(channel_id, message_id);
-    let mut deleted_message = patched_message.clone();
-    deleted_message.deleted_at = Some(Utc::now());
-
-    service
-        .handle(ChannelEvent::MessageChanged {
-            channel_id,
-            actor: actor.clone(),
-            message: patched_message,
-            recipients: Vec::new(),
-            nonce: None,
-            posted_notification: None,
-        })
-        .await;
-    service
-        .handle(ChannelEvent::MessageDeleted {
-            channel_id,
-            actor: actor.clone(),
-            message: deleted_message,
-            recipients: Vec::new(),
-            nonce: None,
-        })
-        .await;
-    service
-        .handle(ChannelEvent::ChannelDeleted { channel_id, actor })
-        .await;
-
-    let published = broker.published.lock().unwrap();
-    assert_eq!(published.len(), 3);
-    assert_eq!(
-        published[0].envelope["event_type"],
-        "channel.message_patched"
-    );
-    assert_eq!(
-        published[1].envelope["event_type"],
-        "channel.message_deleted"
-    );
-    assert_eq!(published[2].envelope["event_type"], "channel.deleted");
-    assert_eq!(
-        published[0].envelope["metadata"]["message_id"],
-        message_id.to_string()
-    );
-    assert_eq!(
-        published[1].envelope["metadata"]["message_id"],
-        message_id.to_string()
-    );
-    for event in published.iter() {
-        assert_eq!(event.topic, "macro.channels");
-        assert_eq!(event.key, channel_id.to_string());
-    }
 }
 
 #[tokio::test]
@@ -1521,56 +1022,29 @@ async fn handle_publishes_participant_events() {
 }
 
 #[tokio::test]
-async fn handle_publishes_nothing_for_typing() {
+async fn handle_publishes_no_channel_topic_facts_for_posted_messages() {
     let broker = TestEventBroker::default();
     let service = broker_service(broker.clone());
-
-    service
-        .handle(ChannelEvent::TypingChanged {
-            channel_id: Uuid::new_v4(),
-            actor: Sender::new_from_user(user("alice@example.com")),
-            action: TypingAction::Start,
-            thread_id: None,
-            recipients: Vec::new(),
-            nonce: None,
-        })
-        .await;
-
-    assert!(broker.published.lock().unwrap().is_empty());
-}
-
-#[tokio::test]
-async fn publish_failure_does_not_break_other_side_effects() {
-    let realtime = FakeRealtime::default();
-    let broker = FailingEventBroker::default();
-    let service = ChannelSideEffectService::new(
-        FakeContext::default(),
-        realtime.clone(),
-        FakeNotifications::default(),
-        FakeContacts::default(),
-    )
-    .with_macro_event_broker(broker.clone());
     let channel_id = Uuid::new_v4();
-    let message_id = Uuid::new_v4();
 
     service
-        .handle(ChannelEvent::MessageChanged {
+        .handle(bot_message_posted_event(
             channel_id,
-            actor: Sender::new_from_user(user("alice@example.com")),
-            message: channel_message(channel_id, message_id),
-            recipients: users(&["bob@example.com"]),
-            nonce: Some("nonce-1".to_string()),
-            posted_notification: None,
-        })
+            Uuid::new_v4(),
+            None,
+            &["macro|alice@example.com"],
+        ))
         .await;
 
-    assert_eq!(*broker.attempts.lock().unwrap(), 1);
-    let realtime_effects = realtime.effects.lock().unwrap();
-    let ChannelRealtimeEffect::Message { message, nonce, .. } = &realtime_effects[0] else {
-        panic!("expected message realtime effect");
-    };
-    assert_eq!(message.id, message_id);
-    assert_eq!(nonce.as_deref(), Some("nonce-1"));
+    // Message facts travel on `macro.messages` with their parent.
+    assert!(
+        broker
+            .published
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|event| event.topic != "macro.channels")
+    );
 }
 
 #[test]
@@ -1610,230 +1084,6 @@ fn broker_events_map_channel_updated() {
     assert_eq!(envelope["event_type"], "channel.updated");
     assert_eq!(envelope["metadata"]["previous_name"], "old");
     assert_eq!(envelope["metadata"]["channel_name"], "new");
-}
-
-/// Build a MessagePosted event from the given sender carrying the given
-/// mentions.
-fn message_posted_with_mentions(
-    sender: Sender,
-    channel_id: Uuid,
-    message_id: Uuid,
-    mentions: Vec<SimpleMention>,
-    participant_principals: &[&str],
-) -> ChannelEvent {
-    let now = Utc::now();
-    ChannelEvent::MessagePosted {
-        channel_id,
-        metadata: ChannelMetadata {
-            channel_type: ChannelType::Team,
-            channel_name: "Project".to_string(),
-        },
-        participants: participant_principals
-            .iter()
-            .map(|principal| ChannelParticipant {
-                channel_id,
-                user_id: principal.to_string(),
-                role: ParticipantRole::Member,
-                joined_at: now,
-                left_at: None,
-            })
-            .collect(),
-        message: MutatedMessage {
-            id: message_id,
-            channel_id,
-            thread_id: None,
-            sender_id: sender,
-            triggered_by: None,
-            content: "hello bots".to_string(),
-            created_at: now,
-            updated_at: now,
-            edited_at: None,
-            deleted_at: None,
-        },
-        mentions,
-        has_attachments: false,
-        attachments: Vec::new(),
-        nonce: None,
-        notification_policy: PostMessageNotificationPolicy::Default,
-    }
-}
-
-#[test]
-fn broker_events_map_message_posted_mentions_per_entity() {
-    use macro_event_broker::MacroEvent as _;
-    let channel_id = Uuid::new_v4();
-    let message_id = Uuid::new_v4();
-    let bot_principal = BotId::new_from_uuid(Uuid::new_v4())
-        .into_storage_id()
-        .to_string();
-    let macro_ai_principal = bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string();
-    let macro_coder_principal = bot_id::MACRO_CODER_BOT_ID.into_storage_id().to_string();
-    let uninstalled_bot_principal = BotId::new_from_uuid(Uuid::new_v4())
-        .into_storage_id()
-        .to_string();
-
-    let events = broker_events_for_event(&message_posted_with_mentions(
-        Sender::new_from_user(user("alice@example.com")),
-        channel_id,
-        message_id,
-        vec![
-            mention(BOT_MENTION_ENTITY_TYPE, &bot_principal),
-            // Duplicate mentions of one entity emit a single event.
-            mention(BOT_MENTION_ENTITY_TYPE, &bot_principal),
-            // Macro AI surfaced through the user-mention UI still counts.
-            mention("user", &macro_ai_principal),
-            // Macro Coder is globally available without a participant row.
-            mention(BOT_MENTION_ENTITY_TYPE, &macro_coder_principal),
-            // A valid bot principal that is not installed emits nothing.
-            mention(BOT_MENTION_ENTITY_TYPE, &uninstalled_bot_principal),
-            // A bot-tagged mention with a malformed id emits nothing.
-            mention(BOT_MENTION_ENTITY_TYPE, "not-a-bot-principal"),
-            // The sender mentioning themselves emits like any other mention.
-            mention("user", "macro|alice@example.com"),
-            // User and document mentions emit like any other entity.
-            mention("user", "macro|bob@example.com"),
-            mention("document", "doc-1"),
-        ],
-        // System bots need no participant rows: they are available in every
-        // channel.
-        &[bot_principal.as_str()],
-    ));
-
-    let posted = serde_json::to_value(events[0].event()).unwrap();
-    assert_eq!(posted["event_type"], "channel.message_posted");
-
-    let mentioned: Vec<_> = events[1..]
-        .iter()
-        .map(|event| serde_json::to_value(event.event()).unwrap())
-        .collect();
-    for envelope in &mentioned {
-        assert_eq!(envelope["event_type"], "channel.mentioned");
-        assert_eq!(envelope["metadata"]["channel_id"], channel_id.to_string());
-        assert_eq!(envelope["metadata"]["message_id"], message_id.to_string());
-        assert_eq!(envelope["metadata"]["sender"], "macro|alice@example.com");
-    }
-    let mentioned_entities: Vec<_> = mentioned
-        .iter()
-        .map(|envelope| {
-            (
-                envelope["metadata"]["mentioned"]["entity_type"]
-                    .as_str()
-                    .unwrap()
-                    .to_string(),
-                envelope["metadata"]["mentioned"]["entity_id"]
-                    .as_str()
-                    .unwrap()
-                    .to_string(),
-            )
-        })
-        .collect();
-    assert_eq!(
-        mentioned_entities,
-        vec![
-            ("bot".to_string(), bot_principal),
-            ("user".to_string(), macro_ai_principal),
-            ("bot".to_string(), macro_coder_principal),
-            ("user".to_string(), "macro|alice@example.com".to_string()),
-            ("user".to_string(), "macro|bob@example.com".to_string()),
-            ("document".to_string(), "doc-1".to_string()),
-        ]
-    );
-    assert_eq!(events[1].key(), channel_id.to_string());
-}
-
-#[test]
-fn broker_events_bot_authored_mentions_emit() {
-    use macro_event_broker::MacroEvent as _;
-    let sender_bot = BotId::new_from_uuid(Uuid::new_v4());
-    let sender_principal = sender_bot.into_storage_id().to_string();
-    let other_bot_principal = BotId::new_from_uuid(Uuid::new_v4())
-        .into_storage_id()
-        .to_string();
-
-    let events = broker_events_for_event(&message_posted_with_mentions(
-        Sender::new_from_bot(sender_bot),
-        Uuid::new_v4(),
-        Uuid::new_v4(),
-        vec![
-            // Bot-authored mentions emit like any other, including a bot
-            // mentioning itself — the pipe reports facts, consumers filter.
-            mention(BOT_MENTION_ENTITY_TYPE, &sender_principal),
-            mention(BOT_MENTION_ENTITY_TYPE, &other_bot_principal),
-        ],
-        &[sender_principal.as_str(), other_bot_principal.as_str()],
-    ));
-
-    assert_eq!(events.len(), 3);
-    let self_mention = serde_json::to_value(events[1].event()).unwrap();
-    assert_eq!(self_mention["event_type"], "channel.mentioned");
-    assert_eq!(
-        self_mention["metadata"]["mentioned"]["entity_id"],
-        sender_principal
-    );
-    let other = serde_json::to_value(events[2].event()).unwrap();
-    assert_eq!(
-        other["metadata"]["mentioned"]["entity_id"],
-        other_bot_principal
-    );
-    assert_eq!(other["metadata"]["sender"], sender_principal);
-}
-
-#[test]
-fn broker_events_skip_mentions_on_message_changed() {
-    use macro_event_broker::MacroEvent as _;
-    let channel_id = Uuid::new_v4();
-    let now = Utc::now();
-
-    let events = broker_events_for_event(&ChannelEvent::MessageChanged {
-        channel_id,
-        actor: Sender::new_from_user(user("alice@example.com")),
-        message: MutatedMessage {
-            id: Uuid::new_v4(),
-            channel_id,
-            thread_id: None,
-            sender_id: Sender::new_from_user(user("alice@example.com")),
-            triggered_by: None,
-            content: "edited to mention a bot".to_string(),
-            created_at: now,
-            updated_at: now,
-            edited_at: Some(now),
-            deleted_at: None,
-        },
-        recipients: Vec::new(),
-        nonce: None,
-        posted_notification: Some(MessageChangedNotificationContext {
-            metadata: ChannelMetadata {
-                channel_type: ChannelType::Team,
-                channel_name: "Project".to_string(),
-            },
-            participants: Vec::new(),
-            mentions: vec![mention(
-                BOT_MENTION_ENTITY_TYPE,
-                &BotId::new_from_uuid(Uuid::new_v4())
-                    .into_storage_id()
-                    .to_string(),
-            )],
-            has_attachments: false,
-        }),
-    });
-
-    assert_eq!(events.len(), 1);
-    let envelope = serde_json::to_value(events[0].event()).unwrap();
-    assert_eq!(envelope["event_type"], "channel.message_patched");
-}
-
-#[test]
-fn broker_events_skip_reaction_changes() {
-    let events = broker_events_for_event(&ChannelEvent::ReactionChanged {
-        channel_id: Uuid::new_v4(),
-        actor: Sender::new_from_user(user("alice@example.com")),
-        message_id: Uuid::new_v4(),
-        reactions: Vec::new(),
-        recipients: Vec::new(),
-        nonce: None,
-    });
-
-    assert!(events.is_empty());
 }
 
 fn entity_mention(entity_type: &str, entity_id: &str) -> EntityMention {
@@ -1901,8 +1151,6 @@ fn mention_broker_events_map_message_posted_mentions() {
             },
         ],
         has_attachments: false,
-        attachments: Vec::new(),
-        nonce: None,
         notification_policy: PostMessageNotificationPolicy::Default,
     });
 
@@ -1942,13 +1190,9 @@ fn mention_broker_events_map_entity_mention_created_and_deleted() {
 
 #[test]
 fn mention_broker_events_skip_unrelated_events() {
-    let events = mention_broker_events_for_event(&ChannelEvent::ReactionChanged {
+    let events = mention_broker_events_for_event(&ChannelEvent::PictureChanged {
         channel_id: Uuid::new_v4(),
-        actor: Sender::new_from_user(user("alice@example.com")),
-        message_id: Uuid::new_v4(),
-        reactions: Vec::new(),
         recipients: Vec::new(),
-        nonce: None,
     });
     assert!(events.is_empty());
 }

@@ -105,6 +105,9 @@ async fn ingest_with_retry<S: WebhookEventIngestionService>(
                     DeclaredMacroEvent::ChannelMacroEvent(event) => {
                         service.ingest_channel_event(event.event().clone()).await
                     }
+                    DeclaredMacroEvent::MessageMacroEvent(event) => {
+                        service.ingest_message_event(event.event().clone()).await
+                    }
                     DeclaredMacroEvent::WebhookMacroEvent(event) => {
                         service.ingest_webhook_event(event.event().clone()).await
                     }

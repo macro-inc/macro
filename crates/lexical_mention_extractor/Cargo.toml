@@ -6,9 +6,6 @@ version = "0.1.0"
 
 [dependencies]
 anyhow = { workspace = true }
-channels = { path = "../channels", default-features = false, features = [
-  "ports",
-] }
 lexical_client = { path = "../lexical_client" }
 messages = { path = "../messages", features = ["ports"] }
 rootcause = { workspace = true }

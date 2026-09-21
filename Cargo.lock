@@ -9597,7 +9597,6 @@ name = "lexical_mention_extractor"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "channels",
  "lexical_client",
  "messages",
  "rootcause",
@@ -14926,6 +14925,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "mention_utils",
+ "messages",
  "model",
  "model_file_type",
  "model_owner",

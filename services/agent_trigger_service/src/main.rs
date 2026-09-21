@@ -1,6 +1,6 @@
 //! Kafka worker that turns committed posts into agent-session events.
 
-// The consumer loop is generic over the trigger source, and the select! it
+// The consumer loop is generic over the trigger topic, and the select! it
 // awaits in nests the concrete service types past the default query depth.
 #![recursion_limit = "256"]
 
@@ -9,7 +9,7 @@ mod config;
 use agent_session::outbound::postgres::PgAgentSessionRepo;
 use agent_trigger::domain::processing::process_message_event;
 use agent_trigger::domain::service::AgentTriggerService;
-use agent_trigger::domain::sources::{ChannelTriggerEvents, MessageTriggerEvents, TriggerEvents};
+use agent_trigger::domain::sources::{MessageTriggerEvents, TriggerEvents};
 use agent_trigger::outbound::{
     BotRepoAgentLookup, ChannelRepoTypeLookup, FastModelTriggerJudge,
     LexicalExplicitReplyExtractor, MessageThreadHistory,
@@ -115,17 +115,10 @@ async fn run() -> anyhow::Result<()> {
         KafkaEventConsumer::<AgentTriggerConsumerGroup>::from_env(config.kafka_brokers.as_ref())?;
     let consumer = KafkaConsumerAdapter::<AgentTriggerConsumerGroup, ()>::new(consumer);
 
-    match config.agent_trigger_event_source {
-        agent_trigger::domain::sources::TriggerEventSource::Messages => {
-            consume::<MessageTriggerEvents>(consumer, &trigger, &publisher, &channel_types).await
-        }
-        agent_trigger::domain::sources::TriggerEventSource::Channels => {
-            consume::<ChannelTriggerEvents>(consumer, &trigger, &publisher, &channel_types).await
-        }
-    }
+    consume::<MessageTriggerEvents>(consumer, &trigger, &publisher, &channel_types).await
 }
 
-/// Read one trigger source until shutdown, evaluating every committed post.
+/// Read the trigger topic until shutdown, evaluating every committed post.
 async fn consume<Events: TriggerEvents>(
     consumer: KafkaConsumerAdapter<AgentTriggerConsumerGroup, ()>,
     trigger: &Trigger,
@@ -139,7 +132,6 @@ async fn consume<Events: TriggerEvents>(
 
     tracing::info!(
         topics = ?Events::topics(),
-        source = ?Events::SOURCE,
         group = AgentTriggerConsumerGroup::GROUP_NAME,
         "agent trigger service listening"
     );

@@ -10,8 +10,7 @@ use super::{
 use crate::domain::{
     models::{
         AddParticipantsRequest, ChannelMetadata, ChannelType, CreateChannelRequest,
-        CreateChannelResponse, PatchChannelRequest, PostMessageRequest, PostMessageResponse,
-        RemoveParticipantsRequest, Sender,
+        CreateChannelResponse, PatchChannelRequest, RemoveParticipantsRequest, Sender,
     },
     ports::{ChannelMutationErr, ChannelService},
 };
@@ -137,6 +136,58 @@ impl messages::domain::api::MessageCommands for RecordingMessages {
     }
 }
 
+#[async_trait::async_trait]
+impl messages::domain::api::MessageReader for RecordingMessages {
+    async fn get(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageView>,
+        _: Uuid,
+    ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
+        unimplemented!("read path unused by mutation tools")
+    }
+    async fn get_thread(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageView>,
+        _: Uuid,
+    ) -> Result<messages::domain::models::MessageThread, messages::domain::ports::MessageError>
+    {
+        unimplemented!("read path unused by mutation tools")
+    }
+    async fn timeline(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageView>,
+        _: messages::domain::ports::MessageTimelineQuery,
+    ) -> Result<messages::domain::ports::MessagePage, messages::domain::ports::MessageError> {
+        unimplemented!("read path unused by mutation tools")
+    }
+    async fn preceding(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageView>,
+        _: Uuid,
+        _: u16,
+    ) -> Result<Vec<messages::domain::models::Message>, messages::domain::ports::MessageError>
+    {
+        unimplemented!("read path unused by mutation tools")
+    }
+    async fn resolve_legacy(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageView>,
+        _: i64,
+        _: bool,
+    ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
+        unimplemented!("read path unused by mutation tools")
+    }
+    async fn referenced_threads(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageView>,
+        _: Option<messages::domain::ports::MessageCursor>,
+        _: u16,
+    ) -> Result<messages::domain::ports::ReferencedThreadPage, messages::domain::ports::MessageError>
+    {
+        unimplemented!("read path unused by mutation tools")
+    }
+}
+
 fn user_id() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(TEST_USER_ID.to_string()).expect("valid macro user id")
 }
@@ -149,7 +200,6 @@ type CreatedChannelCall = (
 type PatchChannelCall = (Sender, Uuid, PatchChannelRequest);
 type AddParticipantsCall = (Sender, Uuid, AddParticipantsRequest);
 type RemoveParticipantsCall = (Sender, Uuid, RemoveParticipantsRequest);
-type PostMessageCall = (Sender, Uuid, PostMessageRequest);
 
 #[derive(Clone, Default)]
 struct ToolTestChannelService {
@@ -160,7 +210,6 @@ struct ToolTestChannelService {
     patch_error: Option<String>,
     adds: Arc<Mutex<Vec<AddParticipantsCall>>>,
     removes: Arc<Mutex<Vec<RemoveParticipantsCall>>>,
-    posts: Arc<Mutex<Vec<PostMessageCall>>>,
     metadata_name: Option<String>,
 }
 
@@ -190,21 +239,6 @@ impl ChannelService for ToolTestChannelService {
         _picture_id: Option<uuid::Uuid>,
     ) -> Result<(), crate::domain::ports::ChannelMutationErr> {
         unimplemented!("picture mutation is not used by this fixture")
-    }
-
-    async fn get_channel_messages(
-        &self,
-        _channel_id: Uuid,
-        _query: models_pagination::Query<Uuid, models_pagination::CreatedAt, ()>,
-        _direction: crate::domain::models::MessagePageDirection,
-        _limit: u16,
-        _filters: &crate::domain::models::ChannelMessageFilters,
-        _notification_user_id: Option<MacroUserIdStr<'static>>,
-    ) -> Result<
-        crate::domain::ports::ChannelMessagesQueryResult,
-        crate::domain::ports::ChannelMessagesErr,
-    > {
-        unimplemented!("read path unused by mutation tools")
     }
 
     async fn get_channel_attachments(
@@ -256,27 +290,6 @@ impl ChannelService for ToolTestChannelService {
         unimplemented!("read path unused by mutation tools")
     }
 
-    async fn get_channel_messages_around(
-        &self,
-        _channel_id: Uuid,
-        _message_id: Uuid,
-        _limit: u16,
-    ) -> Result<
-        crate::domain::ports::ChannelMessagesQueryResult,
-        crate::domain::ports::ChannelMessagesErr,
-    > {
-        unimplemented!("read path unused by mutation tools")
-    }
-
-    async fn get_thread_replies(
-        &self,
-        _channel_id: Uuid,
-        _message_id: Uuid,
-    ) -> Result<Vec<crate::domain::models::ThreadReply>, crate::domain::ports::ChannelMessagesErr>
-    {
-        unimplemented!("read path unused by mutation tools")
-    }
-
     async fn create_channel(
         &self,
         actor: Sender,
@@ -316,22 +329,6 @@ impl ChannelService for ToolTestChannelService {
             .expect("patch lock")
             .push((actor, channel_id, req));
         Ok(())
-    }
-
-    async fn post_message(
-        &self,
-        actor: Sender,
-        channel_id: Uuid,
-        req: PostMessageRequest,
-    ) -> Result<PostMessageResponse, ChannelMutationErr> {
-        self.posts
-            .lock()
-            .expect("post lock")
-            .push((actor, channel_id, req));
-        Ok(PostMessageResponse {
-            id: Uuid::new_v4().to_string(),
-            nonce: None,
-        })
     }
 
     async fn add_participants(

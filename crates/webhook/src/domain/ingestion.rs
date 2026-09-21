@@ -26,6 +26,7 @@ use futures::future::join_all;
 use macro_event_broker::Event;
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::models::MessageParent;
+use messages::outbound::broker::MessageTopicEvent;
 use std::future::Future;
 use std::sync::Arc;
 use tracing::Instrument as _;
@@ -98,6 +99,12 @@ pub trait WebhookEventIngestionService: Clone + Send + Sync + 'static {
     fn ingest_channel_event(
         &self,
         event: Event<ChannelTopicEvent>,
+    ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
+
+    /// Ingest one `macro.messages` event envelope.
+    fn ingest_message_event(
+        &self,
+        event: Event<MessageTopicEvent>,
     ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
 
     /// Ingest one `macro.webhooks` event envelope.
@@ -287,22 +294,6 @@ pub(crate) fn normalized_channel_event(
         ChannelTopicEvent::Created(metadata) => ("channel.created", metadata.channel_id),
         ChannelTopicEvent::Updated(metadata) => ("channel.updated", metadata.channel_id),
         ChannelTopicEvent::Deleted(metadata) => ("channel.deleted", metadata.channel_id),
-        ChannelTopicEvent::MessagePosted(metadata) => {
-            ("channel.message_posted", metadata.channel_id)
-        }
-        ChannelTopicEvent::Mentioned(metadata) => ("channel.mentioned", metadata.channel_id),
-        ChannelTopicEvent::MessagePatched(metadata) => {
-            ("channel.message_patched", metadata.channel_id)
-        }
-        ChannelTopicEvent::MessageDeleted(metadata) => {
-            ("channel.message_deleted", metadata.channel_id)
-        }
-        ChannelTopicEvent::MessageAttachmentCreated(metadata) => {
-            ("channel.message_attachment_created", metadata.channel_id)
-        }
-        ChannelTopicEvent::MessageAttachmentRemoved(metadata) => {
-            ("channel.message_attachment_removed", metadata.channel_id)
-        }
         ChannelTopicEvent::ParticipantAdded(metadata) => {
             ("channel.participant_added", metadata.channel_id)
         }
@@ -320,6 +311,42 @@ pub(crate) fn normalized_channel_event(
         CHANNEL_ENTITY_TYPE,
         &entity_id,
         broker_envelope,
+    ))
+}
+
+/// Normalize one message fact.
+///
+/// The entity is the message's parent, so access and `ids` filtering are by
+/// the channel or document that owns the conversation, and the parent travels
+/// in the payload for consumers to route on.
+pub(crate) fn normalized_message_event(
+    event: &Event<MessageTopicEvent>,
+) -> Result<(NormalizedWebhookEvent, EntityType), WebhookEventIngestionError> {
+    let (event_name, parent) = match &event.event {
+        MessageTopicEvent::Posted(metadata) => ("message.posted", &metadata.parent),
+        MessageTopicEvent::Patched(metadata) => ("message.patched", &metadata.parent),
+        MessageTopicEvent::Deleted(metadata) => ("message.deleted", &metadata.parent),
+        MessageTopicEvent::Mentioned(metadata) => ("message.mentioned", &metadata.parent),
+        MessageTopicEvent::AttachmentCreated(metadata) => {
+            ("message.attachment_created", &metadata.parent)
+        }
+        MessageTopicEvent::AttachmentRemoved(metadata) => {
+            ("message.attachment_removed", &metadata.parent)
+        }
+    };
+    let entity_id = parent.entity_id();
+
+    let broker_envelope = serde_json::to_value(event)?;
+    Ok((
+        normalized_event(
+            event.event_id,
+            event.schema_version,
+            event_name,
+            parent.entity_type(),
+            &entity_id,
+            broker_envelope,
+        ),
+        parent.access_entity_type(),
     ))
 }
 
@@ -537,6 +564,16 @@ where
     ) -> Result<(), WebhookEventIngestionError> {
         let event = normalized_channel_event(&event)?;
         self.resolve_entity_access_and_enqueue(event, EntityType::Channel)
+            .await
+    }
+
+    #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
+    async fn ingest_message_event(
+        &self,
+        event: Event<MessageTopicEvent>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        let (event, entity_type) = normalized_message_event(&event)?;
+        self.resolve_entity_access_and_enqueue(event, entity_type)
             .await
     }
 

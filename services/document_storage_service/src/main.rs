@@ -993,18 +993,14 @@ async fn run() -> anyhow::Result<()> {
                     StaticFileServiceUrl::new()?.to_string(),
                 ),
             ),
-        )
-        .with_mention_extractor(lexical_mention_extractor::LexicalMentionExtractor::new(
-            lexical_client.clone(),
-        )),
+        ),
     );
 
     // One message implementation for channels and documents. Committed changes fan
     // out to the broker, the local agent queue, and the parent's own delivery: channel
-    // messages keep every existing channel side effect (legacy realtime payloads,
-    // notifications, activity, bot triggers, channel broker events) and gain the
-    // common `message_update` payload; document discussions get the common payload
-    // and document comment notifications.
+    // messages keep their notifications, activity, and sharing side effects and send
+    // the common `message_update` payload; document discussions get the common
+    // payload and document comment notifications.
     let message_realtime = messages::outbound::connection_gateway::ConnectionGatewayMessages(
         conn_gateway_client.clone(),
     );
@@ -1050,9 +1046,6 @@ async fn run() -> anyhow::Result<()> {
         ),
     );
     let message_commands: Arc<dyn messages::domain::api::MessageCommands> = message_service.clone();
-    let channel_messages: Arc<dyn channels::domain::ports::ChannelMessageCommands> = Arc::new(
-        channels::domain::message_commands::ChannelMessageAdapter::new(message_commands.clone()),
-    );
     let messages_state = messages::inbound::axum_router::MessagesRouterState {
         service: message_service.clone(),
         access: entity_access_service.clone(),
@@ -1120,8 +1113,7 @@ async fn run() -> anyhow::Result<()> {
         ai_tools::build_channel_tool_context_with_dispatcher(
             db.clone(),
             std::sync::Arc::new(SpawnedChannelEventDispatcher::new(channel_side_effects)),
-            lexical_client.clone(),
-            message_commands.clone(),
+            message_service.clone(),
         );
     let macro_agent_tools = ai_tools::tools_for(ai_tools::AiHost::ChannelBot);
     let conversation_access = Arc::new(
@@ -1564,7 +1556,6 @@ async fn run() -> anyhow::Result<()> {
         config: Arc::new(config),
         channel_service: channels_service.clone(),
         channels_state: ChannelsRouterState::from_arc(
-            channel_messages,
             channels_service,
             (*entity_access_service).clone(),
             authorization_state.clone(),

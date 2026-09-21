@@ -1,13 +1,7 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
-use channels::domain::{
-    broker_events::{
-        ChannelEventAttachment, ChannelMessageAttachmentCreatedMetadata,
-        ChannelMessageDeletedMetadata, ChannelMessagePostedMetadata, ChannelTopicEvent,
-    },
-    models::{ChannelSender, ChannelType},
-};
+use channels::domain::models::ChannelSender;
 use chat::domain::events::{
     ChatMessageDeletedMetadata, ChatMessageRole, ChatMessageSentMetadata, ChatTopicEvent,
     ChatUpdatedMetadata,
@@ -25,6 +19,10 @@ use email::domain::events::{
 };
 use macro_event_broker::{Event, EventBrokerError, MacroEventCollection as _, MessageParts};
 use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::events::{
+    MessageAttachmentCreatedMetadata, MessageDeletedMetadata, MessageEventAttachment,
+    MessagePostedMetadata,
+};
 use messages::domain::models::SimpleMention;
 use model_owner::Owner;
 use projects::domain::events::{ProjectDeletedMetadata, ProjectTopicEvent};
@@ -507,23 +505,44 @@ fn new_email_events_map_to_realtime_thread_patches() {
     );
 }
 
+fn posted(
+    parent: MessageParent,
+    message_id: Uuid,
+    mentions: Vec<SimpleMention>,
+) -> MessagePostedMetadata {
+    MessagePostedMetadata {
+        parent,
+        message_id,
+        thread_id: None,
+        root_id: message_id,
+        sender: ChannelSender::new_from_user(user()),
+        triggered_by: None,
+        content: "shared".to_string(),
+        mentions,
+        attachments: Vec::new(),
+        created_at: Utc::now(),
+    }
+}
+
 #[test]
 fn attachment_events_update_referenced_documents_for_channel_members() {
     let channel_id = Uuid::now_v7();
-    let event =
-        ChannelTopicEvent::MessageAttachmentCreated(ChannelMessageAttachmentCreatedMetadata {
-            channel_id,
-            message_id: Uuid::now_v7(),
-            actor: ChannelSender::new_from_user(user()),
-            attachments: vec![ChannelEventAttachment {
-                attachment_id: Uuid::now_v7(),
-                entity_type: "document".to_string(),
-                entity_id: DOCUMENT_ID.to_string(),
-                created_at: Utc::now(),
-            }],
-        });
+    let message_id = Uuid::now_v7();
+    let event = MessageTopicEvent::AttachmentCreated(MessageAttachmentCreatedMetadata {
+        parent: MessageParent::Channel(channel_id),
+        message_id,
+        thread_id: None,
+        root_id: message_id,
+        actor: ChannelSender::new_from_user(user()),
+        attachments: vec![MessageEventAttachment {
+            attachment_id: Uuid::now_v7(),
+            entity_type: "document".to_string(),
+            entity_id: DOCUMENT_ID.to_string(),
+            created_at: Utc::now(),
+        }],
+    });
 
-    let patches = patches_from_channel_event(&event);
+    let patches = patches_from_message_event(&event);
     assert_eq!(patches.len(), 2);
     assert_eq!(patch_entity(&patches[0]).entity_type, EntityType::Channel);
     assert_eq!(patch_entity(&patches[0]).entity_id, channel_id.to_string());
@@ -536,23 +555,16 @@ fn attachment_events_update_referenced_documents_for_channel_members() {
 #[test]
 fn posted_message_mentions_update_referenced_documents_for_channel_members() {
     let channel_id = Uuid::now_v7();
-    let event = ChannelTopicEvent::MessagePosted(ChannelMessagePostedMetadata {
-        channel_id,
-        message_id: Uuid::now_v7(),
-        thread_id: None,
-        sender: ChannelSender::new_from_user(user()),
-        triggered_by: None,
-        channel_type: ChannelType::Private,
-        content: "shared a document".to_string(),
-        mentions: vec![SimpleMention {
+    let event = MessageTopicEvent::Posted(posted(
+        MessageParent::Channel(channel_id),
+        Uuid::now_v7(),
+        vec![SimpleMention {
             entity_type: "document".to_string(),
             entity_id: DOCUMENT_ID.to_string(),
         }],
-        attachments: Vec::new(),
-        created_at: Utc::now(),
-    });
+    ));
 
-    let patches = patches_from_channel_event(&event);
+    let patches = patches_from_message_event(&event);
     assert_eq!(patches.len(), 3);
     assert_eq!(patch_entity(&patches[2]).entity_type, EntityType::Document);
     assert_eq!(patch_entity(&patches[2]).entity_id, DOCUMENT_ID);
@@ -564,23 +576,16 @@ fn posted_message_mentions_update_referenced_documents_for_channel_members() {
 fn posted_message_mentions_update_referenced_agent_sessions_for_channel_members() {
     let channel_id = Uuid::now_v7();
     let session_id = Uuid::now_v7().to_string();
-    let event = ChannelTopicEvent::MessagePosted(ChannelMessagePostedMetadata {
-        channel_id,
-        message_id: Uuid::now_v7(),
-        thread_id: None,
-        sender: ChannelSender::new_from_user(user()),
-        triggered_by: None,
-        channel_type: ChannelType::Private,
-        content: "shared an agent session".to_string(),
-        mentions: vec![SimpleMention {
+    let event = MessageTopicEvent::Posted(posted(
+        MessageParent::Channel(channel_id),
+        Uuid::now_v7(),
+        vec![SimpleMention {
             entity_type: "agent_session".to_string(),
             entity_id: session_id.to_string(),
         }],
-        attachments: Vec::new(),
-        created_at: Utc::now(),
-    });
+    ));
 
-    let patches = patches_from_channel_event(&event);
+    let patches = patches_from_message_event(&event);
     assert_eq!(patches.len(), 3);
     assert_eq!(
         patch_entity(&patches[2]).entity_type,
@@ -592,18 +597,29 @@ fn posted_message_mentions_update_referenced_agent_sessions_for_channel_members(
 }
 
 #[test]
+fn document_discussion_posts_patch_nothing() {
+    let event = MessageTopicEvent::Posted(posted(
+        MessageParent::parse("document", DOCUMENT_ID).unwrap(),
+        Uuid::now_v7(),
+        vec![],
+    ));
+    assert!(patches_from_message_event(&event).is_empty());
+}
+
+#[test]
 fn deleting_a_root_channel_message_deletes_its_thread_patch() {
     let channel_id = Uuid::now_v7();
     let message_id = Uuid::now_v7();
-    let event = ChannelTopicEvent::MessageDeleted(ChannelMessageDeletedMetadata {
-        channel_id,
+    let event = MessageTopicEvent::Deleted(MessageDeletedMetadata {
+        parent: MessageParent::Channel(channel_id),
         message_id,
         thread_id: None,
+        root_id: message_id,
         actor: ChannelSender::new_from_user(user()),
         deleted_at: None,
     });
 
-    let patches = patches_from_channel_event(&event);
+    let patches = patches_from_message_event(&event);
     assert_eq!(patches.len(), 2);
     assert!(matches!(patches[0].patch, Patch::Updated(_)));
     assert!(matches!(patches[1].patch, Patch::Deleted(_)));

@@ -12,6 +12,7 @@ use chat::domain::events::ChatMacroEvent;
 use documents_hex::domain::events::DocumentMacroEvent;
 use email::domain::events::EmailMacroEvent;
 use macro_event_broker::MacroEvent as _;
+use messages::outbound::broker::MessageMacroEvent;
 use projects_hex::domain::events::ProjectMacroEvent;
 use properties::domain::events::PropertyMacroEvent;
 
@@ -23,6 +24,7 @@ mod source {
         ActivitySourceEvent:
             DocumentMacroEvent,
             ChannelMacroEvent,
+            MessageMacroEvent,
             ChatMacroEvent,
             ProjectMacroEvent,
             EmailMacroEvent,
@@ -32,9 +34,9 @@ mod source {
 }
 pub(crate) use source::ActivitySourceEvent;
 
-/// Dispatches one decoded event to its domain's [`ActivitySource`] impl —
-/// every arm is the identical expression; all semantics live with the
-/// domains.
+/// Dispatches one decoded event to its domain's [`ActivitySource`] impl; all
+/// semantics live with the domains. Message facts are dispatched to the
+/// channels domain, which owns what a channel message means as activity.
 pub(crate) fn ingest(event: &ActivitySourceEvent) -> Ingest {
     fn arm<E: activity::ActivitySource>(envelope: &macro_event_broker::Event<E>) -> Ingest {
         envelope.event.ingest(envelope.event_id)
@@ -43,6 +45,10 @@ pub(crate) fn ingest(event: &ActivitySourceEvent) -> Ingest {
     match event {
         ActivitySourceEvent::DocumentMacroEvent(e) => arm(e.event()),
         ActivitySourceEvent::ChannelMacroEvent(e) => arm(e.event()),
+        ActivitySourceEvent::MessageMacroEvent(e) => {
+            let envelope = e.event();
+            channels::domain::activity::ingest_message_event(envelope.event_id, &envelope.event)
+        }
         ActivitySourceEvent::ChatMacroEvent(e) => arm(e.event()),
         ActivitySourceEvent::ProjectMacroEvent(e) => arm(e.event()),
         ActivitySourceEvent::EmailMacroEvent(e) => arm(e.event()),

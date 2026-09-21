@@ -26,11 +26,8 @@ use calendar_events::domain::events::{
 };
 use channels::domain::{
     broker_events::{
-        ChannelCreatedMetadata, ChannelDeletedMetadata, ChannelMessageAttachmentCreatedMetadata,
-        ChannelMessageAttachmentRemovedMetadata, ChannelMessageDeletedMetadata,
-        ChannelMessagePatchedMetadata, ChannelMessagePostedMetadata,
-        ChannelParticipantAddedMetadata, ChannelParticipantRemovedMetadata, ChannelTopicEvent,
-        ChannelUpdatedMetadata,
+        ChannelCreatedMetadata, ChannelDeletedMetadata, ChannelParticipantAddedMetadata,
+        ChannelParticipantRemovedMetadata, ChannelTopicEvent, ChannelUpdatedMetadata,
     },
     models::{ChannelSender, ChannelType},
 };
@@ -63,9 +60,13 @@ use properties::domain::events::{
 };
 use uuid::Uuid;
 
+use messages::domain::models::MessageParent;
+use messages::outbound::broker::MessageTopicEvent;
+
 use super::{
     call::{CallEventDescription, CallIndexAction, describe_call_event},
     channel::{ChannelEventDescription, ChannelIndexAction, describe_channel_event},
+    message::{MessageEventDescription, MessageIndexAction, describe_message_event},
     chat::{ChatEventDescription, ChatIndexAction, describe_chat_event},
     document::{
         DocumentEventDescription, DocumentIndexAction, describe_document_event,
@@ -707,96 +708,6 @@ fn channel_event_cases() -> Vec<(ChannelTopicEvent, ChannelEventDescription)> {
             },
         ),
         (
-            ChannelTopicEvent::MessagePosted(ChannelMessagePostedMetadata {
-                channel_id: CHANNEL_ID,
-                message_id: MESSAGE_ID,
-                thread_id: None,
-                sender: sender.clone(),
-                triggered_by: None,
-                channel_type: ChannelType::Private,
-                content: "hello".to_string(),
-                mentions: vec![],
-                attachments: vec![],
-                created_at: Utc::now(),
-            }),
-            ChannelEventDescription {
-                action: ChannelIndexAction::UpsertMessage {
-                    channel_id: CHANNEL_ID,
-                    message_id: MESSAGE_ID,
-                },
-                channel_id: CHANNEL_ID,
-                event_type: "channel.message_posted",
-            },
-        ),
-        (
-            ChannelTopicEvent::MessagePatched(ChannelMessagePatchedMetadata {
-                channel_id: CHANNEL_ID,
-                message_id: MESSAGE_ID,
-                thread_id: None,
-                actor: sender.clone(),
-                content: "edited".to_string(),
-                edited_at: Some(Utc::now()),
-                updated_at: Utc::now(),
-            }),
-            ChannelEventDescription {
-                action: ChannelIndexAction::UpsertMessage {
-                    channel_id: CHANNEL_ID,
-                    message_id: MESSAGE_ID,
-                },
-                channel_id: CHANNEL_ID,
-                event_type: "channel.message_patched",
-            },
-        ),
-        (
-            ChannelTopicEvent::MessageDeleted(ChannelMessageDeletedMetadata {
-                channel_id: CHANNEL_ID,
-                message_id: MESSAGE_ID,
-                thread_id: None,
-                actor: sender.clone(),
-                deleted_at: Some(Utc::now()),
-            }),
-            ChannelEventDescription {
-                action: ChannelIndexAction::RemoveMessage {
-                    channel_id: CHANNEL_ID,
-                    message_id: MESSAGE_ID,
-                },
-                channel_id: CHANNEL_ID,
-                event_type: "channel.message_deleted",
-            },
-        ),
-        (
-            ChannelTopicEvent::MessageAttachmentCreated(ChannelMessageAttachmentCreatedMetadata {
-                channel_id: CHANNEL_ID,
-                message_id: MESSAGE_ID,
-                actor: sender.clone(),
-                attachments: vec![],
-            }),
-            ChannelEventDescription {
-                action: ChannelIndexAction::UpsertMessage {
-                    channel_id: CHANNEL_ID,
-                    message_id: MESSAGE_ID,
-                },
-                channel_id: CHANNEL_ID,
-                event_type: "channel.message_attachment_created",
-            },
-        ),
-        (
-            ChannelTopicEvent::MessageAttachmentRemoved(ChannelMessageAttachmentRemovedMetadata {
-                channel_id: CHANNEL_ID,
-                message_id: MESSAGE_ID,
-                actor: sender.clone(),
-                attachments: vec![],
-            }),
-            ChannelEventDescription {
-                action: ChannelIndexAction::UpsertMessage {
-                    channel_id: CHANNEL_ID,
-                    message_id: MESSAGE_ID,
-                },
-                channel_id: CHANNEL_ID,
-                event_type: "channel.message_attachment_removed",
-            },
-        ),
-        (
             ChannelTopicEvent::ParticipantAdded(ChannelParticipantAddedMetadata {
                 channel_id: CHANNEL_ID,
                 channel_type: ChannelType::Private,
@@ -820,6 +731,137 @@ fn channel_event_cases() -> Vec<(ChannelTopicEvent, ChannelEventDescription)> {
                 action: ChannelIndexAction::Ignore,
                 channel_id: CHANNEL_ID,
                 event_type: "channel.participant_removed",
+            },
+        ),
+    ]
+}
+
+fn message_event_cases() -> Vec<(MessageTopicEvent, MessageEventDescription)> {
+    use messages::domain::events::{
+        MessageAttachmentCreatedMetadata, MessageAttachmentRemovedMetadata,
+        MessageDeletedMetadata, MessageMentionedMetadata, MessagePatchedMetadata,
+        MessagePostedMetadata,
+    };
+    let sender = channel_sender();
+    let channel = MessageParent::Channel(CHANNEL_ID);
+    let document = MessageParent::parse("document", "doc-1").unwrap();
+    let posted = |parent: MessageParent| MessagePostedMetadata {
+        parent,
+        message_id: MESSAGE_ID,
+        thread_id: None,
+        root_id: MESSAGE_ID,
+        sender: sender.clone(),
+        triggered_by: None,
+        content: "hello".to_string(),
+        mentions: vec![],
+        attachments: vec![],
+        created_at: Utc::now(),
+    };
+    let upsert = MessageIndexAction::UpsertMessage {
+        channel_id: CHANNEL_ID,
+        message_id: MESSAGE_ID,
+    };
+
+    vec![
+        (
+            MessageTopicEvent::Posted(posted(channel.clone())),
+            MessageEventDescription {
+                action: upsert,
+                parent: channel.clone(),
+                event_type: "message.posted",
+            },
+        ),
+        (
+            MessageTopicEvent::Posted(posted(document.clone())),
+            MessageEventDescription {
+                action: MessageIndexAction::Ignore,
+                parent: document.clone(),
+                event_type: "message.posted",
+            },
+        ),
+        (
+            MessageTopicEvent::Mentioned(MessageMentionedMetadata {
+                parent: channel.clone(),
+                message_id: MESSAGE_ID,
+                thread_id: None,
+                root_id: MESSAGE_ID,
+                sender: sender.clone(),
+                content: "hello @bot".to_string(),
+                mentioned: messages::domain::models::SimpleMention {
+                    entity_type: "bot".to_string(),
+                    entity_id: "bot|00000000-0000-0000-0000-00000000b07a".to_string(),
+                },
+                created_at: Utc::now(),
+            }),
+            MessageEventDescription {
+                action: MessageIndexAction::Ignore,
+                parent: channel.clone(),
+                event_type: "message.mentioned",
+            },
+        ),
+        (
+            MessageTopicEvent::Patched(MessagePatchedMetadata {
+                parent: channel.clone(),
+                message_id: MESSAGE_ID,
+                thread_id: None,
+                root_id: MESSAGE_ID,
+                actor: sender.clone(),
+                content: "edited".to_string(),
+                edited_at: Some(Utc::now()),
+                updated_at: Utc::now(),
+            }),
+            MessageEventDescription {
+                action: upsert,
+                parent: channel.clone(),
+                event_type: "message.patched",
+            },
+        ),
+        (
+            MessageTopicEvent::Deleted(MessageDeletedMetadata {
+                parent: channel.clone(),
+                message_id: MESSAGE_ID,
+                thread_id: None,
+                root_id: MESSAGE_ID,
+                actor: sender.clone(),
+                deleted_at: Some(Utc::now()),
+            }),
+            MessageEventDescription {
+                action: MessageIndexAction::RemoveMessage {
+                    channel_id: CHANNEL_ID,
+                    message_id: MESSAGE_ID,
+                },
+                parent: channel.clone(),
+                event_type: "message.deleted",
+            },
+        ),
+        (
+            MessageTopicEvent::AttachmentCreated(MessageAttachmentCreatedMetadata {
+                parent: channel.clone(),
+                message_id: MESSAGE_ID,
+                thread_id: None,
+                root_id: MESSAGE_ID,
+                actor: sender.clone(),
+                attachments: vec![],
+            }),
+            MessageEventDescription {
+                action: upsert,
+                parent: channel.clone(),
+                event_type: "message.attachment_created",
+            },
+        ),
+        (
+            MessageTopicEvent::AttachmentRemoved(MessageAttachmentRemovedMetadata {
+                parent: channel.clone(),
+                message_id: MESSAGE_ID,
+                thread_id: None,
+                root_id: MESSAGE_ID,
+                actor: sender,
+                attachments: vec![],
+            }),
+            MessageEventDescription {
+                action: upsert,
+                parent: channel,
+                event_type: "message.attachment_removed",
             },
         ),
     ]
@@ -1383,12 +1425,24 @@ fn maps_all_chat_lifecycle_events_to_index_actions() {
 #[test]
 fn maps_all_channel_lifecycle_events_to_index_actions() {
     let cases = channel_event_cases();
-    assert_eq!(cases.len(), 10);
+    assert_eq!(cases.len(), 5);
 
     for (event, expected) in cases {
         let serialized = serde_json::to_value(&event).expect("serializable channel event");
         assert_eq!(serialized["event_type"], expected.event_type);
         assert_eq!(describe_channel_event(&event), expected);
+    }
+}
+
+#[test]
+fn maps_message_facts_to_channel_index_actions() {
+    let cases = message_event_cases();
+    assert_eq!(cases.len(), 7);
+
+    for (event, expected) in cases {
+        let serialized = serde_json::to_value(&event).expect("serializable message event");
+        assert_eq!(serialized["event_type"], expected.event_type);
+        assert_eq!(describe_message_event(&event), expected);
     }
 }
 

@@ -51,6 +51,7 @@ aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
 call = { path = "../../crates/call", default-features = false, optional = true }
 channels = { path = "../../crates/channels", default-features = false, optional = true }
+messages = { path = "../../crates/messages", features = ["broker"] }
 chat = { path = "../../crates/chat", default-features = false, optional = true }
 chrono = { workspace = true }
 comms_db_client = { path = "../../crates/comms_db_client" }

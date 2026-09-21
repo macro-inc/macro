@@ -17,9 +17,6 @@ pub mod group_mentions;
 pub mod list_service;
 /// Kafka event models for the `macro.mentions` topic.
 pub mod mention_events;
-/// Channel compatibility commands over the shared message application.
-#[cfg(feature = "ports")]
-pub mod message_commands;
 /// Channel side effects for messages committed by the shared message service.
 #[cfg(feature = "ports")]
 pub mod message_delivery;

@@ -1,10 +1,8 @@
 #![deny(missing_docs)]
 //! Lexical-service adapter for extracting the mentions embedded in raw
-//! message content, implementing the `channels` domain's
-//! [`ChannelMentionExtractor`] port and the `messages` domain's
+//! message content, implementing the `messages` domain's
 //! [`MessageMentionExtractor`] port.
 
-use channels::domain::ports::ChannelMentionExtractor;
 use lexical_client::LexicalClient;
 use messages::domain::{models::SimpleMention, ports::MessageMentionExtractor};
 use std::sync::Arc;
@@ -32,14 +30,6 @@ impl LexicalMentionExtractor {
                 entity_id: mention.entity_id,
             })
             .collect())
-    }
-}
-
-impl ChannelMentionExtractor for LexicalMentionExtractor {
-    type Err = anyhow::Error;
-
-    async fn extract_mentions(&self, content: &str) -> Result<Vec<SimpleMention>, Self::Err> {
-        self.mentions(content).await
     }
 }
 

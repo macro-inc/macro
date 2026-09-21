@@ -76,16 +76,17 @@ bookkeeping (including success/failure timestamp updates) do not produce them.
 ## Event ingestion and matching
 
 The `webhook-event-ingestion` Kafka consumer reads `macro.documents`,
-`macro.channels`, `macro.webhooks`, `macro.agent_sessions`, and
-`macro.agent_session_lifecycle`. It supports these event names:
+`macro.channels`, `macro.messages`, `macro.webhooks`, `macro.agent_sessions`,
+and `macro.agent_session_lifecycle`. It supports these event names:
 
 - Documents: `document.created`, `document.updated`, `document.deleted`, and
   `document.copied`.
 - Channels: `channel.created`, `channel.updated`, `channel.deleted`,
-  `channel.message_posted`, `channel.message_patched`,
-  `channel.message_deleted`, `channel.message_attachment_created`,
-  `channel.message_attachment_removed`, `channel.participant_added`,
-  `channel.participant_removed`, and `channel.mentioned`.
+  `channel.participant_added`, and `channel.participant_removed`.
+- Messages, on channels and document discussions alike: `message.posted`,
+  `message.patched`, `message.deleted`, `message.attachment_created`,
+  `message.attachment_removed`, and `message.mentioned`. Each payload carries
+  the message's `parent` (`{"type": "channel" | "document", "id": ...}`).
 - Webhooks: `webhook.created`, `webhook.updated`, `webhook.deleted`, and
   `webhook.validated`.
 - Agent triggers: `agent_trigger.new` and `agent_trigger.existing`.
@@ -95,14 +96,15 @@ The `webhook-event-ingestion` Kafka consumer reads `macro.documents`,
   `agent_session.stopped`, `agent_session.renamed`, and
   `agent_session.deleted`.
 
-For document and channel events, ingestion asks `EntityAccessService` for the
-people who currently have access to the entity. The matching workspace set
+For document, channel, and message events, ingestion asks `EntityAccessService`
+for the people who currently have access to the entity; a message's entity is
+its parent channel or document. The matching workspace set
 contains each person's Macro user ID, for personal webhooks, plus every team ID
 to which any of those people belongs. The set is deduplicated before matching,
 so one person or team is considered only once.
 
-`channel.mentioned` is emitted once per distinct entity `@`-mentioned in a
-channel message — users (`macro|<email>`), bots (`bot|<uuid>`), documents, and
+`message.mentioned` is emitted once per distinct entity `@`-mentioned in a
+message — users (`macro|<email>`), bots (`bot|<uuid>`), documents, and
 any future mentionable kind. Bot mentions only emit when the bot is an active
 channel participant; the author may itself be a bot. Like every channel
 event, access and `ids` filtering are by channel: the entity is the channel

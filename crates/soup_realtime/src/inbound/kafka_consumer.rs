@@ -25,6 +25,8 @@ use kafka_util::{GroupName, KafkaEventConsumer};
 use macro_event_broker::{
     KafkaConsumerAdapter, MacroEvent as _, MacroEventCollection as _, MacroEventConsumerService,
 };
+use messages::domain::models::MessageParent;
+use messages::outbound::broker::{MessageMacroEvent, MessageTopicEvent};
 use model_entity::{Entity, EntityType};
 use models_properties::EntityType as PropertyEntityType;
 use projects::domain::events::{ProjectMacroEvent, ProjectTopicEvent};
@@ -51,6 +53,7 @@ macro_event_broker::declare_topics!(
         ChatMacroEvent,
         EmailMacroEvent,
         ChannelMacroEvent,
+        MessageMacroEvent,
         PropertyMacroEvent,
 );
 
@@ -343,13 +346,37 @@ fn patches_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimePatc
         ChannelTopicEvent::Updated(metadata) => {
             vec![update(EntityType::Channel, metadata.channel_id)]
         }
-        ChannelTopicEvent::MessagePosted(metadata) => {
-            let mut patches = channel_and_thread_entities(
-                metadata.channel_id,
-                metadata.message_id,
-                metadata.thread_id,
-            );
-            let channel = entity(EntityType::Channel, metadata.channel_id);
+        ChannelTopicEvent::ParticipantAdded(metadata) => {
+            vec![update(EntityType::Channel, metadata.channel_id)]
+        }
+        ChannelTopicEvent::ParticipantRemoved(metadata) => {
+            vec![update(EntityType::Channel, metadata.channel_id)]
+        }
+        ChannelTopicEvent::Created(metadata) => {
+            vec![update(EntityType::Channel, metadata.channel_id)]
+        }
+        ChannelTopicEvent::Deleted(metadata) => {
+            vec![delete(EntityType::Channel, metadata.channel_id)]
+        }
+    }
+}
+
+/// Message facts carry their parent. Channel messages are Soup items, so a
+/// channel post, edit, deletion, or attachment change patches the channel
+/// and its thread; document discussions are not Soup items and patch nothing.
+fn patches_from_message_event(event: &MessageTopicEvent) -> Vec<SoupRealtimePatch> {
+    let channel = |parent: &MessageParent| match parent {
+        MessageParent::Channel(channel_id) => Some(*channel_id),
+        _ => None,
+    };
+    match event {
+        MessageTopicEvent::Posted(metadata) => {
+            let Some(channel_id) = channel(&metadata.parent) else {
+                return Vec::new();
+            };
+            let mut patches =
+                channel_and_thread_entities(channel_id, metadata.message_id, metadata.thread_id);
+            let channel = entity(EntityType::Channel, channel_id);
             for mention in &metadata.mentions {
                 push_channel_reference_update(
                     &mut patches,
@@ -360,13 +387,17 @@ fn patches_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimePatc
             }
             patches
         }
-        ChannelTopicEvent::MessagePatched(metadata) => channel_and_thread_entities(
-            metadata.channel_id,
-            metadata.message_id,
-            metadata.thread_id,
-        ),
-        ChannelTopicEvent::MessageDeleted(metadata) => {
-            let channel = entity(EntityType::Channel, metadata.channel_id);
+        MessageTopicEvent::Patched(metadata) => match channel(&metadata.parent) {
+            Some(channel_id) => {
+                channel_and_thread_entities(channel_id, metadata.message_id, metadata.thread_id)
+            }
+            None => Vec::new(),
+        },
+        MessageTopicEvent::Deleted(metadata) => {
+            let Some(channel_id) = channel(&metadata.parent) else {
+                return Vec::new();
+            };
+            let channel = entity(EntityType::Channel, channel_id);
             let thread_patch = match metadata.thread_id {
                 Some(thread_id) => Patch::Updated(entity(EntityType::ChannelMessage, thread_id)),
                 None => Patch::Deleted(entity(EntityType::ChannelMessage, metadata.message_id)),
@@ -376,8 +407,11 @@ fn patches_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimePatc
                 SoupRealtimePatch::new(thread_patch, channel),
             ]
         }
-        ChannelTopicEvent::MessageAttachmentCreated(metadata) => {
-            let channel = entity(EntityType::Channel, metadata.channel_id);
+        MessageTopicEvent::AttachmentCreated(metadata) => {
+            let Some(channel_id) = channel(&metadata.parent) else {
+                return Vec::new();
+            };
+            let channel = entity(EntityType::Channel, channel_id);
             let mut patches = vec![SoupRealtimePatch::for_entity(Patch::Updated(
                 channel.clone(),
             ))];
@@ -391,24 +425,12 @@ fn patches_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimePatc
             }
             patches
         }
-        ChannelTopicEvent::MessageAttachmentRemoved(metadata) => {
-            vec![update(EntityType::Channel, metadata.channel_id)]
-        }
-        ChannelTopicEvent::ParticipantAdded(metadata) => {
-            vec![update(EntityType::Channel, metadata.channel_id)]
-        }
-        ChannelTopicEvent::ParticipantRemoved(metadata) => {
-            vec![update(EntityType::Channel, metadata.channel_id)]
-        }
-        ChannelTopicEvent::Created(metadata) => {
-            vec![update(EntityType::Channel, metadata.channel_id)]
-        }
-        ChannelTopicEvent::Deleted(metadata) => {
-            vec![delete(EntityType::Channel, metadata.channel_id)]
-        }
-        // Mentions carry no entity change beyond the message_posted event
-        // emitted alongside them.
-        ChannelTopicEvent::Mentioned(_) => Vec::new(),
+        MessageTopicEvent::AttachmentRemoved(metadata) => channel(&metadata.parent)
+            .map(|channel_id| vec![update(EntityType::Channel, channel_id)])
+            .unwrap_or_default(),
+        // Mentions carry no entity change beyond the posted fact emitted
+        // alongside them.
+        MessageTopicEvent::Mentioned(_) => Vec::new(),
     }
 }
 
@@ -466,6 +488,9 @@ fn patches_from_event(event: &DeclaredMacroEvent) -> Vec<SoupRealtimePatch> {
         }
         DeclaredMacroEvent::ChannelMacroEvent(event) => {
             patches_from_channel_event(&event.event().event)
+        }
+        DeclaredMacroEvent::MessageMacroEvent(event) => {
+            patches_from_message_event(&event.event().event)
         }
         DeclaredMacroEvent::PropertyMacroEvent(event) => {
             patches_from_property_event(&event.event().event)

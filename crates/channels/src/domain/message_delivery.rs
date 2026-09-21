@@ -1,16 +1,12 @@
 //! Channel side effects for messages committed by the shared message service.
 use super::{
-    events::{ChannelEvent, MessageChangedNotificationContext},
-    models::{
-        ChannelMetadata, CountedReaction, MutatedAttachment, MutatedMessage, ReferencedShareItem,
-        Sender, TypingAction,
-    },
+    events::ChannelEvent,
+    models::{ChannelMetadata, MutatedMessage, ReferencedShareItem, Sender},
     ports::{ChannelEventDispatcher, ChannelReferenceSharePermissions, ChannelRepo},
 };
-use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::{
     delivery::MessageRealtime,
-    models::{Message, MessageAttachment, MessageParent, PatchMessageNotificationPolicy},
+    models::{Message, MessageParent, PatchMessageNotificationPolicy, PostMessageNotificationPolicy},
     ports::{MessageChange, MessageEvent, MessageEventPublisher},
 };
 use uuid::Uuid;
@@ -18,10 +14,10 @@ use uuid::Uuid;
 #[cfg(test)]
 mod test;
 
-/// Preserves channel notifications, activity, sharing, indexing, bot triggers, and
-/// the realtime payloads the deployed channel client listens to when the shared
-/// message service commits a channel message, and adds the common
-/// `message_update` payload beside them.
+/// Preserves channel notifications, activity, sharing of referenced items,
+/// contact sync, and the channel lifecycle broker events when the shared
+/// message service commits a channel message, and sends the common
+/// `message_update` payload to the channel's participants.
 #[derive(Clone)]
 pub struct ChannelMessageDelivery<R, E, P, G> {
     repo: R,
@@ -55,26 +51,6 @@ fn persisted(channel_id: Uuid, message: &Message) -> MutatedMessage {
         edited_at: message.edited_at,
         deleted_at: message.deleted_at,
     }
-}
-
-fn attachment_rows(
-    channel_id: Uuid,
-    message_id: Uuid,
-    values: &[MessageAttachment],
-) -> Vec<MutatedAttachment> {
-    values
-        .iter()
-        .map(|attachment| MutatedAttachment {
-            id: attachment.id,
-            channel_id,
-            message_id,
-            entity_type: attachment.entity_type.clone(),
-            entity_id: attachment.entity_id.clone(),
-            width: attachment.width,
-            height: attachment.height,
-            created_at: attachment.created_at,
-        })
-        .collect()
 }
 
 fn repo_error(error: impl Into<anyhow::Error>) -> rootcause::Report {
@@ -131,10 +107,6 @@ where
             .get_participants(channel_id)
             .await
             .map_err(repo_error)?;
-        let recipients: Vec<MacroUserIdStr<'static>> = participants
-            .iter()
-            .filter_map(|participant| MacroUserIdStr::try_from(participant.user_id.clone()).ok())
-            .collect();
         let live_users = participants
             .iter()
             .map(|participant| participant.user_id.clone())
@@ -185,121 +157,43 @@ where
                 side_effect_error = Some(repo_error(error));
             }
         }
-        match &event.change {
+        // Notifications derive from a post, or from an edit that must notify like one.
+        let posted = match &event.change {
             MessageChange::Posted {
                 message,
                 mentions,
                 notification_policy,
-            } => {
-                let metadata = self.channel_metadata(channel_id, &actor).await?;
-                self.events.dispatch(ChannelEvent::MessagePosted {
-                    channel_id,
-                    metadata,
-                    participants: participants.clone(),
-                    message: persisted(channel_id, message),
-                    mentions: mentions.clone(),
-                    has_attachments: !message.attachments.is_empty(),
-                    attachments: attachment_rows(channel_id, message.id, &message.attachments),
-                    nonce: event.nonce.clone(),
-                    notification_policy: *notification_policy,
-                });
-            }
+            } => Some((message, mentions, *notification_policy)),
             MessageChange::Edited {
                 message,
                 mentions,
-                notification_policy,
-                previous_attachments,
-            } => {
-                let posted_notification = if *notification_policy
-                    == PatchMessageNotificationPolicy::NotifyAsPostedMessage
-                {
-                    Some(MessageChangedNotificationContext {
-                        metadata: self.channel_metadata(channel_id, &actor).await?,
-                        participants: participants.clone(),
-                        mentions: mentions.clone(),
-                        has_attachments: !message.attachments.is_empty(),
-                    })
-                } else {
-                    None
-                };
-                let current = attachment_rows(channel_id, message.id, &message.attachments);
-                let previous = attachment_rows(channel_id, message.id, previous_attachments);
-                let added: Vec<_> = current
-                    .iter()
-                    .filter(|attachment| !previous.iter().any(|p| p.id == attachment.id))
-                    .cloned()
-                    .collect();
-                let removed: Vec<_> = previous
-                    .into_iter()
-                    .filter(|attachment| !current.iter().any(|c| c.id == attachment.id))
-                    .collect();
-                if !added.is_empty() || !removed.is_empty() {
-                    self.events.dispatch(ChannelEvent::AttachmentsChanged {
-                        channel_id,
-                        actor: actor.clone(),
-                        message_id: message.id,
-                        attachments: current,
-                        added,
-                        removed,
-                        recipients: recipients.clone(),
-                        nonce: event.nonce.clone(),
-                    });
-                }
-                self.events.dispatch(ChannelEvent::MessageChanged {
-                    channel_id,
-                    actor: actor.clone(),
-                    message: persisted(channel_id, message),
-                    recipients: recipients.clone(),
-                    nonce: event.nonce.clone(),
-                    posted_notification,
-                });
-            }
-            MessageChange::MessageDeleted { message } => {
-                self.events.dispatch(ChannelEvent::MessageDeleted {
-                    channel_id,
-                    actor: actor.clone(),
-                    message: persisted(channel_id, message),
-                    recipients: recipients.clone(),
-                    nonce: event.nonce.clone(),
-                });
-            }
-            MessageChange::ReactionChanged { message } => {
+                notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
+                ..
+            } => Some((message, mentions, PostMessageNotificationPolicy::Default)),
+            MessageChange::ReactionChanged { .. } => {
                 if actor.as_user().is_some()
                     && let Err(error) = self.repo.upsert_activity(actor.clone(), channel_id).await
                 {
                     side_effect_error = Some(repo_error(error));
                 }
-                self.events.dispatch(ChannelEvent::ReactionChanged {
-                    channel_id,
-                    actor: actor.clone(),
-                    message_id: message.id,
-                    reactions: message
-                        .reactions
-                        .iter()
-                        .map(|reaction| CountedReaction {
-                            emoji: reaction.emoji.clone(),
-                            users: reaction.users.clone(),
-                        })
-                        .collect(),
-                    recipients: recipients.clone(),
-                    nonce: event.nonce.clone(),
-                });
+                None
             }
-            MessageChange::Typing { thread_id, active } => {
-                self.events.dispatch(ChannelEvent::TypingChanged {
-                    channel_id,
-                    actor: actor.clone(),
-                    action: if *active {
-                        TypingAction::Start
-                    } else {
-                        TypingAction::Stop
-                    },
-                    thread_id: *thread_id,
-                    recipients: recipients.clone(),
-                    nonce: event.nonce.clone(),
-                });
-            }
-            MessageChange::ThreadUpdated { .. } => {}
+            MessageChange::Edited { .. }
+            | MessageChange::MessageDeleted { .. }
+            | MessageChange::Typing { .. }
+            | MessageChange::ThreadUpdated { .. } => None,
+        };
+        if let Some((message, mentions, notification_policy)) = posted {
+            let metadata = self.channel_metadata(channel_id, &actor).await?;
+            self.events.dispatch(ChannelEvent::MessagePosted {
+                channel_id,
+                metadata,
+                participants,
+                message: persisted(channel_id, message),
+                mentions: mentions.clone(),
+                has_attachments: !message.attachments.is_empty(),
+                notification_policy,
+            });
         }
         if let Err(error) = self.realtime.send(&event, live_users).await {
             side_effect_error = Some(error);

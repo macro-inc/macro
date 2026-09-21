@@ -3,9 +3,7 @@
 use agent_session::outbound::postgres::PgAgentSessionRepo;
 use agent_trigger::domain::processing::process_message_event;
 use agent_trigger::domain::service::AgentTriggerService;
-use agent_trigger::domain::sources::{
-    ChannelTriggerEvents, MessageTriggerEvents, TriggerEventSource, TriggerEvents,
-};
+use agent_trigger::domain::sources::{MessageTriggerEvents, TriggerEvents};
 use agent_trigger::outbound::{
     BotRepoAgentLookup, ChannelRepoTypeLookup, FastModelTriggerJudge,
     LexicalExplicitReplyExtractor, MessageThreadHistory,
@@ -63,20 +61,9 @@ fn commit_message<M: MacroEventCollection + 'static>(
 }
 
 /// Keeps the trigger consumer running across transient failures.
-pub async fn supervise(
-    pool: PgPool,
-    kafka_brokers: String,
-    internal_api_key: String,
-    source: TriggerEventSource,
-) {
+pub async fn supervise(pool: PgPool, kafka_brokers: String, internal_api_key: String) {
     loop {
-        if let Err(error) = run(
-            pool.clone(),
-            kafka_brokers.clone(),
-            internal_api_key.clone(),
-            source,
-        )
-        .await
+        if let Err(error) = run(pool.clone(), kafka_brokers.clone(), internal_api_key.clone()).await
         {
             tracing::error!(error = ?error, "agent trigger stopped; restarting");
             sleep(Duration::from_secs(1)).await;
@@ -84,12 +71,7 @@ pub async fn supervise(
     }
 }
 
-async fn run(
-    pool: PgPool,
-    kafka_brokers: String,
-    internal_api_key: String,
-    source: TriggerEventSource,
-) -> anyhow::Result<()> {
+async fn run(pool: PgPool, kafka_brokers: String, internal_api_key: String) -> anyhow::Result<()> {
     let lexical = LexicalClient::new(internal_api_key, LexicalServiceUrl::new()?.to_string());
     let trigger = AgentTriggerService::new(
         PgAgentSessionRepo::new(pool.clone()),
@@ -115,17 +97,10 @@ async fn run(
     );
     let consumer = KafkaEventConsumer::<AgentTriggerConsumerGroup>::from_env(&kafka_brokers)?;
     let consumer = KafkaConsumerAdapter::<AgentTriggerConsumerGroup, ()>::new(consumer);
-    match source {
-        TriggerEventSource::Messages => {
-            consume::<MessageTriggerEvents>(consumer, &trigger, &publisher, &channel_types).await
-        }
-        TriggerEventSource::Channels => {
-            consume::<ChannelTriggerEvents>(consumer, &trigger, &publisher, &channel_types).await
-        }
-    }
+    consume::<MessageTriggerEvents>(consumer, &trigger, &publisher, &channel_types).await
 }
 
-/// Read one trigger source until it fails, evaluating every committed post.
+/// Read the trigger topic until it fails, evaluating every committed post.
 async fn consume<Events: TriggerEvents>(
     consumer: KafkaConsumerAdapter<AgentTriggerConsumerGroup, ()>,
     trigger: &Trigger,
@@ -139,7 +114,6 @@ async fn consume<Events: TriggerEvents>(
 
     tracing::info!(
         topics = ?Events::topics(),
-        source = ?Events::SOURCE,
         group = AgentTriggerConsumerGroup::GROUP_NAME,
         "agent trigger listening"
     );
