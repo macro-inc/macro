@@ -13,13 +13,13 @@ import { ActionDialogShell, Dialog } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { globalSplitManager } from '../../lib/signals/splitLayout';
 import { ReminderForm } from './ReminderForm';
-import { reminderDetailDestination } from './reminder-navigation';
 import {
   closeReminderComposer,
   reminderComposerOpen,
   reminderComposerState,
   takeReminderCreatedHandler,
 } from './reminder-composer';
+import { reminderDetailDestination } from './reminder-navigation';
 import {
   describeReminderConfirmation,
   resolveReminderDescription,
