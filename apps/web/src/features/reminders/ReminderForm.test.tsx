@@ -2,7 +2,11 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ReminderForm, type ReminderFormValues } from './ReminderForm';
 
+let originalTimezone: string | undefined;
+
 beforeEach(() => {
+  originalTimezone = process.env.TZ;
+  process.env.TZ = 'UTC';
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-09-21T12:00:00.000Z'));
 });
@@ -10,6 +14,8 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  if (originalTimezone === undefined) delete process.env.TZ;
+  else process.env.TZ = originalTimezone;
 });
 
 function renderForm(
@@ -66,6 +72,28 @@ describe('one-shot scheduling', () => {
     expect(tomorrow).not.toBeNull();
 
     fireEvent.click(inThirty);
+    fireEvent.click(screen.getByRole('button', { name: 'Set reminder' }));
+    expect(onSubmit.mock.calls[0]?.[0].schedule).toEqual({
+      type: 'once',
+      remindAt: '2026-09-21T12:30:00.000Z',
+    });
+  });
+
+  it('carries a typed instant into Custom instead of restoring the default', () => {
+    const { onSubmit } = renderForm({ initialDescription: 'Follow up' });
+
+    fireEvent.input(
+      screen.getByPlaceholderText('Try “tomorrow 9am” or “in 30 minutes”'),
+      { target: { value: 'in 30 minutes' } }
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Custom/ }));
+
+    expect(
+      (screen.getByLabelText('Custom reminder date') as HTMLInputElement).value
+    ).toBe('2026-09-21');
+    expect(
+      (screen.getByLabelText('Custom reminder time') as HTMLInputElement).value
+    ).toBe('12:30');
     fireEvent.click(screen.getByRole('button', { name: 'Set reminder' }));
     expect(onSubmit.mock.calls[0]?.[0].schedule).toEqual({
       type: 'once',
@@ -168,6 +196,48 @@ describe('one-shot scheduling', () => {
       const submit = screen.getByRole('button', { name: 'Set reminder' });
       expect((submit as HTMLButtonElement).disabled).toBe(true);
       fireEvent.click(submit);
+      expect(onSubmit).not.toHaveBeenCalled();
+    } finally {
+      if (originalTimezone === undefined) delete process.env.TZ;
+      else process.env.TZ = originalTimezone;
+    }
+  });
+
+  it('rejects a date-language time skipped by spring-forward', () => {
+    const originalTimezone = process.env.TZ;
+    process.env.TZ = 'America/New_York';
+    try {
+      vi.setSystemTime(new Date('2026-03-07T12:00:00-05:00'));
+      const { onSubmit } = renderForm({ initialDescription: 'Follow up' });
+
+      fireEvent.input(
+        screen.getByPlaceholderText('Try “tomorrow 9am” or “in 30 minutes”'),
+        { target: { value: 'Mar 8 2026 2:30am' } }
+      );
+
+      expect(
+        screen.getByText(/local time doesn’t exist because the clocks change/)
+      ).not.toBeNull();
+      expect(
+        (
+          screen.getByRole('button', {
+            name: 'Set reminder',
+          }) as HTMLButtonElement
+        ).disabled
+      ).toBe(true);
+
+      fireEvent.click(screen.getByRole('button', { name: /Custom/ }));
+      expect(
+        (screen.getByLabelText('Custom reminder date') as HTMLInputElement)
+          .value
+      ).toBe('2026-03-08');
+      expect(
+        (screen.getByLabelText('Custom reminder time') as HTMLInputElement)
+          .value
+      ).toBe('02:30');
+      expect(
+        screen.getByText(/local time doesn’t exist because the clocks change/)
+      ).not.toBeNull();
       expect(onSubmit).not.toHaveBeenCalled();
     } finally {
       if (originalTimezone === undefined) delete process.env.TZ;
@@ -281,6 +351,59 @@ describe('recurrence', () => {
     expect(onSubmit.mock.calls[0]?.[0].schedule).toEqual({
       type: 'recurring',
       cron: '0 0 9 * * 3',
+      timezone: 'UTC',
+    });
+  });
+
+  it('keeps edited time and cadence-specific days while switching repeat shapes', () => {
+    const { onSubmit } = renderForm({
+      initialDescription: 'Monthly review',
+      initialSchedule: {
+        type: 'recurring',
+        cron: '0 30 14 15 * *',
+        timezone: 'UTC',
+      },
+      initialRemindAt: '2026-10-15T14:30:00.000Z',
+      submitLabel: 'Save',
+    });
+
+    fireEvent.click(screen.getByText('Repeat'));
+    fireEvent.input(screen.getByLabelText('Day'), {
+      target: { value: '20' },
+    });
+    fireEvent.input(screen.getByLabelText('At'), {
+      target: { value: '16:45' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Weekly' }));
+    expect((screen.getByLabelText('At') as HTMLInputElement).value).toBe(
+      '16:45'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Friday' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Thursday' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Monthly' }));
+    expect((screen.getByLabelText('Day') as HTMLInputElement).value).toBe('20');
+    expect((screen.getByLabelText('At') as HTMLInputElement).value).toBe(
+      '16:45'
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Weekly' }));
+    expect(
+      screen
+        .getByRole('button', { name: 'Friday' })
+        .getAttribute('aria-pressed')
+    ).toBe('true');
+    expect(
+      screen
+        .getByRole('button', { name: 'Thursday' })
+        .getAttribute('aria-pressed')
+    ).toBe('false');
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(onSubmit.mock.calls[0]?.[0].schedule).toEqual({
+      type: 'recurring',
+      cron: '0 45 16 * * 6',
       timezone: 'UTC',
     });
   });
