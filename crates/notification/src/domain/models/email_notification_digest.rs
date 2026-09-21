@@ -23,6 +23,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::{Report, report};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, sync::Arc, time::Duration};
+use uuid::Uuid;
 
 /// Port traits for external dependencies (user existence, push notification checks).
 pub mod ports;
@@ -284,7 +285,16 @@ pub trait BulkDigestStateMachine: Send + Sync + 'static {
     fn ingest<T: Serialize + Send + Sync + 'static>(
         &self,
         notif: UserNotificationRow<Arc<T>>,
+        delivery_generation: Uuid,
     ) -> impl Future<Output = Result<StateMachineDecisionA, Report>> + Send;
+
+    /// Remove an ingress idempotency receipt after durable preparation is safe.
+    fn cleanup_digest_receipt(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_id: Uuid,
+        delivery_generation: Uuid,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
 /// a struct which is able to drive the state machine to a decision on a given notification
@@ -357,6 +367,7 @@ where
     pub async fn ingest<T: Serialize>(
         &self,
         notif: UserNotificationRow<Arc<T>>,
+        delivery_generation: Uuid,
     ) -> Result<StateMachineDecisionA, Report> {
         let allowed = match self.block_list.notification_is_allowed(notif) {
             Either::Left(l) => l,
@@ -384,9 +395,9 @@ where
             }
         };
         Ok(match last_online {
-            Either::Left(l) => {
-                StateMachineDecisionA::BatchWasQueued(self.inner_store_batch(l).await?)
-            }
+            Either::Left(l) => StateMachineDecisionA::BatchWasQueued(
+                self.inner_store_batch(l, delivery_generation).await?,
+            ),
             Either::Right(r) => StateMachineDecisionA::DontSend(r),
         })
     }
@@ -394,13 +405,14 @@ where
     async fn inner_store_batch<T: Serialize>(
         &self,
         batch: BatchSend<UserNotificationRow<Arc<T>>>,
+        delivery_generation: Uuid,
     ) -> Result<BatchSend<()>, Report> {
         let notif = batch
             .0
             .map(|v| serde_json::to_value(&*v).expect("serialize cannot fail"));
         let () = self
             .digest_batcher
-            .add_to_digest(&notif, self.digest_window)
+            .add_to_digest_for_delivery_generation(&notif, delivery_generation, self.digest_window)
             .await?;
         Ok(BatchSend(()))
     }
@@ -416,8 +428,20 @@ where
     fn ingest<T: Serialize + Send + Sync + 'static>(
         &self,
         notif: UserNotificationRow<Arc<T>>,
+        delivery_generation: Uuid,
     ) -> impl Future<Output = Result<StateMachineDecisionA, Report>> + Send {
-        self.ingest(notif)
+        self.ingest(notif, delivery_generation)
+    }
+
+    async fn cleanup_digest_receipt(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_id: Uuid,
+        delivery_generation: Uuid,
+    ) -> Result<(), Report> {
+        self.digest_batcher
+            .remove_notification_receipt(user_id, notification_id, delivery_generation)
+            .await
     }
 }
 

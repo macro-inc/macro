@@ -160,6 +160,73 @@ async fn test_add_multiple_notifications_same_user() {
 }
 
 #[tokio::test]
+async fn test_digest_insert_is_idempotent_until_receipt_cleanup() {
+    let mut conn = get_redis_connection().await;
+    let prefix = test_prefix("idempotent_receipt");
+    let batcher = RedisDigestBatcher::with_key_prefix(conn.clone(), &prefix);
+    let user = test_user("idempotent_receipt");
+    let notification = create_test_notification(user.clone(), "replayed message");
+    let generation = Uuid::now_v7();
+
+    batcher
+        .add_to_digest_for_delivery_generation(&notification, generation, Duration::from_secs(60))
+        .await
+        .unwrap();
+    batcher
+        .add_to_digest_for_delivery_generation(&notification, generation, Duration::from_secs(60))
+        .await
+        .unwrap();
+
+    let digest_key = format!("{prefix}:digest:{}", user.as_ref());
+    let receipt_key = format!(
+        "{prefix}:digest_receipt:{}:{}:{}",
+        user.as_ref(),
+        notification.notification_id,
+        generation,
+    );
+    assert_eq!(conn.llen::<_, usize>(&digest_key).await.unwrap(), 1);
+    assert_eq!(
+        conn.ttl::<_, i64>(&receipt_key).await.unwrap(),
+        -1,
+        "receipt must not expire before the durable cleanup obligation"
+    );
+
+    batcher
+        .remove_notification_receipt(user.clone(), notification.notification_id, generation)
+        .await
+        .unwrap();
+    assert!(!conn.exists::<_, bool>(&receipt_key).await.unwrap());
+
+    let recreated_generation = Uuid::now_v7();
+    batcher
+        .add_to_digest_for_delivery_generation(
+            &notification,
+            recreated_generation,
+            Duration::from_secs(60),
+        )
+        .await
+        .unwrap();
+    let recreated_receipt_key = format!(
+        "{prefix}:digest_receipt:{}:{}:{}",
+        user.as_ref(),
+        notification.notification_id,
+        recreated_generation,
+    );
+    // A late cleanup from the deleted generation addresses only its own key.
+    batcher
+        .remove_notification_receipt(user.clone(), notification.notification_id, generation)
+        .await
+        .unwrap();
+    assert!(
+        conn.exists::<_, bool>(&recreated_receipt_key)
+            .await
+            .unwrap()
+    );
+
+    cleanup_prefix(&mut conn, &prefix).await;
+}
+
+#[tokio::test]
 async fn test_claim_ready_digest_returns_empty_when_none_pending() {
     let conn = get_redis_connection().await;
     let prefix = test_prefix("empty_when_none");

@@ -3,13 +3,17 @@
 #[cfg(test)]
 mod test;
 
+use crate::domain::models::delivery_outbox::{
+    ClaimedDeliveryIntent, ClaimedDeliveryRequest, ClaimedDigestReceiptCleanup, DeliveryClaimToken,
+    DeliveryLease,
+};
 use crate::domain::models::device::DeviceType;
 use crate::domain::models::request::{NotificationCategory, NotificationListFilters};
 use crate::domain::models::{
     DeviceEndpoint, DisabledNotificationType, NotificationIdAndCollapseKey,
-    SendNotificationRequestBuilder, TaggedContent, UserNotificationRow,
+    SendNotificationRequest, SendNotificationRequestBuilder, TaggedContent, UserNotificationRow,
 };
-use crate::domain::ports::NotificationRepository;
+use crate::domain::ports::{NotificationDeliveryRepository, NotificationRepository};
 use crate::outbound::device_registration::DeviceRegistrationDbOps;
 use chrono::{DateTime, Utc};
 use macro_user_id::cowlike::CowLike;
@@ -1549,6 +1553,804 @@ impl NotificationDbOps for PgPool {
         .execute(self)
         .await?;
 
+        Ok(())
+    }
+}
+
+impl NotificationDeliveryRepository for DbNotificationRepository<PgPool> {
+    async fn restore_existing_delivery_request<
+        'a,
+        T: Serialize + Send + Sync,
+        U: Serialize + Send + Sync,
+    >(
+        &self,
+        request: &SendNotificationRequest<'a, T, U>,
+    ) -> Result<Option<HashSet<MacroUserIdStr<'static>>>, Report> {
+        let notification_id = request.uuid_to_write;
+        let mut tx = self.db.begin().await?;
+        let exists = sqlx::query_scalar!(
+            "SELECT EXISTS(SELECT 1 FROM notification WHERE id = $1) AS \"exists!\"",
+            notification_id,
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+        if !exists {
+            tx.commit().await?;
+            return Ok(None);
+        }
+
+        let user_ids = sqlx::query_scalar!(
+            r#"
+            SELECT user_id
+            FROM user_notification
+            WHERE notification_id = $1
+            ORDER BY user_id
+            "#,
+            notification_id,
+        )
+        .fetch_all(&mut *tx)
+        .await?;
+        let recipients = user_ids
+            .iter()
+            .map(|user_id| MacroUserIdStr::parse_from_str(user_id).map(CowLike::into_owned))
+            .collect::<Result<HashSet<_>, _>>()
+            .map_err(|error| rootcause::report!(error))?;
+
+        let mut restored: SendNotificationRequest<'static, serde_json::Value, serde_json::Value> =
+            serde_json::from_value(serde_json::to_value(request)?)?;
+        restored.req.recipient_ids = recipients.clone();
+        let delivery_request = serde_json::to_value(restored)?;
+        let generation = macro_uuid::generate_uuid_v7();
+        let restored_outbox = sqlx::query_scalar!(
+            r#"
+            INSERT INTO notification_delivery_outbox (notification_id, generation, request)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (notification_id) DO NOTHING
+            RETURNING notification_id
+            "#,
+            notification_id,
+            generation,
+            delivery_request,
+        )
+        .fetch_optional(&mut *tx)
+        .await?
+        .is_some();
+
+        if restored_outbox {
+            sqlx::query!(
+                r#"
+                INSERT INTO notification_digest_receipt_cleanup (
+                    notification_id,
+                    user_id,
+                    generation
+                )
+                SELECT notification_id, user_id, $2
+                FROM user_notification
+                WHERE notification_id = $1
+                ON CONFLICT (notification_id, user_id, generation) DO NOTHING
+                "#,
+                notification_id,
+                generation,
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        tx.commit().await?;
+        Ok(Some(recipients))
+    }
+
+    async fn persist_notification_with_delivery_request<
+        'a,
+        T: Serialize + DeserializeOwned + Send + Sync,
+        U: Serialize + Send + Sync,
+    >(
+        &self,
+        mut request: SendNotificationRequest<'a, T, U>,
+        service_sender: &str,
+    ) -> Result<Vec<UserNotificationRow<Arc<T>>>, Report> {
+        let notification_id = request.uuid_to_write;
+        let entity_type: &str = request.req.notification_entity.entity_type.into();
+        let secondary_entity_id = request
+            .req
+            .secondary_notification_entity
+            .as_ref()
+            .map(|entity| entity.entity_id.as_ref());
+        let secondary_entity_type: Option<&str> = request
+            .req
+            .secondary_notification_entity
+            .as_ref()
+            .map(|entity| entity.entity_type.into());
+        let metadata = serde_json::to_value(&request.req.notification.content)?;
+        let sender_id = request.req.sender_id.as_ref().map(ToString::to_string);
+        let typename = request.req.notification.tag.as_ref();
+        let apns_collapse_key = request
+            .build_apns
+            .as_ref()
+            .map(|output| output.attr.collapse_key.as_str());
+
+        let mut tx = self.db.begin().await?;
+        let inserted = sqlx::query!(
+            r#"
+            INSERT INTO notification (
+                id,
+                notification_event_type,
+                event_item_id,
+                event_item_type,
+                service_sender,
+                metadata,
+                sender_id,
+                apns_collapse_key,
+                secondary_event_item_id,
+                secondary_event_item_type
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            ON CONFLICT (id) DO NOTHING
+            "#,
+            notification_id,
+            typename,
+            request.req.notification_entity.entity_id.as_ref(),
+            entity_type,
+            service_sender,
+            metadata,
+            sender_id,
+            apns_collapse_key,
+            secondary_entity_id,
+            secondary_entity_type,
+        )
+        .execute(&mut *tx)
+        .await?
+        .rows_affected()
+            == 1;
+
+        if inserted {
+            let user_ids: Vec<String> = request
+                .req
+                .recipient_ids
+                .iter()
+                .map(ToString::to_string)
+                .collect();
+            sqlx::query!(
+                r#"
+                INSERT INTO user_notification (notification_id, user_id)
+                SELECT $1, user_id
+                FROM UNNEST($2::text[]) AS user_id
+                "#,
+                notification_id,
+                &user_ids,
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        let stored_rows = sqlx::query!(
+            r#"
+            SELECT
+                un.user_id,
+                un.sent,
+                un.state AS "state!: NotificationState",
+                un.created_at::timestamptz AS "created_at!",
+                un.seen_at::timestamptz AS viewed_at,
+                un.deleted_at::timestamptz AS deleted_at,
+                n.notification_event_type,
+                n.event_item_id,
+                n.event_item_type,
+                n.metadata AS "metadata!: serde_json::Value",
+                n.sender_id
+            FROM user_notification un
+            JOIN notification n ON n.id = un.notification_id
+            WHERE un.notification_id = $1
+            ORDER BY un.user_id
+            "#,
+            notification_id,
+        )
+        .fetch_all(&mut *tx)
+        .await?;
+
+        let persisted_recipients = stored_rows
+            .iter()
+            .map(|row| MacroUserIdStr::parse_from_str(&row.user_id).map(CowLike::into_owned))
+            .collect::<Result<HashSet<_>, _>>()
+            .map_err(|error| rootcause::report!(error))?;
+        request.req.recipient_ids = persisted_recipients;
+
+        let delivery_request = serde_json::to_value(&request)?;
+        let generation = macro_uuid::generate_uuid_v7();
+        let inserted_outbox = sqlx::query_scalar!(
+            r#"
+            INSERT INTO notification_delivery_outbox (notification_id, generation, request)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (notification_id) DO NOTHING
+            RETURNING notification_id
+            "#,
+            notification_id,
+            generation,
+            delivery_request,
+        )
+        .fetch_optional(&mut *tx)
+        .await?
+        .is_some();
+
+        if inserted_outbox {
+            sqlx::query!(
+                r#"
+                INSERT INTO notification_digest_receipt_cleanup (
+                    notification_id,
+                    user_id,
+                    generation
+                )
+                SELECT notification_id, user_id, $2
+                FROM user_notification
+                WHERE notification_id = $1
+                ON CONFLICT (notification_id, user_id, generation) DO NOTHING
+                "#,
+                notification_id,
+                generation,
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        tx.commit().await?;
+
+        stored_rows
+            .into_iter()
+            .map(|row| {
+                let owner_id = MacroUserIdStr::parse_from_str(&row.user_id)
+                    .map(CowLike::into_owned)
+                    .map_err(|error| rootcause::report!(error))?;
+                let entity = EntityType::from_str(&row.event_item_type)
+                    .map_err(|error| rootcause::report!(error))?
+                    .with_entity_string(row.event_item_id);
+                let sender_id = row
+                    .sender_id
+                    .as_deref()
+                    .map(|sender| MacroUserIdStr::parse_from_str(sender).map(CowLike::into_owned))
+                    .transpose()
+                    .map_err(|error| rootcause::report!(error))?;
+                let notification_metadata = serde_json::from_value(row.metadata)?;
+
+                Ok(UserNotificationRow {
+                    owner_id,
+                    notification_id,
+                    notification_event_type: row.notification_event_type,
+                    entity,
+                    sent: row.sent,
+                    state: row.state,
+                    created_at: row.created_at,
+                    viewed_at: row.viewed_at,
+                    updated_at: row.created_at,
+                    deleted_at: row.deleted_at,
+                    notification_metadata: Arc::new(notification_metadata),
+                    sender_id,
+                })
+            })
+            .collect()
+    }
+
+    async fn claim_delivery_request(
+        &self,
+        notification_id: Option<Uuid>,
+        claim_token: DeliveryClaimToken,
+        lease: DeliveryLease,
+    ) -> Result<Option<ClaimedDeliveryRequest>, Report> {
+        let claim_token_uuid = claim_token.into_uuid();
+        let mut tx = self.db.begin().await?;
+        let claimed = sqlx::query!(
+            r#"
+            WITH candidate AS (
+                SELECT notification_id
+                FROM notification_delivery_outbox
+                WHERE prepared_at IS NULL
+                  AND completed_at IS NULL
+                  AND next_attempt_at <= now()
+                  AND (claim_expires_at IS NULL OR claim_expires_at <= now())
+                  AND ($1::uuid IS NULL OR notification_id = $1)
+                ORDER BY next_attempt_at, created_at
+                FOR UPDATE SKIP LOCKED
+                LIMIT 1
+            )
+            UPDATE notification_delivery_outbox outbox
+            SET claim_token = $2,
+                claim_expires_at = $3,
+                attempt_count = outbox.attempt_count + 1,
+                updated_at = now()
+            FROM candidate
+            WHERE outbox.notification_id = candidate.notification_id
+            RETURNING
+                outbox.notification_id,
+                outbox.generation,
+                outbox.request AS "request!: serde_json::Value",
+                outbox.attempt_count,
+                outbox.created_at AS "created_at!"
+            "#,
+            notification_id,
+            claim_token_uuid,
+            lease.expires_at,
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
+
+        let Some(claimed) = claimed else {
+            tx.commit().await?;
+            return Ok(None);
+        };
+
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                un.user_id,
+                un.sent,
+                un.state AS "state!: NotificationState",
+                un.created_at::timestamptz AS "created_at!",
+                un.seen_at::timestamptz AS viewed_at,
+                un.deleted_at::timestamptz AS deleted_at,
+                n.notification_event_type,
+                n.event_item_id,
+                n.event_item_type,
+                n.metadata AS "metadata!: serde_json::Value",
+                n.sender_id
+            FROM user_notification un
+            JOIN notification n ON n.id = un.notification_id
+            WHERE un.notification_id = $1
+            ORDER BY un.user_id
+            "#,
+            claimed.notification_id,
+        )
+        .fetch_all(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+
+        let notifications = rows
+            .into_iter()
+            .map(|row| {
+                let owner_id = MacroUserIdStr::parse_from_str(&row.user_id)
+                    .map(CowLike::into_owned)
+                    .map_err(|error| rootcause::report!(error))?;
+                let entity = EntityType::from_str(&row.event_item_type)
+                    .map_err(|error| rootcause::report!(error))?
+                    .with_entity_string(row.event_item_id);
+                let sender_id = row
+                    .sender_id
+                    .as_deref()
+                    .map(|sender| MacroUserIdStr::parse_from_str(sender).map(CowLike::into_owned))
+                    .transpose()
+                    .map_err(|error| rootcause::report!(error))?;
+
+                Ok(UserNotificationRow {
+                    owner_id,
+                    notification_id: claimed.notification_id,
+                    notification_event_type: row.notification_event_type,
+                    entity,
+                    sent: row.sent,
+                    state: row.state,
+                    created_at: row.created_at,
+                    viewed_at: row.viewed_at,
+                    updated_at: row.created_at,
+                    deleted_at: row.deleted_at,
+                    notification_metadata: row.metadata,
+                    sender_id,
+                })
+            })
+            .collect::<Result<Vec<_>, Report>>()?;
+
+        Ok(Some(ClaimedDeliveryRequest {
+            notification_id: claimed.notification_id,
+            generation: claimed.generation,
+            claim_token,
+            request: claimed.request,
+            notifications,
+            attempt_count: claimed.attempt_count,
+            pending_since: claimed.created_at,
+        }))
+    }
+
+    async fn prepare_delivery_intents(
+        &self,
+        notification_id: Uuid,
+        claim_token: DeliveryClaimToken,
+        payloads: &[serde_json::Value],
+        digest_receipt_cleanup_after: DateTime<Utc>,
+    ) -> Result<bool, Report> {
+        let claim_token_uuid = claim_token.into_uuid();
+        let mut tx = self.db.begin().await?;
+        let prepared = sqlx::query_scalar!(
+            r#"
+            UPDATE notification_delivery_outbox
+            SET prepared_at = now(),
+                completed_at = CASE WHEN $3 = 0 THEN now() ELSE completed_at END,
+                claim_token = NULL,
+                claim_expires_at = NULL,
+                updated_at = now()
+            WHERE notification_id = $1
+              AND claim_token = $2
+              AND claim_expires_at > now()
+              AND prepared_at IS NULL
+            RETURNING notification_id
+            "#,
+            notification_id,
+            claim_token_uuid,
+            i32::try_from(payloads.len())?,
+        )
+        .fetch_optional(&mut *tx)
+        .await?
+        .is_some();
+
+        if !prepared {
+            tx.rollback().await?;
+            return Ok(false);
+        }
+
+        for (position, payload) in payloads.iter().enumerate() {
+            sqlx::query!(
+                r#"
+                INSERT INTO notification_delivery_outbox_intent (
+                    notification_id,
+                    position,
+                    payload
+                )
+                VALUES ($1, $2, $3)
+                ON CONFLICT (notification_id, position) DO NOTHING
+                "#,
+                notification_id,
+                i32::try_from(position)?,
+                payload,
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        sqlx::query!(
+            r#"
+            UPDATE notification_digest_receipt_cleanup cleanup
+            SET safe_after = $2,
+                claim_token = NULL,
+                claim_expires_at = NULL,
+                updated_at = now()
+            FROM notification_delivery_outbox outbox
+            WHERE cleanup.notification_id = $1
+              AND outbox.notification_id = cleanup.notification_id
+              AND outbox.generation = cleanup.generation
+            "#,
+            notification_id,
+            digest_receipt_cleanup_after,
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+        Ok(true)
+    }
+
+    async fn release_delivery_request(
+        &self,
+        notification_id: Uuid,
+        claim_token: DeliveryClaimToken,
+    ) -> Result<(), Report> {
+        sqlx::query!(
+            r#"
+            UPDATE notification_delivery_outbox
+            SET claim_token = NULL,
+                claim_expires_at = NULL,
+                next_attempt_at = now() + make_interval(
+                    secs => LEAST(300, power(2, LEAST(attempt_count, 8))::integer)
+                ),
+                updated_at = now()
+            WHERE notification_id = $1 AND claim_token = $2
+            "#,
+            notification_id,
+            claim_token.into_uuid(),
+        )
+        .execute(&self.db)
+        .await?;
+        Ok(())
+    }
+
+    async fn claim_delivery_intent(
+        &self,
+        notification_id: Option<Uuid>,
+        claim_token: DeliveryClaimToken,
+        lease: DeliveryLease,
+    ) -> Result<Option<ClaimedDeliveryIntent>, Report> {
+        let claim_token_uuid = claim_token.into_uuid();
+        let claimed = sqlx::query!(
+            r#"
+            WITH candidate AS (
+                SELECT intent.notification_id, intent.position
+                FROM notification_delivery_outbox_intent intent
+                JOIN notification_delivery_outbox outbox
+                  ON outbox.notification_id = intent.notification_id
+                WHERE intent.published_at IS NULL
+                  AND intent.next_attempt_at <= now()
+                  AND (intent.claim_expires_at IS NULL OR intent.claim_expires_at <= now())
+                  AND outbox.prepared_at IS NOT NULL
+                  AND outbox.completed_at IS NULL
+                  AND ($1::uuid IS NULL OR intent.notification_id = $1)
+                ORDER BY
+                    intent.next_attempt_at,
+                    intent.created_at,
+                    intent.notification_id,
+                    intent.position
+                FOR UPDATE OF intent SKIP LOCKED
+                LIMIT 1
+            )
+            UPDATE notification_delivery_outbox_intent intent
+            SET claim_token = $2,
+                claim_expires_at = $3,
+                attempt_count = intent.attempt_count + 1,
+                updated_at = now()
+            FROM candidate
+            WHERE intent.notification_id = candidate.notification_id
+              AND intent.position = candidate.position
+            RETURNING
+                intent.notification_id,
+                intent.position,
+                intent.payload AS "payload!: serde_json::Value",
+                intent.attempt_count,
+                intent.created_at AS "created_at!"
+            "#,
+            notification_id,
+            claim_token_uuid,
+            lease.expires_at,
+        )
+        .fetch_optional(&self.db)
+        .await?;
+
+        Ok(claimed.map(|claimed| ClaimedDeliveryIntent {
+            notification_id: claimed.notification_id,
+            position: claimed.position,
+            claim_token,
+            payload: claimed.payload,
+            attempt_count: claimed.attempt_count,
+            pending_since: claimed.created_at,
+        }))
+    }
+
+    async fn complete_delivery_intent(
+        &self,
+        notification_id: Uuid,
+        position: i32,
+        claim_token: DeliveryClaimToken,
+    ) -> Result<bool, Report> {
+        let mut tx = self.db.begin().await?;
+        // Serialize final-intent completion per notification. Without this
+        // parent lock, two concurrent final completions can each observe the
+        // other's still-uncommitted intent and both skip completing the parent.
+        let parent_exists = sqlx::query_scalar!(
+            r#"
+            SELECT notification_id
+            FROM notification_delivery_outbox
+            WHERE notification_id = $1
+            FOR UPDATE
+            "#,
+            notification_id,
+        )
+        .fetch_optional(&mut *tx)
+        .await?
+        .is_some();
+        if !parent_exists {
+            tx.commit().await?;
+            return Ok(false);
+        }
+
+        let updated = sqlx::query_scalar!(
+            r#"
+            UPDATE notification_delivery_outbox_intent
+            SET published_at = now(),
+                claim_token = NULL,
+                claim_expires_at = NULL,
+                updated_at = now()
+            WHERE notification_id = $1
+              AND position = $2
+              AND claim_token = $3
+              AND claim_expires_at > now()
+              AND published_at IS NULL
+            RETURNING notification_id
+            "#,
+            notification_id,
+            position,
+            claim_token.into_uuid(),
+        )
+        .fetch_optional(&mut *tx)
+        .await?
+        .is_some();
+
+        if updated {
+            sqlx::query!(
+                r#"
+                UPDATE notification_delivery_outbox outbox
+                SET completed_at = now(), updated_at = now()
+                WHERE outbox.notification_id = $1
+                  AND outbox.completed_at IS NULL
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM notification_delivery_outbox_intent intent
+                      WHERE intent.notification_id = outbox.notification_id
+                        AND intent.published_at IS NULL
+                  )
+                "#,
+                notification_id,
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        tx.commit().await?;
+        Ok(updated)
+    }
+
+    async fn release_delivery_intent(
+        &self,
+        notification_id: Uuid,
+        position: i32,
+        claim_token: DeliveryClaimToken,
+    ) -> Result<(), Report> {
+        sqlx::query!(
+            r#"
+            UPDATE notification_delivery_outbox_intent
+            SET claim_token = NULL,
+                claim_expires_at = NULL,
+                next_attempt_at = now() + make_interval(
+                    secs => LEAST(300, power(2, LEAST(attempt_count, 8))::integer)
+                ),
+                updated_at = now()
+            WHERE notification_id = $1
+              AND position = $2
+              AND claim_token = $3
+            "#,
+            notification_id,
+            position,
+            claim_token.into_uuid(),
+        )
+        .execute(&self.db)
+        .await?;
+        Ok(())
+    }
+
+    async fn claim_digest_receipt_cleanup(
+        &self,
+        claim_token: DeliveryClaimToken,
+        lease: DeliveryLease,
+        orphan_cleanup_after: DateTime<Utc>,
+    ) -> Result<Option<ClaimedDigestReceiptCleanup>, Report> {
+        let claim_token_uuid = claim_token.into_uuid();
+        let mut tx = self.db.begin().await?;
+
+        // A notification can be deleted while preparation is in flight. The
+        // outbox cascade cancels delivery, while this durable obligation keeps
+        // the Redis receipt until every bounded claimant has stopped.
+        sqlx::query!(
+            r#"
+            UPDATE notification_digest_receipt_cleanup cleanup
+            SET safe_after = $1,
+                updated_at = now()
+            WHERE cleanup.safe_after IS NULL
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM notification_delivery_outbox outbox
+                  WHERE outbox.notification_id = cleanup.notification_id
+                    AND outbox.generation = cleanup.generation
+              )
+            "#,
+            orphan_cleanup_after,
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        let claimed = sqlx::query!(
+            r#"
+            WITH candidate AS (
+                SELECT cleanup.notification_id, cleanup.user_id, cleanup.generation
+                FROM notification_digest_receipt_cleanup cleanup
+                WHERE cleanup.safe_after <= now()
+                  AND (cleanup.claim_expires_at IS NULL OR cleanup.claim_expires_at <= now())
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM notification_delivery_outbox outbox
+                      WHERE outbox.notification_id = cleanup.notification_id
+                        AND outbox.generation = cleanup.generation
+                        AND outbox.prepared_at IS NULL
+                  )
+                ORDER BY cleanup.safe_after, cleanup.created_at, cleanup.notification_id, cleanup.user_id
+                FOR UPDATE OF cleanup SKIP LOCKED
+                LIMIT 1
+            )
+            UPDATE notification_digest_receipt_cleanup cleanup
+            SET claim_token = $1,
+                claim_expires_at = $2,
+                attempt_count = cleanup.attempt_count + 1,
+                updated_at = now()
+            FROM candidate
+            WHERE cleanup.notification_id = candidate.notification_id
+              AND cleanup.user_id = candidate.user_id
+              AND cleanup.generation = candidate.generation
+            RETURNING
+                cleanup.notification_id,
+                cleanup.user_id,
+                cleanup.generation,
+                cleanup.attempt_count,
+                cleanup.created_at AS "created_at!"
+            "#,
+            claim_token_uuid,
+            lease.expires_at,
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
+        tx.commit().await?;
+
+        claimed
+            .map(|claimed| {
+                Ok(ClaimedDigestReceiptCleanup {
+                    notification_id: claimed.notification_id,
+                    generation: claimed.generation,
+                    user_id: MacroUserIdStr::parse_from_str(&claimed.user_id)
+                        .map(CowLike::into_owned)
+                        .map_err(|error| rootcause::report!(error))?,
+                    claim_token,
+                    attempt_count: claimed.attempt_count,
+                    pending_since: claimed.created_at,
+                })
+            })
+            .transpose()
+    }
+
+    async fn complete_digest_receipt_cleanup(
+        &self,
+        notification_id: Uuid,
+        user_id: MacroUserIdStr<'_>,
+        generation: Uuid,
+        claim_token: DeliveryClaimToken,
+    ) -> Result<bool, Report> {
+        let deleted = sqlx::query_scalar!(
+            r#"
+            DELETE FROM notification_digest_receipt_cleanup
+            WHERE notification_id = $1
+              AND user_id = $2
+              AND generation = $3
+              AND claim_token = $4
+              AND claim_expires_at > now()
+            RETURNING notification_id
+            "#,
+            notification_id,
+            user_id.as_ref(),
+            generation,
+            claim_token.into_uuid(),
+        )
+        .fetch_optional(&self.db)
+        .await?
+        .is_some();
+        Ok(deleted)
+    }
+
+    async fn release_digest_receipt_cleanup(
+        &self,
+        notification_id: Uuid,
+        user_id: MacroUserIdStr<'_>,
+        generation: Uuid,
+        claim_token: DeliveryClaimToken,
+    ) -> Result<(), Report> {
+        sqlx::query!(
+            r#"
+            UPDATE notification_digest_receipt_cleanup
+            SET claim_token = NULL,
+                claim_expires_at = NULL,
+                safe_after = now() + make_interval(
+                    secs => LEAST(300, power(2, LEAST(attempt_count, 8))::integer)
+                ),
+                updated_at = now()
+            WHERE notification_id = $1
+              AND user_id = $2
+              AND generation = $3
+              AND claim_token = $4
+            "#,
+            notification_id,
+            user_id.as_ref(),
+            generation,
+            claim_token.into_uuid(),
+        )
+        .execute(&self.db)
+        .await?;
         Ok(())
     }
 }

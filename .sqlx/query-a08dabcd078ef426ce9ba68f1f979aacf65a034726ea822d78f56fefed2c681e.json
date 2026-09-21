@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM notification_digest_receipt_cleanup\n            WHERE notification_id = $1\n              AND user_id = $2\n              AND generation = $3\n              AND claim_token = $4\n              AND claim_expires_at > now()\n            RETURNING notification_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "notification_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a08dabcd078ef426ce9ba68f1f979aacf65a034726ea822d78f56fefed2c681e"
+}

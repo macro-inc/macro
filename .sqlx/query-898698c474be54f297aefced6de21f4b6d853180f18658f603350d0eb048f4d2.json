@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE notification_digest_receipt_cleanup\n            SET claim_token = NULL,\n                claim_expires_at = NULL,\n                safe_after = now() + make_interval(\n                    secs => LEAST(300, power(2, LEAST(attempt_count, 8))::integer)\n                ),\n                updated_at = now()\n            WHERE notification_id = $1\n              AND user_id = $2\n              AND generation = $3\n              AND claim_token = $4\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "898698c474be54f297aefced6de21f4b6d853180f18658f603350d0eb048f4d2"
+}

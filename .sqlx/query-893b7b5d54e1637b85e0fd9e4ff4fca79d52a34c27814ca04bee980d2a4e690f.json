@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH candidate AS (\n                SELECT intent.notification_id, intent.position\n                FROM notification_delivery_outbox_intent intent\n                JOIN notification_delivery_outbox outbox\n                  ON outbox.notification_id = intent.notification_id\n                WHERE intent.published_at IS NULL\n                  AND intent.next_attempt_at <= now()\n                  AND (intent.claim_expires_at IS NULL OR intent.claim_expires_at <= now())\n                  AND outbox.prepared_at IS NOT NULL\n                  AND outbox.completed_at IS NULL\n                  AND ($1::uuid IS NULL OR intent.notification_id = $1)\n                ORDER BY\n                    intent.next_attempt_at,\n                    intent.created_at,\n                    intent.notification_id,\n                    intent.position\n                FOR UPDATE OF intent SKIP LOCKED\n                LIMIT 1\n            )\n            UPDATE notification_delivery_outbox_intent intent\n            SET claim_token = $2,\n                claim_expires_at = $3,\n                attempt_count = intent.attempt_count + 1,\n                updated_at = now()\n            FROM candidate\n            WHERE intent.notification_id = candidate.notification_id\n              AND intent.position = candidate.position\n            RETURNING\n                intent.notification_id,\n                intent.position,\n                intent.payload AS \"payload!: serde_json::Value\",\n                intent.attempt_count,\n                intent.created_at AS \"created_at!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "notification_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "position",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "payload!: serde_json::Value",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "attempt_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "893b7b5d54e1637b85e0fd9e4ff4fca79d52a34c27814ca04bee980d2a4e690f"
+}

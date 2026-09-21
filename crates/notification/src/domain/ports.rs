@@ -16,6 +16,10 @@ use uuid::Uuid;
 use model_entity::Entity;
 use models_pagination::{CreatedAt, Query};
 
+use crate::domain::models::delivery_outbox::{
+    ClaimedDeliveryIntent, ClaimedDeliveryRequest, ClaimedDigestReceiptCleanup, DeliveryClaimToken,
+    DeliveryLease,
+};
 use crate::domain::models::device::DeviceType;
 use crate::domain::models::{NotificationStatusPayload, TaggedContent};
 
@@ -23,7 +27,7 @@ use crate::domain::models::email_notification_digest::ports::{ClaimResult, Diges
 use crate::domain::models::request::NotificationListFilters;
 use crate::domain::models::{
     DeviceEndpoint, DisabledNotificationType, NotificationExtEmail, NotificationIdAndCollapseKey,
-    SendNotificationRequestBuilder, UserNotificationRow, VoipPushTarget,
+    SendNotificationRequest, SendNotificationRequestBuilder, UserNotificationRow, VoipPushTarget,
     android::FCMMessage,
     apple::{APNSPushNotification, VoipPushPayload},
     mobile::MessageAttributes,
@@ -272,6 +276,263 @@ pub trait NotificationRepository: Send + Sync + 'static {
         user_id: MacroUserIdStr<'_>,
         notification_event_type: &str,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Port for durable handoff from notification persistence to channel delivery.
+///
+/// The implementation owns the transaction that creates the notification,
+/// recipient rows, and durable delivery request. Preparation expands that
+/// request into independently claimable channel intents.
+pub trait NotificationDeliveryRepository: Send + Sync + 'static {
+    /// Restore a missing delivery request for an already-persisted notification.
+    ///
+    /// This probe runs before current preference filtering so a retry cannot
+    /// lose the original persisted recipients when mute settings changed after
+    /// the notification commit. Returns those recipients when the notification
+    /// already exists, whether or not its outbox row needed restoration.
+    fn restore_existing_delivery_request<
+        'a,
+        T: Serialize + Send + Sync,
+        U: Serialize + Send + Sync,
+    >(
+        &self,
+        request: &SendNotificationRequest<'a, T, U>,
+    ) -> impl Future<Output = Result<Option<HashSet<MacroUserIdStr<'static>>>, Report>> + Send;
+
+    /// Persist a notification and its delivery request atomically.
+    ///
+    /// A duplicate notification id returns its existing recipient rows and
+    /// ensures a missing outbox request is restored from the retry without
+    /// changing the original recipients.
+    fn persist_notification_with_delivery_request<
+        'a,
+        T: Serialize + DeserializeOwned + Send + Sync,
+        U: Serialize + Send + Sync,
+    >(
+        &self,
+        request: SendNotificationRequest<'a, T, U>,
+        service_sender: &str,
+    ) -> impl Future<Output = Result<Vec<UserNotificationRow<Arc<T>>>, Report>> + Send;
+
+    /// Claim one delivery request that has not yet been expanded into channel intents.
+    fn claim_delivery_request(
+        &self,
+        notification_id: Option<Uuid>,
+        claim_token: DeliveryClaimToken,
+        lease: DeliveryLease,
+    ) -> impl Future<Output = Result<Option<ClaimedDeliveryRequest>, Report>> + Send;
+
+    /// Atomically store the concrete channel payloads and finish request preparation.
+    ///
+    /// Returns `false` when the claim expired or was superseded.
+    fn prepare_delivery_intents(
+        &self,
+        notification_id: Uuid,
+        claim_token: DeliveryClaimToken,
+        payloads: &[serde_json::Value],
+        digest_receipt_cleanup_after: chrono::DateTime<chrono::Utc>,
+    ) -> impl Future<Output = Result<bool, Report>> + Send;
+
+    /// Release a preparation claim after an ordinary failure.
+    fn release_delivery_request(
+        &self,
+        notification_id: Uuid,
+        claim_token: DeliveryClaimToken,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Claim one concrete channel intent that has not been published.
+    fn claim_delivery_intent(
+        &self,
+        notification_id: Option<Uuid>,
+        claim_token: DeliveryClaimToken,
+        lease: DeliveryLease,
+    ) -> impl Future<Output = Result<Option<ClaimedDeliveryIntent>, Report>> + Send;
+
+    /// Mark a channel intent published and complete its parent when none remain.
+    ///
+    /// Returns `false` when the claim expired or was superseded.
+    fn complete_delivery_intent(
+        &self,
+        notification_id: Uuid,
+        position: i32,
+        claim_token: DeliveryClaimToken,
+    ) -> impl Future<Output = Result<bool, Report>> + Send;
+
+    /// Release a channel-intent claim after queue publication fails.
+    fn release_delivery_intent(
+        &self,
+        notification_id: Uuid,
+        position: i32,
+        claim_token: DeliveryClaimToken,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Claim one due external digest-receipt cleanup obligation.
+    ///
+    /// Cleanup rows whose notification was deleted before preparation are
+    /// first scheduled after `orphan_cleanup_after`. This delay gives every
+    /// bounded preparation claimant time to stop before its receipt is removed.
+    fn claim_digest_receipt_cleanup(
+        &self,
+        claim_token: DeliveryClaimToken,
+        lease: DeliveryLease,
+        orphan_cleanup_after: chrono::DateTime<chrono::Utc>,
+    ) -> impl Future<Output = Result<Option<ClaimedDigestReceiptCleanup>, Report>> + Send;
+
+    /// Complete an external digest-receipt cleanup obligation.
+    fn complete_digest_receipt_cleanup(
+        &self,
+        notification_id: Uuid,
+        user_id: MacroUserIdStr<'_>,
+        generation: Uuid,
+        claim_token: DeliveryClaimToken,
+    ) -> impl Future<Output = Result<bool, Report>> + Send;
+
+    /// Release a digest-receipt cleanup claim with retry backoff.
+    fn release_digest_receipt_cleanup(
+        &self,
+        notification_id: Uuid,
+        user_id: MacroUserIdStr<'_>,
+        generation: Uuid,
+        claim_token: DeliveryClaimToken,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+impl<T> NotificationDeliveryRepository for Arc<T>
+where
+    T: NotificationDeliveryRepository,
+{
+    async fn restore_existing_delivery_request<
+        'a,
+        N: Serialize + Send + Sync,
+        U: Serialize + Send + Sync,
+    >(
+        &self,
+        request: &SendNotificationRequest<'a, N, U>,
+    ) -> Result<Option<HashSet<MacroUserIdStr<'static>>>, Report> {
+        self.as_ref()
+            .restore_existing_delivery_request(request)
+            .await
+    }
+
+    async fn persist_notification_with_delivery_request<
+        'a,
+        N: Serialize + DeserializeOwned + Send + Sync,
+        U: Serialize + Send + Sync,
+    >(
+        &self,
+        request: SendNotificationRequest<'a, N, U>,
+        service_sender: &str,
+    ) -> Result<Vec<UserNotificationRow<Arc<N>>>, Report> {
+        self.as_ref()
+            .persist_notification_with_delivery_request(request, service_sender)
+            .await
+    }
+
+    async fn claim_delivery_request(
+        &self,
+        notification_id: Option<Uuid>,
+        claim_token: DeliveryClaimToken,
+        lease: DeliveryLease,
+    ) -> Result<Option<ClaimedDeliveryRequest>, Report> {
+        self.as_ref()
+            .claim_delivery_request(notification_id, claim_token, lease)
+            .await
+    }
+
+    async fn prepare_delivery_intents(
+        &self,
+        notification_id: Uuid,
+        claim_token: DeliveryClaimToken,
+        payloads: &[serde_json::Value],
+        digest_receipt_cleanup_after: chrono::DateTime<chrono::Utc>,
+    ) -> Result<bool, Report> {
+        self.as_ref()
+            .prepare_delivery_intents(
+                notification_id,
+                claim_token,
+                payloads,
+                digest_receipt_cleanup_after,
+            )
+            .await
+    }
+
+    async fn release_delivery_request(
+        &self,
+        notification_id: Uuid,
+        claim_token: DeliveryClaimToken,
+    ) -> Result<(), Report> {
+        self.as_ref()
+            .release_delivery_request(notification_id, claim_token)
+            .await
+    }
+
+    async fn claim_delivery_intent(
+        &self,
+        notification_id: Option<Uuid>,
+        claim_token: DeliveryClaimToken,
+        lease: DeliveryLease,
+    ) -> Result<Option<ClaimedDeliveryIntent>, Report> {
+        self.as_ref()
+            .claim_delivery_intent(notification_id, claim_token, lease)
+            .await
+    }
+
+    async fn complete_delivery_intent(
+        &self,
+        notification_id: Uuid,
+        position: i32,
+        claim_token: DeliveryClaimToken,
+    ) -> Result<bool, Report> {
+        self.as_ref()
+            .complete_delivery_intent(notification_id, position, claim_token)
+            .await
+    }
+
+    async fn release_delivery_intent(
+        &self,
+        notification_id: Uuid,
+        position: i32,
+        claim_token: DeliveryClaimToken,
+    ) -> Result<(), Report> {
+        self.as_ref()
+            .release_delivery_intent(notification_id, position, claim_token)
+            .await
+    }
+
+    async fn claim_digest_receipt_cleanup(
+        &self,
+        claim_token: DeliveryClaimToken,
+        lease: DeliveryLease,
+        orphan_cleanup_after: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Option<ClaimedDigestReceiptCleanup>, Report> {
+        self.as_ref()
+            .claim_digest_receipt_cleanup(claim_token, lease, orphan_cleanup_after)
+            .await
+    }
+
+    async fn complete_digest_receipt_cleanup(
+        &self,
+        notification_id: Uuid,
+        user_id: MacroUserIdStr<'_>,
+        generation: Uuid,
+        claim_token: DeliveryClaimToken,
+    ) -> Result<bool, Report> {
+        self.as_ref()
+            .complete_digest_receipt_cleanup(notification_id, user_id, generation, claim_token)
+            .await
+    }
+
+    async fn release_digest_receipt_cleanup(
+        &self,
+        notification_id: Uuid,
+        user_id: MacroUserIdStr<'_>,
+        generation: Uuid,
+        claim_token: DeliveryClaimToken,
+    ) -> Result<(), Report> {
+        self.as_ref()
+            .release_digest_receipt_cleanup(notification_id, user_id, generation, claim_token)
+            .await
+    }
 }
 
 /// Port for receiving realtime notification database events.
