@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use crate::domain::content::DocumentContent;
 use crate::domain::events::InteractionReason;
 use crate::domain::models::{
-    CommentThread, CreateDocumentRepoArgs, CreateTaskRequest, DocumentError,
+    CreateDocumentRepoArgs, CreateTaskRequest, DocumentError,
     DocumentTeamShareResponse, EditDocumentServiceArgs, GithubPullRequestsResponse,
     ImportEmailAttachmentRepoArgs, LocationQueryParams, TaskBranchName,
 };
@@ -117,7 +117,7 @@ impl DocumentService for FakeDocumentService {
     async fn get_document_comments(
         &self,
         _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<Vec<CommentThread>, DocumentError> {
+    ) -> Result<Vec<messages::domain::models::MessageThread>, DocumentError> {
         panic!("unexpected get_document_comments call")
     }
 

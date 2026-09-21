@@ -44,6 +44,7 @@ entity_access = { path = "../entity_access" }
 entity_access_management = { path = "../entity_access_management" }
 foreign_entity = { path = "../foreign_entity" }
 frecency = { path = "../frecency" }
+messages = { path = "../messages", features = ["outbound"] }
 lexical_client = { path = "../lexical_client" }
 macro_aws_config = { path = "../macro_aws_config" }
 notification = { path = "../notification", features = ["ai_tool"] }

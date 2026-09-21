@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::api::context::AuthorizationService;
+use crate::api::context::DssAnnotationService;
 use crate::service::conn_gateway::update_live_comment_state;
 use axum::{
     Json,
@@ -10,7 +11,6 @@ use axum::{
 };
 use connection_gateway_client::ConnectionGatewayClient;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use macro_db_client::annotations::edit_anchor::edit_document_anchor;
 use model::{
     annotations::{
         AnnotationIncrementalUpdate,
@@ -18,9 +18,6 @@ use model::{
     },
     response::ErrorResponse,
 };
-use sqlx::PgPool;
-
-use super::comment_error_response;
 
 /// Edits a single anchor for a document
 #[utoipa::path(
@@ -36,13 +33,24 @@ use super::comment_error_response;
     )]
 #[axum::debug_handler(state = crate::api::context::ApiContext)]
 pub async fn edit_anchor_handler(
-    State(db): State<PgPool>,
+    State(service): State<Arc<DssAnnotationService>>,
     State(conn_gateway_client): State<Arc<ConnectionGatewayClient>>,
     user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Json(req): Json<EditAnchorRequest>,
 ) -> Result<Response, Response> {
     let user_id = user.authorization.user.macro_user_id.as_ref();
-    match edit_document_anchor(&db, user_id, req).await {
+    match service
+        .edit(
+            &user.authorization.user.macro_user_id,
+            user.authorization
+                .user
+                .user_context
+                .organization_id
+                .map(i64::from),
+            req,
+        )
+        .await
+    {
         Ok(res) => {
             let response: EditAnchorResponse = res;
             let document_id = response.document_id.as_str();
@@ -58,6 +66,6 @@ pub async fn edit_anchor_handler(
             .await;
             Ok((StatusCode::OK, Json(response)).into_response())
         }
-        Err(e) => comment_error_response(e, "Error editing anchor"),
+        Err(e) => Err(messages::inbound::axum_router::MessageHttpError::from(e).into_response()),
     }
 }

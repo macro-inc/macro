@@ -404,6 +404,22 @@ pub(crate) type DssChannelBotWebhookState =
 pub(crate) type DssMessagesState =
     messages::inbound::axum_router::MessagesRouterState<EntityAccessService, AuthorizationService>;
 
+/// Document discussion delivery shared by the message service and PDF annotation edits.
+pub(crate) type DssDiscussionDelivery = messages::domain::delivery::DiscussionDelivery<
+    messages::outbound::pg_discussion_context::PgDiscussionContext,
+    messages::outbound::entity_access_audience::EntityAccessMessageAudience<EntityAccessService>,
+    messages::outbound::connection_gateway::ConnectionGatewayMessages,
+    messages::outbound::notification_sender::MessageNotificationSender<NotificationIngressType>,
+    messages::outbound::pg_discussion_context::PgDiscussionContext,
+>;
+
+/// PDF annotation geometry edits and deletes authorized through document access.
+pub(crate) type DssAnnotationService = messages::domain::annotations::AnnotationService<
+    macro_db_client::annotations::repository::PgAnnotationRepository,
+    EntityAccessService,
+    DssDiscussionDelivery,
+>;
+
 /// Type alias for the call connection service.
 pub(crate) type CallConnectionService =
     ConnectionServiceImpl<EntityAccessService, ConnectionGatewayImpl>;
@@ -598,6 +614,7 @@ pub(crate) struct ApiContext {
     pub projects_state: ProjectsState,
     pub channels_state: DssChannelsState,
     pub messages_state: DssMessagesState,
+    pub annotation_service: Arc<DssAnnotationService>,
     /// Shared channel service, for calling channel domain operations outside
     /// the channels router (starter-doc seeding records mention backlinks).
     pub channel_service: Arc<DssChannelService>,

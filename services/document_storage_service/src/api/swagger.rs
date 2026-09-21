@@ -153,14 +153,10 @@ use utoipa::OpenApi;
         calendar_events::inbound::axum_router::list_team_out_of_office,
 
         // annotations
-        annotations::get::get_document_comments_handler,
         annotations::get::get_document_anchors_handler,
         annotations::delete_anchor::delete_anchor_handler,
-        annotations::delete_comment::delete_comment_handler,
-        annotations::edit_comment::edit_comment_handler,
         annotations::edit_anchor::edit_anchor_handler,
         annotations::create_anchor::create_anchor_handler,
-        annotations::create_comment::create_comment_handler,
 
         // documents
         documents::get_user_documents::get_user_documents_handler,

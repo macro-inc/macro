@@ -2,8 +2,9 @@
 
 Moves the historical document comments in `"Comment"` / `"Thread"` into the
 shared message store (`comms_messages`, `comms_message_threads`) while the
-application keeps running. Nothing is dropped; the legacy tables and endpoints
-go away in the last PR of the channel and comment unification stack.
+application keeps running. Nothing is dropped here; the legacy tables go away
+in the schema-drop migration that follows the contract PR of the channel and
+comment unification stack.
 
 ## Operating model
 
@@ -16,34 +17,37 @@ projection differs. That gives three properties operators rely on:
   comment and thread gets one UUIDv7 in `migrated_comment_id` /
   `migrated_comment_thread_id` on its first sighting and keeps it.
 - **Delta-aware.** Comments created, edited, or deleted (soft or hard) through
-  the legacy endpoints after a run are picked up by the next run. New comments
-  get mappings; changed ones are compared by text, timestamps, and deletion.
+  the legacy endpoints before they were removed are picked up by the next run.
+  New comments get mappings; changed ones are compared by text, timestamps, and
+  deletion.
 - **Live.** Work happens in one transaction per batch of documents (250 by
   default). Each batch takes a `SHARE ROW EXCLUSIVE` lock on `"Comment"` and
-  `"Thread"` for the duration of that transaction, so legacy comment writes
-  wait for at most one batch; they are never rejected. Reads are unaffected.
-  The lock waits at most five seconds for in-flight writers and the batch is
-  retried. Nothing takes `ACCESS EXCLUSIVE`.
+  `"Thread"` for the duration of that transaction. Nothing writes those tables
+  any more, so the lock only guards against a second importer; it waits at
+  most five seconds and the batch is retried. Nothing takes `ACCESS EXCLUSIVE`.
 
 Two runs cannot overlap: a session advisory lock makes the second exit with
 `Another comment import is running`.
 
 ### Sequence
 
-1. Run the importer as often as you like while legacy writes continue.
-   Each run reports what it wrote and what it could not represent.
-2. Before enabling the new document discussion UI, freeze legacy comment
-   writes: set `LEGACY_COMMENT_WRITES_ENABLED=false` on the document storage
-   service (Doppler project `cloud-storage-service`) and roll it out. Comment
-   create, edit, and delete and anchor delete then answer `503` with
-   `Document comments are read-only while they move to the new message store. Refresh the app in a few minutes and try again.`.
-   Reads, highlight creation, and anchor edits keep working.
-3. Run the importer once more. It must end with `Nothing to import` on a
-   second invocation.
-4. Enable the new UI. Do not run the importer again after that unless legacy
-   writes are frozen; an edit made through the new API is never reverted by a
-   stale legacy row (newer `updated_at` wins), but a legacy write and a new
-   store write on the same thread while both are live is a race.
+The legacy comment endpoints (`/annotations/comments/*`) and the
+`LEGACY_COMMENT_WRITES_ENABLED` switch are gone: the document storage service
+no longer writes `"Comment"` or `"Thread"`. The remaining job of the importer is
+to move whatever those tables still hold before the schema-drop migration
+removes them.
+
+1. Deploy the contract release. From then on the legacy tables are frozen by
+   construction; the new document discussion UI is the only writer and it
+   writes the message store.
+2. Run the importer. Repeat until a run prints `Nothing to import`; the second
+   consecutive run must do so.
+3. Run `--check` and confirm zero unmapped comments and threads.
+4. Ship the schema-drop migration. The mapping tables
+   (`migrated_comment_id`, `migrated_comment_thread_id`) stay for auditing.
+
+An edit made through the new API is never reverted by a stale legacy row
+(newer `updated_at` wins), so running the importer after the deploy is safe.
 
 ## Running it
 
@@ -85,7 +89,8 @@ comments are only detected by a real run.
   not UUIDs land unanchored. Threads with no comments are marked deleted, so
   the new UI never shows an empty "This message was deleted." discussion.
 - `"PdfPlaceableCommentAnchor".root_id` / `"PdfHighlightAnchor".root_id` from
-  the thread mapping; the legacy `"threadId"` stays until the contract PR.
+  the thread mapping; the legacy `"threadId"` column stays until the
+  schema-drop migration.
 - `notification.metadata` `commentId` / `threadId` for
   `commented_on_document`, `replied_to_document_comment_thread`, and
   `mentioned_in_document_comment` rows on the batch's documents.

@@ -1,22 +1,9 @@
-use document_sub_type::DocumentSubType;
-use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::annotations::Mentions;
-
-use super::{Anchor, Comment};
-
-#[derive(Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct EditCommentRequest {
-    pub text: Option<String>,
-    pub metadata: Option<Value>,
-    pub mentions: Option<Mentions>,
-    pub thread_id: i64,
-}
+use super::Anchor;
 
 #[derive(Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -48,20 +35,6 @@ pub enum EditPdfAnchorRequest {
 #[serde(rename_all = "kebab-case")]
 pub enum EditAnchorRequest {
     Pdf(EditPdfAnchorRequest),
-}
-
-#[derive(Serialize, ToSchema, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct EditCommentResponse {
-    pub document_id: String,
-    pub document_name: String,
-    pub file_type: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub sub_type: Option<DocumentSubType>,
-    #[schema(value_type = String)]
-    pub document_owner: MacroUserIdStr<'static>,
-    #[serde(flatten)]
-    pub comment: Comment,
 }
 
 #[derive(Serialize, ToSchema, Debug)]

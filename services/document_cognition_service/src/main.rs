@@ -318,7 +318,13 @@ async fn main() -> anyhow::Result<()> {
         ),
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
         macro_event_broker.clone(),
-    );
+    )
+    .with_discussions(std::sync::Arc::new(
+        messages::domain::service::MessageService::new(
+            messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone()),
+            messages::domain::ports::NoMessageEventPublisher,
+        ),
+    ));
     let lexical_client_for_tools = (*lexical_client).clone();
     let document_tool_context = DocumentToolContext::new(
         document_service,

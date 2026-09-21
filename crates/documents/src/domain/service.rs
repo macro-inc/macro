@@ -36,6 +36,10 @@ use foreign_entity::domain::models::{ForeignEntity, SourceId};
 use foreign_entity::domain::ports::ForeignEntityService;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::api::MessageReader;
+use messages::domain::models::MessageThread;
+use messages::domain::ports::{MessageDirection, MessageTimelineQuery};
+use messages::domain::service::MessageView;
 use model::document::response::{DocumentResponseMetadata, LocationResponseData};
 use model::document::{
     ContentType, DocumentBasic, DocumentMetadata, FileAssociation, FileType, FileTypeExt,
@@ -60,7 +64,7 @@ use super::events::{
     DocumentInteractionMetadata, DocumentMacroEvent, DocumentUpdatedMetadata, InteractionReason,
 };
 use super::models::{
-    CloudFrontConfig, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
+    CloudFrontConfig, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
     CreateTaskRequest, DocumentError, DocumentTeamShareResponse, EditDocumentRepoArgs,
     EditDocumentServiceArgs, EmailImportRepoOutcome, FileTypeUpdate, GithubPullRequest,
     GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs, LocationQueryParams, TaskBranchName,
@@ -106,6 +110,8 @@ pub struct DocumentServiceImpl<
     pub foreign_entity_service: F,
     /// Macro event broker for publishing document lifecycle events
     pub macro_event_broker: B,
+    /// Document discussions, read under the caller's document view receipt.
+    pub discussions: Option<std::sync::Arc<dyn MessageReader>>,
 }
 
 /// Blank native spreadsheets have no object upload; importing workbook bytes is
@@ -343,7 +349,14 @@ impl<
             entity_access_management_service,
             foreign_entity_service,
             macro_event_broker,
+            discussions: None,
         }
+    }
+
+    /// Serve document comments from the shared message domain.
+    pub fn with_discussions(mut self, discussions: std::sync::Arc<dyn MessageReader>) -> Self {
+        self.discussions = Some(discussions);
+        self
     }
 
     async fn authorize_document_team_share(
@@ -1149,11 +1162,57 @@ impl<
     async fn get_document_comments(
         &self,
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<Vec<CommentThread>, DocumentError> {
-        self.repo
-            .get_document_comments(&entity_access_receipt.entity().entity_id)
-            .await
-            .map_err(|e| DocumentError::Internal(e.into()))
+    ) -> Result<Vec<MessageThread>, DocumentError> {
+        let discussions = self
+            .discussions
+            .as_ref()
+            .ok_or_else(|| DocumentError::Internal(anyhow!("document discussions not configured")))?;
+        let access = entity_access_receipt
+            .try_into_requirement::<MessageView>()
+            .map_err(|_| DocumentError::Unauthorized)?;
+        let message_error = |error: messages::domain::ports::MessageError| match error {
+            messages::domain::ports::MessageError::Forbidden => DocumentError::Unauthorized,
+            messages::domain::ports::MessageError::NotFound => {
+                DocumentError::NotFound(access.entity().entity_id.clone())
+            }
+            other => DocumentError::Internal(other.into()),
+        };
+        let mut threads = Vec::new();
+        let mut cursor = None;
+        loop {
+            let page = discussions
+                .timeline(
+                    access.clone(),
+                    MessageTimelineQuery {
+                        cursor,
+                        direction: MessageDirection::Older,
+                        limit: Some(100),
+                        ..MessageTimelineQuery::default()
+                    },
+                )
+                .await
+                .map_err(message_error)?;
+            for item in page.items {
+                let thread = if item.thread.reply_count > item.thread.preview.len() as i64 {
+                    discussions
+                        .get_thread(access.clone(), item.message.id)
+                        .await
+                        .map_err(message_error)?
+                } else {
+                    MessageThread {
+                        state: item.state,
+                        root: item.message,
+                        replies: item.thread.preview,
+                    }
+                };
+                threads.push(thread);
+            }
+            match page.next_cursor {
+                Some(next) => cursor = Some(next),
+                None => break,
+            }
+        }
+        Ok(threads)
     }
 
     #[tracing::instrument(err, skip(self))]

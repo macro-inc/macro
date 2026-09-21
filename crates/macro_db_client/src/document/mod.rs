@@ -24,7 +24,7 @@ pub use get_document_process_result::{
 pub use get_document_views::{get_document_view_count, get_document_views};
 pub use get_user_documents::{get_user_document_ids, get_user_documents};
 pub use list_documents_with_access::list_documents_with_access;
-pub use save_document::{insert_bom_parts, save_document, try_insert_comment_data};
+pub use save_document::{insert_bom_parts, save_document};
 pub mod build_pdf_modification_data;
 pub mod create_blank_docx;
 pub mod document_email;

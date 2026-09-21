@@ -155,7 +155,11 @@ pub async fn build_tool_service_context(
             entity_access_management::outbound::PgRepository::new(pool.clone()),
         ),
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(pool.clone())),
-    );
+    )
+    .with_discussions(Arc::new(messages::domain::service::MessageService::new(
+        messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone()),
+        messages::domain::ports::NoMessageEventPublisher,
+    )));
     let document_tool_context = DocumentToolContext::new(
         document_service,
         (*entity_access_service).clone(),

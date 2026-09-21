@@ -32,6 +32,7 @@ connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 crm = { path = "../../crates/crm" }
 database_env_vars = { path = "../../crates/database_env_vars" }
 documents = { path = "../../crates/documents", features = ["ai_tools"] }
+messages = { path = "../../crates/messages", features = ["outbound"] }
 doppler-config = { workspace = true }
 email = { path = "../../crates/email", features = ["outbound"] }
 email_service_client = { path = "../../crates/email_service_client" }

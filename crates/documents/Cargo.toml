@@ -117,6 +117,7 @@ macro_service_urls = { path = "../macro_service_urls", optional = true }
 macro_sync_service_jwt = { path = "../macro_sync_service_jwt" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
+messages = { path = "../messages", features = ["json-schema", "ports"] }
 system_skills = { path = "../system_skills" }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }

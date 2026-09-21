@@ -295,6 +295,10 @@ pub async fn build_tool_service_context_from_env(
             pool.clone(),
         )),
         macro_event_broker: macro_event_broker.clone(),
+        discussions: Some(Arc::new(messages::domain::service::MessageService::new(
+            messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone()),
+            messages::domain::ports::NoMessageEventPublisher,
+        ))),
     };
 
     let document_tool_context = DocumentToolContext::new(

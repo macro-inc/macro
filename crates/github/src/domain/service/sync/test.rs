@@ -283,7 +283,7 @@ impl DocumentService for StubDocumentService {
     async fn get_document_comments(
         &self,
         _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<Vec<documents::domain::models::CommentThread>, DocumentError> {
+    ) -> Result<Vec<messages::domain::models::MessageThread>, DocumentError> {
         unimplemented!()
     }
 

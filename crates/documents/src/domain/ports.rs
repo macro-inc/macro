@@ -17,6 +17,7 @@ use entity_access::domain::models::{
 };
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::models::MessageThread;
 use model::document::{ContentType, DocumentBasic, DocumentMetadata, FileType};
 use models_permissions::share_permission::team_share::{
     AuthorizedTeamShareCommand, TeamShareFacts,
@@ -36,7 +37,7 @@ use model_entity::Entity;
 use activity::Attribution;
 
 use super::models::{
-    BranchNameContext, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
+    BranchNameContext, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
     CreateTaskRequest, DocumentError, DocumentTeamShare, DocumentTeamShareResponse,
     EditDocumentRepoArgs, EditDocumentServiceArgs, EmailImportRepoOutcome,
     GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs, LocationQueryParams, TaskBranchName,
@@ -130,12 +131,6 @@ pub trait DocumentRepo: Send + Sync + 'static {
         &self,
         document_id: &str,
     ) -> impl Future<Output = Result<String, Self::Err>> + Send;
-
-    /// Get all comment threads (with their comments) attached to a document.
-    fn get_document_comments(
-        &self,
-        document_id: &str,
-    ) -> impl Future<Output = Result<Vec<CommentThread>, Self::Err>> + Send;
 
     /// Create a new document with all associated records in a single transaction.
     ///
@@ -468,11 +463,11 @@ pub trait DocumentService: Send + Sync + 'static {
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<String, DocumentError>> + Send;
 
-    /// Get all comment threads (with their comments) for a document.
+    /// Get every live discussion on a document with its ordered replies.
     fn get_document_comments(
         &self,
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> impl Future<Output = Result<Vec<CommentThread>, DocumentError>> + Send;
+    ) -> impl Future<Output = Result<Vec<MessageThread>, DocumentError>> + Send;
 
     /// Create a new document, generate an S3 presigned upload URL, and
     /// optionally attach task properties and update project modified.

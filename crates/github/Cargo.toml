@@ -95,6 +95,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 document_sub_type = { path = "../document_sub_type" }
+messages = { path = "../messages", default-features = false }
 http-body-util = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 mockall = { workspace = true }

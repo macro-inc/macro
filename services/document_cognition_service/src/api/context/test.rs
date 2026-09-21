@@ -274,7 +274,13 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ),
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(pool.clone())),
         macro_event_broker.clone(),
-    );
+    )
+    .with_discussions(std::sync::Arc::new(
+        messages::domain::service::MessageService::new(
+            messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone()),
+            messages::domain::ports::NoMessageEventPublisher,
+        ),
+    ));
     let test_lexical_client = LexicalClient::new("test".into(), "http://nofileshere".into());
     let test_editing_client =
         documents::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(

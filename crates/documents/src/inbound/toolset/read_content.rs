@@ -4,7 +4,7 @@ use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use std::str::FromStr;
 
 use crate::domain::{
-    models::{CommentThread, LocationQueryParams},
+    models::LocationQueryParams,
     ports::{DocumentService, create::DocumentCreationService, editing::EditingWorkerService},
     response::LocationResponseV3,
 };
@@ -14,6 +14,7 @@ use entity_access::domain::{
     models::{EntityAccessReceipt, EntityType, ViewAccessLevel},
     ports::EntityAccessService,
 };
+use messages::domain::models::MessageThread;
 use model::document::DocumentBasic;
 use model_file_type::{FileAssociation, FileType};
 use schemars::JsonSchema;
@@ -78,8 +79,8 @@ pub enum Content {
 pub struct ReadContentResponse {
     /// The content of the document
     pub content: Content,
-    /// Any comments on the document
-    pub comments: Vec<CommentThread>,
+    /// Live discussions on the document, each with its ordered replies
+    pub comments: Vec<MessageThread>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema, Clone, Default)]
