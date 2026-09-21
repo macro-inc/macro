@@ -4,6 +4,7 @@ use chrono::{DateTime, Utc};
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroProjectsTopic;
 use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::Owner;
 use serde::{Deserialize, Serialize};
 
 /// Metadata for [`ProjectTopicEvent::Created`].
@@ -12,7 +13,7 @@ pub struct ProjectCreatedMetadata {
     /// The id of the created project.
     pub project_id: String,
     /// The owner and creator of the project.
-    pub owner: MacroUserIdStr<'static>,
+    pub owner: Owner,
     /// The project name.
     pub name: String,
     /// The parent project id, when the project has a parent.
@@ -27,7 +28,7 @@ pub struct ProjectUpdatedMetadata {
     /// The id of the updated project.
     pub project_id: String,
     /// The owner of the project.
-    pub owner: MacroUserIdStr<'static>,
+    pub owner: Owner,
     /// The authenticated user who performed the update, if any.
     pub actor_user_id: Option<MacroUserIdStr<'static>>,
     /// The new project name, or `None` when unchanged.
@@ -46,7 +47,7 @@ pub struct ProjectDeletedMetadata {
     /// The id of the root project that was deleted.
     pub project_id: String,
     /// The owner of the root project.
-    pub owner: MacroUserIdStr<'static>,
+    pub owner: Owner,
     /// The authenticated user who performed the deletion, if any.
     pub actor_user_id: Option<MacroUserIdStr<'static>>,
     /// The parent of the root project, when any.
@@ -65,7 +66,7 @@ pub struct ProjectRestoredMetadata {
     /// The id of the root project that was restored.
     pub project_id: String,
     /// The owner of the root project.
-    pub owner: MacroUserIdStr<'static>,
+    pub owner: Owner,
     /// The authenticated user who performed the restoration, if any.
     pub actor_user_id: Option<MacroUserIdStr<'static>>,
     /// The parent under which the root project was restored, when any.
@@ -80,7 +81,7 @@ pub struct ProjectPermanentlyDeletedMetadata {
     /// The id of the root project that was permanently deleted.
     pub project_id: String,
     /// The owner of the root project.
-    pub owner: MacroUserIdStr<'static>,
+    pub owner: Owner,
     /// The authenticated user who performed the deletion, if any.
     pub actor_user_id: Option<MacroUserIdStr<'static>>,
     /// The parent of the root project, when any.
@@ -99,7 +100,7 @@ pub struct ProjectUploadedMetadata {
     /// The id of the root project in the uploaded tree.
     pub root_project_id: String,
     /// The owner of the uploaded tree.
-    pub owner: MacroUserIdStr<'static>,
+    pub owner: Owner,
     /// The name of the root project.
     pub name: String,
     /// The parent of the root project, when any.

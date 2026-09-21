@@ -12,6 +12,7 @@ delivery = [
   "dep:connection_gateway_client",
   "dep:model-entity",
   "dep:model_notifications",
+  "dep:model_owner",
   "dep:notification",
   "dep:system_properties",
   "outbound",
@@ -48,6 +49,7 @@ mockall = { workspace = true, optional = true }
 model = { path = "../model", optional = true }
 model-entity = { path = "../model-entity", optional = true }
 model_notifications = { path = "../model_notifications", optional = true }
+model_owner = { path = "../model_owner", optional = true }
 models_pagination = { path = "../models_pagination" }
 notification = { path = "../notification", optional = true }
 rootcause = { workspace = true, optional = true }

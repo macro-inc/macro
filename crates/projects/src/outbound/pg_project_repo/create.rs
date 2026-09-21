@@ -13,8 +13,7 @@ pub(super) async fn create_project(
     transaction: &mut Transaction<'_, Postgres>,
     args: &CreateProjectArgs,
 ) -> Result<Project, sqlx::Error> {
-    let project = sqlx::query_as!(
-        Project,
+    let row = sqlx::query!(
         r#"
         INSERT INTO "Project" (name, "userId", "parentId", "createdAt", "updatedAt")
         VALUES ($1, $2, $3, NOW(), NOW())
@@ -33,6 +32,15 @@ pub(super) async fn create_project(
     )
     .fetch_one(transaction.as_mut())
     .await?;
+    let project = super::map_project(
+        row.id,
+        row.name,
+        row.user_id,
+        row.parent_id,
+        row.created_at,
+        row.updated_at,
+        row.deleted_at,
+    )?;
 
     share::create_project_share_permission(transaction, &project.id, &args.share_permission)
         .await?;

@@ -22,7 +22,6 @@ outbound = [
   "dep:entity_access_db_utils",
   "dep:entity_registry_db_utils",
   "dep:macro_uuid",
-  "dep:model_owner",
   "dep:share_permission_db_utils",
   "dep:sqlx",
   "ports",
@@ -50,7 +49,7 @@ macro_user_id = { path = "../macro_user_id" }
 model = { path = "../model" }
 non_empty = { path = "../non_empty" }
 model-entity = { path = "../model-entity" }
-model_owner = { path = "../model_owner", optional = true }
+model_owner = { path = "../model_owner" }
 models_entity_access_management = { path = "../models_entity_access_management", default-features = false }
 models_permissions = { path = "../models_permissions" }
 rootcause = { workspace = true }

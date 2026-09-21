@@ -1,6 +1,7 @@
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::cowlike::CowLike;
 use model_entity::EntityType;
+use model_owner::Owner;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::{
     UpdateChannelSharePermission, UpdateOperation,
@@ -730,7 +731,10 @@ async fn test_get_document_metadata(pool: Pool<Postgres>) {
         .unwrap();
     assert_eq!(metadata.document_id, "d0000000-0000-0000-0000-000000000001");
     assert_eq!(metadata.document_name, "test_document_name");
-    assert_eq!(metadata.owner.as_ref(), "macro|user@user.com");
+    assert_eq!(
+        metadata.owner,
+        Owner::from_principal_str("macro|user@user.com").unwrap()
+    );
     assert_eq!(metadata.document_version_id, 1);
     assert_eq!(metadata.file_type, Some("txt".to_string()));
 
@@ -752,12 +756,72 @@ async fn test_get_basic_document(pool: Pool<Postgres>) {
         .unwrap();
     assert_eq!(basic.document_id, "d0000000-0000-0000-0000-000000000001");
     assert_eq!(basic.document_name, "test_document_name");
-    assert_eq!(basic.owner.as_ref(), "macro|user@user.com");
+    assert_eq!(
+        basic.owner,
+        Owner::from_principal_str("macro|user@user.com").unwrap()
+    );
     assert_eq!(basic.file_type, Some("txt".to_string()));
 
     // Not found
     let result = repo.get_basic_document("nonexistent").await;
     assert!(result.is_err());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn get_document_metadata_and_basic_document_decode_bot_and_team_owners(pool: Pool<Postgres>) {
+    const BOT_OWNER: &str = "bot|00000000-0000-0000-0000-00000000a1a1";
+    const TEAM_OWNER: &str = "00000000-0000-0000-0000-00000000a2a2";
+
+    sqlx::query(
+        r#"
+        INSERT INTO "User" (id, email, macro_user_id)
+        VALUES ($1, $2, $3), ($4, $5, $6)
+        ON CONFLICT (id) DO NOTHING
+        "#,
+    )
+    .bind(BOT_OWNER)
+    .bind("bot-owner-fixture@example.com")
+    .bind(uuid::Uuid::parse_str("a1111111-1111-1111-1111-111111111111").unwrap())
+    .bind(TEAM_OWNER)
+    .bind("team-owner-fixture@example.com")
+    .bind(uuid::Uuid::parse_str("a2222222-2222-2222-2222-222222222222").unwrap())
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query(r#"UPDATE "Document" SET owner = $1 WHERE id = $2"#)
+        .bind(BOT_OWNER)
+        .bind(TEST_DOCUMENT_ID)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let repo = PgDocumentRepo::new(pool.clone());
+    let metadata = repo.get_document_metadata(TEST_DOCUMENT_ID).await.unwrap();
+    assert_eq!(
+        metadata.owner,
+        Owner::from_principal_str(BOT_OWNER).unwrap()
+    );
+    let basic = repo.get_basic_document(TEST_DOCUMENT_ID).await.unwrap();
+    assert_eq!(basic.owner, Owner::from_principal_str(BOT_OWNER).unwrap());
+
+    sqlx::query(r#"UPDATE "Document" SET owner = $1 WHERE id = $2"#)
+        .bind(TEAM_OWNER)
+        .bind(TEST_DOCUMENT_ID)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let metadata = repo.get_document_metadata(TEST_DOCUMENT_ID).await.unwrap();
+    assert_eq!(
+        metadata.owner,
+        Owner::from_principal_str(TEAM_OWNER).unwrap()
+    );
+    let basic = repo.get_basic_document(TEST_DOCUMENT_ID).await.unwrap();
+    assert_eq!(basic.owner, Owner::from_principal_str(TEAM_OWNER).unwrap());
 }
 
 #[sqlx::test(

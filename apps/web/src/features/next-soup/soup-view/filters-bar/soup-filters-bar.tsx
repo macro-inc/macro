@@ -9,7 +9,6 @@ import {
   CompanyViewsMenu,
 } from '@app/features/next-soup/soup-view/views/companies/CompanyViewsMenu';
 import { CollapsibleToolbarItem } from '@components/app/split-layout/components/CollapsibleItem';
-import { PreviewButton } from '@components/app/split-layout/components/PreviewButton';
 import {
   SplitToolbarLeft,
   SplitToolbarRight,
@@ -18,12 +17,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createMemo, createSignal, Show } from 'solid-js';
 
-export function SoupFiltersBar(props: {
-  variant?: 'default' | 'tag';
-  hasPreviewItems: boolean;
-  onPreviewEngage: () => void;
-  onPreviewOpenChange?: (open: boolean) => void;
-}) {
+export function SoupFiltersBar(props: { variant?: 'default' | 'tag' }) {
   const { resetToTabDefaults, consolidatedFiltersList } =
     useFilterRefinements();
 
@@ -95,17 +89,6 @@ export function SoupFiltersBar(props: {
             {(isCollapsed) => <CompanyViewsMenu hideLabel={isCollapsed()} />}
           </CollapsibleToolbarItem>
         </Show>
-        <CollapsibleToolbarItem id="soup-toolbar-preview" priority={3}>
-          {(isCollapsed) => (
-            <PreviewButton
-              disabled={!props.hasPreviewItems}
-              disabledLabel="No items to preview"
-              onEngage={props.onPreviewEngage}
-              onOpenChange={props.onPreviewOpenChange}
-              hideLabel={isCollapsed()}
-            />
-          )}
-        </CollapsibleToolbarItem>
       </SplitToolbarRight>
       {/* Active filters bar - shown below the toolbar when there are filters */}
       <Show when={!isSearchView() && !isTagView()}>

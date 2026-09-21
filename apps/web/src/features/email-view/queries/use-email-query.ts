@@ -97,6 +97,8 @@ export function useEmailDataSource(
   const query = useSoupAstItemsQuery(queryArgs, () => ({
     enabled: facetsReady(),
   }));
+  const isListPending = () =>
+    !facetsReady() || query.isLoading || query.isPlaceholderData;
 
   const selectEmails = (entities: EntityData[]): EmailEntity[] => {
     const context = queryContext();
@@ -122,8 +124,14 @@ export function useEmailDataSource(
   });
 
   const rawEntities = createMemo<EntityData[]>((previous) => {
+    // Disabled searches can retain placeholder data for the previous facets.
+    if (!facetsReady()) return [];
+
     if (!search.isSearching()) {
-      if (query.isLoading) return previous;
+      // Previous-tab/inbox rows are not valid results for the new query.
+      // REST placeholders need the same treatment as pending GraphQL reads.
+      // Background refreshes still retain usable current-query cache results.
+      if (isListPending()) return [];
 
       return query.data?.entities ?? [];
     }
@@ -200,7 +208,7 @@ export function useEmailDataSource(
 
   const hasMore = () => {
     if (usesServiceSearch()) return search.hasNextPage();
-    return query.hasNextPage;
+    return !isListPending() && query.hasNextPage;
   };
 
   const isLoadingMore = () => {
@@ -228,9 +236,10 @@ export function useEmailDataSource(
   });
 
   const isLoading = () => {
+    if (!facetsReady()) return true;
     if (!search.isSearching()) {
       // A query held back for the tag sets is loading, not empty.
-      return (query.isLoading || !facetsReady()) && rawEntities().length === 0;
+      return isListPending();
     }
     if (entities().items.length > 0) return false;
     if (usesServiceSearch()) return search.isLoading();

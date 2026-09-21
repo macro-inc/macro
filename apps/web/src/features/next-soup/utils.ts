@@ -1,7 +1,11 @@
 import { isListViewID } from '@app/constants/list-views';
 import { URL_PARAMS as EMAIL_PARAMS } from '@app/features/email-thread/core/location';
 import { withListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
-import { scopeChannelNotificationsForEntity } from '@app/features/soup/entity-notifications';
+import {
+  type EntityWithRawNotifications,
+  getEntityNotifications,
+  scopeChannelNotificationsForEntity,
+} from '@app/features/soup/entity-notifications';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { createCalendarBlockRange } from '@block-calendar/calendar-range';
 import {
@@ -22,7 +26,6 @@ import type {
   SplitContent,
   SplitHandle,
 } from '@components/app/split-layout/layoutManager';
-import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import {
   enableCalendarUi,
@@ -48,7 +51,6 @@ import {
   type EntityData,
   emailQueryKeyExcludesDone,
   getSnippetHit,
-  isChannelEntity,
   isEmailEntity,
   isGithubPrEntity,
   isHitSnippetEntity,
@@ -100,7 +102,6 @@ import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-qu
 import { emailClient } from '@service-email/client';
 import { isAfter } from 'date-fns';
 import { match } from 'ts-pattern';
-import { withPreviewSourceEntityId } from './preview-history';
 
 export { scopeChannelNotificationsForEntity };
 
@@ -382,11 +383,6 @@ export const restoreSoupFocus = async (entityId?: string): Promise<void> => {
 
 interface OpenEntityOptions {
   openInNewSplit?: boolean;
-  /**
-   * Open in place of the whole Preview Pair: the Viewer closes and the content
-   * replaces the Controller. No-op outside a Preview Pair.
-   */
-  replacePreview?: boolean;
   location?: SearchLocation;
   splitHandle?: SplitHandle;
   mergeHistory?: boolean;
@@ -397,37 +393,6 @@ interface OpenEntityOptions {
    * opening a channel row. Callers that can open channels must provide it.
    */
   notificationSource?: NotificationSource;
-}
-
-const DUPLICATE_CONTENT_MESSAGE = 'Content already open.';
-
-/** Whether this entity is open outside the controller's own preview viewer. */
-export function isDuplicatePreviewEntityOpen(
-  entity: EntityData,
-  controller: SplitHandle
-): boolean {
-  const splitManager = globalSplitManager();
-  const viewerId = controller.viewerId();
-  if (!splitManager || !viewerId) return false;
-
-  const content = getEntitySplitContent(entity);
-  const existing = splitManager.getSplitByContent(content.type, content.id);
-  return existing !== undefined && existing.id !== viewerId;
-}
-
-/** Show the standard duplicate-content notification. */
-export function notifyDuplicateContentOpen() {
-  toast.alert(DUPLICATE_CONTENT_MESSAGE);
-}
-
-/** Reject and notify for an entity already owned by another split. */
-export function preventDuplicatePreviewEntityOpen(
-  entity: EntityData,
-  controller: SplitHandle
-): boolean {
-  if (!isDuplicatePreviewEntityOpen(entity, controller)) return false;
-  notifyDuplicateContentOpen();
-  return true;
 }
 
 /**
@@ -601,13 +566,7 @@ export const openEntityInSplitFromUnifiedList = async (
   entity: EntityData,
   options: OpenEntityOptions
 ): Promise<void> => {
-  const {
-    allowDuplicate,
-    openInNewSplit,
-    replacePreview,
-    splitHandle,
-    mergeHistory,
-  } = options;
+  const { allowDuplicate, openInNewSplit, splitHandle, mergeHistory } = options;
   let { location } = options;
 
   if (!location) {
@@ -621,29 +580,8 @@ export const openEntityInSplitFromUnifiedList = async (
     return;
   }
 
-  // Channels the viewer hasn't joined can't be read. In a Preview Pair, offer
-  // the Join prompt in the Viewer; otherwise the row's inline Join button is
-  // the only affordance.
+  // Non-members use the row's inline Join button before opening a channel.
   if (isNonMemberChannelEntity(entity)) {
-    if (isChannelEntity(entity) && splitHandle?.isControllerSplit()) {
-      const joinPromptContent = withPreviewSourceEntityId(
-        {
-          type: 'component',
-          id: 'non-member-channel',
-          params: {
-            channelId: entity.id,
-            channelName: entity.name,
-            memberCount: entity.participantIds?.length ?? 0,
-          },
-        },
-        entity.id
-      );
-      splitManager.openWithSplit(joinPromptContent, {
-        referredFrom: options.referredFrom,
-        activate: true,
-        handle: splitHandle,
-      });
-    }
     return;
   }
 
@@ -655,7 +593,6 @@ export const openEntityInSplitFromUnifiedList = async (
           referredFrom: options.referredFrom,
           activate: true,
           preferNewSplit: openInNewSplit,
-          replacePreview,
           handle: splitHandle,
           mergeHistory,
         }
@@ -678,12 +615,7 @@ export const openEntityInSplitFromUnifiedList = async (
       'calendar',
       CALENDAR_BLOCK_ID
     );
-    const existingIsViewer =
-      existing &&
-      splitHandle?.isControllerSplit() &&
-      splitHandle.viewerId() === existing.id;
-
-    if (existing && !existingIsViewer) {
+    if (existing) {
       existing.activate();
     } else {
       splitManager.openWithSplit(
@@ -692,7 +624,6 @@ export const openEntityInSplitFromUnifiedList = async (
           activate: true,
           referredFrom: null,
           preferNewSplit: openInNewSplit,
-          replacePreview,
           handle: splitHandle,
           mergeHistory,
         }
@@ -703,16 +634,6 @@ export const openEntityInSplitFromUnifiedList = async (
   }
 
   const content = getEntitySplitContent(entity);
-
-  if (
-    !allowDuplicate &&
-    !openInNewSplit &&
-    !replacePreview &&
-    splitHandle &&
-    preventDuplicatePreviewEntityOpen(entity, splitHandle)
-  ) {
-    return;
-  }
 
   const channelTarget = getChannelEntityTarget(entity);
   const channelMessageTarget =
@@ -750,17 +671,11 @@ export const openEntityInSplitFromUnifiedList = async (
   if (splitHandle && referredFrom && isListViewID(referredFrom)) {
     splitContent = withListNavigationSource(splitContent, splitHandle);
   }
-  // Preview source metadata belongs on Viewer entries; a replacement takes the
-  // Preview Pair's place, so its entry is ordinary split history.
-  if (splitHandle?.isControllerSplit() && !replacePreview) {
-    splitContent = withPreviewSourceEntityId(splitContent, entity.id);
-  }
 
   splitManager.openWithSplit(splitContent, {
     referredFrom,
     activate: true,
     preferNewSplit: openInNewSplit,
-    replacePreview,
     handle: splitHandle,
     mergeHistory,
     allowDuplicate,
@@ -795,29 +710,27 @@ export const openEntityInSplitFromUnifiedList = async (
 /**
  * Mark every unread notification represented by an opened channel Soup row.
  *
- * The row's attached Soup edge is authoritative. The channel block's message
- * marker discovers notifications through the separately paginated global
- * source, so it cannot reliably clear older notifications. Passing the row's
- * attached notifications through the source keeps its REST cache and durable
- * seen overrides in sync while the configured mutation updates GraphQL edges.
+ * The row's attached Soup edge is authoritative, whether it is a raw GraphQL
+ * array (mobile Channels) or a list accessor. Only rows without an edge fall
+ * back to the separately paginated global source. Passing these notifications
+ * through the source keeps its REST cache and durable seen overrides in sync
+ * while the configured mutation updates GraphQL edges.
  */
 export function markChannelNotificationsSeenOnOpen(
-  entity: EntityData,
+  entity: EntityWithRawNotifications<EntityData>,
   notificationSource: NotificationSource
 ) {
   if (
-    (entity.type !== 'channel' &&
-      entity.type !== 'channel_message' &&
-      entity.type !== 'channel_thread') ||
-    !isWithNotification(entity)
+    entity.type !== 'channel' &&
+    entity.type !== 'channel_message' &&
+    entity.type !== 'channel_thread'
   ) {
     return;
   }
 
-  const notifications = scopeChannelNotificationsForEntity(
-    entity,
-    entity.notifications?.() ?? []
-  ).filter((notification) => !notificationIsRead(notification));
+  const notifications = getEntityNotifications(entity, notificationSource, {
+    scopeChannelThreads: true,
+  }).filter((notification) => !notificationIsRead(notification));
   if (notifications.length === 0) return;
 
   void notificationSource.bulkMarkAsRead(notifications).catch((error) => {

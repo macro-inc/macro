@@ -777,6 +777,15 @@ async fn run() -> anyhow::Result<()> {
             harness: config.inmem_harness_slug.clone(),
             // Stamped but unused: the in-process agent has no
             // workspace to clone anything into.
+            repo_url: Some(repo_url.clone()),
+        },
+    )
+    .with_bot(
+        bot_id::CURSOR_BOT_ID,
+        SessionDefaults {
+            bot_id: bot_id::CURSOR_BOT_ID,
+            model: config.harness_model.clone(),
+            harness: "cursor".into(),
             repo_url: Some(repo_url),
         },
     )

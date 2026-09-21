@@ -86,7 +86,7 @@ fn new_session(
     CreateAgentSessionParams {
         repo_branch: None,
         id: AgentSessionId::new(),
-        owner_id: user_id(OWNER),
+        owner_id: Owner::User(user_id(OWNER)),
         bot_id,
         thread_id,
         originating_message_id,
@@ -212,6 +212,30 @@ fn acp_notification() -> AcpMessage {
         RawJsonRpcMessage::notification("test/notify".to_string(), serde_json::json!({}))
             .expect("valid notification"),
     )
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_refuses_an_owner_that_is_not_a_user(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let params = CreateAgentSessionParams {
+        owner_id: Owner::Bot(bot_id),
+        ..new_session(bot_id, None, None)
+    };
+    let id = params.id;
+
+    // Refused by type before the row's user foreign key, user access row, or
+    // user history could say it less clearly - and before any of them is
+    // written.
+    let error = AgentSessionRepo::create(&repo, params)
+        .await
+        .expect_err("a bot cannot own a session row");
+
+    assert!(matches!(
+        error,
+        AgentSessionError::OwnerNotUser(model_owner::OwnerType::Bot)
+    ));
+    assert_eq!(entity_row_count(&pool, id).await, 0);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -845,7 +869,7 @@ async fn recent_for_owner_returns_the_owners_newest_sessions(pool: PgPool) {
     let someone_else = create_session(
         &repo,
         CreateAgentSessionParams {
-            owner_id: user_id(OTHER_OWNER),
+            owner_id: Owner::User(user_id(OTHER_OWNER)),
             ..new_session(bot_id, None, None)
         },
     )
@@ -1099,7 +1123,7 @@ async fn preview_answers_per_id_by_the_viewers_grants(pool: PgPool) {
                 id: from_channel.id,
                 bot: None,
                 name: DEFAULT_AGENT_SESSION_NAME.to_string(),
-                owner_id: user_id(OWNER),
+                owner_id: Owner::User(user_id(OWNER)),
                 bot_id,
                 status: SessionStatus::NoMessages,
                 created_at: from_channel.created_at,
@@ -1113,7 +1137,7 @@ async fn preview_answers_per_id_by_the_viewers_grants(pool: PgPool) {
                 id: private.id,
                 bot: None,
                 name: DEFAULT_AGENT_SESSION_NAME.to_string(),
-                owner_id: user_id(OWNER),
+                owner_id: Owner::User(user_id(OWNER)),
                 bot_id,
                 status: SessionStatus::Event(SystemEvent::AcpReady),
                 created_at: private.created_at,
@@ -1971,8 +1995,8 @@ async fn pull_request_is_atomic_and_survives_history_selection(pool: PgPool) {
     let session = create_session(&repo, new_session(bot, None, None)).await;
     let url = "https://github.com/org/repo/pull/123";
     let (first, second) = tokio::join!(
-        repo.record_pull_request(session.id, &session.owner_id, url, None),
-        repo.record_pull_request(session.id, &session.owner_id, url, None),
+        repo.record_pull_request(session.id, session.owner_user().unwrap(), url, None),
+        repo.record_pull_request(session.id, session.owner_user().unwrap(), url, None),
     );
     assert_eq!(
         usize::from(first.unwrap()) + usize::from(second.unwrap()),
@@ -2014,7 +2038,7 @@ async fn pull_request_is_atomic_and_survives_history_selection(pool: PgPool) {
     );
     assert!(
         !repo
-            .record_pull_request(session.id, &session.owner_id, url, None)
+            .record_pull_request(session.id, session.owner_user().unwrap(), url, None)
             .await
             .unwrap()
     );
@@ -2067,13 +2091,23 @@ async fn pull_request_waiting_on_takeover_cannot_overwrite_successor(pool: PgPoo
     };
     let original_url = "https://github.com/org/repo/pull/1";
     assert!(
-        repo.record_pull_request(session.id, &session.owner_id, original_url, Some(old))
-            .await
-            .unwrap()
+        repo.record_pull_request(
+            session.id,
+            session.owner_user().unwrap(),
+            original_url,
+            Some(old)
+        )
+        .await
+        .unwrap()
     );
     assert!(
         !repo
-            .record_pull_request(session.id, &session.owner_id, original_url, Some(old))
+            .record_pull_request(
+                session.id,
+                session.owner_user().unwrap(),
+                original_url,
+                Some(old)
+            )
             .await
             .unwrap()
     );
@@ -2082,7 +2116,7 @@ async fn pull_request_waiting_on_takeover_cannot_overwrite_successor(pool: PgPoo
     sqlx::query!("UPDATE agent_session SET manager_fence = manager_fence + 1, pull_request_url = $2 WHERE id = $1", session.id.as_uuid(), "https://github.com/org/repo/pull/2")
         .execute(&mut *takeover).await.unwrap();
     let stale_repo = repo.clone();
-    let owner = session.owner_id.clone();
+    let owner = session.owner_user().unwrap().clone();
     let mut stale = tokio::spawn(async move {
         stale_repo
             .record_pull_request(
@@ -2114,7 +2148,7 @@ async fn pull_request_waiting_on_takeover_cannot_overwrite_successor(pool: PgPoo
     assert!(matches!(
         repo.record_pull_request(
             session.id,
-            &session.owner_id,
+            session.owner_user().unwrap(),
             "https://github.com/org/repo/pull/2",
             Some(old)
         )

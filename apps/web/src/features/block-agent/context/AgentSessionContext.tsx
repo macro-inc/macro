@@ -63,7 +63,10 @@ export type AgentSessionState = {
    * Send the next queued message now: stop the running turn, and show the
    * queue head as sent under the id the server already holds it by. The
    * server dispatches it when the turn actually ends, and that row promotes
-   * the speculation in place. No-op with nothing queued.
+   * the speculation in place. No-op with nothing queued, and while the head
+   * a previous call showed as sent is still unconfirmed (`turn` reads
+   * `starting`): a stop posted then would end the turn already ending, and
+   * the server would dispatch that head, not the next one.
    */
   sendNext: () => void;
   /** The live requests, and the action that answers each one. */

@@ -15,6 +15,7 @@ use crate::domain::response::{
     CreateDocumentResponseData, DocumentResponse, DocumentResponseMetadataWithContent,
 };
 use model::document::response::DocumentResponseMetadata;
+use model_owner::Owner;
 
 const DOCUMENT_ID: &str = "created-task";
 const EMAIL_SEED: &str = r#"<m-document-mention>{"documentId":"thread-7","blockName":"email","documentName":"Re: invoice"}</m-document-mention>"#;
@@ -43,7 +44,7 @@ impl DocumentCreationService for FakeCreationService {
                     DocumentResponseMetadata {
                         document_id: DOCUMENT_ID.to_string(),
                         document_version_id: 1,
-                        owner: user_id,
+                        owner: Owner::User(user_id),
                         document_name: "task".to_string(),
                         file_type: file_type.clone(),
                         sha: None,

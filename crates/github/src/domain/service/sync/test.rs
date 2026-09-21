@@ -108,7 +108,7 @@ impl StubDocumentService {
         DocumentMetadata {
             document_id: document_id.to_string(),
             document_version_id: 1,
-            owner: MacroUserIdStr::try_from_email("test@example.com").unwrap(),
+            owner: "macro|test@example.com".to_string().try_into().unwrap(),
             document_name: "My Task".to_string(),
             file_type: Some("md".to_string()),
             sha: None,

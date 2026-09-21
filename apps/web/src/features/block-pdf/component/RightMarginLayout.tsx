@@ -73,6 +73,7 @@ const useCommentsContext = (
     isDocumentOwner: pdf.permissions.isOwner,
     getCommentById,
     documentId: pdf.documentId(),
+    documentType: 'pdf',
     ownedComment,
     commentOperations: {
       createComment,

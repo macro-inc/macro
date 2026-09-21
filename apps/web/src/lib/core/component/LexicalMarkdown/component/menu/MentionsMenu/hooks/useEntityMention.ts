@@ -45,13 +45,12 @@ export function useEntityMention(
     entities,
     totalCount: () =>
       usesRankedList() ? entityList.totalCount() : entities().length,
-    hasMore: () => quickAccess.usesRecordSelection() && entityList.hasMore(),
+    hasMore: () => usesRankedList() && entityList.hasMore(),
     isLoading: () =>
       usesRankedList() ? entityList.isLoading() : quickAccess.isLoading(),
-    isLoadingMore: () =>
-      quickAccess.usesRecordSelection() && entityList.isLoadingMore(),
+    isLoadingMore: () => usesRankedList() && entityList.isLoadingMore(),
     loadMore: async () => {
-      if (quickAccess.usesRecordSelection()) await entityList.loadMore();
+      if (usesRankedList()) await entityList.loadMore();
     },
   };
 }

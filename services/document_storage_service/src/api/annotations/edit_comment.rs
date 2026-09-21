@@ -22,6 +22,7 @@ use model::{
     response::ErrorResponse,
 };
 use model_notifications::NotificationDocumentSubType;
+use model_owner::Owner;
 use notification::domain::service::NotificationIngress;
 use sqlx::PgPool;
 
@@ -77,7 +78,7 @@ pub async fn edit_comment_handler(
                     thread_id: req.thread_id,
                     document_name: res.document_name.clone(),
                     document_id: res.document_id.to_string(),
-                    owner: res.document_owner.clone(),
+                    owner: Owner::User(res.document_owner.clone()),
                     file_type: res.file_type.clone(),
                     sub_type: res.sub_type.map(|sub_type| match sub_type {
                         document_sub_type::DocumentSubType::Task => {
