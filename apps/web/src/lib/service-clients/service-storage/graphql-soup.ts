@@ -408,6 +408,13 @@ export function getGraphqlSoupClient(): Client {
       operationKind?: Operation['kind']
     ) => {
       try {
+        // Navigation deliberately rejects outstanding reads. Do not turn that
+        // expected shutdown into an error; unexpected disposal still reports.
+        if (
+          error instanceof Error &&
+          error.message === 'cache worker host was disposed for page navigation'
+        )
+          return;
         // Caught cache failures never reach window.unhandledrejection. Report
         // them through the Datadog-bound exporter without query/variable data.
         Telemetry.error(error, {

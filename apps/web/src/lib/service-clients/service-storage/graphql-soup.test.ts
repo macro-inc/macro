@@ -477,6 +477,11 @@ describe('GraphQL Soup browser cache session gate', () => {
       const report =
         mocks.normalizedCacheExchange.mock.calls[0]?.[1]?.onCacheError;
 
+      report?.(
+        new Error('cache worker host was disposed for page navigation'),
+        operation
+      );
+      expect(mocks.telemetryError).not.toHaveBeenCalled();
       report?.(error, operation);
 
       expect(mocks.telemetryError).toHaveBeenCalledExactlyOnceWith(error, {
