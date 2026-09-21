@@ -1,6 +1,7 @@
 use super::*;
 
 mod predicate_cost;
+mod projection_writes;
 mod startup;
 use cache_core::normalize::RecordUpdates;
 use pollster::block_on;

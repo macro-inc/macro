@@ -1809,18 +1809,23 @@ fn write_projection_mutations(
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect::<Vec<_>>();
+    let previous = load_projection_states(connection, &keys)?;
     let mut states = keys
         .iter()
         .cloned()
-        .zip(load_projection_states(connection, &keys)?)
+        .zip(previous.iter().cloned())
         .filter_map(|(key, state)| state.map(|state| (key, state)))
         .collect::<HashMap<_, _>>();
 
     apply_authoritative_projection_mutations(&mut states, &mutations);
-    // A snapshot can include many child contributions to the same parent.
-    // Preserve mutation order in memory, but persist each final state only once.
-    for key in &keys {
-        write_projection_state(connection, key, states.get(key))?;
+    // Fold child contributions in order, then persist only changed final states.
+    // Refreshing unchanged authority must not delete/reinsert every index fact
+    // while the native engine lock blocks foreground reads and mutations.
+    for (key, previous) in keys.iter().zip(previous) {
+        let next = states.get(key);
+        if next != previous.as_ref() {
+            write_projection_state(connection, key, next)?;
+        }
     }
     if !keys.is_empty() {
         // Network snapshots and realtime writes must rebase pending member edits

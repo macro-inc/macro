@@ -31,6 +31,13 @@ scheduled automatically in the background. Failures latch the existing storage
 health state without deleting records or pending mutations. Recovery/reset remains
 an explicit caller decision after closing the storage.
 
+## Projection refreshes
+
+Hydration folds authoritative index mutations in order and writes only final
+states that differ from stored state. An updated normalized record does not force
+unchanged index facts to be deleted and reinserted. Pending optimistic projections
+are still rebased for every affected key, even when authority is unchanged.
+
 ## Tests
 
 Run from the repository root:
