@@ -1,5 +1,5 @@
 import { notificationKeys } from '@queries/notification/keys';
-import { QueryClient } from '@tanstack/solid-query';
+import { isCancelledError, QueryClient } from '@tanstack/solid-query';
 import { describe, expect, it, vi } from 'vitest';
 
 const { client } = vi.hoisted(() => ({
@@ -37,6 +37,31 @@ vi.mock('./push-registration-lifecycle', () => ({
 import { clearLocalAuthSession } from './logout';
 
 describe('logout notification cache isolation', () => {
+  it('cancels an old in-flight snapshot even when its transport ignores abort', async () => {
+    const queryClient = new QueryClient();
+    client.current = queryClient;
+    const queryKey = notificationKeys.user({ limit: 500 }).queryKey;
+    let resolveTransport!: (value: { owner: string }) => void;
+    const transport = new Promise<{ owner: string }>((resolve) => {
+      resolveTransport = resolve;
+    });
+    const request = queryClient
+      .fetchQuery({ queryKey, queryFn: () => transport, retry: false })
+      .catch((error: unknown) => error);
+    expect(queryClient.getQueryState(queryKey)?.fetchStatus).toBe('fetching');
+
+    await clearLocalAuthSession();
+    expect(isCancelledError(await request)).toBe(true);
+    expect(queryClient.getQueryData(queryKey)).toBeUndefined();
+
+    queryClient.setQueryData(queryKey, { owner: 'bob' });
+    resolveTransport({ owner: 'alice' });
+    await transport;
+    await Promise.resolve();
+    expect(queryClient.getQueryData(queryKey)).toEqual({ owner: 'bob' });
+    queryClient.clear();
+  });
+
   it('evicts account notification snapshots and preferences before another login', async () => {
     const queryClient = new QueryClient();
     client.current = queryClient;

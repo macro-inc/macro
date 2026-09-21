@@ -101,4 +101,46 @@ describe('reminder alert feed', () => {
     expect(h.alerts()).toEqual([]);
     h.dispose();
   });
+
+  it.each(['seen', 'done'] as const)(
+    'forgets replayed delivery ids after a %s query occurrence leaves the feed',
+    (state) => {
+      const h = mount();
+      h.deliver(notification);
+      h.setLoading(false);
+      h.setNotifications([
+        {
+          ...notification,
+          id: 'query-delivery',
+          state,
+          notification_metadata: {
+            tag: 'reminder',
+            content: {
+              reminderId: 'reminder-1',
+              description: 'Follow up',
+              scheduledFor: '2026-09-21T12:00:00+02:00',
+            },
+          },
+        },
+      ]);
+      expect(h.alerts()).toEqual([]);
+      h.setNotifications([]);
+      expect(h.alerts()).toEqual([]);
+      h.deliver({
+        ...notification,
+        id: 'next-occurrence',
+        notification_metadata: {
+          tag: 'reminder',
+          content: {
+            reminderId: 'reminder-1',
+            description: 'Follow up',
+            scheduledFor: '2026-09-22T10:00:00Z',
+          },
+        },
+      });
+      expect(h.alerts()).toHaveLength(1);
+      expect(h.alerts()[0].scheduledFor).toBe('2026-09-22T10:00:00.000Z');
+      h.dispose();
+    }
+  );
 });
