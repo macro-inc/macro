@@ -200,11 +200,22 @@ export function createEmailSendSchedule(options: {
         draftId = options.draftId() ?? undefined;
       }
       if (
-        !draftId ||
         revision !== selectionRevision ||
         generation !== options.generation() ||
         inboxId !== options.inboxId()
       ) {
+        return false;
+      }
+      if (!draftId) {
+        notices.feedback.failure(
+          action === 'update'
+            ? 'Failed to update schedule'
+            : 'Failed to schedule email',
+          {
+            subtext:
+              'Draft is not ready to schedule. Resolve any save or connection errors and try again',
+          }
+        );
         return false;
       }
 

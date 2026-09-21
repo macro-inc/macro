@@ -780,7 +780,27 @@
               }
             }
           },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
             "description": "",
             "content": {
               "application/json": {
@@ -816,7 +836,7 @@
     "/email/drafts/scheduled/{message_id}": {
       "delete": {
         "tags": ["Draft Scheduling"],
-        "summary": "Remove the scheduled send from a draft.",
+        "summary": "Remove the scheduled send from a draft, including immediate-send undo.",
         "operationId": "delete_scheduled_draft",
         "parameters": [
           {
@@ -845,6 +865,16 @@
             }
           },
           "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
             "description": "",
             "content": {
               "application/json": {
@@ -5407,10 +5437,14 @@
         "type": "object",
         "required": ["send_time"],
         "properties": {
+          "include_signature": {
+            "type": ["boolean", "null"],
+            "description": "Per-message signature override; absent uses the inbox's send defaults."
+          },
           "send_time": {
             "type": "string",
             "format": "date-time",
-            "description": "The time to send the message (ISO 8601 format)"
+            "description": "The time to send the message (ISO 8601 format)."
           }
         }
       },

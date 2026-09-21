@@ -92,6 +92,52 @@ function composerWithLifecycleQuery(
 
 describe('send and schedule ordering', () => {
   it.each(['standalone', 'reply'] as const)(
+    '%s does not report a syncing failure after delivery invalidates a pending schedule save',
+    async (kind) => {
+      const context = createComposeContext();
+      const state = composer(kind, context);
+      const pending = Promise.withResolvers<PersistedEmailIdentity>();
+      try {
+        state.edit('Previously saved');
+        await vi.advanceTimersByTimeAsync(600);
+        vi.mocked(context.drafts.saveDraft).mockReturnValueOnce(
+          pending.promise
+        );
+        state.selectTime(new Date('2026-12-01T12:00:00Z'));
+        state.send();
+        await vi.advanceTimersByTimeAsync(0);
+        context.setDraftLifecycle({
+          type: 'sent',
+          draftId: 'draft',
+          threadId: 'thread',
+          inboxId: 'inbox',
+          observedAt: Date.now(),
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(context.notices.feedback.success).toHaveBeenCalledWith(
+          'Scheduled email sent'
+        );
+        pending.resolve({
+          draftId: 'draft',
+          threadId: 'thread',
+          inboxId: 'inbox',
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(context.delivery.schedule).not.toHaveBeenCalled();
+        expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+        expect(context.notices.feedback.failure).not.toHaveBeenCalled();
+      } finally {
+        pending.resolve({
+          draftId: 'draft',
+          threadId: 'thread',
+          inboxId: 'inbox',
+        });
+        state.dispose();
+      }
+    }
+  );
+
+  it.each(['standalone', 'reply'] as const)(
     '%s keeps an unconfirmed time local across an editing refresh',
     async (kind) => {
       const context = createComposeContext();

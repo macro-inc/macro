@@ -381,6 +381,13 @@ describe.each(['reply', 'compose'] as const)(
         await root.send();
         expect(context.delivery.schedule).not.toHaveBeenCalled();
         expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+        expect(context.notices.feedback.failure).toHaveBeenLastCalledWith(
+          'Failed to schedule email',
+          {
+            subtext:
+              'Draft is not ready to schedule. Resolve any save or connection errors and try again',
+          }
+        );
         expect(
           context.attachmentStorage.uploadAttachments
         ).not.toHaveBeenCalled();
@@ -441,6 +448,13 @@ describe.each(['reply', 'compose'] as const)(
         await root.schedule?.(new Date('2027-01-01T12:00:00Z'));
         await root.send();
         expect(context.delivery.schedule).not.toHaveBeenCalled();
+        expect(context.notices.feedback.failure).toHaveBeenLastCalledWith(
+          'Failed to schedule email',
+          {
+            subtext:
+              'Draft is not ready to schedule. Resolve any save or connection errors and try again',
+          }
+        );
         vi.mocked(context.drafts.saveDraft).mockResolvedValue(
           committed('existing')
         );
