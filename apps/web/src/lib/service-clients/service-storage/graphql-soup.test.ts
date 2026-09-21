@@ -1,4 +1,7 @@
+import type { NormalizedCacheExchangeOptions } from '@graphql-cache/exchange/normalized-cache-exchange';
 import type { BrowserTursoCacheRolloutDecision } from '@graphql-cache/rollout-policy';
+import type { Operation } from '@urql/core';
+import { parse } from 'graphql';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   GraphqlSoupEntityType,
@@ -118,15 +121,21 @@ const mocks = vi.hoisted(() => {
     queueDepth: () => queuedMutationCount,
     recordSubscriptionDisposal: () => cleanupOrder.push('subscriptions'),
     cleanupOrder: () => [...cleanupOrder],
-    failInitialization: () =>
-      initializationErrorHandler?.(
-        new Error('injected initialization failure')
-      ),
+    failInitialization: (
+      error = new Error('injected initialization failure')
+    ) => initializationErrorHandler?.(error),
     plainClient,
     realtimeClient,
     replaceSubscriptions,
     platformFetch,
     toastFailure,
+    telemetryError: vi.fn(),
+    normalizedCacheExchange: vi.fn(
+      (host: unknown, _options?: NormalizedCacheExchangeOptions) => ({
+        kind: 'cache',
+        host,
+      })
+    ),
     createWorkerCacheHost: vi.fn(
       (options: { onInitializationError?: (error: Error) => void }) => {
         initializationErrorHandler = options.onInitializationError;
@@ -180,7 +189,10 @@ vi.mock('@graphql-cache/scope', () => ({
   getOrCreateCacheScope: () => 'anonymous-scope',
 }));
 vi.mock('@graphql-cache/exchange/normalized-cache-exchange', () => ({
-  normalizedCacheExchange: (host: unknown) => ({ kind: 'cache', host }),
+  normalizedCacheExchange: mocks.normalizedCacheExchange,
+}));
+vi.mock('@macro-inc/observability', () => ({
+  Telemetry: { error: mocks.telemetryError },
 }));
 vi.mock('@service-auth/fetch', () => ({ getMacroApiToken: vi.fn() }));
 vi.mock('graphql-ws', () => ({
@@ -312,6 +324,7 @@ describe('GraphQL Soup browser cache session gate', () => {
     mocks.tauri = false;
     mocks.resetQueue();
     mocks.platformFetch.mockReset();
+    mocks.telemetryError.mockReset();
   });
 
   afterEach(() => {
@@ -448,13 +461,79 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(mocks.host.dispose).not.toHaveBeenCalled();
   });
 
+  it.each(['query', 'mutation'] as const)(
+    'reports handled cache-disposed failures for %s without exporting operation payloads',
+    async (kind) => {
+      const soup = await import('./graphql-soup');
+      soup.getGraphqlSoupClient();
+      const error = new Error('cache worker host was disposed');
+      const operation: Operation = {
+        kind,
+        key: 42,
+        query: parse('query PrivateDocument { user { id } }'),
+        variables: { privateValue: 'do-not-export' },
+        context: { url: 'http://dss.test', requestPolicy: 'cache-first' },
+      };
+      const report =
+        mocks.normalizedCacheExchange.mock.calls[0]?.[1]?.onCacheError;
+
+      report?.(error, operation);
+
+      expect(mocks.telemetryError).toHaveBeenCalledExactlyOnceWith(error, {
+        'error.source': 'graphql-cache',
+        'cache.backend': 'turso-wasm-opfs',
+        'cache.phase': 'operation',
+        'cache.operation_kind': kind,
+      });
+    }
+  );
+
+  it('reports synchronous cache construction failures before falling back', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = new Error('cache worker construction failed');
+    mocks.createWorkerCacheHost.mockImplementationOnce(() => {
+      throw error;
+    });
+    const soup = await import('./graphql-soup');
+
+    expect(soup.getGraphqlSoupClient()).toBe(mocks.realtimeClient);
+    expect(mocks.telemetryError).toHaveBeenCalledExactlyOnceWith(error, {
+      'error.source': 'graphql-cache',
+      'cache.backend': 'turso-wasm-opfs',
+      'cache.phase': 'initialization',
+    });
+  });
+
+  it('does not let telemetry failures prevent terminal-cache fallback', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mocks.telemetryError.mockImplementationOnce(() => {
+      throw new Error('telemetry unavailable');
+    });
+    const soup = await import('./graphql-soup');
+    soup.getGraphqlSoupClient();
+
+    expect(() => mocks.failInitialization()).not.toThrow();
+    expect(mocks.telemetryError).toHaveBeenCalledOnce();
+    expect(soup.getGraphqlSoupClient()).toBe(mocks.realtimeClient);
+    expect(mocks.cleanupOrder()).toEqual(['subscriptions', 'host']);
+  });
+
   it('unsubscribes cache operations before disposing a failed host', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const soup = await import('./graphql-soup');
     const cachedClient = soup.getGraphqlSoupClient();
 
-    mocks.failInitialization();
+    const error = new Error('injected initialization failure');
+    mocks.failInitialization(error);
 
+    expect(mocks.telemetryError).toHaveBeenCalledExactlyOnceWith(error, {
+      'error.source': 'graphql-cache',
+      'cache.backend': 'turso-wasm-opfs',
+      'cache.phase': 'initialization',
+    });
+    // Late failure notifications from the old host do not emit duplicate logs.
+    mocks.failInitialization(error);
+    expect(mocks.telemetryError).toHaveBeenCalledOnce();
     expect(cachedClient).not.toBe(mocks.realtimeClient);
     expect(soup.getGraphqlSoupClient()).toBe(mocks.realtimeClient);
     expect(soup.graphqlCacheEnabled()).toBe(false);
