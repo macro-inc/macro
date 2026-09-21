@@ -1,3 +1,18 @@
+import { isCoderHarness } from '@app/features/agents-view/core/agent-kind';
+
+/**
+ * The repository a session works in, for the header menu and side panel.
+ * The service stamps the deployment's default repository on every session,
+ * including chat-only ones that never touch it, so only a coding harness
+ * gets to show one.
+ */
+export function sessionRepositoryUrl(
+  session: { harness: string; repoUrl?: string | null } | undefined
+): string | undefined {
+  if (!session || !isCoderHarness(session.harness)) return undefined;
+  return session.repoUrl ?? undefined;
+}
+
 /** 'claude-code' → 'Claude Code'; the fallback when nothing names a harness. */
 export function harnessTitle(harness: string | undefined): string {
   if (!harness) return 'Agent session';

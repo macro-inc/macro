@@ -104,7 +104,6 @@ function DriveComposition(props: DriveViewProps) {
 
     showList: () => {
       navigation.clear();
-      panel.handle.resetPreview();
     },
   });
 

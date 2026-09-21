@@ -376,11 +376,19 @@ shows Connecting and waits for that request before registering again.
 
 ## Channel tabs
 
-Radio group at the top of the channel pane: `Messages` / `Attachments` / `Participants`,
-plus `Ask Macro` and `Call` buttons. `Ask Macro` opens a new chat pane with the channel
+Radio group at the top of the channel pane: `Messages` / `Attachments` / `Calls` / `Participants`,
+plus `Ask Macro` and `Call` buttons. The `Calls` tab lists recordings for that channel
+(same rows as the Calls soup view, filtered to this channel). The live `Call` tab
+appears while a call is in progress. `Ask Macro` opens a new chat pane with the channel
 already @mentioned as context (see ai-chat.md). On mobile it lives in the channel title's
 `...` drawer instead. Clicking the radio input can time out — click the adjacent label text
 instead.
+
+`Calls` tab: recordings, transcriptions, and summaries for this channel. Click a
+row to open the call. The search field above the list matches call names and
+transcripts in this channel; queries shorter than 3 characters are not sent.
+Empty copy: `No calls in this channel`. No matches: `No results for "…"`.
+Shorter queries: `Keep typing to search`.
 
 `Participants` tab:
 - `Copy invite link`, participant search box.

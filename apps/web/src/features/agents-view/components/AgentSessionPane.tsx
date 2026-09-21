@@ -8,7 +8,10 @@ import {
 import { AgentSessionProvider } from '@app/features/block-agent/agent-session-provider';
 import { AgentComposer } from '@app/features/block-agent/component/AgentComposer';
 import { AgentPullRequestChip } from '@app/features/block-agent/component/AgentPullRequestChip';
-import { agentSessionTitle } from '@app/features/block-agent/component/AgentSplitHeader';
+import {
+  agentSessionTitle,
+  sessionRepositoryUrl,
+} from '@app/features/block-agent/component/AgentSplitHeader';
 import { AgentSidePanelSections } from '@app/features/block-agent/component/sidepanel/AgentSidePanelSections';
 import { Transcript } from '@app/features/block-agent/component/Transcript';
 import { useAgentSession } from '@app/features/block-agent/context/AgentSessionContext';
@@ -143,14 +146,18 @@ function SessionContent(props: { onDeleted: () => void }) {
                         ops={[
                           { op: 'rename' },
                           { op: 'delete' },
-                          {
-                            label: 'Open repository',
-                            icon: GitBranch,
-                            action: () => {
-                              const url = session()?.repoUrl;
-                              if (url) openExternalUrl(url);
-                            },
-                          },
+                          ...(sessionRepositoryUrl(session())
+                            ? [
+                                {
+                                  label: 'Open repository',
+                                  icon: GitBranch,
+                                  action: () => {
+                                    const url = sessionRepositoryUrl(session());
+                                    if (url) openExternalUrl(url);
+                                  },
+                                },
+                              ]
+                            : []),
                         ]}
                         tools={[
                           {

@@ -75,6 +75,26 @@ CHROMEDRIVER="$chromedriver" \
 WASM_BINDGEN_TEST_ONLY_WEB=1 cargo test --target wasm32-unknown-unknown -p turso-opfs --lib
 ```
 
+## Slow SQL telemetry
+
+The browser WASM driver reports each SQL statement execution **over 200 ms** as
+`graphql_cache.slow_query` through the existing page telemetry relay and OTLP
+pipeline to Datadog. These events bypass cache sampling/aggregation. Exporting
+still requires the existing browser telemetry enablement and exporter config.
+
+Search Datadog logs for `service:web-app "graphql_cache.slow_query"`:
+
+- `cache.duration_ms`: binding, stepping/OPFS I/O, row collection, and cleanup;
+  excludes statement preparation and time queued in the worker.
+- `db.query.fingerprint`: 16-digit lowercase FNV-1a hash of the exact unexpanded
+  SQL template, allowing repeated executions to be grouped without exporting SQL.
+- `cache.outcome`: `success` or `error`; slow failures are reported too.
+- `cache.slow_query_threshold_ms`: `200`.
+
+Parameters, results, raw SQL, and user identity are not exported. Logging uses
+an anonymous span context. A throwing JS telemetry callback cannot change query
+results. Native hosts are unchanged unless they install their own telemetry sink.
+
 ## Key policy
 
 **Presence-of-id convention**: an output object type with an `id: ID!`
