@@ -265,13 +265,14 @@ pub struct DeleteEmailDraftPayload {
     pub thread_deleted: bool,
 }
 
-/// Result of creating or updating an email draft.
 pub struct SaveEmailDraftPayload<O: EmailThreadMutationOutput> {
     draft_id: Uuid,
     draft: GraphqlSoupEmailMessage,
     thread: O::Thread,
 }
 
+/// Result of creating or updating an email draft.
+// async-graphql reads the schema description from the impl, not the struct.
 #[Object(name = "SaveEmailDraftPayload")]
 impl<O> SaveEmailDraftPayload<O>
 where
