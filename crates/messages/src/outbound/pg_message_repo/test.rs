@@ -549,7 +549,9 @@ async fn roots_get_thread_rows_without_the_bookkeeping_trigger(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn channel_rows_keep_the_legacy_channel_columns_and_document_rows_do_not(pool: PgPool) {
+async fn channel_rows_get_the_legacy_channel_column_from_the_shim_and_attachments_do_not(
+    pool: PgPool,
+) {
     setup(&pool).await;
     let channel = macro_uuid::generate_uuid_v7();
     sqlx::query!(
@@ -584,7 +586,7 @@ async fn channel_rows_keep_the_legacy_channel_columns_and_document_rows_do_not(p
     .await
     .unwrap();
     assert_eq!(columns[0].channel_id, Some(channel));
-    assert_eq!(columns[0].attachment_channel_id, Some(channel));
+    assert_eq!(columns[0].attachment_channel_id, None);
     assert_eq!(columns[1].channel_id, None);
     assert_eq!(columns[1].attachment_channel_id, None);
 }

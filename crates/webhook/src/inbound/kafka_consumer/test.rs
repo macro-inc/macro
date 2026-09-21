@@ -67,6 +67,7 @@ fn subscribes_to_all_ingestion_topics() {
         [
             "macro.documents",
             "macro.channels",
+            "macro.messages",
             "macro.webhooks",
             "macro.agent_sessions",
             "macro.agent_session_lifecycle"

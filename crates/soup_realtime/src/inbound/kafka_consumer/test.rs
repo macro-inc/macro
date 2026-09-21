@@ -117,6 +117,7 @@ fn subscribes_to_all_existing_soup_source_topics() {
             "macro.chats",
             "macro.email",
             "macro.channels",
+            "macro.messages",
             "macro.properties",
         ]
     );

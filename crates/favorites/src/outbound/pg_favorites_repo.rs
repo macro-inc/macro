@@ -149,7 +149,7 @@ impl FavoritesRepo for PgFavoritesRepo {
                 d."fileType" as "file_type?",
                 dt.sub_type::text as "document_sub_type?",
                 ch.channel_type::text as "channel_type?",
-                cm.channel_id::text as "channel_id?"
+                cm.parent_entity_id as "channel_id?"
             FROM favorite f
             -- The comms tables key on uuid while favorite.entity_id is text.
             -- Compare in uuid (casting the favorite side) so their
@@ -168,7 +168,7 @@ impl FavoritesRepo for PgFavoritesRepo {
             LEFT JOIN "Chat" c ON f.entity_type = 'chat' AND c.id = f.entity_id
             LEFT JOIN "Project" p ON f.entity_type = 'project' AND p.id = f.entity_id
             LEFT JOIN comms_channels ch ON f.entity_type = 'channel' AND ch.id = fid.entity_uuid
-            LEFT JOIN comms_messages cm ON f.entity_type = 'channel_message' AND cm.id = fid.entity_uuid
+            LEFT JOIN comms_messages cm ON f.entity_type = 'channel_message' AND cm.id = fid.entity_uuid AND cm.parent_entity_type = 'channel'
             WHERE f.user_id = $1
                 AND ($2::text[] IS NULL OR f.entity_type = ANY($2))
                 AND ($3::text[] IS NULL OR f.entity_id = ANY($3))

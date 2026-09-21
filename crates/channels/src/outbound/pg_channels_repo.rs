@@ -168,14 +168,14 @@ async fn get_channel_participants_for_thread_id(
             SELECT m.sender_id AS id
             FROM comms_messages m
             JOIN comms_channel_participants cp
-              ON cp.channel_id = m.channel_id AND cp.user_id = m.sender_id
+              ON m.parent_entity_type = 'channel' AND m.parent_entity_id = cp.channel_id::text AND cp.user_id = m.sender_id
             WHERE (m.id = $1 OR m.thread_id = $1) AND cp.left_at IS NULL
             UNION
             SELECT em.entity_id AS id
             FROM comms_entity_mentions em
             JOIN comms_messages m ON m.id::text = em.source_entity_id
             JOIN comms_channel_participants cp
-              ON cp.channel_id = m.channel_id AND cp.user_id = em.entity_id
+              ON m.parent_entity_type = 'channel' AND m.parent_entity_id = cp.channel_id::text AND cp.user_id = em.entity_id
             WHERE (m.id = $1 OR m.thread_id = $1)
               AND em.source_entity_type = 'message'
               AND em.entity_type = 'user'
@@ -741,7 +741,7 @@ fn push_channel_thread_participant_filter_expr(
         r#"(EXISTS (
             SELECT 1
             FROM comms_channel_participants pcp
-            WHERE pcp.channel_id = m.channel_id
+            WHERE m.parent_entity_type = 'channel' AND m.parent_entity_id = pcp.channel_id::text
               AND pcp.user_id = "#,
     );
     builder.push_bind(participant.clone());
@@ -830,7 +830,7 @@ fn build_channel_thread_rows_query(
         )
         SELECT
             m.id AS id,
-            m.channel_id AS channel_id,
+            m.parent_entity_id::uuid AS channel_id,
             m.sender_id AS sender_id,
             m.triggered_by_user_id AS triggered_by_user_id,
             m.content AS content,
@@ -839,7 +839,7 @@ fn build_channel_thread_rows_query(
             m.edited_at::timestamptz AS edited_at,
             m.deleted_at::timestamptz AS deleted_at
         FROM comms_messages m
-        INNER JOIN user_channels c ON c.id = m.channel_id
+        INNER JOIN user_channels c ON m.parent_entity_type = 'channel' AND m.parent_entity_id = c.id::text
         LEFT JOIN LATERAL (
             SELECT MAX(reply.updated_at) AS latest_reply_updated_at
             FROM comms_messages reply
@@ -1268,7 +1268,7 @@ impl ChannelListRepo for PgChannelsRepo {
                     '{}'::text[]
                 ) AS mentions
             FROM comms_messages m
-            WHERE m.channel_id = i.channel_id
+            WHERE m.parent_entity_type = 'channel' AND m.parent_entity_id = i.channel_id::text
               AND m.deleted_at IS NULL
             ORDER BY m.created_at DESC
             LIMIT 1
@@ -1292,7 +1292,7 @@ impl ChannelListRepo for PgChannelsRepo {
                     '{}'::text[]
                 ) AS mentions
             FROM comms_messages m
-            WHERE m.channel_id = i.channel_id
+            WHERE m.parent_entity_type = 'channel' AND m.parent_entity_id = i.channel_id::text
               AND m.deleted_at IS NULL
               AND m.thread_id IS NULL
             ORDER BY m.created_at DESC
@@ -1601,7 +1601,7 @@ impl ChannelAttachmentRepo for PgChannelsRepo {
                 '{}'::text[]
             ) AS "mentions!"
         FROM comms_messages m
-        WHERE m.channel_id = $1
+        WHERE m.parent_entity_type = 'channel' AND m.parent_entity_id = $1::uuid::text
           AND m.deleted_at IS NULL
         ORDER BY m.created_at DESC
         LIMIT $2
@@ -1661,12 +1661,12 @@ impl ChannelRepo for PgChannelsRepo {
         let rows = sqlx::query_as!(
             ChannelAttachmentRow,
             r#"
-            SELECT a.id, a.channel_id AS "channel_id!", a.message_id, m.sender_id,
+            SELECT a.id, m.parent_entity_id::uuid AS "channel_id!", a.message_id, m.sender_id,
                 a.entity_type, a.entity_id,
                 a.width AS "width?", a.height AS "height?", a.created_at
             FROM comms_attachments a
             JOIN comms_messages m ON m.id = a.message_id
-            WHERE a.channel_id = $1
+            WHERE m.parent_entity_type = 'channel' AND m.parent_entity_id = $1::uuid::text
               AND m.deleted_at IS NULL
               AND ($2::timestamptz IS NULL OR (a.created_at, a.id) < ($2, $3))
               AND ($5::bool IS NULL
@@ -1751,7 +1751,7 @@ impl ChannelRepo for PgChannelsRepo {
                 AttachmentChannelReference,
                 r#"
                 SELECT
-                    a.channel_id                     AS "channel_id!: uuid::Uuid",
+                    m.parent_entity_id::uuid         AS "channel_id!: uuid::Uuid",
                     c.name                           AS "channel_name?",            -- Option<String>
                     a.message_id                     AS "message_id: uuid::Uuid",
                     m.thread_id                      AS "thread_id?: uuid::Uuid",
@@ -1761,7 +1761,7 @@ impl ChannelRepo for PgChannelsRepo {
                     a.created_at                     AS "attachment_created_at!: chrono::DateTime<chrono::Utc>"
                 FROM comms_attachments a
                 JOIN comms_messages m ON a.message_id = m.id
-                JOIN comms_channels c ON a.channel_id = c.id
+                JOIN comms_channels c ON m.parent_entity_type = 'channel' AND m.parent_entity_id = c.id::text
                 JOIN comms_channel_participants cp ON cp.channel_id = c.id
                 WHERE a.entity_type = ANY($1)
                   AND a.entity_id  = $2
@@ -1784,7 +1784,7 @@ impl ChannelRepo for PgChannelsRepo {
                 AttachmentChannelReference,
                 r#"
                 SELECT
-                    m.channel_id                     AS "channel_id!: uuid::Uuid",
+                    m.parent_entity_id::uuid         AS "channel_id!: uuid::Uuid",
                     c.name                           AS "channel_name?",            -- Option<String>
                     m.id                             AS "message_id: uuid::Uuid",
                     m.thread_id                      AS "thread_id?: uuid::Uuid",
@@ -1794,7 +1794,7 @@ impl ChannelRepo for PgChannelsRepo {
                     em.created_at                    AS "attachment_created_at!: chrono::DateTime<chrono::Utc>"
                 FROM comms_entity_mentions em
                 JOIN comms_messages m ON (em.source_entity_id = m.id::text AND em.source_entity_type = 'message')
-                JOIN comms_channels c ON m.channel_id = c.id
+                JOIN comms_channels c ON m.parent_entity_type = 'channel' AND m.parent_entity_id = c.id::text
                 JOIN comms_channel_participants cp ON cp.channel_id = c.id
                 WHERE em.entity_type = ANY($1)
                   AND em.entity_id  = $2

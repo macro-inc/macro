@@ -48,14 +48,6 @@ fn database_error(error: sqlx::Error) -> MessageError {
     MessageError::Repository(rootcause::Report::new(error).into())
 }
 
-/// Legacy channel column kept in step with the parent until the last PR of the stack.
-fn channel_column(parent: &MessageParent) -> Option<Uuid> {
-    match parent {
-        MessageParent::Channel(id) => Some(*id),
-        MessageParent::Document(_) => None,
-    }
-}
-
 /// Email references arrive under several editor aliases; store the canonical one.
 fn stored_attachment_type(entity_type: &str) -> &str {
     match MessageReferenceKind::parse(entity_type) {
@@ -221,7 +213,6 @@ impl PgMessageRepository {
 
     async fn replace_references(
         tx: &mut Transaction<'_, Postgres>,
-        parent: &MessageParent,
         id: Uuid,
         actor: &str,
         mentions: &[SimpleMention],
@@ -276,9 +267,9 @@ impl PgMessageRepository {
             .map_err(database_error)?;
             for (entity_type, attachment) in added {
                 sqlx::query!(
-                    r#"INSERT INTO comms_attachments (id, message_id, channel_id, entity_type, entity_id, width, height)
-                       VALUES ($1, $2, $3, $4, $5, $6, $7)"#,
-                    macro_uuid::generate_uuid_v7(), id, channel_column(parent), entity_type, attachment.entity_id,
+                    r#"INSERT INTO comms_attachments (id, message_id, entity_type, entity_id, width, height)
+                       VALUES ($1, $2, $3, $4, $5, $6)"#,
+                    macro_uuid::generate_uuid_v7(), id, entity_type, attachment.entity_id,
                     attachment.width, attachment.height,
                 ).execute(&mut **tx).await.map_err(database_error)?;
             }
@@ -607,13 +598,12 @@ impl MessageRepository for PgMessageRepository {
             }
         }
         sqlx::query!(
-            r#"INSERT INTO comms_messages(id, parent_entity_type, parent_entity_id, channel_id, thread_id,
+            r#"INSERT INTO comms_messages(id, parent_entity_type, parent_entity_id, thread_id,
                     sender_id, triggered_by_user_id, content)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"#,
+               VALUES ($1, $2, $3, $4, $5, $6, $7)"#,
             id,
             command.parent.entity_type(),
             command.parent.entity_id(),
-            channel_column(&command.parent),
             command.input.thread_id,
             command.actor.as_ref(),
             command.triggered_by,
@@ -628,7 +618,6 @@ impl MessageRepository for PgMessageRepository {
         }
         Self::replace_references(
             &mut tx,
-            &command.parent,
             id,
             command.actor.as_ref(),
             &command.input.mentions,
@@ -662,7 +651,6 @@ impl MessageRepository for PgMessageRepository {
         .map_err(database_error)?;
         Self::replace_references(
             &mut tx,
-            parent,
             id,
             &actor,
             &command.mentions,
