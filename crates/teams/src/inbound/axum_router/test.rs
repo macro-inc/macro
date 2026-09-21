@@ -124,15 +124,15 @@ async fn invite_to_team_validation_error_response_is_preserved() {
 }
 
 #[tokio::test]
-async fn invite_to_free_team_at_capacity_returns_bad_request() {
+async fn invite_to_team_preserves_admin_only_invite_restriction() {
     let error =
-        InviteToTeamError::InviteUsersToTeamError(InviteUsersToTeamError::NotEnoughOpenSeats);
+        InviteToTeamError::InviteUsersToTeamError(InviteUsersToTeamError::NonAdminInvitesDisabled);
     let (status, body_text, _) = response_parts(error).await;
 
-    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(status, StatusCode::FORBIDDEN);
     assert_eq!(
         body_text,
-        r#"{"message":"free team member limit reached; upgrade to invite more members"}"#
+        r#"{"message":"only team admins may invite users to this team"}"#
     );
 }
 

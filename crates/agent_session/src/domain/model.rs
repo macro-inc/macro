@@ -4,6 +4,9 @@ use bots::domain::models::BotId;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use model_owner::Owner;
+
+use super::error::AgentSessionError;
 
 // The log vocabulary - the session id, the log entry, and the frame it
 // carries - is owned by `agent_fold`, the bottom of the agent session stack,
@@ -162,8 +165,8 @@ pub use bots::domain::models::{AgentMcpServer, AgentMcpServers};
 pub struct CreateAgentSessionParams {
     /// Caller-minted session id, available before persistence.
     pub id: AgentSessionId,
-    /// User who created and owns the session.
-    pub owner_id: MacroUserIdStr<'static>,
+    /// Who created and owns the session.
+    pub owner_id: Owner,
     /// Bot running the agent.
     pub bot_id: BotId,
     /// Root message identifying the originating thread, if any.
@@ -208,8 +211,8 @@ pub struct AgentSession {
     pub id: AgentSessionId,
     /// User-facing session name.
     pub name: String,
-    /// The user who created and owns the session. Immutable for its life.
-    pub owner_id: MacroUserIdStr<'static>,
+    /// Who created and owns the session. Immutable for its life.
+    pub owner_id: Owner,
     /// The root message where the bot was originally invoked, if any.
     pub thread_id: Option<Uuid>,
     /// Entity owning the originating thread, derived from its root message.
@@ -251,6 +254,21 @@ pub struct AgentSession {
     pub status: SessionStatus,
     pub created_at: DateTime<Utc>,
     pub modified_at: DateTime<Utc>,
+}
+
+impl AgentSession {
+    /// The user this session runs as.
+    ///
+    /// For every path that acts as the owner - spends their credentials,
+    /// bills them, grants them access - rather than merely names them. The
+    /// owner is a user for every session today, but the type no longer says
+    /// so; asking here fails typed for any other kind instead of treating a
+    /// bot or team as a person.
+    pub fn owner_user(&self) -> Result<&MacroUserIdStr<'static>, AgentSessionError> {
+        self.owner_id
+            .as_user()
+            .ok_or_else(|| AgentSessionError::OwnerNotUser(self.owner_id.owner_type()))
+    }
 }
 
 /// A persisted agent-session name changed and should be shown to live viewers.
@@ -535,8 +553,8 @@ pub struct AgentSessionPreviewData {
     pub id: AgentSessionId,
     /// User-facing session name.
     pub name: String,
-    /// The user who owns the session.
-    pub owner_id: MacroUserIdStr<'static>,
+    /// Who owns the session.
+    pub owner_id: Owner,
     /// The bot running the agent, for its avatar.
     pub bot_id: BotId,
     /// Minimal bot identity, hydrated by the service after checking session access.

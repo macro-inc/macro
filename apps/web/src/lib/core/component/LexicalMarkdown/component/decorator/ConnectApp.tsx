@@ -1,3 +1,5 @@
+import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { HarnessIcon } from '@core/component/HarnessIcon';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
@@ -27,7 +29,7 @@ export function ConnectApp(props: ConnectAppDecoratorProps) {
 }
 
 function ConnectPipedreamApp(props: ConnectAppDecoratorProps) {
-  const { openSettings } = useSettingsState();
+  const layout = useSplitLayout();
   const connections = usePipedreamConnectedSlugs();
   return (
     <ConnectChip
@@ -37,9 +39,9 @@ function ConnectPipedreamApp(props: ConnectAppDecoratorProps) {
       }
       icon={<PipedreamConnectorIcon appSlug={props.appSlug} class="size-3.5" />}
       onConnect={() => {
-        // The Integrations tab picks this up and starts the Connect flow.
+        // Connections picks this up and starts the Connect flow.
         requestConnectApp(props.appSlug);
-        openSettings('Connected');
+        openAgentsPage(layout, 'connections');
       }}
     />
   );

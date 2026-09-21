@@ -2546,10 +2546,12 @@ fn compile_predicate_selection(
     compiler
         .parameters
         .push(text(descriptor.sort_attribute.as_str()));
-    // Look up identity and sort facts by their real primary keys. Joining three
-    // materialized sets loses those indexes and makes even small queries quadratic.
+    // Drive the join from matching IDs and point-probe the sort-fact primary key.
+    // Without both constraints Turso prefers the (attribute, value, document_id)
+    // lookup index using only attribute, rescanning all sort facts for each match.
+    // The composite primary keys are part of the validated storage schema.
     compiler.ctes.push(format!(
-        "{hits}(record_key, value) AS MATERIALIZED (SELECT d.record_key, s.value FROM {matches} AS m JOIN index_documents AS d ON m.source = 0 AND d.id = m.document_id JOIN sort_facts AS s ON s.document_id = m.document_id AND s.attribute = ? UNION ALL SELECT d.record_key, s.value FROM {matches} AS m JOIN optimistic_index_documents AS d ON m.source = 1 AND d.id = m.document_id JOIN optimistic_sort_facts AS s ON s.document_id = m.document_id AND s.attribute = ?)"
+        "{hits}(record_key, value) AS MATERIALIZED (SELECT d.record_key, s.value FROM {matches} AS m CROSS JOIN index_documents AS d ON m.source = 0 AND d.id = m.document_id CROSS JOIN sort_facts AS s INDEXED BY sqlite_autoindex_sort_facts_1 ON s.document_id = m.document_id AND s.attribute = ? UNION ALL SELECT d.record_key, s.value FROM {matches} AS m CROSS JOIN optimistic_index_documents AS d ON m.source = 1 AND d.id = m.document_id CROSS JOIN optimistic_sort_facts AS s INDEXED BY sqlite_autoindex_optimistic_sort_facts_1 ON s.document_id = m.document_id AND s.attribute = ?)"
     ));
     compiler
         .parameters

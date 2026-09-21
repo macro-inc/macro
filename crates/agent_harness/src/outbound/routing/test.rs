@@ -140,8 +140,10 @@ impl AgentSessionRepo for FixedBotSessions {
             repo_branch: None,
             pull_request_url: None,
             id,
-            owner_id: MacroUserIdStr::try_from("macro|owner@macro.com".to_owned())
-                .expect("valid user id"),
+            owner_id: model_owner::Owner::User(
+                MacroUserIdStr::try_from("macro|owner@macro.com".to_owned())
+                    .expect("valid user id"),
+            ),
             thread_id: None,
             thread_parent: None,
             originating_message_id: None,

@@ -56,6 +56,7 @@ export interface CoordinatorRouterOptions {
   heartbeatIntervalMs?: number;
   heartbeatTimeoutMs?: number;
   verifyTabLockHeld?: (lockName: string) => Promise<boolean>;
+  verifyOwnerLockHeld?: (lockName: string) => Promise<boolean>;
   watchTabLock?: (
     lockName: string,
     onReleased: () => void
@@ -129,8 +130,8 @@ const envelope = <T extends { coordinatorVersion: 3 }>(
     ...value,
   }) as unknown as T;
 
-/** Independently checks that registration cannot acquire the page-held lock. */
-export async function verifyTabLivenessLockHeld(
+/** Probes lock ownership without queuing behind or stealing the held lock. */
+export async function verifyExclusiveLockHeld(
   lockName: string
 ): Promise<boolean> {
   return await navigator.locks.request(
@@ -189,6 +190,7 @@ export class CoordinatorRouter {
   private readonly heartbeatIntervalMs: number;
   private readonly heartbeatTimeoutMs: number;
   private readonly verifyTabLockHeld: (lockName: string) => Promise<boolean>;
+  private readonly verifyOwnerLockHeld: (lockName: string) => Promise<boolean>;
   private readonly watchTabLock: (
     lockName: string,
     onReleased: () => void
@@ -227,7 +229,9 @@ export class CoordinatorRouter {
     this.heartbeatTimeoutMs =
       options.heartbeatTimeoutMs ?? DEFAULT_HEARTBEAT_TIMEOUT_MS;
     this.verifyTabLockHeld =
-      options.verifyTabLockHeld ?? verifyTabLivenessLockHeld;
+      options.verifyTabLockHeld ?? verifyExclusiveLockHeld;
+    this.verifyOwnerLockHeld =
+      options.verifyOwnerLockHeld ?? verifyExclusiveLockHeld;
     this.watchTabLock = options.watchTabLock ?? watchTabLivenessLock;
     this.setTimeoutFn =
       options.setTimeout ?? globalThis.setTimeout.bind(globalThis);
@@ -1302,18 +1306,50 @@ export class CoordinatorRouter {
         return;
       }
       this.heartbeatTimeoutTimer = this.setTimeoutFn(() => {
-        if (
-          this.pendingHeartbeat?.ownerEpoch === ownerEpoch &&
-          this.pendingHeartbeat.heartbeatId === heartbeatId
-        ) {
-          this.failOwner(
-            route.tabId,
-            ownerEpoch,
-            'engine heartbeat watchdog timed out'
-          );
-        }
+        void this.checkHeartbeatOwner(route, heartbeatId);
       }, this.heartbeatTimeoutMs);
     }, this.heartbeatIntervalMs);
+  }
+
+  private async checkHeartbeatOwner(
+    route: EngineRoute,
+    heartbeatId: number
+  ): Promise<void> {
+    const core = this.coreValue;
+    if (!core || this.engineRoute !== route) return;
+
+    // A backgrounded/frozen page can suspend its DedicatedWorker while the
+    // SharedWorker keeps running. A missed heartbeat is not evidence of a
+    // crash: revoking ownership here wipes healthy storage and can exhaust
+    // recovery while the page is still suspended. Only a released physical
+    // owner lock confirms silent worker death (terminate() emits no error).
+    let lockHeld: boolean;
+    try {
+      lockHeld = await this.verifyOwnerLockHeld(
+        databaseOwnerLockName(core.scope)
+      );
+    } catch {
+      // A failed probe is not proof of owner loss either. Retry later.
+      lockHeld = true;
+    }
+    // The ack, a graceful drain, or another failure may have won the race
+    // while the lock probe was pending. Never act on that stale observation.
+    if (
+      this.engineRoute !== route ||
+      this.pendingHeartbeat?.ownerEpoch !== route.ownerEpoch ||
+      this.pendingHeartbeat.heartbeatId !== heartbeatId
+    ) {
+      return;
+    }
+    if (!lockHeld) {
+      this.failOwner(
+        route.tabId,
+        route.ownerEpoch,
+        'engine owner lock was released'
+      );
+      return;
+    }
+    this.scheduleHeartbeat(route.ownerEpoch);
   }
 
   private acceptHeartbeat(ownerEpoch: number, heartbeatId: number): void {

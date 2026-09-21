@@ -340,13 +340,55 @@ and DMs section headers.
 On touch layouts, the `Recent`, `Channels`, and `DMs` pill tabs each retain
 their own loaded pages and load more as their active list approaches the end.
 
+## Call lifecycle
+
+The channel's call tab and floating call controls share one session. Repeated
+Join clicks while connecting should produce one connection; leaving from either
+control ends the same call. Navigate away and return while connected to check
+that the call and its controls remain usable.
+
+For recovery checks, keep another participant connected and briefly interrupt
+the first participant's network. Recovery may rejoin that same live call. It
+must not start a replacement call if the original ended, or rejoin after the
+user chose Leave. A failed join must restore the Try again control even if
+background cleanup is slow.
+
+If another call prevents joining, the error should say to leave the current
+call first. Trying to join another channel must keep the current call connected,
+with its participants and controls intact. A restored live session must clear
+any earlier join or recovery error. Failed Join, Call Again, and Leave actions must not produce unhandled
+promise rejections.
+
+On iOS, ending a call during connection must leave Join usable. If CallKit
+restores or answers another call while an earlier join or leave finishes, the
+controls must follow the current native call; finishing the old operation must
+not restore the old call or remove the new call's end handler.
+An empty native snapshot before the first media update must not cancel a new
+join. Once native has reported the session, disconnecting or ending it must
+cancel pending connection/recovery and allow a new join.
+Cancelling after a token is issued must also remove server membership, even if
+media has not connected yet. Repeated end events share that cleanup; a newer
+native call must survive while cleanup for the cancelled attempt finishes.
+Restore the same channel while transport cleanup is pending and check that no
+server leave is sent for the restored session. Join must also accept a retry
+during cancellation cleanup. If a server leave was already sent, the retry
+shows Connecting and waits for that request before registering again.
+
 ## Channel tabs
 
-Radio group at the top of the channel pane: `Messages` / `Attachments` / `Participants`,
-plus `Ask Macro` and `Call` buttons. `Ask Macro` opens a new chat pane with the channel
+Radio group at the top of the channel pane: `Messages` / `Attachments` / `Calls` / `Participants`,
+plus `Ask Macro` and `Call` buttons. The `Calls` tab lists recordings for that channel
+(same rows as the Calls soup view, filtered to this channel). The live `Call` tab
+appears while a call is in progress. `Ask Macro` opens a new chat pane with the channel
 already @mentioned as context (see ai-chat.md). On mobile it lives in the channel title's
 `...` drawer instead. Clicking the radio input can time out — click the adjacent label text
 instead.
+
+`Calls` tab: recordings, transcriptions, and summaries for this channel. Click a
+row to open the call. The search field above the list matches call names and
+transcripts in this channel; queries shorter than 3 characters are not sent.
+Empty copy: `No calls in this channel`. No matches: `No results for "…"`.
+Shorter queries: `Keep typing to search`.
 
 `Participants` tab:
 - `Copy invite link`, participant search box.
@@ -356,6 +398,14 @@ instead.
 - Team access: `Team channel` switch (disabled until you belong to a team).
 - Bots: `New bot`, `Search existing bots…` combobox, `Invite bot` — webhook-powered channel
   participants.
+
+## Incoming call ringing
+
+For cross-tab ringing checks, sign the recipient into two tabs and start a call
+from another account. Both tabs may show the incoming call; only one should play
+the chime. Closing the audible tab lets the other take over while the call is
+still ringing. Answering or dismissing stops ringing across tabs. An unanswered
+call stops ringing after 30 seconds, including after a tab takes over.
 
 ## Onboarding channel
 

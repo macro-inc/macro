@@ -494,7 +494,14 @@ impl CursorClient {
 }
 
 impl CursorAgents for CursorClient {
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(
+        skip(self),
+        err,
+        fields(
+            cursor.poll.status = tracing::field::Empty,
+            cursor.poll.rate_limited = tracing::field::Empty,
+        )
+    )]
     async fn raw_result(
         &self,
         agent: &CursorAgentId,
@@ -508,8 +515,33 @@ impl CursorAgents for CursorClient {
             .await
             .map_err(|e| rootcause::report!(e))?;
         let status = response.status();
+        let retry_after = response
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned);
         let text = response.text().await.map_err(|e| rootcause::report!(e))?;
+        let span = tracing::Span::current();
+        span.record("cursor.poll.status", status.as_u16());
+        span.record(
+            "cursor.poll.rate_limited",
+            status == reqwest::StatusCode::TOO_MANY_REQUESTS,
+        );
         if !status.is_success() {
+            // The rate limit is per API key and shared by every session this
+            // deployment drives, so one session's 429 is a fact about the
+            // fleet, not about this run. Logged in its own right: until now
+            // it existed only inside an error chain that reached the reader
+            // and nothing else, so "are we over the limit" was unanswerable
+            // from telemetry.
+            if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                tracing::warn!(
+                    %agent,
+                    %run,
+                    retry_after = retry_after.as_deref().unwrap_or("unset"),
+                    "Cursor run poll was rate limited"
+                );
+            }
             return Err(rootcause::report!(
                 "Cursor run poll failed: {status}: {text}"
             ));

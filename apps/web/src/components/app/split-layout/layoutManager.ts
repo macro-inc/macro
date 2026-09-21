@@ -14,7 +14,6 @@ import { toast } from '@core/component/Toast/Toast';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
 import { settingsTabToSlug } from '@core/constant/settingsTabsConfig';
 import { sameContentIdentity } from '@core/contentInstanceRegistry';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type {
   BlockInstanceHandle,
   BlockOrchestrator,
@@ -30,26 +29,15 @@ import {
   onCleanup,
 } from 'solid-js';
 import { createStore, produce, reconcile, type Store } from 'solid-js/store';
-import { match } from 'ts-pattern';
 import {
   type ComponentMeta,
   type ComponentMetaMap,
   resolveComponent,
 } from './componentRegistry';
 import { createHistory, type History } from './history';
-import {
-  isPreviewControllerContent,
-  previewControllerWidthForContent,
-} from './previewController';
 import { DEFAULT_SPLIT_MIN_WIDTH } from './splitContentSizing';
 
 const ENABLE_DEFAULT_ALWAYS_IN_HISTORY = false;
-
-/** Placeholder content a Preview Pair's Viewer opens before any navigation. */
-const PREVIEW_VIEWER_EMPTY_CONTENT = {
-  type: 'component',
-  id: 'preview-empty',
-} as const;
 
 export type SplitId = string & { readonly SplitId: unique symbol };
 type SplitKey = `${BlockName | BlockAlias | 'component'}:${string}`;
@@ -218,13 +206,6 @@ export type OpenWithSplitOptions = {
   replaceWhenFull?: boolean;
   /** If true, prefers opening in a new split. May still replace if layout is at capacity. */
   preferNewSplit?: boolean;
-  /**
-   * Open in place of the whole Preview Pair: the Viewer closes, preview mode
-   * disengages, and the content replaces the Controller — the same shape as
-   * external replacement navigation, but asked for deliberately. Ignored when
-   * the navigation does not come from a live Preview Pair.
-   */
-  replacePreview?: boolean;
   insertIndex?: number;
   handle?: SplitHandle;
   /**
@@ -236,12 +217,6 @@ export type OpenWithSplitOptions = {
    */
   reopen?: 'latest';
 };
-
-/**
- * A live Preview Pair: navigation in the Controller is redirected into its
- * immediately-adjacent Viewer.
- */
-export type PreviewPair = { controllerId: SplitId; viewerId: SplitId };
 
 /**
  * A navigation interceptor registered by, e.g. mobile swipe layout.
@@ -430,54 +405,6 @@ export type SplitManager = {
    */
   setNavigationInterceptor: (fn: NavigationInterceptor | undefined) => void;
 
-  /**
-   * Engage preview mode on a split: it becomes the Controller in a Preview
-   * Pair with an eagerly-created Viewer, and navigation routes between them by
-   * configured controller capability. No-op on mobile and when there is no
-   * room for the Viewer.
-   */
-  engagePreviewMode: (controllerId: SplitId) => void;
-
-  /** Restore a Preview Pair using an existing adjacent Viewer. */
-  restorePreviewPair: (controllerId: SplitId, viewerId: SplitId) => boolean;
-
-  /**
-   * Whether preview mode can engage on this split — requires room for the
-   * Viewer (or an adoptable placeholder already on screen). Reactive.
-   */
-  canEngagePreview: (controllerId: SplitId) => boolean;
-
-  /** Exit preview mode and close the Preview Pair's Viewer. */
-  disengagePreviewMode: (controllerId: SplitId) => void;
-
-  /**
-   * Return the Preview Pair's Viewer to its empty placeholder, e.g. when the
-   * Controller's list changes wholesale and the previewed entity no longer
-   * corresponds to a selected row. Replaces the Viewer's current entry (like
-   * Controller-originated selection navigation) rather than stacking a
-   * placeholder entry. No-op without a Viewer or when it already shows the
-   * placeholder.
-   */
-  resetPreviewMode: (controllerId: SplitId) => void;
-
-  /** Preserve both splits while unlinking their Preview Pair. */
-  unlinkPreviewPair: (controllerId: SplitId) => void;
-
-  /** The automatic-redistribution preference for a Controller. Reactive. */
-  previewControllerWidth: (
-    controllerId: SplitId,
-    viewportWidth?: number
-  ) => number | undefined;
-
-  /** The Controller's live Viewer id, if one exists. Reactive. */
-  viewerOf: (controllerId: SplitId) => SplitId | undefined;
-
-  /** The controller whose viewer is the given split, if any. Reactive. */
-  controllerOf: (viewerId: SplitId) => SplitId | undefined;
-
-  /** All live, immediately-adjacent Preview Pairs. */
-  previewPairs: Accessor<PreviewPair[]>;
-
   /** Get reactive accessor to popovers map */
   popovers: () => Map<
     string,
@@ -531,10 +458,6 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
   content: () => SplitContent;
   isSpotLight: () => boolean;
   isPopover: () => boolean;
-  /** Whether this split is the Viewer side of a Preview Pair. */
-  isViewerSplit: () => boolean;
-  /** Whether this split is the Controller side of a Preview Pair. */
-  isControllerSplit: () => boolean;
   displayName: () => string;
   canGoBack: () => boolean;
   isActive: () => boolean;
@@ -587,16 +510,6 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
    * Returns `undefined` if no state has been captured.
    */
   currentEntryState: () => EntryState | undefined;
-  /** Whether preview mode can engage on this split (room for a viewer). */
-  canEngagePreview: () => boolean;
-  /** Engage preview mode on this split (see SplitManager.engagePreviewMode). */
-  engagePreview: () => void;
-  /** Exit preview mode and close this Controller's Viewer. */
-  disengagePreview: () => void;
-  /** Return this Controller's Viewer to its placeholder (see SplitManager.resetPreviewMode). */
-  resetPreview: () => void;
-  /** This Controller's live Viewer id, if one exists. Reactive. */
-  viewerId: () => SplitId | undefined;
 } & UrlCapabilities;
 
 function newSplitId(): SplitId {
@@ -686,13 +599,6 @@ export function createSplitLayout(
     lastActiveSplitId: SplitId | undefined;
     spotlightId: SplitId | undefined;
     events: SplitEventWithType[];
-    /**
-     * Preview Pairs keyed by Controller id. Key present = preview mode
-     * engaged on that split, and the Viewer always exists (engage
-     * refuses to run without room for one). IDs remain in-memory only;
-     * SplitLayout persists stable URL-order indices for reload restoration.
-     */
-    previewPairs: Record<SplitId, { viewerId: SplitId }>;
     popovers: Map<
       string,
       {
@@ -710,7 +616,6 @@ export function createSplitLayout(
     lastActiveSplitId: undefined,
     spotlightId: undefined,
     events: [],
-    previewPairs: {},
     popovers: new Map(),
   });
 
@@ -938,11 +843,6 @@ export function createSplitLayout(
       };
       return s.with(i, target);
     });
-
-    // Content changes that bypass Preview Pair routing (direct handle.replace,
-    // history back/forward) can violate its content invariant; unlink the
-    // Preview Pair when they do.
-    enforcePreviewPairContentInvariant(split.id);
   }
 
   function back(id: SplitId) {
@@ -961,7 +861,6 @@ export function createSplitLayout(
       if (!prev) return;
 
       reattach(split, prev, undefined, 'history-back');
-      resetPreviewMode(id);
     });
   }
 
@@ -1003,7 +902,6 @@ export function createSplitLayout(
 
       result.moved = true;
       reattach(split, prev, undefined, 'history-back');
-      resetPreviewMode(id);
     });
 
     return result.moved;
@@ -1025,7 +923,6 @@ export function createSplitLayout(
       if (!next) return;
 
       reattach(split, next, undefined, 'history-forward');
-      resetPreviewMode(id);
     });
   }
 
@@ -1283,18 +1180,7 @@ export function createSplitLayout(
           return;
         }
 
-        // Closing a Preview Pair's Controller closes its Viewer too. Remove
-        // the Viewer first so the Controller's final remove event determines
-        // which remaining split receives focus. One atomic mutation: a flush
-        // between the removals would let a pending preview engagement (a
-        // split waiting on room, see soup-view's initial-preview effect)
-        // insert its Viewer into the still-crowded layout, min-crushing
-        // every panel and scrambling the freed space's redistribution.
-        batch(() => {
-          const viewerId = viewerOf(currentSplit.id);
-          if (viewerId) removeSplit(viewerId, false);
-          removeSplit(currentSplit.id);
-        });
+        removeSplit(currentSplit.id);
       },
       getUrlSegments: () => contentUrlSegments(content()),
       getUrl: () => contentUrlSegments(content()).join('/'),
@@ -1303,8 +1189,6 @@ export function createSplitLayout(
       isActive: () => currentSplit.id === state.activeSplitId,
       isSpotLight: () => state.spotlightId === currentSplit.id,
       isPopover: () => state.popovers.has(currentSplit.id),
-      isViewerSplit: () => controllerOf(currentSplit.id) !== undefined,
-      isControllerSplit: () => viewerOf(currentSplit.id) !== undefined,
       toggleSpotlight: (force?: boolean) => {
         toggleSpotlightSplit(currentSplit.id, force);
       },
@@ -1367,11 +1251,6 @@ export function createSplitLayout(
         const c = live.content as { state?: EntryState };
         return c.state;
       },
-      canEngagePreview: () => canEngagePreview(currentSplit.id),
-      engagePreview: () => engagePreviewMode(currentSplit.id),
-      disengagePreview: () => disengagePreviewMode(currentSplit.id),
-      resetPreview: () => resetPreviewMode(currentSplit.id),
-      viewerId: () => viewerOf(currentSplit.id),
     };
   };
 
@@ -1414,7 +1293,6 @@ export function createSplitLayout(
         );
         return nextSplits;
       });
-      pruneNonAdjacentPreviewPairs();
     });
 
     const handle = getSplit(split.id)!;
@@ -1439,11 +1317,7 @@ export function createSplitLayout(
     contentChangeListeners.delete(id);
     entryStateCaptors.delete(id);
 
-    // One atomic mutation: clearing the Preview Pair and removing the split
-    // must reach reactive consumers together, so the departing split's panel
-    // still carries its pair share-group when the resize solver drops it.
     batch(() => {
-      clearPreviewPairsFor(id);
       setSplitNamesById(
         produce((map) => {
           delete map[id];
@@ -1462,345 +1336,23 @@ export function createSplitLayout(
     });
   }
 
-  function splitGroupBounds(
-    id: SplitId
-  ): readonly [number, number] | undefined {
-    const index = splitIndexById(id);
-    if (index < 0) return undefined;
-
-    const viewerId = state.previewPairs[id]?.viewerId;
-    if (viewerId && state.splits[index + 1]?.id === viewerId) {
-      return [index, index + 1];
-    }
-
-    const controllerIndex = state.splits.findIndex(
-      (split) => state.previewPairs[split.id]?.viewerId === id
-    );
-    if (controllerIndex >= 0 && controllerIndex + 1 === index) {
-      return [controllerIndex, index];
-    }
-
-    return [index, index];
-  }
-
   function canSwapSplit(id: SplitId, direction: 'left' | 'right') {
-    const bounds = splitGroupBounds(id);
-    if (!bounds) return false;
-
-    const targetIndex = direction === 'left' ? bounds[0] - 1 : bounds[1] + 1;
-    return targetIndex >= 0 && targetIndex < state.splits.length;
+    const index = splitIndexById(id);
+    const target = index + (direction === 'left' ? -1 : 1);
+    return index >= 0 && target >= 0 && target < state.splits.length;
   }
 
   function swapSplit(id: SplitId, direction: 'left' | 'right') {
-    const bounds = splitGroupBounds(id);
-    if (!bounds) return;
-
-    const targetIndex = direction === 'left' ? bounds[0] - 1 : bounds[1] + 1;
-    if (targetIndex < 0 || targetIndex >= state.splits.length) return;
-
+    if (!canSwapSplit(id, direction)) return;
+    const index = splitIndexById(id);
+    const targetIndex = index + (direction === 'left' ? -1 : 1);
     const target = state.splits[targetIndex];
-    if (!target) return;
-    const targetBounds = splitGroupBounds(target.id);
-    if (!targetBounds) return;
-
-    const [sourceStart, sourceEnd] = bounds;
-    const [targetStart, targetEnd] = targetBounds;
-    const [leftStart, leftEnd, rightStart, rightEnd] =
-      sourceStart < targetStart
-        ? [sourceStart, sourceEnd, targetStart, targetEnd]
-        : [targetStart, targetEnd, sourceStart, sourceEnd];
-
     batch(() => {
       resizeContext()?.swap(id, target.id);
-      setState('splits', (splits) => {
-        return [
-          ...splits.slice(0, leftStart),
-          ...splits.slice(rightStart, rightEnd + 1),
-          ...splits.slice(leftEnd + 1, rightStart),
-          ...splits.slice(leftStart, leftEnd + 1),
-          ...splits.slice(rightEnd + 1),
-        ];
-      });
+      setState('splits', (splits) =>
+        splits.with(index, splits[targetIndex]).with(targetIndex, splits[index])
+      );
     });
-  }
-
-  /**
-   * An unclaimed placeholder split sitting immediately right of the
-   * controller that engage adopts as the viewer instead of creating a
-   * duplicate.
-   */
-  function adoptableViewerFor(controllerId: SplitId): SplitId | undefined {
-    const controllerIndex = splitIndexById(controllerId);
-    const adjacent =
-      controllerIndex >= 0 ? state.splits[controllerIndex + 1] : undefined;
-    if (
-      adjacent &&
-      sameContent(adjacent.content, PREVIEW_VIEWER_EMPTY_CONTENT) &&
-      !controllerOf(adjacent.id)
-    ) {
-      return adjacent.id;
-    }
-    return undefined;
-  }
-
-  /**
-   * Whether preview mode can engage on this split: there must be room for
-   * the Viewer (or an adoptable placeholder already on screen).
-   * Reactive.
-   */
-  function canEngagePreview(controllerId: SplitId): boolean {
-    if (isTouchDevice()) return false;
-    const controller = findSplitById(controllerId);
-    if (
-      !controller ||
-      isExcluded(controller) ||
-      !isPreviewControllerContent(controller.content) ||
-      controllerOf(controllerId) !== undefined
-    ) {
-      return false;
-    }
-    if (viewerOf(controllerId) !== undefined) return true;
-    return adoptableViewerFor(controllerId) !== undefined || canAppendSplit();
-  }
-
-  /** Whether two live splits can form a non-overlapping adjacent Preview Pair. */
-  function canLinkPreviewPair(
-    controllerId: SplitId,
-    viewerId: SplitId
-  ): boolean {
-    if (isTouchDevice()) return false;
-    const controllerIndex = splitIndexById(controllerId);
-    const controller = state.splits[controllerIndex];
-    const viewer = state.splits[controllerIndex + 1];
-    if (
-      !controller ||
-      controller.id !== controllerId ||
-      !viewer ||
-      viewer.id !== viewerId ||
-      isExcluded(controller) ||
-      isExcluded(viewer)
-    ) {
-      return false;
-    }
-    if (!isPreviewControllerContent(controller.content)) {
-      return false;
-    }
-
-    // Neither side can already participate in another Preview Pair.
-    return (
-      state.previewPairs[controllerId] === undefined &&
-      state.previewPairs[viewerId] === undefined &&
-      controllerOf(controllerId) === undefined &&
-      controllerOf(viewerId) === undefined
-    );
-  }
-
-  /** The sole creator of Controller/Viewer Preview Pairs. */
-  function linkPreviewPair(controllerId: SplitId, viewerId: SplitId): boolean {
-    if (!canLinkPreviewPair(controllerId, viewerId)) return false;
-    setState('previewPairs', controllerId, { viewerId });
-
-    // A restored layout comes up with its last split — often the viewer — as
-    // active. The controller owns the keyboard when its viewer is active only
-    // because it was the last URL entry, so return activation to it.
-    if (state.activeSplitId === viewerId) {
-      activateSplit(controllerId);
-    }
-    return true;
-  }
-
-  /**
-   * Structural split mutations may not leave a Preview Pair whose Viewer is
-   * anywhere except immediately right of its Controller.
-   */
-  function pruneNonAdjacentPreviewPairs() {
-    setState(
-      'previewPairs',
-      produce((map) => {
-        for (const controllerId of Object.keys(map) as SplitId[]) {
-          const controllerIndex = splitIndexById(controllerId);
-          if (
-            controllerIndex < 0 ||
-            state.splits[controllerIndex + 1]?.id !==
-              map[controllerId]?.viewerId
-          ) {
-            delete map[controllerId];
-          }
-        }
-      })
-    );
-  }
-
-  function restorePreviewPair(
-    controllerId: SplitId,
-    viewerId: SplitId
-  ): boolean {
-    return linkPreviewPair(controllerId, viewerId);
-  }
-
-  function engagePreviewMode(controllerId: SplitId) {
-    // Mobile shows one panel at a time; a side-by-side viewer cannot exist.
-    if (isTouchDevice()) return;
-    const controller = findSplitById(controllerId);
-    if (!controller || !isPreviewControllerContent(controller.content)) return;
-    if (state.previewPairs[controllerId] !== undefined) return;
-    if (controllerOf(controllerId) !== undefined) return;
-
-    // The viewer opens with its placeholder immediately; navigation then
-    // replaces its content. Adopt an unclaimed placeholder already sitting
-    // right of the controller instead of duplicating it. Without room for a
-    // viewer, preview mode does not engage at all.
-    //
-    // Creating the viewer and linking the Preview Pair is one atomic
-    // mutation: the viewer's resize panel must register with its pair
-    // share-group already in place so it carves its width out of the
-    // Controller instead of every split.
-    batch(() => {
-      let viewerId = adoptableViewerFor(controllerId);
-      if (viewerId === undefined) {
-        if (!canAppendSplit()) return;
-        const controllerIndex = splitIndexById(controllerId);
-        const viewerHandle = createNewSplit({
-          content: PREVIEW_VIEWER_EMPTY_CONTENT,
-          activate: false,
-          referredFrom: null,
-          allowDuplicate: true,
-          insertIndex: controllerIndex >= 0 ? controllerIndex + 1 : undefined,
-        });
-        if (!viewerHandle) return;
-        viewerId = viewerHandle.id;
-      }
-      linkPreviewPair(controllerId, viewerId);
-    });
-
-    // The Controller's configured width is enforced declaratively as an
-    // automatic-redistribution preference and maximum (see
-    // SplitLayoutContainer). Direct gutter drags remain unconstrained by it.
-  }
-
-  function unlinkPreviewPair(controllerId: SplitId) {
-    setState(
-      'previewPairs',
-      produce((map) => {
-        delete map[controllerId];
-      })
-    );
-  }
-
-  function disengagePreviewMode(controllerId: SplitId) {
-    // Atomic for the same reason as removeSplit: the viewer's panel must
-    // still carry its pair share-group when the resize solver drops it, so
-    // its width returns to the Controller rather than every split.
-    batch(() => {
-      const viewerId = viewerOf(controllerId);
-      unlinkPreviewPair(controllerId);
-      if (viewerId) removeSplit(viewerId);
-    });
-  }
-
-  function resetPreviewMode(controllerId: SplitId) {
-    const viewerId = viewerOf(controllerId);
-    if (viewerId === undefined) return;
-    const viewer = getSplit(viewerId);
-    if (!viewer) return;
-    const content = viewer.content();
-    if (
-      content.type === PREVIEW_VIEWER_EMPTY_CONTENT.type &&
-      content.id === PREVIEW_VIEWER_EMPTY_CONTENT.id
-    ) {
-      return;
-    }
-    viewer.replace({
-      next: PREVIEW_VIEWER_EMPTY_CONTENT,
-      referredFrom: null,
-      // Like Controller-originated selection navigation, the reset replaces
-      // the Viewer's current entry instead of stacking a placeholder entry.
-      mergeHistory: true,
-    });
-  }
-
-  const previewControllerWidth = (
-    controllerId: SplitId,
-    viewportWidth?: number
-  ) => {
-    if (viewerOf(controllerId) === undefined) return undefined;
-    const content = findSplitById(controllerId)?.content;
-    return content
-      ? previewControllerWidthForContent(content, viewportWidth)
-      : undefined;
-  };
-
-  const viewerOf = (controllerId: SplitId): SplitId | undefined => {
-    return state.previewPairs[controllerId]?.viewerId;
-  };
-
-  const controllerOf = (viewerId: SplitId): SplitId | undefined => {
-    for (const [controllerId, previewPair] of Object.entries(
-      state.previewPairs
-    )) {
-      if (previewPair.viewerId === viewerId) {
-        return controllerId as SplitId;
-      }
-    }
-    return undefined;
-  };
-
-  const previewPairs = createMemo<PreviewPair[]>(() => {
-    return Object.entries(state.previewPairs).map(
-      ([controllerId, { viewerId }]) => ({
-        controllerId: controllerId as SplitId,
-        viewerId,
-      })
-    );
-  });
-
-  /** Called whenever split `id` leaves the layout. */
-  function clearPreviewPairsFor(id: SplitId) {
-    setState(
-      'previewPairs',
-      produce((map) => {
-        // Controller removed outside its close action: Preview Pair gone, its
-        // Viewer stays. SplitHandle.close removes the Viewer first.
-        delete map[id];
-        for (const key of Object.keys(map) as SplitId[]) {
-          // Viewer closed (✕ button, hotkey, reconcile): preview mode
-          // disengages on its controller.
-          if (map[key]?.viewerId === id) delete map[key];
-        }
-      })
-    );
-  }
-
-  /** The Preview Pair a split belongs to, seen from either side. */
-  function previewPairOf(id: SplitId): PreviewPair | undefined {
-    const viewerId = state.previewPairs[id]?.viewerId;
-    if (viewerId !== undefined) return { controllerId: id, viewerId };
-    const controllerId = controllerOf(id);
-    if (controllerId) return { controllerId, viewerId: id };
-    return undefined;
-  }
-
-  /**
-   * A Preview Pair consists of an eligible Controller and its Viewer. A block
-   * such as a project may be eligible to act as a Controller while also being
-   * valid Viewer content; the live pair assignment, rather than content type,
-   * determines its role.
-   *
-   * Content changes that reach the Controller outside `openWithSplit` (direct
-   * `handle.replace`, history back/forward, URL reconcile) can make it
-   * ineligible; when they do, the Preview Pair closes.
-   */
-  function enforcePreviewPairContentInvariant(id: SplitId) {
-    const split = findSplitById(id);
-    if (!split) return;
-
-    // Controller side: ineligible content breaks the Preview Pair.
-    if (
-      viewerOf(id) !== undefined &&
-      !isPreviewControllerContent(split.content)
-    ) {
-      disengagePreviewMode(id);
-    }
   }
 
   function hasSplit(type: SplitContentType, id: string): boolean {
@@ -1915,17 +1467,12 @@ export function createSplitLayout(
       resultSplits.push(newSplit);
     }
 
-    // Update order and unlink any Preview Pair that the rebuild separated
-    // before reactive consumers can observe the new split layout. Removed
-    // splits are cleaned up in the same atomic mutation so a removed
-    // Preview Pair member's panel still carries its pair share-group when
-    // the resize solver drops it.
+    // Update the layout and clean up removed splits atomically.
     batch(() => {
       for (const split of state.splits) {
         if (!usedIds.has(split.id)) {
           contentChangeListeners.delete(split.id);
           entryStateCaptors.delete(split.id);
-          clearPreviewPairsFor(split.id);
           setSplitNamesById(
             produce((map) => {
               delete map[split.id];
@@ -1936,17 +1483,7 @@ export function createSplitLayout(
       }
 
       setState('splits', resultSplits);
-      pruneNonAdjacentPreviewPairs();
     });
-
-    // URL-driven rebuilds can swap a Preview Pair member's content in place
-    // (same id, new content) — enforce its content invariant here too.
-    for (const [controllerId, previewPair] of Object.entries(
-      state.previewPairs
-    )) {
-      enforcePreviewPairContentInvariant(controllerId as SplitId);
-      enforcePreviewPairContentInvariant(previewPair.viewerId);
-    }
   }
 
   const lastEvent = createMemo(() => state.events[state.events.length - 1]);
@@ -2047,42 +1584,6 @@ export function createSplitLayout(
     }
   }
 
-  /**
-   * Where a navigation lands when its source belongs to a live Preview Pair.
-   *
-   * - `dissolve`: the Viewer closes and the content replaces the Controller.
-   * - `into-viewer`: the content previews in the Viewer, which never takes the
-   *   keyboard from the Controller.
-   * - `unchanged`: the navigation stands on its own — a new split, or the
-   *   Viewer replacing itself like any other split.
-   */
-  type PreviewRoute = 'dissolve' | 'into-viewer' | 'unchanged';
-
-  function previewRouteFor(
-    previewPair: PreviewPair,
-    explicitSourceId: SplitId | undefined,
-    options: OpenWithSplitOptions
-  ): PreviewRoute {
-    // Asking to replace the preview outranks everything else.
-    if (options.replacePreview) return 'dissolve';
-
-    // Explicit new-split intent stands on its own while there is room for it,
-    // which leaves the Preview Pair intact. Without room it falls back to the
-    // replacement routing below — into the Viewer, never the Controller.
-    if (options.preferNewSplit && canAppendSplit()) return 'unchanged';
-
-    // External (handle-less) replacement navigation, e.g. the sidebar or the
-    // command menu, takes the pair's place. Handle-less create-new actions are
-    // not replacements, and were already answered above.
-    if (explicitSourceId === undefined) return 'dissolve';
-
-    // A Controller selection previews; anything else (notably the Viewer
-    // navigating itself) replaces its own split.
-    return explicitSourceId === previewPair.controllerId
-      ? 'into-viewer'
-      : 'unchanged';
-  }
-
   function openWithSplit(
     content: SplitContent,
     options: OpenWithSplitOptions = {}
@@ -2109,75 +1610,13 @@ export function createSplitLayout(
       if (result.handled) return undefined;
     }
 
-    // Preview Pair routing (see previewRouteFor for the rules). Options are
-    // rewritten once, never recursively. Runs before the duplicate
-    // short-circuit so an existing-content hit can never activate (and focus)
-    // another split while the Controller holds the keyboard.
-    const explicitSourceId = options.handle?.id;
-    const previewSourceId = explicitSourceId ?? state.activeSplitId;
-    const sourcePreviewPair = previewSourceId
-      ? previewPairOf(previewSourceId)
-      : undefined;
-    const previewPair =
-      sourcePreviewPair && findSplitById(sourcePreviewPair.viewerId)
-        ? sourcePreviewPair
-        : undefined;
-    const previewRoute: PreviewRoute = previewPair
-      ? previewRouteFor(previewPair, explicitSourceId, options)
-      : 'unchanged';
-
-    if (previewPair) {
-      options = match(previewRoute)
-        .with('dissolve', () => {
-          disengagePreviewMode(previewPair.controllerId);
-          return {
-            ...options,
-            handle: getSplit(previewPair.controllerId),
-            preferNewSplit: false,
-            insertIndex: undefined,
-          };
-        })
-        .with('into-viewer', () => ({
-          ...options,
-          handle: getSplit(previewPair.viewerId),
-          preferNewSplit: false,
-          activate: false,
-          insertIndex: undefined,
-          // Controller-originated navigation is transient selection state,
-          // not preview history: it replaces the Viewer's current
-          // entry, so only the preview's own navigation stacks up.
-          mergeHistory: true,
-        }))
-        .with('unchanged', () => options)
-        .exhaustive();
-    }
-
     const existingSplit = getSplitByContent(content.type, content.id);
-
-    // Promoting the previewed row into a split of its own: the Viewer's copy is
-    // the preview being superseded, not a competing split, so it must not
-    // short-circuit into "activate what is already open". The Viewer drops back
-    // to its placeholder once the content has a real split (see below), so the
-    // content still lives in exactly one place. An `unchanged` route with
-    // new-split intent is precisely the case where the split has room to exist.
-    const promotedPreviewPair =
-      previewPair !== undefined &&
-      previewRoute === 'unchanged' &&
-      options.preferNewSplit === true &&
-      explicitSourceId === previewPair.controllerId &&
-      existingSplit?.id === previewPair.viewerId
-        ? previewPair
-        : undefined;
 
     if (
       existingSplit &&
-      !promotedPreviewPair &&
       (contentIdentity(content).type !== 'component' || !options.allowDuplicate)
     ) {
-      // A controller selection can resolve to content already mounted in its
-      // own viewer (notably two rows from one channel). Refresh the viewer's
-      // merged history entry so per-entry source metadata follows the latest
-      // selection instead of being stranded on the first row.
+      // Preserve per-entry state when the owning split replaces its current entry.
       if (options.mergeHistory && options.handle?.id === existingSplit.id) {
         existingSplit.captureEntryState();
         const currentState = existingSplit.currentEntryState();
@@ -2228,13 +1667,6 @@ export function createSplitLayout(
 
       return splitHandle;
     } else {
-      // The promoted content is about to own a real split, so clear the preview
-      // it came from first: it must never sit in two splits at once, and a
-      // Viewer still holding it would make createNewSplit dedupe into it.
-      if (promotedPreviewPair) {
-        resetPreviewMode(promotedPreviewPair.controllerId);
-      }
-
       return createNewSplit({
         content,
         activate: options.activate ?? true,
@@ -2267,7 +1699,7 @@ export function createSplitLayout(
     }
 
     // Atomic for the same reason as SplitHandle.close: no flush between
-    // removals, so pending preview engagements only see the final layout.
+    // removals, so observers only see the final layout.
     batch(() => {
       for (const split of visibleSplits) {
         if (split.id !== splitToKeep.id) {
@@ -2344,15 +1776,5 @@ export function createSplitLayout(
     setNavigationInterceptor: (fn) => {
       navigationInterceptor = fn;
     },
-    engagePreviewMode,
-    restorePreviewPair,
-    canEngagePreview,
-    disengagePreviewMode,
-    resetPreviewMode,
-    unlinkPreviewPair,
-    previewControllerWidth,
-    viewerOf,
-    controllerOf,
-    previewPairs,
   };
 }

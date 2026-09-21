@@ -105,7 +105,9 @@ fn session(id: AgentSessionId, bot_id: BotId) -> AgentSession {
         pull_request_url: None,
         id,
         name: agent_session::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
-        owner_id: MacroUserIdStr::try_from_email("owner@example.com").expect("valid macro user id"),
+        owner_id: model_owner::Owner::User(
+            MacroUserIdStr::try_from_email("owner@example.com").expect("valid macro user id"),
+        ),
         thread_id: Some(Uuid::from_u128(3)),
         thread_parent: Some(MessageParent::Channel(Uuid::from_u128(1))),
         originating_message_id: None,

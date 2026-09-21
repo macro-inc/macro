@@ -668,6 +668,33 @@ function withRawNotifications<T extends SoupEntity>(
   return { ...entity, notifications } as T;
 }
 
+function calendarReminderTimestamp(
+  item: Extract<DisplayableSoupItem, { tag: 'calendarEvent' }>
+): string | undefined {
+  let latest: string | undefined;
+  let latestMs = -Infinity;
+  const include = (timestamp: string | null | undefined) => {
+    const ms = timestamp ? Date.parse(timestamp) : NaN;
+    if (ms > latestMs) {
+      latest = timestamp ?? undefined;
+      latestMs = ms;
+    }
+  };
+
+  include(item.data.lastReminderFiredAt);
+  const notifications = (item as SoupItemWithOptionalNotifications).data
+    .notifications;
+  for (const notification of notifications ?? []) {
+    if (
+      !notification.deleted_at &&
+      notification.notification_metadata.tag === 'calendar_event_reminder'
+    ) {
+      include(notification.created_at);
+    }
+  }
+  return latest;
+}
+
 type ReferencedEntityType = NonNullable<
   ReminderEntity['referencedEntity']
 >['type'];
@@ -1015,10 +1042,15 @@ export const mapApiSoupItemToEntity = (
   // activity consumer can't move a freshly-touched row back down.
   const touchedAt = resolveOwnTouch(entity.id, item.touched_at ?? null);
   const touched = touchedAt ? { ...entity, touchedAt } : entity;
-  // Likewise only notified_at pages carry this one; the inbox sorts and
-  // date-buckets on it. Resolved through the notified floor so a page that
-  // was in flight when a notification landed can't move the row back down.
-  const notifiedAt = resolveNotifiedAt(entity.id, item.notified_at ?? null);
+  // Calendar sync can update old events long after their reminders fired.
+  // Without the server's notified_at sort, use the attached reminder's
+  // delivery time (or REST delivery stamp) rather than that metadata update.
+  // The explicit server stamp and newer websocket floor still take priority.
+  const notifiedAt = resolveNotifiedAt(
+    entity.id,
+    item.notified_at ??
+      (item.tag === 'calendarEvent' ? calendarReminderTimestamp(item) : null)
+  );
   const notified = notifiedAt ? { ...touched, notifiedAt } : touched;
 
   return withRawNotifications(notified, item);

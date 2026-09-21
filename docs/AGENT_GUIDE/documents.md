@@ -432,6 +432,12 @@ keeps at least 16px of
 bottom clearance above the drawer's curve, including while the keyboard is open,
 and accounts for the home-indicator safe area when the keyboard is closed.
 
+Also verify anchored comments in Drive's detail pane: open a document with
+existing text anchors, then click a numbered comment badge to expand it. The
+document should stay visible and the thread should open; loading the document
+with its badges still collapsed does not exercise thread rendering. Comment
+copy links should retain the document/task route and the selected comment.
+
 ### Unified document discussions (`enable-unified-document-discussions`)
 
 With the PostHog flag `enable-unified-document-discussions` on (locally

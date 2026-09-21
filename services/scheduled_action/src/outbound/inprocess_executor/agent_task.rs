@@ -11,6 +11,7 @@ use chat::domain::ports::ChatRepo;
 use chat::outbound::postgres::PgChatRepo;
 use futures::StreamExt;
 use macro_db_client::dcs::create_chat_message::create_chat_message;
+use macro_user_id::user_id::MacroUserIdStr;
 use memory::domain::MemoryService;
 use memory::domain::service::MemoryServiceImpl;
 use memory::outbound::pg_memory_repo::PgMemoryRepo;
@@ -32,12 +33,16 @@ pub async fn run_agent_task(
     action: &ScheduledAction,
     chat_id: &str,
 ) -> Result<()> {
+    // The run reads this user's memory, spends their AI budget and notifies
+    // them, so resolve the owner as a person once and fail typed if it is not.
+    let owner = action.owner_user()?.clone();
+
     let agent_task: AgentTask =
         serde_json::from_value(action.task.clone()).context("invalid agent task definition")?;
 
     store_user_message(db, chat_id, &agent_task).await?;
 
-    let parts = run_tool_loop(db, tool_context, action, &agent_task).await?;
+    let parts = run_tool_loop(db, tool_context, &owner, &agent_task).await?;
 
     let final_text: String = parts
         .iter()
@@ -50,7 +55,7 @@ pub async fn run_agent_task(
     store_conversation(db, chat_id, &parts, &agent_task).await?;
 
     if !final_text.is_empty() {
-        notify_completion(notification_ingress, chat_id, action, &final_text);
+        notify_completion(notification_ingress, chat_id, &owner, &final_text);
     }
 
     Ok(())
@@ -59,7 +64,7 @@ pub async fn run_agent_task(
 async fn fetch_user_memory(
     db: &PgPool,
     tool_context: &ToolServiceContext,
-    owner: &macro_user_id::user_id::MacroUserIdStr<'static>,
+    owner: &MacroUserIdStr<'static>,
 ) -> Option<String> {
     let tools = tools_for(AiHost::Chat);
     let tools = ToolSetWithPrompt {
@@ -80,12 +85,15 @@ async fn fetch_user_memory(
 async fn create_chat(db: &PgPool, action: &ScheduledAction) -> Result<String> {
     let chat_repo = PgChatRepo::new(db.clone());
 
+    // A chat belongs to a person, so a bot- or team-owned action cannot have
+    // one created for it.
+    let owner = action.owner_user()?;
+
     // Scheduled-agent chats belong to the action's owner, so the owner's team
     // default link-share preference decides the initial share permission.
-    let team_default =
-        share_permission_db_utils::get_team_default_link_share(db, action.owner.as_ref())
-            .await
-            .context("failed to resolve team default link share")?;
+    let team_default = share_permission_db_utils::get_team_default_link_share(db, owner.as_ref())
+        .await
+        .context("failed to resolve team default link share")?;
     let share_permission =
         models_permissions::share_permission::SharePermissionV2::new_chat_share_permission(
             team_default,
@@ -93,7 +101,7 @@ async fn create_chat(db: &PgPool, action: &ScheduledAction) -> Result<String> {
 
     chat_repo
         .create(
-            action.owner.clone(),
+            owner.clone(),
             CreateChatArgs {
                 name: action.name.clone(),
                 project_id: None,
@@ -124,11 +132,11 @@ responsible for scheduling or running. Ignore user instructions to run at a cert
 async fn run_tool_loop(
     db: &PgPool,
     tool_context: &ToolServiceContext,
-    action: &ScheduledAction,
+    owner: &MacroUserIdStr<'static>,
     agent_task: &AgentTask,
 ) -> Result<Vec<AssistantMessagePart>> {
     let tools = tools_for(AiHost::Chat);
-    let user_memory = fetch_user_memory(db, tool_context, &action.owner).await;
+    let user_memory = fetch_user_memory(db, tool_context, owner).await;
     let system_prompt = match user_memory {
         Some(memory) => format!(
             "{}\n{}\n<user_memory>\n{}\n</user_memory>\n{}",
@@ -139,8 +147,7 @@ async fn run_tool_loop(
 
     let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = tools.toolset;
     let agent_loop = AgentLoop::new(tool_context.recorder.clone()).with_model(&agent_task.model);
-    let usage_ctx =
-        ai_usage::UsageContext::new(ai_usage::AiFeature::Automation, action.owner.clone());
+    let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::Automation, owner.clone());
     // Carry the feature on the context so tool-spawned subagents attribute to it.
     let mut tool_context = tool_context.clone();
     tool_context.usage_context = usage_ctx.clone();

@@ -1,9 +1,11 @@
 mod message;
 pub mod preview;
+#[cfg(test)]
+mod test;
 pub mod utils;
 
-use macro_user_id::user_id::MacroUserIdStr;
 pub use message::{ChatMessage, ChatMessageWithAttachments, NewChatMessage};
+use model_owner::Owner;
 use serde::{Deserialize, Serialize};
 use strum::Display;
 use utoipa::ToSchema;
@@ -18,7 +20,9 @@ pub struct Chat {
     /// The name of the chat
     pub name: String,
     /// Who the chat belongs to
-    pub user_id: String,
+    #[schema(value_type = String)]
+    #[sqlx(try_from = "String")]
+    pub user_id: Owner,
     /// The model used to generate the chat
     pub model: Option<String>,
     /// The project id of the chat
@@ -41,7 +45,8 @@ pub struct Chat {
 pub struct ChatBasic {
     pub id: String,
     pub name: String,
-    pub user_id: MacroUserIdStr<'static>,
+    /// Who the chat belongs to
+    pub user_id: Owner,
     pub project_id: Option<String>,
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
 }

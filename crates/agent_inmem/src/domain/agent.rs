@@ -37,7 +37,7 @@ use ai_tools::user_tool_review::{
     ReviewError, ReviewFieldKind, ReviewForm, ReviewOutcome, ReviewRequest, UserToolReviewer,
 };
 use async_trait::async_trait;
-use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::Owner;
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
@@ -104,7 +104,7 @@ pub struct AgentState {
     /// The Macro session this agent runs.
     pub session_id: AgentSessionId,
     /// The session's owner; turns run on their behalf.
-    pub owner: MacroUserIdStr<'static>,
+    pub owner: Owner,
     /// Runs the actual turns.
     pub engine: Arc<dyn TurnEngine>,
     /// Conversation state, shared with the manager so it survives reattach.

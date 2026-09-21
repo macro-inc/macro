@@ -207,20 +207,28 @@ export function ChatComposer(props: {
                 data-composer-compact={isCompact()}
                 class="group/composer flex min-w-0 data-[composer-compact=false]:flex-col data-[composer-compact=false]:items-stretch items-end gap-2 p-[7.5px]"
               >
-                <div class="max-h-60 min-w-0 flex-1 self-center group-data-[composer-compact=false]/composer:flex-none group-data-[composer-compact=false]/composer:self-stretch overflow-y-auto px-[9.375px]">
-                  <MarkdownShell
-                    class="h-auto min-h-6 text-base leading-6 [&_[data-markdown-editable]]:min-h-6 [&_[data-markdown-editable]]:outline-none [&_[data-markdown-editable]>.md-p]:my-0 [&_[data-markdown-placeholder]]:max-w-full [&_[data-markdown-placeholder]>p]:m-0 [&_[data-markdown-placeholder]>p]:truncate"
-                    config={editor}
-                    initialValue={props.draft}
-                    placeholder={props.placeholder ?? tip()}
-                    refFn={(element) =>
-                      element.setAttribute('aria-label', 'Message the agent')
-                    }
-                    autofocus={
-                      !isTouchDevice() &&
-                      (props.autoFocus ?? props.session?.autofocus ?? true)
-                    }
-                  />
+                <div class="flex min-w-0 flex-1 self-center items-start group-data-[composer-compact=false]/composer:flex-none group-data-[composer-compact=false]/composer:self-stretch">
+                  <Show when={props.onAttachFiles}>
+                    <Input.AttachFilesAction
+                      accept={null}
+                      disabled={disabled()}
+                    />
+                  </Show>
+                  <div class="max-h-60 min-w-0 flex-1 self-center overflow-y-auto px-[9.375px]">
+                    <MarkdownShell
+                      class="h-auto min-h-6 text-base leading-6 [&_[data-markdown-editable]]:min-h-6 [&_[data-markdown-editable]]:outline-none [&_[data-markdown-editable]>.md-p]:my-0 [&_[data-markdown-placeholder]]:max-w-full [&_[data-markdown-placeholder]>p]:m-0 [&_[data-markdown-placeholder]>p]:truncate"
+                      config={editor}
+                      initialValue={props.draft}
+                      placeholder={props.placeholder ?? tip()}
+                      refFn={(element) =>
+                        element.setAttribute('aria-label', 'Message the agent')
+                      }
+                      autofocus={
+                        !isTouchDevice() &&
+                        (props.autoFocus ?? props.session?.autofocus ?? true)
+                      }
+                    />
+                  </div>
                 </div>
                 <div
                   data-composer-controls
@@ -229,12 +237,6 @@ export function ChatComposer(props: {
                   aria-label="Composer settings"
                 >
                   <div class="ml-auto flex min-w-0 max-w-full items-center gap-2 [&_.menu]:right-0 [&_.menu]:left-auto [&_.menu-anchor]:min-w-0 [&_.pill]:max-w-full">
-                    <Show when={props.onAttachFiles}>
-                      <Input.AttachFilesAction
-                        accept={null}
-                        disabled={disabled()}
-                      />
-                    </Show>
                     {props.selector}
                     <Show
                       when={

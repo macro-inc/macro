@@ -5,8 +5,8 @@ use std::sync::Arc;
 use agent::types::ChatMessage;
 use agent::{AgentError, StreamPart};
 use ai_tools::user_tool_review::UserToolReviewer;
-use macro_user_id::user_id::MacroUserIdStr;
 use mcp_toolset::RemoteMcpToolSet;
+use model_owner::Owner;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
@@ -23,9 +23,10 @@ pub struct AgentIdentity {
 
 /// Everything one conversational turn needs.
 pub struct TurnRequest {
-    /// The user the turn acts on behalf of. Tools run with their identity and
-    /// token usage is recorded against them.
-    pub owner: MacroUserIdStr<'static>,
+    /// The session's owner, whom the turn acts on behalf of: tools run with
+    /// their identity and token usage is recorded against them. Both need a
+    /// person, which the engine asks of this rather than assumes.
+    pub owner: Owner,
     /// Model id the turn runs on. Unknown ids fall back to the loop's
     /// default model rather than failing the turn.
     pub model: String,

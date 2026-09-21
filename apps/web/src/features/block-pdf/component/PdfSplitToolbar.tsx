@@ -13,17 +13,14 @@ import { PageNumberInput } from './PageNumberInput';
 export function PdfTabsToggle() {
   const pdf = usePdfDocument();
   const canEdit = pdf.permissions.canEdit;
-  const [showTabBar, setShowTabBar] = pdf.state.signals.showTabBar;
 
   return (
     <Show when={canEdit()}>
       <Button
         size="icon-sm"
-        label={showTabBar() ? 'Hide Tabs' : 'Show Tabs'}
+        label={pdf.tabs.isVisible() ? 'Hide Tabs' : 'Show Tabs'}
         variant="ghost"
-        onClick={() => {
-          setShowTabBar(!showTabBar());
-        }}
+        onClick={pdf.tabs.commands.toggleVisibility}
       >
         <Tabs />
       </Button>
@@ -44,7 +41,7 @@ export function PdfToolbarControls() {
 }
 
 export function PdfSplitToolbar() {
-  const [documentProxy] = usePdfDocument().state.signals.documentProxy;
+  const documentProxy = usePdfDocument().documentProxy;
   return (
     <Show when={documentProxy()}>
       <SplitToolbarLeft>

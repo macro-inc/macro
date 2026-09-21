@@ -72,8 +72,8 @@ may import a block package, `@core/block`, or block-related signal modules.
   callbacks use those captured functions instead of resolving a provider after
   setup.
 - `email-view` owns an `EntityDetailNavigationStack`. Ordinary list activation
-  mounts the thread inside `/app/component/mail`; Shift-open and Preview Pair
-  navigation continue through the standalone `/app/email/:threadId` block. The
+  mounts the thread inside `/app/component/mail`; Shift-open
+  navigation continues through the standalone `/app/email/:threadId` block. The
   filtered data source outlives the list UI so Previous, Next, Mark done, and
   restored list focus keep their source order while detail is mounted.
 
