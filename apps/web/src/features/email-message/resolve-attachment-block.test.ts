@@ -12,6 +12,14 @@ describe('resolveEmailAttachmentBlockName', () => {
     ).toBe('pdf');
   });
 
+  it('opens documents stored as ps (legacy postscript mime mapping) in pdf', () => {
+    expect(
+      resolveEmailAttachmentBlockName({
+        documentFileType: 'ps',
+      })
+    ).toBe('pdf');
+  });
+
   it('prefers filename over ambiguous MIME mappings', () => {
     expect(
       resolveEmailAttachmentBlockName({
