@@ -31,7 +31,8 @@ function viewRoute(
 const agentsSplitRoutes = ['agents', 'coders', 'agent-chats'].map((section) =>
   defineRoute({
     id: section,
-    path: `${section}/:id`,
+    path: section === 'agent-chats' ? 'agents/chat/:id' : `${section}/:id`,
+    aliases: section === 'agent-chats' ? ['agent-chats/:id'] : undefined,
     params: z.object({ id: z.string() }),
     component: views.withLaunchParams(() => views.AgentsRouteView),
     remountKey: ({ id }: Record<string, unknown>) => String(id),

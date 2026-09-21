@@ -1,14 +1,23 @@
+import { agentsRouteId } from '@app/features/agents-view/core/route';
 import {
   createRoutesManifest,
+  decodeRoute,
   defineRoute,
+  encodeRoute,
 } from '@app/lib/split-router/routes';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import type { SplitContent } from '../layoutManager';
+import { appSplitRoutes } from '../split-router/app-routes';
 import {
   legacySplitRoute,
   resolveContentLocation,
+  splitContentFromLocation,
 } from '../split-router/legacy-route';
+
+vi.mock('../split-router/app-views', () => ({
+  withLaunchParams: () => () => null,
+}));
 
 vi.mock('@core/constant/allBlocks', () => ({
   isBlockAlias: () => false,
@@ -40,6 +49,62 @@ const routes = createRoutesManifest({
 const content: SplitContent = { type: 'component', id: 'documents' };
 
 describe('legacy router location boundary', () => {
+  it.each([
+    {
+      type: 'chat',
+      routeId: 'agent-chats',
+      path: ['agents', 'chat', 'conversation-1'],
+    },
+    {
+      type: 'agent_session',
+      routeId: 'agents',
+      path: ['agents', 'conversation-1'],
+    },
+  ] as const)(
+    'keeps $type conversations under Agents across URL and saved-layout round trips',
+    ({ type, routeId, path }) => {
+      const manifest = createRoutesManifest(appSplitRoutes);
+      const conversation: SplitContent = {
+        type: 'component',
+        id: agentsRouteId({
+          mode: 'chat',
+          conversation: { type, id: 'conversation-1' },
+        }),
+      };
+      for (const restored of [
+        conversation,
+        {
+          ...conversation,
+          entryMetadata: {
+            route: {
+              matches: [{ id: routeId, params: { id: 'conversation-1' } }],
+            },
+          },
+        },
+      ]) {
+        const location = resolveContentLocation(manifest, restored);
+        expect(encodeRoute(manifest, { location })).toEqual(path);
+        const decoded = decodeRoute(manifest, [...path]);
+        expect(decoded?.location).toEqual(location);
+        expect(splitContentFromLocation(decoded!.location)).toEqual(
+          conversation
+        );
+      }
+    }
+  );
+
+  it('canonicalizes old agent-chats links without changing conversation identity', () => {
+    const manifest = createRoutesManifest(appSplitRoutes);
+    const oldLink = decodeRoute(manifest, ['agent-chats', 'chat-1']);
+    const canonical = decodeRoute(manifest, ['agents', 'chat', 'chat-1']);
+    expect(oldLink).toEqual(canonical);
+    expect(encodeRoute(manifest, oldLink!)).toEqual([
+      'agents',
+      'chat',
+      'chat-1',
+    ]);
+  });
+
   it.each([
     undefined,
     null,
