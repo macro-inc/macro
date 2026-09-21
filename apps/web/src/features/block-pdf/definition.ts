@@ -18,6 +18,7 @@ export const definition = defineBlock({
   accepted: {
     pdf: 'application/pdf',
     docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ai: 'application/postscript',
   },
   component: lazy(() => import('./component/Block')),
   liveTrackingEnabled: true,
