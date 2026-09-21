@@ -139,6 +139,7 @@ function InboxViewRoot() {
                               selectedEntity={entity()}
                               orchestrator={orchestrator}
                               splitPanelContext={panel}
+                              onReminderClose={newChat}
                               headerLeading={
                                 <HomeReturnBreadcrumb onReturn={newChat} />
                               }

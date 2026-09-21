@@ -1,8 +1,11 @@
+import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
+import { openCalendarEventSplit } from '@block-calendar/open-calendar-event';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { ItemPreview } from '@core/component/ItemPreview';
 import { toast } from '@core/component/Toast/Toast';
 import type { ReminderEntity } from '@entity';
 import BellIcon from '@phosphor/bell-simple.svg';
+import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import {
   reminderSoupPatch,
@@ -14,10 +17,12 @@ import {
   optimisticUpdateSoupEntity,
 } from '@queries/soup/cache';
 import type { Reminder } from '@service-storage/generated/schemas/reminder';
+import { Button } from '@ui';
 import {
   createMemo,
   createSignal,
   Match,
+  onCleanup,
   onMount,
   Show,
   Switch,
@@ -84,6 +89,12 @@ export type ReminderDetailsProps = {
  * mutation the create modal uses and asks its host to close.
  */
 export function ReminderDetails(props: ReminderDetailsProps) {
+  let active = true;
+  onCleanup(() => {
+    active = false;
+  });
+
+  const calendarUiEnabled = useCalendarUiFlag();
   const query = useReminderQuery(() => props.reminderId);
   const [updateError, setUpdateError] = createSignal<string>();
   let focusBeforeSave: HTMLElement | undefined;
@@ -105,6 +116,12 @@ export function ReminderDetails(props: ReminderDetailsProps) {
   const reference = createMemo(() => {
     const reminder = query.isSuccess ? query.data : undefined;
     return reminder ? referenceMention(reminder) : undefined;
+  });
+  const calendarEventId = createMemo(() => {
+    if (!query.isSuccess || query.data.entityType !== 'calendar_event') {
+      return undefined;
+    }
+    return query.data.entityId;
   });
   const reminderUnavailable = () =>
     !props.reminderId ||
@@ -143,21 +160,30 @@ export function ReminderDetails(props: ReminderDetailsProps) {
       props.onClose();
       return;
     }
+    const submittedReminderId = reminder.id;
     try {
       const updated = await updateReminder.mutateAsync({
         id: reminder.id,
         patch,
       });
+      if (!active || props.reminderId !== submittedReminderId) return;
       toast.success(
         `Reminder updated · ${describeReminderConfirmation(updated.schedule)}`
       );
       props.onClose();
     } catch {
+      if (!active || props.reminderId !== submittedReminderId) return;
       setUpdateError(
         'We couldn’t save these changes. Your edits are still here—try again.'
       );
       queueMicrotask(() => {
-        if (focusBeforeSave?.isConnected) focusBeforeSave.focus();
+        if (
+          active &&
+          props.reminderId === submittedReminderId &&
+          focusBeforeSave?.isConnected
+        ) {
+          focusBeforeSave.focus();
+        }
       });
     }
   };
@@ -177,18 +203,45 @@ export function ReminderDetails(props: ReminderDetailsProps) {
                 pending={updateReminder.isPending}
                 error={updateError()}
                 reference={
-                  <Show when={reference()}>
-                    {(ref) => (
-                      <div class="flex flex-col gap-1">
-                        <span class="text-xs font-medium text-ink-muted">
-                          Original item
-                        </span>
-                        <div class="flex">
-                          <ItemPreview id={ref().id} type={ref().type} />
+                  <>
+                    <Show when={reference()}>
+                      {(ref) => (
+                        <div class="flex flex-col gap-1">
+                          <span class="text-xs font-medium text-ink-muted">
+                            Original item
+                          </span>
+                          <div class="flex">
+                            <ItemPreview id={ref().id} type={ref().type} />
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </Show>
+                      )}
+                    </Show>
+                    <Show
+                      when={calendarUiEnabled() ? calendarEventId() : undefined}
+                    >
+                      {(eventId) => (
+                        <div class="flex flex-col gap-1">
+                          <span class="text-xs font-medium text-ink-muted">
+                            Original item
+                          </span>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            class="self-start"
+                            onClick={() =>
+                              void openCalendarEventSplit({
+                                eventId: eventId(),
+                              })
+                            }
+                          >
+                            <CalendarBlankIcon class="size-4" />
+                            Open calendar event
+                          </Button>
+                        </div>
+                      )}
+                    </Show>
+                  </>
                 }
                 onCancel={props.onClose}
                 onSubmit={(values) => void save(values, reminder())}
