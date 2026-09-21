@@ -25,7 +25,7 @@ use agent_runtime_protocol::domain::{
 use axum::{
     Json, Router,
     extract::{FromRef, Path, State},
-    http::StatusCode,
+    http::{StatusCode, header},
     response::{IntoResponse, Response},
     routing::{delete, get, post, put},
 };
@@ -341,6 +341,20 @@ impl IntoResponse for AgentSessionApiError {
                     _ => StatusCode::BAD_REQUEST,
                 };
                 (status, error.to_string()).into_response()
+            }
+            // This replica is on its way out of a rolling deploy. The work
+            // was not started, so the honest answer is "ask again" rather
+            // than a 200 for a command that would have died with the
+            // process: 503 with a retry hint, which is what the load
+            // balancer's next pick will serve.
+            Self::Domain(AgentSessionError::Draining(session_id)) => {
+                tracing::info!(%session_id, "command refused: this replica is draining");
+                (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    [(header::RETRY_AFTER, "1")],
+                    "this replica is shutting down; retry",
+                )
+                    .into_response()
             }
             // Already dispatched, removed, or never queued: the caller's
             // entry is not waiting anymore, and there is no un-sending it.

@@ -5,6 +5,7 @@
 mod chat_reply;
 mod user_cleanup;
 
+use agent_session::domain::service::AgentSessionService as _;
 use messages::domain::models::MessageParent;
 use std::sync::{Arc, Mutex};
 
@@ -1222,6 +1223,56 @@ async fn forward_to_a_live_session_reuses_the_transport() {
         MessageParent::Channel(Uuid::from_u128(0xf0))
     );
     assert_eq!(announced[1].origin_thread_id, Uuid::from_u128(0xf1));
+}
+
+/// The failure this exists to stop: a rolling deploy's outgoing task keeps
+/// heartbeating for its whole drain window, so peers went on forwarding it
+/// prompts, it accepted them with a 200, and they died with the process
+/// seconds later. Once it has published its drain it starts nothing - not a
+/// prompt for a session it is still running, not an open for a new one - so
+/// the caller's retry lands on a replica that is staying.
+#[tokio::test]
+async fn a_draining_replica_starts_no_new_work() {
+    let ((service, _repo, containers, _announcer, _runtimes), mut turns) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+    let id = AgentSessionId::new();
+    let container = live_session(&service, &containers, id).await;
+    turns.settled(id).await;
+    let delivered = prompts(&container.agent()).len();
+
+    service
+        .inner
+        .sessions
+        .begin_draining()
+        .await
+        .expect("the drain is published");
+
+    let refused = service
+        .execute(
+            id,
+            HarnessCommand::Deliver(forward_message("how is it going")),
+        )
+        .await
+        .expect_err("a draining replica must not take a prompt it cannot finish");
+    assert!(
+        matches!(refused, HarnessError::Session(AgentSessionError::Draining(session)) if session == id),
+        "the refusal names the drain so the caller can retry, got {refused:?}"
+    );
+    assert_eq!(
+        prompts(&container.agent()).len(),
+        delivered,
+        "nothing reached the agent"
+    );
+
+    let refused_open = service
+        .execute(AgentSessionId::new(), HarnessCommand::Open(open_command()))
+        .await
+        .expect_err("a draining replica must not open a session either");
+    assert!(matches!(
+        refused_open,
+        HarnessError::Session(AgentSessionError::Draining(_))
+    ));
+    assert_eq!(containers.spawned(), 1, "no container for the refused open");
 }
 
 #[tokio::test]

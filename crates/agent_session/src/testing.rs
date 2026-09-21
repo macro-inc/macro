@@ -8,8 +8,8 @@ use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::events::AgentSessionLifecycleEvent;
 use crate::domain::model::{
     AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreviewData,
-    ClaimOutcome, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME, LogAppended, ManagerFence,
-    ReplicaAddress, ReplicaId, SandboxSize, SessionBot, SessionClaim, SessionManager,
+    ClaimOutcome, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME, LeaseView, LogAppended,
+    ManagerFence, ReplicaAddress, ReplicaId, SandboxSize, SessionBot, SessionClaim, SessionManager,
     SessionPreviewCandidate, SessionStatus, StoredAgentSessionLog, StoredQueuedAction,
     ThreadSession,
 };
@@ -34,7 +34,28 @@ mod working_branch;
 type Lease = (Option<ReplicaId>, i64);
 
 /// One replica's row: its last heartbeat and published forwarding address.
-type ReplicaRow = (std::time::Instant, Option<ReplicaAddress>);
+/// A replica's heartbeat row: when it last beat, where peers reach it, and
+/// whether it has said it is going away.
+#[derive(Debug, Clone)]
+struct ReplicaRow {
+    beat: std::time::Instant,
+    address: Option<ReplicaAddress>,
+    draining: bool,
+}
+
+impl ReplicaRow {
+    fn beating() -> Self {
+        Self {
+            beat: std::time::Instant::now(),
+            address: None,
+            draining: false,
+        }
+    }
+
+    fn live(&self) -> bool {
+        self.beat.elapsed() < REPLICA_STALE_AFTER
+    }
+}
 
 /// An in-memory [`AgentSessionRepo`] and [`AgentSessionLogRepo`].
 ///
@@ -499,16 +520,19 @@ impl SessionOwnership for InMemoryAgentSessionRepo {
             .replicas
             .lock()
             .expect("in-memory replica store is not poisoned");
-        replicas.entry(replica).or_insert((now, None)).0 = now;
+        replicas
+            .entry(replica)
+            .or_insert_with(ReplicaRow::beating)
+            .beat = now;
         let mut leases = self
             .leases
             .lock()
             .expect("in-memory lease store is not poisoned");
         let (holder, fence) = leases.entry(session).or_insert((None, 0));
         let holder_is_live = holder.filter(|holder| *holder != replica).filter(|holder| {
-            replicas
-                .get(holder)
-                .is_some_and(|(beat, _)| now.duration_since(*beat) < REPLICA_STALE_AFTER)
+            replicas.get(holder).is_some_and(|row| {
+                now.duration_since(row.beat) < REPLICA_STALE_AFTER && !row.draining
+            })
         });
         if let Some(holder) = holder_is_live {
             return Ok(ClaimOutcome::ManagedElsewhere(holder));
@@ -541,37 +565,52 @@ impl SessionOwnership for InMemoryAgentSessionRepo {
             .replicas
             .lock()
             .expect("in-memory replica store is not poisoned");
-        let entry = replicas
-            .entry(replica)
-            .or_insert((std::time::Instant::now(), None));
-        entry.0 = std::time::Instant::now();
+        let entry = replicas.entry(replica).or_insert_with(ReplicaRow::beating);
+        entry.beat = std::time::Instant::now();
         // As in the real adapter: a beat carrying no address keeps the one
         // already published.
         if let Some(address) = address {
-            entry.1 = Some(address.clone());
+            entry.address = Some(address.clone());
         }
         Ok(())
     }
 
-    async fn manager_of(&self, session: AgentSessionId) -> Result<Option<SessionManager>> {
+    async fn lease_view(&self, session: AgentSessionId, replica: ReplicaId) -> Result<LeaseView> {
         let leases = self
             .leases
             .lock()
             .expect("in-memory lease store is not poisoned");
-        let Some((Some(holder), _)) = leases.get(&session) else {
-            return Ok(None);
-        };
         let replicas = self
             .replicas
             .lock()
             .expect("in-memory replica store is not poisoned");
-        Ok(replicas
-            .get(holder)
-            .filter(|(beat, _)| beat.elapsed() < REPLICA_STALE_AFTER)
-            .map(|(_, address)| SessionManager {
-                replica: *holder,
-                address: address.clone(),
-            }))
+        let holder = match leases.get(&session) {
+            Some((Some(holder), _)) => {
+                replicas
+                    .get(holder)
+                    .filter(|row| row.live())
+                    .map(|row| SessionManager {
+                        replica: *holder,
+                        address: row.address.clone(),
+                        draining: row.draining,
+                    })
+            }
+            _ => None,
+        };
+        Ok(LeaseView {
+            holder,
+            asking_replica_draining: replicas.get(&replica).is_some_and(|row| row.draining),
+        })
+    }
+
+    async fn begin_draining(&self, replica: ReplicaId) -> Result<()> {
+        self.replicas
+            .lock()
+            .expect("in-memory replica store is not poisoned")
+            .entry(replica)
+            .or_insert_with(ReplicaRow::beating)
+            .draining = true;
+        Ok(())
     }
 }
 

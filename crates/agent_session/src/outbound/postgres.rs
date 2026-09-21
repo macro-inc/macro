@@ -18,9 +18,10 @@ mod working_branch;
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{
     AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreviewData,
-    ClaimOutcome, CreateAgentSessionParams, ExternalSession, ManagerFence, Message, ReplicaAddress,
-    ReplicaId, SandboxSize, SessionBot, SessionClaim, SessionManager, SessionPreviewCandidate,
-    SessionStatus, StoredAgentSessionLog, StoredQueuedAction, ThreadSession, cursor_run_checkpoint,
+    ClaimOutcome, CreateAgentSessionParams, ExternalSession, LeaseView, ManagerFence, Message,
+    ReplicaAddress, ReplicaId, SandboxSize, SessionBot, SessionClaim, SessionManager,
+    SessionPreviewCandidate, SessionStatus, StoredAgentSessionLog, StoredQueuedAction,
+    ThreadSession, cursor_run_checkpoint,
 };
 use crate::domain::ports::{
     AgentSessionLogRepo, AgentSessionRepo, ExternalSessionRepo, REPLICA_STALE_AFTER,
@@ -1452,6 +1453,7 @@ impl SessionOwnership for PgAgentSessionRepo {
                     SELECT 1 FROM harness_replica live
                     WHERE live.id = agent_session.manager_replica_id
                       AND live.last_heartbeat_at > now() - make_interval(secs => $3)
+                      AND live.draining_at IS NULL
                 )
               )
             RETURNING manager_fence
@@ -1542,25 +1544,63 @@ impl SessionOwnership for PgAgentSessionRepo {
         Ok(())
     }
 
-    async fn manager_of(&self, session: AgentSessionId) -> Result<Option<SessionManager>> {
+    async fn lease_view(&self, session: AgentSessionId, replica: ReplicaId) -> Result<LeaseView> {
+        // One statement for both halves: the holder comes from the session's
+        // lease, the asking replica's own drain from its heartbeat row, and
+        // reading them apart could straddle the moment this replica started
+        // draining and route a command to itself anyway. Built outward from
+        // the asked-for id rather than from `agent_session`, so a session
+        // that does not exist still answers the drain half.
         let row = sqlx::query!(
             r#"
-            SELECT live.id AS replica_id, live.address
-            FROM agent_session
-            JOIN harness_replica live ON live.id = agent_session.manager_replica_id
-            WHERE agent_session.id = $1
-              AND live.last_heartbeat_at > now() - make_interval(secs => $2)
+            SELECT
+                live.id AS "replica_id?",
+                live.address AS "address?",
+                (live.draining_at IS NOT NULL) AS "holder_draining?",
+                EXISTS (
+                    SELECT 1 FROM harness_replica me
+                    WHERE me.id = $3 AND me.draining_at IS NOT NULL
+                ) AS "asking_replica_draining!"
+            FROM (SELECT $1::uuid AS id) AS asked
+            LEFT JOIN agent_session ON agent_session.id = asked.id
+            LEFT JOIN harness_replica live
+                ON live.id = agent_session.manager_replica_id
+               AND live.last_heartbeat_at > now() - make_interval(secs => $2)
             "#,
             session.as_uuid(),
             REPLICA_STALE_AFTER.as_secs_f64(),
+            replica.as_uuid(),
         )
-        .fetch_optional(&self.pool)
+        .fetch_one(&self.pool)
         .await
-        .context("failed to read the agent session's live manager")?;
-        Ok(row.map(|row| SessionManager {
-            replica: ReplicaId::from_uuid(row.replica_id),
-            address: row.address.map(ReplicaAddress::new),
-        }))
+        .context("failed to read the agent session's lease")?;
+        Ok(LeaseView {
+            holder: row.replica_id.map(|replica_id| SessionManager {
+                replica: ReplicaId::from_uuid(replica_id),
+                address: row.address.map(ReplicaAddress::new),
+                draining: row.holder_draining.unwrap_or(false),
+            }),
+            asking_replica_draining: row.asking_replica_draining,
+        })
+    }
+
+    async fn begin_draining(&self, replica: ReplicaId) -> Result<()> {
+        // Upsert, not update: a replica that has not heartbeated yet still
+        // has to be able to say it is leaving, and the row it creates is
+        // stale from birth - which is exactly what it means.
+        sqlx::query!(
+            r#"
+            INSERT INTO harness_replica (id, draining_at)
+            VALUES ($1, now())
+            ON CONFLICT (id) DO UPDATE
+            SET draining_at = COALESCE(harness_replica.draining_at, now())
+            "#,
+            replica.as_uuid(),
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to publish that the harness replica is draining")?;
+        Ok(())
     }
 }
 

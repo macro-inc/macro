@@ -1,7 +1,7 @@
 use super::*;
 use crate::PROTOCOL_VERSION;
 use crate::domain::model::{
-    DEFAULT_AGENT_SESSION_NAME, Message, ReplicaAddress, SessionBot, SessionManager,
+    DEFAULT_AGENT_SESSION_NAME, LeaseView, Message, ReplicaAddress, SessionBot,
 };
 use crate::domain::ports::NoOpRealtime;
 use crate::domain::ports::{NoOpTurnObserver, NoopLifecyclePublisher};
@@ -624,8 +624,12 @@ impl SessionOwnership for BlockingPromptLogs {
         self.repo.heartbeat(replica, address).await
     }
 
-    async fn manager_of(&self, session: AgentSessionId) -> Result<Option<SessionManager>> {
-        self.repo.manager_of(session).await
+    async fn lease_view(&self, session: AgentSessionId, replica: ReplicaId) -> Result<LeaseView> {
+        self.repo.lease_view(session, replica).await
+    }
+
+    async fn begin_draining(&self, replica: ReplicaId) -> Result<()> {
+        self.repo.begin_draining(replica).await
     }
 }
 
@@ -924,6 +928,61 @@ async fn a_second_replica_cannot_attach_a_session_with_a_live_manager() {
         .await;
 
     assert!(matches!(result, Err(AgentSessionError::ManagedElsewhere(id)) if id == fx.session));
+}
+
+/// What a rolling deploy does to routing, from the service's side. The task
+/// being replaced keeps heartbeating for its whole drain window, so nothing
+/// about liveness stops work reaching it; the drain it publishes is what
+/// does. Both halves: the replica leaving reports itself as no place to send
+/// work, and the peer stops seeing it as the manager and takes the session
+/// over instead of waiting out a heartbeat that is still arriving.
+#[tokio::test]
+async fn a_draining_replica_stops_managing_its_sessions() {
+    let fx = fixture();
+    fx.service
+        .attach_session(fx.session, RuntimeAttachment::solo(PendingTransport))
+        .await
+        .expect("the first replica attaches");
+    let peer = AgentSessionServiceImpl::new(
+        fx.repo.clone(),
+        FoldedMessageService::new(fx.repo.clone()),
+        NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
+    );
+    assert!(matches!(
+        fx.service.management(fx.session).await.expect("management"),
+        SessionManagement::Ours
+    ));
+    assert!(matches!(
+        peer.management(fx.session).await.expect("management"),
+        SessionManagement::Peer(manager) if manager.replica == fx.service.replica_id()
+    ));
+
+    fx.service
+        .begin_draining()
+        .await
+        .expect("the drain is published");
+
+    assert!(
+        matches!(
+            fx.service.management(fx.session).await.expect("management"),
+            SessionManagement::Draining
+        ),
+        "a replica on its way out sends work nowhere, its own sessions included"
+    );
+    assert!(
+        matches!(
+            peer.management(fx.session).await.expect("management"),
+            SessionManagement::Unmanaged
+        ),
+        "the holder is leaving, so the session is the staying replica's to take"
+    );
+    peer.attach_session(fx.session, RuntimeAttachment::solo(PendingTransport))
+        .await
+        .expect("the peer takes over from a draining holder");
 }
 
 /// A command sent while the handshake never completes cannot hang its caller

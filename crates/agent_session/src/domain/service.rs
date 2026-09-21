@@ -198,12 +198,22 @@ pub trait AgentSessionService: Send + Sync + 'static {
     fn mark_disconnected(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
 
     /// Where the session's live actor runs, from this instance's viewpoint:
-    /// unmanaged (claimable here), ours, or a live peer's - in which case
-    /// commands belong at the peer's address rather than in this process.
+    /// unmanaged (claimable here), ours, a live peer's - in which case
+    /// commands belong at the peer's address rather than in this process -
+    /// or nowhere worth sending work, because this instance is draining.
     fn management(
         &self,
         id: AgentSessionId,
     ) -> impl Future<Output = Result<SessionManagement>> + Send;
+
+    /// Publish that this instance's replica is shutting down.
+    ///
+    /// Called the moment the process is told to stop, long before it
+    /// actually does: from here on peers route around this replica and it
+    /// routes work away from itself, so nothing new is started on a process
+    /// that will not live to finish it. Sessions already running here keep
+    /// running - they hold their claims until their actors wind down.
+    fn begin_draining(&self) -> impl Future<Output = Result<()>> + Send;
 
     /// Attach a new transport to an existing persisted session.
     ///
@@ -804,11 +814,24 @@ where
     }
 
     async fn management(&self, id: AgentSessionId) -> Result<SessionManagement> {
-        Ok(match self.repo.manager_of(id).await? {
+        let view = self.repo.lease_view(id, self.replica).await?;
+        if view.asking_replica_draining {
+            return Ok(SessionManagement::Draining);
+        }
+        Ok(match view.holder {
             None => SessionManagement::Unmanaged,
+            // A draining holder is still heartbeating and may still be mid
+            // turn, but it is leaving: treated as claimable so the next
+            // command lands on a replica that is staying, and the fence the
+            // takeover bumps is what stops the two writing over each other.
+            Some(manager) if manager.draining => SessionManagement::Unmanaged,
             Some(manager) if manager.replica == self.replica => SessionManagement::Ours,
             Some(manager) => SessionManagement::Peer(manager),
         })
+    }
+
+    async fn begin_draining(&self) -> Result<()> {
+        self.repo.begin_draining(self.replica).await
     }
 
     /// The out-of-band disconnect: a session marked dead by its opener rather

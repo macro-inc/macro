@@ -578,13 +578,24 @@ pub trait SessionOwnership: Send + Sync + 'static {
         address: Option<&ReplicaAddress>,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// The live manager of a session, if a replica with a fresh heartbeat
-    /// holds its lease. `None` covers both an unclaimed session and one whose
-    /// holder has gone stale - either way the session is claimable.
-    fn manager_of(
+    /// What the lease says about a session, from `replica`'s viewpoint: who
+    /// holds it (when a replica with a fresh heartbeat does - an absent
+    /// holder covers both an unclaimed session and one whose holder has gone
+    /// stale, either way claimable) and whether `replica` is itself draining.
+    fn lease_view(
         &self,
         session: AgentSessionId,
-    ) -> impl Future<Output = Result<Option<SessionManager>>> + Send;
+        replica: ReplicaId,
+    ) -> impl Future<Output = Result<LeaseView>> + Send;
+
+    /// Publish that `replica` is shutting down, so nothing new is routed to
+    /// it while it drains.
+    ///
+    /// A deploy's old task keeps heartbeating for its whole drain window, so
+    /// liveness alone cannot tell a replica that is serving from one that is
+    /// leaving; this is the replica saying which it is. Idempotent: the first
+    /// drain wins, and a replica never un-drains.
+    fn begin_draining(&self, replica: ReplicaId) -> impl Future<Output = Result<()>> + Send;
 }
 
 #[cfg_attr(feature = "test-utils", mockall::automock)]
