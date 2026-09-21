@@ -72,6 +72,9 @@ pub enum EntityType {
     ScheduledAction,
     /// The entity is an initiative (a named grouping of tasks)
     Initiative,
+    /// The entity is a Macro Database: a collection of user-defined tables
+    /// (see the `databases` crate)
+    Database,
 }
 
 impl EntityType {
@@ -116,6 +119,10 @@ impl EntityType {
             // Initiatives hold `entity_access` rows but are not something
             // you file into a project.
             EntityType::Initiative => false,
+            // A database's permissions are `entity_access` rows - the creator
+            // as owner, plus whoever it is later shared with - but, like agent
+            // sessions, a database is not something you file into a project.
+            EntityType::Database => false,
         }
     }
     /// provide an entity string slice to upgrade this type into an [Entity]

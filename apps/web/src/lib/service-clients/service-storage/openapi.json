@@ -6284,6 +6284,1647 @@
         }
       }
     },
+    "/databases": {
+      "get": {
+        "tags": ["databases"],
+        "summary": "List the caller's databases.",
+        "operationId": "list_databases",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ListedDatabase"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["databases"],
+        "summary": "Create a database owned by the caller.",
+        "operationId": "create_database",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDatabaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Database"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/exec": {
+      "post": {
+        "tags": ["databases"],
+        "summary": "Execute SQL as the caller. The whole read/write surface.",
+        "operationId": "exec_database_sql",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExecRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "SQL error (message verbatim from SQLite) or untranslatable change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Write to a read-only table or column",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A written table moved past its base version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Query budget exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/query": {
+      "post": {
+        "tags": ["databases"],
+        "summary": "Run read-only SQL with the caller's current visibility.",
+        "operationId": "query_database_sql",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QueryRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid SQL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Queries cannot write data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Query budget exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/starter": {
+      "post": {
+        "tags": ["databases"],
+        "summary": "Create a small example once for the authenticated user, if they have no databases.",
+        "operationId": "ensure_starter_handler",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StarterDatabase"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "500": {
+            "description": "Provisioning failed; safe to retry"
+          }
+        }
+      }
+    },
+    "/databases/{id}": {
+      "get": {
+        "tags": ["databases"],
+        "summary": "Schema detail of one database.",
+        "operationId": "get_database",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Database id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No access to the database",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/{id}/import": {
+      "post": {
+        "tags": ["databases"],
+        "summary": "Import a new table and every row atomically; retries carry the same request ID.",
+        "operationId": "import_database_table",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportTable"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Table"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/{id}/permissions": {
+      "get": {
+        "tags": ["databases"],
+        "summary": "Read recipients for a database owned by the caller.",
+        "operationId": "get_database_permissions",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseSharePermissions"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["databases"],
+        "summary": "Update recipients after proving database ownership.",
+        "operationId": "update_database_permissions",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDatabasePermissionsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseSharePermissions"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/{id}/sqlite": {
+      "get": {
+        "tags": ["databases"],
+        "summary": "Download a database as a SQLite file.",
+        "operationId": "download_database_sqlite",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Database id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A SQLite database file",
+            "content": {
+              "application/vnd.sqlite3": {
+                "schema": {
+                  "$ref": "#/components/schemas/SqliteFile"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No access to the database",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/{id}/tables": {
+      "post": {
+        "tags": ["databases"],
+        "summary": "Create a table in a database.",
+        "operationId": "create_database_table",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Database id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTableRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Table"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No edit access to the database",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/{id}/tables/{table_id}": {
+      "patch": {
+        "tags": ["databases"],
+        "summary": "Rename a table in a database.",
+        "operationId": "rename_database_table",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Database id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "table_id",
+            "in": "path",
+            "description": "Table id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameTableRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Table"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/{id}/tables/{table_id}/columns": {
+      "post": {
+        "tags": ["databases"],
+        "summary": "Add a column to a table.",
+        "operationId": "create_database_column",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Database id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "table_id",
+            "in": "path",
+            "description": "Table id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateColumnRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateColumnResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No edit access to the database",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/{id}/tables/{table_id}/columns/order": {
+      "patch": {
+        "tags": ["databases"],
+        "summary": "Persist the order of every column in a table.",
+        "operationId": "reorder_database_columns",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "table_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderColumnsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ColumnSchemaOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/{id}/tables/{table_id}/columns/{column_id}": {
+      "delete": {
+        "tags": ["databases"],
+        "summary": "Delete one placement and its cells, preserving shared definitions.",
+        "operationId": "delete_database_column",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "table_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "column_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteColumnRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ColumnSchemaOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["databases"],
+        "summary": "Rename a column's label in this table.",
+        "operationId": "rename_database_column",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Database id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "table_id",
+            "in": "path",
+            "description": "Table id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "column_id",
+            "in": "path",
+            "description": "Column id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameColumnRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RenameColumnOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/{id}/tables/{table_id}/columns/{column_id}/infer-type": {
+      "post": {
+        "tags": ["databases"],
+        "summary": "Settle a new empty text column's type.",
+        "operationId": "infer_database_column_type",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Database id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "table_id",
+            "in": "path",
+            "description": "Table id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "column_id",
+            "in": "path",
+            "description": "Column id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InferColumnTypeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferColumnTypeOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/{id}/tables/{table_id}/columns/{column_id}/options": {
+      "post": {
+        "tags": ["databases"],
+        "summary": "Add options to a select column.",
+        "operationId": "add_database_column_options",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Database id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "table_id",
+            "in": "path",
+            "description": "Table id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "column_id",
+            "in": "path",
+            "description": "Column id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddColumnOptionsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ColumnDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a select column, or an invalid label",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No edit access to the database",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/{id}/tables/{table_id}/columns/{column_id}/type": {
+      "patch": {
+        "tags": ["databases"],
+        "summary": "Change one column's type with all-or-nothing conversion.",
+        "operationId": "change_database_column_type",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "table_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "column_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeColumnTypeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ColumnSchemaOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents": {
       "get": {
         "tags": ["document"],
@@ -8765,7 +10406,8 @@
                   "skill",
                   "agent_session",
                   "scheduled_action",
-                  "initiative"
+                  "initiative",
+                  "database"
                 ]
               }
             },
@@ -8980,7 +10622,8 @@
                 "skill",
                 "agent_session",
                 "scheduled_action",
-                "initiative"
+                "initiative",
+                "database"
               ]
             }
           },
@@ -12597,7 +14240,8 @@
                   "skill",
                   "agent_session",
                   "scheduled_action",
-                  "initiative"
+                  "initiative",
+                  "database"
                 ]
               }
             },
@@ -14142,6 +15786,11 @@
   },
   "components": {
     "schemas": {
+      "AccessGrant": {
+        "type": "string",
+        "description": "The access a viewer holds on a database, from its `entity_access` rows.",
+        "enum": ["view", "comment", "edit", "owner"]
+      },
       "AccessLevel": {
         "type": "string",
         "description": "Ordered from least to most access top -> bottom",
@@ -14203,6 +15852,20 @@
         "description": "The kind of activity a user performs in a channel.",
         "enum": ["view", "interact"]
       },
+      "AddColumnOptionsRequest": {
+        "type": "object",
+        "description": "Request body for adding options to a select column.",
+        "required": ["labels"],
+        "properties": {
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Display labels to add. Labels the column already has are ignored."
+          }
+        }
+      },
       "AddFavoriteRequest": {
         "type": "object",
         "description": "Request body for favoriting an entity.",
@@ -14236,7 +15899,8 @@
                   "skill",
                   "agent_session",
                   "scheduled_action",
-                  "initiative"
+                  "initiative",
+                  "database"
                 ]
               }
             ],
@@ -17282,6 +18946,46 @@
           }
         }
       },
+      "ChangeColumnTypeRequest": {
+        "type": "object",
+        "description": "Explicit column type configuration. Existing values must convert without loss.",
+        "required": ["dataType", "baseVersion"],
+        "properties": {
+          "baseVersion": {
+            "$ref": "#/components/schemas/TableVersion",
+            "description": "Table version shown when the type menu opened."
+          },
+          "dataType": {
+            "$ref": "#/components/schemas/DataType",
+            "description": "Requested property type."
+          },
+          "isMultiSelect": {
+            "type": "boolean",
+            "description": "Whether select, link or entity values may hold multiple items."
+          },
+          "linkToDatabaseId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Related database; defaults to the current database."
+          },
+          "linkToTableId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Related table, when choosing a database-row relationship."
+          },
+          "specificEntityType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityType",
+                "description": "Required category for entity references, omitted for row relationships."
+              }
+            ]
+          }
+        }
+      },
       "Channel": {
         "type": "object",
         "description": "Channel metadata in soup payloads.",
@@ -18475,7 +20179,8 @@
                   "skill",
                   "agent_session",
                   "scheduled_action",
-                  "initiative"
+                  "initiative",
+                  "database"
                 ]
               }
             ],
@@ -18495,6 +20200,206 @@
           "token": {
             "type": "string",
             "description": "The signed JWT to pass to the sync-service websocket connect."
+          }
+        }
+      },
+      "Column": {
+        "type": "object",
+        "description": "A column: the placement of a property definition on a table.\n\nThe definition carries name, [`DataType`], multi-select flag, and options;\nthis carries only where it appears and column-kind configuration.",
+        "required": ["id", "table_id", "property_definition_id", "position"],
+        "properties": {
+          "config": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ColumnConfig",
+                "description": "Column-kind specific configuration."
+              }
+            ]
+          },
+          "display_name": {
+            "type": ["string", "null"],
+            "description": "Optional label for this placement. The property's name still defines\nits SQL identifier, so renaming a column does not break saved queries."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Identifier of the placement."
+          },
+          "infer_type": {
+            "type": "boolean",
+            "description": "Whether the first nonempty value may settle this new text column's type."
+          },
+          "position": {
+            "type": "string",
+            "description": "Fractional index for column ordering."
+          },
+          "property_definition_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The bound property definition."
+          },
+          "table_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Table the column appears on."
+          }
+        }
+      },
+      "ColumnBindingRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Create a fresh definition scoped to the database.",
+            "required": ["name", "data_type", "kind"],
+            "properties": {
+              "data_type": {
+                "$ref": "#/components/schemas/DataType",
+                "description": "Value type."
+              },
+              "is_multi_select": {
+                "type": "boolean",
+                "description": "Whether the column holds multiple values."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["new"]
+              },
+              "name": {
+                "type": "string",
+                "description": "Column display name."
+              },
+              "options": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "For a select or tag column, the labels SQL will accept. A select\ncolumn created without any accepts nothing until options are added."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Bind an existing user/team/system definition.",
+            "required": ["property_definition_id", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["existing"]
+              },
+              "property_definition_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The definition to bind."
+              }
+            }
+          }
+        ],
+        "description": "How a new column obtains its definition."
+      },
+      "ColumnConfig": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A link column targeting another table; edges live in the junction.",
+            "required": ["database_id", "table_id", "kind"],
+            "properties": {
+              "database_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Target database."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["link"]
+              },
+              "table_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Target table."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A derived lookup through a link or entity column on the same table.",
+            "required": ["via_column_id", "target", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["lookup"]
+              },
+              "target": {
+                "type": "string",
+                "description": "Target field on the other side (a definition id or magic column name)."
+              },
+              "via_column_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The link/entity column the lookup reads through."
+              }
+            }
+          }
+        ],
+        "description": "Column-kind specific configuration stored on the placement."
+      },
+      "ColumnDetail": {
+        "type": "object",
+        "description": "One column placement with the definition behind it.",
+        "required": [
+          "column",
+          "sql_name",
+          "definition",
+          "writable",
+          "junction_writable"
+        ],
+        "properties": {
+          "column": {
+            "$ref": "#/components/schemas/Column",
+            "description": "The placement."
+          },
+          "definition": {
+            "$ref": "#/components/schemas/PropertyDefinitionWithOptions",
+            "description": "The bound definition (name, type, options)."
+          },
+          "junction_sql_name": {
+            "type": ["string", "null"],
+            "description": "Exact junction name for multi-valued or relation columns."
+          },
+          "junction_writable": {
+            "type": "boolean",
+            "description": "Whether this viewer can insert/delete edges in the junction."
+          },
+          "read_junction_sql_name": {
+            "type": ["string", "null"],
+            "description": "Stable read-only junction alias, when it is unambiguous in the catalog."
+          },
+          "sql_name": {
+            "type": "string",
+            "description": "Name to use in SQL."
+          },
+          "writable": {
+            "type": "boolean",
+            "description": "Whether SQL may write this column."
+          }
+        }
+      },
+      "ColumnSchemaOutcome": {
+        "type": "object",
+        "description": "Table versions changed by a placement deletion or reorder.",
+        "required": ["table_versions"],
+        "properties": {
+          "table_versions": {
+            "type": "object",
+            "description": "Includes both endpoint tables when deleting relationship edges.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/TableVersion"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
           }
         }
       },
@@ -18887,6 +20792,43 @@
           }
         }
       },
+      "CreateColumnRequest": {
+        "type": "object",
+        "description": "Request body for creating a column.",
+        "required": ["binding"],
+        "properties": {
+          "binding": {
+            "$ref": "#/components/schemas/ColumnBindingRequest",
+            "description": "Definition source."
+          },
+          "infer_type": {
+            "type": "boolean",
+            "description": "Infer the first value type of a newly owned text column."
+          },
+          "linkToDatabaseId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Database of the linked table (defaults to this database)."
+          },
+          "linkToTableId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Link this column to another table (many-to-many)."
+          }
+        }
+      },
+      "CreateColumnResponse": {
+        "type": "object",
+        "description": "Response for a created column.",
+        "required": ["columnId"],
+        "properties": {
+          "columnId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Identifier of the new column placement."
+          }
+        }
+      },
       "CreateCommentRequest": {
         "type": "object",
         "required": ["text"],
@@ -18997,6 +20939,17 @@
           "name": {
             "type": "string",
             "description": "Display name for the contact."
+          }
+        }
+      },
+      "CreateDatabaseRequest": {
+        "type": "object",
+        "description": "Request body for creating a database.",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Display name."
           }
         }
       },
@@ -19341,7 +21294,8 @@
                   "skill",
                   "agent_session",
                   "scheduled_action",
-                  "initiative"
+                  "initiative",
+                  "database"
                 ]
               }
             ],
@@ -19412,6 +21366,17 @@
           "documentId": {
             "type": "string",
             "description": "The document ID of the created snippet."
+          }
+        }
+      },
+      "CreateTableRequest": {
+        "type": "object",
+        "description": "Request body for creating a table.",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Display name."
           }
         }
       },
@@ -20189,6 +22154,81 @@
           "LINK"
         ]
       },
+      "Database": {
+        "type": "object",
+        "description": "A database: a named collection of tables, owned and shared as one entity.",
+        "required": ["id", "name", "owner_id", "created_at"],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation time."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Identifier."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "owner_id": {
+            "type": "string",
+            "description": "Owning user."
+          },
+          "trashed_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Set when trashed."
+          }
+        }
+      },
+      "DatabaseDetail": {
+        "type": "object",
+        "description": "Everything a client needs to render and edit one database: tables,\ncolumn placements with their definitions, and the SQL names the query\nsurface exposes them under.",
+        "required": ["database", "grant", "tables"],
+        "properties": {
+          "database": {
+            "$ref": "#/components/schemas/Database",
+            "description": "The database."
+          },
+          "grant": {
+            "$ref": "#/components/schemas/AccessGrant",
+            "description": "The viewer's access."
+          },
+          "tables": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TableDetail"
+            },
+            "description": "Tables in tab order."
+          }
+        }
+      },
+      "DatabaseSharePermissions": {
+        "type": "object",
+        "description": "Recipient grants shown in the native sharing interface.",
+        "required": ["id", "owner", "channelSharePermissions"],
+        "properties": {
+          "channelSharePermissions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelSharePermission"
+            },
+            "description": "Directly shared channels, including direct messages."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Database identifier; sharing has no separate policy entity."
+          },
+          "owner": {
+            "type": "string",
+            "description": "Current database owner."
+          }
+        }
+      },
       "DeleteAnchorInfo": {
         "allOf": [
           {
@@ -20204,6 +22244,17 @@
             }
           }
         ]
+      },
+      "DeleteColumnRequest": {
+        "type": "object",
+        "description": "Guard a column deletion against concurrent writes.",
+        "required": ["baseVersion"],
+        "properties": {
+          "baseVersion": {
+            "$ref": "#/components/schemas/TableVersion",
+            "description": "Table version shown in the confirmation."
+          }
+        }
       },
       "DeleteCommentRequest": {
         "type": "object",
@@ -21833,7 +23884,8 @@
                   "skill",
                   "agent_session",
                   "scheduled_action",
-                  "initiative"
+                  "initiative",
+                  "database"
                 ]
               }
             ],
@@ -22186,6 +24238,108 @@
           }
         }
       },
+      "ExecOutcome": {
+        "type": "object",
+        "description": "Outcome of an [`ExecRequest`].",
+        "required": [
+          "results",
+          "changes_applied",
+          "inserted_row_ids",
+          "new_versions",
+          "read_tables",
+          "read_database_ids",
+          "read_versions",
+          "truncated_tables"
+        ],
+        "properties": {
+          "changes_applied": {
+            "type": "integer",
+            "description": "How many row changes were applied to Postgres.",
+            "minimum": 0
+          },
+          "inserted_row_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Server-minted ids for rows the statement inserted."
+          },
+          "new_versions": {
+            "type": "object",
+            "description": "New versions of every written table, for client-side liveness.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/TableVersion"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "read_database_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Databases containing the read dependencies, for live subscriptions."
+          },
+          "read_tables": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Dependency set of the statement, for liveness subscription."
+          },
+          "read_versions": {
+            "type": "object",
+            "description": "The version every user table in [`ExecOutcome::read_tables`] was at\nwhen this statement materialized it. Send these back as\n[`ExecRequest::base_versions`] to guard tables the follow-up statement\nwrites. Versions for tables it only reads are ignored.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/TableVersion"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QueryResult"
+            },
+            "description": "Result sets of the SELECT statements, in order."
+          },
+          "truncated_tables": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Magic tables whose materialization hit its row cap; aggregates over\nthem are incomplete."
+          }
+        }
+      },
+      "ExecRequestBody": {
+        "type": "object",
+        "description": "Request body for `POST /exec`.",
+        "required": ["sql"],
+        "properties": {
+          "baseVersions": {
+            "type": "object",
+            "description": "Optional compare-and-swap: reject writes if a listed table being written\nhas moved past the given version. Read-only dependencies are not guarded.\nOmitted → cell-level last-write-wins.",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "propertyNames": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "sql": {
+            "type": "string",
+            "description": "The statements to run, executed in one transaction."
+          }
+        }
+      },
       "ExportDocumentResponse": {
         "type": "object",
         "required": ["presigned_url"],
@@ -22246,7 +24400,8 @@
                   "skill",
                   "agent_session",
                   "scheduled_action",
-                  "initiative"
+                  "initiative",
+                  "database"
                 ]
               }
             ],
@@ -22296,7 +24451,8 @@
                   "skill",
                   "agent_session",
                   "scheduled_action",
-                  "initiative"
+                  "initiative",
+                  "database"
                 ]
               }
             ],
@@ -24057,6 +26213,39 @@
         "type": "integer",
         "enum": [1, 2, 3]
       },
+      "ImportTable": {
+        "type": "object",
+        "description": "An import is identified once, before sending, so retries cannot duplicate rows.",
+        "required": ["requestId", "name", "columns", "rows"],
+        "properties": {
+          "columns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Header names, in order. All imported values remain text."
+          },
+          "name": {
+            "type": "string",
+            "description": "New table's display name."
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable key for this import, retained through retries."
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "Rectangular text rows. Empty fields are preserved."
+          }
+        }
+      },
       "ImportedAuthor": {
         "type": "object",
         "description": "Display attribution for a comment imported from an external document.",
@@ -24098,6 +26287,47 @@
             "format": "int32",
             "description": "Position in the session's log.",
             "minimum": 0
+          }
+        }
+      },
+      "InferColumnTypeOutcome": {
+        "type": "object",
+        "description": "Settled schema and the version against which its first value can be written.",
+        "required": ["column", "table_version"],
+        "properties": {
+          "column": {
+            "$ref": "#/components/schemas/ColumnDetail",
+            "description": "Updated placement, property definition, and stable SQL identifier."
+          },
+          "table_version": {
+            "$ref": "#/components/schemas/TableVersion",
+            "description": "Version after settling the column."
+          }
+        }
+      },
+      "InferColumnTypeRequest": {
+        "type": "object",
+        "description": "Request to settle an empty column's first-value type.",
+        "required": ["data_type", "base_version"],
+        "properties": {
+          "base_version": {
+            "$ref": "#/components/schemas/TableVersion",
+            "description": "Table version used when interpreting the first value."
+          },
+          "data_type": {
+            "$ref": "#/components/schemas/DataType",
+            "description": "First-value type: STRING, NUMBER, or ENTITY."
+          },
+          "specific_entity_type": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityType",
+                "description": "Required entity category for ENTITY."
+              }
+            ]
           }
         }
       },
@@ -24324,6 +26554,28 @@
               "$ref": "#/components/schemas/Webhook"
             },
             "description": "The caller's webhooks, newest first. Signing secrets are omitted."
+          }
+        }
+      },
+      "ListedDatabase": {
+        "type": "object",
+        "description": "A database as listed for a viewer.",
+        "required": ["database", "grant", "tables"],
+        "properties": {
+          "database": {
+            "$ref": "#/components/schemas/Database",
+            "description": "The database."
+          },
+          "grant": {
+            "$ref": "#/components/schemas/AccessGrant",
+            "description": "The viewer's access."
+          },
+          "tables": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Table"
+            },
+            "description": "Tables in tab order, so discovery can find a table independently of\nthe containing database's display name."
           }
         }
       },
@@ -26484,6 +28736,22 @@
           }
         }
       },
+      "PropertyDefinitionWithOptions": {
+        "type": "object",
+        "description": "Property definition with its associated options (service representation).",
+        "required": ["definition", "property_options"],
+        "properties": {
+          "definition": {
+            "$ref": "#/components/schemas/PropertyDefinition"
+          },
+          "property_options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PropertyOption"
+            }
+          }
+        }
+      },
       "PropertyFilter": {
         "type": "object",
         "description": "A single property-based filter condition.\n\nEach filter targets a specific property definition on entities of a given type,\nmatching against select option UUIDs or entity reference IDs.\nMultiple values within a single filter are OR'd together.\nMultiple filters are AND'd together.",
@@ -26528,6 +28796,82 @@
           }
         }
       },
+      "PropertyOption": {
+        "type": "object",
+        "description": "A selectable option for select-type properties (service representation).",
+        "required": [
+          "id",
+          "property_definition_id",
+          "display_order",
+          "value",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "color": {
+            "type": ["string", "null"]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "display_order": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "property_definition_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "value": {
+            "$ref": "#/components/schemas/PropertyOptionValue"
+          }
+        }
+      },
+      "PropertyOptionValue": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "String value for SelectString properties",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["string"]
+              },
+              "value": {
+                "type": "string",
+                "description": "String value for SelectString properties"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Number value for SelectNumber properties",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["number"]
+              },
+              "value": {
+                "type": "number",
+                "format": "double",
+                "description": "Number value for SelectNumber properties"
+              }
+            }
+          }
+        ],
+        "description": "The value of a property option - either a string or a number."
+      },
       "PropertyOwner": {
         "oneOf": [
           {
@@ -26561,7 +28905,22 @@
           },
           {
             "type": "object",
-            "description": "System-owned property (no user or team owner).",
+            "description": "Database-scoped property: the definition is a column of one Macro\ndatabase and is invisible to the shared user/team property namespace.",
+            "required": ["database_id", "scope"],
+            "properties": {
+              "database_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "scope": {
+                "type": "string",
+                "enum": ["database"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "System-owned property (no user, team, or database owner).",
             "required": ["scope"],
             "properties": {
               "scope": {
@@ -26571,7 +28930,7 @@
             }
           }
         ],
-        "description": "Defines who owns a property - user-scoped, team-scoped, or system."
+        "description": "Defines who owns a property - user-scoped, team-scoped, database-scoped, or system."
       },
       "PropertyValue": {
         "oneOf": [
@@ -26694,6 +29053,41 @@
           }
         ],
         "description": "Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to/from JSONB in the database."
+      },
+      "QueryRequestBody": {
+        "type": "object",
+        "description": "Request body for read-only SQL queries.",
+        "required": ["sql"],
+        "properties": {
+          "sql": {
+            "type": "string",
+            "description": "SQL to read. Writes are refused by the domain service."
+          }
+        }
+      },
+      "QueryResult": {
+        "type": "object",
+        "description": "A SELECT's result set with provenance for hydration and write-through.",
+        "required": ["columns", "rows"],
+        "properties": {
+          "columns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResultColumn"
+            },
+            "description": "Result columns."
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/SqlValue"
+              }
+            },
+            "description": "Row values as JSON scalars."
+          }
+        }
       },
       "ReactionAction": {
         "type": "string",
@@ -26843,7 +29237,8 @@
                   "skill",
                   "agent_session",
                   "scheduled_action",
-                  "initiative"
+                  "initiative",
+                  "database"
                 ]
               }
             ],
@@ -26974,6 +29369,70 @@
           }
         }
       },
+      "RenameColumnOutcome": {
+        "type": "object",
+        "description": "A renamed placement and its table's version after the atomic update.",
+        "required": ["column", "table_version"],
+        "properties": {
+          "column": {
+            "$ref": "#/components/schemas/Column",
+            "description": "The placement with its new display label; IDs and binding are preserved."
+          },
+          "table_version": {
+            "$ref": "#/components/schemas/TableVersion",
+            "description": "Monotonic table version used to reconcile concurrent client refreshes."
+          }
+        }
+      },
+      "RenameColumnRequest": {
+        "type": "object",
+        "description": "Rename one column placement without changing its property's SQL identifier.",
+        "required": ["name", "previousName"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "New display name."
+          },
+          "previousName": {
+            "type": "string",
+            "description": "Label shown when the rename editor opened."
+          }
+        }
+      },
+      "RenameTableRequest": {
+        "type": "object",
+        "description": "Request body for renaming a table without overwriting a concurrent rename.",
+        "required": ["name", "previousName"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "New display name."
+          },
+          "previousName": {
+            "type": "string",
+            "description": "Name shown when the rename editor opened."
+          }
+        }
+      },
+      "ReorderColumnsRequest": {
+        "type": "object",
+        "description": "A complete placement order, identified by stable column IDs.",
+        "required": ["columnIds", "baseVersion"],
+        "properties": {
+          "baseVersion": {
+            "$ref": "#/components/schemas/TableVersion",
+            "description": "Table version used to build the order."
+          },
+          "columnIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Every column, exactly once."
+          }
+        }
+      },
       "ReorderFavoritesRequest": {
         "type": "object",
         "description": "Request body for reordering favorites.",
@@ -27025,6 +29484,64 @@
         "type": "string",
         "description": "The ownership scope a daemon's config asks for.\n\nAdvisory, not binding: the approving user confirms it in the dialog, which\narrives preselected to this. Approval is what actually sets ownership.",
         "enum": ["private", "team"]
+      },
+      "ResultColumn": {
+        "type": "object",
+        "description": "One result column with its origin.",
+        "required": ["name"],
+        "properties": {
+          "entity_type": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string",
+                "description": "The type of an entity in Macro",
+                "enum": [
+                  "user",
+                  "chat",
+                  "channel",
+                  "channel_message",
+                  "document",
+                  "project",
+                  "email_thread",
+                  "calendar_event",
+                  "team",
+                  "call",
+                  "foreign_entity",
+                  "static_file",
+                  "crm_company",
+                  "crm_contact",
+                  "reminder",
+                  "skill",
+                  "agent_session",
+                  "scheduled_action",
+                  "initiative",
+                  "database"
+                ]
+              }
+            ],
+            "description": "Entity type of id values, when known — drives chip rendering."
+          },
+          "name": {
+            "type": "string",
+            "description": "Column name or alias."
+          },
+          "origin": {
+            "type": ["array", "null"],
+            "items": false,
+            "prefixItems": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "description": "Origin `(table, column)` when the column traces to a single base\ncolumn — the precondition for write-through."
+          }
+        }
       },
       "RingStatus": {
         "type": "string",
@@ -29212,7 +31729,8 @@
                   "skill",
                   "agent_session",
                   "scheduled_action",
-                  "initiative"
+                  "initiative",
+                  "database"
                 ]
               }
             ],
@@ -29439,6 +31957,58 @@
           }
         }
       },
+      "SqlValue": {
+        "oneOf": [
+          {
+            "type": "null",
+            "description": "SQL NULL.",
+            "default": null
+          },
+          {
+            "type": "integer",
+            "format": "int64",
+            "description": "Integer (also booleans as 0/1)."
+          },
+          {
+            "type": "number",
+            "format": "double",
+            "description": "Float."
+          },
+          {
+            "type": "string",
+            "description": "Text (also ids, dates as ISO-8601, resolved option display values)."
+          }
+        ],
+        "description": "A value in the SQLite materialization, kept engine-agnostic so the domain\nnever depends on rusqlite types. Serializes as a plain JSON scalar."
+      },
+      "SqliteFile": {
+        "type": "string",
+        "format": "binary",
+        "description": "The bytes of a SQLite database file.\n\nIts only job is to make the response body binary in the OpenAPI document;\n`Vec<u8>` would be described as an array of integers and generate clients\nthat parse the file as JSON."
+      },
+      "StarterDatabase": {
+        "type": "object",
+        "description": "Starter result. A missing database means the user already started or removed it.",
+        "required": ["created"],
+        "properties": {
+          "created": {
+            "type": "boolean",
+            "description": "Whether this request created the example."
+          },
+          "databaseId": {
+            "type": ["string", "null"],
+            "description": "Accessible starter database, if still present."
+          },
+          "tableId": {
+            "type": ["string", "null"],
+            "description": "Initial table, returned only on first creation."
+          },
+          "viewId": {
+            "type": ["string", "null"],
+            "description": "Initial board view, returned only on first creation."
+          }
+        }
+      },
       "StarterDocumentsResponse": {
         "type": "object",
         "description": "The deterministic starter document ids for the current user.",
@@ -29500,6 +32070,66 @@
             "description": "The name of the skill."
           }
         }
+      },
+      "Table": {
+        "type": "object",
+        "description": "One table (tab) of a database.",
+        "required": ["id", "database_id", "name", "position", "version"],
+        "properties": {
+          "database_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Owning database."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Identifier."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name; also the basis of the table's SQL name."
+          },
+          "position": {
+            "type": "string",
+            "description": "Fractional index for tab ordering."
+          },
+          "version": {
+            "$ref": "#/components/schemas/TableVersion",
+            "description": "Current version."
+          }
+        }
+      },
+      "TableDetail": {
+        "type": "object",
+        "description": "One table with its columns and SQL name.",
+        "required": ["table", "sql_name", "read_sql_name", "columns"],
+        "properties": {
+          "columns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ColumnDetail"
+            },
+            "description": "Columns in display order."
+          },
+          "read_sql_name": {
+            "type": "string",
+            "description": "Immutable read-only name for persisted queries; unaffected by renames\nor the other tables a viewer can access."
+          },
+          "sql_name": {
+            "type": "string",
+            "description": "Name to use in SQL (`FROM guests`)."
+          },
+          "table": {
+            "$ref": "#/components/schemas/Table",
+            "description": "The table."
+          }
+        }
+      },
+      "TableVersion": {
+        "type": "integer",
+        "format": "int64",
+        "description": "Monotonic per-table version, bumped on every row/column/link mutation.\n\nThe cache key for query materializations and the invalidation signal for\nlive query chips."
       },
       "TagFilterMode": {
         "type": "string",
@@ -30203,6 +32833,20 @@
           },
           "team_views": {
             "description": "Replacement team-views array (whole-blob, last write wins)."
+          }
+        }
+      },
+      "UpdateDatabasePermissionsRequest": {
+        "type": "object",
+        "description": "Explicit recipient updates; ownership cannot be changed here.",
+        "required": ["channelSharePermissions"],
+        "properties": {
+          "channelSharePermissions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UpdateChannelSharePermission"
+            },
+            "description": "Channel and direct-message grants to change."
           }
         }
       },

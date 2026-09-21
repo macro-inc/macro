@@ -32,4 +32,5 @@ export const ListRemindersEntityTypeItem = {
   agent_session: 'agent_session',
   scheduled_action: 'scheduled_action',
   initiative: 'initiative',
+  database: 'database',
 } as const;

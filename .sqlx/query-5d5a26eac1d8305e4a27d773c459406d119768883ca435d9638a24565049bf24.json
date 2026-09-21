@@ -1,0 +1,49 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE database_tables\n            SET name = $3, version = version + 1\n            WHERE id = $1 AND database_id = $2 AND name = $4\n              AND NOT EXISTS (\n                SELECT 1 FROM database_tables other\n                WHERE other.database_id = $2 AND other.id <> $1\n                  AND lower(other.name) = lower($3)\n              )\n            RETURNING id, database_id, name, position, version\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "database_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "position",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "version",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "5d5a26eac1d8305e4a27d773c459406d119768883ca435d9638a24565049bf24"
+}

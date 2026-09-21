@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE database_starter_seeds SET database_id = $2 WHERE user_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c6615ba8faba66f1ea98ace402d440baa47743a0a5338c4dacf731bf0c7d9bf0"
+}

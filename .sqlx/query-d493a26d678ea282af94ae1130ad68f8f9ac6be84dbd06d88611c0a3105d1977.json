@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT u.id AS \"id!\", u.name, u.email AS \"email!\"\n            FROM \"User\" u\n            WHERE u.id = $1\n               OR u.id IN (\n                    SELECT teammate.user_id\n                    FROM team_user mine\n                    JOIN team_user teammate ON teammate.team_id = mine.team_id\n                    WHERE mine.user_id = $1\n               )\n            ORDER BY u.email\n            LIMIT $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "email!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "d493a26d678ea282af94ae1130ad68f8f9ac6be84dbd06d88611c0a3105d1977"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE database_rows SET cells = cells - $2::text, updated_at = now()\n             WHERE table_id = $1 AND cells ? $2::text",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8e0925c8702fb20edd031dd956ed5cc5127e85ec003ba565314f2e1ff543c2a0"
+}

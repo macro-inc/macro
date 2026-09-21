@@ -1,0 +1,51 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO database_tables (id, database_id, name, position, version, import_key, import_fingerprint)\n               SELECT $1, $2, $3, $4, 1, $5, $6 WHERE NOT EXISTS (\n                   SELECT 1 FROM database_tables WHERE database_id = $2 AND lower(name) = lower($3))\n               RETURNING id, database_id, name, position, version",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "database_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "position",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "version",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "650670142d5954f31afd3c9dff9d19027489943571692ec15b6a0ea9313a595b"
+}

@@ -107,6 +107,8 @@ fn validate_favoritable(entity_type: EntityType) -> Result<(), FavoritesError> {
         | EntityType::Skill
         | EntityType::AgentSession
         | EntityType::ScheduledAction
-        | EntityType::Initiative => Err(FavoritesError::UnsupportedEntityType(entity_type)),
+        | EntityType::Initiative
+        // Databases are not favoritable yet.
+        | EntityType::Database => Err(FavoritesError::UnsupportedEntityType(entity_type)),
     }
 }

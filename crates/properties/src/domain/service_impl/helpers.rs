@@ -20,7 +20,8 @@ fn tag_visible_to(owner: &PropertyOwner, auth: &EntityAccessAuth) -> bool {
             EntityAccessAuth::Unauthenticated => false,
             EntityAccessAuth::Internal => true,
         },
-        PropertyOwner::Team { .. } | PropertyOwner::System => true,
+        // A database column definition is never a tag in the shared namespace.
+        PropertyOwner::Team { .. } | PropertyOwner::Database { .. } | PropertyOwner::System => true,
     }
 }
 

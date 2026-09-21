@@ -30,6 +30,7 @@ struct MockRepo {
     agent_session_access: Arc<Mutex<Option<AccessLevel>>>,
     initiative_access: Arc<Mutex<Option<AccessLevel>>>,
     agent_session_document: Arc<Mutex<Option<String>>>,
+    database_access: Arc<Mutex<Option<AccessLevel>>>,
     reminder_access: Arc<Mutex<Option<AccessLevel>>>,
     team_entity_access: Arc<Mutex<Option<AccessLevel>>>,
     team_entity_access_calls: Arc<AtomicUsize>,
@@ -49,6 +50,7 @@ struct MockRepo {
     project_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     thread_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     agent_session_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
+    database_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     channel_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     call_channel: Arc<Mutex<Option<CallChannelInfo>>>,
     user_team: Arc<Mutex<Option<UserTeamInfo>>>,
@@ -68,6 +70,7 @@ impl MockRepo {
             agent_session_access: Arc::new(Mutex::new(None)),
             initiative_access: Arc::new(Mutex::new(None)),
             agent_session_document: Arc::default(),
+            database_access: Arc::new(Mutex::new(None)),
             reminder_access: Arc::new(Mutex::new(None)),
             team_entity_access: Arc::new(Mutex::new(None)),
             team_entity_access_calls: Arc::new(AtomicUsize::new(0)),
@@ -87,6 +90,7 @@ impl MockRepo {
             project_users: Arc::new(Mutex::new(vec![])),
             thread_users: Arc::new(Mutex::new(vec![])),
             agent_session_users: Arc::new(Mutex::new(Vec::new())),
+            database_users: Arc::new(Mutex::new(vec![])),
             channel_users: Arc::new(Mutex::new(vec![])),
             call_channel: Arc::new(Mutex::new(None)),
             user_team: Arc::new(Mutex::new(None)),
@@ -131,6 +135,11 @@ impl MockRepo {
 
     fn with_agent_session_access(mut self, level: AccessLevel) -> Self {
         self.agent_session_access = Arc::new(Mutex::new(Some(level)));
+        self
+    }
+
+    fn with_database_access(mut self, level: AccessLevel) -> Self {
+        self.database_access = Arc::new(Mutex::new(Some(level)));
         self
     }
 
@@ -193,6 +202,11 @@ impl MockRepo {
 
     fn with_document_users(mut self, users: Vec<MacroUserIdStr<'static>>) -> Self {
         self.document_users = Arc::new(Mutex::new(users));
+        self
+    }
+
+    fn with_database_users(mut self, users: Vec<MacroUserIdStr<'static>>) -> Self {
+        self.database_users = Arc::new(Mutex::new(users));
         self
     }
 
@@ -326,6 +340,14 @@ impl AccessRepository for MockRepo {
         Ok(*self.initiative_access.lock().await)
     }
 
+    async fn get_database_access(
+        &self,
+        _database_id: &str,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Ok(*self.database_access.lock().await)
+    }
+
     async fn get_reminder_access(
         &self,
         _reminder_id: &str,
@@ -430,6 +452,7 @@ impl AccessRepository for MockRepo {
             EntityType::EmailThread => Ok(self.thread_users.lock().await.clone()),
             EntityType::AgentSession => Ok(self.agent_session_users.lock().await.clone()),
             EntityType::Initiative => Ok(vec![]),
+            EntityType::Database => Ok(self.database_users.lock().await.clone()),
             _ => Err(AccessError::BadRequest("unsupported entity type")),
         }
     }
@@ -760,6 +783,47 @@ async fn test_get_entity_permission_agent_session_no_access_returns_unauthorized
             Some(&user_id),
             "0198a805-3e22-75b2-97eb-d9c6b91accb0",
             EntityType::AgentSession,
+            None,
+        )
+        .await;
+
+    assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn test_get_entity_permission_database_returns_access_level() {
+    let repo = MockRepo::new().with_database_access(AccessLevel::Owner);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .get_entity_permission(
+            Some(&user_id),
+            "0198a805-3e22-75b2-97eb-d9c6b91accb0",
+            EntityType::Database,
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        result,
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Owner
+        }
+    ));
+}
+
+#[tokio::test]
+async fn test_get_entity_permission_database_no_access_returns_unauthorized() {
+    let service = EntityAccessServiceImpl::new(MockRepo::new());
+    let user_id = test_user_id();
+
+    let result = service
+        .get_entity_permission(
+            Some(&user_id),
+            "0198a805-3e22-75b2-97eb-d9c6b91accb0",
+            EntityType::Database,
             None,
         )
         .await;
@@ -2085,6 +2149,50 @@ async fn test_get_users_by_entity_thread_returns_empty_when_no_users() {
         .unwrap();
 
     assert!(result.is_empty());
+}
+
+#[tokio::test]
+async fn test_get_users_by_entity_database_returns_users() {
+    let users = vec![
+        user_id("macro|dana@test.com"),
+        user_id("macro|erin@test.com"),
+    ];
+    let repo = MockRepo::new().with_database_users(users.clone());
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let result = service
+        .get_users_by_entity("00000000-0000-0000-0000-000000000004", EntityType::Database)
+        .await
+        .unwrap();
+
+    assert_eq!(result.len(), 2);
+    assert_eq!(result[0].to_string(), "macro|dana@test.com");
+    assert_eq!(result[1].to_string(), "macro|erin@test.com");
+}
+
+#[tokio::test]
+async fn test_get_users_by_entity_database_returns_empty_when_no_users() {
+    let repo = MockRepo::new();
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let result = service
+        .get_users_by_entity("00000000-0000-0000-0000-000000000004", EntityType::Database)
+        .await
+        .unwrap();
+
+    assert!(result.is_empty());
+}
+
+#[tokio::test]
+async fn test_get_users_by_entity_database_rejects_invalid_uuid() {
+    let repo = MockRepo::new().with_database_users(vec![user_id("macro|dana@test.com")]);
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let result = service
+        .get_users_by_entity("not-a-uuid", EntityType::Database)
+        .await;
+
+    assert!(matches!(result, Err(AccessError::BadRequest(_))));
 }
 
 #[tokio::test]

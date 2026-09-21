@@ -489,3 +489,69 @@ async fn get_caller_tag_definitions_with_options(pool: Pool<Postgres>) -> anyhow
 
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn create_database_property_definition_preserves_type_and_isolates_ownership(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let database_id = macro_uuid::generate_uuid_v7();
+    sqlx::query!(
+        "INSERT INTO databases (id, name, owner_id) VALUES ($1, 'Property definition test', 'macro|user1@test.com')",
+        database_id
+    )
+    .execute(&pool)
+    .await?;
+    let repo = PropertiesPgRepo::new(pool);
+    for (data_type, specific_entity_type) in [
+        (DataType::String, None),
+        (DataType::Number, None),
+        (DataType::Entity, Some(EntityType::User)),
+    ] {
+        // Database definitions may reuse a label across different table placements.
+        let definition = repo
+            .create_database_property_definition(
+                database_id,
+                "Status",
+                data_type,
+                false,
+                specific_entity_type,
+            )
+            .await?;
+        assert_eq!(definition.owner.database_id(), Some(database_id));
+        assert_eq!(definition.id.get_version_num(), 7);
+        assert_eq!(definition.display_name, "Status");
+        assert_eq!(definition.data_type, data_type);
+        assert_eq!(definition.specific_entity_type, specific_entity_type);
+        assert!(!definition.is_multi_select);
+        assert!(!definition.is_system);
+        assert!(!definition.is_metadata);
+        assert!(repo.get_property_definition(definition.id).await?.is_none());
+        assert!(repo.get_property_options(definition.id).await?.is_empty());
+    }
+    let shared = repo
+        .list_property_definitions(None, Some(&user_1()), false)
+        .await?;
+    assert_eq!(shared.len(), 2);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_database_property_definition_rejects_missing_database(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool);
+    let result = repo
+        .create_database_property_definition(
+            macro_uuid::generate_uuid_v7(),
+            "Missing database",
+            DataType::String,
+            false,
+            None,
+        )
+        .await;
+    assert!(result.is_err());
+    Ok(())
+}

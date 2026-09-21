@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE database_columns SET infer_type = TRUE WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4b4560c3bd7cc8cf855b9ffa0299de1ea5b387a14dac3d26867904948fa2afa4"
+}

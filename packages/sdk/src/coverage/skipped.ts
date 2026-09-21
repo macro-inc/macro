@@ -281,6 +281,8 @@ export const storageExcluded = [
   'createViewHandler',
   'deleteCollabSurface',
   'ensureCollabSurface',
+  // First-run sample content is provisioned by the app's feature-gated onboarding.
+  'ensureStarterHandler',
   'deleteHistoryHandler',
   'deleteUserDocumentViewLocation',
   'deleteViewHandler',

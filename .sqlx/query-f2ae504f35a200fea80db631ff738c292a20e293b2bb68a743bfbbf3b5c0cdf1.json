@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE database_columns SET property_definition_id = $4, infer_type = FALSE\n            WHERE id = $1 AND table_id = $2 AND property_definition_id = $3 AND infer_type\n              AND NOT EXISTS (SELECT 1 FROM database_rows WHERE table_id = $2 AND cells ? $5)\n              AND EXISTS (SELECT 1 FROM databases WHERE id = $6 AND trashed_at IS NULL)\n            RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f2ae504f35a200fea80db631ff738c292a20e293b2bb68a743bfbbf3b5c0cdf1"
+}

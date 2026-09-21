@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                        DELETE FROM database_row_links\n                        WHERE link_column_id = $1 AND source_row_id = $2 AND target_row_id = $3\n                        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "35802f3170e93ceeee810b142facd718d89858d8985780036a56cb0683633443"
+}

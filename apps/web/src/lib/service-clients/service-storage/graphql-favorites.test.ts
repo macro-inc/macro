@@ -16,6 +16,8 @@ import {
   executeGraphqlSetFavoriteMutation,
   graphqlReorderFavoritesResult,
   graphqlSetFavoriteResult,
+  mapGraphqlFavorite,
+  toGraphqlFavoriteEntityType,
 } from './graphql-favorites';
 
 const mutationMock = vi.fn();
@@ -62,6 +64,28 @@ describe('favorites GraphQL mutations', () => {
     mutationMock.mockReset();
     mutationMock.mockReturnValue({
       toPromise: async () => ({ data: reorderData }),
+    });
+  });
+
+  it('preserves the database entity identity across REST and GraphQL', () => {
+    expect(toGraphqlFavoriteEntityType('database')).toBe('DATABASE');
+    expect(
+      mapGraphqlFavorite({
+        __typename: 'GraphqlFavorite',
+        id: 'database:database-1',
+        entityType: 'DATABASE',
+        entityId: 'database-1',
+        sortOrder: 2,
+        createdAt: '2026-09-21T00:00:00.000Z',
+        fileType: null,
+        documentSubType: null,
+        channelType: null,
+        channelId: null,
+      })
+    ).toMatchObject({
+      id: 'database:database-1',
+      entityType: 'database',
+      entityId: 'database-1',
     });
   });
 
