@@ -1,12 +1,14 @@
 //! Creation of files supplied as bytes, using the ordinary upload lifecycle.
 
 use std::str::FromStr;
+use std::time::Duration;
 
 use activity::Attribution;
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, EntityType};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{FileType, FileTypeExt};
 use rootcause::compat::anyhow1::IntoAnyhow;
+use tracing::Instrument;
 
 use super::{
     CreatedDocument, DocumentCreator, NewDocumentMetadata, RepoDocumentKind, RepoDocumentSubtype,
@@ -23,6 +25,8 @@ mod test;
 /// Maximum decoded size of a file passed inline to an AI tool (25 MiB).
 pub const MAX_INLINE_UPLOAD_BYTES: usize = 25 * 1024 * 1024;
 
+const UPLOAD_TIMEOUT: Duration = Duration::from_secs(120);
+
 /// File contents and the verified destination for an inline upload.
 pub struct NewFileUpload {
     /// Filename, including its extension, without directory components.
@@ -38,12 +42,14 @@ pub struct NewFileUpload {
 impl<Svc, MarkdownInit, BytesUpload, MentionTracker>
     DocumentCreator<Svc, MarkdownInit, BytesUpload, MentionTracker>
 where
-    Svc: DocumentCreationService,
-    BytesUpload: DocumentBytesUploadPort,
+    Svc: DocumentCreationService + Clone + 'static,
+    BytesUpload: DocumentBytesUploadPort + Clone + 'static,
 {
     /// Upload bytes and let the storage event pipeline finalize the content.
     /// In particular, DOCX conversion and Markdown initialization must finish
     /// before those documents can be marked ready.
+    /// Once metadata creation starts, the upload or its failure cleanup finishes
+    /// even if the caller stops waiting.
     #[tracing::instrument(skip_all, err)]
     pub async fn upload_file(
         &self,
@@ -119,39 +125,62 @@ where
                 share_with_team: false,
             },
         );
-        let response = self
-            .document_service
-            .create_document(user_id, args, None)
-            .await?;
-        let created = CreatedDocument::new(response);
-        let result = async {
-            let presigned_url = created
-                .response()
-                .document_response
-                .presigned_url
-                .as_ref()
-                .ok_or_else(|| {
-                    DocumentError::Internal(
-                        rootcause::report!("document storage did not provide an upload URL")
-                            .into_anyhow(),
+        let document_service = self.document_service.clone();
+        let bytes_uploader = self.bytes_uploader.clone();
+        // Own the entire write so dropping the caller cannot interrupt metadata
+        // creation before we know its ID, the upload, or failure cleanup.
+        tokio::spawn(
+            async move {
+                let response = document_service
+                    .create_document(user_id, args, None)
+                    .await
+                    .inspect_err(|error| {
+                        tracing::error!(error=?error, "file upload metadata creation failed");
+                    })?;
+                let created = CreatedDocument::new(response);
+                let result = async {
+                    let presigned_url = created
+                        .response()
+                        .document_response
+                        .presigned_url
+                        .as_ref()
+                        .ok_or_else(|| {
+                            DocumentError::Internal(
+                                rootcause::report!(
+                                    "document storage did not provide an upload URL"
+                                )
+                                .into_anyhow(),
+                            )
+                        })?;
+                    tokio::time::timeout(
+                        UPLOAD_TIMEOUT,
+                        bytes_uploader.upload_document_bytes(DocumentBytesUpload {
+                            presigned_url: presigned_url.clone(),
+                            content_type: created.response().content_type.clone(),
+                            base64_sha256: hashes.base64,
+                            bytes,
+                        }),
                     )
-                })?;
-            self.bytes_uploader
-                .upload_document_bytes(DocumentBytesUpload {
-                    presigned_url: presigned_url.clone(),
-                    content_type: created.response().content_type.clone(),
-                    base64_sha256: hashes.base64,
-                    bytes,
-                })
-                .await
-        }
-        .await;
-        if let Err(error) = result {
-            self.document_service
-                .cleanup_created_document(created.document_id())
+                    .await
+                    .map_err(|_| {
+                        DocumentError::Internal(
+                            rootcause::report!("file upload timed out").into_anyhow(),
+                        )
+                    })?
+                }
                 .await;
-            return Err(error);
-        }
-        Ok(created)
+                if let Err(error) = result {
+                    tracing::error!(error=?error, document_id=%created.document_id(), "file upload failed; cleaning up document");
+                    document_service
+                        .cleanup_created_document(created.document_id())
+                        .await;
+                    return Err(error);
+                }
+                Ok(created)
+            }
+            .in_current_span(),
+        )
+        .await
+        .map_err(|error| DocumentError::Internal(rootcause::report!(error).into_anyhow()))?
     }
 }

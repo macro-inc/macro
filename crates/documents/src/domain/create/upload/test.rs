@@ -1,5 +1,6 @@
 use super::*;
 use std::sync::{Arc, Mutex};
+use tokio::sync::Notify;
 
 use activity::Actor;
 use entity_access::domain::models::{BotReceiptScope, Entity, EntityPermission};
@@ -20,10 +21,32 @@ fn owner() -> MacroUserIdStr<'static> {
 }
 
 #[derive(Default)]
+struct Gate {
+    entered: Notify,
+    release: Notify,
+}
+
+impl Gate {
+    async fn wait(&self) {
+        self.entered.notify_one();
+        self.release.notified().await;
+    }
+}
+
+async fn wait_for(notification: &Notify) {
+    tokio::time::timeout(Duration::from_secs(5), notification.notified())
+        .await
+        .expect("operation should make progress");
+}
+
+#[derive(Default)]
 struct RecordingService {
     creates: Mutex<Vec<CreateDocumentRepoArgs>>,
     cleanups: Mutex<Vec<String>>,
     omit_url: bool,
+    create_gate: Option<Arc<Gate>>,
+    cleanup_gate: Option<Arc<Gate>>,
+    cleanup_finished: Notify,
 }
 
 impl DocumentCreationService for RecordingService {
@@ -36,13 +59,16 @@ impl DocumentCreationService for RecordingService {
         let file_type = args.file_type.map(|kind| kind.to_string());
         let document_name = args.document_name.clone();
         self.creates.lock().unwrap().push(args);
+        if let Some(gate) = &self.create_gate {
+            gate.wait().await;
+        }
         Ok(CreateDocumentResponseData {
             document_response: DocumentResponse {
                 document_metadata: DocumentResponseMetadataWithContent::new(
                     DocumentResponseMetadata {
                         document_id: DOCUMENT_ID.to_string(),
                         document_version_id: 1,
-                        owner: user_id,
+                        owner: model_owner::Owner::User(user_id),
                         document_name,
                         file_type: file_type.clone(),
                         sha: None,
@@ -84,7 +110,11 @@ impl DocumentCreationService for RecordingService {
     }
 
     async fn cleanup_created_document(&self, id: &str) {
+        if let Some(gate) = &self.cleanup_gate {
+            gate.wait().await;
+        }
         self.cleanups.lock().unwrap().push(id.to_string());
+        self.cleanup_finished.notify_one();
     }
 }
 
@@ -92,14 +122,20 @@ impl DocumentCreationService for RecordingService {
 struct RecordingUploader {
     uploads: Mutex<Vec<DocumentBytesUpload>>,
     fail: bool,
+    gate: Option<Arc<Gate>>,
+    finished: Notify,
 }
 
-impl DocumentBytesUploadPort for &RecordingUploader {
+impl DocumentBytesUploadPort for Arc<RecordingUploader> {
     async fn upload_document_bytes(
         &self,
         upload: DocumentBytesUpload,
     ) -> Result<(), DocumentError> {
         self.uploads.lock().unwrap().push(upload);
+        if let Some(gate) = &self.gate {
+            gate.wait().await;
+        }
+        self.finished.notify_one();
         if self.fail {
             return Err(DocumentError::Gone);
         }
@@ -137,8 +173,8 @@ fn project_receipt(
 #[tokio::test]
 async fn uploads_exact_bytes_with_checksums_owner_project_and_attribution() {
     let service = Arc::new(RecordingService::default());
-    let uploader = RecordingUploader::default();
-    let creator = DocumentCreator::new(service.clone(), (), &uploader, ());
+    let uploader = Arc::new(RecordingUploader::default());
+    let creator = DocumentCreator::new(service.clone(), (), uploader.clone(), ());
     let bytes = vec![0, 255, 128, 13, 10];
     let mut file = upload("Report.PDF", bytes.clone());
     file.project = Some(project_receipt(owner(), EntityType::Project));
@@ -177,8 +213,8 @@ async fn preserves_unknown_extensions_and_leaves_conversion_to_the_pipeline() {
         ("notes.md", "notes", Some(FileType::Md)),
     ] {
         let service = Arc::new(RecordingService::default());
-        let uploader = RecordingUploader::default();
-        let creator = DocumentCreator::new(service.clone(), (), &uploader, ());
+        let uploader = Arc::new(RecordingUploader::default());
+        let creator = DocumentCreator::new(service.clone(), (), uploader.clone(), ());
         creator
             .upload_file(owner(), upload(name, b"contents".to_vec()))
             .await
@@ -192,8 +228,8 @@ async fn preserves_unknown_extensions_and_leaves_conversion_to_the_pipeline() {
 #[tokio::test]
 async fn rejects_invalid_files_before_creating_metadata() {
     let service = Arc::new(RecordingService::default());
-    let uploader = RecordingUploader::default();
-    let creator = DocumentCreator::new(service.clone(), (), &uploader, ());
+    let uploader = Arc::new(RecordingUploader::default());
+    let creator = DocumentCreator::new(service.clone(), (), uploader.clone(), ());
     for file in [
         upload("../report.pdf", vec![]),
         upload("C:\\report.pdf", vec![]),
@@ -216,8 +252,8 @@ async fn rejects_invalid_files_before_creating_metadata() {
 #[tokio::test]
 async fn rejects_receipts_for_another_user_or_entity_type() {
     let service = Arc::new(RecordingService::default());
-    let uploader = RecordingUploader::default();
-    let creator = DocumentCreator::new(service.clone(), (), &uploader, ());
+    let uploader = Arc::new(RecordingUploader::default());
+    let creator = DocumentCreator::new(service.clone(), (), uploader.clone(), ());
     for receipt in [
         project_receipt(
             MacroUserIdStr::try_from("macro|other@example.com".to_string()).unwrap(),
@@ -243,11 +279,11 @@ async fn cleans_up_when_storage_upload_fails_or_url_is_missing() {
             omit_url,
             ..Default::default()
         });
-        let uploader = RecordingUploader {
+        let uploader = Arc::new(RecordingUploader {
             fail: true,
             ..Default::default()
-        };
-        let creator = DocumentCreator::new(service.clone(), (), &uploader, ());
+        });
+        let creator = DocumentCreator::new(service.clone(), (), uploader.clone(), ());
         assert!(
             creator
                 .upload_file(owner(), upload("report.pdf", vec![1]))
@@ -265,8 +301,8 @@ async fn cleans_up_when_storage_upload_fails_or_url_is_missing() {
 #[tokio::test]
 async fn accepts_empty_files_and_the_exact_size_limit() {
     let service = Arc::new(RecordingService::default());
-    let uploader = RecordingUploader::default();
-    let creator = DocumentCreator::new(service, (), &uploader, ());
+    let uploader = Arc::new(RecordingUploader::default());
+    let creator = DocumentCreator::new(service, (), uploader.clone(), ());
     for size in [0, MAX_INLINE_UPLOAD_BYTES] {
         creator
             .upload_file(owner(), upload("file.bin", vec![0; size]))
@@ -274,4 +310,107 @@ async fn accepts_empty_files_and_the_exact_size_limit() {
             .unwrap();
     }
     assert_eq!(uploader.uploads.lock().unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn dropping_the_caller_during_metadata_creation_finishes_the_upload() {
+    let gate = Arc::new(Gate::default());
+    let service = Arc::new(RecordingService {
+        create_gate: Some(gate.clone()),
+        ..Default::default()
+    });
+    let uploader = Arc::new(RecordingUploader::default());
+    let creator = DocumentCreator::new(service.clone(), (), uploader.clone(), ());
+    let caller = tokio::spawn(async move {
+        creator
+            .upload_file(owner(), upload("report.pdf", vec![1]))
+            .await
+    });
+
+    wait_for(&gate.entered).await;
+    caller.abort();
+    assert!(caller.await.unwrap_err().is_cancelled());
+    assert!(uploader.uploads.lock().unwrap().is_empty());
+    gate.release.notify_one();
+
+    wait_for(&uploader.finished).await;
+    assert_eq!(uploader.uploads.lock().unwrap().len(), 1);
+    assert!(service.cleanups.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn dropping_the_caller_during_upload_finishes_or_cleans_up() {
+    for fail in [false, true] {
+        let gate = Arc::new(Gate::default());
+        let service = Arc::new(RecordingService::default());
+        let uploader = Arc::new(RecordingUploader {
+            fail,
+            gate: Some(gate.clone()),
+            ..Default::default()
+        });
+        let creator = DocumentCreator::new(service.clone(), (), uploader.clone(), ());
+        let caller = tokio::spawn(async move {
+            creator
+                .upload_file(owner(), upload("report.pdf", vec![1]))
+                .await
+        });
+
+        wait_for(&gate.entered).await;
+        caller.abort();
+        assert!(caller.await.unwrap_err().is_cancelled());
+        gate.release.notify_one();
+
+        if fail {
+            wait_for(&service.cleanup_finished).await;
+            assert_eq!(*service.cleanups.lock().unwrap(), [DOCUMENT_ID]);
+        } else {
+            wait_for(&uploader.finished).await;
+            assert!(service.cleanups.lock().unwrap().is_empty());
+        }
+    }
+}
+
+#[tokio::test]
+async fn dropping_the_caller_during_cleanup_does_not_interrupt_cleanup() {
+    let gate = Arc::new(Gate::default());
+    let service = Arc::new(RecordingService {
+        cleanup_gate: Some(gate.clone()),
+        ..Default::default()
+    });
+    let uploader = Arc::new(RecordingUploader {
+        fail: true,
+        ..Default::default()
+    });
+    let creator = DocumentCreator::new(service.clone(), (), uploader, ());
+    let caller = tokio::spawn(async move {
+        creator
+            .upload_file(owner(), upload("report.pdf", vec![1]))
+            .await
+    });
+
+    wait_for(&gate.entered).await;
+    caller.abort();
+    assert!(caller.await.unwrap_err().is_cancelled());
+    gate.release.notify_one();
+
+    wait_for(&service.cleanup_finished).await;
+    assert_eq!(*service.cleanups.lock().unwrap(), [DOCUMENT_ID]);
+}
+
+#[tokio::test(start_paused = true)]
+async fn storage_upload_timeout_cleans_up_metadata() {
+    let service = Arc::new(RecordingService::default());
+    let uploader = Arc::new(RecordingUploader {
+        gate: Some(Arc::new(Gate::default())),
+        ..Default::default()
+    });
+    let creator = DocumentCreator::new(service.clone(), (), uploader.clone(), ());
+    let error = creator
+        .upload_file(owner(), upload("report.pdf", vec![1]))
+        .await
+        .unwrap_err();
+
+    assert!(error.to_string().contains("file upload timed out"));
+    assert_eq!(uploader.uploads.lock().unwrap().len(), 1);
+    assert_eq!(*service.cleanups.lock().unwrap(), [DOCUMENT_ID]);
 }
