@@ -1,7 +1,7 @@
 import { UserIcon } from '@core/component/UserIcon';
 import { isMacroAgentId } from '@core/constant/macroAgent';
 import { senderFromStorageId } from '@queries/messages/message-sender';
-import type { ApiMessageSender } from '@service-storage/generated/schemas/apiMessageSender';
+import type { MessageSender } from '@service-storage/messages';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 import { BotIcon } from './BotIcon';
@@ -17,7 +17,7 @@ export function SenderIcon(props: SenderIconProps) {
 
   // Bot senders render their own avatar; Macro AI keeps its dedicated logo
   // rendering inside UserIcon.
-  const botSender = (): ApiMessageSender | undefined => {
+  const botSender = (): MessageSender | undefined => {
     const sender = message().sender ?? senderFromStorageId(message().sender_id);
     if (sender.type !== 'bot' || isMacroAgentId(sender.id)) return undefined;
     return sender;

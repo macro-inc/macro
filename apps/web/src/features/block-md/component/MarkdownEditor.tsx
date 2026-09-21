@@ -4,6 +4,7 @@ import { URL_PARAMS } from '@block-md/constants';
 import { keyNavigationPlugin } from '@block-md/plugins/keyboardNavigation';
 import { SplitBottomPanel } from '@components/app/split-layout/components/SplitBottomPanel';
 import type { BlockName } from '@core/block';
+import { isDraftThreadId } from '@core/comments/commentType';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
 import {
@@ -237,7 +238,8 @@ export function MarkdownEditor(props: {
     setFindAndReplace: setFindAndReplaceStore,
   } = documentState.editor;
   const { revisions, setRevisions } = documentState.rewrite;
-  const saveBlocked = () => documentState.comments.activeCommentThread === -1;
+  const saveBlocked = () =>
+    isDraftThreadId(documentState.comments.activeCommentThread);
 
   const IS_SYNC = () => documentSource().type === 'sync';
 

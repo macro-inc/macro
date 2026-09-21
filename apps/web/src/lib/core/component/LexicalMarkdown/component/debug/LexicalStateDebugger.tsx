@@ -402,7 +402,8 @@ export function LexicalStateDebugger(props: {
                                       'bg-red/5': !commentNode().getIsDraft(),
                                     }}
                                   >
-                                    {commentNode().getThreadId() ?? 'NO # ID'}
+                                    {commentNode().getIDs().join(', ') ||
+                                      'NO ID'}
                                   </span>
                                 )}
                               </Show>

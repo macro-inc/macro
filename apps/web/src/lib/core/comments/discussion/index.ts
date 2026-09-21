@@ -6,7 +6,7 @@ export {
 } from './Discussion';
 export { DiscussionInput } from './DiscussionInput';
 export {
-  discussionCommentToApiChannelMessage,
+  discussionCommentToChannelMessage,
   discussionCommentToMessageData,
 } from './messageAdapter';
 export type {

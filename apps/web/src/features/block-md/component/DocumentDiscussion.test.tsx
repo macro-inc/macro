@@ -12,10 +12,6 @@ const mocks = vi.hoisted(() => ({
   conversation: vi.fn(),
 }));
 
-vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  isFeatureEnabled: () => true,
-}));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => true }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanel: () => undefined,
@@ -54,17 +50,6 @@ vi.mock('@core/component/ParamsProvider', () => ({
 vi.mock('@channel/Input/ChannelInputContainer', () => ({
   ChannelInputContainer: (props: ParentProps) => props.children,
 }));
-vi.mock('@core/comments/discussion', () => ({
-  DiscussionProvider: (props: ParentProps) => props.children,
-  Discussion: () => null,
-  DiscussionComposer: () => null,
-}));
-vi.mock('../comments/documentDiscussionSource', () => ({
-  createDocumentDiscussionSource: () => ({
-    canEdit: () => true,
-    threads: () => [],
-  }),
-}));
 vi.mock(
   '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
   () => ({
@@ -94,7 +79,7 @@ function setup() {
   return { input, setEditorHasFocus };
 }
 
-describe('mobile document discussion accessory behind the flag', () => {
+describe('mobile document discussion accessory', () => {
   it('moves the composer to the accessory and hides an empty conversation', () => {
     setup();
     expect(mocks.conversation).toHaveBeenCalledWith(

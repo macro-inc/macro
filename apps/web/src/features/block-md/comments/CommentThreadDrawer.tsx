@@ -4,23 +4,15 @@ import {
   MobileDrawer,
   scrollToFocusedInput,
 } from '@components/app/mobile/MobileDrawer';
-import { getAndClearCommentMentions } from '@core/comments';
 import {
   type CommentId,
   type CommentOperations,
   isDraftThreadId,
-  type MessageCommentOperations,
   type Root,
 } from '@core/comments/commentType';
-import { NewReplyInput } from '@core/comments/Inputs';
-import {
-  CommentsContext,
-  ThreadBody,
-  ThreadContext,
-} from '@core/comments/Thread';
+import { CommentsContext, ThreadBody } from '@core/comments/Thread';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { createTheme } from '@core/component/LexicalMarkdown/theme';
-import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
@@ -55,55 +47,12 @@ function getCommentComposerInput(): HTMLElement | null {
 
 /**
  * The drawer's always-visible reply composer, pinned below the scrolling
- * thread. Extracted so its state (text, mentions) resets when the pager
- * switches threads (the host keys it by thread). Provides its own
- * ThreadContext so @-mentions typed here are captured.
+ * thread. Keyed by thread by the host so its draft resets when the pager
+ * switches threads.
  */
 function PinnedReplyComposer(props: {
   root: Root;
   createComment: CommentOperations['createComment'];
-}) {
-  const mentionsSignal = createSignal<UserMentionRecord[]>([]);
-  const [text, setText] = createSignal('');
-  const [editing, setEditing] = createSignal(false);
-
-  return (
-    <ThreadContext.Provider value={{ mentionsSignal }}>
-      <StaticMarkdownContext theme={drawerCommentTheme}>
-        <div
-          class={cn(
-            'shrink-0 px-3',
-            virtualKeyboardVisible()
-              ? 'pb-4'
-              : 'pb-[max(16px,var(--mobile-sheet-safe-padding))]'
-          )}
-        >
-          <NewReplyInput
-            textValue={text()}
-            setTextValue={setText}
-            isEditing={editing()}
-            setEditing={setEditing}
-            deactivateThreadOnCancel={false}
-            createReply={(content) => {
-              if (content.trim() === '') return;
-              setEditing(false);
-              return props.createComment({
-                threadId: props.root.threadId,
-                text: content,
-                mentions: getAndClearCommentMentions(mentionsSignal),
-              });
-            }}
-          />
-        </div>
-      </StaticMarkdownContext>
-    </ThreadContext.Provider>
-  );
-}
-
-/** The pinned composer for a document whose comments are shared messages. */
-function MessagePinnedReplyComposer(props: {
-  root: Root;
-  createComment: MessageCommentOperations['createComment'];
 }) {
   const context = useContext(CommentsContext);
   const typing = usePostTypingUpdateMutation();
@@ -218,7 +167,7 @@ export function CommentThreadDrawer() {
     return active == null ? -1 : orderedThreadIds().indexOf(active);
   });
 
-  // The pager applies to saved threads only — a draft (-1) is mid-compose.
+  // The pager applies to saved threads only — a draft is mid-compose.
   const showPager = () => pagerIndex() >= 0 && orderedThreadIds().length > 1;
 
   const goToThread = (direction: 1 | -1) => {
@@ -327,7 +276,6 @@ export function CommentThreadDrawer() {
                       isActive
                       theme={drawerCommentTheme}
                       hideReplyInput
-                      actionsDropdown
                     />
                   </div>
                 )}
@@ -346,24 +294,12 @@ export function CommentThreadDrawer() {
               // Hidden, not unmounted, while a message edit is open — an
               // in-progress reply draft survives the edit.
               <div classList={{ hidden: messageEditing() }}>
-                <Show
-                  when={parentCommentsContext.messageOperations}
-                  fallback={
-                    <PinnedReplyComposer
-                      root={root}
-                      createComment={
-                        parentCommentsContext.commentOperations.createComment
-                      }
-                    />
+                <PinnedReplyComposer
+                  root={root}
+                  createComment={
+                    parentCommentsContext.commentOperations.createComment
                   }
-                >
-                  {(operations) => (
-                    <MessagePinnedReplyComposer
-                      root={root}
-                      createComment={operations().createComment}
-                    />
-                  )}
-                </Show>
+                />
               </div>
             )}
           </Show>

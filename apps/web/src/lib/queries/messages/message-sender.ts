@@ -1,8 +1,8 @@
-import type { ApiMessageSender } from '@service-storage/generated/schemas/apiMessageSender';
 import type { Bot } from '@service-storage/generated/schemas/bot';
 import type {
   Message as EntityMessage,
   MessageListItem,
+  MessageSender,
   MessageTimelinePage,
 } from '@service-storage/messages';
 import { firstPartyBotName } from '../bots/first-party-bot-name';
@@ -12,11 +12,11 @@ export { firstPartyBotName } from '../bots/first-party-bot-name';
 type WithMaybeSender<
   T extends {
     sender_id: string;
-    sender?: ApiMessageSender;
+    sender?: MessageSender;
     bot_profile?: { name: string; avatar_url?: string | null } | null;
     triggered_by?: string | null;
   },
-> = Omit<T, 'sender'> & { sender?: ApiMessageSender };
+> = Omit<T, 'sender'> & { sender?: MessageSender };
 
 export type ThreadReplyWithMaybeSender = WithMaybeSender<EntityMessage>;
 
@@ -30,7 +30,7 @@ export type ChannelMessageWithMaybeSender = Omit<
 };
 
 /** Derive presentation identity from the canonical stored principal. */
-export function senderFromStorageId(senderId: string): ApiMessageSender {
+export function senderFromStorageId(senderId: string): MessageSender {
   if (senderId.startsWith('bot|')) {
     return { type: 'bot', id: senderId.slice('bot|'.length) };
   }
@@ -41,7 +41,7 @@ export function senderFromStorageId(senderId: string): ApiMessageSender {
 /** Resolve a channel bot sender to its display name. */
 export function getBotDisplayName(
   senderId: string,
-  sender?: ApiMessageSender,
+  sender?: MessageSender,
   bots: readonly Pick<Bot, 'id' | 'name'>[] = []
 ): string | undefined {
   const parsed = sender ?? senderFromStorageId(senderId);
@@ -65,13 +65,13 @@ export function isBotSenderId(senderId: string): boolean {
 export function normalizeMessageSender<
   T extends {
     sender_id: string;
-    sender?: ApiMessageSender;
+    sender?: MessageSender;
     bot_profile?: { name: string; avatar_url?: string | null } | null;
     triggered_by?: string | null;
   },
->(message: T): T & { sender: ApiMessageSender } {
+>(message: T): T & { sender: MessageSender } {
   return message.sender
-    ? (message as T & { sender: ApiMessageSender })
+    ? (message as T & { sender: MessageSender })
     : {
         ...message,
         sender: {

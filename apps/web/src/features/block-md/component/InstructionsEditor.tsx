@@ -1,4 +1,5 @@
 import { SplitBottomPanel } from '@components/app/split-layout/components/SplitBottomPanel';
+import { isDraftThreadId } from '@core/comments/commentType';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
 import { LexicalStateDebugger } from '@core/component/LexicalMarkdown/component/debug/LexicalStateDebugger';
@@ -85,7 +86,8 @@ export function InstructionsEditor(props: {
     error: editorError,
     setError: setEditorError,
   } = documentState.editor;
-  const saveBlocked = () => documentState.comments.activeCommentThread === -1;
+  const saveBlocked = () =>
+    isDraftThreadId(documentState.comments.activeCommentThread);
 
   const IS_SYNC = () => documentSource().type === 'sync';
 

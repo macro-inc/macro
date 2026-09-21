@@ -79,10 +79,11 @@ function getHighlightThread(
 }
 
 /**
- * Comments read through the shared message API. Marks are bound to threads by
- * their stable mark id; the mark itself stores no thread reference.
+ * Binds the editor's comment marks to the document's message threads. Marks are
+ * bound to threads by their stable mark id; the mark itself stores no thread
+ * reference.
  */
-export const MessageCommentsProvider: VoidComponent<{
+export const CommentsProvider: VoidComponent<{
   activeComment?: Accessor<string | undefined>;
   loroManager: LoroManager;
 }> = (props) => {

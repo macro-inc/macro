@@ -2,10 +2,6 @@ import { openMacroMcpSetupModal } from '@app/features/integrations/mcp-setup/Mac
 import type { SplitFileMenuAction } from '@components/app/split-layout/context';
 import { editorStateAsMarkdown } from '@core/component/LexicalMarkdown/utils';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  enableUnifiedDocumentDiscussions,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { macroIdToEmail, tryMacroId } from '@core/user';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import ClaudeIcon from '@icon/wide-claude.svg';
@@ -19,17 +15,12 @@ import PlugIcon from '@phosphor/plug.svg';
 import TerminalWindowIcon from '@phosphor/terminal-window.svg';
 import { fetchDocumentThreads } from '@queries/messages/document-messages';
 import { storageServiceClient } from '@service-storage/client';
-import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
 import type { MessageThread } from '@service-storage/messages';
 import { createCallback } from '@solid-primitives/rootless';
 import { makePersisted } from '@solid-primitives/storage';
 import { Button, ButtonGroup, Dropdown } from '@ui';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import {
-  sortComments,
-  useDiscussionThreads,
-} from '../comments/discussionResource';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { useMarkdownName } from './MarkdownNameProvider';
 
@@ -40,21 +31,7 @@ type PromptComment = {
   createdAt?: string | null;
   text: string;
 };
-type PromptThread = { threadId: string | number; comments: PromptComment[] };
-
-function legacyPromptThreads(threads: CommentThread[]): PromptThread[] {
-  return threads.map((thread) => ({
-    threadId: thread.thread.threadId,
-    comments: [...thread.comments]
-      .sort(sortComments)
-      .filter((comment) => comment.text && !comment.deletedAt)
-      .map((comment) => ({
-        author: comment.sender ?? comment.owner,
-        createdAt: comment.createdAt,
-        text: comment.text,
-      })),
-  }));
-}
+type PromptThread = { threadId: string; comments: PromptComment[] };
 
 function messagePromptThreads(threads: MessageThread[]): PromptThread[] {
   return threads.map((thread) => ({
@@ -214,7 +191,6 @@ export function useDispatchAgentAction() {
   const { documentId, state } = useMarkdownDocument();
   const blockId = documentId();
   const { displayName: name } = useMarkdownName();
-  const discussionThreads = useDiscussionThreads();
 
   const lastUsed = () =>
     ALL_ACTIONS.find((a) => a.key === lastUsedKey()) ?? COPY_ACTION;
@@ -223,9 +199,7 @@ export function useDispatchAgentAction() {
     const docName = name() ?? '';
     const editor = state.editor.md.editor;
     const content = editor ? editorStateAsMarkdown(editor, 'external') : '';
-    const threads = isFeatureEnabled(enableUnifiedDocumentDiscussions)
-      ? await fetchMessagePromptThreads(blockId)
-      : legacyPromptThreads(discussionThreads() ?? []);
+    const threads = await fetchMessagePromptThreads(blockId);
     return generateTaskPrompt(blockId, docName, content, threads);
   });
 

@@ -1,10 +1,10 @@
 import type {
   CommentId,
-  IComment,
   Reply,
   Root,
   ThreadId,
 } from '@core/comments/commentType';
+import type { Message } from '@service-storage/messages';
 import type { NodeKey } from 'lexical';
 
 export type MarkId = string; // uuid
@@ -13,8 +13,9 @@ export type ThreadPayload = {
   threadId: ThreadId;
   rootId: CommentId;
   anchorId: string; // uuid
-  comments: IComment[];
-  /** Total live replies when the source reports it; comments holds the loaded preview. */
+  /** The root message followed by the loaded reply preview. */
+  comments: Message[];
+  /** Total live replies; comments holds the loaded preview. */
   replyCount?: number;
   isResolved: boolean;
 };
