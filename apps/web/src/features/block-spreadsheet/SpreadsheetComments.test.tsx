@@ -1,4 +1,4 @@
-import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
+import type { Message, MessageThread } from '@service-storage/messages';
 import {
   cleanup,
   fireEvent,
@@ -14,7 +14,7 @@ import type { SpreadsheetStore } from './primitives/create-spreadsheet-store';
 const mocks = vi.hoisted(() => ({
   api: { create: vi.fn(), edit: vi.fn(), delete: vi.fn() },
   refresh: vi.fn(async () => {}),
-  data: [] as CommentThread[],
+  data: [] as MessageThread[],
   target: undefined as string | undefined,
   canComment: true,
 }));
@@ -92,7 +92,26 @@ vi.mock('@core/comments/discussion', async () => {
 
 import { SpreadsheetComments } from './SpreadsheetComments';
 
-const anchor = { sheetId: 'sheet1', sheetName: 'Budget', range: 'B4:C5' };
+const threadAnchor = {
+  type: 'spreadsheet',
+  sheet_id: 'sheet1',
+  sheet_name: 'Budget',
+  range: 'B4:C5',
+} as const;
+function message(overrides: Partial<Message> & { id: string }): Message {
+  return {
+    parent: { type: 'document', id: 'doc' },
+    thread_id: null,
+    sender_id: 'me',
+    content: 'Check assumptions',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    mentions: [],
+    attachments: [],
+    reactions: [],
+    ...overrides,
+  };
+}
 let cap: SpreadsheetCommentsCapability;
 let active!: (id: string) => void;
 let selection = { anchor: 'B4', focus: 'C5' };
@@ -136,19 +155,19 @@ function mount() {
 beforeEach(() => {
   mocks.data = [
     {
-      thread: {
-        threadId: 7,
-        documentId: 'doc',
-        owner: 'me',
+      state: {
+        root_id: 'root-7',
+        user_id: 'me',
         resolved: false,
-        metadata: { spreadsheet: anchor },
+        anchor: threadAnchor,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
       },
-      comments: [
-        { commentId: 42, threadId: 7, owner: 'me', text: 'Check assumptions' },
-      ],
+      root: message({ id: 'root-7' }),
+      replies: [],
     },
   ];
-  mocks.api.create.mockResolvedValue({ thread: { threadId: 8 }, comments: [] });
+  mocks.api.create.mockResolvedValue(message({ id: 'root-8' }));
   mocks.target = undefined;
   mocks.canComment = true;
   selection = { anchor: 'B4', focus: 'C5' };
@@ -171,9 +190,7 @@ it('offers a cell-anchored composer and freezes the range even if the grid selec
   fireEvent.click(screen.getByRole('button', { name: 'Post' }));
   await waitFor(() =>
     expect(mocks.api.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        threadMetadata: expect.objectContaining({ spreadsheet: anchor }),
-      })
+      expect.objectContaining({ content: 'Check this', anchor: threadAnchor })
     )
   );
 });
@@ -192,9 +209,9 @@ it('shows existing comments on hover, replies in place, and pins the card when i
   fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
   await waitFor(() =>
     expect(mocks.api.create).toHaveBeenCalledWith({
-      text: 'Reply from card',
-      threadId: 7,
-      mentions: undefined,
+      content: 'Reply from card',
+      thread_id: 'root-7',
+      mentions: [],
     })
   );
   expect(screen.queryByRole('complementary')).toBeNull();
@@ -214,16 +231,14 @@ it('dismisses unpinned previews and supports clicking a marker for touch/keyboar
   expect(screen.queryByRole('dialog')).toBeNull();
 });
 it('opens notification targets at the linked range and keeps deleted-sheet threads accessible', async () => {
-  mocks.target = '42';
+  mocks.target = 'root-7';
   mount();
   expect(
     screen.getByRole('complementary', { name: 'Spreadsheet comments' })
   ).toBeTruthy();
   expect(screen.getByRole('status').textContent).toBe('B4:C5');
   cleanup();
-  mocks.data[0].thread.metadata = {
-    spreadsheet: { ...anchor, sheetId: 'deleted' },
-  };
+  mocks.data[0].state.anchor = { ...threadAnchor, sheet_id: 'deleted' };
   mount();
   expect(
     screen.getByText('This comment refers to a sheet that has been deleted.')
@@ -247,8 +262,8 @@ it('keeps sidebar and floating composer attachments independent', async () => {
   await waitFor(() =>
     expect(mocks.api.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        text: 'Sidebar draft',
-        threadMetadata: expect.objectContaining({ spreadsheet: anchor }),
+        content: 'Sidebar draft',
+        anchor: threadAnchor,
       })
     )
   );

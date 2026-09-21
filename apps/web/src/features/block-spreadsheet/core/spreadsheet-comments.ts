@@ -1,3 +1,5 @@
+import type { NewThreadAnchor } from '@service-storage/generated/schemas/newThreadAnchor';
+import type { ThreadAnchor } from '@service-storage/generated/schemas/threadAnchor';
 import { positionFromAddress } from './grid-selection';
 
 export const SPREADSHEET_COMMENT_PARAMS = { commentId: 'comment_id' } as const;
@@ -8,29 +10,32 @@ export type SpreadsheetCommentAnchor = {
   range: string;
 };
 
-/** Stored on the existing document annotation thread, never in cell contents. */
+/** The thread anchor posted with a root comment on a cell range. */
+export function spreadsheetThreadAnchor(
+  anchor: SpreadsheetCommentAnchor
+): NewThreadAnchor {
+  return {
+    type: 'spreadsheet',
+    sheet_id: anchor.sheetId,
+    sheet_name: anchor.sheetName,
+    range: anchor.range,
+  };
+}
+
+/** The cell range a thread is anchored to; absent for workbook comments and other anchors. */
 export function spreadsheetCommentAnchor(
-  metadata: unknown
+  anchor: ThreadAnchor | null | undefined
 ): SpreadsheetCommentAnchor | undefined {
-  if (!metadata || typeof metadata !== 'object' || !('spreadsheet' in metadata))
-    return;
-  const value = metadata.spreadsheet;
-  if (
-    !value ||
-    typeof value !== 'object' ||
-    !('sheetId' in value) ||
-    !('sheetName' in value) ||
-    !('range' in value)
-  )
+  if (!anchor || typeof anchor !== 'object' || anchor.type !== 'spreadsheet')
     return;
   if (
-    typeof value.sheetId !== 'string' ||
-    !value.sheetId ||
-    typeof value.sheetName !== 'string' ||
-    typeof value.range !== 'string'
+    typeof anchor.sheet_id !== 'string' ||
+    !anchor.sheet_id ||
+    typeof anchor.sheet_name !== 'string' ||
+    typeof anchor.range !== 'string'
   )
     return;
-  const addresses = value.range.split(':');
+  const addresses = anchor.range.split(':');
   if (
     addresses.length > 2 ||
     !addresses.every(
@@ -40,8 +45,8 @@ export function spreadsheetCommentAnchor(
   )
     return;
   return {
-    sheetId: value.sheetId,
-    sheetName: value.sheetName,
-    range: value.range,
+    sheetId: anchor.sheet_id,
+    sheetName: anchor.sheet_name,
+    range: anchor.range,
   };
 }

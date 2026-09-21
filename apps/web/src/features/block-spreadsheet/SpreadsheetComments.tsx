@@ -38,7 +38,7 @@ import { createSpreadsheetDiscussion } from './primitives/create-spreadsheet-dis
 import type { SpreadsheetStore } from './primitives/create-spreadsheet-store';
 import { useSpreadsheetComments } from './queries/spreadsheet-comments';
 
-/** Production wiring: shared discussions + the document annotation service. */
+/** Production wiring: shared discussions over the document's message threads. */
 export function SpreadsheetComments(props: {
   documentId: string;
   store: SpreadsheetStore;
@@ -102,11 +102,11 @@ export function SpreadsheetComments(props: {
     create: async (body) => {
       const postingCard = card();
       const result = await api.create(body);
-      if (!body.threadId && postingCard?.creating && card() === postingCard) {
+      if (!body.thread_id && postingCard?.creating && card() === postingCard) {
         setCard({
           ...postingCard,
           creating: false,
-          threadIds: [String(result.thread.threadId)],
+          threadIds: [result.id],
         });
       }
       return result;
@@ -155,11 +155,13 @@ export function SpreadsheetComments(props: {
   };
   const anchoredThreads = createMemo(() =>
     threads().flatMap((thread) => {
-      const value = spreadsheetCommentAnchor(thread.thread.metadata);
+      const value = spreadsheetCommentAnchor(thread.state.anchor);
       if (
         !value ||
-        thread.thread.deletedAt ||
-        !thread.comments.some((comment) => !comment.deletedAt) ||
+        thread.state.deleted_at ||
+        ![thread.root, ...thread.replies].some(
+          (message) => !message.deleted_at
+        ) ||
         value.sheetId !== props.store.activeSheetId()
       )
         return [];
@@ -167,7 +169,7 @@ export function SpreadsheetComments(props: {
       const first = positionFromAddress(start)!;
       const last = positionFromAddress(end)!;
       const bounds = selectionBounds({ anchor: first, focus: last });
-      return [{ id: String(thread.thread.threadId), anchor: value, bounds }];
+      return [{ id: thread.state.root_id, anchor: value, bounds }];
     })
   );
   const markers = createMemo(
@@ -247,11 +249,11 @@ export function SpreadsheetComments(props: {
         setOpen(true);
         if (!loaded || !ready) return;
         const thread = threads().find((thread) =>
-          thread.comments.some(
-            (comment) => String(comment.commentId) === value.id
+          [thread.root, ...thread.replies].some(
+            (message) => message.id === value.id
           )
         );
-        const linked = spreadsheetCommentAnchor(thread?.thread.metadata);
+        const linked = spreadsheetCommentAnchor(thread?.state.anchor);
         if (linked) navigate(linked);
       }
     )
@@ -323,9 +325,8 @@ export function SpreadsheetComments(props: {
                 threadHeader={(thread) => {
                   const linked = () =>
                     spreadsheetCommentAnchor(
-                      threads().find(
-                        (item) => String(item.thread.threadId) === thread.id
-                      )?.thread.metadata
+                      threads().find((item) => item.state.root_id === thread.id)
+                        ?.state.anchor
                     );
                   const label = () => {
                     const value = linked();

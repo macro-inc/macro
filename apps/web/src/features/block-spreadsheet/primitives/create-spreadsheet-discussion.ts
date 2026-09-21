@@ -1,24 +1,36 @@
+import { authoredMentions } from '@channel/Input/message-payload';
 import type {
   DiscussionSource,
   DiscussionThread,
 } from '@core/comments/discussion/types';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
-import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
-import type { CreateCommentRequest } from '@service-storage/generated/schemas/createCommentRequest';
+import type { SimpleMention } from '@service-storage/generated/schemas/simpleMention';
+import type {
+  Message,
+  MessageThread,
+  PostMessage,
+} from '@service-storage/messages';
 import { type Accessor, createMemo } from 'solid-js';
-import type { SpreadsheetCommentAnchor } from '../core/spreadsheet-comments';
+import {
+  type SpreadsheetCommentAnchor,
+  spreadsheetThreadAnchor,
+} from '../core/spreadsheet-comments';
 
 export function createSpreadsheetDiscussion(options: {
-  threads: Accessor<CommentThread[]>;
+  threads: Accessor<MessageThread[]>;
   canComment: Accessor<boolean>;
   userId: Accessor<string | undefined>;
   anchor: Accessor<SpreadsheetCommentAnchor | undefined>;
   targetCommentId: Accessor<string | null>;
   targetRevision: Accessor<unknown>;
   api: {
-    create(body: CreateCommentRequest): Promise<unknown>;
-    edit(commentId: number, threadId: number, text: string): Promise<unknown>;
-    delete(commentId: number): Promise<unknown>;
+    create(input: PostMessage): Promise<Message>;
+    edit(
+      messageId: string,
+      content: string,
+      mentions: SimpleMention[]
+    ): Promise<unknown>;
+    delete(messageId: string): Promise<unknown>;
   };
   refresh(): Promise<unknown>;
   buildLink(commentId: string): string;
@@ -33,9 +45,9 @@ export function createSpreadsheetDiscussion(options: {
       new Map(
         options
           .threads()
-          .filter((value) => !value.thread.deletedAt)
+          .filter((value) => !value.state.deleted_at)
           .map((value) => [
-            String(value.thread.threadId),
+            value.state.root_id,
             spreadsheetDiscussionThread(value),
           ])
       )
@@ -79,70 +91,54 @@ export function createSpreadsheetDiscussion(options: {
       const anchor = options.anchor();
       return write(() =>
         options.api.create({
-          text,
-          threadMetadata: {
-            markId: `DISCUSSION:${crypto.randomUUID()}`,
-            ...(anchor ? { spreadsheet: anchor } : {}),
-          },
+          content: text,
           mentions: spreadsheetCommentMentions(mentions),
+          ...(anchor ? { anchor: spreadsheetThreadAnchor(anchor) } : {}),
         })
       );
     },
     createReply: (threadId, text, mentions) =>
       write(() =>
         options.api.create({
-          text,
-          threadId: Number(threadId),
+          content: text,
+          thread_id: threadId,
           mentions: spreadsheetCommentMentions(mentions),
         })
       ),
     editComment: (comment, text) => {
       assertOwner(comment.authorId);
-      return write(() =>
-        options.api.edit(Number(comment.id), Number(comment.threadId), text)
-      );
+      return write(() => options.api.edit(comment.id, text, []));
     },
     deleteComment: (comment) => {
       assertOwner(comment.authorId);
-      return write(() => options.api.delete(Number(comment.id)));
+      return write(() => options.api.delete(comment.id));
     },
     buildCommentLink: (comment) => options.buildLink(comment.id),
   };
 }
 
-export function spreadsheetCommentMentions(mentions: ItemMention[]) {
-  const users = [
-    ...new Set(
-      mentions
-        .filter((item) => item.itemType === 'user')
-        .map((item) => item.itemId)
-    ),
-  ];
-  return users.length ? { mentionId: crypto.randomUUID(), users } : undefined;
+/** Mentions the composer authored, as the message API stores them. */
+export function spreadsheetCommentMentions(
+  mentions: ItemMention[]
+): SimpleMention[] {
+  return authoredMentions(mentions);
 }
 
+/** A message thread as the shared discussion UI renders it: root first, then replies. */
 export function spreadsheetDiscussionThread(
-  value: CommentThread
+  value: MessageThread
 ): DiscussionThread {
   return {
-    id: String(value.thread.threadId),
-    resolved: value.thread.resolved,
-    comments: [...value.comments]
-      .sort(
-        (a, b) =>
-          (a.order ?? Number.MAX_SAFE_INTEGER) -
-            (b.order ?? Number.MAX_SAFE_INTEGER) ||
-          (a.createdAt ?? '').localeCompare(b.createdAt ?? '') ||
-          a.commentId - b.commentId
-      )
-      .map((comment) => ({
-        id: String(comment.commentId),
-        threadId: String(comment.threadId),
-        authorId: comment.sender ?? comment.owner,
-        text: comment.text,
-        createdAt: comment.createdAt ?? '',
-        updatedAt: comment.updatedAt ?? comment.createdAt ?? '',
-        deletedAt: comment.deletedAt ?? null,
-      })),
+    id: value.state.root_id,
+    resolved: value.state.resolved,
+    comments: [value.root, ...value.replies].map((message) => ({
+      id: message.id,
+      threadId: message.thread_id ?? message.id,
+      authorId: message.sender_id,
+      text: message.content,
+      createdAt: message.created_at,
+      updatedAt: message.updated_at,
+      deletedAt: message.deleted_at ?? null,
+    })),
   };
 }
