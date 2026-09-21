@@ -92,13 +92,13 @@ and never turns the committed write into an error:
 - The local built-in agent queue: every human-authored post, on either parent, is
   handed to the in-process Macro AI detector (see Agents below). Bot posts never
   enter it, so bots cannot trigger each other.
-- Parent delivery. For channels, `ChannelMessageDelivery` dispatches the same
-  `ChannelEvent`s the old writer dispatched, so notifications, activity, sharing of
-  referenced items, contact sync, search indexing, bot triggers, and the
-  `comms_message` / `comms_attachment` / `comms_reaction` / `comms_typing` realtime
-  payloads the deployed client listens to are unchanged, and the `channel.*` events
-  on `macro.channels` keep flowing. It also sends the common `message_update` payload
-  to channel participants. For documents, `DiscussionDelivery` sends `message_update`
+- Parent delivery. For channels, `ChannelMessageDelivery` shares the referenced
+  items with participants, dispatches `ChannelEvent::MessagePosted` for new posts
+  (notifications and mention events), and sends the common `message_update` payload
+  to channel participants. The legacy `comms_message` / `comms_attachment` /
+  `comms_reaction` / `comms_typing` realtime frames and the `channel.message_*`
+  events on `macro.channels` are gone; search, webhooks, and soup consume
+  `macro.messages` instead. For documents, `DiscussionDelivery` sends `message_update`
   to current viewers and the existing document comment notifications (mention, reply,
   assignee, owner) to recipients whose view access is rechecked at delivery time.
   Comment notifications now identify the comment by message id, so the metadata's

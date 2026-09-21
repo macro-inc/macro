@@ -39,10 +39,12 @@ export function spreadsheetCommentsApi(documentId: string) {
             limit: 100,
             cursor: cursor ?? undefined,
           });
-          for (const root of page.items) {
-            if (root.state.deleted_at) continue;
-            threads.push(await entityMessagesClient.thread(parent, root.id));
-          }
+          const live = page.items.filter((root) => !root.state.deleted_at);
+          threads.push(
+            ...(await Promise.all(
+              live.map((root) => entityMessagesClient.thread(parent, root.id))
+            ))
+          );
           cursor = page.next_cursor;
         } while (cursor);
         return threads;

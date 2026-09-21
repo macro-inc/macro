@@ -13,5 +13,5 @@ export async function* paginate<T, Cursor = string>(
     const page = await fetchPage(cursor);
     yield* page.items;
     cursor = page.nextCursor ?? undefined;
-  } while (cursor);
+  } while (cursor !== undefined);
 }

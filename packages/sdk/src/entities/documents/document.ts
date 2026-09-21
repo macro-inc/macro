@@ -15,7 +15,7 @@ import {
   toBody,
   wrapXml,
 } from '../../mentions';
-import { MacroApiError, paginate, unwrap } from '../../utils';
+import { MacroApiError, mapConcurrently, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { PropertiedEntity } from '../entity';
 import { Project } from '../projects/project';
@@ -24,6 +24,9 @@ import { User } from '../users/user';
 import { Comment } from './comment';
 
 type DocumentDetail = GetDocumentResponses[200]['data']['documentMetadata'];
+
+/** Thread reads in flight at once while `comments()` expands a document's roots. */
+const THREAD_FETCH_CONCURRENCY = 8;
 
 /** One of a document's comment threads: its state and its comments. */
 export interface CommentThread {
@@ -276,21 +279,21 @@ export class Document
       );
       return { items: page.items, nextCursor: page.next_cursor };
     });
-    const threads: CommentThread[] = [];
-    for await (const item of roots) {
+    const items: MessageListItem[] = [];
+    for await (const item of roots) items.push(item);
+    return mapConcurrently(items, THREAD_FETCH_CONCURRENCY, async (item) => {
       const { state, root, replies } = unwrap(
         await this.client.storage.entityMessageGetThread({
           path: { ...parent, id: item.id },
         }),
       );
-      threads.push({
+      return {
         thread: state,
         comments: [root, ...replies].map((comment) =>
           Comment.from(this.client, this.id, comment),
         ),
-      });
-    }
-    return threads;
+      };
+    });
   }
 
   /**
