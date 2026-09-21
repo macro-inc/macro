@@ -308,7 +308,11 @@ export const useEntityActionHotkeys = (
         if (entities.length === 0) return false;
         if (!entities.every(deleteAction.canExecute)) return false;
 
-        deleteAction.executeWithSoup(entities, list);
+        deleteAction.executeWithSoup(
+          entities,
+          list,
+          options.createActionNavigationHandler?.() ?? openNextEntity
+        );
         return true;
       },
       condition: () => {
