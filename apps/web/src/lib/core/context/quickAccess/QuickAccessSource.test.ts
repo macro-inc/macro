@@ -7,8 +7,8 @@ import type {
 import type { HistoryItem } from '@queries/history/types';
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createQuickAccessValue } from './QuickAccessSource';
 import { MAX_BROWSE_PAGES_PER_LOAD } from './projected-list';
+import { createQuickAccessValue } from './QuickAccessSource';
 import type { QuickAccessContextValue } from './types';
 
 const mocks = vi.hoisted(() => ({
