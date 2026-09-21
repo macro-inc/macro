@@ -124,7 +124,7 @@ where
 
         // Bots always resolve ownership through the scoped domain policy.
         if let Some(ref user_id) = macro_user_id
-            && chat_context.user_id == *user_id
+            && chat_context.user_id.is_user(user_id)
         {
             return Ok(Self {
                 entity_access_receipt: EntityAccessReceipt {

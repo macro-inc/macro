@@ -145,7 +145,7 @@ fn test_chat_serde() {
     let chat = Chat {
         id: "chat123".to_string(),
         name: "Test Chat".to_string(),
-        user_id: "user1".to_string(),
+        user_id: Owner::from_principal_str("macro|user1@example.com").unwrap(),
         model: Some("claude-3".to_string()),
         project_id: None,
         created_at: Some(chrono::Utc::now()),

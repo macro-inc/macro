@@ -1,6 +1,7 @@
 use anyhow::Context;
 use document_sub_type::DocumentSubType;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use model_owner::Owner;
 
 use crate::{chat::get_basic_chat, projects::get_project::get_basic_project::get_basic_project};
 
@@ -65,11 +66,15 @@ pub async fn get_basic_cloud_storage_item_metadata(
             let basic_chat_metadata = get_basic_chat(db, item_id)
                 .await
                 .context("unable to get chat metadata")?;
+            // Notifications address a user; bot- and team-owned chats have none.
+            let Owner::User(owner) = basic_chat_metadata.user_id else {
+                anyhow::bail!("chat owner is not a user");
+            };
 
             Ok(BasicCloudStorageItemMetadata {
                 item_id: basic_chat_metadata.id,
                 item_name: basic_chat_metadata.name,
-                item_owner: basic_chat_metadata.user_id,
+                item_owner: owner,
                 file_type: None,
                 sub_type: None,
             })
