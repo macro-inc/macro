@@ -163,10 +163,14 @@ pub trait DatabasesRepo: Send + Sync + 'static {
         limit: usize,
     ) -> impl Future<Output = Result<Vec<Row>, Self::Err>> + Send;
 
-    /// Fetch the link edges for a link column.
+    /// Fetch at most `limit` link edges for a link column, in position order.
+    ///
+    /// Materialization requests its budget plus one to detect overflow without
+    /// loading every edge. Existence checks only need a limit of one.
     fn fetch_links(
         &self,
         column_id: ColumnId,
+        limit: usize,
     ) -> impl Future<Output = Result<Vec<(RowId, RowId)>, Self::Err>> + Send;
 
     /// Apply a translated changeset atomically: inserts (returning minted row

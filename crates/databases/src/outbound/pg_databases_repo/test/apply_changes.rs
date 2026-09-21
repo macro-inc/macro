@@ -89,7 +89,7 @@ async fn link_to_a_concurrently_deleted_endpoint_conflicts_and_rolls_back_insert
             repo.fetch_rows(source.id, 100).await.unwrap().len(),
             source_count
         );
-        assert!(repo.fetch_links(column_id).await.unwrap().is_empty());
+        assert!(repo.fetch_links(column_id, 100).await.unwrap().is_empty());
         assert_eq!(
             repo.table_versions(&[source.id, target.id]).await.unwrap(),
             before
@@ -164,7 +164,7 @@ async fn allocated_rows_and_edges_commit_together_or_roll_back_together(pool: Pg
         ApplyOutcome::VersionConflict { table_id: table.id }
     );
     assert!(repo.fetch_rows(table.id, 100).await.unwrap().is_empty());
-    assert!(repo.fetch_links(column_id).await.unwrap().is_empty());
+    assert!(repo.fetch_links(column_id, 100).await.unwrap().is_empty());
     assert_eq!(repo.table_versions(&[table.id]).await.unwrap(), snapshot);
 
     let (ids, versions) = repo
@@ -175,7 +175,7 @@ async fn allocated_rows_and_edges_commit_together_or_roll_back_together(pool: Pg
         .unwrap();
     assert_eq!(ids, vec![source, target]);
     assert_eq!(
-        repo.fetch_links(column_id).await.unwrap(),
+        repo.fetch_links(column_id, 100).await.unwrap(),
         vec![(source, target)]
     );
     assert_eq!(versions[&table.id], TableVersion(snapshot[&table.id].0 + 1));
@@ -446,7 +446,7 @@ async fn trash_at_either_link_endpoint_rejects_link_and_unlink(pool: PgPool) {
                 }
             );
             assert_eq!(
-                repo.fetch_links(column_id).await.unwrap(),
+                repo.fetch_links(column_id, 100).await.unwrap(),
                 vec![(rows[0], rows[2])]
             );
             assert_eq!(

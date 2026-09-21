@@ -39,6 +39,107 @@ async fn linked_fixture() -> (Shared, Service, DatabaseId, TableId, TableId, Col
 }
 
 #[tokio::test]
+async fn link_materialization_accepts_the_exact_cap_and_fetches_each_column_once() {
+    let (world, svc, _, guests, _, column) = linked_fixture().await;
+    let source = world.lock().unwrap().rows[&guests][0].id;
+    world.lock().unwrap().links.insert(
+        column,
+        (1..=MAX_MATERIALIZED_ROWS)
+            .map(|index| (source, Uuid::from_u128(index as u128)))
+            .collect(),
+    );
+    let catalog = svc.build_catalog(&viewer(OWNER)).await.unwrap();
+    let entry = catalog
+        .entries
+        .iter()
+        .find(|entry| entry.table.id == guests)
+        .unwrap();
+    let mut loaded = Loaded::default();
+
+    svc.load_table(entry, &mut loaded).await.unwrap();
+    svc.load_table(entry, &mut loaded).await.unwrap();
+
+    assert_eq!(loaded.links[&column][&source].len(), MAX_MATERIALIZED_ROWS);
+    assert_eq!(
+        world.lock().unwrap().fetch_link_limits,
+        vec![MAX_MATERIALIZED_ROWS + 1],
+        "the repository receives the cap plus one, and cached links are not fetched twice"
+    );
+}
+
+#[tokio::test]
+async fn oversized_links_reject_reads_and_writes_before_applying_changes() {
+    let (world, svc, _, guests, _, column) = linked_fixture().await;
+    {
+        let mut world = world.lock().unwrap();
+        let source = world.rows[&guests][0].id;
+        world.links.insert(
+            column,
+            (1..=MAX_MATERIALIZED_ROWS + 2)
+                .map(|index| (source, Uuid::from_u128(index as u128)))
+                .collect(),
+        );
+        world.applied.clear();
+    }
+
+    for sql in [
+        "SELECT name FROM guests",
+        "SELECT * FROM guests__sessions",
+        "UPDATE guests SET name = 'Must not commit'",
+    ] {
+        assert!(matches!(
+            exec(&svc, OWNER, sql).await,
+            Err(QueryError::BudgetExceeded)
+        ));
+    }
+
+    let world = world.lock().unwrap();
+    assert!(world.applied.is_empty());
+    assert_eq!(world.fetch_link_limits, vec![MAX_MATERIALIZED_ROWS + 1; 3]);
+}
+
+#[tokio::test]
+async fn changing_a_link_column_type_checks_only_one_existing_edge() {
+    let (world, svc, db, guests, _, column) = linked_fixture().await;
+    let base_version = {
+        let mut world = world.lock().unwrap();
+        let source = world.rows[&guests][0].id;
+        world.links.insert(
+            column,
+            vec![(source, Uuid::now_v7()), (source, Uuid::now_v7())],
+        );
+        world
+            .tables
+            .iter()
+            .find(|table| table.id == guests)
+            .unwrap()
+            .version
+    };
+
+    let result = svc
+        .change_column_type(
+            receipt(db, OWNER, AccessLevel::Edit),
+            viewer(OWNER),
+            ChangeColumnType {
+                table_id: guests,
+                column_id: column,
+                data_type: DataType::String,
+                is_multi_select: false,
+                specific_entity_type: None,
+                relation: None,
+                base_version,
+            },
+        )
+        .await;
+
+    assert!(matches!(
+        result,
+        Err(DatabaseError::InvalidSchemaOperation(_))
+    ));
+    assert_eq!(world.lock().unwrap().fetch_link_limits, vec![1]);
+}
+
+#[tokio::test]
 async fn same_exec_new_source_and_target_link_by_server_minted_ids() {
     let (world, svc, _, guests, sessions, column) = linked_fixture().await;
     let result = exec(

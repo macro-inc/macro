@@ -90,7 +90,7 @@ where
         if matches!(detail.column.config, Some(ColumnConfig::Link { .. }))
             && !self
                 .repo
-                .fetch_links(cmd.column_id)
+                .fetch_links(cmd.column_id, 1)
                 .await
                 .map_err(repo_err)?
                 .is_empty()

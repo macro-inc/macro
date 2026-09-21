@@ -12,6 +12,7 @@ use crate::domain::models::{ColumnBinding, ColumnConfig};
 mod apply_changes;
 mod columns;
 mod infer_column_type;
+mod links;
 mod rename_column;
 mod sharing;
 mod tables;
@@ -553,7 +554,7 @@ async fn links_are_inserted_idempotently_and_removed(pool: PgPool) {
         HashMap::from([(table.id, TableVersion(before.0 + 1))])
     );
     assert_eq!(
-        repo.fetch_links(link_column_id)
+        repo.fetch_links(link_column_id, 100)
             .await
             .expect("links should fetch"),
         vec![(rows[0], rows[1])]
@@ -572,7 +573,7 @@ async fn links_are_inserted_idempotently_and_removed(pool: PgPool) {
     .expect("unlink should apply");
 
     assert!(
-        repo.fetch_links(link_column_id)
+        repo.fetch_links(link_column_id, 100)
             .await
             .expect("links should fetch")
             .is_empty()
@@ -654,7 +655,7 @@ async fn deleting_a_row_cascades_its_links(pool: PgPool) {
         1
     );
     assert!(
-        repo.fetch_links(link_column_id)
+        repo.fetch_links(link_column_id, 100)
             .await
             .expect("links should fetch")
             .is_empty()
@@ -786,7 +787,7 @@ async fn a_link_bumps_both_ends(pool: PgPool) {
         }
     );
     assert_eq!(
-        repo.fetch_links(link_column_id)
+        repo.fetch_links(link_column_id, 100)
             .await
             .expect("links should fetch"),
         vec![(guest_rows[0], session_rows[0])],

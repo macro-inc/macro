@@ -21,32 +21,36 @@ const USER: &str = "macro|databases-defs@macro.com";
 
 async fn insert_user(pool: &PgPool, id: &str) {
     let macro_user_id = macro_uuid::generate_uuid_v7();
-    sqlx::query(
+    sqlx::query!(
         r#"INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, $2)"#,
+        macro_user_id,
+        id,
     )
-    .bind(macro_user_id)
-    .bind(id)
     .execute(pool)
     .await
     .expect("macro_user should insert");
-    sqlx::query(r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ($1, $1, $2)"#)
-        .bind(id)
-        .bind(macro_user_id)
-        .execute(pool)
-        .await
-        .expect("user should insert");
+    sqlx::query!(
+        r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ($1, $1, $2)"#,
+        id,
+        macro_user_id,
+    )
+    .execute(pool)
+    .await
+    .expect("user should insert");
 }
 
 /// A database owned by [`USER`], which every database-scoped definition needs.
 async fn insert_database(pool: &PgPool) -> DatabaseId {
     insert_user(pool, USER).await;
     let id = macro_uuid::generate_uuid_v7();
-    sqlx::query("INSERT INTO databases (id, name, owner_id) VALUES ($1, 'Guests', $2)")
-        .bind(id)
-        .bind(USER)
-        .execute(pool)
-        .await
-        .expect("database should insert");
+    sqlx::query!(
+        "INSERT INTO databases (id, name, owner_id) VALUES ($1, 'Guests', $2)",
+        id,
+        USER,
+    )
+    .execute(pool)
+    .await
+    .expect("database should insert");
     id
 }
 
@@ -57,16 +61,16 @@ async fn insert_option(
     number_value: Option<f64>,
 ) -> Uuid {
     let id = macro_uuid::generate_uuid_v7();
-    sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO property_options (id, property_definition_id, display_order, string_value, number_value)
         VALUES ($1, $2, 0, $3, $4)
         "#,
+        id,
+        definition_id,
+        string_value,
+        number_value,
     )
-    .bind(id)
-    .bind(definition_id)
-    .bind(string_value)
-    .bind(number_value)
     .execute(pool)
     .await
     .expect("option should insert");

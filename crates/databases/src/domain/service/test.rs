@@ -68,6 +68,8 @@ struct World {
     applied: Vec<RowChange>,
     /// Row limits `fetch_rows` was called with, newest last.
     fetch_row_limits: Vec<usize>,
+    /// Edge limits `fetch_links` was called with, newest last.
+    fetch_link_limits: Vec<usize>,
     /// When set, the fake magic table reports itself truncated.
     magic_truncated: bool,
     /// Simulate a parent removed between domain validation and the write.
@@ -413,15 +415,21 @@ impl DatabasesRepo for FakeRepo {
         rows.truncate(limit);
         Ok(rows)
     }
-    async fn fetch_links(&self, column_id: ColumnId) -> Result<Vec<(RowId, RowId)>, FakeError> {
-        Ok(self
-            .0
-            .lock()
-            .unwrap()
+    async fn fetch_links(
+        &self,
+        column_id: ColumnId,
+        limit: usize,
+    ) -> Result<Vec<(RowId, RowId)>, FakeError> {
+        let mut world = self.0.lock().unwrap();
+        world.fetch_link_limits.push(limit);
+        Ok(world
             .links
             .get(&column_id)
-            .cloned()
-            .unwrap_or_default())
+            .into_iter()
+            .flatten()
+            .take(limit)
+            .copied()
+            .collect())
     }
     async fn apply_changes(
         &self,

@@ -653,15 +653,21 @@ impl DatabasesRepo for PgDatabasesRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn fetch_links(&self, column_id: ColumnId) -> Result<Vec<(RowId, RowId)>, Self::Err> {
+    async fn fetch_links(
+        &self,
+        column_id: ColumnId,
+        limit: usize,
+    ) -> Result<Vec<(RowId, RowId)>, Self::Err> {
         let links = sqlx::query!(
             r#"
             SELECT source_row_id, target_row_id
             FROM database_row_links
             WHERE link_column_id = $1
             ORDER BY position NULLS LAST, created_at
+            LIMIT $2
             "#,
-            column_id
+            column_id,
+            limit as i64,
         )
         .fetch_all(&self.pool)
         .await?

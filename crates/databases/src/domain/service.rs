@@ -399,9 +399,12 @@ where
             {
                 let edges = self
                     .repo
-                    .fetch_links(junction.column_id)
+                    .fetch_links(junction.column_id, MAX_MATERIALIZED_ROWS + 1)
                     .await
                     .map_err(infra)?;
+                if edges.len() > MAX_MATERIALIZED_ROWS {
+                    return Err(QueryError::BudgetExceeded);
+                }
                 let mut by_source: HashMap<RowId, Vec<RowId>> = HashMap::new();
                 for (source, target) in edges {
                     by_source.entry(source).or_default().push(target);
