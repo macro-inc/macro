@@ -65,8 +65,6 @@ export interface DraftClientHandles {
 
 export interface SaveEmailDraft {
   draft: EmailDraft;
-  clientHandles?: DraftClientHandles;
-  sendTime?: Date | null;
   previousThreadId?: string;
   inboxId?: string;
   completingThread?: boolean;
@@ -122,7 +120,11 @@ export interface EmailDelivery {
   sendMessage(input: SendEmailDraft): Promise<PersistedEmailIdentity>;
   unschedule(input: { draftId: string; inboxId?: string }): Promise<void>;
   schedule(
-    input: { draftId: string; sendTime: string },
+    input: {
+      draftId: string;
+      sendTime: string;
+      includeSignature?: boolean;
+    },
     inboxId?: string
   ): Promise<void>;
   archive(

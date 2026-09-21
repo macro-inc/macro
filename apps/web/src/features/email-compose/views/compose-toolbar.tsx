@@ -23,6 +23,14 @@ export function EmailComposeToolbar(props: {
 }) {
   const ctx = useCompose();
   const [showFormatRibbon, setShowFormatRibbon] = createSignal(false);
+  const expandedActionLabel = () => {
+    const schedule = ctx.schedule.state();
+    return schedule.type === 'editing' && schedule.intent.type === 'immediate'
+      ? undefined
+      : schedule.type === 'scheduled' && !schedule.proposedTime
+        ? undefined
+        : ctx.schedule.actionLabel();
+  };
 
   const handleAddAttachments = (files: File[]) => {
     const currentAttachments = ctx.attachments();
@@ -111,27 +119,27 @@ export function EmailComposeToolbar(props: {
         >
           <TextAa />
         </Button>
-        <Show when={ctx.scheduleEnabled && ctx.onSendTimeChange}>
+        <Show when={ctx.scheduleEnabled}>
           <div class="min-w-0 max-w-[45%] shrink">
             <EmailDateSelector
               mobile={false}
-              sendTime={ctx.sendTime()}
-              onSendTimeChange={ctx.onSendTimeChange}
-              disabled={ctx.scheduleSendDisabled?.()}
+              state={ctx.schedule.state()}
+              selectedTime={ctx.schedule.selectedTime()}
+              onSelectTime={ctx.schedule.onSelect}
+              onCancelSchedule={ctx.schedule.onCancel}
+              operation={ctx.schedule.operation()}
+              disabled={ctx.schedule.pickerDisabled()}
             />
           </div>
         </Show>
         <SendButton
           appearance="composer"
           onClick={() => ctx.onSend()}
-          disabled={
-            ctx.isSavingDraft?.() ||
-            !!ctx.sendTime() ||
-            ctx.isSending() ||
-            ctx.disabled()
-          }
+          disabled={ctx.isSavingDraft?.() || ctx.primaryActionDisabled()}
           pending={ctx.isSending()}
-          tooltip={ctx.sendUnavailableReason?.() ?? 'Send email'}
+          tooltip={ctx.sendUnavailableReason?.() ?? ctx.schedule.actionLabel()}
+          aria-label={ctx.schedule.actionLabel()}
+          actionLabel={expandedActionLabel()}
           shortcut="cmd+enter"
         />
       </div>
@@ -164,23 +172,22 @@ function MobileToolbar(props: {
           </div>
         </Show>
 
-        <Show when={ctx.scheduleEnabled && ctx.onSendTimeChange}>
+        <Show when={ctx.scheduleEnabled}>
           <EmailDateSelector
             mobile={ctx.isMobile()}
-            sendTime={ctx.sendTime()}
-            onSendTimeChange={ctx.onSendTimeChange}
-            disabled={ctx.scheduleSendDisabled?.()}
+            state={ctx.schedule.state()}
+            selectedTime={ctx.schedule.selectedTime()}
+            onSelectTime={ctx.schedule.onSelect}
+            onCancelSchedule={ctx.schedule.onCancel}
+            operation={ctx.schedule.operation()}
+            disabled={ctx.schedule.pickerDisabled()}
             compact
           />
         </Show>
         <SendButton
-          tooltip={ctx.sendUnavailableReason?.() ?? 'Send email'}
-          disabled={
-            ctx.isSending() ||
-            ctx.isSavingDraft?.() ||
-            ctx.disabled() ||
-            !!ctx.sendTime()
-          }
+          tooltip={ctx.sendUnavailableReason?.() ?? ctx.schedule.actionLabel()}
+          aria-label={ctx.schedule.actionLabel()}
+          disabled={ctx.isSavingDraft?.() || ctx.primaryActionDisabled()}
           pending={ctx.isSending()}
           onClick={() => ctx.onSend()}
         />

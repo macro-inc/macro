@@ -163,13 +163,8 @@ export function ComposeLayout(props: {
     scopeId: composeHotkeyScope,
     description: 'Send email',
     keyDownHandler: () => {
-      // Let the controller explain why an already-scheduled message cannot be
-      // sent again; keyboard and pointer submission share that same guard.
-      if (ctx.sendTime()) {
-        ctx.onSend();
-        return true;
-      }
-      if (ctx.disabled()) return false;
+      // Pointer and keyboard submission always enter the same controller. It
+      // snapshots whether this is Send, Schedule send, or Update schedule.
       ctx.onSend();
       return true;
     },

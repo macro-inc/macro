@@ -373,14 +373,20 @@ pub(crate) async fn delete_draft_message(
 ) -> Result<Option<DraftDeletion>, sqlx::Error> {
     let mut tx = pool.begin().await?;
 
+    // Sender migration must not delete a draft whose delivery was committed
+    // after the service's initial validation. Match the shared lock order.
+    sqlx::query!(
+        "SELECT id FROM email_messages WHERE id = $1 FOR UPDATE",
+        message_id
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+
     let deleted_link_id = sqlx::query_scalar!(
         r#"
         DELETE FROM email_messages
-        WHERE id = $1
-            AND thread_id = $2
-            AND link_id = ANY($3)
-            AND is_draft = true
-            AND is_sent = false
+        WHERE id = $1 AND thread_id = $2 AND is_draft = true AND is_sent = false
+          AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages WHERE message_id = $1 AND link_id = email_messages.link_id)
         RETURNING link_id
         "#,
         message_id,
@@ -437,9 +443,9 @@ pub(super) async fn process_scheduled_message(
             VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
             ON CONFLICT (link_id, message_id) DO UPDATE SET
                 send_time = EXCLUDED.send_time,
-                sent = EXCLUDED.sent,
                 actor_id = EXCLUDED.actor_id,
                 updated_at = NOW()
+            WHERE NOT email_scheduled_messages.sent AND NOT email_scheduled_messages.processing
             "#,
             link_id,
             message_db_id,

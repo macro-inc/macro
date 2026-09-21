@@ -4,8 +4,10 @@ import PaperclipIcon from '@phosphor/paperclip.svg';
 import TextAa from '@phosphor/text-aa.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import { Button, SendButton } from '@ui';
+import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
 import { EmailDateSelector } from '../components/email-date-selector';
+import type { EmailScheduleState } from '../primitives/email-send-schedule';
 
 const LONG_SCHEDULE_LABEL =
   'Wednesday, September 30, 2026 at 11:59 PM Coordinated Universal Time';
@@ -13,7 +15,67 @@ const LONG_SCHEDULE_LABEL =
 function Fixture() {
   const params = new URLSearchParams(location.search);
   const mobile = params.has('mobile');
+  const flow = params.has('flow');
   const width = Number(params.get('width') ?? (mobile ? 240 : 420));
+  const confirmedTime = new Date('2026-09-30T23:59:00Z');
+  const [schedule, setSchedule] = createSignal<EmailScheduleState>(
+    flow
+      ? { type: 'editing', intent: { type: 'immediate' } }
+      : { type: 'scheduled', confirmedTime }
+  );
+  const [commitCount, setCommitCount] = createSignal(0);
+  const selectedTime = () => {
+    const current = schedule();
+    if (current.type === 'scheduled')
+      return current.proposedTime ?? current.confirmedTime;
+    return current.intent.type === 'later'
+      ? current.intent.sendTime
+      : undefined;
+  };
+  const selectTime = (date: Date | null) => {
+    const current = schedule();
+    if (current.type === 'scheduled') {
+      setSchedule(
+        date && date.getTime() !== current.confirmedTime.getTime()
+          ? { ...current, proposedTime: date }
+          : { type: 'scheduled', confirmedTime: current.confirmedTime }
+      );
+    } else {
+      setSchedule(
+        date
+          ? { type: 'editing', intent: { type: 'later', sendTime: date } }
+          : { type: 'editing', intent: { type: 'immediate' } }
+      );
+    }
+    return true;
+  };
+  const actionLabel = () => {
+    const current = schedule();
+    if (current.type === 'scheduled')
+      return current.proposedTime ? 'Update schedule' : 'Send email';
+    return current.intent.type === 'later' ? 'Schedule send' : 'Send email';
+  };
+  const actionDisabled = () => {
+    const current = schedule();
+    return current.type === 'scheduled' && !current.proposedTime;
+  };
+  const status = () => {
+    const current = schedule();
+    if (current.type === 'scheduled')
+      return `Scheduled for ${current.confirmedTime.toLocaleString()}`;
+    return current.intent.type === 'later'
+      ? `Will send ${current.intent.sendTime.toLocaleString()}`
+      : 'No send time selected';
+  };
+  const submit = () => {
+    const current = schedule();
+    if (current.type !== 'editing' || current.intent.type !== 'later') return;
+    setCommitCount((count) => count + 1);
+    setSchedule({
+      type: 'scheduled',
+      confirmedTime: current.intent.sendTime,
+    });
+  };
   document.documentElement.dataset.touchDevice = String(mobile);
 
   return (
@@ -36,10 +98,12 @@ function Fixture() {
           <EmailDateSelector
             mobile={mobile}
             compact={mobile}
-            sendTime={new Date('2026-09-30T23:59:00Z')}
-            onSendTimeChange={() => true}
+            state={schedule()}
+            selectedTime={selectedTime()}
+            onSelectTime={selectTime}
+            operation="idle"
             trigger={
-              mobile
+              mobile || flow
                 ? undefined
                 : () => (
                     <span class="min-w-0 truncate text-sm">
@@ -51,10 +115,17 @@ function Fixture() {
         </div>
         <SendButton
           appearance="composer"
-          disabled
-          tooltip="Already scheduled. Cancel or reschedule from the schedule control."
+          disabled={actionDisabled()}
+          aria-label={actionLabel()}
+          actionLabel={actionDisabled() ? undefined : actionLabel()}
+          tooltip={actionLabel()}
+          onClick={submit}
         />
       </div>
+      <p role="status" data-testid="schedule-status">
+        {status()}
+      </p>
+      <output data-testid="commit-count">{commitCount()}</output>
     </main>
   );
 }

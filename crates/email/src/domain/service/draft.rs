@@ -28,8 +28,11 @@ where
         &self,
         link: &Link,
         accessible_inboxes: &[Link],
-        input: CreateDraftInput,
+        mut input: CreateDraftInput,
     ) -> Result<CreatedDraft, EmailErr> {
+        // Ordinary draft persistence never grants delivery authority. Keep the
+        // legacy field wire-compatible, but only explicit delivery can use it.
+        input.send_time = None;
         self.prepare_and_insert_db_message(link, accessible_inboxes, input, true)
             .await
     }
@@ -339,36 +342,7 @@ where
         let Some(settled) = self
             .email_repo
             .insert_message(&resolved, &contacts, link_id, new_thread, is_draft)
-            .await
-            .map_err(anyhow::Error::from)?
-        else {
-            // The upsert's owner guard rejected the write: the row it landed
-            // on is under another inbox or is no longer an unsent draft. Tell
-            // the sent case apart, as the delete path does — the client
-            // resets its composer on `MessageAlreadySent` but latches
-            // autosave off on a not-found. Re-read through the handle when the
-            // save carried one, since a concurrent first save may have
-            // settled it on a row this save's input never named. Anything
-            // else stays the opaque not-found the validation read reports.
-            let rejected_id = match resolved.draft_client_id {
-                Some(handle) => self
-                    .email_repo
-                    .message_id_for_client_draft_id(handle, &accessible_link_ids)
-                    .await
-                    .map_err(anyhow::Error::from)?
-                    .unwrap_or(resolved.db_id),
-                None => resolved.db_id,
-            };
-            let rejected = self
-                .email_repo
-                .get_simple_message(rejected_id, &accessible_link_ids)
-                .await
-                .map_err(anyhow::Error::from)?;
-            if rejected.is_some_and(|m| m.is_sent || !m.is_draft) {
-                return Err(EmailErr::MessageAlreadySent(resolved.db_id));
-            }
-            return Err(EmailErr::MessageNotFound(resolved.db_id));
-        };
+            .await?;
 
         Ok(CreatedDraft {
             db_id: settled.message_db_id,
@@ -394,64 +368,27 @@ where
     /// forwards (a `replying_to_id` is present) require
     /// `signature_on_replies_forwards`. Best-effort — any failure just skips.
     async fn maybe_inject_signature(&self, link: &Link, input: &mut CreateDraftInput) {
-        if input.include_signature == Some(false) {
-            // Honor "exclude" literally: drop any server-wrapped signature a
-            // client may have baked in, rather than just declining to add one.
-            if input
+        let settings = if input.include_signature == Some(false)
+            || input
                 .body_html
                 .as_deref()
                 .is_some_and(super::signature::has_signature)
-                && let Some(body_html) = input.body_html.take()
-            {
-                input.body_html = Some(super::signature::strip_signature(&body_html));
-            }
-            return;
-        }
-        // Idempotent: if the body already carries a signature — a client still
-        // baking it in during the FE cutover, or a re-sent message — don't add
-        // another (and leave body_text alone too).
-        if input
-            .body_html
-            .as_deref()
-            .is_some_and(super::signature::has_signature)
         {
-            return;
-        }
-        let settings = match self.email_repo.fetch_email_settings(link.id).await {
-            Ok(settings) => settings,
-            Err(e) => {
-                tracing::warn!(error = ?e, "failed to fetch settings for signature; skipping");
-                return;
-            }
+            None
+        } else {
+            self.email_repo.fetch_email_settings(link.id).await
+                .inspect_err(|error| tracing::warn!(error=?error, "failed to fetch settings for signature; skipping"))
+                .ok()
         };
-        let Some(signature) = settings.signature.filter(|s| !s.trim().is_empty()) else {
-            return;
-        };
-        let include = match input.include_signature {
-            Some(value) => value,
-            None => {
-                if input.replying_to_id.is_some() {
-                    settings.signature_on_replies_forwards
-                } else {
-                    true
-                }
-            }
-        };
-        if !include {
-            return;
+        super::signature::SignaturePreparation {
+            settings,
+            include_signature: input.include_signature,
         }
-        if let Some(body_html) = input.body_html.take() {
-            input.body_html = Some(super::signature::inject_signature(&body_html, &signature));
-        }
-        let plain = super::signature::signature_plain_text(&signature);
-        if !plain.is_empty()
-            && let Some(existing) = input.body_text.take().filter(|s| !s.is_empty())
-        {
-            // Only append to an existing plain-text body. HTML-only sends
-            // (body_text None/empty, e.g. the AI path) keep no text part rather
-            // than getting a signature-only one that drops the message body.
-            input.body_text = Some(format!("{existing}\n\n{plain}"));
-        }
+        .apply(
+            input.replying_to_id.is_some(),
+            &mut input.body_html,
+            &mut input.body_text,
+        );
     }
 
     async fn validate_existing_message(

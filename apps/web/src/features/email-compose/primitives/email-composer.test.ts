@@ -50,7 +50,7 @@ describe('standalone compose controller', () => {
     }
   });
 
-  it('reports scheduling failure without adopting an unconfirmed time, and keeps a confirmed schedule when archive fails', async () => {
+  it('keeps a picked time local and preserves it when explicit scheduling fails', async () => {
     const context = createComposeContext();
     const root = mountEmailComposer(context);
     try {
@@ -59,16 +59,22 @@ describe('standalone compose controller', () => {
       vi.mocked(context.delivery.schedule).mockRejectedValueOnce(
         new Error('offline')
       );
-      await root.state.context.onSendTimeChange?.(requested);
-      expect(root.state.context.sendTime()).toBeFalsy();
+      expect(root.state.context.schedule.onSelect(requested)).toBe(true);
+      expect(root.state.context.schedule.selectedTime()).toEqual(requested);
+      expect(context.delivery.schedule).not.toHaveBeenCalled();
+      root.state.context.onSend();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(root.state.context.schedule.selectedTime()).toEqual(requested);
+      expect(root.state.context.schedule.state().type).toBe('editing');
       expect(context.notices.feedback.failure).toHaveBeenCalledWith(
-        'Failed to schedule message'
+        'Failed to schedule email'
       );
       vi.mocked(context.delivery.archive).mockRejectedValueOnce(
         new Error('archive offline')
       );
-      await root.state.context.onSendTimeChange?.(requested);
-      expect(root.state.context.sendTime()).toEqual(requested);
+      root.state.context.onSend();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(root.state.context.schedule.confirmedTime()).toEqual(requested);
       expect(context.notices.feedback.failure).toHaveBeenCalledWith(
         'Email scheduled, but unable to mark thread done'
       );
@@ -84,23 +90,22 @@ describe('standalone compose controller', () => {
     const root = mountEmailComposer(context);
     try {
       root.edit('Schedule this reply', 'Schedule review');
-      const request = root.state.context.onSendTimeChange?.(
-        new Date('2026-10-01T12:00:00Z')
-      );
+      root.state.context.schedule.onSelect(new Date('2026-10-01T12:00:00Z'));
+      root.state.context.onSend();
       await vi.advanceTimersByTimeAsync(0);
       expect(context.delivery.schedule).toHaveBeenCalledOnce();
       expect(root.state.context.disabled()).toBe(true);
       root.state.context.onSend();
-      await root.state.context.onSendTimeChange?.(
-        new Date('2026-10-02T12:00:00Z')
-      );
+      expect(
+        root.state.context.schedule.onSelect(new Date('2026-10-02T12:00:00Z'))
+      ).toBe(false);
       expect(context.delivery.sendMessage).not.toHaveBeenCalled();
       expect(context.delivery.schedule).toHaveBeenCalledOnce();
       pending.resolve();
-      await request;
+      await vi.advanceTimersByTimeAsync(0);
       expect(root.state.context.disabled()).toBe(true);
       expect(root.state.context.sendUnavailableReason?.()).toContain(
-        'Already scheduled'
+        'Scheduled for'
       );
       expect(root.state.draftDirty()).toBe(true);
     } finally {

@@ -29,7 +29,7 @@ test('scheduled label truncates without covering adjacent narrow desktop control
   await expectNoOverlap(toolbar);
 
   const schedule = page.getByRole('button', {
-    name: /Scheduled for .* Open to reschedule or cancel/,
+    name: /Scheduled for .* Open to propose a new time or cancel/,
   });
   const label = schedule.locator('.truncate');
   await expect(schedule).toHaveCSS('aspect-ratio', 'auto');
@@ -43,7 +43,7 @@ test('scheduled label truncates without covering adjacent narrow desktop control
   await expect(
     page.getByRole('button', { name: 'Cancel schedule' })
   ).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Send' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Send email' })).toBeDisabled();
 });
 
 test('scheduled controls retain separate mobile hit targets', async ({
@@ -53,7 +53,7 @@ test('scheduled controls retain separate mobile hit targets', async ({
   const toolbar = page.getByTestId('toolbar');
   await expectNoOverlap(toolbar);
   const schedule = page.getByRole('button', {
-    name: /Scheduled for .* Open to reschedule or cancel/,
+    name: /Scheduled for .* Open to propose a new time or cancel/,
   });
   const box = await schedule.boundingBox();
   expect(box?.width).toBeGreaterThanOrEqual(36);
@@ -68,4 +68,28 @@ test('scheduled controls do not overlap at 200 percent browser zoom', async ({
     document.body.style.zoom = '200%';
   });
   await expectNoOverlap(page.getByTestId('toolbar'));
+});
+
+test('selection stays a preview until the primary action confirms it', async ({
+  page,
+}) => {
+  await page.goto('/?flow&width=420');
+  await page.getByRole('button', { name: 'Choose send time' }).click();
+  await page.getByRole('combobox').fill('tomorrow 9am');
+  await page.getByRole('option').first().click();
+
+  await expect(page.getByTestId('schedule-status')).toContainText('Will send');
+  await expect(page.getByTestId('commit-count')).toHaveText('0');
+  const submit = page.getByRole('button', {
+    name: 'Schedule send',
+    exact: true,
+  });
+  await expect(submit).toBeEnabled();
+  await submit.click();
+
+  await expect(page.getByTestId('schedule-status')).toContainText(
+    'Scheduled for'
+  );
+  await expect(page.getByTestId('commit-count')).toHaveText('1');
+  await expect(page.getByRole('button', { name: 'Send email' })).toBeDisabled();
 });

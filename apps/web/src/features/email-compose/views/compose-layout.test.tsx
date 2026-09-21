@@ -9,7 +9,6 @@ const registerHotkeyMock = vi.hoisted(() => vi.fn());
 const onSend = vi.hoisted(() => vi.fn());
 const composeStatus = vi.hoisted(() => ({
   disabled: false,
-  sendTime: null as Date | null,
 }));
 vi.mock('@core/hotkey/hotkeys', () => ({
   registerHotkey: registerHotkeyMock,
@@ -24,7 +23,6 @@ vi.mock('../context/compose-context', () => ({
   useCompose: () => ({
     recipients: () => ({ cc: [], bcc: [] }),
     disabled: () => composeStatus.disabled,
-    sendTime: () => composeStatus.sendTime,
     onSend,
     isMobile: () => false,
   }),
@@ -49,7 +47,6 @@ beforeEach(() => {
   registerHotkeyMock.mockClear();
   onSend.mockClear();
   composeStatus.disabled = false;
-  composeStatus.sendTime = null;
 });
 afterEach(cleanup);
 
@@ -85,14 +82,13 @@ describe('ComposeLayout root composition', () => {
     }
   );
 
-  it('routes pointer and keyboard submission through the same scheduled guard', () => {
+  it('routes pointer and keyboard submission through the same controller', () => {
     render(() => (
       <ComposeLayout toolbar={<button onClick={onSend}>Send email</button>} />
     ));
     fireEvent.click(screen.getByRole('button', { name: 'Send email' }));
 
     composeStatus.disabled = true;
-    composeStatus.sendTime = new Date('2026-12-01T12:00:00Z');
     const sendHotkey = registerHotkeyMock.mock.calls.find(
       ([options]) => options.hotkey === 'cmd+enter'
     )?.[0];

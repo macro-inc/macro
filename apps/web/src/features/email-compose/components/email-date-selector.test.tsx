@@ -31,15 +31,20 @@ describe('EmailDateSelector', () => {
       <div style={{ width: '150px' }}>
         <EmailDateSelector
           mobile={false}
-          sendTime={new Date('2026-12-31T23:59:00Z')}
-          onSendTimeChange={vi.fn()}
+          state={{
+            type: 'scheduled',
+            confirmedTime: new Date('2026-12-31T23:59:00Z'),
+          }}
+          selectedTime={new Date('2026-12-31T23:59:00Z')}
+          onSelectTime={vi.fn()}
+          operation="idle"
           disablePortal
         />
       </div>
     ));
 
     const trigger = screen.getByRole('button', {
-      name: /Scheduled for .* Open to reschedule or cancel/,
+      name: /Scheduled for .* Open to propose a new time or cancel/,
     });
     expect(trigger.className).toContain('not-touch:w-auto!');
     expect(trigger.className).toContain('aspect-auto!');
@@ -54,14 +59,19 @@ describe('EmailDateSelector', () => {
     render(() => (
       <EmailDateSelector
         mobile
-        sendTime={new Date('2026-12-31T23:59:00Z')}
-        onSendTimeChange={vi.fn()}
+        state={{
+          type: 'scheduled',
+          confirmedTime: new Date('2026-12-31T23:59:00Z'),
+        }}
+        selectedTime={new Date('2026-12-31T23:59:00Z')}
+        onSelectTime={vi.fn()}
+        operation="idle"
         disablePortal
       />
     ));
 
     const trigger = screen.getByRole('button', {
-      name: /Scheduled for .* Open to reschedule or cancel/,
+      name: /Scheduled for .* Open to propose a new time or cancel/,
     });
     expect(trigger.className).not.toContain('not-touch:w-auto!');
     expect(trigger.querySelector('.truncate')).toBeNull();

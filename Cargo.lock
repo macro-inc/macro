@@ -6147,6 +6147,7 @@ dependencies = [
  "crm",
  "doppleganger",
  "either",
+ "email_db_client",
  "email_utils",
  "entity_access",
  "entity_access_management",

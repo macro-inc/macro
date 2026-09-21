@@ -13,7 +13,6 @@ import { emailKeys } from './keys';
 
 type CreateDraftParams = {
   draft: ApiDraftInput;
-  sendTime?: Date | null;
   /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
   linkId?: string;
   /** Skip updating soup when the thread will immediately be marked done. */
@@ -30,13 +29,7 @@ export function useSaveDraftMutation(
     mutationFn: async (vars: CreateDraftParams) => {
       return await throwOnErr(
         async () =>
-          await emailClient.createDraft(
-            {
-              draft: vars.draft,
-              send_time: vars.sendTime?.toISOString() ?? null,
-            },
-            vars.linkId
-          )
+          await emailClient.createDraft({ draft: vars.draft }, vars.linkId)
       );
     },
     ...withCallbacks<CreateDraftResponse, Error, CreateDraftParams>(

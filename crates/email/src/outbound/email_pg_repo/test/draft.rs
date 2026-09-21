@@ -697,8 +697,9 @@ async fn test_insert_draft_message_with_new_thread(pool: Pool<Postgres>) -> anyh
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
-#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
-async fn test_insert_draft_message_with_scheduled_send(pool: Pool<Postgres>) -> anyhow::Result<()> {
+async fn test_autosave_ignores_send_time_but_immediate_send_preserves_undo_schedule(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
     let repo = EmailPgRepo::new(pool.clone());
 
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
@@ -735,15 +736,27 @@ async fn test_insert_draft_message_with_scheduled_send(pool: Pool<Postgres>) -> 
     repo.insert_message(&input, &contacts, link_id, None, true)
         .await?;
 
-    // Verify the scheduled message was created
-    let row =
-        sqlx::query("SELECT send_time, sent FROM email_scheduled_messages WHERE message_id = $1")
-            .bind(message_db_id)
-            .fetch_one(&pool)
-            .await?;
+    let absent = sqlx::query!(
+        "SELECT send_time FROM email_scheduled_messages WHERE message_id = $1",
+        message_db_id
+    )
+    .fetch_optional(&pool)
+    .await?;
+    assert!(
+        absent.is_none(),
+        "ordinary autosave cannot commit a schedule"
+    );
 
-    assert_eq!(row.get::<chrono::DateTime<Utc>, _>("send_time"), send_time);
-    assert!(!row.get::<bool, _>("sent"));
+    repo.insert_message(&input, &contacts, link_id, None, false)
+        .await?;
+    let row = sqlx::query!(
+        "SELECT send_time, sent FROM email_scheduled_messages WHERE message_id = $1",
+        message_db_id
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(row.send_time, send_time);
+    assert!(!row.sent);
 
     Ok(())
 }

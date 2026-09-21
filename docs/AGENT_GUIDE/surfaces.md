@@ -470,17 +470,31 @@ A failure from an older, unmounted editor must not overwrite a newer edited repl
 A presentation or refresh error after successful delivery is not a reason to send
 again.
 
-Choosing a time commits the schedule immediately; there is no second Send step.
-Success is confirmed by a notice and a persisted scheduled-time pill. Open that
-pill to reschedule or use **Cancel schedule**, which returns the message to an
-editable draft. Scheduled composers are otherwise read-only, and Send (including
-`Ctrl`/`Cmd`+`Enter`) explains that cancellation is required instead of dispatching
-a duplicate. At narrow split widths the pill truncates inside its reserved toolbar
-space; it must not cover discard, attachment, formatting, or Send controls.
-While a schedule change is pending, immediate send and further schedule changes
-are disabled. Reply recipients cannot be edited or dragged during scheduling,
-sending, or discarding. A failed schedule or unschedule keeps the last confirmed time.
-If a later lifecycle refresh fails, that confirmed result remains in place; stale
+Choosing or clearing a send time is local preparation only. The composer remains
+editable and autosaves normally, shows **Will send ...**, and performs no schedule,
+unschedule, archive, or delivery request. The primary action changes from **Send**
+to **Schedule send**; clicking it or pressing `Ctrl`/`Cmd`+`Enter runs the same
+validation and is the only initial scheduling commitment. A selected time that has
+passed is rejected at submission rather than falling back to immediate send. The
+former picker-auto-commit behavior was a defect and must not be restored.
+
+Only a successful scheduling response or authoritative lifecycle reconciliation
+shows **Scheduled for ...**. Confirmed scheduled composers are content-locked.
+Picking another time creates a local proposal while the original remains active;
+**Update schedule** commits the proposal. Clearing that proposal does not cancel
+the original. **Cancel schedule** is a separate explicit action, and only its
+confirmed success returns the message to an editable draft. Failed schedule,
+update, or cancel requests retain the user's local intent and last authoritative
+time, and never fall through to immediate Send. At narrow split widths the time
+label truncates inside its reserved toolbar space; it must not cover discard,
+attachment, formatting, or the primary action. Reply recipients cannot be edited
+or dragged during a confirmed schedule or active delivery mutation.
+
+When verifying, use an intercepted or isolated delivery fixture: choose a time,
+confirm that the editable **Will send** preview makes zero delivery calls, then use
+the primary button and `Ctrl`/`Cmd`+`Enter separately to confirm exactly one schedule
+call. Reopen a confirmed schedule to exercise proposal/update and explicit cancel.
+If a later lifecycle refresh fails, the confirmed result remains in place; stale
 observations must not undo it or create a recovery draft after a failed inbox move.
 Reconciliation resumes when a fresh poll or event-driven read succeeds.
 If scheduling succeeds but marking the thread done fails, the email remains

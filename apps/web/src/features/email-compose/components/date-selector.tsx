@@ -49,6 +49,9 @@ type DateSelectorProps = {
   triggerClass?: string;
   triggerLabel?: string;
   clearLabel?: string;
+  currentLabel?: string;
+  clearable?: boolean;
+  footer?: JSX.Element;
   trigger?:
     | JSX.Element
     | ((props: { selectedDate: Date | null }) => JSX.Element);
@@ -128,7 +131,11 @@ export const DateSelector = (props: DateSelectorProps) => {
     switch (e.key) {
       case 'Delete':
       case 'Backspace': {
-        if (isNonComboboxInput || searchQuery().trim()) {
+        if (
+          props.clearable === false ||
+          isNonComboboxInput ||
+          searchQuery().trim()
+        ) {
           return;
         }
         e.preventDefault();
@@ -337,6 +344,8 @@ export const DateSelector = (props: DateSelectorProps) => {
                 <CurrentValueDisplay
                   selectedOption={option()}
                   clearLabel={props.clearLabel}
+                  currentLabel={props.currentLabel}
+                  clearable={props.clearable !== false}
                   onClear={() => {
                     void onChange(null);
                   }}
@@ -387,6 +396,9 @@ export const DateSelector = (props: DateSelectorProps) => {
                 <code class="bg-active px-1">tomorrow</code>
               </div>
             </div>
+            <Show when={props.footer}>
+              <div class="border-t border-edge-muted p-1.5">{props.footer}</div>
+            </Show>
           </WithCustomDateMode>
         </Combobox.Content>
       </DateSelectorPortalWrapper>
@@ -398,6 +410,8 @@ interface CurrentValueDisplayProps {
   selectedOption: DateSelectorOption;
   onClear: VoidFunction;
   clearLabel?: string;
+  currentLabel?: string;
+  clearable: boolean;
 }
 
 const CurrentValueDisplay = (props: CurrentValueDisplayProps) => {
@@ -414,16 +428,20 @@ const CurrentValueDisplay = (props: CurrentValueDisplayProps) => {
     <div class="px-3 py-2 border-b border-edge-muted">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
-          <span class="text-xs text-ink-muted">Current:</span>
+          <span class="text-xs text-ink-muted">
+            {props.currentLabel ?? 'Current:'}
+          </span>
           <span class="text-xs font-medium">{currentDateDisplay()}</span>
         </div>
-        <button
-          onPointerDown={(e: PointerEvent) => e.preventDefault()}
-          onClick={props.onClear}
-          class="text-xs text-ink-muted hover:text-ink underline"
-        >
-          {props.clearLabel ?? 'Clear'}
-        </button>
+        <Show when={props.clearable}>
+          <button
+            onPointerDown={(e: PointerEvent) => e.preventDefault()}
+            onClick={props.onClear}
+            class="text-xs text-ink-muted hover:text-ink underline"
+          >
+            {props.clearLabel ?? 'Clear'}
+          </button>
+        </Show>
       </div>
     </div>
   );

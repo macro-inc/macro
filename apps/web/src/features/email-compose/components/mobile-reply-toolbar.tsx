@@ -24,6 +24,7 @@ export function MobileReplyToolbar(props: {
   onDiscard: () => void;
   attachRef: (element: HTMLButtonElement) => void;
   onSend: () => void;
+  sendLabel: string;
   sendDisabled: boolean;
   sending: boolean;
   editingDisabled: boolean;
@@ -51,7 +52,7 @@ export function MobileReplyToolbar(props: {
           <Paperclip class="size-(--mobile-chrome-icon-size)" />
         </ToolbarButton>
         <ToolbarButton
-          label="Send email"
+          label={props.sendLabel}
           disabled={props.sendDisabled}
           onClick={props.onSend}
         >

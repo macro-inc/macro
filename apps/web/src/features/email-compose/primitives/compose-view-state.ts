@@ -6,6 +6,7 @@ import type {
   EmailRecipient,
 } from '../core/email-recipient';
 import type { DraftFormAttachment } from './email-form-state';
+import type { EmailScheduleState } from './email-send-schedule';
 
 export type ComposeValidationError = {
   type: 'no_recipient' | 'no_message' | 'no_subject' | 'no_link';
@@ -26,7 +27,6 @@ export interface ComposeState {
   recipients: () => EmailFormRecipients;
   subject: () => string;
   attachments: () => DraftFormAttachment[];
-  sendTime: () => Date | null | undefined;
   initialHtml: () => string | undefined;
   initialMarkdown?: () => string | undefined;
 
@@ -47,12 +47,20 @@ export interface ComposeState {
   // Actions
   onSend: () => void;
   onDelete?: () => void;
-  onSendTimeChange?: (
-    date: Date | null
-  ) => void | boolean | Promise<void | boolean>;
+  schedule: {
+    state: Accessor<EmailScheduleState>;
+    selectedTime: Accessor<Date | undefined>;
+    confirmedTime: Accessor<Date | undefined>;
+    actionLabel: Accessor<string>;
+    operation: Accessor<'idle' | 'committing' | 'updating' | 'cancelling'>;
+    onSelect(date: Date | null): boolean;
+    onCancel(): Promise<boolean>;
+    pickerDisabled: Accessor<boolean>;
+  };
 
   // Status
   disabled: Accessor<boolean>;
+  primaryActionDisabled: Accessor<boolean>;
   isSending: Accessor<boolean>;
   isSavingDraft?: Accessor<boolean>;
   hasDraft: Accessor<boolean>;
@@ -69,9 +77,6 @@ export interface ComposeState {
   focusRecipientsOnMount: boolean;
   includeSelf?: boolean;
   hideAttachments?: boolean;
-
-  // Schedule send
-  scheduleSendDisabled?: Accessor<boolean>;
 
   // Display
   fromAddress?: Accessor<string | undefined>;

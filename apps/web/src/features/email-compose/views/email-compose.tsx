@@ -104,13 +104,25 @@ export function EmailComposeView(props: EmailComposeViewProps) {
   const [draftBackMenuOpen, setDraftBackMenuOpen] = createSignal(false);
   const statusLabel = () => ctxValue.deliveryState?.() ?? 'draft';
   const statusTooltip = () => {
-    const sendTime = ctxValue.sendTime();
-    if (sendTime)
-      return `Scheduled for ${sendTime.toLocaleString()}. Use the schedule control to reschedule or cancel.`;
+    const schedule = ctxValue.schedule.state();
+    if (schedule.type === 'scheduled')
+      return `Scheduled for ${schedule.confirmedTime.toLocaleString()}. Use the send-time control to propose an update or cancel.`;
     if (statusLabel() === 'sent') return 'This email has been sent.';
     if (statusLabel() === 'missing')
       return 'This draft is no longer available.';
     return 'This is a draft email.';
+  };
+  const scheduleNotice = () => {
+    const schedule = ctxValue.schedule.state();
+    if (schedule.type === 'editing') {
+      return schedule.intent.type === 'later'
+        ? `Will send ${schedule.intent.sendTime.toLocaleString()} after you choose Schedule send.`
+        : undefined;
+    }
+    if (schedule.proposedTime) {
+      return `Scheduled for ${schedule.confirmedTime.toLocaleString()}. Proposed replacement: ${schedule.proposedTime.toLocaleString()}. The original remains active until Update schedule succeeds.`;
+    }
+    return `Scheduled for ${schedule.confirmedTime.toLocaleString()}. Cancel the schedule to edit the message.`;
   };
 
   if (composeContext.presentation.isMobile()) {
@@ -166,10 +178,9 @@ export function EmailComposeView(props: EmailComposeViewProps) {
               notice={
                 hasInboxError() ? (
                   <EmailPermissionsBanner />
-                ) : ctxValue.sendTime() ? (
+                ) : scheduleNotice() ? (
                   <div role="status" class="text-sm text-ink-muted">
-                    Scheduled for {ctxValue.sendTime()!.toLocaleString()}.
-                    Cancel the schedule to edit or send now.
+                    {scheduleNotice()}
                   </div>
                 ) : undefined
               }

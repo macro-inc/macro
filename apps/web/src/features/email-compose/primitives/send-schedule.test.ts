@@ -96,9 +96,12 @@ function composer(
       switchInbox: state.persistDraftOnSenderSwitch,
       selectedInbox: state.activeInboxId,
       disabled: state.editingDisabled,
-      sendTime: state.form.sendTime,
+      selectedTime: state.selectedSendTime,
+      confirmedTime: state.confirmedSendTime,
+      scheduleState: state.scheduleState,
       send: () => state.sendEmail(),
-      schedule: state.handleSendTimeChange,
+      selectTime: state.handleSendTimeChange,
+      cancelSchedule: state.cancelSchedule,
     };
   }
   const root = mountEmailComposer(composeContext);
@@ -109,9 +112,12 @@ function composer(
     switchInbox: root.state.context.onSelectInbox!,
     selectedInbox: () => root.state.context.selectedInboxId?.(),
     disabled: root.state.context.disabled,
-    sendTime: root.state.context.sendTime,
+    selectedTime: root.state.context.schedule.selectedTime,
+    confirmedTime: root.state.context.schedule.confirmedTime,
+    scheduleState: root.state.context.schedule.state,
     send: root.state.context.onSend,
-    schedule: root.state.context.onSendTimeChange!,
+    selectTime: root.state.context.schedule.onSelect,
+    cancelSchedule: root.state.context.schedule.onCancel,
   };
 }
 
@@ -148,53 +154,29 @@ function composerWithLifecycleQuery(
 }
 
 describe('send and schedule ordering', () => {
-  it.each([
-    ['standalone', false],
-    ['reply', false],
-    ['standalone', true],
-    ['reply', true],
-  ] as const)(
-    '%s keeps a successful schedule change when the authoritative read fails (unschedule: %s)',
-    async (kind, unschedule) => {
+  it.each(['standalone', 'reply'] as const)(
+    '%s keeps an unconfirmed time local across an editing refresh',
+    async (kind) => {
       const context = createComposeContext();
-      const failure = new Error('Lifecycle unavailable');
-      const scheduled = new Date('2026-12-01T12:00:00Z');
-      fetchLifecycleThread
-        .mockReset()
-        .mockResolvedValueOnce({
-          messages: [
-            message('draft', {
-              is_draft: true,
-              scheduled_send_time: unschedule
-                ? scheduled.toISOString()
-                : undefined,
-            }),
-          ],
-        })
-        .mockRejectedValueOnce(failure);
-      const state = composerWithLifecycleQuery(kind, context);
-      const notifications: VoidFunction[] = [];
-      let queueNotification: ReturnType<typeof vi.spyOn> | undefined;
+      const state = composer(kind, context);
+      const selected = new Date('2026-12-01T12:00:00Z');
       try {
-        state.edit('Save before scheduling');
-        await vi.advanceTimersByTimeAsync(600);
-        expect(fetchLifecycleThread).toHaveBeenCalledOnce();
-        queueNotification = vi
-          .spyOn(globalThis, 'queueMicrotask')
-          .mockImplementation((callback) => notifications.push(callback));
-        const expected = unschedule ? null : scheduled;
-        expect(await state.schedule(expected)).toBe(true);
-        expect(fetchLifecycleThread).toHaveBeenCalledTimes(2);
-        expect(context.notices.reportError).toHaveBeenCalledWith(failure);
-        if (unschedule) expect(state.sendTime()).toBeFalsy();
-        else expect(state.sendTime()).toEqual(expected);
-        expect(state.disabled()).toBe(!unschedule);
-        expect(context.notices.feedback.success).not.toHaveBeenCalledWith(
-          'Schedule cancelled. This email is editable again.'
-        );
+        expect(state.selectTime(selected)).toBe(true);
+        context.setDraftLifecycle({
+          type: 'editing',
+          draftId: 'draft',
+          threadId: 'thread',
+          inboxId: 'inbox',
+          observedAt: Date.now(),
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(state.selectedTime()).toEqual(selected);
+        expect(state.scheduleState().type).toBe('editing');
+        expect(state.disabled()).toBe(false);
+        expect(context.delivery.schedule).not.toHaveBeenCalled();
+        expect(context.delivery.unschedule).not.toHaveBeenCalled();
+        expect(context.delivery.archive).not.toHaveBeenCalled();
       } finally {
-        queueNotification?.mockRestore();
-        for (const notify of notifications) notify();
         state.dispose();
       }
     }
@@ -381,7 +363,8 @@ describe('send and schedule ordering', () => {
         context.setDraftLifecycle(scheduled);
         return scheduled;
       });
-      const scheduling = state.schedule(new Date(scheduled.sendTime));
+      state.selectTime(new Date(scheduled.sendTime));
+      const scheduling = state.send();
       await vi.advanceTimersByTimeAsync(0);
       context.setDraftLifecycle({
         type: 'editing',
@@ -391,11 +374,17 @@ describe('send and schedule ordering', () => {
         observedAt: Date.now(),
       });
       await vi.advanceTimersByTimeAsync(0);
-      expect(state.sendTime()).toEqual(new Date(scheduled.sendTime));
+      expect(state.selectedTime()).toEqual(new Date(scheduled.sendTime));
       pending.resolve();
       await scheduling;
-      expect(state.sendTime()).toEqual(new Date(scheduled.sendTime));
-      expect(state.disabled()).toBe(true);
+      if (kind === 'standalone') {
+        expect(state.confirmedTime()).toEqual(new Date(scheduled.sendTime));
+        expect(state.disabled()).toBe(true);
+      } else {
+        // Inline reply follows its normal successful-submit convention and
+        // collapses; a stale editing observation must not surface a cancel.
+        expect(state.scheduleState().type).toBe('editing');
+      }
       expect(context.notices.feedback.success).not.toHaveBeenCalledWith(
         'Schedule cancelled. This email is editable again.'
       );
@@ -408,9 +397,11 @@ describe('send and schedule ordering', () => {
     vi.mocked(context.delivery.schedule).mockReturnValueOnce(pending.promise);
     const state = mountReplyComposer(context);
     const originalTo = [...state.form.recipients().to];
-    const schedule = state.handleSendTimeChange(
-      new Date('2026-12-01T12:00:00Z')
+    expect(state.handleSendTimeChange(new Date('2026-12-01T12:00:00Z'))).toBe(
+      true
     );
+    expect(context.delivery.schedule).not.toHaveBeenCalled();
+    const scheduling = state.sendEmail();
     try {
       await vi.advanceTimersByTimeAsync(0);
       expect(context.delivery.schedule).toHaveBeenCalledOnce();
@@ -420,26 +411,34 @@ describe('send and schedule ordering', () => {
       expect(state.form.recipients().to).toEqual(originalTo);
       expect(state.form.recipients().cc).toEqual([]);
       pending.resolve();
-      await schedule;
-      state.recipients.setRecipients('to', []);
-      await vi.advanceTimersByTimeAsync(0);
+      await scheduling;
       expect(context.delivery.unschedule).not.toHaveBeenCalled();
-      expect(state.form.recipients().to).toEqual(originalTo);
-      expect(state.form.sendTime()).toEqual(new Date('2026-12-01T12:00:00Z'));
-      expect(state.sendActionDisabled()).toBe(true);
+      expect(context.delivery.sendMessage).not.toHaveBeenCalled();
     } finally {
       pending.resolve();
-      await schedule;
+      await scheduling;
       state.dispose();
     }
   });
 
-  it('ignores scheduled reply notifications and quoted-text toggles', async () => {
+  it('ignores confirmed-schedule edits and quoted-text toggles', async () => {
     const context = createComposeContext();
     const state = replyComposer(context);
     try {
-      await state.handleSendTimeChange(new Date('2026-12-01T12:00:00Z'));
-      expect(state.form.sendTime()).toEqual(new Date('2026-12-01T12:00:00Z'));
+      state.edit('Persist before scheduling elsewhere');
+      await vi.advanceTimersByTimeAsync(600);
+      context.setDraftLifecycle({
+        type: 'scheduled',
+        draftId: 'draft',
+        threadId: 'thread',
+        inboxId: 'inbox',
+        sendTime: '2026-12-01T12:00:00Z',
+        observedAt: Date.now(),
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(state.confirmedSendTime()).toEqual(
+        new Date('2026-12-01T12:00:00Z')
+      );
 
       state.scheduleDraftSave();
       state.toggleQuotedText();
@@ -565,7 +564,10 @@ describe('send and schedule ordering', () => {
     vi.mocked(composeContext.drafts.saveDraft).mockRejectedValueOnce(failure);
     const state = replyComposer(composeContext);
     try {
-      await state.handleSendTimeChange(new Date('2026-12-01T12:00:00Z'));
+      expect(state.handleSendTimeChange(new Date('2026-12-01T12:00:00Z'))).toBe(
+        true
+      );
+      await state.sendEmail();
       expect(composeContext.delivery.schedule).not.toHaveBeenCalled();
       expect(
         composeContext.notices.feedback.failure
@@ -699,11 +701,11 @@ describe('send and schedule ordering', () => {
       state.form.setSelectedInbox('secondary');
       state.handleAddAttachments([new File(['attachment'], 'review.txt')]);
       await vi.advanceTimersByTimeAsync(500);
-      const scheduling = state.handleSendTimeChange(
-        new Date('2026-10-01T12:00:00Z')
+      expect(state.handleSendTimeChange(new Date('2026-10-01T12:00:00Z'))).toBe(
+        true
       );
+      const scheduling = state.sendEmail();
       await vi.advanceTimersByTimeAsync(0);
-      state.form.setSelectedInbox('inbox');
       expect(composeContext.delivery.schedule).not.toHaveBeenCalled();
       finish();
       await scheduling;
@@ -971,7 +973,8 @@ describe('send and schedule ordering', () => {
         'draft-a',
         'draft-b',
       ]);
-      await state.handleSendTimeChange(new Date('2026-10-01T12:00:00Z'));
+      state.handleSendTimeChange(new Date('2026-10-01T12:00:00Z'));
+      await state.sendEmail();
       expect(composeContext.delivery.archive).toHaveBeenLastCalledWith(
         { threadId: 'thread-c', value: true },
         'c'
@@ -982,14 +985,11 @@ describe('send and schedule ordering', () => {
   });
 
   it.each(['standalone', 'reply'] as const)(
-    '%s does not dispatch when scheduling starts during the pending draft save',
+    '%s rejects a time change after immediate submission has started',
     async (kind) => {
       const { promise: saving, resolve: finishSaving } =
         Promise.withResolvers<PersistedEmailIdentity>();
-      const { promise: scheduled, resolve: finishScheduling } =
-        Promise.withResolvers<void>();
       const composeContext = createComposeContext();
-      vi.mocked(composeContext.delivery.schedule).mockReturnValue(scheduled);
       vi.mocked(composeContext.drafts.saveDraft).mockImplementationOnce(
         () => saving
       );
@@ -998,18 +998,15 @@ describe('send and schedule ordering', () => {
         state.send();
         await vi.advanceTimersByTimeAsync(0);
         expect(composeContext.drafts.saveDraft).toHaveBeenCalledOnce();
-        const scheduling = state.schedule(new Date('2026-10-01T12:00:00Z'));
-        await vi.advanceTimersByTimeAsync(0);
+        expect(state.selectTime(new Date('2026-10-01T12:00:00Z'))).toBe(false);
         finishSaving({
           draftId: 'draft',
           threadId: 'thread',
           inboxId: 'inbox',
         });
         await vi.advanceTimersByTimeAsync(0);
-        expect(composeContext.delivery.sendMessage).not.toHaveBeenCalled();
-        expect(composeContext.delivery.schedule).toHaveBeenCalledOnce();
-        finishScheduling();
-        await scheduling;
+        expect(composeContext.delivery.sendMessage).toHaveBeenCalledOnce();
+        expect(composeContext.delivery.schedule).not.toHaveBeenCalled();
       } finally {
         state.dispose();
       }

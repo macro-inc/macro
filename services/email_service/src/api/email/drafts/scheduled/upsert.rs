@@ -1,44 +1,47 @@
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService, EmailSvc};
+use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::{Extension, Json};
-use email::domain::events::{EmailMacroEvent, MessageSendQueuedMetadata};
-use email_service::pubsub::publish_email_event;
+use axum_extra::extract::Cached;
+use email::domain::{
+    models::EmailErr,
+    scheduled::{EmailSchedulingService, ScheduleChange},
+};
+use email::inbound::axum::axum_impls::EmailLinkExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::ErrorResponse;
-use models_email::service::link::Link;
-use models_email::service::message::ScheduledMessage;
 use sqlx_core::types::chrono::{DateTime, Utc};
-use strum_macros::AsRefStr;
 use thiserror::Error;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Debug, Error, AsRefStr)]
-pub enum UpsertScheduledError {
-    #[error("Draft not found")]
-    NotFound,
-
-    #[error("Failed to upsert scheduled message")]
-    QueryError(#[from] anyhow::Error),
-
-    #[error("Database error")]
-    DatabaseError(#[from] sqlx::Error),
-}
+#[derive(Debug, Error)]
+#[error("{0}")]
+pub struct UpsertScheduledError(#[from] EmailErr);
 
 impl IntoResponse for UpsertScheduledError {
     fn into_response(self) -> Response {
-        let status_code = match &self {
-            UpsertScheduledError::NotFound => StatusCode::NOT_FOUND,
-            UpsertScheduledError::QueryError(_) | UpsertScheduledError::DatabaseError(_) => {
+        let status = match &self.0 {
+            EmailErr::MessageNotFound(_) => StatusCode::NOT_FOUND,
+            EmailErr::Unauthorized => StatusCode::FORBIDDEN,
+            EmailErr::MessageDeliveryConflict(_) | EmailErr::InvalidScheduleTime => {
+                StatusCode::BAD_REQUEST
+            }
+            _ => {
+                tracing::error!(error=?self.0, "schedule transition failed");
                 StatusCode::INTERNAL_SERVER_ERROR
             }
         };
-
+        let message = if status == StatusCode::INTERNAL_SERVER_ERROR {
+            "Failed to update scheduled message".to_owned()
+        } else {
+            self.to_string()
+        };
         (
-            status_code,
+            status,
             Json(ErrorResponse {
-                message: self.to_string().into(),
+                message: message.into(),
             }),
         )
             .into_response()
@@ -47,8 +50,10 @@ impl IntoResponse for UpsertScheduledError {
 
 #[derive(Debug, serde::Deserialize, ToSchema)]
 pub struct UpsertScheduledRequest {
-    /// The time to send the message (ISO 8601 format)
+    /// The time to send the message (ISO 8601 format).
     pub send_time: DateTime<Utc>,
+    /// Per-message signature override; absent uses the inbox's send defaults.
+    pub include_signature: Option<bool>,
 }
 
 #[derive(Debug, serde::Serialize, ToSchema)]
@@ -59,86 +64,39 @@ pub struct UpsertScheduledResponse {
 
 /// Schedule or update a scheduled draft.
 #[utoipa::path(
-    put,
-    tag = "Draft Scheduling",
-    path = "/email/drafts/scheduled/{id}",
+    put, tag = "Draft Scheduling", path = "/email/drafts/scheduled/{id}",
     operation_id = "upsert_scheduled_message",
-    params(
-        ("id" = Uuid, Path, description = "The ID of the draft message to schedule")
-    ),
+    params(("id" = Uuid, Path, description = "The ID of the draft message to schedule")),
     request_body = UpsertScheduledRequest,
     responses(
         (status = 200, body = UpsertScheduledResponse),
+        (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx), err)]
+#[tracing::instrument(skip(ctx, authorization, link), err)]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    link: Extension<Link>,
+    Cached(authorization): Cached<
+        MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
+    >,
+    Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<EmailSvc, AuthorizationService>>,
     Path(draft_id): Path<Uuid>,
     Json(request): Json<UpsertScheduledRequest>,
 ) -> Result<Json<UpsertScheduledResponse>, UpsertScheduledError> {
-    // Check if the draft exists
-    let draft_exists =
-        email_db_client::messages::get::draft_exists_with_id(&ctx.db, link.id, draft_id).await?;
-
-    if !draft_exists {
-        return Err(UpsertScheduledError::NotFound);
-    }
-
-    // Create the scheduled message
-    let scheduled_message = ScheduledMessage {
-        link_id: link.id,
-        message_id: draft_id,
-        send_time: request.send_time,
-        sent: false,
-        processing: false,
-        // This legacy transport only knows the link; the owner is the best
-        // available attribution (matching the message_send_queued event
-        // below).
-        actor_id: Some(link.macro_id.to_string()),
-    };
-
-    // Upsert the scheduled message
-    let mut tx = ctx.db.begin().await?;
-    email_db_client::messages::scheduled::upsert::upsert_scheduled_message(
-        &mut tx,
-        scheduled_message,
-    )
-    .await?;
-    tx.commit().await?;
-
-    // Best-effort event: resolve the draft's thread for the payload.
-    let thread_db_id = email_db_client::messages::get_simple_messages::get_simple_message(
-        &ctx.db,
-        &draft_id,
-        &link.fusionauth_user_id,
-    )
-    .await
-    .inspect_err(
-        |e| tracing::warn!(error=?e, %draft_id, "skipping message_send_queued event: draft lookup failed"),
-    )
-    .ok()
-    .flatten()
-    .map(|m| m.thread_db_id);
-    if let Some(thread_id) = thread_db_id {
-        publish_email_event(
-            ctx.macro_event_broker.as_ref(),
-            &EmailMacroEvent::message_send_queued(MessageSendQueuedMetadata {
-                link_id: link.id,
-                owner: link.macro_id.clone(),
-                actor: Some(link.macro_id.clone()),
-                message_id: draft_id,
-                thread_id,
-                scheduled_send_at: request.send_time,
-                is_scheduled: true,
-            }),
-        );
-    }
-
+    ctx.email_service
+        .service()
+        .change_schedule(
+            authorization.authorization.user.macro_user_id.clone(),
+            link.id,
+            draft_id,
+            ScheduleChange::Set(request.send_time),
+            request.include_signature,
+        )
+        .await?;
     Ok(Json(UpsertScheduledResponse {
         message_id: draft_id,
         send_time: request.send_time,

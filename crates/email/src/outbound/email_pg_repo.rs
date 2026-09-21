@@ -27,6 +27,7 @@ mod message;
 mod preview;
 mod preview_views;
 mod project;
+mod scheduled;
 mod settings;
 mod thread;
 
@@ -307,7 +308,7 @@ impl EmailRepo for EmailPgRepo {
         link_id: Uuid,
         new_thread: Option<ThreadRow>,
         is_draft: bool,
-    ) -> Result<Option<SettledDraftIds>, Self::Err> {
+    ) -> Result<(), EmailErr> {
         draft::insert_message(&self.pool, input, contacts, link_id, new_thread, is_draft).await
     }
 

@@ -370,9 +370,13 @@ export function createEmailComposeContext(
           reportError(error);
         }
       },
-      schedule: async ({ draftId, sendTime }, inboxId) => {
+      schedule: async ({ draftId, sendTime, includeSignature }, inboxId) => {
         await scheduleEmailMessage(
-          { draftID: draftId, send_time: sendTime },
+          {
+            draftID: draftId,
+            send_time: sendTime,
+            include_signature: includeSignature,
+          },
           headerId(inboxId)
         );
         publishDraftLifecycleChange(draftId, inboxId);

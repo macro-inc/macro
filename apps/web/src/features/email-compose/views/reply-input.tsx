@@ -112,10 +112,15 @@ export function ReplyInputView(props: ReplyInputViewProps) {
     handleAddAttachments,
     handleRemoveAttachment,
     handleSendTimeChange,
+    scheduleState,
+    selectedSendTime,
+    scheduleActionLabel,
+    scheduleOperation,
+    cancelSchedule,
+    schedulePickerDisabled,
     editingDisabled,
     sendUnavailableReason,
     sendActionDisabled,
-    scheduleSendDisabled,
     toggleQuotedText,
   } = state;
   const sendActionHidden = () =>
@@ -133,6 +138,26 @@ export function ReplyInputView(props: ReplyInputViewProps) {
     isMobileDrawer() ? signatureHtml() : undefined;
   const footerSignatureHtml = () =>
     isMobileDrawer() ? undefined : signatureHtml();
+  const expandedActionLabel = () => {
+    const schedule = scheduleState();
+    return schedule.type === 'editing' && schedule.intent.type === 'immediate'
+      ? undefined
+      : schedule.type === 'scheduled' && !schedule.proposedTime
+        ? undefined
+        : scheduleActionLabel();
+  };
+  const scheduleNotice = () => {
+    const schedule = scheduleState();
+    if (schedule.type === 'editing') {
+      return schedule.intent.type === 'later'
+        ? `Will send ${schedule.intent.sendTime.toLocaleString()} after you choose Schedule send.`
+        : undefined;
+    }
+    if (schedule.proposedTime) {
+      return `Scheduled for ${schedule.confirmedTime.toLocaleString()}. Proposed replacement: ${schedule.proposedTime.toLocaleString()}. The original remains active until Update schedule succeeds.`;
+    }
+    return `Scheduled for ${schedule.confirmedTime.toLocaleString()}. Cancel the schedule to edit the message.`;
+  };
   // File sharing and editor plugin wiring belong to this view. The controller only
   // needs to know when editor content has changed and requires another save.
   const editorConfig = buildConfig('markdown')
@@ -334,6 +359,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
             }))
           }
           sendDisabled={sendActionDisabled() || sendActionHidden()}
+          sendLabel={scheduleActionLabel()}
           sending={isSending()}
           editingDisabled={editingDisabled()}
           onSend={() => sendEmail()}
@@ -342,9 +368,12 @@ export function ReplyInputView(props: ReplyInputViewProps) {
               <EmailDateSelector
                 mobile
                 compact
-                sendTime={form.sendTime() ?? null}
-                onSendTimeChange={handleSendTimeChange}
-                disabled={scheduleSendDisabled()}
+                state={scheduleState()}
+                selectedTime={selectedSendTime()}
+                onSelectTime={handleSendTimeChange}
+                onCancelSchedule={cancelSchedule}
+                operation={scheduleOperation()}
+                disabled={schedulePickerDisabled()}
               />
             </Show>
           }
@@ -369,11 +398,10 @@ export function ReplyInputView(props: ReplyInputViewProps) {
         replyType={state.replyType}
         disabled={editingDisabled}
       />
-      <Show when={form.sendTime()}>
-        {(sendTime) => (
+      <Show when={scheduleNotice()}>
+        {(notice) => (
           <div role="status" class="px-4 pb-2 text-sm text-ink-muted">
-            Scheduled for {sendTime().toLocaleString()}. Cancel the schedule to
-            edit or send now.
+            {notice()}
           </div>
         )}
       </Show>
@@ -582,9 +610,12 @@ export function ReplyInputView(props: ReplyInputViewProps) {
               <div class="min-w-0 max-w-[45%] shrink">
                 <EmailDateSelector
                   mobile={false}
-                  sendTime={form.sendTime() ?? null}
-                  onSendTimeChange={handleSendTimeChange}
-                  disabled={scheduleSendDisabled()}
+                  state={scheduleState()}
+                  selectedTime={selectedSendTime()}
+                  onSelectTime={handleSendTimeChange}
+                  onCancelSchedule={cancelSchedule}
+                  operation={scheduleOperation()}
+                  disabled={schedulePickerDisabled()}
                 />
               </div>
             </Show>
@@ -594,7 +625,9 @@ export function ReplyInputView(props: ReplyInputViewProps) {
               pending={isSending()}
               hidden={sendActionHidden()}
               onClick={() => sendEmail()}
-              tooltip={sendUnavailableReason() ?? 'Send email'}
+              tooltip={sendUnavailableReason() ?? scheduleActionLabel()}
+              aria-label={scheduleActionLabel()}
+              actionLabel={expandedActionLabel()}
             />
           </div>
         </Show>
