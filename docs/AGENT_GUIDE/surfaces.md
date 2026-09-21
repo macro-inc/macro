@@ -73,6 +73,13 @@ Touch devices render the legacy Notifications view without waiting for the new a
 views feature flag. Desktop waits for flag readiness before choosing the new Home
 view or its legacy fallback.
 
+On a cold launch, notification transport follows the GraphQL Soup flag reactively:
+if the flag arrives after REST starts, the GraphQL notification query must actually
+start too. Verify a reload with delayed flags retains non-email notifications once
+loading settles, including when the list itself uses REST (notified-at sorting).
+Email alone is not sufficient verification: its inbox membership does not require
+the global notification feed.
+
 GraphQL-attached notification rows share the global feed's local seen/done
 overrides: Mark Done and Undo reflect local intent without waiting for an older
 cached notification snapshot to be replaced. These display overrides do not turn
