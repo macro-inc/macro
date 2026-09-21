@@ -43,6 +43,7 @@ vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: mocks.mentionsEnabled }),
 }));
 vi.mock('@phosphor/caret-right.svg', () => ({ default: () => null }));
+vi.mock('@phosphor/caret-down.svg', () => ({ default: () => null }));
 vi.mock('@core/component/ItemPreview', () => ({
   InlineItemPreview: (props: { id: string; type: string }) => (
     <span>
@@ -379,5 +380,18 @@ describe('DocumentConversation placement', () => {
         name: 'Could not load channel mentions. Retry',
       })
     ).toBeTruthy();
+  });
+
+  it('keeps a comment-less discussion mounted when it has channel mentions', () => {
+    mocks.mentionsEnabled = true;
+    const view = discussion([[]], undefined, {
+      hideComposer: true,
+      hideWhenEmpty: true,
+    });
+    expect(view.getByText('Channel mentions')).toBeTruthy();
+    expect(view.getAllByRole('article').map((el) => el.textContent)).toEqual([
+      'source source-a',
+      'source source-b',
+    ]);
   });
 });

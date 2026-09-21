@@ -8,6 +8,7 @@ import { InlineItemPreview } from '@core/component/ItemPreview';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { enableDocumentChannelMentions } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import { useContacts } from '@queries/contacts/contacts';
 import { useMessageLink } from '@queries/messages/document-messages';
@@ -16,6 +17,7 @@ import { useChannelReferenceThreadsQuery } from '@queries/messages/references';
 import { useMessageTimelineQuery } from '@queries/messages/timeline';
 import type { MessageParent } from '@service-storage/messages';
 import { createMemo, createSignal, For, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { MessageThread, MessageThreadFromSource } from './MessageThread';
 import type { MessageData } from './types';
 
@@ -118,16 +120,23 @@ export function DocumentConversation(props: {
       )
   );
   return (
-    <Show when={!props.hideWhenEmpty || messages().length > 0}>
+    <Show
+      when={
+        !props.hideWhenEmpty ||
+        messages().length > 0 ||
+        sourcesById().size > 0 ||
+        (mentions().enabled && references.isError)
+      }
+    >
       <section class="mt-3 pb-12" data-document-conversation>
         <button
           type="button"
           class="flex items-center gap-1.5 text-xs font-medium text-ink-muted not-touch:hover:text-ink"
           onClick={() => setExpanded(!expanded())}
         >
-          <CaretRightIcon
-            class="size-3 transition-transform duration-90"
-            classList={{ 'rotate-90': expanded() }}
+          <Dynamic
+            component={expanded() ? CaretDownIcon : CaretRightIcon}
+            class="size-3"
           />
           {props.label ?? 'Discussion'}
         </button>
