@@ -19,7 +19,6 @@ import { copyCalendarEventMention } from '@app/features/calendar-view/copy-event
 import { copyGuestEmails } from '@app/features/calendar-view/copy-guest-emails';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { toast } from '@core/component/Toast/Toast';
-import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { Popover } from '@kobalte/core/popover';
 import CopyIcon from '@phosphor/copy.svg';
@@ -231,15 +230,6 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
     openEventComposer({ event: props.event });
     props.onOpenChange(false);
   };
-  const addCall = () => {
-    openEventComposer({ event: props.event, addMacroCall: true });
-    props.onOpenChange(false);
-  };
-  const canAddCall = () =>
-    ENABLE_CALLS &&
-    canModify() &&
-    props.event.eventType !== 'out_of_office' &&
-    reminderCalendarIdOf(props.event) === props.event.calendarId;
 
   return (
     <MobileDrawer
@@ -317,7 +307,6 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                 event={props.event}
                 timeFormat={props.timeFormat}
                 defaultReminders={props.defaultReminders}
-                onAddCall={canAddCall() ? addCall : undefined}
               />
             </div>
             <EventAttendeesSection
@@ -457,15 +446,6 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
     openEventComposer({ event: props.event });
     props.onOpenChange(false);
   };
-  const addCall = () => {
-    openEventComposer({ event: props.event, addMacroCall: true });
-    props.onOpenChange(false);
-  };
-  const canAddCall = () =>
-    ENABLE_CALLS &&
-    canModify() &&
-    props.event.eventType !== 'out_of_office' &&
-    reminderCalendarIdOf(props.event) === props.event.calendarId;
 
   return (
     <Popover
@@ -583,7 +563,6 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
                     event={props.event}
                     timeFormat={props.timeFormat}
                     defaultReminders={props.defaultReminders}
-                    onAddCall={canAddCall() ? addCall : undefined}
                   />
                 </div>
                 <EventAttendeesSection

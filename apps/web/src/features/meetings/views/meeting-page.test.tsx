@@ -6,9 +6,14 @@ import type {
   MeetingPageState,
   MeetingSessionCapabilities,
 } from '../context/meeting-session';
+import type { MeetingMediaAccess } from '../primitives/meeting-media';
 import { MeetingPage } from './meeting-page';
 
-function setup(authenticated: boolean, startCall: boolean) {
+function setup(
+  authenticated: boolean,
+  startCall: boolean,
+  mediaAccess?: MeetingMediaAccess
+) {
   const [signedIn, setSignedIn] = createSignal(authenticated);
   const [activeCallId, setActiveCallId] = createSignal<string | null>(null);
   const [source, setSource] = createSignal<MeetingPageState>({
@@ -42,6 +47,7 @@ function setup(authenticated: boolean, startCall: boolean) {
     <MeetingPage
       source={source}
       session={session}
+      mediaAccess={mediaAccess}
       authenticated={signedIn}
       author={() => 'Macro Member'}
       startCall={startCall}
@@ -61,6 +67,37 @@ function setup(authenticated: boolean, startCall: boolean) {
 }
 
 describe('public meeting prejoin', () => {
+  it('checks devices before joining and never joins from a permission grant', async () => {
+    const stop = vi.fn();
+    const request = vi.fn(
+      async () => ({ getTracks: () => [{ stop }] }) as unknown as MediaStream
+    );
+    const session = setup(true, true, { request });
+    await waitFor(() => {
+      expect(request).toHaveBeenCalledTimes(2);
+      expect(screen.getByRole('button', { name: 'Start call' })).toHaveProperty(
+        'disabled',
+        false
+      );
+    });
+    expect(session.join).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('switch', { name: 'Camera' }));
+    await waitFor(() =>
+      expect(screen.getByLabelText('Camera preview')).toHaveProperty(
+        'srcObject',
+        expect.anything()
+      )
+    );
+    expect(session.join).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Start call' }));
+    await screen.findByText('Connected call');
+    expect(stop).toHaveBeenCalledTimes(3);
+    expect(session.connect).toHaveBeenCalledWith(expect.anything(), {
+      microphoneEnabled: true,
+      cameraEnabled: true,
+    });
+  });
+
   it('requires a guest name and a deliberate join', async () => {
     const session = setup(false, false);
     expect(session.join).not.toHaveBeenCalled();
@@ -119,7 +156,7 @@ describe('public meeting prejoin', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Join call' }));
     await screen.findByText('Connected call');
     fireEvent.click(screen.getByRole('button', { name: 'Copy Meeting Url' }));
-    await screen.findByRole('button', { name: 'Copied' });
+    await screen.findByText('Meeting URL copied');
     session.setSource({ kind: 'unavailable' });
     expect(screen.getByText('Connected call')).toBeTruthy();
     expect(screen.queryByText('This call is unavailable')).toBeNull();
@@ -130,8 +167,11 @@ describe('public meeting prejoin', () => {
 
   it('offers the copy action before joining', async () => {
     setup(false, false);
+    expect(
+      screen.getByRole('link', { name: 'Back to Macro' }).getAttribute('href')
+    ).toBe('/app');
     fireEvent.click(screen.getByRole('button', { name: 'Copy Meeting Url' }));
-    await screen.findByRole('button', { name: 'Copied' });
+    await screen.findByText('Meeting URL copied');
     expect(screen.queryByRole('textbox', { name: 'Call link' })).toBeNull();
     expect(screen.getByText(/recorded and transcribed/)).toBeTruthy();
   });

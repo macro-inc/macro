@@ -9,7 +9,6 @@ export function CalendarCreateMenuView(props: {
   pending: boolean;
   onEvent: () => void;
   onQuickCall: () => void;
-  onScheduledCall: () => void;
 }) {
   const [open, setOpen] = createSignal(false);
   function changeOpen(next: boolean) {
@@ -35,10 +34,9 @@ export function CalendarCreateMenuView(props: {
     const actions = {
       e: props.onEvent,
       q: props.onQuickCall,
-      s: props.onScheduledCall,
     };
     const key = context.pressedKeysString;
-    if (key !== 'e' && key !== 'q' && key !== 's') return false;
+    if (key !== 'e' && key !== 'q') return false;
     select(actions[key]);
     return true;
   });
@@ -49,7 +47,6 @@ export function CalendarCreateMenuView(props: {
       pending={props.pending}
       onEvent={() => select(props.onEvent)}
       onQuickCall={() => select(props.onQuickCall)}
-      onScheduledCall={() => select(props.onScheduledCall)}
     />
   );
 }

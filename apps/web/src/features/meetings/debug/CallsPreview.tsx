@@ -127,9 +127,6 @@ export default function CallsPreview() {
             onQuickCall={() =>
               setNotice('Open the join preview to try a Quick Call.')
             }
-            onScheduledCall={() =>
-              setNotice('Preview: create event with Macro call enabled')
-            }
           />
           <CalendarActiveCallNotice
             title="Quick Call"

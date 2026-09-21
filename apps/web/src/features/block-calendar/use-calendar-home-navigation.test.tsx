@@ -7,7 +7,7 @@ import { useCalendarHomeNavigation } from './use-calendar-home-navigation';
 
 afterEach(cleanup);
 
-it('restores all three destinations from URL history and preserves other parameters', async () => {
+it('restores both destinations from URL history and preserves other parameters', async () => {
   const history = createMemoryHistory();
   history.set({
     value: '/calendar?calendarView=calls&other=kept',
@@ -18,10 +18,8 @@ it('restores all three destinations from URL history and preserves other paramet
     return (
       <CalendarNavigation
         tab={state.tab()}
-        eventFilter={state.eventFilter()}
         callsEnabled
-        onTabChange={() => state.navigateView('calls')}
-        onEventFilterChange={state.navigateView}
+        onTabChange={state.navigateView}
         onCreate={() => {}}
         createMenu={<span />}
       />
@@ -37,16 +35,12 @@ it('restores all three destinations from URL history and preserves other paramet
       screen.getByRole('button', { name: label }).getAttribute('aria-current')
     ).toBe('page');
   active('Calls');
-  fireEvent.click(screen.getByRole('button', { name: 'My Events' }));
-  await vi.waitFor(() => active('My Events'));
-  expect(history.get()).toContain('calendarView=my');
+  fireEvent.click(screen.getByRole('button', { name: 'Events' }));
+  await vi.waitFor(() => active('Events'));
+  expect(history.get()).toContain('calendarView=events');
   expect(history.get()).toContain('other=kept');
-  fireEvent.click(screen.getByRole('button', { name: 'All Events' }));
-  await vi.waitFor(() => active('All Events'));
-  history.back();
-  await vi.waitFor(() => active('My Events'));
   history.back();
   await vi.waitFor(() => active('Calls'));
   history.forward();
-  await vi.waitFor(() => active('My Events'));
+  await vi.waitFor(() => active('Events'));
 });

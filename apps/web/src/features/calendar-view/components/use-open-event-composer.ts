@@ -8,7 +8,6 @@ import { getOwner } from 'solid-js';
 export interface OpenEventComposerOptions {
   event?: CalendarEvent;
   initialValues?: EventEditorInitialValues;
-  addMacroCall?: boolean;
   onCalendarChange?: (calendarId: string, color: string) => void;
   onClose?: () => void;
 }
@@ -30,7 +29,6 @@ export function useOpenEventComposer() {
         params: {
           event: options.event,
           initialValues: options.initialValues,
-          addMacroCall: options.addMacroCall,
           onCalendarChange: options.onCalendarChange,
           onDirtyChange: (dirty: boolean) => {
             formDirty = dirty;

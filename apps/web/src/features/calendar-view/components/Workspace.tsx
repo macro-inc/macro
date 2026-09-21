@@ -9,7 +9,6 @@ import { calendarMacroCallUrl } from '@app/features/calendar/utils/macro-call-li
 import { SidePanel } from '@components/app/side-panel/SidePanel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
-import { useEmail } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Layer } from '@ui';
@@ -27,14 +26,10 @@ import {
 } from 'solid-js';
 import { CalendarAgenda } from '../../calendar-home/components/calendar-agenda';
 import { CalendarNavigation } from '../../calendar-home/components/calendar-navigation';
-import type {
-  CalendarEventFilter,
-  CalendarHomeTab,
-} from '../../calendar-home/core/calendar-home';
+import type { CalendarHomeTab } from '../../calendar-home/core/calendar-home';
 import { CalendarActiveCallSidebar } from '../../meetings/calendar-calls-view';
 import { CalendarCreateMenu } from '../../meetings/calendar-create-menu';
 import { CalendarCalls } from '../calendar-calls';
-import { matchesEventFilter } from '../calendar-event-filter';
 import { useCalendarFocus } from '../calendar-focus-target';
 import { useCalendarHomeNavigation } from '../use-calendar-home-navigation';
 import { CalendarSidebarDetails } from './CalendarSidebarDetails';
@@ -46,11 +41,7 @@ import { useOpenEventComposer } from './use-open-event-composer';
 
 const CALENDAR_SWIPE_EDGE_INSET = 40;
 
-function CalendarPages(props: {
-  eventFilter: CalendarEventFilter;
-  viewerEmail?: string;
-  interactive: boolean;
-}) {
+function CalendarPages(props: { interactive: boolean }) {
   const calendarPager = useCalendarPager();
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
   const [useNarrowDayHeaders, setUseNarrowDayHeaders] = createSignal(false);
@@ -89,8 +80,6 @@ function CalendarPages(props: {
                       id={pageId}
                       initialDate={calendarPager.initialDateFor(pageId)}
                       useNarrowDayHeaders={useNarrowDayHeaders()}
-                      eventFilter={props.eventFilter}
-                      viewerEmail={props.viewerEmail}
                       interactive={props.interactive}
                     />
                   </Suspense>
@@ -122,10 +111,8 @@ function WorkspaceContent() {
   const calendarView = useCalendarView();
   const calendarPager = useCalendarPager();
   const calendarFocus = useCalendarFocus();
-  const email = useEmail();
   const openEventComposer = useOpenEventComposer();
-  const { tab, eventFilter, navigateView } =
-    useCalendarHomeNavigation(ENABLE_CALLS);
+  const { tab, navigateView } = useCalendarHomeNavigation(ENABLE_CALLS);
   const [list, setList] = createSignal(false);
   const [viewport, setViewport] = createSignal<HTMLElement>();
   const [wide, setWide] = createSignal(false);
@@ -135,23 +122,18 @@ function WorkspaceContent() {
 
   const selectTab = (next: CalendarHomeTab) => {
     calendarView.closeEventDetails();
-    navigateView(next === 'calls' ? 'calls' : eventFilter());
+    navigateView(next);
   };
   const showEvents = () => {
     setList(false);
     calendarView.closeEventDetails();
-    navigateView('all');
-  };
-  const changeFilter = (filter: CalendarEventFilter) => {
-    calendarView.closeEventDetails();
-    navigateView(filter);
+    navigateView('events');
   };
   const changeList = (next: boolean) => {
     calendarView.closeEventDetails();
     setList(next);
   };
   const create = () => openEventComposer();
-  const scheduleCall = () => openEventComposer({ addMacroCall: true });
   // External event navigation must reveal the grid even while Calls is open.
   createEffect(
     on(
@@ -168,13 +150,8 @@ function WorkspaceContent() {
       ? [...data.visibleEvents(), ...calendarPager.activeTeamEvents()]
       : [];
   });
-  const filteredEvents = createMemo(() =>
-    events().filter((event) =>
-      matchesEventFilter(event, eventFilter(), email())
-    )
-  );
   const agendaEvents = createMemo(() =>
-    filteredEvents().map((event) => ({
+    events().map((event) => ({
       id: event.id,
       title: event.title,
       start: event.start,
@@ -214,17 +191,12 @@ function WorkspaceContent() {
           >
             <CalendarNavigation
               tab={tab()}
-              eventFilter={eventFilter()}
               callsEnabled={ENABLE_CALLS}
               onTabChange={selectTab}
-              onEventFilterChange={changeFilter}
               onCreate={create}
               createMenu={
                 ENABLE_CALLS ? (
-                  <CalendarCreateMenu
-                    onEvent={create}
-                    onScheduledCall={scheduleCall}
-                  />
+                  <CalendarCreateMenu onEvent={create} />
                 ) : undefined
               }
             />
@@ -246,17 +218,12 @@ function WorkspaceContent() {
               <CalendarNavigation
                 compact
                 tab={tab()}
-                eventFilter={eventFilter()}
                 callsEnabled={ENABLE_CALLS}
                 onTabChange={selectTab}
-                onEventFilterChange={changeFilter}
                 onCreate={create}
                 createMenu={
                   ENABLE_CALLS ? (
-                    <CalendarCreateMenu
-                      onEvent={create}
-                      onScheduledCall={scheduleCall}
-                    />
+                    <CalendarCreateMenu onEvent={create} />
                   ) : undefined
                 }
               />
@@ -297,11 +264,7 @@ function WorkspaceContent() {
                 }}
                 inert={list()}
               >
-                <CalendarPages
-                  eventFilter={eventFilter()}
-                  viewerEmail={email()}
-                  interactive={tab() === 'events' && !list()}
-                />
+                <CalendarPages interactive={tab() === 'events' && !list()} />
               </div>
               <Show when={list()}>
                 <CalendarAgenda
@@ -312,9 +275,7 @@ function WorkspaceContent() {
                   }
                   loading={calendarPager.activeData()?.isLoading() ?? true}
                   onSelect={(id, anchor) => {
-                    const event = filteredEvents().find(
-                      (event) => event.id === id
-                    );
+                    const event = events().find((event) => event.id === id);
                     if (event) calendarView.selectEvent(event, anchor);
                   }}
                 />
@@ -333,7 +294,7 @@ function WorkspaceContent() {
             >
               <CalendarCalls
                 onShowEvents={showEvents}
-                onScheduleCall={scheduleCall}
+                onScheduleCall={create}
               />
             </Suspense>
           </Show>

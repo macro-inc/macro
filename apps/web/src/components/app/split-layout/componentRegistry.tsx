@@ -184,7 +184,6 @@ registerComponent('calendar-event-compose', (params) => {
   usePageViewTracking('calendar-event-compose');
   return (
     <EventComposerSplit
-      addMacroCall={params?.addMacroCall === true}
       event={params?.event as CalendarEvent | undefined}
       initialValues={
         params?.initialValues as EventEditorInitialValues | undefined

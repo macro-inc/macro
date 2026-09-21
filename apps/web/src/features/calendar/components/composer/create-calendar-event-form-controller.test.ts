@@ -153,49 +153,13 @@ describe('pastEventWarning', () => {
   });
 });
 
-describe('Macro call conferencing', () => {
-  it('submits a Macro call preselected by Schedule call', () => {
+describe('provider conferencing', () => {
+  it('submits preselected Google Meet on new events', () => {
     const controller = controllerFor({
       title: 'Planning',
-      conference: 'macro_call',
+      conference: 'google_meet',
     });
-    expect(controller.submitValues()?.macroCall).toBe(true);
-    expect(controller.submitValues()?.conference).toBeUndefined();
-  });
-
-  it('retains a saved Macro call when only its title changes', () => {
-    const controller = controllerFor(
-      { title: 'Planning', conference: 'macro_call' },
-      { isEdit: true }
-    );
-    controller.setField('title', 'Planning follow-up');
-    expect(controller.submitValues()?.macroCall).toBe(true);
-    expect(controller.submitValues()?.conference).toBeUndefined();
-  });
-
-  it('removes provider conferencing when replacing Google Meet with a Macro call', () => {
-    const controller = controllerFor(
-      { title: 'Planning', conference: 'google_meet' },
-      { isEdit: true }
-    );
-    controller.setField('conference', 'macro_call');
-    expect(controller.submitValues()?.macroCall).toBe(true);
-    expect(controller.submitValues()?.conference).toBe('none');
-  });
-
-  it('allows removing a saved Macro call and suppresses calls on out-of-office events', () => {
-    const controller = controllerFor(
-      { title: 'Planning', conference: 'macro_call' },
-      { isEdit: true }
-    );
-    controller.setField('conference', 'none');
-    expect(controller.submitValues()?.macroCall).toBeUndefined();
-    const outOfOffice = controllerFor({
-      title: 'Away',
-      conference: 'macro_call',
-      eventType: 'out_of_office',
-    });
-    expect(outOfOffice.submitValues()?.macroCall).toBeUndefined();
+    expect(controller.submitValues()?.conference).toBe('google_meet');
   });
 });
 

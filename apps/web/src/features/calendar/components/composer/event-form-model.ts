@@ -66,11 +66,7 @@ function defaultEditorTimes(reference: Date) {
 }
 
 /** Conferencing displayed by the editor before it is submitted. */
-export type EventEditorConferenceChoice =
-  | 'none'
-  | 'google_meet'
-  | 'macro_call'
-  | 'existing';
+export type EventEditorConferenceChoice = 'none' | 'google_meet' | 'existing';
 
 /** Values used to initialize the shared event editor form. */
 export interface EventEditorInitialValues {
@@ -143,8 +139,6 @@ export interface EventEditorSubmitValues {
   description: string;
   /** Present only when conferencing should be attached, replaced, or removed. */
   conference?: ConferenceChange;
-  /** Attach or retain a shareable Macro call in the calendar invitation. */
-  macroCall?: boolean;
   /** Present only when the user changed the event's reminder configuration. */
   reminders?: EventReminders;
   /**
@@ -202,7 +196,6 @@ export function calendarSelectionToEditorInitialValues(selection: {
 function initialConferenceChoice(
   event: CalendarEvent
 ): EventEditorConferenceChoice {
-  if (calendarMacroCallUrl(event)) return 'macro_call';
   if (!event.conferenceUrl) return 'none';
   return event.conferenceProvider === 'google_meet'
     ? 'google_meet'

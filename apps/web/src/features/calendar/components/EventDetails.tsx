@@ -495,7 +495,6 @@ export function EventDetails(props: {
   event: CalendarEvent;
   timeFormat: CalendarTimeFormat;
   defaultReminders?: EventReminderOverride[];
-  onAddCall?: () => void;
 }) {
   const macroMeetingUrl = () => calendarMacroCallUrl(props.event);
   const conferenceUrl = createMemo(
@@ -628,30 +627,6 @@ export function EventDetails(props: {
             </div>
           </div>
         )}
-      </Show>
-      <Show when={!conferenceUrl() && props.onAddCall}>
-        <div class="col-span-2 flex min-w-0 flex-col gap-3 rounded-xl border border-edge-muted bg-surface p-3">
-          <div class="flex items-start gap-3">
-            <VideoCameraIcon class="mt-0.5 size-4 shrink-0 text-ink-extra-muted" />
-            <div class="flex min-w-0 flex-col gap-1">
-              <span class="text-sm font-medium text-ink">
-                No call on this event
-              </span>
-              <p class="text-xs leading-relaxed text-ink-muted">
-                Add one and the link goes on the invite for everyone, guests
-                included.
-              </p>
-            </div>
-          </div>
-          <Button
-            variant="accent"
-            size="sm"
-            class="self-end"
-            onClick={() => props.onAddCall?.()}
-          >
-            Add a call
-          </Button>
-        </div>
       </Show>
       <Show when={originalTimeZone()}>
         {(timeZone) => (

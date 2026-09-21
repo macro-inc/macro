@@ -53,8 +53,6 @@ import {
   Show,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import type { CalendarEventFilter } from '../../calendar-home/core/calendar-home';
-import { matchesEventFilter } from '../calendar-event-filter';
 import {
   calendarFocusTargetId,
   useCalendarFocus,
@@ -218,8 +216,6 @@ export function Page(props: {
   id: CalendarPageId;
   initialDate: Date;
   useNarrowDayHeaders: boolean;
-  eventFilter?: CalendarEventFilter;
-  viewerEmail?: string;
   interactive?: boolean;
 }) {
   const pager = useCalendarPager();
@@ -253,11 +249,10 @@ export function Page(props: {
     isSourceVisible: calendarView.isSourceVisible,
     refetchOnWindowFocus: isActive,
   });
-  const visibleEvents = createMemo(() =>
-    [...data.visibleEvents(), ...teamOoo.visibleEvents()].filter((event) =>
-      matchesEventFilter(event, props.eventFilter ?? 'all', props.viewerEmail)
-    )
-  );
+  const visibleEvents = createMemo(() => [
+    ...data.visibleEvents(),
+    ...teamOoo.visibleEvents(),
+  ]);
   const eventsById = createMemo(() =>
     teamOoo.eventsById().size === 0
       ? data.eventsById()

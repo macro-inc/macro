@@ -1,43 +1,26 @@
 import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
 import CalendarIcon from '@phosphor/calendar-blank.svg';
-import UserIcon from '@phosphor/user.svg';
 import VideoIcon from '@phosphor/video-camera.svg';
 import { For, type JSX } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import type {
-  CalendarEventFilter,
-  CalendarHomeTab,
-} from '../core/calendar-home';
+import type { CalendarHomeTab } from '../core/calendar-home';
 
 const CALENDAR_DESTINATIONS = [
-  { id: 'all', label: 'All Events', icon: CalendarIcon },
-  { id: 'my', label: 'My Events', icon: UserIcon },
+  { id: 'events', label: 'Events', icon: CalendarIcon },
   { id: 'calls', label: 'Calls', icon: VideoIcon },
 ] as const;
 
 /** Navigation shared by the wide calendar sidebar and its compact toolbar. */
 export function CalendarNavigation(props: {
   tab: CalendarHomeTab;
-  eventFilter: CalendarEventFilter;
   compact?: boolean;
   callsEnabled: boolean;
   onTabChange: (tab: CalendarHomeTab) => void;
-  onEventFilterChange: (filter: CalendarEventFilter) => void;
   onCreate: () => void;
   createMenu?: JSX.Element;
 }) {
   const isActive = (id: (typeof CALENDAR_DESTINATIONS)[number]['id']) =>
-    id === 'calls'
-      ? props.tab === 'calls'
-      : props.tab === 'events' && props.eventFilter === id;
-
-  const select = (id: (typeof CALENDAR_DESTINATIONS)[number]['id']) => {
-    if (id === 'calls') {
-      props.onTabChange('calls');
-      return;
-    }
-    props.onEventFilterChange(id);
-  };
+    props.tab === id;
 
   return (
     <div
@@ -66,7 +49,7 @@ export function CalendarNavigation(props: {
           each={
             props.callsEnabled
               ? CALENDAR_DESTINATIONS
-              : CALENDAR_DESTINATIONS.slice(0, 2)
+              : CALENDAR_DESTINATIONS.slice(0, 1)
           }
         >
           {(destination) => (
@@ -78,7 +61,7 @@ export function CalendarNavigation(props: {
                 'bg-active font-semibold text-ink': isActive(destination.id),
                 'text-ink-muted': !isActive(destination.id),
               }}
-              onClick={() => select(destination.id)}
+              onClick={() => props.onTabChange(destination.id)}
             >
               <Dynamic component={destination.icon} class="size-4" />
               {destination.label}

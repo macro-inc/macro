@@ -54,6 +54,10 @@ function MeetingRouteContent(props: { shareToken: string }) {
   return (
     <MeetingPage
       source={source}
+      mediaAccess={{
+        request: (constraints) =>
+          navigator.mediaDevices.getUserMedia(constraints),
+      }}
       authenticated={authenticated}
       author={author}
       avatar={

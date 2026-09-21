@@ -1,11 +1,15 @@
+import ArrowLeft from '@phosphor/arrow-left.svg';
 import Phone from '@phosphor/phone-call.svg';
 import { Button, ToggleSwitch } from '@ui';
 import {
   type Accessor,
   children,
+  createEffect,
   createSignal,
+  For,
   type JSX,
   Match,
+  on,
   Show,
   Switch,
 } from 'solid-js';
@@ -15,11 +19,16 @@ import type {
   MeetingPageState,
   MeetingSessionCapabilities,
 } from '../context/meeting-session';
+import {
+  createMeetingMedia,
+  type MeetingMediaAccess,
+} from '../primitives/meeting-media';
 import { createMeetingSession } from '../primitives/meeting-session';
 
 export function MeetingPage(props: {
   source: Accessor<MeetingPageState>;
   session: MeetingSessionCapabilities;
+  mediaAccess?: MeetingMediaAccess;
   authenticated: Accessor<boolean | undefined>;
   author: Accessor<string>;
   avatar?: JSX.Element;
@@ -32,8 +41,7 @@ export function MeetingPage(props: {
   const avatar = children(() => props.avatar);
   const session = createMeetingSession(props.session);
   const [name, setName] = createSignal('');
-  const [microphoneEnabled, setMicrophoneEnabled] = createSignal(true);
-  const [cameraEnabled, setCameraEnabled] = createSignal(false);
+  const media = createMeetingMedia(props.mediaAccess);
   const ready = () => {
     const state = props.source();
     return state.kind === 'ready' ? state : undefined;
@@ -45,15 +53,41 @@ export function MeetingPage(props: {
     props.session.activeCallId() === session.joinedCallId() &&
     props.session.isInCall();
 
-  const join = () =>
-    session.join(props.authenticated() ? undefined : name(), {
-      microphoneEnabled: microphoneEnabled(),
-      cameraEnabled: cameraEnabled(),
+  createEffect(
+    on(
+      () => Boolean(ready()) && !inCall() && !session.joining(),
+      (setup) => {
+        if (setup) void media.prepare();
+        else media.release();
+      }
+    )
+  );
+  let videoElement: HTMLVideoElement | undefined;
+  createEffect(() => {
+    const stream = media.video();
+    if (videoElement) videoElement.srcObject = stream ?? null;
+  });
+  const join = () => {
+    if (media.pending()) return;
+    media.release();
+    return session.join(props.authenticated() ? undefined : name(), {
+      microphoneEnabled: media.microphoneEnabled(),
+      cameraEnabled: media.cameraEnabled(),
     });
+  };
 
   return (
     <main class="ph-no-capture flex h-dvh min-h-0 flex-col bg-surface p-4 text-ink sm:p-6">
       <header class="flex flex-wrap items-center gap-4 pb-4">
+        <Show when={!inCall()}>
+          <a
+            href="/app"
+            class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-muted hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent"
+          >
+            <ArrowLeft class="size-4" />
+            Back to Macro
+          </a>
+        </Show>
         <Show
           when={inCall()}
           fallback={
@@ -101,20 +135,33 @@ export function MeetingPage(props: {
         <Match when={ready()}>
           <div class="m-auto grid w-full max-w-4xl gap-8 py-6 md:grid-cols-2 md:items-center">
             <div class="flex aspect-video flex-col items-center justify-center gap-5 rounded-2xl border border-edge-muted bg-message px-6">
-              <div class="flex size-24 items-center justify-center rounded-full bg-accent/10 text-4xl font-medium text-accent">
-                <Show
-                  when={avatar()}
-                  fallback={
-                    displayName().charAt(0).toUpperCase() || (
-                      <Phone class="size-10" />
-                    )
-                  }
-                >
-                  {avatar()}
-                </Show>
-              </div>
+              <video
+                ref={videoElement}
+                autoplay
+                muted
+                playsinline
+                aria-label="Camera preview"
+                class="max-h-full w-full rounded-xl object-cover -scale-x-100"
+                classList={{ hidden: !media.video() }}
+              />
+              <Show when={!media.video()}>
+                <div class="flex size-24 items-center justify-center rounded-full bg-accent/10 text-4xl font-medium text-accent">
+                  <Show
+                    when={avatar()}
+                    fallback={
+                      displayName().charAt(0).toUpperCase() || (
+                        <Phone class="size-10" />
+                      )
+                    }
+                  >
+                    {avatar()}
+                  </Show>
+                </div>
+              </Show>
               <p class="text-center text-sm text-ink-muted">
-                Your microphone and camera turn on only after you join.
+                {media.pending()
+                  ? 'Allow microphone and camera access to check your setup.'
+                  : 'Only you can see this preview. Start or join when you’re ready.'}
               </p>
             </div>
             <form
@@ -170,22 +217,29 @@ export function MeetingPage(props: {
               </Show>
               <div class="flex flex-wrap items-center gap-6">
                 <ToggleSwitch
-                  checked={microphoneEnabled()}
+                  checked={media.microphoneEnabled()}
                   disabled={session.joining()}
-                  onChange={setMicrophoneEnabled}
+                  onChange={media.setMicrophoneEnabled}
                   size="sm"
                   label="Microphone"
                   labelClass="whitespace-nowrap text-xs text-ink-muted"
                 />
                 <ToggleSwitch
-                  checked={cameraEnabled()}
+                  checked={media.cameraEnabled()}
                   disabled={session.joining()}
-                  onChange={setCameraEnabled}
+                  onChange={media.setCameraEnabled}
                   size="sm"
                   label="Camera"
                   labelClass="whitespace-nowrap text-xs text-ink-muted"
                 />
               </div>
+              <For each={media.errors()}>
+                {(error) => (
+                  <p role="alert" class="text-sm text-failure">
+                    {error} You can still join with it off.
+                  </p>
+                )}
+              </For>
               <Show when={session.error()}>
                 <p role="alert" class="text-sm text-failure">
                   {session.error()}
@@ -203,6 +257,7 @@ export function MeetingPage(props: {
                 type="submit"
                 disabled={
                   session.joining() ||
+                  media.pending() ||
                   (!props.authenticated() && !name().trim())
                 }
               >

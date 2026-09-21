@@ -6,10 +6,7 @@ import { createSignal } from 'solid-js';
 import { CalendarCreateMenuView as CreateMenu } from './views/calendar-create-menu';
 
 /** Calendar's event, Quick Call, and scheduled-call creation entry point. */
-export function CalendarCreateMenu(props: {
-  onEvent: () => void;
-  onScheduledCall: () => void;
-}) {
+export function CalendarCreateMenu(props: { onEvent: () => void }) {
   const create = useCreateMeetingMutation();
   const navigate = useNavigate();
   const [pending, setPending] = createSignal(false);
@@ -32,7 +29,6 @@ export function CalendarCreateMenu(props: {
       pending={pending()}
       onEvent={props.onEvent}
       onQuickCall={() => void createQuickCall()}
-      onScheduledCall={props.onScheduledCall}
     />
   );
 }

@@ -54,7 +54,6 @@ const values: EventEditorSubmitValues = {
   location: 'Meeting room',
   description: '<p>Roadmap discussion</p>',
   guestEmails: ['guest@example.com'],
-  macroCall: true,
 };
 
 const savedEvent: CalendarEvent = {
@@ -91,6 +90,86 @@ beforeEach(() => {
 });
 
 describe('scheduling a Macro call', () => {
+  it('schedules an all-day call for the event’s exclusive date range', async () => {
+    const [editor, dispose] = createRoot(
+      (dispose) =>
+        [
+          useEventEditor({ event: () => undefined, onSaved: vi.fn() }),
+          dispose,
+        ] as const
+    );
+    try {
+      await editor.save({
+        ...values,
+        time: {
+          kind: 'allDay',
+          startDate: '2026-09-22',
+          endDate: '2026-09-24',
+        },
+      });
+      expect(mocks.createMeeting).toHaveBeenCalledWith({
+        title: 'Planning',
+        scheduledStart: new Date(2026, 8, 22).toISOString(),
+        scheduledEnd: new Date(2026, 8, 24).toISOString(),
+      });
+    } finally {
+      dispose();
+    }
+  });
+
+  it('does not attach a call to an out-of-office entry', async () => {
+    const [editor, dispose] = createRoot(
+      (dispose) =>
+        [
+          useEventEditor({ event: () => undefined, onSaved: vi.fn() }),
+          dispose,
+        ] as const
+    );
+    try {
+      await editor.save({
+        ...values,
+        outOfOffice: { autoDeclineMode: 'decline_none' },
+      });
+      expect(mocks.createEvent).toHaveBeenCalledOnce();
+      expect(mocks.createMeeting).not.toHaveBeenCalled();
+      expect(mocks.updateEvent).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('retains an invited event link without managing another organizer’s call', async () => {
+    const event = {
+      ...savedEvent,
+      attendees: [
+        {
+          email: 'host@example.com',
+          isOrganizer: true,
+          isOptional: false,
+          isSelf: false,
+          responseStatus: 'accepted' as const,
+        },
+      ],
+    };
+    const [editor, dispose] = createRoot(
+      (dispose) =>
+        [
+          useEventEditor({ event: () => event, onSaved: vi.fn() }),
+          dispose,
+        ] as const
+    );
+    try {
+      await editor.save(values);
+      expect(mocks.updateEvent.mock.lastCall?.[0].patch.description).toContain(
+        savedEvent.location
+      );
+      expect(mocks.createMeeting).not.toHaveBeenCalled();
+      expect(mocks.updateMeeting).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+
   it('creates the calendar event before creating and attaching its call', async () => {
     const saved = vi.fn();
     const [editor, dispose] = createRoot(

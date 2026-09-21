@@ -701,16 +701,15 @@ that path. Calendar navigation defaults to Day on phones and Week on desktop; th
 recent choice is remembered locally for navigation that does not specify a period. An
 opened event is reflected in the pane-owned `sN.calendar.eventId` search parameter.
 
-Calendar has `All Events`, `My Events`, and `Calls` destinations. Wide splits show
+Calendar has `Events` and `Calls` destinations. Wide splits show
 `Create`, navigation, the mini calendar, then calendar sources in a left column.
 The mini calendar's month label is plain text; use its arrows to change months.
 Narrow splits put navigation and `Create` above the content, with source and
 availability controls under `Calendars and availability`. Events can be shown
 as a grid or chronological list using `Show event list` / `Show calendar grid`.
-The sidebar destinations are stored in `calendarView=all|my|calls` URL parameters;
+The sidebar destinations are stored in `calendarView=events|calls` URL parameters;
 reload and browser Back/Forward restore the selected destination.
-`My Events` includes events you created or organized and invitations you accepted
-or tentatively accepted. The list preserves calendar setup, errors,
+The list preserves calendar setup, errors,
 retry, and unsupported-date-range messages. Live calls appear in the sidebar with
 `Join` and `See in Calls`; Quick Calls are not inserted into the calendar grid.
 
@@ -730,31 +729,28 @@ section listing each connected account with a per-account `Enable` (grant calend
 `Turn off` action, plus `Connect another account` to connect a new Google account
 (email + calendar).
 
-`Create` opens a dropdown styled like Files: `Event`, `Quick Call`, and
-`Scheduled Call`. `Event` opens the compact event composer.
-While the menu is open, press `E` for Event, `Q` for Quick Call, or `S` for
-Scheduled Call; each item displays its shortcut. Escape or `C` closes the menu.
+`Create` opens a dropdown styled like Files with `Event` and `Quick Call`.
+While the menu is open, press `E` for Event or `Q` for Quick Call; each item
+shows its shortcut. Escape or `C` closes the menu.
 `Quick Call` creates a reusable link and opens setup. The creator must press
 `Start call`; invitees must press `Join call`. Loading the page or completing
 authentication never joins automatically, including old `?join=true` URLs.
-`Copy Meeting Url` is available in setup and during the call.
-`Scheduled Call` opens the event composer with the
-`Macro call` switch enabled. It creates the calendar event and its call link only
-when saved. Quick Calls do not create calendar events.
-`All day` and `Macro call` toggles sit
-below the description and above the event option buttons. Turning on `Macro call`
-only changes the draft; the call is created after the event saves successfully.
-Before saving, the composer says the link will be created on save; saved events
-show the join URL. A failed link attachment keeps the composer open with a retry
-message, and Save reuses the saved event and call instead of creating duplicates.
-The invitation includes the
-call link in its description and, when no physical location was entered, its location.
-The `Macro call` toggle is available on new events and when editing events.
-Event details show `Join Macro call`, the visible URL, and `Copy call link`; editable
-events without a conference offer `Add a call`, opening a changed draft to save.
-Rescheduling
-or editing an existing event retains its link. Removing the meeting choice removes the
-generated invitation link; deleting a calendar event does not revoke its reusable call link.
+Setup requests microphone and camera access and offers a local camera preview.
+Permission denial leaves the affected device off and still allows joining.
+`Back to Macro` exits setup. `Copy Meeting Url` keeps its label and shows a
+checkmark for a few seconds after copying, then restores the copy icon.
+
+`Event` opens the original compact composer with All day in the date/time fields.
+Every regular event created here automatically gets a Macro call after the event
+saves. Out-of-office entries do not create calls. There is no separate call toggle
+or Scheduled Call menu option. Quick Calls do not create calendar events.
+A failed link attachment keeps the composer open with a retry message; Save reuses
+the saved event and call instead of creating duplicates. The invitation includes
+the call link in its description and, when no location was entered, its location.
+Event details show `Join Macro call`, the URL, and `Copy call link`.
+Editing or rescheduling an owned event retains and updates its call; an owned
+editable event without a call receives one on save. Deleting a calendar event
+does not revoke its reusable call link.
 Guests can use the link without a Macro account.
 
 Calendar's Calls view shows a people/email picker, live-call cards, and
@@ -766,7 +762,7 @@ copy and Join actions. Upcoming calls are grouped by local date, with reusable
 links in `Your links` below the scheduled rows. Link rows offer `Copy link` and
 `Start`; calendar rows and detail cards offer `Join` only between the scheduled
 start and end, or while the call has an active session. Past and future events
-keep their details and copy-link actions. Return to All Events using the sidebar.
+keep their details and copy-link actions. Return to Events using the sidebar.
 The view combines owned call links, active channel calls, saved calls, and
 calendar invitations from the previous 30 days through the next 90 days,
 including other conferencing providers. `Recent` offers `Load older calls`
@@ -882,7 +878,7 @@ that the failure is caused by an unsupported media format.
 
 ### Call links and guests — `/app/meet/:shareToken`
 
-In Calendar, create an event and enable `Macro call` in the event composer.
+In Calendar, create an event; its Macro call is included automatically.
 Saving creates the call and includes its link in the invitation;
 the room starts on the first join. Use Calendar to edit the event or invite guests.
 
@@ -892,7 +888,8 @@ events or disconnect current participants. Each active channel call also shows i
 URL and `Copy link`. A channel call's link stops working when that call ends.
 
 Opening a call link works without signing in. Guests enter `Your name`, choose their
-microphone and camera preferences, and press `Join call`. Media starts after joining.
+microphone and camera preferences, and press `Join call`. Setup requests device
+permissions and previews video locally; sharing starts only after joining.
 The call page shows a recording/transcription notice. It uses the normal call controls
 for audio, video, device selection, screen sharing, and effects. `Leave call` returns
 to the join screen so guests can rejoin. `Copy Meeting Url` is available during the call.

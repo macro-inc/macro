@@ -1,7 +1,7 @@
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import type { CalendarUpdateScope } from '@service-email/client';
-import { Button, cn, Layer, RadioGroup, ToggleSwitch } from '@ui';
+import { Button, cn, Layer, RadioGroup } from '@ui';
 import {
   createEffect,
   createSignal,
@@ -27,7 +27,6 @@ import {
   EventComposerRemindersPill,
 } from './EventPropertyPills';
 import type {
-  EventEditorConferenceChoice,
   EventEditorDisabledFields,
   EventEditorSubmitValues,
 } from './event-form-model';
@@ -37,16 +36,12 @@ import { RecurrenceBuilder } from './RecurrenceBuilder';
 export interface EventFormProps {
   controller: CalendarEventFormController;
   isEdit?: boolean;
-  /** The host can create persistent Macro meeting links on save. */
-  allowMacroCall?: boolean;
-  /** Existing Macro call URL shown when editing a saved event. */
-  macroCallUrl?: string;
-  saveError?: string;
   disabledFields?: EventEditorDisabledFields;
   showRecurringEditNotice?: boolean;
   /** Disable interaction without presenting the form as an in-flight save. */
   disabled?: boolean;
   pending: boolean;
+  saveError?: string;
   class?: string;
   onCalendarChange?: (calendarId: string, color: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
@@ -96,16 +91,6 @@ export function EventForm(props: EventFormProps) {
     formIsDisabled() || fieldIsReadOnly(field);
 
   const isOutOfOffice = () => controller.isOutOfOffice();
-  let previousConference: EventEditorConferenceChoice =
-    state().conference === 'macro_call' ? 'none' : state().conference;
-  const toggleMacroCall = (checked: boolean) => {
-    if (checked) {
-      previousConference = state().conference;
-      controller.setField('conference', 'macro_call');
-    } else {
-      controller.setField('conference', previousConference);
-    }
-  };
   // The decline settings of an edited event are unknown until picked, and the
   // disclosure must not claim behavior nobody chose.
   const outOfOfficeNotice = () => {
@@ -160,8 +145,10 @@ export function EventForm(props: EventFormProps) {
                 allDay={state().allDay}
                 onStartChange={controller.setStart}
                 onEndChange={(end) => controller.setField('end', end)}
+                onAllDayChange={controller.setAllDay}
                 startDisabled={fieldIsDisabled('start')}
                 endDisabled={fieldIsDisabled('end')}
+                allDayDisabled={fieldIsDisabled('allDay')}
                 invalid={controller.dateRangeError() !== undefined}
                 describedBy={dateRangeDescribedBy()}
               />
@@ -202,6 +189,9 @@ export function EventForm(props: EventFormProps) {
               class="h-9 w-full bg-transparent px-2 text-lg font-semibold leading-snug text-ink outline-none placeholder:text-ink-placeholder"
             />
 
+            {/* Google rejects a description on an out-of-office event. The
+                editor re-initializes from the kind switch's reset state, so
+                what it shows always matches what a save submits. */}
             <Show when={!isOutOfOffice()}>
               <div class="h-12 overflow-y-auto">
                 <MarkdownTextarea
@@ -232,58 +222,6 @@ export function EventForm(props: EventFormProps) {
             </Show>
           </div>
 
-          <div class="flex flex-col gap-3 px-2">
-            <div class="flex flex-wrap items-center gap-6">
-              <ToggleSwitch
-                checked={state().allDay}
-                disabled={fieldIsDisabled('allDay')}
-                onChange={controller.setAllDay}
-                size="sm"
-                label="All day"
-                labelClass="whitespace-nowrap text-xs text-ink-muted"
-              />
-              <Show
-                when={
-                  !isOutOfOffice() &&
-                  (props.allowMacroCall || state().conference === 'macro_call')
-                }
-              >
-                <ToggleSwitch
-                  checked={state().conference === 'macro_call'}
-                  disabled={fieldIsDisabled('conference')}
-                  onChange={toggleMacroCall}
-                  size="sm"
-                  label="Macro call"
-                  labelClass="whitespace-nowrap text-xs text-ink-muted"
-                />
-              </Show>
-            </div>
-            <Show
-              when={!isOutOfOffice() && state().conference === 'macro_call'}
-            >
-              <Show
-                when={props.macroCallUrl}
-                fallback={
-                  <span class="text-xs text-ink-extra-muted">
-                    Call link created when event is saved
-                  </span>
-                }
-              >
-                {(url) => (
-                  <a
-                    href={url()}
-                    target="_blank"
-                    rel="noreferrer"
-                    class="break-all text-xs text-accent underline"
-                    aria-label="Join Macro call"
-                  >
-                    {url()}
-                  </a>
-                )}
-              </Show>
-            </Show>
-          </div>
-
           <div class="flex min-w-0 flex-wrap items-center gap-2">
             <EventComposerKindPill
               eventType={state().eventType}
@@ -305,6 +243,8 @@ export function EventForm(props: EventFormProps) {
               value={controller.selectedRecurrenceOption()}
               onChange={controller.changeRecurrenceChoice}
               disabled={formIsDisabled()}
+              // A single occurrence has no recurrence rule of its own, so the
+              // recurrence cannot be edited while the scope is one event.
               readOnly={
                 fieldIsReadOnly('recurrence') || editScope() === 'this_event'
               }
@@ -317,18 +257,16 @@ export function EventForm(props: EventFormProps) {
                 disabled={formIsDisabled()}
                 readOnly={fieldIsReadOnly('guests')}
               />
-              <Show when={state().conference !== 'macro_call'}>
-                <EventComposerConferencePill
-                  value={state().conference}
-                  canKeepExisting={
-                    controller.initialConferenceChoice() === 'existing'
-                  }
-                  onChange={(conference) =>
-                    controller.setField('conference', conference)
-                  }
-                  disabled={fieldIsDisabled('conference')}
-                />
-              </Show>
+              <EventComposerConferencePill
+                value={state().conference}
+                canKeepExisting={
+                  controller.initialConferenceChoice() === 'existing'
+                }
+                onChange={(conference) =>
+                  controller.setField('conference', conference)
+                }
+                disabled={fieldIsDisabled('conference')}
+              />
               <EventComposerLocationPill
                 value={state().location}
                 onChange={(location) =>
@@ -394,6 +332,7 @@ export function EventForm(props: EventFormProps) {
             )}
           </Show>
         </div>
+
         <Show when={controller.recurrenceChoice() === 'custom'}>
           <Layer depth={3}>
             <div class="rounded-xl bg-surface p-4 text-ink">
@@ -412,11 +351,9 @@ export function EventForm(props: EventFormProps) {
       </div>
 
       <Show when={props.saveError}>
-        {(error) => (
-          <p role="alert" class="text-xs text-failure">
-            {error()}
-          </p>
-        )}
+        <p role="alert" class="text-sm text-failure">
+          {props.saveError}
+        </p>
       </Show>
       <div class="flex shrink-0 items-center justify-end gap-3">
         <Show when={props.showRecurringEditNotice}>

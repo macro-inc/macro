@@ -46,17 +46,11 @@ afterEach(() => {
 });
 
 describe('Calendar Create menu', () => {
-  it.each(['e', 'q', 's'] as const)(
+  it.each(['e', 'q'] as const)(
     'runs the %s shortcut only while the menu is open',
     async (key) => {
       const onEvent = vi.fn();
-      const onScheduledCall = vi.fn();
-      render(() => (
-        <CalendarCreateMenu
-          onEvent={onEvent}
-          onScheduledCall={onScheduledCall}
-        />
-      ));
+      render(() => <CalendarCreateMenu onEvent={onEvent} />);
       const handle = mocks.intercept.mock.calls[0][0];
       const context: HotkeyInterceptorContext = {
         pressedKeysString: key,
@@ -75,31 +69,26 @@ describe('Calendar Create menu', () => {
         screen
           .getAllByRole('menuitem')
           .map((item) => item.getAttribute('aria-keyshortcuts'))
-      ).toEqual(['E', 'Q', 'S']);
+      ).toEqual(['E', 'Q']);
       expect(handle({ ...context, isEditableFocused: true })).toBe(false);
       expect(handle({ ...context, eventType: 'keyup' })).toBe(false);
       expect(handle(context)).toBe(true);
       expect(handle(context)).toBe(false);
       expect(onEvent).toHaveBeenCalledTimes(key === 'e' ? 1 : 0);
-      expect(onScheduledCall).toHaveBeenCalledTimes(key === 's' ? 1 : 0);
       expect(mocks.create).toHaveBeenCalledTimes(key === 'q' ? 1 : 0);
     }
   );
 
   it('opens the event composer without creating a call', async () => {
     const onEvent = vi.fn();
-    render(() => (
-      <CalendarCreateMenu onEvent={onEvent} onScheduledCall={vi.fn()} />
-    ));
+    render(() => <CalendarCreateMenu onEvent={onEvent} />);
     await choose(/^Event/);
     expect(onEvent).toHaveBeenCalledOnce();
     expect(mocks.create).not.toHaveBeenCalled();
   });
 
-  it('creates an instant link and enters its call', async () => {
-    render(() => (
-      <CalendarCreateMenu onEvent={vi.fn()} onScheduledCall={vi.fn()} />
-    ));
+  it('creates a Quick Call link and opens setup', async () => {
+    render(() => <CalendarCreateMenu onEvent={vi.fn()} />);
     await choose(/^Quick Call/);
     await vi.waitFor(() =>
       expect(mocks.navigate).toHaveBeenCalledWith(
@@ -109,24 +98,9 @@ describe('Calendar Create menu', () => {
     expect(mocks.create).toHaveBeenCalledWith({ title: 'Quick Call' });
   });
 
-  it('opens the scheduled event composer without creating a call yet', async () => {
-    const onEvent = vi.fn();
-    const onScheduledCall = vi.fn();
-    render(() => (
-      <CalendarCreateMenu onEvent={onEvent} onScheduledCall={onScheduledCall} />
-    ));
-    await choose(/^Scheduled Call/);
-    expect(onScheduledCall).toHaveBeenCalledOnce();
-    expect(onEvent).not.toHaveBeenCalled();
-    expect(mocks.create).not.toHaveBeenCalled();
-    expect(mocks.navigate).not.toHaveBeenCalled();
-  });
-
   it('allows retrying a failed Quick Call', async () => {
     mocks.create.mockRejectedValueOnce(new Error('offline'));
-    render(() => (
-      <CalendarCreateMenu onEvent={vi.fn()} onScheduledCall={vi.fn()} />
-    ));
+    render(() => <CalendarCreateMenu onEvent={vi.fn()} />);
     await choose(/^Quick Call/);
     await vi.waitFor(() => expect(mocks.failure).toHaveBeenCalledOnce());
     expect(mocks.navigate).not.toHaveBeenCalled();

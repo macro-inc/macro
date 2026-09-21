@@ -12,6 +12,7 @@ import {
   useUpdateMeetingMutation,
 } from '@queries/call/meetings';
 import type { CalendarUpdateScope } from '@service-email/client';
+import { parseISO } from 'date-fns';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import {
   calendarEventToEditorInitialValues,
@@ -133,7 +134,10 @@ export function useEventEditor(props: UseEventEditorProps) {
           scheduledStart: values.time.startsAt,
           scheduledEnd: values.time.endsAt,
         }
-      : { clearSchedule: true as const };
+      : {
+          scheduledStart: parseISO(values.time.startDate).toISOString(),
+          scheduledEnd: parseISO(values.time.endDate).toISOString(),
+        };
 
   const createScheduledMeeting = async (values: EventEditorSubmitValues) => {
     const existingUrl = createdMeetingUrl();
@@ -143,12 +147,7 @@ export function useEventEditor(props: UseEventEditorProps) {
     }
     const meeting = await createMeeting.mutateAsync({
       title: values.title,
-      ...(values.time.kind === 'timed'
-        ? {
-            scheduledStart: values.time.startsAt,
-            scheduledEnd: values.time.endsAt,
-          }
-        : {}),
+      ...meetingSchedule(values),
     });
     const url = getMeetingUrl(meeting.shareToken);
     setCreatedMeetingUrl(url);
@@ -180,6 +179,13 @@ export function useEventEditor(props: UseEventEditorProps) {
     const event = props.event();
     const existingMeetingUrl = event ? calendarMacroCallUrl(event) : undefined;
     const cleanContent = removeCalendarMacroCall(values, existingMeetingUrl);
+    const needsCall =
+      !values.outOfOffice && event?.eventType !== 'out_of_office';
+    const canManageCall =
+      !event ||
+      (!event.isReadOnly &&
+        editsPrimaryCopy(event) &&
+        viewerCanEditGuests(event));
     let calendarSaved = false;
 
     try {
@@ -221,7 +227,7 @@ export function useEventEditor(props: UseEventEditorProps) {
         }
         calendarSaved = true;
 
-        if (values.macroCall) {
+        if (needsCall) {
           const meetingUrl = await createScheduledMeeting(values);
           const linkedContent = attachCalendarMacroCall(
             cleanContent,
@@ -242,14 +248,13 @@ export function useEventEditor(props: UseEventEditorProps) {
 
       const effectiveScope: CalendarUpdateScope = scope ?? 'all';
       const targetsOneOccurrence = effectiveScope === 'this_event';
-      const content =
-        values.macroCall && existingMeetingUrl
-          ? attachCalendarMacroCall(
-              cleanContent,
-              existingMeetingUrl,
-              existingMeetingUrl
-            )
-          : cleanContent;
+      const content = existingMeetingUrl
+        ? attachCalendarMacroCall(
+            cleanContent,
+            existingMeetingUrl,
+            existingMeetingUrl
+          )
+        : cleanContent;
 
       // A single occurrence has no recurrence of its own, and the provider
       // rejects a recurrence-carrying patch scoped to one event, so recurrence
@@ -291,7 +296,7 @@ export function useEventEditor(props: UseEventEditorProps) {
       await update.mutateAsync(updateArgs);
       calendarSaved = true;
 
-      if (values.macroCall && !existingMeetingUrl) {
+      if (needsCall && canManageCall && !existingMeetingUrl) {
         const meetingUrl = await createScheduledMeeting(values);
         const linkedContent = attachCalendarMacroCall(cleanContent, meetingUrl);
         await update.mutateAsync({
@@ -301,7 +306,7 @@ export function useEventEditor(props: UseEventEditorProps) {
             description: linkedContent.description,
           },
         });
-      } else if (values.macroCall && existingMeetingUrl) {
+      } else if (needsCall && canManageCall && existingMeetingUrl) {
         await syncScheduledMeeting(existingMeetingUrl, values);
       }
       props.onSaved();

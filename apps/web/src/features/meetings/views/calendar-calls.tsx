@@ -134,7 +134,7 @@ export function CalendarCalls(props: {
                 <p class="text-sm text-ink-muted">
                   {state.tab() === 'recent'
                     ? 'No recent calls.'
-                    : 'No upcoming calls. Add a Macro call to an event, or create a link for later.'}
+                    : 'No upcoming calls. Create an event to schedule a call.'}
                 </p>
                 <Show when={state.tab() === 'upcoming'}>
                   <Button

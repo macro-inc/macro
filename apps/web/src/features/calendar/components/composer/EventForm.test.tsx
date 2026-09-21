@@ -36,7 +36,7 @@ vi.mock('./EventPropertyPills', () => ({
 
 afterEach(cleanup);
 
-function setup(conference: EventEditorConferenceChoice = 'none', url?: string) {
+function setup(conference: EventEditorConferenceChoice = 'none') {
   const submit = vi.fn();
   render(() => {
     const controller = createCalendarEventFormController({
@@ -53,8 +53,6 @@ function setup(conference: EventEditorConferenceChoice = 'none', url?: string) {
     return (
       <EventForm
         controller={controller}
-        allowMacroCall
-        macroCallUrl={url}
         pending={false}
         onCancel={vi.fn()}
         onSubmit={submit}
@@ -64,42 +62,20 @@ function setup(conference: EventEditorConferenceChoice = 'none', url?: string) {
   return submit;
 }
 
-describe('event composer toggles', () => {
-  it('keeps both toggles local until the event is submitted', () => {
+describe('event composer', () => {
+  it('submits an event without a separate Macro call option', () => {
     const submit = setup();
-    fireEvent.click(screen.getByRole('switch', { name: 'Macro call' }));
-    fireEvent.click(screen.getByRole('switch', { name: 'All day' }));
+    expect(screen.queryByRole('switch', { name: 'Macro call' })).toBeNull();
     expect(submit).not.toHaveBeenCalled();
-    expect(screen.queryByRole('link', { name: 'Join Macro call' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Create event' }));
     expect(submit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        macroCall: true,
-        time: expect.objectContaining({ kind: 'allDay' }),
-      }),
+      expect.objectContaining({ title: 'Planning' }),
       undefined
     );
   });
-
-  it('restores existing conferencing when the call toggle is turned back off', () => {
+  it('preserves provider conferencing', () => {
     const submit = setup('google_meet');
-    const toggle = screen.getByRole('switch', { name: 'Macro call' });
-    fireEvent.click(toggle);
-    fireEvent.click(toggle);
     fireEvent.click(screen.getByRole('button', { name: 'Create event' }));
-    expect(submit.mock.calls[0][0].macroCall).toBeUndefined();
     expect(submit.mock.calls[0][0].conference).toBe('google_meet');
-  });
-
-  it('shows the saved call URL and removes it from the draft when toggled off', () => {
-    const url = 'https://macro.com/app/meet/8m8mGwzHqxzYjeIN5-nJRquRbzyTEhGF';
-    const submit = setup('macro_call', url);
-    expect(
-      screen.getByRole('link', { name: 'Join Macro call' }).getAttribute('href')
-    ).toBe(url);
-    fireEvent.click(screen.getByRole('switch', { name: 'Macro call' }));
-    expect(screen.queryByRole('link', { name: 'Join Macro call' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Create event' }));
-    expect(submit.mock.calls[0][0].macroCall).toBeUndefined();
   });
 });
