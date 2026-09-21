@@ -177,7 +177,7 @@ fn test_project_serde() {
     let project = Project {
         id: "proj123".to_string(),
         name: "Test Project".to_string(),
-        user_id: "user1".to_string(),
+        user_id: Owner::from_principal_str("macro|user@example.com").unwrap(),
         parent_id: None,
         created_at: Some(chrono::Utc::now()),
         updated_at: Some(chrono::Utc::now()),

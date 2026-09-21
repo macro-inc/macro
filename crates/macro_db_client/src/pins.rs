@@ -240,7 +240,10 @@ pub async fn get_pins(db: Pool<Postgres>, user_id: &str) -> anyhow::Result<Vec<P
                     r.updated_at,
                     None, // Will never be deleted
                     r.project_id,
-                );
+                )
+                .map_err(|e| sqlx::Error::TypeNotFound {
+                    type_name: e.to_string(),
+                })?;
                 Ok(PinnedItem {
                     pin_index,
                     item: Item::Project(project.clone()),

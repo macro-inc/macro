@@ -149,15 +149,21 @@ pub async fn get_recently_deleted(
             })?;
             Ok(Item::Chat(chat))
         }
-        "project" => Ok(Item::Project(map_project_item(
-            r.id,
-            r.user_id,
-            r.name,
-            r.created_at,
-            r.updated_at,
-            r.deleted_at,
-            r.project_id,
-        ))),
+        "project" => {
+            let project = map_project_item(
+                r.id,
+                r.user_id,
+                r.name,
+                r.created_at,
+                r.updated_at,
+                r.deleted_at,
+                r.project_id,
+            )
+            .map_err(|e| sqlx::Error::TypeNotFound {
+                type_name: e.to_string(),
+            })?;
+            Ok(Item::Project(project))
+        }
         _ => Err(sqlx::Error::TypeNotFound {
             type_name: r.item_type,
         }),

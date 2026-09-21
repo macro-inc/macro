@@ -18,6 +18,7 @@ use model::project::{
     BasicProject, PendingProject, Project, ProjectPreview, ProjectPreviewData, ProjectPreviewV2,
     WithProjectId,
 };
+use model_owner::Owner;
 use models_bulk_upload::{UploadExtractFolderRequest, UploadExtractFolderResponseData};
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
@@ -298,7 +299,7 @@ where
     ) -> Result<Vec<ItemWithUserAccessLevel>, ProjectError> {
         let project_access_level = receipt_access_level(&receipt)?;
         let actor = match receipt.auth() {
-            EntityAccessAuth::Authenticated(user_id) => Some(user_id.as_ref()),
+            EntityAccessAuth::Authenticated(user_id) => Some(user_id),
             _ => None,
         };
         let internal = matches!(receipt.auth(), EntityAccessAuth::Internal);
@@ -394,7 +395,7 @@ where
             project.id.clone(),
             ProjectCreatedMetadata {
                 project_id: project.id.clone(),
-                owner: actor,
+                owner: Owner::User(actor),
                 name: project.name.clone(),
                 parent_project_id: project.parent_id.clone(),
                 created_at: project.created_at,
@@ -721,7 +722,7 @@ where
                         root_project_id.clone(),
                         ProjectUploadedMetadata {
                             root_project_id: root_project_id.clone(),
-                            owner: event_owner,
+                            owner: Owner::User(event_owner),
                             name: event_name,
                             parent_project_id: event_parent_project_id,
                             project_ids: uploaded.project_ids,
@@ -785,7 +786,7 @@ where
                 uploaded_tree.id.clone(),
                 ProjectUploadedMetadata {
                     root_project_id: uploaded_tree.id,
-                    owner: uploaded_tree.user_id,
+                    owner: Owner::User(uploaded_tree.user_id),
                     name: uploaded_tree.name,
                     parent_project_id: uploaded_tree.parent_id,
                     project_ids: uploaded_tree.project_ids.clone(),
@@ -869,11 +870,11 @@ where
     }
 }
 
-fn owns(item: &Item, actor: &str) -> bool {
+fn owns(item: &Item, actor: &MacroUserIdStr<'_>) -> bool {
     match item {
-        Item::Project(project) => project.user_id == actor,
-        Item::Document(document) => document.owner.principal_id() == actor,
-        Item::Chat(chat) => chat.user_id.principal_id() == actor,
+        Item::Project(project) => project.user_id.is_user(actor),
+        Item::Document(document) => document.owner.is_user(actor),
+        Item::Chat(chat) => chat.user_id.is_user(actor),
     }
 }
 

@@ -84,10 +84,14 @@ pub async fn get_basic_cloud_storage_item_metadata(
             let project_metadata = get_basic_project(db, item_id)
                 .await
                 .context("unable to get project metadata")?;
+            let item_owner = match project_metadata.user_id {
+                Owner::User(user_id) => user_id,
+                owner => anyhow::bail!("project {item_id} is owned by {owner}, not a user"),
+            };
             Ok(BasicCloudStorageItemMetadata {
                 item_id: project_metadata.id,
                 item_name: project_metadata.name,
-                item_owner: project_metadata.user_id,
+                item_owner,
                 file_type: None,
                 sub_type: None,
             })

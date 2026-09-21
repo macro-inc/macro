@@ -135,8 +135,7 @@ async fn create_pending_project(
     parent_id: Option<&str>,
     upload_request_id: &str,
 ) -> Result<Project, sqlx::Error> {
-    let project = sqlx::query_as!(
-        Project,
+    let row = sqlx::query!(
         r#"
         INSERT INTO "Project"
             (name, "userId", "parentId", "createdAt", "updatedAt", "uploadPending", "uploadRequestId")
@@ -157,6 +156,15 @@ async fn create_pending_project(
     )
     .fetch_one(transaction.as_mut())
     .await?;
+    let project = super::map_project(
+        row.id,
+        row.name,
+        row.user_id,
+        row.parent_id,
+        row.created_at,
+        row.updated_at,
+        row.deleted_at,
+    )?;
 
     share::create_project_share_permission(transaction, &project.id, share_permission).await?;
     let entity_id = project
