@@ -1,3 +1,5 @@
+import { isClaudeBotId } from '@core/constant/claudeAgent';
+import { isCodexBotId } from '@core/constant/codexAgent';
 import { isCursorBotId } from '@core/constant/cursorAgent';
 
 /** 'claude-code' → 'Claude Code'; the fallback when nothing names a harness. */
@@ -11,16 +13,27 @@ export function harnessTitle(harness: string | undefined): string {
 }
 
 /**
- * The harness label a session should show. Cursor sessions are always
- * Cursor, even when an older row was stamped with the sandboxed-coder
- * default (`opencode`).
+ * The harness slug a session should be labeled with. First-party cloud bots
+ * own a fixed slug (Cursor / Codex / Claude Cloud), even when an older row
+ * was stamped with the sandboxed-coder default (`opencode`).
  */
+export function sessionHarnessSlug(session: {
+  harness?: string;
+  botId?: string;
+}): string | undefined {
+  const botId = session.botId;
+  if (botId && isCursorBotId(botId)) return 'cursor';
+  if (botId && isCodexBotId(botId)) return 'codex-cloud';
+  if (botId && isClaudeBotId(botId)) return 'claude-cloud';
+  return session.harness;
+}
+
+/** Title-cased harness label for session chrome (side panel, fallback title). */
 export function sessionHarnessTitle(session: {
   harness?: string;
   botId?: string;
 }): string {
-  if (isCursorBotId(session.botId)) return harnessTitle('cursor');
-  return harnessTitle(session.harness);
+  return harnessTitle(sessionHarnessSlug(session));
 }
 
 /**

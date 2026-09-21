@@ -2,6 +2,7 @@ import {
   harnessDisplayName,
   harnessTitle,
   modelDisplayName,
+  sessionHarnessSlug,
 } from '@app/features/block-agent/component/compose-agent-session-options';
 import {
   toolCallDetail,
@@ -11,7 +12,6 @@ import type { InteractionController } from '@app/features/block-agent/context/in
 import { createInteractionController } from '@app/features/block-agent/primitives/create-interaction-controller';
 import { AgentSession } from '@core/agent-session/AgentSession';
 import { toast } from '@core/component/Toast/Toast';
-import { isCursorBotId } from '@core/constant/cursorAgent';
 import {
   MAGIC_CHIP_STATUSES,
   type MagicChipData,
@@ -56,7 +56,7 @@ function agentName(session: {
   harness?: string;
   botId?: string;
 }): string | undefined {
-  const harness = isCursorBotId(session.botId) ? 'cursor' : session.harness;
+  const harness = sessionHarnessSlug(session);
   if (!harness) return undefined;
   const known = harnessDisplayName(harness);
   return `${known === harness ? harnessTitle(harness) : known} Agent`;

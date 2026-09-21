@@ -1,3 +1,5 @@
+import { CLAUDE_BOT_ID } from '@core/constant/claudeAgent';
+import { CODEX_BOT_ID } from '@core/constant/codexAgent';
 import { CURSOR_BOT_ID } from '@core/constant/cursorAgent';
 import { describe, expect, it } from 'vitest';
 import {
@@ -21,11 +23,16 @@ describe('harnessDisplayName', () => {
 });
 
 describe('sessionHarnessTitle', () => {
-  it('names a Cursor session Cursor even when the row says opencode', () => {
-    expect(
-      sessionHarnessTitle({ harness: 'opencode', botId: CURSOR_BOT_ID })
-    ).toBe('Cursor');
-  });
+  it.each([
+    [CURSOR_BOT_ID, 'Cursor'],
+    [CODEX_BOT_ID, 'Codex Cloud'],
+    [CLAUDE_BOT_ID, 'Claude Cloud'],
+  ] as const)(
+    'names a %s session from the bot even when the row says opencode',
+    (botId, title) => {
+      expect(sessionHarnessTitle({ harness: 'opencode', botId })).toBe(title);
+    }
+  );
 
   it('title-cases other sessions from their stored slug', () => {
     expect(sessionHarnessTitle({ harness: 'claude-cloud' })).toBe(
