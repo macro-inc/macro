@@ -206,7 +206,12 @@ function SplitCloseButton() {
   });
 
   return (
-    <Show when={shouldShowSplitCloseButton(layout.manager)}>
+    <Show
+      when={
+        shouldShowSplitCloseButton(layout.manager) ||
+        !isListViewID(context.handle.content().id)
+      }
+    >
       <Button
         square
         size="icon-sm"

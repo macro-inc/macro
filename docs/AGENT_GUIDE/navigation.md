@@ -97,9 +97,9 @@ Unmodified clicks keep each surface’s default (same split, preview, or new spl
 Existing-content deduplication and split-capacity limits still apply; touch devices
 continue to navigate in place.
 
-A block mounted in an inline preview cannot also open in a split. An attempt
-shows `Content already open.` and keeps the preview in place. Select another
-preview item or leave that view before opening the block in a split. Duplicate
+A block mounted in an inline detail is reused when opened elsewhere. Mentions
+and notifications activate its host without a toast; explicit list or Cmd+K
+selection shows `Content already open` to explain the move. Duplicate
 mounts reached through direct layout paths show the same message instead of a
 second block instance.
 
@@ -147,7 +147,9 @@ to Home's starting pane without creating a chat. Email and Tasks use the same
 pill styling and top placement for **New email** and **New task**, replacing
 the sidebar title bars. When multiple desktop splits are open, a **Close** (X)
 button appears beside each sidebar's New button and closes that split. The last
-logical split has no close button; mobile chrome is unchanged.
+logical split has no sidebar close button; mobile chrome is unchanged.
+A lone non-list content split still shows a header X labeled **Return to list**,
+which returns that split to the default list.
 These buttons and Home items activate on primary-button
 press; keyboard activation remains supported. Home, Chat, Email,
 Tasks, and other views using the shared inner
@@ -352,15 +354,29 @@ create a session before the user sends. Repeating it focuses the existing draft.
 Splits navigate independently. The retired Preview Pair mode no longer creates
 an adjacent viewer, redirects list navigation, or links split sizes and history.
 Inline details in workspaces continue to use their own navigation stack.
+Split back/forward navigation skips entries whose entities are open elsewhere,
+without moving focus or showing a toast. Those entries remain in history and
+become reachable again after their owning view releases them. A direction is
+unavailable when no reachable entries remain. Mobile swipe navigation reuses
+an already-mounted conversation without losing the other pane.
+History controls update when an inline detail claims or releases an entry,
+including when the detail closes.
+Resetting a split clears its previous history and starts at the default view;
+after opening another item, Back returns to that default view.
 
 Entity content can be open in only one split or inline preview/detail view at a
 time. Shell components may have duplicate splits when `allowDuplicate` is enabled.
 An Agents conversation route counts as the same entity as its agent or chat block.
+Following a mention or notification reuses the existing split or inline detail,
+activates its workspace, and navigates to any specified location without a toast.
+Explicit entity selections from lists or Cmd+K also reuse the existing view, but
+show the duplicate-content toast to explain the move. A list whose detail cannot
+claim that entity keeps its previous selection and history.
 Opening an entity already in a split focuses that split when activation is
 requested; the sidebar's **Open in new split** also shows a **Content already open** toast.
 Selecting an entity owned by another view from a detail view leaves the current
-detail and navigation history unchanged and shows a **Content already open**
-toast. Close or navigate away
+detail and navigation history unchanged, focuses the owning view, and shows a
+**Content already open** toast. Close or navigate away
 from the owning view before opening it elsewhere. The same rule applies to mouse
 selection, keyboard preview navigation, and detail breadcrumbs. Touch layouts
 never render inline previews or detail views: a tap opens the entity in the

@@ -1,3 +1,4 @@
+import type { NavigationStackChangeReason } from '@app/components/navigation-stack/NavigationStack';
 import { makePersistedState } from '@app/lib/persistence';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -91,18 +92,21 @@ export const [ChannelsViewProvider, useChannelsView] =
       const mobileLayout = () => isTouchDevice();
       const selectPreview = createPreviewSelectionGuard();
       const [previewChannelId, setPreviewChannelId] = createSignal<string>();
-      const setSelectedChannelId = (id: string | undefined) => {
+      const setSelectedChannelId = (
+        id: string | undefined,
+        reason: NavigationStackChangeReason = 'navigate'
+      ) => {
         // The mobile layout keeps the selection for row highlighting only, so
         // there is no preview to claim.
         const preview =
           id && !mobileLayout() ? { type: 'channel' as const, id } : undefined;
-        if (!selectPreview(preview)) return;
+        if (!selectPreview(preview, reason)) return;
         setPreviewChannelId(preview?.id);
         setState('selectedChannelId', id);
       };
       // Keep restored selection in persistence even if another view currently
       // owns its preview. It can be retried on selection or the next mount.
-      setSelectedChannelId(state.selectedChannelId);
+      setSelectedChannelId(state.selectedChannelId, 'restore');
 
       return {
         state,
