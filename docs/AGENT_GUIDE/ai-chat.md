@@ -122,8 +122,9 @@
   saved-title precedence, and title menu as `/app/agent/<id>`; click the caret
   beside the title for shared block actions such as Rename, Copy link, Favorite,
   and Delete
-  (Rename, Copy link, Delete). A metadata strip lists the agent, runtime,
-  model, repository, and status. Chat and Code session inputs
+  (Rename, Copy link, Delete). A metadata strip lists the agent, model,
+  repository, and status. Coding sessions also list the harness; in-memory
+  chat agents omit that row. Chat and Code session inputs
   use the same growing, initially single-line input with the model selector on
   the right.
   Existing sessions retain their agent and kind; use **New conversation** to
@@ -394,6 +395,8 @@ There is no breadcrumb because Agents has no subspaces. Unknown model providers
 fall back to the chat icon. The toggle (or `]`) opens the session's Details, Plan,
 Changes, and Activity sections when available, beside the transcript in wide
 layouts or over it in narrow layouts; it does not open another split.
+Details lists Status, Agent, Model, and dates for every session; the Harness
+row appears only for coding runtimes, never for in-memory chat agents.
 New conversation pages have no disabled session action buttons. Older chats
 also have one header row, and empty chats show a simple conversation prompt
 instead of the standalone recent-sessions and tips surface.

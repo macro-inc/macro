@@ -24,6 +24,7 @@ import { AgentPullRequestChip } from '../AgentPullRequestChip';
 import {
   sessionHarnessTitle,
   sessionRepositoryUrl,
+  showsSessionHarness,
 } from '../compose-agent-session-options';
 
 export function AgentSidePanelSections() {
@@ -51,13 +52,15 @@ export function AgentSidePanelSections() {
               </SidePanel.Row>
             )}
           </Show>
-          <SidePanel.Row label="Harness">
-            <SidePanel.Pill>
-              <span class="truncate">
-                {sessionHarnessTitle(session() ?? {})}
-              </span>
-            </SidePanel.Pill>
-          </SidePanel.Row>
+          <Show when={showsSessionHarness(session() ?? {})}>
+            <SidePanel.Row label="Harness">
+              <SidePanel.Pill>
+                <span class="truncate">
+                  {sessionHarnessTitle(session() ?? {})}
+                </span>
+              </SidePanel.Pill>
+            </SidePanel.Row>
+          </Show>
           <Show when={metadata()?.model ?? session()?.model}>
             {(model) => (
               <SidePanel.Row label="Model">

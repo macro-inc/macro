@@ -71,6 +71,19 @@ export function harnessDisplayName(harness: string): string {
   }
 }
 
+/**
+ * Session Details lists a harness only for coding runtimes. In-memory chat
+ * agents have no user-facing harness, so the row stays off. Uses the same
+ * slug as `sessionHarnessTitle` so a first-party coding bot still shows even
+ * when an older row was stamped `opencode`.
+ */
+export function showsSessionHarness(session: {
+  harness?: string;
+  botId?: string;
+}): boolean {
+  return isCoderHarness(sessionHarnessSlug(session));
+}
+
 /** A model's display name, or its id when the runtime lists no name for it. */
 export function modelDisplayName(
   id: string,
