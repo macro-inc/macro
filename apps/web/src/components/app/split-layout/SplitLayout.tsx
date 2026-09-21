@@ -48,16 +48,6 @@ type SplitLayoutContainerProps = {
   setManager: Setter<SplitManager | undefined>;
 };
 
-function PublishSplitManager(props: {
-  manager: SplitManager;
-  setManager: Setter<SplitManager | undefined>;
-}) {
-  createEffect(() => props.setManager(props.manager));
-  onCleanup(() => props.setManager(undefined));
-
-  return null;
-}
-
 export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -110,6 +100,8 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   const ids = createMemo(() => splits().map(({ id }) => id));
 
   createSplitFocusTracker({ splitManager, panelRefs, splits });
+  createEffect(() => props.setManager(splitManager));
+  onCleanup(() => props.setManager(undefined));
 
   return (
     <SplitRouter.Root
@@ -118,10 +110,6 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
       location={externalLocation}
       middleware={props.middleware}
     >
-      <PublishSplitManager
-        manager={splitManager}
-        setManager={props.setManager}
-      />
       <SplitLayoutContext.Provider value={{ manager: splitManager }}>
         <div
           class="size-full"

@@ -25,9 +25,9 @@ import type { DriveLocation } from './core/types';
 import {
   type DriveDocumentRoute,
   type DriveRouteParams,
+  driveDestination,
   driveDocumentFromParams,
   driveDocumentRoute,
-  drivePath,
 } from './primitives/drive-route';
 
 type DriveDetailHistoryEntry = EntityDetailNavigationStackEntry & {
@@ -158,7 +158,7 @@ export function DriveDetailNavigationProvider(
       if (!blockType || !selectPreview(target)) return false;
 
       navigate(
-        drivePath(
+        driveDestination(
           props.location(),
           driveDocumentRoute({
             id: target.id,
@@ -184,8 +184,13 @@ export function DriveDetailNavigationProvider(
     },
 
     clear(options) {
+      // Location navigation already lands on a list route. Clearing again must
+      // not climb out of the folder/tab the user just selected.
+      if (!driveDocumentFromParams(params)) return;
       selectPreview(undefined);
-      navigate({ parent: true }, { replace: options?.replace });
+      navigate(driveDestination(props.location()), {
+        replace: options?.replace,
+      });
     },
   };
 

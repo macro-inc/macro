@@ -28,7 +28,8 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { DriveDetailRouteContext } from '../context/detail-route';
+import { useDriveView } from '../context/drive-context';
+import { driveLocationBreadcrumbs } from '../core/breadcrumbs';
 import { useDriveDetailNavigation } from '../drive-detail-navigation';
 import {
   MarkdownDetail,
@@ -204,7 +205,10 @@ function StackEntityDetail(props: {
   );
 }
 
-export function DriveDetailView(props: { breadcrumbOrderOffset: number }) {
+export function DriveDetailView() {
+  const { state, sidebar } = useDriveView();
+  const breadcrumbOrderOffset = () =>
+    driveLocationBreadcrumbs(state.value().location, sidebar.folders()).length;
   const [shareOpen, setShareOpen] = createSignal(false);
   const navigationStack = useDriveDetailNavigation();
   const referralCode = useReferralCode();
@@ -231,54 +235,40 @@ export function DriveDetailView(props: { breadcrumbOrderOffset: number }) {
         copyLink,
       }}
     >
-      <DriveDetailRouteContext.Provider
-        value={{
-          onUnavailable: () => {
-            navigationStack.clear();
-            toast.alert('File unavailable', {
-              subtext:
-                'It may have moved, been deleted, or no longer be shared.',
-            });
-          },
-        }}
-      >
-        <DriveDetailAncestorBreadcrumbs
-          orderOffset={props.breadcrumbOrderOffset}
-        />
-        <SidePanel.Root>
-          <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-            <Show when={!hasBlockHeader()}>
-              <DriveDetailTopBar />
-            </Show>
-            <div class="relative min-h-0 min-w-0 flex-1">
-              <Show when={navigationStack.active()}>
-                {(entry) => (
-                  <ErrorBoundary
-                    fallback={(error, reset) => (
-                      <MarkdownDetailBodyState
-                        error={error}
-                        actionLabel="Reset"
-                        onAction={reset}
-                      />
-                    )}
-                  >
-                    <StackEntityDetail
-                      entry={entry()}
-                      order={
-                        props.breadcrumbOrderOffset +
-                        navigationStack.entries().length -
-                        1
-                      }
-                      shareOpen={shareOpen()}
-                      onShareOpenChange={setShareOpen}
+      <DriveDetailAncestorBreadcrumbs orderOffset={breadcrumbOrderOffset()} />
+      <SidePanel.Root>
+        <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
+          <Show when={!hasBlockHeader()}>
+            <DriveDetailTopBar />
+          </Show>
+          <div class="relative min-h-0 min-w-0 flex-1">
+            <Show when={navigationStack.active()}>
+              {(entry) => (
+                <ErrorBoundary
+                  fallback={(error, reset) => (
+                    <MarkdownDetailBodyState
+                      error={error}
+                      actionLabel="Reset"
+                      onAction={reset}
                     />
-                  </ErrorBoundary>
-                )}
-              </Show>
-            </div>
+                  )}
+                >
+                  <StackEntityDetail
+                    entry={entry()}
+                    order={
+                      breadcrumbOrderOffset() +
+                      navigationStack.entries().length -
+                      1
+                    }
+                    shareOpen={shareOpen()}
+                    onShareOpenChange={setShareOpen}
+                  />
+                </ErrorBoundary>
+              )}
+            </Show>
           </div>
-        </SidePanel.Root>
-      </DriveDetailRouteContext.Provider>
+        </div>
+      </SidePanel.Root>
     </ShareDialogContext.Provider>
   );
 }

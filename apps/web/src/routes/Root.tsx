@@ -232,57 +232,6 @@ const ROUTES: RouteDefinition[] = [
     component: TaskRoute,
   },
   LAYOUT_ROUTE,
-  /** BEGIN - APP ROUTES */
-  {
-    path: '/inbox',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/recent',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/activity',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/reminders',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/agents',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/mail',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/documents',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/tasks',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/channels',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/calls',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/companies',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/files',
-    component: LAYOUT_ROUTE.component,
-  },
-  /** END - APP ROUTES */
-
   {
     path: '/',
     component: BasePathComponent,

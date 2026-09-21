@@ -3,7 +3,6 @@ import {
   SidePanel,
 } from '@components/app/side-panel';
 import type { BlockAlias, BlockName } from '@core/block';
-import { toEntityLoadError } from '@core/component/EntityLoadGate';
 import {
   getPermissions,
   hasPermissions,
@@ -18,21 +17,17 @@ import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import { Button } from '@ui';
 import {
-  createEffect,
   createResource,
   createSignal,
   ErrorBoundary,
   type JSX,
   Match,
-  on,
   type ParentProps,
-  children as resolveChildren,
   type Setter,
   Suspense,
   Switch,
   useContext,
 } from 'solid-js';
-import { useMaybeDriveDetailRoute } from '../context/detail-route';
 
 export type FileDetailShareProps = {
   shareOpen?: boolean;
@@ -51,7 +46,6 @@ export type FileDetailLayoutProps = ParentProps<
 
 export function FileDetailLayout(props: FileDetailLayoutProps) {
   const parentShareContext = useContext(ShareDialogContext);
-  const renderedChildren = resolveChildren(() => props.children);
   const [localShareOpen, setLocalShareOpen] = createSignal(false);
   const shareOpen = () => props.shareOpen ?? localShareOpen();
   const setShareOpen: Setter<boolean> = (next) => {
@@ -84,7 +78,7 @@ export function FileDetailLayout(props: FileDetailLayoutProps) {
           canEdit={canEdit()}
         />
         <div class="relative size-full min-h-0 min-w-0 overflow-hidden">
-          {renderedChildren()}
+          {props.children}
         </div>
       </SidePanel.Layout>
       <Suspense>
@@ -147,22 +141,6 @@ export function FileDetailLoadGate<T extends object>(props: {
   const [document, { refetch }] = createResource(
     () => props.documentId,
     props.load
-  );
-  const detailRoute = useMaybeDriveDetailRoute();
-  createEffect(
-    on(
-      () => toEntityLoadError(document.error),
-      (error) => {
-        if (
-          error === 'UNAUTHORIZED' ||
-          error === 'FORBIDDEN' ||
-          error === 'NOT_FOUND' ||
-          error === 'GONE'
-        ) {
-          detailRoute?.onUnavailable();
-        }
-      }
-    )
   );
 
   return (

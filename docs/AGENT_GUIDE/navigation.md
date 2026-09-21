@@ -8,23 +8,23 @@
 | `/app/welcome` | Login page (when unauthenticated) |
 | `/app/invite?token=<token>` | GTM invite welcome page ("Welcome, <first name>", Continue → signup). Links come from the staff portal, last 48h, and grant the first month of Premium free once the account is created |
 | `/app/internal/invite-links` | Macro staff only (`@macro.com`): create GTM invite links and track opens, signups, and subscriptions |
-| `/app/component/inbox` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
-| `/app/component/mail` | Email client |
-| `/app/component/channels` | Channels list |
+| `/app/inbox` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
+| `/app/mail` | Email client |
+| `/app/channels` | Channels list |
 | `/app/drive` | Files (Drive defaults to My Files) |
 | `/app/drive/<recent-or-shared>` | A Drive tab (`/app/drive/tab/<...>` remains a compatibility alias) |
 | `/app/drive/folder/<uuid>` | A Drive folder; breadcrumbs resolve from current accessible folder data |
 | `/app/drive/<document-type>/<uuid>` | An item opened inline in My Files |
 | `/app/drive/folder/<uuid>/<document-type>/<uuid>` | An item opened inline in its Drive folder; document types include `md`, `task`, `skill`, `snippet`, `canvas`, `pdf`, `code`, `csv`, `image`, `video`, `spreadsheet`, and `unknown` |
-| `/app/component/tasks` | Tasks table |
-| `/app/component/agents` | AI chats / agents list |
+| `/app/tasks` | Tasks table |
+| `/app/agents` | AI chats / agents list |
 | `/app/agents/<uuid>` | Chat agent session with the Agents sidebar |
 | `/app/coders/<uuid>` | Code session with the Agents sidebar |
 | `/app/agent-chats/<uuid>` | Legacy AI chat opened in the Agents workspace |
-| `/app/component/calls` | Calls list |
-| `/app/component/companies` | Customers (CRM; needs a team) |
-| `/app/component/activity` | Activity heatmap + feed |
-| `/app/component/home` | Assistant (AI-first landing) |
+| `/app/calls` | Calls list |
+| `/app/companies` | Customers (CRM; needs a team) |
+| `/app/activity` | Activity heatmap + feed |
+| `/app/home` | Assistant (AI-first landing) |
 | `/app/calendar/view` | Calendar |
 | `/app/<document-type>/<uuid>` | Legacy document URL (including `md`, `pdf`, `canvas`, `spreadsheet`, and the other Drive document types); redirects to `/app/drive/<document-type>/<uuid>` |
 | `/app/documents`, `/app/files` | Legacy Files views; redirect to `/app/drive` |
@@ -36,8 +36,9 @@
 
 Splits: the app is a tiling window manager. Public variable-length routes use
 `~` as the boundary between panes
-(`/app/drive/folder/<uuid>/~/component/mail`). Legacy fixed `type/id`
-pane routes remain accepted. Split-specific view state uses positionally
+(`/app/drive/folder/<uuid>/~/mail`). Legacy fixed `type/id`
+pane routes remain accepted. Known app-view URLs under `/app/component/` redirect
+to their canonical paths above; legacy composers keep their existing paths. Split-specific view state uses positionally
 namespaced query parameters such as `s0.drive.sort=created_at`; route identity
 and breadcrumb nesting remain in the path. Desktop panes expose Close when available and omit
 split-history back/forward buttons. Mobile content panes retain their back button.
@@ -48,7 +49,10 @@ displayed width. Workspace navigation uses shared 32px rows (44px on touch), 16p
 glyphs in aligned 20px icon slots, a 6px text gap, and compact sentence-case section
 headings. Tags and folders have a separate disclosure button on the **right** of
 the row: clicking the label selects the destination; clicking Expand/Collapse
-only opens or closes its children. Long destination names are single-line and
+only opens or closes its children. Selecting a Drive folder or tab closes an
+inline detail into that destination; it does not navigate back to Drive's root.
+Unavailable documents retain their error/retry UI rather than navigating away.
+Long destination names are single-line and
 expose the full name on hover. Section chevrons point right and stay visible when
 collapsed. Expanded chevrons point down and appear when hovering their section;
 the section heading also brightens on hover. Sections and nested branches briefly

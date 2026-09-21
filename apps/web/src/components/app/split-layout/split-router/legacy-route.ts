@@ -2,10 +2,16 @@ import {
   agentsRouteFromSegments,
   agentsRouteSegments,
 } from '@app/features/agents-view/core/route';
+import type { DriveLocation } from '@app/features/drive-view/core/types';
+import {
+  type DriveDocumentRoute,
+  driveDestination,
+} from '@app/features/drive-view/primitives/drive-route';
 import {
   defineRoute,
   routeParams,
   type SplitLocation,
+  type SplitRouteMatch,
   type SplitRouterEntry,
   type UnmatchedSplitPathHandler,
 } from '@app/lib/split-router';
@@ -113,6 +119,7 @@ export const handleLegacySplitPath: UnmatchedSplitPathHandler = (context) => {
   if (
     context.matchedRouteId &&
     context.matchedRouteId !== 'settings' &&
+    !context.matchedRouteId.startsWith('view-') &&
     context.matchedRouteId !== 'legacy-content'
   ) {
     return;
@@ -141,7 +148,38 @@ export function encodeLegacyContent(content: SplitContent): string[] {
   ];
 }
 
-export function splitLocationFromContent(content: SplitContent): SplitLocation {
+export function driveSplitContent(
+  location: DriveLocation,
+  document?: DriveDocumentRoute
+): SplitContent {
+  const matches: [SplitRouteMatch, ...SplitRouteMatch[]] = [
+    { id: 'drive', params: {} },
+  ];
+  if (location.kind === 'folder') {
+    matches.push({
+      id: 'drive-folder',
+      params: { view: 'folder', folderId: location.id ?? undefined },
+    });
+  } else if (location.tab !== 'owned') {
+    matches.push({ id: 'drive-tab', params: { tab: location.tab } });
+  }
+  if (document) {
+    matches.push({
+      id: driveDestination(location, document).route.id,
+      params: { documentId: document.id, documentType: document.type },
+    });
+  }
+  return {
+    type: 'component',
+    id: 'documents',
+    entryMetadata: { route: { matches } },
+  };
+}
+
+export function splitLocationFromContent(
+  routes: SplitRoutesManifest,
+  content: SplitContent
+): SplitLocation {
   if (content.type === 'component' && content.id === 'documents') {
     return { route: { matches: [{ id: 'drive', params: {} }] } };
   }
@@ -155,6 +193,10 @@ export function splitLocationFromContent(content: SplitContent): SplitLocation {
   }
 
   if (content.type === 'component') {
+    const viewId = `view-${content.id}`;
+    if (routes.byId.has(viewId)) {
+      return { route: { matches: [{ id: viewId, params: {} }] } };
+    }
     const segments = agentsRouteSegments(content.id);
     const [section, id] = segments ?? [];
     if (section && id) {
@@ -204,7 +246,7 @@ export function resolveContentLocation(
       // Old or malformed metadata falls back to the content's compatibility route.
     }
   }
-  route ??= resolve(splitLocationFromContent(content).route);
+  route ??= resolve(splitLocationFromContent(routes, content).route);
   const search = filterRouteSearch(
     routes,
     route,
@@ -218,6 +260,8 @@ export function splitContentFromLocation(
 ): SplitContent {
   const root = location.route.matches[0];
 
+  if (root.id.startsWith('view-'))
+    return { type: 'component', id: root.id.slice('view-'.length) };
   if (root.id === 'drive') return { type: 'component', id: 'documents' };
   if (root.id === 'settings') return { type: 'component', id: 'settings' };
 
