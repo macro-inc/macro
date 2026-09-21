@@ -10,6 +10,15 @@ export function ToastRegion() {
       */}
       <div class="fixed bottom-2 right-2 m-0 p-2 sm:p-4 list-none outline-none pointer-events-none z-toast-region flex flex-col items-end gap-2">
         <Toast.Region
+          regionId="reminder-region"
+          duration={Infinity}
+          limit={1}
+          pauseOnInteraction={false}
+          swipeDirection="right"
+        >
+          <Toast.List class="flex flex-col gap-2" />
+        </Toast.Region>
+        <Toast.Region
           regionId="prompt-region"
           duration={Infinity}
           limit={1}
@@ -48,6 +57,15 @@ export function ToastRegion() {
           bottom: 'calc(var(--mobile-content-inset-bottom, 0px) + 12px)',
         }}
       >
+        <Toast.Region
+          regionId="mobile-reminder-region"
+          duration={Infinity}
+          limit={1}
+          pauseOnInteraction={false}
+          swipeDirection="left"
+        >
+          <Toast.List class="flex flex-col gap-2" />
+        </Toast.Region>
         <Toast.Region
           regionId="mobile-prompt-region"
           duration={Infinity}

@@ -116,6 +116,7 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import { useReminderAlerts } from '../features/reminders/reminder-alerts';
 import { BasePathComponent } from './BasePath';
 import { TaskRoute } from './TaskRoute';
 
@@ -408,6 +409,7 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
     onNotification
   );
   useNotificationUpdates(notificationSource);
+  useReminderAlerts(notificationSource);
 
   const blockOrchestrator = createBlockOrchestrator();
   usePendingNotificationNavigationEffect(notificationSource);

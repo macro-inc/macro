@@ -5,6 +5,36 @@ import type {
   SoupItemFieldsFragment,
 } from './graphql/generated/graphql';
 
+it('preserves the scheduled occurrence identity on reminder notifications', async () => {
+  const { mapGraphqlNotification } = await import('./graphql-soup');
+  const mapped = mapGraphqlNotification({
+    id: 'notification-1',
+    entityId: 'reminder-1',
+    entityType: 'REMINDER',
+    eventType: 'reminder',
+    state: 'UNSEEN',
+    sent: true,
+    senderId: null,
+    viewedAt: null,
+    createdAt: '2026-09-21T10:00:00Z',
+    updatedAt: '2026-09-21T10:00:00Z',
+    metadata: {
+      __typename: 'GraphqlReminderMetadata',
+      reminderReminderId: 'reminder-1',
+      reminderDescription: 'Follow up',
+      reminderScheduledFor: '2026-09-21T10:00:00Z',
+    },
+  });
+  expect(mapped.notification_metadata).toEqual({
+    tag: 'reminder',
+    content: {
+      reminderId: 'reminder-1',
+      description: 'Follow up',
+      scheduledFor: '2026-09-21T10:00:00Z',
+    },
+  });
+});
+
 it('maps agent sessions without discarding persona, favorites or notifications', async () => {
   const { mapGraphqlSoupItem } = await import('./graphql-soup');
   const mapped = mapGraphqlSoupItem({
