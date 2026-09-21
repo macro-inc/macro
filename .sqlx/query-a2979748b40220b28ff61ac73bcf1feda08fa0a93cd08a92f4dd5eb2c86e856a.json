@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT NOT EXISTS (SELECT 1 FROM notification WHERE id = $2)\n                OR NOT EXISTS (SELECT 1 FROM notification_user_device_registration WHERE device_endpoint = $1)\n                OR EXISTS (\n                    SELECT 1 FROM team_privacy p JOIN team_user u ON u.team_id = p.team_id\n                    WHERE p.hipaa_enabled AND (\n                        u.user_id IN (SELECT user_id FROM notification_user_device_registration WHERE device_endpoint = $1)\n                        OR u.user_id IN (SELECT user_id FROM user_notification WHERE notification_id = $2)\n                        OR u.user_id IN (SELECT sender_id FROM notification WHERE id = $2)\n                    )\n                ) AS \"restricted!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "restricted!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a2979748b40220b28ff61ac73bcf1feda08fa0a93cd08a92f4dd5eb2c86e856a"
+}

@@ -225,14 +225,20 @@ pub async fn main() -> anyhow::Result<()> {
         KafkaRealtimeSender::new(realtime_event_broker),
     );
 
-    let mobile_adapter = MobilePushAdapter {
-        push_service: aws_sdk_sns::Client::new(&aws_config),
-        apns_bundle_id: config.apple_bundle_id.as_ref().to_string(),
-        voip_bundle_id: None,
+    let mobile_adapter = ::notification::domain::service::privacy::PrivatePushSender {
+        policy: workspace_privacy::outbound::PgPrivacyRepository(db.clone()),
+        inner: MobilePushAdapter {
+            push_service: aws_sdk_sns::Client::new(&aws_config),
+            apns_bundle_id: config.apple_bundle_id.as_ref().to_string(),
+            voip_bundle_id: None,
+        },
     };
 
     let ses_client = aws_sdk_sesv2::Client::new(&aws_config);
-    let email_adapter = EmailAdapter::new(ses_client, crate::env::SENDER_ADDRESS.clone());
+    let email_adapter = ::notification::domain::service::privacy::PrivateEmailSender {
+        inner: EmailAdapter::new(ses_client, crate::env::SENDER_ADDRESS.clone()),
+        policy: workspace_privacy::outbound::PgPrivacyRepository(db.clone()),
+    };
 
     let redis_multiplexed_conn = redis_client
         .get_multiplexed_async_connection()

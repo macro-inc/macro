@@ -1,3 +1,4 @@
+import { analytics } from '@app/lib/analytics';
 import { createTabLeaderSignal } from '@core/cross-tab/tab-leader';
 import { makePersisted } from '@solid-primitives/storage';
 import {
@@ -187,7 +188,16 @@ function PlatformNotificationState(props: {
       return 'not-granted';
     }
 
-    return await platformNotif.showNotification(data);
+    return await platformNotif.showNotification(
+      analytics.allowsNotificationContent()
+        ? data
+        : {
+            title: 'Macro',
+            options: {
+              body: 'New activity in Macro. Open the app to view it.',
+            },
+          }
+    );
   }
 
   return (

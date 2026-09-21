@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT t.id, t.paying OR t.enterprise AS \"paid!\",\n                u.team_role::text IN ('admin', 'owner') AS \"is_admin!\",\n                COALESCE(p.hipaa_enabled, FALSE) AS \"enabled!\",\n                p.hipaa_approved_at IS NOT NULL AS \"ready!\",\n                COALESCE(p.revision, 0) AS \"revision!\"\n            FROM team_user u JOIN team t ON t.id = u.team_id\n            LEFT JOIN team_privacy p ON p.team_id = t.id\n            WHERE u.user_id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "paid!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "is_admin!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "enabled!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "ready!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "revision!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "9e40be402dca77e8654252431a033eaa3ad0c49b1f6dec91a4351d7192281071"
+}

@@ -116,6 +116,15 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
         .nest("/oauth", oauth::router(state.clone()))
         .nest("/oauth2", oauth2::router())
         .nest("/user", user::router())
+        .nest(
+            "/privacy",
+            workspace_privacy::inbound::router(workspace_privacy::inbound::PrivacyRouterState {
+                service: std::sync::Arc::new(workspace_privacy::domain::PrivacyService(
+                    workspace_privacy::outbound::PgPrivacyRepository(state.db.clone()),
+                )),
+                authorization_state: state.authorization_state.clone(),
+            }),
+        )
         .nest("/link", link::router())
         .nest("/cursor-api-key", cursor_api_key::router())
         .nest("/codex", codex::router())

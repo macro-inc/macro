@@ -1,3 +1,4 @@
+import { analytics } from '@app/lib/analytics';
 import { recordBrowserTursoCacheNavigation } from '@graphql-cache/rollout-observability';
 import { Telemetry } from '@macro-inc/observability';
 import { createWebTracingProvider } from '@macro-inc/observability/web';
@@ -5,6 +6,7 @@ import { createWebTracingProvider } from '@macro-inc/observability/web';
 import { ZoneContextManager } from '@macro-inc/observability/zone';
 
 async function browserTelemetryEnabled(hasExporter: boolean): Promise<boolean> {
+  if (!analytics.isAllowed()) return false;
   const override = import.meta.env.VITE_ENABLE_BROWSER_OTEL;
 
   if (override === 'false') return false;
@@ -14,7 +16,6 @@ async function browserTelemetryEnabled(hasExporter: boolean): Promise<boolean> {
 
   if (!import.meta.env.VITE_POSTHOG_API_KEY) return false;
 
-  const { analytics } = await import('@app/lib/analytics');
   const flag = 'enable-browser-otel';
   const current = analytics.posthog.isFeatureEnabled(flag);
   if (current !== undefined) return current;
@@ -44,6 +45,7 @@ async function browserTelemetryEnabled(hasExporter: boolean): Promise<boolean> {
 
 /** Initialize browser telemetry and its application-level lifecycle hooks. */
 export async function initializeBrowserObservability(): Promise<void> {
+  await analytics.permissionGranted;
   const tracesUrl =
     import.meta.env.VITE_OTEL_EXPORTER_URL ??
     (import.meta.hot ? 'http://localhost:8098/i/otlp/v1/traces' : undefined);
@@ -56,6 +58,7 @@ export async function initializeBrowserObservability(): Promise<void> {
     logsUrl: tracesUrl?.replace(/\/v1\/traces\/?$/, '/v1/logs'),
     contextManager: new ZoneContextManager(),
     enabled: () => browserTelemetryEnabled(Boolean(tracesUrl)),
+    shouldExport: () => analytics.isAllowed(),
   };
 
   await Telemetry.init({

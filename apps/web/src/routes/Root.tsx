@@ -84,6 +84,7 @@ import {
 } from '@queries/auth/user-info';
 import { useChatRenameWebsocketSync } from '@queries/chat';
 import { QuerySyncProvider } from '@queries/sync/SyncProvider';
+import { useWorkspacePrivacyQuery } from '@queries/team/privacy';
 import { MutationUndoProvider } from '@queries/undo';
 import { useReopenTrackedEntitiesOnReconnect } from '@service-connection/client';
 import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
@@ -440,6 +441,22 @@ function UserInfoSideEffects() {
 
   // Set user info for observability and analytics
   const userInfo = useUserInfo();
+  const privacy = useWorkspacePrivacyQuery();
+
+  createEffect(() => {
+    const user = userInfo();
+    // Unknown, unauthenticated and failed policy reads stay closed.
+    const allowed = user?.authenticated
+      ? privacy.isSuccess
+        ? privacy.data.hipaa_enabled === false
+        : privacy.isError
+          ? false
+          : undefined
+      : user
+        ? false
+        : undefined;
+    analytics.setPrivacyPermission(allowed);
+  });
 
   // Keep the active theme following the OS color scheme when auto-detect is on.
   systemThemeEffect();
@@ -447,41 +464,46 @@ function UserInfoSideEffects() {
   let identified = false;
   let syncedPlanKey: string | undefined;
   createEffect(
-    on(userInfo, (user) => {
-      // Keep telemetry user context in sync with auth state: set on every
-      // authenticated load, and clear on logout so spans and logs aren't
-      // attributed to a signed-out user. Logout flips userInfo client-side,
-      // and on native mobile it's an SPA navigation with no page reload, so
-      // this effect is what clears it there.
-      Telemetry.config.setUser(user?.authenticated ? user.id : undefined);
+    on(
+      () => [userInfo(), analytics.isAllowed()] as const,
+      ([user, allowed]) => {
+        // Keep telemetry user context in sync with auth state: set on every
+        // authenticated load, and clear on logout so spans and logs aren't
+        // attributed to a signed-out user. Logout flips userInfo client-side,
+        // and on native mobile it's an SPA navigation with no page reload, so
+        // this effect is what clears it there.
+        Telemetry.config.setUser(
+          allowed && user?.authenticated ? user.id : undefined
+        );
 
-      if (!user || !user.authenticated) {
-        syncedPlanKey = undefined;
-        return;
+        if (!user || !user.authenticated || !allowed) {
+          syncedPlanKey = undefined;
+          return;
+        }
+
+        if (!posthog.instance._isIdentified() && !identified) {
+          identified = true;
+
+          const platform = detect(navigator.userAgent);
+          const os = platform?.os?.replaceAll(' ', '');
+
+          analytics.identify(user.id, {
+            email: user.email,
+            os,
+          });
+        }
+
+        const planKey = `${user.id}:${user.licenseStatus}`;
+        if (syncedPlanKey !== planKey) {
+          syncedPlanKey = planKey;
+          analytics.setPlanProperties(user.licenseStatus);
+        }
+
+        // Fires sign_up + ad conversions once when the auth service flagged this
+        // session as a freshly created account (signed_up=true redirect param).
+        trackSignupCompletion(analytics, { id: user.id });
       }
-
-      if (!posthog.instance._isIdentified() && !identified) {
-        identified = true;
-
-        const platform = detect(navigator.userAgent);
-        const os = platform?.os?.replaceAll(' ', '');
-
-        analytics.identify(user.id, {
-          email: user.email,
-          os,
-        });
-      }
-
-      const planKey = `${user.id}:${user.licenseStatus}`;
-      if (syncedPlanKey !== planKey) {
-        syncedPlanKey = planKey;
-        analytics.setPlanProperties(user.licenseStatus);
-      }
-
-      // Fires sign_up + ad conversions once when the auth service flagged this
-      // session as a freshly created account (signed_up=true redirect param).
-      trackSignupCompletion(analytics, { id: user.id });
-    })
+    )
   );
 
   return (

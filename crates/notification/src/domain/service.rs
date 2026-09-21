@@ -7,6 +7,8 @@
 pub mod device;
 mod egress;
 mod ingress;
+/// Last-mile notification privacy guards.
+pub mod privacy;
 mod push_notification_event;
 mod realtime;
 #[cfg(test)]

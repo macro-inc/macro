@@ -75,6 +75,7 @@ import {
   Switch,
 } from 'solid-js';
 import { z } from 'zod';
+import { HipaaSettings } from './Hipaa';
 import {
   IntegrationRow,
   SettingsCard,
@@ -1296,6 +1297,9 @@ function TeamManagement(props: {
               </Button>
             </SettingsRow>
 
+            <Suspense>
+              <HipaaSettings />
+            </Suspense>
             <Show when={isAdminOrOwner()}>
               <SettingsRow
                 label="Auto-join on domain"

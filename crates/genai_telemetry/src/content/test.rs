@@ -20,9 +20,10 @@ fn truncate_chars_cuts_on_char_boundaries_and_marks_the_cut() {
 
 #[test]
 fn policy_parses_the_standard_switch() {
-    assert!(ContentPolicy::parse(None).capture);
+    assert!(!ContentPolicy::parse(None).capture);
     assert!(ContentPolicy::parse(Some("true")).capture);
-    assert!(ContentPolicy::parse(Some("anything")).capture);
+    assert!(!ContentPolicy::parse(Some("anything")).capture);
+    assert!(!ContentPolicy::default().capture);
     for off in ["false", "FALSE", " 0 ", "no", "Off"] {
         assert!(
             !ContentPolicy::parse(Some(off)).capture,

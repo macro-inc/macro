@@ -289,42 +289,45 @@ async fn main() -> anyhow::Result<()> {
     tracing::trace!("initialized sqs client");
 
     // Initialize analytics client with configured providers
-    let analytics_client = Arc::new(AnalyticsClient::new(AnalyticsClientConfig {
-        google_analytics: config
-            .ga_measurement_id
-            .value()
-            .zip(config.ga_api_secret.value())
-            .map(|(measurement_id, api_secret)| {
-                tracing::info!("configuring Google Analytics");
-                GoogleAnalyticsConfig {
-                    measurement_id: measurement_id.to_string(),
-                    api_secret: api_secret.to_string(),
+    let analytics_client = Arc::new(AnalyticsClient::new(
+        AnalyticsClientConfig {
+            google_analytics: config
+                .ga_measurement_id
+                .value()
+                .zip(config.ga_api_secret.value())
+                .map(|(measurement_id, api_secret)| {
+                    tracing::info!("configuring Google Analytics");
+                    GoogleAnalyticsConfig {
+                        measurement_id: measurement_id.to_string(),
+                        api_secret: api_secret.to_string(),
+                    }
+                }),
+            meta: config
+                .meta_pixel_id
+                .value()
+                .zip(config.meta_access_token.value())
+                .map(|(pixel_id, access_token)| {
+                    tracing::info!("configuring Meta Conversions API");
+                    MetaConfig {
+                        pixel_id: pixel_id.to_string(),
+                        access_token: access_token.to_string(),
+                        test_event_code: config.meta_test_event_code.value().map(str::to_string),
+                    }
+                }),
+            posthog: config.posthog_api_key.value().map(|api_key| {
+                tracing::info!("configuring PostHog");
+                PostHogConfig {
+                    api_key: api_key.to_string(),
+                    host: config
+                        .posthog_host
+                        .value()
+                        .map(str::to_string)
+                        .unwrap_or_else(|| "https://us.i.posthog.com".to_string()),
                 }
             }),
-        meta: config
-            .meta_pixel_id
-            .value()
-            .zip(config.meta_access_token.value())
-            .map(|(pixel_id, access_token)| {
-                tracing::info!("configuring Meta Conversions API");
-                MetaConfig {
-                    pixel_id: pixel_id.to_string(),
-                    access_token: access_token.to_string(),
-                    test_event_code: config.meta_test_event_code.value().map(str::to_string),
-                }
-            }),
-        posthog: config.posthog_api_key.value().map(|api_key| {
-            tracing::info!("configuring PostHog");
-            PostHogConfig {
-                api_key: api_key.to_string(),
-                host: config
-                    .posthog_host
-                    .value()
-                    .map(str::to_string)
-                    .unwrap_or_else(|| "https://us.i.posthog.com".to_string()),
-            }
-        }),
-    }));
+        },
+        Arc::new(workspace_privacy::outbound::PgPrivacyRepository(db.clone())),
+    ));
     tracing::trace!("initialized analytics client");
 
     // Initialize Loops client. Production and develop sign-ups are added to

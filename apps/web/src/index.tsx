@@ -88,7 +88,8 @@ const renderApp = () => {
 };
 
 async function main() {
-  await initializeBrowserObservability();
+  // Render while privacy loads. Telemetry starts only after an authenticated policy grant.
+  void initializeBrowserObservability();
 
   console.log('App Version ', import.meta.env.__APP_VERSION__);
 

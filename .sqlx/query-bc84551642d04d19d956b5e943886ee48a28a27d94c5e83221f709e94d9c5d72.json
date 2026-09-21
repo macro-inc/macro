@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT t.paying OR t.enterprise AS \"paid!\"\n            FROM team t JOIN team_user u ON u.team_id = t.id\n            WHERE t.id = $1 AND u.user_id = $2 AND u.team_role::text IN ('admin', 'owner')\n            FOR UPDATE OF t, u\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "paid!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "bc84551642d04d19d956b5e943886ee48a28a27d94c5e83221f709e94d9c5d72"
+}

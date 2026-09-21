@@ -148,6 +148,8 @@ use model::user::{
                 email::verify_email_link::handler,
 
                 /// /team
+                workspace_privacy::inbound::status::<workspace_privacy::outbound::PgPrivacyRepository, crate::api::context::AuthorizationService>,
+                workspace_privacy::inbound::set::<workspace_privacy::outbound::PgPrivacyRepository, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::create_team::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::delete_team::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::join_team::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
@@ -250,6 +252,8 @@ use model::user::{
                         PatchUserOnboardingRequest,
 
                         // Teams
+                        workspace_privacy::domain::PrivacyStatus,
+                        workspace_privacy::domain::SetPrivacyRequest,
                         models_permissions::share_permission::LinkShare,
                         TeamRole,
                         TeamMember,

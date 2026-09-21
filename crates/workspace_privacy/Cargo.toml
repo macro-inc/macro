@@ -1,0 +1,23 @@
+[package]
+name = "workspace_privacy"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+default = ["outbound"]
+outbound = ["dep:sqlx"]
+inbound = ["dep:axum", "dep:macro_authorization", "dep:utoipa"]
+
+[dependencies]
+async-trait = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+sqlx = { workspace = true, optional = true }
+axum = { workspace = true, optional = true }
+utoipa = { workspace = true, optional = true }
+macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"], optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
