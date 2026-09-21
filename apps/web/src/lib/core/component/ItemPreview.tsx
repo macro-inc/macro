@@ -285,7 +285,11 @@ function ItemPreviewInner(props: ItemPreviewProps) {
                       props.disableHoverCard || isTouchDevice() || !blockName()
                     }
                     trigger={
-                      <button class={buttonClass()} {...navHandlers}>
+                      <button
+                        type="button"
+                        class={buttonClass()}
+                        {...navHandlers}
+                      >
                         <div class={iconClass()}>
                           <ItemEntityIcon size={iconSize()} />
                         </div>
