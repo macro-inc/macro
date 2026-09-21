@@ -64,6 +64,35 @@ describe('send and schedule ordering', () => {
     }
   });
 
+  it('ignores scheduled reply notifications and quoted-text toggles', async () => {
+    const context = createComposeContext();
+    const state = replyComposer(context);
+    try {
+      await state.handleSendTimeChange(new Date('2026-12-01T12:00:00Z'));
+      expect(state.form.sendTime()).toEqual(new Date('2026-12-01T12:00:00Z'));
+
+      state.scheduleDraftSave();
+      state.toggleQuotedText();
+      expect(state.form.replyAppended()).toBe(false);
+
+      context.setDraftLifecycle({
+        type: 'sent',
+        draftId: 'draft',
+        threadId: 'thread',
+        inboxId: 'inbox',
+        observedAt: Date.now(),
+      });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(context.drafts.saveDraft).toHaveBeenCalledOnce();
+      expect(context.notices.feedback.success).toHaveBeenCalledWith(
+        'Scheduled email sent'
+      );
+    } finally {
+      state.dispose();
+    }
+  });
+
   it('undoes only the mark-done belonging to the selected send', async () => {
     const context = createComposeContext();
     const first = {

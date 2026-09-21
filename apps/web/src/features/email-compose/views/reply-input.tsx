@@ -532,6 +532,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
                 size="icon-sm"
                 class="size-5 rounded bg-transparent p-0 text-ink-extra-muted hover:text-ink-muted [&_:where(svg)]:size-5"
                 pressed={form.replyAppended()}
+                disabled={editingDisabled()}
                 onChange={toggleQuotedText}
               >
                 <DotsThree />

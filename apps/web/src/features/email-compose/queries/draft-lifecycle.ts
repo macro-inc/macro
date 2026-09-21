@@ -90,7 +90,7 @@ async function fetchLifecycle(input: {
 }): Promise<EmailDraftLifecycleState> {
   const observedAt = Date.now();
   try {
-    const thread = await fetchFreshEmailThread(input.threadId);
+    const thread = await fetchFreshEmailThread(input.threadId, input.draftId);
     return deriveEmailDraftLifecycle({
       ...input,
       observedAt,

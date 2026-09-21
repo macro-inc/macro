@@ -117,21 +117,45 @@ export async function fetchAndCacheThread(
   return ok({ thread: result.value });
 }
 
-/** Fetch the first page from the server even when the ordinary thread cache is fresh. */
-export async function fetchFreshEmailThread(threadId: string): Promise<Thread> {
-  if (!isFeatureEnabled(enableGraphqlSoup)) {
-    const result = await throwOnErr(
-      async () =>
-        await emailClient.getThread({
-          thread_id: threadId,
-          offset: 0,
-          limit: DEFAULT_THREAD_MESSAGES_LIMIT,
-        })
-    );
-    return result.thread;
-  }
+/**
+ * Fetch fresh thread pages until the requested message is present or the
+ * server has no more pages. Drafts have no internal date and sort after sent
+ * messages, so lifecycle reconciliation cannot assume they are on page one.
+ */
+export async function fetchFreshEmailThread(
+  threadId: string,
+  requiredMessageId?: string
+): Promise<Thread> {
+  let offset = 0;
+  let merged: Thread | undefined;
 
-  return await fetchGraphqlEmailThread(threadId);
+  while (true) {
+    const page = !isFeatureEnabled(enableGraphqlSoup)
+      ? (
+          await throwOnErr(
+            async () =>
+              await emailClient.getThread({
+                thread_id: threadId,
+                offset,
+                limit: DEFAULT_THREAD_MESSAGES_LIMIT,
+              })
+          )
+        ).thread
+      : await fetchGraphqlEmailThread(threadId, offset);
+
+    merged = merged
+      ? { ...page, messages: [...merged.messages, ...page.messages] }
+      : page;
+
+    if (
+      !requiredMessageId ||
+      page.messages.some((message) => message.db_id === requiredMessageId) ||
+      page.messages.length < DEFAULT_THREAD_MESSAGES_LIMIT
+    ) {
+      return merged;
+    }
+    offset += page.messages.length;
+  }
 }
 
 /**

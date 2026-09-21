@@ -589,9 +589,15 @@ export function createReplyComposer(
     return autosave.save(captureSave(completingThread));
   }
   function scheduleDraftSave() {
-    if (submitting() || pendingDeletion() || terminalState()) return;
+    if (
+      submitting() ||
+      pendingDeletion() ||
+      scheduling() ||
+      form.sendTime() ||
+      terminalState()
+    )
+      return;
     editVersion += 1;
-    if (form.sendTime()) return;
     props.onEngaged?.();
     autosave.schedule();
   }
@@ -1175,6 +1181,7 @@ export function createReplyComposer(
       form.recipients().cc.length === 0 &&
       form.recipients().bcc.length === 0);
   const toggleQuotedText = () => {
+    if (editingDisabled()) return;
     const replyingTo = replyTarget;
     if (!replyingTo) return;
 
