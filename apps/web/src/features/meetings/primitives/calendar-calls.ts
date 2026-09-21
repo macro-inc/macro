@@ -3,7 +3,11 @@ import type {
   CalendarCallsActions,
   CalendarCallsSource,
 } from '../context/calendar-calls';
-import { type CalendarCallItem, calendarCallUrl } from '../core/calendar-calls';
+import {
+  type CalendarCallItem,
+  calendarCallCanJoin,
+  calendarCallUrl,
+} from '../core/calendar-calls';
 
 export function createCalendarCalls(
   source: CalendarCallsSource,
@@ -81,10 +85,10 @@ export function createCalendarCalls(
     title,
     setTitle,
     join: (item: CalendarCallItem) =>
-      run(
-        () => actions.join(item),
-        'Could not open the call. Please try again.'
-      ),
+      run(async () => {
+        if (item.group === 'instant' || calendarCallCanJoin(item, now()))
+          await actions.join(item);
+      }, 'Could not open the call. Please try again.'),
     share: async (item: CalendarCallItem) => {
       setError(undefined);
       try {

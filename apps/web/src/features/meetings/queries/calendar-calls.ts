@@ -1,6 +1,6 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { getMeetingUrl } from '@channel/Call/call-link';
-import { throwOnErr } from '@core/util/result';
+import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { useActiveCallsQuery } from '@queries/call/call';
 import { callKeys } from '@queries/call/keys';
 import { useMeetingsQuery } from '@queries/call/meetings';
@@ -159,7 +159,9 @@ export function useCalendarCallsSource(
       meetings.isError && history.isError
         ? 'Could not load calls. Please try again.'
         : meetings.isError
-          ? 'Your call links could not be loaded.'
+          ? thrownResultErrorHasCode(meetings.error, 'MEETINGS_UNAVAILABLE')
+            ? 'Quick and scheduled calls are not available on this server yet.'
+            : 'Your call links could not be loaded.'
           : history.isError
             ? 'Recent calls could not be loaded.'
             : active.isError

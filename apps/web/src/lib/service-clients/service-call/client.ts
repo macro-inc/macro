@@ -49,7 +49,36 @@ export const callServiceClient = {
 
   async getMeetings() {
     return (
-      await fetchWithToken<{ meetings: Meeting[] }>(`${host}/call/meetings`)
+      await fetchWithToken<{ meetings: Meeting[] }, 'MEETINGS_UNAVAILABLE'>(
+        `${host}/call/meetings`,
+        {
+          errorResponseHandler: async (response) => {
+            if (response.status === 400) {
+              const body = await response.json().catch(() => undefined);
+              // Older servers route the literal "meetings" as a channel UUID.
+              if (body?.message === 'Bad request: Invalid channel ID format')
+                return {
+                  code: 'MEETINGS_UNAVAILABLE',
+                  message:
+                    'Quick and scheduled calls are not available on this server yet.',
+                };
+            }
+            return {
+              code:
+                response.status === 401
+                  ? 'UNAUTHORIZED'
+                  : response.status === 403
+                    ? 'FORBIDDEN'
+                    : response.status === 404
+                      ? 'NOT_FOUND'
+                      : response.status >= 500
+                        ? 'SERVER_ERROR'
+                        : 'HTTP_ERROR',
+              message: `HTTP error! status: ${response.status}`,
+            };
+          },
+        }
+      )
     ).map((result) => result.meetings);
   },
 

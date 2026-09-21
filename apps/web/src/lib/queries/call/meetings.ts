@@ -1,4 +1,4 @@
-import { throwOnErr } from '@core/util/result';
+import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import {
   type CreateMeetingRequest,
@@ -33,7 +33,14 @@ export function useMeetingsQuery(options?: {
   return useQuery(() => ({
     queryKey: callKeys.meetings.queryKey,
     queryFn: () => throwOnErr(() => callServiceClient.getMeetings()),
-    refetchInterval: options?.refetchInterval,
+    retry: (count, error) =>
+      !thrownResultErrorHasCode(error, 'MEETINGS_UNAVAILABLE') && count < 3,
+    refetchInterval: (query) =>
+      thrownResultErrorHasCode(query.state.error, 'MEETINGS_UNAVAILABLE')
+        ? false
+        : options?.refetchInterval,
+    refetchOnWindowFocus: (query) =>
+      !thrownResultErrorHasCode(query.state.error, 'MEETINGS_UNAVAILABLE'),
   }));
 }
 

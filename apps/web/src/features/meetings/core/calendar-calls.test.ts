@@ -4,6 +4,7 @@ import {
   type CalendarCallEvent,
   type CalendarCallLink,
   type CalendarCallRecord,
+  calendarCallCanJoin,
   calendarCallDate,
   calendarCallDuration,
   calendarCallNavigation,
@@ -36,6 +37,56 @@ const record: CalendarCallRecord = {
 };
 
 describe('calendar calls model', () => {
+  it('offers Join only during the scheduled time window', () => {
+    const [item] = buildCalendarCallItems([], [event], [], now);
+    expect(
+      calendarCallCanJoin(item, new Date(Date.parse(event.start) - 1))
+    ).toBe(false);
+    expect(calendarCallCanJoin(item, new Date(event.start))).toBe(true);
+    expect(calendarCallCanJoin(item, new Date(Date.parse(event.end) - 1))).toBe(
+      true
+    );
+    expect(calendarCallCanJoin(item, new Date(event.end))).toBe(false);
+  });
+  it('does not treat an archived meeting session as live', () => {
+    const [item] = buildCalendarCallItems(
+      [
+        {
+          ...link,
+          callId: record.id,
+          start: record.startedAt,
+          end: record.startedAt,
+        },
+      ],
+      [],
+      [record],
+      now
+    );
+    expect(item.group).toBe('recent');
+    expect(calendarCallCanJoin(item, new Date(now))).toBe(false);
+    const [active] = buildCalendarCallItems(
+      [],
+      [],
+      [{ ...record, active: true }],
+      now
+    );
+    expect(calendarCallCanJoin(active, new Date(now))).toBe(true);
+    const [idle] = buildCalendarCallItems([link], [], [], now);
+    expect(calendarCallCanJoin(idle, new Date(now))).toBe(false);
+  });
+  it('uses local day boundaries for joining all-day scheduled calls', () => {
+    const [item] = buildCalendarCallItems(
+      [],
+      [{ ...event, allDay: true, start: '2026-09-20', end: '2026-09-21' }],
+      [],
+      now
+    );
+    expect(calendarCallCanJoin(item, new Date(2026, 8, 19, 23, 59))).toBe(
+      false
+    );
+    expect(calendarCallCanJoin(item, new Date(2026, 8, 20, 0, 0))).toBe(true);
+    expect(calendarCallCanJoin(item, new Date(2026, 8, 21, 0, 0))).toBe(false);
+  });
   it('groups calendar rows by local day, keeps all-day dates, and formats their duration', () => {
     const now = new Date(2026, 8, 20, 10);
     const items = buildCalendarCallItems(

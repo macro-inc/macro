@@ -5,7 +5,10 @@ import type {
   CalendarCallsActions,
   CalendarCallsSource,
 } from '../context/calendar-calls';
-import type { CalendarCallItem } from '../core/calendar-calls';
+import {
+  type CalendarCallItem,
+  calendarCallCanJoin,
+} from '../core/calendar-calls';
 import { createCalendarCalls } from '../primitives/calendar-calls';
 
 export function CalendarCallDetailsView(props: {
@@ -26,6 +29,7 @@ export function CalendarCallDetailsView(props: {
   return (
     <CalendarCallDetails
       item={item()}
+      canJoin={calendarCallCanJoin(item(), state.now())}
       renderAvatar={props.renderAvatar}
       invite={props.renderInvite?.(item())}
       pending={state.pending()}

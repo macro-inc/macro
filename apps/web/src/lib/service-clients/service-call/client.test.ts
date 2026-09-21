@@ -22,6 +22,24 @@ beforeEach(() => {
 });
 
 describe('meeting transport authorization', () => {
+  it.each([
+    [400, 'Bad request: Invalid channel ID format', 'MEETINGS_UNAVAILABLE'],
+    [400, 'Bad request: Invalid title', 'HTTP_ERROR'],
+    [403, 'Forbidden', 'FORBIDDEN'],
+    [500, 'Internal error', 'SERVER_ERROR'],
+  ])(
+    'classifies the meeting list response %s / %s',
+    async (status, message, code) => {
+      requests.authenticated.mockResolvedValue(ok({ meetings: [] }));
+      await callServiceClient.getMeetings();
+      const [url, options] = requests.authenticated.mock.calls[0];
+      expect(url).toBe('https://gateway.example/dss/call/meetings');
+      const error = await options.errorResponseHandler(
+        new Response(JSON.stringify({ message }), { status })
+      );
+      expect(error.code).toBe(code);
+    }
+  );
   it('requires a signed-in sender for guest invitations and sends the email to the call endpoint', async () => {
     await callServiceClient.inviteToMeeting('secret', 'guest@outside.example');
     expect(requests.authenticated).toHaveBeenCalledWith(

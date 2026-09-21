@@ -9,6 +9,7 @@ import { For, Show } from 'solid-js';
 import {
   type CalendarCallItem,
   type CalendarCallPerson,
+  calendarCallCanJoin,
   calendarCallDuration,
   calendarCallGuests,
   calendarCallParticipants,
@@ -159,7 +160,9 @@ export function CalendarLiveCall(
   );
 }
 
-function CalendarCallRow(props: CallRowActions & { item: CalendarCallItem }) {
+function CalendarCallRow(
+  props: CallRowActions & { item: CalendarCallItem; now: Date }
+) {
   const reusable = () => props.item.group === 'instant';
   const url = () => calendarCallUrl(props.item);
   const guests = () => calendarCallGuests(props.item);
@@ -254,16 +257,21 @@ function CalendarCallRow(props: CallRowActions & { item: CalendarCallItem }) {
             </Button>
           </Show>
           <Show
-            when={url()}
+            when={
+              calendarCallCanJoin(props.item, props.now) ||
+              (reusable() && url())
+            }
             fallback={
-              <Button
-                size="sm"
-                variant="outline"
-                class="rounded-lg"
-                onClick={() => props.onOpenRecord(props.item)}
-              >
-                View
-              </Button>
+              <Show when={props.item.record}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  class="rounded-lg"
+                  onClick={() => props.onOpenRecord(props.item)}
+                >
+                  View
+                </Button>
+              </Show>
             }
           >
             <Button

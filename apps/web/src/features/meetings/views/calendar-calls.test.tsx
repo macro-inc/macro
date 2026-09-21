@@ -59,6 +59,32 @@ afterEach(() => {
 });
 
 describe('Calendar Calls dashboard', () => {
+  it.each(['past', 'future', 'current'] as const)(
+    'shows Join in the row and details only for a current scheduled call (%s)',
+    (when) => {
+      const now = Date.now();
+      const start =
+        now +
+        (when === 'future' ? 60_000 : when === 'past' ? -120_000 : -60_000);
+      const scheduled = {
+        ...item,
+        group: when === 'past' ? ('recent' as const) : ('scheduled' as const),
+        start: new Date(start).toISOString(),
+        end: new Date(start + 90_000).toISOString(),
+      };
+      setup([scheduled]);
+      if (when !== 'past')
+        fireEvent.click(screen.getByRole('button', { name: /Upcoming/ }));
+      expect(Boolean(screen.queryByRole('button', { name: 'Join' }))).toBe(
+        when === 'current'
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Planning call' }));
+      expect(Boolean(screen.queryByRole('button', { name: 'Join call' }))).toBe(
+        when === 'current'
+      );
+      expect(screen.getByRole('button', { name: 'Copy link' })).toBeTruthy();
+    }
+  );
   it('opens actionable call details on hover without a dialog', async () => {
     const { actions } = setup([{ ...item, group: 'recent' }]);
     fireEvent.pointerEnter(screen.getByLabelText('Preview Planning call'), {
@@ -68,8 +94,10 @@ describe('Calendar Calls dashboard', () => {
       expect(screen.getByRole('article', { name: 'Call details' })).toBeTruthy()
     );
     expect(screen.queryByRole('dialog')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Join call' }));
-    await vi.waitFor(() => expect(actions.join).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: 'Join call' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
+    await vi.waitFor(() => expect(actions.copy).toHaveBeenCalled());
+    expect(actions.join).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Close call details' }));
     await vi.waitFor(() =>
       expect(screen.queryByRole('article', { name: 'Call details' })).toBeNull()
@@ -89,7 +117,7 @@ describe('Calendar Calls dashboard', () => {
     fireEvent.click(screen.getByRole('button', { name: /Upcoming/ }));
     expect(screen.queryByRole('dialog')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Planning call' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Join call' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start call' }));
     await vi.waitFor(() => expect(actions.join).toHaveBeenCalledWith(item));
     fireEvent.click(screen.getByRole('button', { name: 'Copy call link' }));
     await vi.waitFor(() =>

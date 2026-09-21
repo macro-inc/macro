@@ -119,14 +119,17 @@ export function buildCalendarCallItems(
     return {
       id: `meeting:${link.id}`,
       title: event?.title ?? link.title,
-      group: link.callId
-        ? 'live'
-        : start
-          ? scheduleTimestamp(event?.end ?? link.end ?? start, event?.allDay) <=
-            now
-            ? 'recent'
-            : 'scheduled'
-          : 'instant',
+      group:
+        link.callId && record?.active !== false
+          ? 'live'
+          : start
+            ? scheduleTimestamp(
+                event?.end ?? link.end ?? start,
+                event?.allDay
+              ) <= now
+              ? 'recent'
+              : 'scheduled'
+            : 'instant',
       start,
       end: event?.end ?? link.end,
       link,
@@ -171,6 +174,19 @@ export function buildCalendarCallItems(
 
 export function calendarCallUrl(item: CalendarCallItem) {
   return item.link?.url ?? item.event?.url;
+}
+
+/** Join live sessions or scheduled calls during their calendar time window. */
+export function calendarCallCanJoin(item: CalendarCallItem, now: Date) {
+  if (item.group === 'live') return item.record?.active !== false;
+  if (item.group !== 'scheduled' || !calendarCallUrl(item)) return false;
+  const start = item.start ?? item.event?.start ?? item.link?.start;
+  const end = item.end ?? item.event?.end ?? item.link?.end;
+  if (!start || !end) return false;
+  return (
+    scheduleTimestamp(start, item.event?.allDay) <= now.getTime() &&
+    now.getTime() < scheduleTimestamp(end, item.event?.allDay)
+  );
 }
 
 export function calendarCallPeople(item: CalendarCallItem): string[] {

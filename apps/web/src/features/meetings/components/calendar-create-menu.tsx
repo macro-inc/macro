@@ -35,58 +35,45 @@ export function CalendarCreateMenu(props: {
           <CaretDownIcon class="size-3 shrink-0" />
         </ViewSidebar.Trailing>
       </Dropdown.Trigger>
-      <Dropdown.Content class="w-80 max-w-[calc(100vw-2rem)] p-2">
-        <Dropdown.Item
-          aria-keyshortcuts="E"
-          closeOnSelect
-          onSelect={props.onEvent}
-          class="gap-3 py-3"
-        >
-          <span class="rounded-lg bg-active p-1.5">
-            <CalendarIcon class="size-5" />
-          </span>
-          <span class="min-w-0 flex-1">
-            <span class="block font-medium">Event</span>
-            <span class="block text-xs leading-4 text-ink-muted">
-              Pick a time. Add a Macro call with one toggle.
-            </span>
-          </span>
-          <Hotkey shortcut="e" theme="subtle" class="shrink-0" />
-        </Dropdown.Item>
-        <Dropdown.Item
-          aria-keyshortcuts="Q"
-          closeOnSelect
-          onSelect={props.onQuickCall}
-          class="gap-3 py-3"
-        >
-          <span class="rounded-lg bg-active p-1.5">
-            <LightningIcon class="size-5" />
-          </span>
-          <span class="min-w-0 flex-1">
-            <span class="block font-medium">Quick Call</span>
-            <span class="block text-xs leading-4 text-ink-muted">
-              Starts now. Share the link from the call.
-            </span>
-          </span>
-          <Hotkey shortcut="q" theme="subtle" class="shrink-0" />
-        </Dropdown.Item>
-        <Dropdown.Item
-          aria-keyshortcuts="S"
-          closeOnSelect
-          onSelect={props.onScheduledCall}
-          class="gap-3 py-3"
-        >
-          <span class="rounded-lg bg-active p-1.5">
-            <VideoIcon class="size-5" />
-          </span>
-          <span class="min-w-0 flex-1">
-            <span class="block font-medium">Scheduled Call</span>
-            <span class="block text-xs leading-4 text-ink-muted">
-              Create an event with a Macro call.
-            </span>
-          </span>
-          <Hotkey shortcut="s" theme="subtle" class="shrink-0" />
-        </Dropdown.Item>
+      <Dropdown.Content class="min-w-52">
+        <Dropdown.Group>
+          <Dropdown.Item
+            aria-keyshortcuts="E"
+            closeOnSelect
+            onSelect={props.onEvent}
+            class="min-h-9 gap-2 px-2.5"
+          >
+            <div class="size-4 shrink-0 flex items-center rounded-sm text-ink-muted [&_svg]:size-4">
+              <CalendarIcon />
+            </div>
+            <span class="flex-1 text-ink">Event</span>
+            <Hotkey shortcut="e" theme="subtle" class="ml-6" />
+          </Dropdown.Item>
+          <Dropdown.Item
+            aria-keyshortcuts="Q"
+            closeOnSelect
+            onSelect={props.onQuickCall}
+            class="min-h-9 gap-2 px-2.5"
+          >
+            <div class="size-4 shrink-0 flex items-center rounded-sm text-ink-muted [&_svg]:size-4">
+              <LightningIcon />
+            </div>
+            <span class="flex-1 text-ink">Quick Call</span>
+            <Hotkey shortcut="q" theme="subtle" class="ml-6" />
+          </Dropdown.Item>
+          <Dropdown.Item
+            aria-keyshortcuts="S"
+            closeOnSelect
+            onSelect={props.onScheduledCall}
+            class="min-h-9 gap-2 px-2.5"
+          >
+            <div class="size-4 shrink-0 flex items-center rounded-sm text-ink-muted [&_svg]:size-4">
+              <VideoIcon />
+            </div>
+            <span class="flex-1 text-ink">Scheduled Call</span>
+            <Hotkey shortcut="s" theme="subtle" class="ml-6" />
+          </Dropdown.Item>
+        </Dropdown.Group>
       </Dropdown.Content>
     </Dropdown>
   );

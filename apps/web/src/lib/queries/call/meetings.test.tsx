@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
-import { render } from '@solidjs/testing-library';
+import { cleanup, render } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
-import { ok } from 'neverthrow';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { err, ok } from 'neverthrow';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const client = vi.hoisted(() => ({
   joinMeeting: vi.fn(),
   joinMeetingAsGuest: vi.fn(),
   getCallLink: vi.fn(),
   getMeeting: vi.fn(),
+  getMeetings: vi.fn(),
 }));
 vi.mock('@service-call/client', () => ({ callServiceClient: client }));
 vi.mock('@queries/client', () => ({
@@ -19,6 +20,7 @@ import {
   useCallLinkQuery,
   useJoinMeetingMutation,
   useMeetingQuery,
+  useMeetingsQuery,
 } from './meetings';
 
 beforeEach(() => {
@@ -26,6 +28,7 @@ beforeEach(() => {
   client.joinMeeting.mockResolvedValue(ok({ token: 'private-token' }));
   client.joinMeetingAsGuest.mockResolvedValue(ok({ token: 'private-token' }));
 });
+afterEach(cleanup);
 
 function setupMutation() {
   const queryClient = new QueryClient();
@@ -43,6 +46,31 @@ function setupMutation() {
 }
 
 describe('meeting query capabilities', () => {
+  it('stops retries and polling on older servers, but allows a manual retry', async () => {
+    client.getMeetings.mockResolvedValue(
+      err([{ code: 'MEETINGS_UNAVAILABLE', message: 'Unavailable' }])
+    );
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retryDelay: 1 } },
+    });
+    let query!: ReturnType<typeof useMeetingsQuery>;
+    function Probe() {
+      query = useMeetingsQuery({ refetchInterval: 10 });
+      return null;
+    }
+    render(() => (
+      <QueryClientProvider client={queryClient}>
+        <Probe />
+      </QueryClientProvider>
+    ));
+    await vi.waitFor(() => expect(query.isError).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(client.getMeetings).toHaveBeenCalledTimes(1);
+    client.getMeetings.mockResolvedValue(ok([]));
+    await query.refetch();
+    await vi.waitFor(() => expect(query.isSuccess).toBe(true));
+    queryClient.clear();
+  });
   it('selects guest join only when a display name is supplied', async () => {
     const { mutation } = setupMutation();
     await mutation.mutateAsync({ shareToken: 'secret', displayName: 'Taylor' });

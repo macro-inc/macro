@@ -31,6 +31,7 @@ function responseLabel(status?: string) {
 }
 export function CalendarCallDetails(props: {
   item: CalendarCallItem;
+  canJoin: boolean;
   renderAvatar?: CallAvatarRenderer;
   invite?: JSX.Element;
   pending: boolean;
@@ -187,7 +188,9 @@ export function CalendarCallDetails(props: {
           </p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-          <Show when={url() || props.item.group === 'live'}>
+          <Show
+            when={props.canJoin || (url() && props.item.group === 'instant')}
+          >
             <Button
               size="sm"
               variant="success"
@@ -196,8 +199,10 @@ export function CalendarCallDetails(props: {
               onClick={props.onJoin}
             >
               <VideoIcon class="size-4" />
-              Join call
+              {props.item.group === 'instant' ? 'Start call' : 'Join call'}
             </Button>
+          </Show>
+          <Show when={url() || props.item.group === 'live'}>
             <Button
               size="sm"
               variant="outline"

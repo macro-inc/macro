@@ -761,7 +761,9 @@ invitations for selected recipients. Failed invitations can be retried without
 creating a second link or resending successful invitations. Live cards have
 copy and Join actions. Upcoming calls are grouped by local date, with reusable
 links in `Your links` below the scheduled rows. Link rows offer `Copy link` and
-`Start`; calendar rows offer `Join`. Return to All Events using the sidebar.
+`Start`; calendar rows and detail cards offer `Join` only between the scheduled
+start and end, or while the call has an active session. Past and future events
+keep their details and copy-link actions. Return to All Events using the sidebar.
 The view combines owned call links, active channel calls, saved calls, and
 calendar invitations from the previous 30 days through the next 90 days,
 including other conferencing providers. `Recent` offers `Load older calls`
