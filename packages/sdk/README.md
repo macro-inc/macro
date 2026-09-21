@@ -184,9 +184,10 @@ const macro = new Macro({
 
 const me = await macro.users.me();
 
-macro.events.on('channel.message_posted', async ({ metadata, message }) => {
+macro.events.on('message.posted', async ({ metadata, target }) => {
   if (metadata.sender === me.id) return; // don't reply to ourselves
-  await message.reply('hi!');
+  if (target.type === 'channel') await target.message.reply('hi!');
+  else await target.comment.reply('hi!');
 });
 
 const stop = await macro.events.listen();
@@ -202,7 +203,13 @@ replay if you disconnect.
 Handlers receive the same hydrated payloads as webhook deliveries — ORM
 handles for every entity the event names.
 
-Three families are delivered: `document.*`, `channel.*`, and `agent_session.*`.
+Four families are delivered: `document.*`, `channel.*`, `message.*`, and
+`agent_session.*`. Message events (`posted`, `patched`, `deleted`, `mentioned`,
+`attachment_created`, `attachment_removed`) cover channel messages and document
+comments alike: `metadata.parent` names the channel or document, and the
+hydrated `target` carries a `Channel` plus `Message` (and the `Thread` for a
+reply) or a `Document` plus `Comment`. `macro.events.onSelfMention` subscribes to
+`message.mentioned` deliveries that name the caller.
 Agent-session events describe a coding agent's life: `opened`, `turn_started`,
 `turn_ended`, `settled` (a turn ended with nothing queued behind it),
 `waiting_for_input` (the agent asked its owner a question), `input_received`,
@@ -232,14 +239,53 @@ const macro = new Macro({
   webhookSecret: process.env.MACRO_WEBHOOK_SECRET,
 });
 
-macro.events.on('channel.message_posted', async ({ metadata, message }) => {
-  if (metadata.sender === me.id) return;
-  await message.reply('hi!');
+macro.events.on('message.posted', async ({ metadata, target }) => {
+  if (metadata.sender === me.id || target.type !== 'channel') return;
+  await target.message.reply('hi!');
 });
 
 // Hono
 app.post('/webhook', (c) => macro.events.webhook()(c.req.raw));
 ```
+
+# Upgrading to 1.0
+
+Channel messages and document comments share one API, `/messages/{parent_type}/{parent_id}`,
+and the SDK entities follow it. The public `Channel`, `Message`, `Thread`, and
+`Document` methods keep their names; these details changed:
+
+- `Channel.messages()` and `Channel.messagesAfter()` page with the structured
+  `MessageCursor` and yield `Message` handles seeded from the shared message
+  record (`mentions` are now populated from list reads too).
+- `Channel.typing(action)` takes `'start' | 'stop'` and posts to
+  `/messages/channel/{id}/typing`.
+- `Message.from(client, channelId, record)` replaces `Message.from(client, record)`,
+  `Message.fromReply`, and `Message.received`.
+- `Comment` ids are message UUIDs: `Comment.commentId` is gone, `Comment.threadId()`
+  is async and returns the root comment id, `Comment.edit` accepts a rich body, and
+  `Comment.reply` exists. `Document.comment(body, { threadId })` takes a string
+  thread id and a rich body; `Document.comments()` returns `{ thread: ThreadState,
+  comments }` per live thread.
+- Webhook and SSE events `channel.message_posted`, `channel.mentioned`,
+  `channel.message_patched`, `channel.message_deleted`,
+  `channel.message_attachment_created`, and `channel.message_attachment_removed`
+  are replaced by `message.posted`, `message.mentioned`, `message.patched`,
+  `message.deleted`, `message.attachment_created`, and
+  `message.attachment_removed`. Their metadata carries `parent` instead of
+  `channel_id`, and handlers receive `target` (see Events above) instead of
+  `channel`/`message`/`thread`. `onSelfMention` handlers now receive
+  `message.mentioned` events. Update persisted webhook filters accordingly.
+
+Removed storage operations and their replacements: `getChannelMessages` →
+`messageTimeline`; `getChannelMessagesCatchUp` → `messageTimeline` with
+`activity_after`; `getThreadReplies` → `entityMessageGetThread`;
+`getMessageWithContext` → `entityMessageGetMessage` / `messageTimeline` with
+`around`; `postMessage` → `entityMessageCreate`; `patchMessage` →
+`entityMessageEdit`; `deleteMessage` → `entityMessageDeleteMessage`;
+`postReaction` → `entityMessageReact`; `postTyping` → `entityMessageTyping`;
+`getDocumentComments` → `messageTimeline` + `entityMessageGetThread` on a
+document parent; `createComment` → `entityMessageCreate`; `editComment` →
+`entityMessageEdit`; `deleteComment` → `entityMessageDeleteMessage`.
 
 # Developing
 
