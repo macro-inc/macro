@@ -313,6 +313,59 @@ describe('split router', () => {
     }
   );
 
+  it.each([false, true])(
+    'rechecks reentrant navigation at the async commit boundary (new owner: %s)',
+    async (newOwner) => {
+      const layout = createLayout();
+      const location = createMemorySplitRouterLocation(
+        '/drive/folder/one/~/drive/folder/two'
+      );
+      const router = createSplitRouter({
+        layout,
+        routes,
+        location,
+        middleware: [
+          ({ cause, path, redirect }) => {
+            if (cause === 'navigate' && path === '/drive/folder/three') {
+              return Promise.resolve(redirect('/drive/folder/shared'));
+            }
+          },
+        ],
+      });
+      const [first, second] = layout.snapshot().entries;
+      let handled = false;
+      router.subscribe((splitId) => {
+        if (
+          handled ||
+          splitId !== first!.splitId ||
+          routeParams(router.route(splitId)).folderId !== 'shared'
+        )
+          return;
+        handled = true;
+        if (newOwner) {
+          router.navigate(second!.splitId, '/drive/folder/shared', {
+            allowDuplicate: true,
+          });
+        } else {
+          router.navigate(first!.splitId, '/drive/folder/other');
+        }
+      });
+      router.navigate(first!.splitId, '/drive/folder/three');
+      await router.settled();
+      expect(handled).toBe(true);
+      expect(location.read().pathname).toBe(
+        newOwner
+          ? '/drive/folder/one/~/drive/folder/shared'
+          : '/drive/folder/other/~/drive/folder/two'
+      );
+      if (newOwner) {
+        expect(layout.activatedSplitId()).toBe(second!.splitId);
+        expect(router.history(first!.splitId)?.entries).toHaveLength(1);
+      }
+      router.dispose();
+    }
+  );
+
   it('does not activate the original claim when middleware redirects away', async () => {
     const location = createMemorySplitRouterLocation(
       '/drive/folder/one/~/drive/folder/two'

@@ -324,7 +324,8 @@ export function createSplitRouter<TSplitId>(
     config: EntryTransition<TSplitId>,
     controller: AbortController,
     prepared: Promise<SplitRouterEntry | undefined>,
-    finish: () => void
+    finish: () => void,
+    checkClaim: (entry: SplitRouterEntry) => SplitRouterEntry | undefined
   ) => {
     const { splitId } = config;
 
@@ -347,6 +348,11 @@ export function createSplitRouter<TSplitId>(
             notify(splitId);
           }
 
+          // Pending-state subscribers may navigate or create another owner.
+          // Recheck synchronously at the actual commit boundary.
+          throwIfAborted(controller.signal);
+          if (!checkClaim(entry)) return;
+          throwIfAborted(controller.signal);
           const changed = config.apply(entry);
           if (changed && splitId === undefined) notify();
         } finally {
@@ -367,7 +373,7 @@ export function createSplitRouter<TSplitId>(
     const hadPending = transitions.pending(config.key) !== undefined;
     cancelTargetTransition(config.key);
     const controller = new AbortController();
-    const reservation = claims.reserve(claimToAcquire(config.entry, config));
+    const reservation = claims.reserve(undefined);
     entryControllers.set(config.key, controller);
     const finish = () => {
       reservation.release();
@@ -417,6 +423,7 @@ export function createSplitRouter<TSplitId>(
       accept(await prepared);
 
     try {
+      reservation.move(claimToAcquire(config.entry, config));
       const prepared =
         middleware.length === 0
           ? config.entry
@@ -431,7 +438,9 @@ export function createSplitRouter<TSplitId>(
         : accept(prepared);
       if (isPromise(resolved)) {
         assertRouteEntry(routes, config.entry);
-        startAsyncEntry(config, controller, resolved, finish);
+        startAsyncEntry(config, controller, resolved, finish, (entry) =>
+          reuseOrAccept(entry, claimToAcquire(entry, config))
+        );
       } else {
         try {
           const changed = resolved ? publishEntry(config, resolved) : false;
