@@ -1,5 +1,19 @@
 # AI Chat (Agents)
 
+## Uploading files with AI
+
+`UploadFile` accepts a filename and standard padded base64 contents, up to 25 MiB
+decoded. An optional project ID places the file in a folder the caller can edit.
+Use `CreateDocument` for generated text and native Macro spreadsheets. Agents with
+code execution should construct the base64 argument from the original bytes;
+the tool cannot access an agent's local path or download a URL.
+
+The tool row displays the filename and, on success, **Uploaded**. Expand it to
+open the created document and see the uploaded byte count. Success means the
+bytes reached storage; previews, DOCX conversion, Markdown initialization, and
+indexing may finish asynchronously. Invalid contents, oversized files, and folder
+permission failures should display a failed tool call without a successful result.
+
 ## Where chats live
 
 - If session creation fails, the session view shows **Unable to start this agent**
