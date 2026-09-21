@@ -444,8 +444,10 @@ review note for the agent (`aria-label="Review note"`; `Cmd/Ctrl+Enter` adds,
 The chip's count row expands (`aria-expanded`) to show each queued note's
 file, line, and text so the reviewer can read or edit them before sending;
 **Send to agent** then posts one prompt listing every non-empty note by file
-and line and marks them "sent to agent". Clicking a note's path opens that
-file in the Changes pane. Notes never go to GitHub. Collapsed files and
+and line and marks them "sent to agent". Sending a typed composer message
+while notes are queued includes those notes in the same prompt and marks them
+sent — a second Enter does not post them again. Clicking a note's path opens
+that file in the Changes pane. Notes never go to GitHub. Collapsed files and
 unsent notes persist per session in localStorage; a new capture expands all
 files.
 
@@ -523,7 +525,12 @@ must stay hidden; subsequent live messages must still appear.
   walks back and past the bottom row returns to the input. When the composer is empty
   and a prompt is queued, its action becomes `Send next queued message` (an Enter
   symbol); pressing Enter or clicking that button cancels the current turn so the next
-  queued prompt starts immediately. Typed composer text still takes priority and Enter
+  queued prompt starts immediately. The advance is held — the control reads `Stop` and
+  Enter is inert — while a stop is already in flight or while the prompt the last
+  advance sent is still unconfirmed (it shows as a pending bubble); once the server
+  confirms that prompt as the running turn, Enter advances the queue again. Two rapid
+  Enters therefore advance one entry, not two: each advance ends the turn the server is
+  actually running. Typed composer text still takes priority and Enter
   queues that new prompt normally.
 - The stop button cancels only the **current** turn. The queue keeps draining: the next
   queued prompt starts a new turn. To fully quiesce a session, remove the queued

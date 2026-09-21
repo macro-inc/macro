@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  combinePromptWithNotes,
   describeNoteLines,
   formatNotesForAgent,
   notesForFile,
@@ -93,5 +94,28 @@ describe('formatNotesForAgent', () => {
         '2. `b.ts`, line 10 (old): Keep this',
       ].join('\n')
     );
+  });
+});
+
+describe('combinePromptWithNotes', () => {
+  it('keeps a draft that has no notes', () => {
+    expect(combinePromptWithNotes('  Please ship this  ', [])).toBe(
+      'Please ship this'
+    );
+  });
+
+  it('is the notes dump when the draft is empty', () => {
+    expect(combinePromptWithNotes('   ', [note()])).toBe(
+      formatNotesForAgent([note()])
+    );
+  });
+
+  it('joins a draft and queued notes as one prompt, ignoring already-sent notes', () => {
+    expect(
+      combinePromptWithNotes('Please also add a test.', [
+        note(),
+        note({ id: 'sent', sentAt: 't', text: 'already sent' }),
+      ])
+    ).toBe(`Please also add a test.\n\n${formatNotesForAgent([note()])}`);
   });
 });

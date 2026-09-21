@@ -271,7 +271,10 @@ describe('session controls', () => {
     ) as HTMLTextAreaElement;
     expect(editor.value).toBe('Use a constant');
     fireEvent.input(editor, { target: { value: 'Use a named constant' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Send to agent' }));
+    const send = screen.getByRole('button', { name: 'Send to agent' });
+    fireEvent.click(send);
+    fireEvent.click(send);
+    expect(context.sent).toHaveLength(1);
     expect(context.sent[0]).toContain('`apps/web/src/a.ts`, line 2 (new)');
     expect(context.sent[0]).toContain('Use a named constant');
     expect(screen.queryByText(/review note/)).toBeNull();

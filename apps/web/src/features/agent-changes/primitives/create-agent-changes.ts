@@ -28,6 +28,12 @@ export type AgentChangesController = {
   setDiffStyle: (style: DiffStyle) => void;
   /** Post every queued note to the agent as one prompt. */
   sendQueuedNotes: () => void;
+  /**
+   * Take queued notes off the dock as the markdown a composer send should
+   * carry, and mark them sent. Empty when there is nothing to take — so a
+   * second send in the same tick cannot post the same notes again.
+   */
+  consumeSendableNotes: () => string;
   /** The handoff card was dismissed for the changeset on screen. */
   handoffDismissed: Accessor<boolean>;
   dismissHandoff: () => void;
@@ -78,6 +84,14 @@ export function createAgentChanges(options: {
     );
   };
 
+  const consumeSendableNotes = () => {
+    const queued = sendableNotes(review.notes());
+    if (queued.length === 0) return '';
+    const markdown = formatNotesForAgent(queued);
+    review.markQueuedSent();
+    return markdown;
+  };
+
   return {
     context: options.context,
     layout,
@@ -88,15 +102,15 @@ export function createAgentChanges(options: {
     sendQueuedNotes: () => {
       const agent = host.agent;
       if (!agent) return;
-      const queued = sendableNotes(review.notes());
-      if (queued.length === 0) return;
+      if (sendableNotes(review.notes()).length === 0) return;
       if (!agent.canSend()) {
         host.notify('The agent cannot take a prompt right now.', 'failure');
         return;
       }
-      agent.send(formatNotesForAgent(queued));
-      review.markQueuedSent();
+      const markdown = consumeSendableNotes();
+      if (markdown) agent.send(markdown);
     },
+    consumeSendableNotes,
     handoffDismissed: () => {
       const id = model.changeset()?.id;
       return id !== undefined && dismissed() === id;

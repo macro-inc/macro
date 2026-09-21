@@ -93,3 +93,18 @@ export function formatNotesForAgent(notes: readonly ReviewNote[]): string {
   );
   return `Please address these ${ordered.length} review notes on the current changes:\n\n${items.join('\n')}`;
 }
+
+/**
+ * One prompt for a composer send that also carries queued notes. Notes
+ * without a draft are the dump alone; a draft without notes is the draft.
+ */
+export function combinePromptWithNotes(
+  message: string,
+  notes: readonly ReviewNote[]
+): string {
+  const notesMarkdown = formatNotesForAgent(sendableNotes(notes));
+  const prompt = message.trim();
+  if (!notesMarkdown) return prompt;
+  if (!prompt) return notesMarkdown;
+  return `${prompt}\n\n${notesMarkdown}`;
+}
