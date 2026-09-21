@@ -98,7 +98,10 @@ describe('standalone compose controller', () => {
       expect(context.delivery.schedule).toHaveBeenCalledOnce();
       pending.resolve();
       await request;
-      expect(root.state.context.disabled()).toBe(false);
+      expect(root.state.context.disabled()).toBe(true);
+      expect(root.state.context.sendUnavailableReason?.()).toContain(
+        'Already scheduled'
+      );
       expect(root.state.draftDirty()).toBe(true);
     } finally {
       pending.resolve();

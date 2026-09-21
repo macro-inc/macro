@@ -77,6 +77,10 @@ import { decodeBase64Utf8 } from './core/decode-base64';
 import type { EmailDraft } from './core/email-draft';
 import { readDroppedEmailFiles } from './editor-adapter';
 import { makeAttachmentPublic } from './make-attachment-public';
+import {
+  emailDraftLifecycleSource,
+  publishDraftLifecycleChange,
+} from './queries/draft-lifecycle';
 import { createEmailInboxSource } from './queries/inbox-source';
 import { restoreDraftBodyAfterUndo, runUndoSend } from './undo-send';
 
@@ -169,6 +173,7 @@ export function createEmailComposeContext(
   });
 
   return {
+    draftLifecycle: emailDraftLifecycleSource,
     recipientName: (id) => getDisplayName(tryMacroId(id)),
     recordMention: (sourceId, targetId) => {
       void trackMention(sourceId, 'document', targetId).catch(reportError);
@@ -298,6 +303,7 @@ export function createEmailComposeContext(
           skipSoupRefetch: completingThread,
         });
         try {
+          publishDraftLifecycleChange(input.draftId, inboxId);
           if (input.threadId) markThreadDraftSaved(input.threadId);
         } catch (error) {
           reportError(error);
@@ -336,6 +342,11 @@ export function createEmailComposeContext(
           skipSoupRefetch: completingThread,
         });
         try {
+          if (result.message.db_id)
+            publishDraftLifecycleChange(
+              result.message.db_id,
+              result.message.link_id
+            );
           if (result.message.thread_db_id)
             markThreadDraftSaved(result.message.thread_db_id);
         } catch (error) {
@@ -353,6 +364,7 @@ export function createEmailComposeContext(
           linkId: headerId(inboxId),
         });
         try {
+          publishDraftLifecycleChange(draftId, inboxId);
           invalidateSoupEntity(draftId);
         } catch (error) {
           reportError(error);
@@ -363,6 +375,7 @@ export function createEmailComposeContext(
           { draftID: draftId, send_time: sendTime },
           headerId(inboxId)
         );
+        publishDraftLifecycleChange(draftId, inboxId);
       },
       archive: async ({ threadId, value }, inboxId) => {
         await archiveEmailThread({ id: threadId, value }, headerId(inboxId));

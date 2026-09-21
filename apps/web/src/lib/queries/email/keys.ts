@@ -14,6 +14,13 @@ export const emailKeys = createQueryKeys('email', {
   threadMessages: (threadId: string) => ({
     queryKey: ['messages', threadId],
   }),
+  composeDraftState: (params: {
+    draftId: string;
+    threadId: string;
+    inboxId?: string;
+  }) => ({
+    queryKey: ['compose-draft-state', params],
+  }),
   previews: (params: {
     view: PreviewViewStandardLabel;
     limit?: number;

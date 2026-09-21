@@ -1,3 +1,4 @@
+import { format } from 'date-fns/format';
 import { type Accessor, createEffect, createSignal, on } from 'solid-js';
 import type {
   EmailComposeFeedback,
@@ -14,12 +15,13 @@ export function createEmailSendSchedule(options: {
   sendTime: Accessor<Date | null | undefined>;
   setSendTime: (date: Date | null) => void;
   recipientCount: Accessor<number>;
+  reconcile?: () => Promise<unknown>;
 }) {
   const { delivery, notices } = options;
   const [pending, setPending] = createSignal(false);
 
-  const change = async (date: Date | null) => {
-    if (pending()) return;
+  const change = async (date: Date | null): Promise<boolean> => {
+    if (pending()) return false;
     const inboxId = options.inboxId();
     setPending(true);
     try {
@@ -34,23 +36,22 @@ export function createEmailSendSchedule(options: {
         } catch (error) {
           notices.reportError(error);
           notices.feedback.failure('Failed to unschedule email');
-          return;
+          return false;
         }
         options.setSendTime(null);
         notices.feedback.success('Email unscheduled');
-        return;
+        return true;
       }
       if (!date) {
         options.setSendTime(null);
-        return;
+        return true;
       }
       // Persistence owns its failure notice; a failed save is not a failed schedule request.
       let draftId: string | undefined;
       try {
         draftId = await options.saveDraft();
-      } catch (error) {
-        notices.reportError(error);
-        return;
+      } catch {
+        return false;
       }
       try {
         if (!draftId) throw new Error('Draft required');
@@ -61,7 +62,7 @@ export function createEmailSendSchedule(options: {
       } catch (error) {
         notices.reportError(error);
         notices.feedback.failure('Failed to schedule message');
-        return;
+        return false;
       }
       options.setSendTime(date);
       const threadId = options.threadId();
@@ -75,10 +76,20 @@ export function createEmailSendSchedule(options: {
           );
         }
       }
+      notices.feedback.success(
+        `${previous ? 'Email rescheduled' : 'Email scheduled'} for ${format(date, "MMM d, yyyy 'at' h:mm a")}`
+      );
+      return true;
     } catch (error) {
       // Presentation failures do not change a successful schedule/unschedule.
       notices.reportError(error);
+      return false;
     } finally {
+      try {
+        await options.reconcile?.();
+      } catch (error) {
+        notices.reportError(error);
+      }
       setPending(false);
     }
   };

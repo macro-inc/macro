@@ -470,28 +470,24 @@ A failure from an older, unmounted editor must not overwrite a newer edited repl
 A presentation or refresh error after successful delivery is not a reason to send
 again.
 
-Send and schedule are refused with a notice while the device is offline, while a
-draft is still syncing (its save was accepted locally but not yet confirmed by the
-server; retry after a moment), or while an attachment has no completed upload. The
-composer keeps its content in each case. Attachments cannot be added while
-offline: a blocking notice explains and nothing is attached.
-For a new standalone email, a failed REST draft save is best-effort: Send can
-still proceed without a draft ID when no save was queued and no attachment is
-waiting to upload. A server rejection blocks sending even an existing draft.
-An internal draft-save failure, including a failed response read after the save
-commits, stays queued and retries with backoff. It must not permanently disable
-autosave; Send stays blocked until a save is confirmed. Invalid or unauthorized
-writes still stop retrying.
-Test this with a previously saved draft as well as a new one: a queued edit must
-block Send and scheduling until a save commits. Reopening a cached draft while
-offline must retain its uploaded attachments and confirmed scheduled time.
-
+Choosing a time commits the schedule immediately; there is no second Send step.
+Success is confirmed by a notice and a persisted scheduled-time pill. Open that
+pill to reschedule or use **Cancel schedule**, which returns the message to an
+editable draft. Scheduled composers are otherwise read-only, and Send (including
+`Ctrl`/`Cmd`+`Enter`) explains that cancellation is required instead of dispatching
+a duplicate. At narrow split widths the pill truncates inside its reserved toolbar
+space; it must not cover discard, attachment, formatting, or Send controls.
 While a schedule change is pending, immediate send and further schedule changes
 are disabled. Reply recipients cannot be edited or dragged during scheduling,
 sending, or discarding. A failed schedule or unschedule keeps the last confirmed time.
 If scheduling succeeds but marking the thread done fails, the email remains
 scheduled and a notice explains the separate failure. Check the confirmed time
 before retrying; do not treat that notice as a failed schedule.
+Keep a scheduled composer open through its due time when verifying the flow. It
+reconciles on email events, tab focus/reconnect, cross-tab schedule changes, and a
+short due-time poll. Confirmed delivery closes or disables the old composer and
+stops autosave/delete against the sent ID. Text from an edit that raced delivery
+is preserved as a new unsent draft, never submitted with the sent message ID.
 
 With the new app views enabled, mobile and tablet Email use a floating, horizontally
 scrolling row of those tabs, with `Open email filters` at the left. The rest of the

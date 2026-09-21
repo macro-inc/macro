@@ -117,6 +117,23 @@ export async function fetchAndCacheThread(
   return ok({ thread: result.value });
 }
 
+/** Fetch the first page from the server even when the ordinary thread cache is fresh. */
+export async function fetchFreshEmailThread(threadId: string): Promise<Thread> {
+  if (!isFeatureEnabled(enableGraphqlSoup)) {
+    const result = await throwOnErr(
+      async () =>
+        await emailClient.getThread({
+          thread_id: threadId,
+          offset: 0,
+          limit: DEFAULT_THREAD_MESSAGES_LIMIT,
+        })
+    );
+    return result.thread;
+  }
+
+  return await fetchGraphqlEmailThread(threadId);
+}
+
 /**
  * Whether a thread's done state can actually be reversed.
  *

@@ -40,6 +40,7 @@ type ReplyInputViewProps = Omit<
   | 'drafts'
   | 'attachmentStorage'
   | 'delivery'
+  | 'draftLifecycle'
   | 'notices'
   | 'accounts'
   | 'connectivity'
@@ -65,6 +66,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
       drafts: composeContext.drafts,
       attachmentStorage: composeContext.attachmentStorage,
       delivery: composeContext.delivery,
+      draftLifecycle: composeContext.draftLifecycle,
       notices: composeContext.notices,
       accounts: composeContext.accounts,
       connectivity: composeContext.connectivity,
@@ -110,6 +112,8 @@ export function ReplyInputView(props: ReplyInputViewProps) {
     handleAddAttachments,
     handleRemoveAttachment,
     handleSendTimeChange,
+    editingDisabled,
+    sendUnavailableReason,
     sendActionDisabled,
     scheduleSendDisabled,
     toggleQuotedText,
@@ -153,6 +157,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
     .onChange(state.onContentChange)
     .withFilePaste({
       onPasteFilesAndDirs: (files, directories) => {
+        if (editingDisabled()) return;
         composeContext.editorFiles.uploadEditorFiles({
           editor: editor(),
           sourceId: props.sourceEntityId,
@@ -186,7 +191,6 @@ export function ReplyInputView(props: ReplyInputViewProps) {
         scopeId: composeHotkeyScope,
         description: 'Send email',
         keyDownHandler: () => {
-          if (form.sendTime()) return false;
           sendEmail();
           return true;
         },
@@ -200,7 +204,6 @@ export function ReplyInputView(props: ReplyInputViewProps) {
         scopeId: composeHotkeyScope,
         description: 'Send and mark done',
         keyDownHandler: () => {
-          if (form.sendTime()) return false;
           sendEmail(true);
           return true;
         },
@@ -278,8 +281,10 @@ export function ReplyInputView(props: ReplyInputViewProps) {
                       ? attachment.contentType
                       : attachment.mimeType,
               }}
-              removable
-              onRemove={() => handleRemoveAttachment(attachment)}
+              removable={!editingDisabled()}
+              onRemove={() => {
+                if (!editingDisabled()) handleRemoveAttachment(attachment);
+              }}
             />
           )}
         </For>
@@ -297,6 +302,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
       }
       size="icon-composer"
       tooltip="Attach"
+      disabled={editingDisabled()}
     >
       <Paperclip />
     </Button>
@@ -329,7 +335,19 @@ export function ReplyInputView(props: ReplyInputViewProps) {
           }
           sendDisabled={sendActionDisabled() || sendActionHidden()}
           sending={isSending()}
+          editingDisabled={editingDisabled()}
           onSend={() => sendEmail()}
+          scheduleControl={
+            <Show when={composeContext.presentation.scheduleEnabled}>
+              <EmailDateSelector
+                mobile
+                compact
+                sendTime={form.sendTime() ?? null}
+                onSendTimeChange={handleSendTimeChange}
+                disabled={scheduleSendDisabled()}
+              />
+            </Show>
+          }
         />
       </Show>
       <ReplyEnvelope
@@ -349,7 +367,16 @@ export function ReplyInputView(props: ReplyInputViewProps) {
         mobile={isMobileDrawer}
         portalScope={composePortalScope}
         replyType={state.replyType}
+        disabled={editingDisabled}
       />
+      <Show when={form.sendTime()}>
+        {(sendTime) => (
+          <div role="status" class="px-4 pb-2 text-sm text-ink-muted">
+            Scheduled for {sendTime().toLocaleString()}. Cancel the schedule to
+            edit or send now.
+          </div>
+        )}
+      </Show>
       <div
         class={cn(
           isMobileDrawer()
@@ -388,6 +415,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
             onDragStart: (valid) => setIsDragging(valid),
             onDragEnd: () => setIsDragging(false),
             onDrop: (files, directories, event) => {
+              if (editingDisabled()) return;
               const currentEditor = editor();
               if (!currentEditor || !event) return;
               composeContext.editorFiles.uploadEditorFiles({
@@ -420,7 +448,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
               quoteCollapsed() && 'quote-collapsed',
               isDragging() && 'blur'
             )}
-            disabled={isSending()}
+            disabled={editingDisabled()}
             placeholder={
               isMobileDrawer()
                 ? 'Use `@` to reference files'
@@ -450,6 +478,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
                 mobile={composeContext.presentation.isMobile()}
                 prepareLinks={composeContext.presentation.prepareSignatureLinks}
                 html={html()}
+                dismissable={!editingDisabled()}
                 onDismiss={() => {
                   // Dismissal is composer-local state worth keeping — latch
                   // the seed so a draft upgrade can't remount it away.
@@ -519,6 +548,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
                 mobile={composeContext.presentation.isMobile()}
                 prepareLinks={composeContext.presentation.prepareSignatureLinks}
                 html={html()}
+                dismissable={!editingDisabled()}
                 onDismiss={() => {
                   // Dismissal is composer-local state worth keeping — latch
                   // the seed so a draft upgrade can't remount it away.
@@ -537,6 +567,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
               onClick={deleteDraftAndReset}
               tooltip={savedDraftId() ? 'Delete draft' : 'Discard'}
               size="icon-composer"
+              disabled={editingDisabled()}
             >
               <Trash />
             </Button>
@@ -547,12 +578,14 @@ export function ReplyInputView(props: ReplyInputViewProps) {
                 !sendActionHidden()
               }
             >
-              <EmailDateSelector
-                mobile={false}
-                sendTime={form.sendTime() ?? null}
-                onSendTimeChange={handleSendTimeChange}
-                disabled={scheduleSendDisabled()}
-              />
+              <div class="min-w-0 max-w-[45%] shrink">
+                <EmailDateSelector
+                  mobile={false}
+                  sendTime={form.sendTime() ?? null}
+                  onSendTimeChange={handleSendTimeChange}
+                  disabled={scheduleSendDisabled()}
+                />
+              </div>
             </Show>
             <SendButton
               appearance="composer"
@@ -560,6 +593,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
               pending={isSending()}
               hidden={sendActionHidden()}
               onClick={() => sendEmail()}
+              tooltip={sendUnavailableReason() ?? 'Send email'}
             />
           </div>
         </Show>

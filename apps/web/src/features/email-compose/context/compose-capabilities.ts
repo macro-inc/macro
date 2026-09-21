@@ -137,6 +137,48 @@ export interface EmailDelivery {
   }): Promise<void>;
 }
 
+export type EmailDraftLifecycleState =
+  | {
+      type: 'editing';
+      draftId: string;
+      threadId: string;
+      inboxId: string;
+      observedAt: number;
+    }
+  | {
+      type: 'scheduled';
+      draftId: string;
+      threadId: string;
+      inboxId: string;
+      sendTime: string;
+      observedAt: number;
+    }
+  | {
+      type: 'sent';
+      draftId: string;
+      threadId: string;
+      inboxId: string;
+      observedAt: number;
+    }
+  | {
+      type: 'missing';
+      draftId: string;
+      threadId: string;
+      inboxId?: string;
+      observedAt: number;
+    };
+
+export interface EmailDraftLifecycleSource {
+  observe(input: {
+    draftId: Accessor<string | null | undefined>;
+    threadId: Accessor<string | null | undefined>;
+    inboxId: Accessor<string | undefined>;
+  }): {
+    state: Accessor<EmailDraftLifecycleState | undefined>;
+    refresh(): Promise<EmailDraftLifecycleState | undefined>;
+  };
+}
+
 export interface EmailComposeFeedback {
   feedback: {
     success(
@@ -193,6 +235,7 @@ export interface EmailComposeContext {
   drafts: EmailDraftStorage;
   attachmentStorage: EmailAttachmentStorage;
   delivery: EmailDelivery;
+  draftLifecycle: EmailDraftLifecycleSource;
   notices: EmailComposeFeedback;
   accounts: EmailComposeAccounts;
   connectivity: EmailConnectivity;

@@ -47,13 +47,17 @@ export interface ComposeState {
   // Actions
   onSend: () => void;
   onDelete?: () => void;
-  onSendTimeChange?: (date: Date | null) => void;
+  onSendTimeChange?: (
+    date: Date | null
+  ) => void | boolean | Promise<void | boolean>;
 
   // Status
   disabled: Accessor<boolean>;
   isSending: Accessor<boolean>;
   isSavingDraft?: Accessor<boolean>;
   hasDraft: Accessor<boolean>;
+  sendUnavailableReason?: Accessor<string | undefined>;
+  deliveryState?: Accessor<'draft' | 'scheduled' | 'sent' | 'missing'>;
 
   // Validation
   validationError: (

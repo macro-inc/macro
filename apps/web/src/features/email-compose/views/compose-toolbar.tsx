@@ -12,7 +12,7 @@ import { plural } from '@core/util/string';
 import PaperclipIcon from '@phosphor/paperclip.svg?component-solid';
 import TextAa from '@phosphor/text-aa.svg';
 import Trash from '@phosphor/trash.svg';
-import { Button, SendButton, Tooltip } from '@ui';
+import { Button, SendButton } from '@ui';
 import { FORMAT_TEXT_COMMAND, type LexicalEditor } from 'lexical';
 import { createSignal, Show } from 'solid-js';
 import { EmailDateSelector } from '../components/email-date-selector';
@@ -83,6 +83,7 @@ export function EmailComposeToolbar(props: {
             onClick={ctx.onDelete}
             tooltip="Delete draft"
             size="icon-composer"
+            disabled={ctx.disabled()}
           >
             <Trash />
           </Button>
@@ -111,28 +112,28 @@ export function EmailComposeToolbar(props: {
           <TextAa />
         </Button>
         <Show when={ctx.scheduleEnabled && ctx.onSendTimeChange}>
-          <EmailDateSelector
-            mobile={false}
-            sendTime={ctx.sendTime()}
-            onSendTimeChange={ctx.onSendTimeChange}
-            disabled={ctx.scheduleSendDisabled?.()}
-          />
+          <div class="min-w-0 max-w-[45%] shrink">
+            <EmailDateSelector
+              mobile={false}
+              sendTime={ctx.sendTime()}
+              onSendTimeChange={ctx.onSendTimeChange}
+              disabled={ctx.scheduleSendDisabled?.()}
+            />
+          </div>
         </Show>
-        <Tooltip label={ctx.sendTime() ? 'Send time is scheduled' : ''}>
-          <SendButton
-            appearance="composer"
-            onClick={() => ctx.onSend()}
-            disabled={
-              ctx.isSavingDraft?.() ||
-              !!ctx.sendTime() ||
-              ctx.isSending() ||
-              ctx.disabled()
-            }
-            pending={ctx.isSending()}
-            tooltip="Send email"
-            shortcut="cmd+enter"
-          />
-        </Tooltip>
+        <SendButton
+          appearance="composer"
+          onClick={() => ctx.onSend()}
+          disabled={
+            ctx.isSavingDraft?.() ||
+            !!ctx.sendTime() ||
+            ctx.isSending() ||
+            ctx.disabled()
+          }
+          pending={ctx.isSending()}
+          tooltip={ctx.sendUnavailableReason?.() ?? 'Send email'}
+          shortcut="cmd+enter"
+        />
       </div>
     </Show>
   );
@@ -173,7 +174,7 @@ function MobileToolbar(props: {
           />
         </Show>
         <SendButton
-          tooltip="Send email"
+          tooltip={ctx.sendUnavailableReason?.() ?? 'Send email'}
           disabled={
             ctx.isSending() ||
             ctx.isSavingDraft?.() ||

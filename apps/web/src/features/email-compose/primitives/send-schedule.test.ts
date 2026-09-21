@@ -53,9 +53,10 @@ describe('send and schedule ordering', () => {
       await schedule;
       state.recipients.setRecipients('to', []);
       await vi.advanceTimersByTimeAsync(0);
-      expect(context.delivery.unschedule).toHaveBeenCalledOnce();
-      expect(state.form.sendTime()).toBeUndefined();
-      expect(state.sendActionDisabled()).toBe(false);
+      expect(context.delivery.unschedule).not.toHaveBeenCalled();
+      expect(state.form.recipients().to).toEqual(originalTo);
+      expect(state.form.sendTime()).toEqual(new Date('2026-12-01T12:00:00Z'));
+      expect(state.sendActionDisabled()).toBe(true);
     } finally {
       pending.resolve();
       await schedule;
@@ -162,13 +163,8 @@ describe('send and schedule ordering', () => {
   it('does not add a scheduling notice after persistence already failed', async () => {
     const composeContext = createComposeContext();
     const failure = new Error('Draft save failed');
-    vi.mocked(composeContext.drafts.saveDraft).mockImplementationOnce(
-      async () => {
-        composeContext.notices.feedback.failure('Failed to save draft');
-        throw failure;
-      }
-    );
-    const state = mountReplyComposer(composeContext);
+    vi.mocked(composeContext.drafts.saveDraft).mockRejectedValueOnce(failure);
+    const state = replyComposer(composeContext);
     try {
       await state.handleSendTimeChange(new Date('2026-12-01T12:00:00Z'));
       expect(composeContext.delivery.schedule).not.toHaveBeenCalled();

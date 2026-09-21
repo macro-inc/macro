@@ -1,4 +1,3 @@
-import { toast } from '@core/component/Toast/Toast';
 import { throwOnErr } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
 import { invalidateAllSoup, refetchSoupEntity } from '@queries/soup/cache';
@@ -44,7 +43,6 @@ export function useSaveDraftMutation(
       {
         onError(error) {
           console.error('Failed to save draft', error);
-          toast.failure('Failed to save draft');
         },
         onSuccess(data, vars) {
           try {
@@ -104,7 +102,6 @@ export function useDeleteDraftMutation(
       {
         onError(error) {
           console.error('Failed to delete draft', error);
-          toast.failure('Failed to delete draft');
         },
         onSuccess(_data, vars) {
           try {
