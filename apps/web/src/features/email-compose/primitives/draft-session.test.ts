@@ -24,6 +24,7 @@ describe('reduceDraftSession', () => {
   it('seeds a server identity from an existing draft, none otherwise', () => {
     expect(seeded.identity).toEqual({
       kind: 'server',
+      queued: false,
       draftId: 'server-1',
       threadId: 't-1',
     });
@@ -51,6 +52,7 @@ describe('reduceDraftSession', () => {
     });
     expect(next.identity).toEqual({
       kind: 'server',
+      queued: false,
       draftId: 'server-2',
       threadId: 'th-1',
     });
@@ -61,7 +63,12 @@ describe('reduceDraftSession', () => {
         epoch: handle.epoch,
         identity: { draftId: 'server-3', threadId: 't-9' },
       }).identity
-    ).toEqual({ kind: 'server', draftId: 'server-3', threadId: 't-9' });
+    ).toEqual({
+      kind: 'server',
+      draftId: 'server-3',
+      threadId: 't-9',
+      queued: false,
+    });
   });
 
   it('a queued save never confirms: handles stay handles, server ids stay', () => {
@@ -83,7 +90,20 @@ describe('reduceDraftSession', () => {
         epoch: seeded.epoch,
         identity: { draftId: 'server-1', persistence: 'queued' },
       })
-    ).toBe(seeded);
+    ).toEqual({ ...seeded, identity: { ...seeded.identity, queued: true } });
+  });
+
+  it('invalidates pending writes when undo restores a different draft', () => {
+    const restored = reduceDraftSession(handle, {
+      type: 'seeded',
+      draftId: 'restored',
+    });
+    const lateSave = reduceDraftSession(restored, {
+      type: 'saved',
+      epoch: handle.epoch,
+      identity: { draftId: 'old-draft' },
+    });
+    expect(lateSave.identity).toMatchObject({ draftId: 'restored' });
   });
 
   it('ignores outcomes from before a reset', () => {
@@ -161,24 +181,24 @@ describe('createDraftSession', () => {
   it('derives the send and autosave predicates from state', () => {
     createRoot((dispose) => {
       const session = createDraftSession();
-      expect(session.restSendable()).toBe(false);
+      expect(session.serverConfirmed()).toBe(false);
       expect(session.autosaveAllowed()).toBe(true);
       session.dispatch({ type: 'minted', draftId: 'h-1', threadId: 'th-1' });
       const epoch = session.epoch();
       expect(session.draftId()).toBe('h-1');
-      expect(session.restSendable()).toBe(false);
+      expect(session.serverConfirmed()).toBe(false);
       session.dispatch({
         type: 'saved',
         epoch,
         identity: { draftId: 'h-1', persistence: 'queued' },
       });
-      expect(session.restSendable()).toBe(false);
+      expect(session.serverConfirmed()).toBe(false);
       session.dispatch({
         type: 'saved',
         epoch,
         identity: { draftId: 'server-1', persistence: 'committed' },
       });
-      expect(session.restSendable()).toBe(true);
+      expect(session.serverConfirmed()).toBe(true);
       expect(session.draftId()).toBe('server-1');
       expect(session.threadId()).toBe('th-1');
       session.dispatch({ type: 'rejected', epoch, code: 'INVALID' });

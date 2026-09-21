@@ -43,7 +43,6 @@ export function mountReplyComposer(
           onDraftRemoved() {},
           exitToThread: () => false,
           replyRequest: { replyType: () => undefined, clear() {} },
-          getMarkDoneNavigationTargetId: () => undefined,
         },
       },
       () => editor,

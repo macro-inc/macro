@@ -302,6 +302,8 @@ Macro Markdown messages retain document mentions. Ordinary HTML bodies use an
 open shadow root: Playwright text locators can reach them, but a card's ordinary
 `innerText` or `querySelector` does not traverse that root.
 
+Sending a reply from an inbox thread marks that thread done but stays on it;
+only the explicit Mark done action opens the next email.
 After a successful send, the `Email sent` notice offers `Undo`. Undo restores the
 sent envelope and editable content, including when the reply used another inbox;
 a slow background refresh must not keep the restored editor disabled. A rejected
@@ -317,7 +319,10 @@ composer keeps its content in each case. Attachments cannot be added while
 offline: a blocking notice explains and nothing is attached.
 For a new standalone email, a failed REST draft save is best-effort: Send can
 still proceed without a draft ID when no save was queued and no attachment is
-waiting to upload. A server rejection still blocks sending the unconfirmed draft.
+waiting to upload. A server rejection blocks sending even an existing draft.
+Test this with a previously saved draft as well as a new one: a queued edit must
+block Send and scheduling until a save commits. Reopening a cached draft while
+offline must retain its uploaded attachments and confirmed scheduled time.
 
 While a schedule change is pending, immediate send and further schedule changes
 are disabled. Reply recipients cannot be edited or dragged during scheduling,

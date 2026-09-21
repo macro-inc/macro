@@ -14,6 +14,7 @@ export function createComposeContext(): EmailComposeContext {
       primaryId: () => 'inbox',
     },
     viewerEmail: () => 'me@example.com',
+    connectivity: { looksOffline: vi.fn(() => false) },
     recipients: () => [],
     hasPaidAccess: () => true,
     presentation: {

@@ -13,7 +13,8 @@ export function createThreadDrafts(
   >
 ) {
   // The newest version of each reply draft seen across query snapshots,
-  // keyed by the replied-to message id. A cached snapshot populates this the
+  // keyed by the replied-to message id. A server identity replacing a client
+  // handle wins regardless of timestamp: client and server clocks can differ. A cached snapshot populates this the
   // moment it's available (the composer must not wait on the network), and a
   // later fetch upgrades an entry only when its updated_at is newer — so the
   // revalidation of a stale cache wins, but an out-of-order response can't
@@ -33,8 +34,9 @@ export function createThreadDrafts(
       const nextDraft = map[messageId];
       if (
         !nextDraft ||
-        new Date(nextDraft.updated_at).getTime() <
-          new Date(prevDraft.updated_at).getTime()
+        (nextDraft.db_id === prevDraft.db_id &&
+          new Date(nextDraft.updated_at).getTime() <
+            new Date(prevDraft.updated_at).getTime())
       ) {
         map[messageId] = prevDraft;
       }

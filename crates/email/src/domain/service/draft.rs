@@ -50,18 +50,25 @@ where
         let accessible_link_ids: Vec<Uuid> = accessible_inboxes.iter().map(|l| l.id).collect();
         self.resolve_client_handles(&mut input, &accessible_link_ids)
             .await?;
-        let draft = self
+        let mut draft = self
             .create_draft_impl(&link, &accessible_inboxes, input)
             .await?;
         let message_ids = [draft.db_id];
-        let (mut attachments, mut attachments_draft, mut attachments_forwarded) = tokio::try_join!(
-            self.email_repo.attachments_by_message_ids(&message_ids),
-            self.email_repo
-                .draft_attachments_by_message_ids(&message_ids),
-            self.email_repo
-                .forwarded_attachments_by_message_ids(&message_ids),
-        )
-        .map_err(anyhow::Error::from)?;
+        let (mut attachments, mut attachments_draft, mut attachments_forwarded, mut send_times) =
+            tokio::try_join!(
+                self.email_repo.attachments_by_message_ids(&message_ids),
+                self.email_repo
+                    .draft_attachments_by_message_ids(&message_ids),
+                self.email_repo
+                    .forwarded_attachments_by_message_ids(&message_ids),
+                self.email_repo
+                    .scheduled_send_times_by_message_ids(&message_ids),
+            )
+            .map_err(anyhow::Error::from)?;
+
+        // Autosaves leave scheduling untouched. Return the stored schedule,
+        // not the usually absent input, so normalized cache writes preserve it.
+        draft.send_time = send_times.remove(&draft.db_id);
 
         Ok(SavedUserDraft {
             attachments: attachments.remove(&draft.db_id).unwrap_or_default(),

@@ -7,7 +7,6 @@ import {
   select,
   update,
 } from '@graphql-cache/exchange/optimistic';
-import { type Client, CombinedError } from '@urql/core';
 import {
   DeleteEmailDraftDocument,
   type DeleteEmailDraftMutation,
@@ -20,7 +19,8 @@ import {
   type SaveEmailDraftInput,
   type SaveEmailDraftMutation,
   type SaveEmailDraftMutationVariables,
-} from './graphql/generated/graphql';
+} from '@service-storage/graphql/generated/graphql';
+import { type Client, CombinedError } from '@urql/core';
 
 /**
  * Input for a durable GraphQL draft save. `draftId` is the draft's handle —
@@ -47,6 +47,8 @@ export type GraphqlSaveEmailDraftArgs = Omit<
    * `bodyHtmlSanitized` — responses carry that field unencoded. Unsanitized
    * until the first commit; own-content only, composed locally. */
   optimisticBodyHtml: string | null;
+  /** Preserve persisted fields this body/envelope save does not modify. */
+  existingDraft?: OptimisticDraftEntity;
 };
 
 /** Maps a REST-shaped contact to the mutation's input shape. */
@@ -129,6 +131,7 @@ function optimisticDraftEntity(
   args: GraphqlSaveEmailDraftArgs
 ): OptimisticDraftEntity {
   const now = new Date().toISOString();
+  const existing = args.existingDraft;
   return {
     __typename: 'GraphqlSoupEmailMessage',
     id: String(args.draftId),
@@ -137,29 +140,29 @@ function optimisticDraftEntity(
     replyingToId: args.replyingToId != null ? String(args.replyingToId) : null,
     linkId: args.senderLinkId,
     subject: args.subject,
-    snippet: null,
-    internalDateTs: null,
-    sentAt: null,
+    snippet: existing?.snippet ?? null,
+    internalDateTs: existing?.internalDateTs ?? null,
+    sentAt: existing?.sentAt ?? null,
     isRead: true,
-    isStarred: false,
+    isStarred: existing?.isStarred ?? false,
     isSent: false,
     isDraft: true,
-    hasAttachments: false,
-    scheduledSendTime: args.sendTime ?? null,
+    hasAttachments: existing?.hasAttachments ?? false,
+    scheduledSendTime: args.sendTime ?? existing?.scheduledSendTime ?? null,
     bodyText: args.bodyText ?? null,
     bodyHtmlSanitized: args.optimisticBodyHtml,
     bodyMacro: args.bodyMacro ?? null,
     bodyReplyless: null,
-    createdAt: now,
+    createdAt: existing?.createdAt ?? now,
     updatedAt: now,
     from: { email: args.senderEmail, name: null, photoUrl: null },
     to: (args.to ?? []).map(optimisticContact),
     cc: (args.cc ?? []).map(optimisticContact),
     bcc: (args.bcc ?? []).map(optimisticContact),
-    labels: [],
-    attachments: [],
-    attachmentsDraft: [],
-    attachmentsForwarded: [],
+    labels: existing?.labels ?? [],
+    attachments: existing?.attachments ?? [],
+    attachmentsDraft: existing?.attachmentsDraft ?? [],
+    attachmentsForwarded: existing?.attachmentsForwarded ?? [],
   };
 }
 
@@ -182,6 +185,7 @@ export async function executeGraphqlSaveEmailDraft(
     senderLinkId: _senderLinkId,
     senderEmail: _senderEmail,
     optimisticBodyHtml: _optimisticBodyHtml,
+    existingDraft: _existingDraft,
     ...input
   } = args;
   const variables: SaveEmailDraftMutationVariables = { input };

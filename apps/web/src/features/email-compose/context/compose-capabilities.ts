@@ -19,13 +19,15 @@ export interface PersistedEmailIdentity {
   draftId?: string;
   threadId?: string;
   inboxId: string;
-  /**
-   * How a save landed. `committed`: the server holds this identity, so
-   * REST-only actions (send, schedule, attachment uploads) can use it.
-   * `queued`: durably accepted by the local mutation queue under the
-   * caller's client handles, which the server may not know yet. Absent
-   * means committed.
-   */
+}
+
+/**
+ * A draft save's identity plus how it landed. `queued`: the durable
+ * mutation queue accepted the write under the caller's client handles, which
+ * the server may not know yet; REST-only actions cannot use them until a
+ * later save commits. Absent means committed.
+ */
+export interface DraftSaveResult extends PersistedEmailIdentity {
   persistence?: 'committed' | 'queued';
 }
 
@@ -94,7 +96,7 @@ export interface EmailAttachmentChange {
 }
 
 export interface EmailDraftStorage {
-  saveDraft(input: SaveEmailDraft): Promise<PersistedEmailIdentity>;
+  saveDraft(input: SaveEmailDraft): Promise<DraftSaveResult>;
   deleteDraft(input: DeleteEmailDraft): Promise<void>;
   restoreDraft(input: {
     draftId: string;
@@ -150,6 +152,11 @@ export interface EmailComposeFeedback {
   reportError(error: unknown): void;
 }
 
+/** Best-effort device connectivity; a false negative surfaces as the guarded action's own failure. */
+export interface EmailConnectivity {
+  looksOffline(): boolean;
+}
+
 export interface EmailComposeAccounts {
   inboxes: Accessor<EmailInbox[]>;
   loading: Accessor<boolean>;
@@ -188,6 +195,7 @@ export interface EmailComposeContext {
   delivery: EmailDelivery;
   notices: EmailComposeFeedback;
   accounts: EmailComposeAccounts;
+  connectivity: EmailConnectivity;
   presentation: EmailComposePresentation;
   editorFiles: EmailEditorFiles;
   viewerEmail: Accessor<string | undefined>;

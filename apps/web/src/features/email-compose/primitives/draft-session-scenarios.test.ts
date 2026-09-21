@@ -1,27 +1,22 @@
-import { deviceLooksOffline } from '@core/util/connectivity';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   DraftPersistRejected,
-  type PersistedEmailIdentity,
+  type DraftSaveResult,
   type SaveEmailDraft,
 } from '../context/compose-capabilities';
 import { createComposeContext } from '../tests/capabilities';
 import { mountEmailComposer } from '../tests/composer';
 import { mountReplyComposer } from '../tests/reply';
 
-vi.mock('@core/util/connectivity', () => ({
-  deviceLooksOffline: vi.fn(() => false),
-}));
-
 /** A save the durable queue accepted under the composer's own handles. */
-const queued = (input: SaveEmailDraft): PersistedEmailIdentity => ({
+const queued = (input: SaveEmailDraft): DraftSaveResult => ({
   draftId: input.clientHandles?.draftId ?? input.draft.db_id ?? undefined,
   threadId:
     input.clientHandles?.threadId ?? input.draft.thread_db_id ?? 'thread',
   inboxId: 'inbox',
   persistence: 'queued',
 });
-const committed = (draftId = 'server-1'): PersistedEmailIdentity => ({
+const committed = (draftId = 'server-1'): DraftSaveResult => ({
   draftId,
   threadId: 'thread',
   inboxId: 'inbox',
@@ -30,16 +25,13 @@ const committed = (draftId = 'server-1'): PersistedEmailIdentity => ({
 const savedInputs = (context: ReturnType<typeof createComposeContext>) =>
   vi.mocked(context.drafts.saveDraft).mock.calls.map(([input]) => input);
 
-beforeEach(() => {
-  vi.useFakeTimers();
-  vi.mocked(deviceLooksOffline).mockReturnValue(false);
-});
+beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 describe('draft session: reply composer', () => {
   it('queues saves offline under one handle, refuses to send, then sends once a save commits', async () => {
     const context = createComposeContext();
-    vi.mocked(deviceLooksOffline).mockReturnValue(true);
+    vi.mocked(context.connectivity.looksOffline).mockReturnValue(true);
     vi.mocked(context.drafts.saveDraft).mockImplementation(async (input) =>
       queued(input)
     );
@@ -63,7 +55,7 @@ describe('draft session: reply composer', () => {
         { subtext: "You're offline" }
       );
 
-      vi.mocked(deviceLooksOffline).mockReturnValue(false);
+      vi.mocked(context.connectivity.looksOffline).mockReturnValue(false);
       vi.mocked(context.drafts.saveDraft).mockImplementation(async () =>
         committed('server-1')
       );
@@ -107,7 +99,7 @@ describe('draft session: reply composer', () => {
 
   it('waits for an in-flight first save and sends with the id it confirmed', async () => {
     const context = createComposeContext();
-    const first = Promise.withResolvers<PersistedEmailIdentity>();
+    const first = Promise.withResolvers<DraftSaveResult>();
     vi.mocked(context.drafts.saveDraft)
       .mockReturnValueOnce(first.promise)
       .mockImplementationOnce(async () => committed('server-3'));
@@ -186,7 +178,7 @@ describe('draft session: reply composer', () => {
 
   it('refuses to attach while offline with a blocking notice', async () => {
     const context = createComposeContext();
-    vi.mocked(deviceLooksOffline).mockReturnValue(true);
+    vi.mocked(context.connectivity.looksOffline).mockReturnValue(true);
     const state = mountReplyComposer(context);
     try {
       await state.handleAddAttachments([new File(['bytes'], 'notes.txt')]);
@@ -341,3 +333,74 @@ describe('draft session: compose composer', () => {
     }
   );
 });
+
+describe.each(['reply', 'compose'] as const)(
+  'saved %s draft ordering',
+  (surface) => {
+    const mount = (context: ReturnType<typeof createComposeContext>) => {
+      if (surface === 'reply') {
+        const root = mountReplyComposer(context);
+        return {
+          ...root,
+          send: root.sendEmail,
+          schedule: root.handleSendTimeChange,
+        };
+      }
+      const root = mountEmailComposer(context);
+      return {
+        ...root,
+        send: async () => {
+          root.state.context.onSend();
+          await vi.advanceTimersByTimeAsync(0);
+        },
+        schedule: root.state.context.onSendTimeChange,
+      };
+    };
+
+    it('does not send or schedule over a queued update to an existing server draft', async () => {
+      const context = createComposeContext();
+      vi.mocked(context.drafts.saveDraft)
+        .mockResolvedValueOnce(committed('existing'))
+        .mockImplementation(async (input) => queued(input));
+      const root = mount(context);
+      try {
+        root.edit('Saved online');
+        await vi.advanceTimersByTimeAsync(600);
+        root.edit('Updated behind the queue');
+        await root.send();
+        expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+        expect(context.notices.feedback.failure).toHaveBeenLastCalledWith(
+          'Failed to send email',
+          { subtext: 'Draft still syncing, try again' }
+        );
+        await root.schedule?.(new Date('2027-01-01T12:00:00Z'));
+        expect(context.delivery.schedule).not.toHaveBeenCalled();
+        vi.mocked(context.drafts.saveDraft).mockResolvedValue(
+          committed('existing')
+        );
+        await root.send();
+        expect(context.delivery.sendMessage).toHaveBeenCalledOnce();
+      } finally {
+        root.dispose();
+      }
+    });
+
+    it('does not send a known server draft after autosave has been rejected', async () => {
+      const context = createComposeContext();
+      vi.mocked(context.drafts.saveDraft)
+        .mockResolvedValueOnce(committed('existing'))
+        .mockRejectedValue(new DraftPersistRejected('UNAUTHORIZED'));
+      const root = mount(context);
+      try {
+        root.edit('Saved online');
+        await vi.advanceTimersByTimeAsync(600);
+        root.edit('Access revoked');
+        await vi.advanceTimersByTimeAsync(600);
+        await root.send();
+        expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+      } finally {
+        root.dispose();
+      }
+    });
+  }
+);

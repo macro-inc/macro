@@ -2,7 +2,7 @@ import { createSignal } from 'solid-js';
 import { match } from 'ts-pattern';
 import type {
   DraftPersistFailureCode,
-  PersistedEmailIdentity,
+  DraftSaveResult,
 } from '../context/compose-capabilities';
 
 /**
@@ -16,7 +16,7 @@ import type {
 export type DraftIdentity =
   | { kind: 'none' }
   | { kind: 'handle'; draftId: string; threadId?: string; queued: boolean }
-  | { kind: 'server'; draftId: string; threadId?: string };
+  | { kind: 'server'; draftId: string; threadId?: string; queued: boolean };
 
 /**
  * Whether edits may autosave. A deterministic server rejection latches the
@@ -49,9 +49,7 @@ export type DraftSessionEvent =
   | {
       type: 'saved';
       epoch: number;
-      identity: Pick<PersistedEmailIdentity, 'draftId' | 'threadId'> & {
-        persistence?: PersistedEmailIdentity['persistence'];
-      };
+      identity: Pick<DraftSaveResult, 'draftId' | 'threadId' | 'persistence'>;
     }
   /** The server rejected a save or delete deterministically. */
   | { type: 'rejected'; epoch: number; code: DraftPersistFailureCode }
@@ -88,11 +86,13 @@ export function reduceDraftSession(
         identity: event.draftId
           ? {
               kind: 'server',
+              queued: false,
               draftId: event.draftId,
               threadId: event.threadId ?? undefined,
             }
           : { kind: 'none' },
         policy: { kind: 'autosaving' },
+        epoch: state.epoch + 1,
       };
     })
     .with({ type: 'minted' }, (event) => {
@@ -116,13 +116,16 @@ export function reduceDraftSession(
         // Durable locally under the caller's handles; the server has not
         // confirmed them. A server id stays a server id.
         return state.identity.kind === 'server'
-          ? state
+          ? { ...state, identity: { ...state.identity, queued: true } }
           : {
               ...state,
               identity: { kind: 'handle', draftId, threadId, queued: true },
             };
       }
-      return { ...state, identity: { kind: 'server', draftId, threadId } };
+      return {
+        ...state,
+        identity: { kind: 'server', draftId, threadId, queued: false },
+      };
     })
     .with({ type: 'rejected' }, (event) => {
       if (event.epoch !== state.epoch) return state;
@@ -148,6 +151,8 @@ function currentThreadId(state: DraftSessionState) {
   return state.identity.kind === 'none' ? undefined : state.identity.threadId;
 }
 
+export type DraftSession = ReturnType<typeof createDraftSession>;
+
 /** Reactive holder for one composer's draft session. */
 export function createDraftSession(seed?: {
   draftId?: string | null;
@@ -165,8 +170,11 @@ export function createDraftSession(seed?: {
     identity: () => state().identity,
     draftId: () => currentDraftId(state()),
     threadId: () => currentThreadId(state()),
-    /** REST-only actions can resolve the draft's ids. */
-    restSendable: () => state().identity.kind === 'server',
+    /** The server holds the draft under these ids, so any transport can address it. */
+    serverConfirmed: () => {
+      const identity = state().identity;
+      return identity.kind === 'server' && !identity.queued;
+    },
     autosaveAllowed: () => state().policy.kind === 'autosaving',
   };
 }
