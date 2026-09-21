@@ -64,8 +64,13 @@ impl<Reader: PullRequestDiffReader> ChangesetExtractor for PullRequestChanges<Re
         let pull_request = PullRequestRef::parse(url).ok_or_else(|| {
             ExtractError::NotReady("The linked URL is not a GitHub pull request.".to_owned())
         })?;
+        // Same as extract: contents are read through the GitHub App on the
+        // owner's behalf, so the owner has to be a person.
+        let owner = session
+            .owner_user()
+            .map_err(|error| ExtractError::Failed(rootcause::report!(error).into()))?;
         self.reader
-            .read_file(&session.owner_id, &pull_request, path, rev)
+            .read_file(owner, &pull_request, path, rev)
             .await
             .map_err(map_file_error)
     }

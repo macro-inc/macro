@@ -67,6 +67,9 @@ function setup() {
     refresh: async () => {
       refreshes += 1;
     },
+    file: async () => {
+      throw new Error('no file contents in this test');
+    },
   };
   const model = createChangesModel({ source, changesVisible: visible });
   return {

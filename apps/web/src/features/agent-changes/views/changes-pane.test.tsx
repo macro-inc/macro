@@ -21,6 +21,47 @@ import {
   ReviewNotesDock,
 } from './SessionChangesControls';
 
+// jsdom has no layout: the file-tree splitter only registers once the zone
+// measures a width, so give every element a box and fire ResizeObserver.
+const TEST_RECT = {
+  width: 800,
+  height: 600,
+  top: 0,
+  left: 0,
+  bottom: 600,
+  right: 800,
+  x: 0,
+  y: 0,
+  toJSON() {
+    return {};
+  },
+};
+HTMLElement.prototype.getBoundingClientRect = function () {
+  return TEST_RECT;
+};
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    callback: ResizeObserverCallback;
+    constructor(callback: ResizeObserverCallback) {
+      this.callback = callback;
+    }
+    observe(target: Element) {
+      this.callback(
+        [
+          {
+            target,
+            contentRect: TEST_RECT,
+          } as ResizeObserverEntry,
+        ],
+        this as unknown as ResizeObserver
+      );
+    }
+    unobserve() {}
+    disconnect() {}
+  }
+);
+
 // Pierre mounts a custom element and highlights with shiki; the pane test
 // covers everything around it and leaves the diff body to the browser.
 vi.mock('../components/PierreFileDiff', () => ({
