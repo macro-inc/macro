@@ -1461,6 +1461,47 @@ fn document_extractor_messages_disable_index_overrides_and_set_expected_users() 
 }
 
 #[test]
+fn bot_owned_document_event_preserves_the_principal_for_indexing() {
+    const BOT_PRINCIPAL: &str = "bot|00000000-0000-0000-0000-00000000a1a1";
+
+    let message = TestMessage {
+        topic: MacroDocumentsTopic::TOPIC_STR,
+        key: Some(DOCUMENT_ID.to_string()),
+        payload: Some(
+            br#"{
+                "event_id":"00000000-0000-0000-0000-000000000001",
+                "schema_version":1,
+                "event_type":"document.content_uploaded",
+                "metadata":{
+                    "document_id":"document-id",
+                    "owner":"bot|00000000-0000-0000-0000-00000000a1a1",
+                    "file_type":"pdf",
+                    "document_version_id":"convert"
+                }
+            }"#
+            .to_vec(),
+        ),
+    };
+
+    let decoded = DeclaredMacroEvent::decode(&message).expect("decodable document event");
+    let DeclaredMacroEvent::DocumentMacroEvent(event) = decoded else {
+        panic!("expected document event");
+    };
+    let DocumentIndexAction::ExtractText {
+        owner,
+        file_type,
+        document_version_id,
+    } = describe_document_event(&event.event().event).action
+    else {
+        panic!("expected document extraction");
+    };
+    let extractor_message =
+        stored_extractor_message(DOCUMENT_ID, owner, file_type, document_version_id);
+
+    assert_eq!(extractor_message.user_id, BOT_PRINCIPAL);
+}
+
+#[test]
 fn maps_all_project_lifecycle_events_to_reconciliation_actions() {
     let cases = project_event_cases();
     assert_eq!(cases.len(), 7);
