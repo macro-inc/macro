@@ -151,7 +151,9 @@ the sidebar title bars. When multiple desktop splits are open, a **Close** (X)
 button appears beside each sidebar's New button and closes that split. The last
 logical split has no sidebar close button; mobile chrome is unchanged.
 A lone non-list content split still shows a header X labeled **Return to list**,
-which returns that split to the default list.
+which returns that split to the most recent list in its history, preserving
+that list’s state. If there is no prior list, it replaces the current entry with
+inbox. Excluded background panels do not count toward close eligibility.
 These buttons and Home items activate on primary-button
 press; keyboard activation remains supported. Home, Chat, Email,
 Tasks, and other views using the shared inner

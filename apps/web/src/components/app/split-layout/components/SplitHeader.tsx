@@ -48,7 +48,10 @@ import { match, P } from 'ts-pattern';
 import { splitBackInterceptor } from '../back-interceptor';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import type { SplitContent } from '../layoutManager';
-import { shouldShowSplitCloseButton } from '../layoutUtils';
+import {
+  closeSplitOrReturnToList,
+  shouldShowSplitCloseButton,
+} from '../layoutUtils';
 import { canSpotlight } from '../utils/canSpotlight';
 import { HeaderIsland } from './HeaderIsland';
 import {
@@ -200,7 +203,7 @@ function SplitCloseButton() {
   if (!context || !layout) return null;
 
   const label = createMemo(() => {
-    const isOnlySplit = layout.manager.splits().length === 1;
+    const isOnlySplit = !shouldShowSplitCloseButton(layout.manager);
     const isNotUnifiedList = !isListViewID(context.handle.content().id);
     return isOnlySplit && isNotUnifiedList ? 'Return to list' : 'Close';
   });
@@ -218,7 +221,7 @@ function SplitCloseButton() {
         class="rounded-lg"
         label={label()}
         hotkey={TOKENS.split.close}
-        onClick={context.handle.close}
+        onClick={() => closeSplitOrReturnToList(layout.manager, context.handle)}
       >
         <CloseIcon class="size-4" />
       </Button>

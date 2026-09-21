@@ -15,7 +15,10 @@ import {
   type SplitContent,
   SplitEvent,
 } from '../layoutManager';
-import { shouldShowSplitCloseButton } from '../layoutUtils';
+import {
+  closeSplitOrReturnToList,
+  shouldShowSplitCloseButton,
+} from '../layoutUtils';
 import { createMobileSwipeLayout } from '../mobile/createMobileSwipeLayout';
 
 vi.mock('@core/component/Toast/Toast', () => ({
@@ -65,6 +68,88 @@ function createMockOrchestrator(): BlockOrchestrator {
 }
 
 describe('layoutManager', () => {
+  describe('header close action', () => {
+    it.each([false, true])(
+      'returns the sole visible split to its prior list (excluded background: %s)',
+      (withBackground) => {
+        createRoot((dispose) => {
+          const manager = createSplitLayout(createMockOrchestrator(), [
+            { type: 'component', id: 'inbox' },
+          ]);
+          const split = manager.getSplit(manager.splits()[0].id)!;
+          const list: SplitContent = {
+            type: 'component',
+            id: 'tasks',
+            state: { filter: 'assigned' },
+          };
+          split.replace({ next: list });
+          split.replace({ next: { type: 'md', id: 'doc-1' } });
+          split.replace({ next: { type: 'md', id: 'doc-2' } });
+          if (withBackground) {
+            const background = manager.createNewSplit({
+              content: { type: 'md', id: 'background' },
+              activate: false,
+              referredFrom: null,
+            })!;
+            manager.setExclusionFilter((entry) => entry.id === background.id);
+          }
+
+          closeSplitOrReturnToList(manager, split);
+
+          expect(manager.getVisibleSplitCount()).toBe(1);
+          expect(manager.splits()).toHaveLength(withBackground ? 2 : 1);
+          expect(split.content()).toEqual(list);
+          expect(split.canGoForward()).toBe(true);
+          split.goBack();
+          expect(split.content()).toEqual({ type: 'component', id: 'inbox' });
+          dispose();
+        });
+      }
+    );
+
+    it('falls back to inbox without keeping the current detail as a Back entry', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'md', id: 'direct-link' },
+        ]);
+        const split = manager.getSplit(manager.splits()[0].id)!;
+        closeSplitOrReturnToList(manager, split);
+        expect(split.content()).toEqual({ type: 'component', id: 'inbox' });
+        expect(split.canGoBack()).toBe(false);
+        dispose();
+      });
+    });
+
+    it('closes the panel when another visible split remains', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'md', id: 'detail' },
+          { type: 'component', id: 'tasks' },
+        ]);
+        const split = manager.getSplit(manager.splits()[0].id)!;
+        closeSplitOrReturnToList(manager, split);
+        expect(manager.getSplit(split.id)).toBeUndefined();
+        expect(manager.splits().map((entry) => entry.content.id)).toEqual([
+          'tasks',
+        ]);
+        dispose();
+      });
+    });
+
+    it('leaves a sole list unchanged', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'tasks' },
+        ]);
+        const split = manager.getSplit(manager.splits()[0].id)!;
+        closeSplitOrReturnToList(manager, split);
+        expect(split.content()).toEqual({ type: 'component', id: 'tasks' });
+        expect(manager.getVisibleSplitCount()).toBe(1);
+        dispose();
+      });
+    });
+  });
+
   it.each([true, false, undefined])(
     'honors activate=%s when direct split creation finds an existing entity',
     (activate) => {
