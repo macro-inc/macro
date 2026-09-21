@@ -1,7 +1,10 @@
 import { FileSidePanelSections, SidePanel } from '@components/app/side-panel';
+import { useSplitLayout } from '@components/app/split-layout/layout';
+import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { toast } from '@core/component/Toast/Toast';
 import { useShareDialogContext } from '@core/component/TopBar/ShareButton';
+import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { blockMetadataSignal } from '@core/signal/load';
 import {
   useBlockDocumentDownloadName,
@@ -9,7 +12,7 @@ import {
 } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import { createCallback } from '@solid-primitives/rootless';
-import { lazy, Show, Suspense } from 'solid-js';
+import { lazy, onMount, Show, Suspense } from 'solid-js';
 import { isUploadedWorkbook } from '../../block-spreadsheet/core/uploaded-workbook';
 import { useSpreadsheetAccess } from '../../block-spreadsheet/primitives/use-spreadsheet-access';
 import { useGetFileBlob } from '../signal/blockData';
@@ -41,6 +44,19 @@ function BlockUnknownContent() {
   const downloadName = useBlockDocumentDownloadName();
   const shareCtx = useShareDialogContext();
   const getBlob = useGetFileBlob();
+  const { replaceSplit } = useSplitLayout();
+  const documentId = useBlockId();
+
+  // Email attachments used to open as `unknown` when MIME was ambiguous
+  // (e.g. .ai → application/postscript). If the stored file type actually
+  // has a viewer, jump there so bookmarked /unknown/ URLs still work.
+  onMount(() => {
+    const fileType = blockMetadataSignal.get()?.fileType;
+    if (isUploadedWorkbook(fileType)) return;
+    const block = fileTypeToBlockName(fileType);
+    if (block === 'unknown') return;
+    replaceSplit({ content: { type: block, id: documentId } });
+  });
 
   const downloadDocument = createCallback(async () => {
     try {
