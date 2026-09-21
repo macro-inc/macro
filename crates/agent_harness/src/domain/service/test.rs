@@ -2286,6 +2286,7 @@ async fn a_prompt_through_control_resumes_a_disconnected_session() {
 
 fn open_external_request(workspace: &str) -> OpenExternalAgentSession {
     OpenExternalAgentSession {
+        id: None,
         profile: None,
         instructions: None,
         bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
@@ -2655,6 +2656,7 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
 
     let session = service
         .open_managed_session(agent_session::domain::ports::OpenManagedSession {
+            id: None,
             repo_url: None,
             repo_branch: None,
             instructions: None,
@@ -2892,6 +2894,7 @@ async fn managed_open_composes_its_prompt_without_channel_context() {
 
     let result = service
         .open_managed_session(OpenManagedSession {
+            id: None,
             repo_url: None,
             repo_branch: None,
             instructions: None,
@@ -2919,6 +2922,7 @@ async fn open_managed_session_spawns_at_the_users_default_size() {
         .expect("the user default should persist");
 
     let open = service.open_managed_session(OpenManagedSession {
+        id: None,
         repo_url: None,
         repo_branch: None,
         instructions: None,
@@ -3643,6 +3647,7 @@ mod lifecycle_events {
 async fn codex_named_session_provisions_egress_without_advertising_mcp() {
     let (service, repo, containers, _, _) = harness();
     let open = service.open_managed_session(OpenManagedSession {
+        id: None,
         repo_url: None,
         repo_branch: None,
         owner: model_owner::Owner::User(sender()),
@@ -3766,6 +3771,7 @@ impl crate::domain::ports::ReachableRepositories for SelectedRepositories {
 
 fn explicit_cursor_request() -> OpenManagedSession {
     OpenManagedSession {
+        id: None,
         owner: model_owner::Owner::User(sender()),
         instructions: None,
         prompt: None,

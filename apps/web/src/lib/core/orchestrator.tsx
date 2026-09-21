@@ -337,11 +337,11 @@ export type BlockOrchestrator = {
    * alive.
    *
    * For a block whose id is not knowable at mount time: the agent block opens
-   * on a client-minted placeholder and learns its real session id when the
-   * create resolves (`features/block-agent/context/pending-session.ts`). The
+   * on a client-minted id and only re-keys if the create answers with a
+   * different one (`features/block-agent/context/pending-session.ts`). The
    * mount must survive that — the user is already typing into it — so the
    * registry is re-keyed rather than the block re-created. The element keeps
-   * the id it closed over, so `useBlockId()` still reports the placeholder;
+   * the id it closed over, so `useBlockId()` still reports the minted id;
    * that is what the block resolves through the pending registry.
    *
    * A no-op when nothing is registered under `fromId`, or when `toId` is

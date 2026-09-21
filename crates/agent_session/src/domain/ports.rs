@@ -196,6 +196,8 @@ pub struct SessionThread {
 /// Everything needed to open a session served by an external runtime.
 #[derive(Debug, Clone)]
 pub struct OpenExternalAgentSession {
+    /// Caller-minted session id. `None` lets the opener mint one.
+    pub id: Option<AgentSessionId>,
     /// The bot the session runs for.
     pub bot_id: BotId,
     /// Persisted agent settings resolved by the authenticated entry point.
@@ -219,6 +221,8 @@ pub struct OpenExternalAgentSession {
 /// paths remain runtime-owned. There is no originating mention to announce.
 #[derive(Debug, Clone)]
 pub struct OpenManagedSession {
+    /// Caller-minted session id. `None` lets the opener mint one.
+    pub id: Option<AgentSessionId>,
     /// Repository explicitly selected by the caller for a supported runtime.
     pub repo_url: Option<String>,
     /// Starting branch for the selected repository.

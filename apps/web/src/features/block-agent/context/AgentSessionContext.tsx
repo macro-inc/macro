@@ -22,7 +22,8 @@ export type AgentSessionState = {
   displayName: (userId: string) => string;
   /**
    * The session this block shows, absent while a just-created one's `POST`
-   * is still on the wire. See `pending-session.ts`.
+   * is still on the wire. The URL already holds the client-minted id; see
+   * `pending-session.ts`.
    */
   sessionId: Accessor<string | undefined>;
   /** The session is still being created — everything else is empty because

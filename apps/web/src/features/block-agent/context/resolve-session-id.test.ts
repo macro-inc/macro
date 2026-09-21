@@ -1,8 +1,8 @@
 /**
  * @vitest-environment jsdom
  *
- * The two shapes a block id can have — a session, or a placeholder standing
- * in for one being created — resolved into the one the block consumes.
+ * The two shapes a block id can have — a session, or a client-minted id
+ * standing in for one being created — resolved into the one the block consumes.
  */
 
 import { createRoot } from 'solid-js';
@@ -37,7 +37,9 @@ vi.mock('@service-agent-harness/client', () => ({
   },
 }));
 
-const { startPendingSession } = await import('./pending-session');
+const { pendingSession, startPendingSession } = await import(
+  './pending-session'
+);
 const { agentHarnessServiceClient } = await import(
   '@service-agent-harness/client'
 );
@@ -60,28 +62,52 @@ describe('a block id that is already a session', () => {
   });
 });
 
-describe('a placeholder', () => {
+describe('a client-minted id', () => {
+  it('is a uuid posted as the create id', () => {
+    const id = startPendingSession();
+    expect(id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+    );
+    expect(agentHarnessServiceClient.create).toHaveBeenLastCalledWith({
+      id,
+    });
+  });
+
   it('has no session until the create lands, then has that one', async () => {
-    const placeholder = startPendingSession();
+    const id = startPendingSession();
     await createRoot(async (dispose) => {
-      const resolved = resolveSessionId(() => placeholder);
+      const resolved = resolveSessionId(() => id);
       expect(resolved.sessionId()).toBeUndefined();
       expect(resolved.pending()).toBe(true);
       expect(resolved.failed()).toBe(false);
 
-      create.resolve?.('session-9');
+      create.resolve?.(id);
       await flush();
 
-      expect(resolved.sessionId()).toBe('session-9');
+      expect(resolved.sessionId()).toBe(id);
       expect(resolved.pending()).toBe(false);
+      expect(pendingSession(id)).toBeUndefined();
+      dispose();
+    });
+  });
+
+  it('keeps the pending entry when the server returns a different id', async () => {
+    const id = startPendingSession();
+    await createRoot(async (dispose) => {
+      const resolved = resolveSessionId(() => id);
+      create.resolve?.('server-minted-id');
+      await flush();
+
+      expect(resolved.sessionId()).toBe('server-minted-id');
+      expect(pendingSession(id)?.sessionId()).toBe('server-minted-id');
       dispose();
     });
   });
 
   it('fails when the create fails', async () => {
-    const placeholder = startPendingSession();
+    const id = startPendingSession();
     await createRoot(async (dispose) => {
-      const resolved = resolveSessionId(() => placeholder);
+      const resolved = resolveSessionId(() => id);
       create.reject?.();
       await flush();
 
@@ -98,7 +124,7 @@ describe('a placeholder', () => {
       isErr: () => false,
       value: { actionId: 'action-1', status: 'accepted' },
     });
-    const placeholder = startPendingSession({
+    const id = startPendingSession({
       botId: 'persona-1',
       modelOverride: 'model-2',
       prompt: 'Fix the tests',
@@ -106,21 +132,22 @@ describe('a placeholder', () => {
       repoBranch: 'feature/home',
     });
     expect(agentHarnessServiceClient.create).toHaveBeenLastCalledWith({
+      id,
       botId: 'persona-1',
       repoUrl: 'https://github.com/macro-inc/macro',
       repoBranch: 'feature/home',
     });
     await createRoot(async (dispose) => {
-      const resolved = resolveSessionId(() => placeholder);
-      create.resolve?.('session-10');
+      const resolved = resolveSessionId(() => id);
+      create.resolve?.(id);
       await flush();
       await flush();
 
       expect(create.control.mock.calls).toEqual([
-        ['session-10', { type: 'setModel', model: 'model-2' }],
-        ['session-10', { type: 'prompt', prompt: 'Fix the tests' }],
+        [id, { type: 'setModel', model: 'model-2' }],
+        [id, { type: 'prompt', prompt: 'Fix the tests' }],
       ]);
-      expect(resolved.sessionId()).toBe('session-10');
+      expect(resolved.sessionId()).toBe(id);
       dispose();
     });
   });
@@ -130,13 +157,13 @@ describe('a placeholder', () => {
       isErr: () => true,
       error: [{ code: 'HTTP_ERROR', message: 'Model is unavailable.' }],
     });
-    const placeholder = startPendingSession({
+    const id = startPendingSession({
       modelOverride: 'missing',
       prompt: 'Hello',
     });
     await createRoot(async (dispose) => {
-      const resolved = resolveSessionId(() => placeholder);
-      create.resolve?.('session-model-error');
+      const resolved = resolveSessionId(() => id);
+      create.resolve?.(id);
       await flush();
       expect(resolved.error()).toBe('Model is unavailable.');
       expect(resolved.pending()).toBe(false);
@@ -150,10 +177,10 @@ describe('a placeholder', () => {
       isErr: () => true,
       error: [{ code: 'HTTP_ERROR', message: 'Runtime is disconnected.' }],
     });
-    const placeholder = startPendingSession({ prompt: 'Hello' });
+    const id = startPendingSession({ prompt: 'Hello' });
     await createRoot(async (dispose) => {
-      const resolved = resolveSessionId(() => placeholder);
-      create.resolve?.('session-prompt-error');
+      const resolved = resolveSessionId(() => id);
+      create.resolve?.(id);
       await flush();
       expect(resolved.error()).toBe('Runtime is disconnected.');
       expect(resolved.pending()).toBe(false);
@@ -161,13 +188,16 @@ describe('a placeholder', () => {
     });
   });
 
-  // A placeholder URL reloaded in a new tab: the create it named belonged to
-  // the tab that is gone, so there is nothing to wait for.
-  it('with no create behind it is a failure, not a wait', () => {
+  // A session URL whose create belonged to another tab: nothing is pending
+  // here, so the id is already a session and the GET decides if it exists.
+  it('with no create behind it is a session, not a wait', () => {
     createRoot((dispose) => {
-      const resolved = resolveSessionId(() => 'pending-nothing');
+      const resolved = resolveSessionId(
+        () => '0199a0ac-ab5e-7d6f-91ca-16997a26d13a'
+      );
+      expect(resolved.sessionId()).toBe('0199a0ac-ab5e-7d6f-91ca-16997a26d13a');
       expect(resolved.pending()).toBe(false);
-      expect(resolved.failed()).toBe(true);
+      expect(resolved.failed()).toBe(false);
       dispose();
     });
   });
@@ -187,10 +217,10 @@ it.each(['Describe this', ''])(
         mimeType: 'image/png',
       },
     ];
-    startPendingSession({ prompt, attachments });
-    create.resolve?.('session-image');
+    const id = startPendingSession({ prompt, attachments });
+    create.resolve?.(id);
     await flush();
-    expect(create.control).toHaveBeenCalledWith('session-image', {
+    expect(create.control).toHaveBeenCalledWith(id, {
       type: 'prompt',
       prompt,
       attachments,

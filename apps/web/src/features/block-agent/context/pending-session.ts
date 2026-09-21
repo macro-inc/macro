@@ -4,8 +4,8 @@
  * `POST /agent-sessions` does not answer until its Daytona sandbox is booted,
  * cloned and answering — minutes, not milliseconds. Waiting on that before
  * opening anything means staring at a spinner for the whole provision, so the
- * block opens immediately against a placeholder id minted here, and adopts
- * the real one when the create lands.
+ * block opens immediately against a client-minted session id, and the POST
+ * adopts that same id when it lands.
  *
  * The registry is module-level on purpose: the create is in flight before any
  * block mounts, and must survive the mount either way round — resolving
@@ -23,12 +23,7 @@ import type {
   PromptAttachment,
 } from '@service-agent-harness/generated/schemas';
 import { type Accessor, createSignal } from 'solid-js';
-
-/**
- * Placeholder ids are prefixed so a session id can never be mistaken for one:
- * real ids are UUIDs.
- */
-const PLACEHOLDER_PREFIX = 'pending-';
+import { v7 as uuidv7 } from 'uuid';
 
 export type PendingSession = {
   /** The real session id, once the create resolves. */
@@ -40,11 +35,6 @@ export type PendingSession = {
 };
 
 const pending = new Map<string, PendingSession>();
-
-/** Whether `id` is a placeholder this module minted rather than a session. */
-export function isPlaceholderSessionId(id: string): boolean {
-  return id.startsWith(PLACEHOLDER_PREFIX);
-}
 
 /**
  * Options captured by the preflight composer before a session exists.
@@ -67,16 +57,16 @@ export type StartPendingSessionOptions = {
 };
 
 /**
- * Start creating a managed session and return the placeholder to open a block
- * against right now. The POST runs unattended; nothing awaits it.
+ * Start creating a managed session and return the id to open a block against
+ * right now. The POST runs unattended and adopts this id; nothing awaits it.
  */
 export function startPendingSession(
   options: StartPendingSessionOptions = {}
 ): string {
-  const placeholder = `${PLACEHOLDER_PREFIX}${crypto.randomUUID()}`;
+  const id = uuidv7();
   const [sessionId, setSessionId] = createSignal<string>();
   const [error, setError] = createSignal<string>();
-  pending.set(placeholder, {
+  pending.set(id, {
     sessionId,
     failed: () => error() !== undefined,
     error,
@@ -84,6 +74,7 @@ export function startPendingSession(
 
   void agentHarnessServiceClient
     .create({
+      id,
       ...(options.botId ? { botId: options.botId } : {}),
       ...(options.repoUrl
         ? { repoUrl: options.repoUrl, repoBranch: options.repoBranch }
@@ -97,9 +88,9 @@ export function startPendingSession(
         );
         return;
       }
-      const id = result.value.session.id;
+      const createdId = result.value.session.id;
       if (options.modelOverride) {
-        const changed = await agentHarnessServiceClient.control(id, {
+        const changed = await agentHarnessServiceClient.control(createdId, {
           type: 'setModel',
           model: options.modelOverride,
         });
@@ -113,7 +104,7 @@ export function startPendingSession(
       }
       const prompt = options.prompt?.trim() ?? '';
       if (prompt || options.attachments?.length) {
-        const delivered = await agentHarnessServiceClient.control(id, {
+        const delivered = await agentHarnessServiceClient.control(createdId, {
           type: 'prompt',
           prompt,
           ...(options.attachments?.length
@@ -127,9 +118,12 @@ export function startPendingSession(
           );
           return;
         }
-        markMessageSent(`agent:${id}:${delivered.value.actionId}`);
+        markMessageSent(`agent:${createdId}:${delivered.value.actionId}`);
       }
-      setSessionId(id);
+      setSessionId(createdId);
+      if (createdId === id) {
+        pending.delete(id);
+      }
     })
     .catch(() =>
       setError(
@@ -137,24 +131,21 @@ export function startPendingSession(
       )
     );
 
-  return placeholder;
+  return id;
 }
 
 /**
- * The pending session behind a placeholder, or undefined when there is none —
- * a placeholder URL reloaded in a new tab, whose create belonged to the tab
- * that is gone.
+ * The pending session behind a just-minted id, or undefined when there is
+ * none — a session URL whose create belonged to another tab, or a reload.
  */
-export function pendingSession(
-  placeholder: string
-): PendingSession | undefined {
-  return pending.get(placeholder);
+export function pendingSession(id: string): PendingSession | undefined {
+  return pending.get(id);
 }
 
 /**
- * Drop a resolved placeholder. Called once the block has adopted the real id,
+ * Drop a resolved pending create. Called once the block has adopted the id,
  * so the map does not grow for the life of the tab.
  */
-export function forgetPendingSession(placeholder: string): void {
-  pending.delete(placeholder);
+export function forgetPendingSession(id: string): void {
+  pending.delete(id);
 }

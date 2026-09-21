@@ -907,6 +907,24 @@ async fn managed_repository_and_branch_reach_the_domain() {
 }
 
 #[tokio::test]
+async fn a_caller_minted_id_reaches_the_managed_opener() {
+    let opener = Arc::new(RecordingOpener::default());
+    let id = Uuid::from_u128(0x01a0_acab_5eff_72d6_91ca_1699_7a26_d13a);
+    let response = router(opener.clone())
+        .oneshot(as_user(
+            OWNER,
+            serde_json::json!({ "id": id, "prompt": "fix it" }).to_string(),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    assert_eq!(
+        opener.managed.lock().unwrap()[0].id,
+        Some(AgentSessionId::new_from_uuid(id))
+    );
+}
+
+#[tokio::test]
 async fn invalid_repository_branch_is_rejected_before_opening() {
     let opener = Arc::new(RecordingOpener::default());
     let response = router_for(opener.clone(), OneBotDirectory::system_coder())

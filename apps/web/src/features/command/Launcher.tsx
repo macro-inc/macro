@@ -441,10 +441,10 @@ export function runCreateAction(
       // bot, repository and workspace are all deployment configuration, so
       // this opens one straight away.
       //
-      // Opened against a placeholder rather than awaited: the create does not
-      // answer until its sandbox has booted and cloned the repo, and no one
-      // should watch a spinner for that. The block mounts now — composer live,
-      // prompts queueing — and adopts the real id when it lands
+      // Opened against a client-minted id rather than awaited: the create
+      // does not answer until its sandbox has booted and cloned the repo, and
+      // no one should watch a spinner for that. The block mounts now —
+      // composer live, prompts queueing — under the same id the POST adopts
       // (`block-agent/context/pending-session.ts`).
       const { openWithSplit } = useSplitLayout();
       setCreateMenuOpen(false, false);

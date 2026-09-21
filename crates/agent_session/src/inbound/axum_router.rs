@@ -1419,6 +1419,11 @@ where
 #[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateAgentSessionRequest {
+    /// The id the caller already minted this session under, so the client can
+    /// open the session URL before this POST answers. Adopted as the persisted
+    /// id. Omitted, the service mints one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<Uuid>,
     /// Bot the session runs for. On a managed request this optionally selects
     /// a persisted persona the user owns, may use through team membership, or
     /// can `@` mention in a shared channel; omitting it uses the deployment's
@@ -1774,6 +1779,7 @@ pub async fn create_agent_session_handler<
         let session = state
             .opener
             .open_managed_session(OpenManagedSession {
+                id: request.id.map(AgentSessionId::new_from_uuid),
                 repo_url: request.repo_url,
                 repo_branch: request
                     .repo_branch
@@ -1861,6 +1867,7 @@ pub async fn create_agent_session_handler<
     let session = match state
         .opener
         .open_external_session(OpenExternalAgentSession {
+            id: request.id.map(AgentSessionId::new_from_uuid),
             bot_id,
             profile: managed_profile,
             workspace,

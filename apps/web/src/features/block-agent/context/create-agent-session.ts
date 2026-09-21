@@ -86,9 +86,10 @@ function sameMessage(a: FoldedMessage, b: FoldedMessage): boolean {
 
 /**
  * `sessionId` is absent while a just-created session's `POST` is still on the
- * wire (`pending-session.ts`). `createResource` treats an absent source as
- * "nothing to fetch", so the block simply renders its empty transcript until
- * the id lands and the load runs itself.
+ * wire (`pending-session.ts`), even though the URL already holds the
+ * client-minted id. `createResource` treats an absent source as "nothing to
+ * fetch", so the block simply renders its empty transcript until the create
+ * lands and the load runs itself.
  */
 export function createAgentSession(
   sessionId: Accessor<string | undefined>,
@@ -104,11 +105,12 @@ export function createAgentSession(
   // `<Suspense fallback={<LoadingBlock />}>` a promise: Solid swaps in the
   // fallback, which detaches the whole block subtree and re-attaches it when
   // the fetch lands. A cold open has nothing on screen to lose and wants that
-  // skeleton. This block does: it opened on a placeholder minutes before the
-  // create resolved, the user has been typing into its composer the whole
-  // time, and the detach blanks the transcript and drops the caret to
-  // `<body>`. Absent is a state it already renders — that is the whole point
-  // of the placeholder — so report that for the first fetch instead.
+  // skeleton. This block does: it opened on a client-minted id minutes
+  // before the create resolved, the user has been typing into its composer
+  // the whole time, and the detach blanks the transcript and drops the
+  // caret to `<body>`. Absent is a state it already renders — that is the
+  // whole point of opening before the POST answers — so report that for the
+  // first fetch instead.
   const openedPending = sessionId() === undefined;
 
   const [list, setList] = createStore<FoldedMessage[]>([]);

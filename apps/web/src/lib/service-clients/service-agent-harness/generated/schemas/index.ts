@@ -85,6 +85,7 @@ export * from './controlResponse';
 export * from './controlStatusDto';
 export * from './createAgentSessionRequest';
 export * from './createAgentSessionRequestBotId';
+export * from './createAgentSessionRequestId';
 export * from './createAgentSessionRequestInstructions';
 export * from './createAgentSessionRequestOwner';
 export * from './createAgentSessionRequestPrompt';

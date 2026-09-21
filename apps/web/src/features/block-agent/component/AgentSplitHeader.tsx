@@ -62,9 +62,10 @@ export function AgentSplitHeader(props: {
   /** The fold's session title, preferred over the harness fallback. */
   title?: string;
 }) {
-  // The session, not `useBlockId()`: a block created from the launcher mounts
-  // against a placeholder and keeps reporting it (see `Block.tsx`), so the
-  // block id is the one thing here that is not a shareable session id.
+  // The session, not `useBlockId()`: a just-created block's id is already
+  // the session UUID, but `sessionId` stays absent until the POST lands, so
+  // share actions wait for that rather than linking a session that is not
+  // created yet.
   const { sessionId, metadata } = useAgentSession();
   const conversation = useDrawerControl(ORIGIN_THREAD_DRAWER_ID);
   const title = () => agentSessionTitle(props.session, props.title);

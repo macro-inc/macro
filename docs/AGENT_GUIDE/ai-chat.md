@@ -203,6 +203,8 @@ are shared. Sending opens the new session inside Agents with the matching URL.
 Home suggestions and document/project context populate this same draft as markdown
 mentions. A failed suggestion conversion preserves the text and shows an error.
 Session creation and prompt delivery use the shared pending-session flow.
+Send mints the session UUID in the browser and opens that URL immediately;
+the create POST adopts the same id.
 
 ## Sharing a chat
 

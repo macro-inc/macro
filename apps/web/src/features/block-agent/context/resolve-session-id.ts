@@ -2,40 +2,33 @@
  * A block's session id, which may not exist yet.
  *
  * The block mounts with whatever id the split gave it. Usually that is a real
- * session; for a just-created one it is a placeholder standing in for a create
- * still on the wire (`pending-session.ts`). This resolves the two into the one
- * shape the block consumes: an id that is absent until there is one, plus the
- * two facts the block chrome needs to explain the wait.
+ * session; for a just-created one it is a client-minted id standing in for a
+ * create still on the wire (`pending-session.ts`). This resolves the two into
+ * the one shape the block consumes: an id that is absent until there is one,
+ * plus the two facts the block chrome needs to explain the wait.
  */
 
 import { type Accessor, createMemo } from 'solid-js';
-import { isPlaceholderSessionId, pendingSession } from './pending-session';
+import { pendingSession } from './pending-session';
 
 export type ResolvedSessionId = {
   /** The real session id; absent while a create is still in flight. */
   sessionId: Accessor<string | undefined>;
   /** This block is waiting on a create it started. */
   pending: Accessor<boolean>;
-  /** The create failed, or the placeholder has no create behind it. */
+  /** The create failed. */
   failed: Accessor<boolean>;
   error: Accessor<string | undefined>;
 };
 
 export function resolveSessionId(blockId: Accessor<string>): ResolvedSessionId {
-  const entry = createMemo(() => {
-    const id = blockId();
-    return isPlaceholderSessionId(id)
-      ? (pendingSession(id) ?? null)
-      : undefined;
-  });
+  const entry = createMemo(() => pendingSession(blockId()));
 
-  // `undefined` entry: the block id is already a session. `null`: a
-  // placeholder nothing is creating — a reloaded placeholder URL, which can
-  // only be an error, never a wait.
+  // No entry: the block id is already a session. An entry: this tab is
+  // still creating it, so the id is absent until the POST lands.
   const sessionId = () => {
     const session = entry();
-    if (session === undefined) return blockId();
-    return session?.sessionId();
+    return session ? session.sessionId() : blockId();
   };
 
   return {
@@ -44,10 +37,7 @@ export function resolveSessionId(blockId: Accessor<string>): ResolvedSessionId {
       entry() != null &&
       !entry()?.failed() &&
       entry()?.sessionId() === undefined,
-    failed: () => entry() === null || (entry()?.failed() ?? false),
-    error: () =>
-      entry() === null
-        ? 'This conversation was not created. Return to the composer to start a new one.'
-        : entry()?.error(),
+    failed: () => entry()?.failed() ?? false,
+    error: () => entry()?.error(),
   };
 }

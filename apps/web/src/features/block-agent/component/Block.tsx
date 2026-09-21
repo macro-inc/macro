@@ -144,12 +144,11 @@ export default function BlockAgent() {
   const blockId = useBlockId();
   const split = useContext(SplitPanelContext);
 
-  // A block opened from the create menu mounts against a placeholder while
-  // `POST /agent-sessions` provisions its sandbox — minutes, during which the
-  // user is already typing. When the real id lands the split adopts it in
-  // place: the URL becomes the session's, this mount keeps running, and the
-  // placeholder is gone from history rather than being a back step to
-  // nowhere.
+  // A block opened from the create menu mounts against the client-minted id
+  // while `POST /agent-sessions` provisions its sandbox — minutes, during
+  // which the user is already typing. The POST adopts that id, so the URL
+  // does not change. If a server still mints its own id, the split adopts
+  // that one in place.
   const adoptSessionId = (sessionId: string) => {
     split?.handle.adoptContentId({ type: 'agent', nextId: sessionId });
     forgetPendingSession(blockId);

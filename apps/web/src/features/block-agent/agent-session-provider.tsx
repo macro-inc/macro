@@ -22,15 +22,16 @@ import {
   createQueueController,
   type QueueController,
 } from './context/create-queue-controller';
+import { forgetPendingSession } from './context/pending-session';
 import { resolveSessionId } from './context/resolve-session-id';
 import { createInteractionController } from './primitives/create-interaction-controller';
 import type { QuoteInsert } from './ui';
 
 export function AgentSessionProvider(
   props: ParentProps & {
-    /** The block's id: a session, or a placeholder for one being created. */
+    /** The block's id: a session, or a just-minted id still being created. */
     blockId: string;
-    /** The real id, once known — the block adopts it into the URL. */
+    /** A different id, if the create answered with one the client did not mint. */
     onSessionId?: (sessionId: string) => void;
   }
 ) {
@@ -40,7 +41,14 @@ export function AgentSessionProvider(
 
   createEffect(() => {
     const id = sessionId();
-    if (id && id !== props.blockId) props.onSessionId?.(id);
+    if (!id) return;
+    if (id !== props.blockId) {
+      props.onSessionId?.(id);
+      return;
+    }
+    // Same id the URL already holds — drop the pending entry so the map
+    // does not grow for the life of the tab.
+    forgetPendingSession(props.blockId);
   });
 
   const userId = useUserId();

@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CreateAgentSessionRequestBotId } from './createAgentSessionRequestBotId';
+import type { CreateAgentSessionRequestId } from './createAgentSessionRequestId';
 import type { CreateAgentSessionRequestInstructions } from './createAgentSessionRequestInstructions';
 import type { CreateAgentSessionRequestOwner } from './createAgentSessionRequestOwner';
 import type { CreateAgentSessionRequestPrompt } from './createAgentSessionRequestPrompt';
@@ -28,6 +29,10 @@ the two shapes is refused rather than guessed at.
 Clients serialize this, so both derives are used.
  */
 export interface CreateAgentSessionRequest {
+  /** The id the caller already minted this session under, so the client can
+open the session URL before this POST answers. Adopted as the persisted
+id. Omitted, the service mints one. */
+  id?: CreateAgentSessionRequestId;
   /** Bot the session runs for. On a managed request this optionally selects
 a persisted persona the user owns, may use through team membership, or
 can `@` mention in a shared channel; omitting it uses the deployment's

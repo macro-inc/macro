@@ -217,11 +217,11 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
       modeForKind(kindForBot(start.botId, rosterSource.roster()))
     );
   };
-  const adoptSessionId = (placeholderId: string, sessionId: string) => {
+  const adoptSessionId = (mintedId: string, sessionId: string) => {
     setSelected((current) => {
       if (
         current?.conversation.type !== 'agent_session' ||
-        current.conversation.id !== placeholderId ||
+        current.conversation.id !== mintedId ||
         current.activeConversationId === sessionId ||
         panel.handle.content().id !==
           agentsRouteId({
