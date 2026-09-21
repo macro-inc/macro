@@ -120,6 +120,51 @@ describe('reminder alert feed', () => {
   });
 
   it.each(['seen', 'done'] as const)(
+    'restores the alert when a loaded optimistic %s state rolls back',
+    (state) => {
+      const h = mount();
+      const [currentState, setCurrentState] = createSignal(notification.state);
+      h.setLoading(false);
+      h.setNotifications([
+        {
+          ...notification,
+          get state() {
+            return currentState();
+          },
+        },
+      ]);
+      expect(h.alerts()).toHaveLength(1);
+      setCurrentState(state);
+      expect(h.alerts()).toEqual([]);
+      setCurrentState('unseen');
+      expect(h.alerts()).toHaveLength(1);
+      h.dispose();
+    }
+  );
+
+  it.each([false, true])(
+    'keeps an acknowledged occurrence hidden across mixed duplicate rows (reversed: %s)',
+    (reversed) => {
+      const h = mount();
+      const seen: UnifiedNotification = {
+        ...notification,
+        id: 'seen-delivery',
+        state: 'seen',
+      };
+      h.setLoading(false);
+      h.setNotifications(
+        reversed ? [seen, notification] : [notification, seen]
+      );
+      expect(h.alerts()).toEqual([]);
+      h.setNotifications([notification]);
+      expect(h.alerts()).toEqual([]);
+      h.setNotifications([notification, { ...seen, state: 'unseen' }]);
+      expect(h.alerts()).toHaveLength(1);
+      h.dispose();
+    }
+  );
+
+  it.each(['seen', 'done'] as const)(
     'forgets replayed delivery ids after a %s query occurrence leaves the feed',
     (state) => {
       const h = mount();

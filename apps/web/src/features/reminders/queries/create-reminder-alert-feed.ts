@@ -50,6 +50,7 @@ export function createReminderAlertFeed(
     account: string | undefined;
     latest: ReturnType<typeof latest>;
     pending: Map<string, UnifiedNotification>;
+    acknowledgedDeliveries: Map<string, string>;
     acknowledged: Set<string>;
   }>((previous) => {
     const owner = account();
@@ -57,10 +58,11 @@ export function createReminderAlertFeed(
     const pending = new Map(
       previous?.account === owner ? previous?.pending : undefined
     );
-    // Keep observed acknowledgements after pagination removes the query row,
-    // so a later delivery id cannot resurrect the same occurrence.
-    const acknowledged = new Set(
-      previous?.account === owner ? previous?.acknowledged : undefined
+    // Remember which delivery acknowledged an occurrence after its query row
+    // leaves. Only that delivery rolling back to unseen revokes its memory;
+    // a different, stale unseen delivery must not resurrect the occurrence.
+    const acknowledgedDeliveries = new Map(
+      previous?.account === owner ? previous?.acknowledgedDeliveries : undefined
     );
     if (event && event !== previous?.latest && event.account === owner) {
       pending.set(event.notification.id, event.notification);
@@ -75,9 +77,11 @@ export function createReminderAlertFeed(
       if (identity) {
         confirmed.add(identity.key);
         if (item.state !== 'unseen' || item.deleted_at)
-          acknowledged.add(identity.key);
+          acknowledgedDeliveries.set(item.id, identity.key);
+        else acknowledgedDeliveries.delete(item.id);
       }
     }
+    const acknowledged = new Set(acknowledgedDeliveries.values());
     for (const [id, item] of pending) {
       const identity = reminderAlertIdentity(item);
       if (
@@ -86,7 +90,13 @@ export function createReminderAlertFeed(
       )
         pending.delete(id);
     }
-    return { account: owner, latest: event, pending, acknowledged };
+    return {
+      account: owner,
+      latest: event,
+      pending,
+      acknowledgedDeliveries,
+      acknowledged,
+    };
   });
 
   return createMemo(() =>
