@@ -265,6 +265,7 @@ pub struct DeleteEmailDraftPayload {
     pub thread_deleted: bool,
 }
 
+/// Result of creating or updating an email draft.
 pub struct SaveEmailDraftPayload<O: EmailThreadMutationOutput> {
     draft_id: Uuid,
     draft: GraphqlSoupEmailMessage,
@@ -272,7 +273,8 @@ pub struct SaveEmailDraftPayload<O: EmailThreadMutationOutput> {
 }
 
 /// Result of creating or updating an email draft.
-// async-graphql reads the schema description from the impl, not the struct.
+// Repeated on purpose: the schema description comes from the impl's doc,
+// while `missing_docs` wants one on the struct.
 #[Object(name = "SaveEmailDraftPayload")]
 impl<O> SaveEmailDraftPayload<O>
 where
