@@ -142,7 +142,12 @@ const mocks = vi.hoisted(() => {
         return host;
       }
     ),
-    createTauriCacheHost: vi.fn(() => host),
+    createTauriCacheHost: vi.fn(
+      (options: { onInitializationError?: (error: Error) => void }) => {
+        initializationErrorHandler = options.onInitializationError;
+        return host;
+      }
+    ),
   };
 });
 
@@ -490,6 +495,46 @@ describe('GraphQL Soup browser cache session gate', () => {
         'cache.phase': 'operation',
         'cache.operation_kind': kind,
       });
+    }
+  );
+
+  it.each([
+    { native: false, backend: 'turso-wasm-opfs' },
+    { native: true, backend: 'native' },
+  ])(
+    'reports $backend initialization failures once despite in-flight operation errors',
+    async ({ native, backend }) => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      mocks.tauri = native;
+      const soup = await import('./graphql-soup');
+      soup.getGraphqlSoupClient();
+      const report =
+        mocks.normalizedCacheExchange.mock.calls[0]?.[1]?.onCacheError;
+      expect(report).toBeDefined();
+      const operation: Operation = {
+        kind: 'query',
+        key: 42,
+        query: parse('query { user { id } }'),
+        variables: {},
+        context: { url: 'http://dss.test', requestPolicy: 'cache-first' },
+      };
+      const error = new Error('injected initialization failure');
+
+      mocks.failInitialization(error);
+      // Rejected in-flight reads reach the exchange after the host reports
+      // initialization failure. Cleanup can also reject outstanding work.
+      await Promise.resolve();
+      report?.(error, operation);
+      report?.(new Error('cache worker host was disposed'), operation);
+
+      expect(mocks.telemetryError).toHaveBeenCalledExactlyOnceWith(error, {
+        'error.source': 'graphql-cache',
+        'cache.backend': backend,
+        'cache.phase': 'initialization',
+      });
+      expect(soup.getGraphqlSoupClient()).toBe(mocks.realtimeClient);
+      expect(soup.getGraphqlCacheHost()).toBeUndefined();
+      expect(soup.graphqlCacheEnabled()).toBe(false);
     }
   );
 

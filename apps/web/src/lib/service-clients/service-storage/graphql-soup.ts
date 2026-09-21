@@ -470,8 +470,12 @@ export function getGraphqlSoupClient(): Client {
         preferGetMethod: false,
         exchanges: [
           normalizedCacheExchange(host, {
-            onCacheError: (error, operation) =>
-              reportCacheError(error, 'operation', operation.kind),
+            onCacheError: (error, operation) => {
+              // Initialization failure already reports before retiring the host;
+              // rejected in-flight operations must not report it again.
+              if (!host || cachedCacheHost !== host) return;
+              reportCacheError(error, 'operation', operation.kind);
+            },
             entityResolvers: {
               GraphqlUser: {
                 emailThread: entityFromArgument('GraphqlSoupEmailThread', [
