@@ -11217,74 +11217,6 @@
         }
       }
     },
-    "/messages/{parent_type}/{parent_id}/references": {
-      "get": {
-        "tags": ["messages::inbound::axum_router"],
-        "summary": "Read source channel threads mentioning this document under both parents' permissions.",
-        "operationId": "entity_message_references",
-        "parameters": [
-          {
-            "name": "parent_type",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "parent_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Maximum number of roots.",
-            "required": false,
-            "schema": {
-              "type": ["integer", "null"],
-              "format": "int32",
-              "minimum": 0
-            }
-          },
-          {
-            "name": "created_at",
-            "in": "query",
-            "description": "Last root's creation timestamp.",
-            "required": false,
-            "schema": {
-              "type": ["string", "null"],
-              "format": "date-time"
-            }
-          },
-          {
-            "name": "cursor_id",
-            "in": "query",
-            "description": "Last root's UUID.",
-            "required": false,
-            "schema": {
-              "type": ["string", "null"],
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReferencedThreadPage"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/messages/{parent_type}/{parent_id}/threads/{id}": {
       "get": {
         "tags": ["messages::inbound::axum_router"],
@@ -26729,55 +26661,6 @@
               "$ref": "#/components/schemas/Item"
             },
             "description": "The items returned from the call"
-          }
-        }
-      },
-      "ReferencedThread": {
-        "type": "object",
-        "description": "A source channel thread that mentions the requested document.",
-        "required": ["parent", "root_id", "can_reply"],
-        "properties": {
-          "can_reply": {
-            "type": "boolean",
-            "description": "Whether this viewer currently has permission to reply in the source channel."
-          },
-          "channel_name": {
-            "type": ["string", "null"],
-            "description": "Source channel's current display name, returned only after access checks."
-          },
-          "parent": {
-            "$ref": "#/components/schemas/MessageParent",
-            "description": "Source parent used by the common message reader and mutations."
-          },
-          "root_id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Source root identity; discovery does not copy its message content."
-          }
-        }
-      },
-      "ReferencedThreadPage": {
-        "type": "object",
-        "description": "Authorized source threads, deduplicated by root.",
-        "required": ["threads"],
-        "properties": {
-          "next_cursor": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/MessageCursor",
-                "description": "Last visible root; no private thread identifiers are exposed through cursors."
-              }
-            ]
-          },
-          "threads": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ReferencedThread"
-            },
-            "description": "Accessible channel discussions mentioning the document."
           }
         }
       },

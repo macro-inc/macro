@@ -359,7 +359,6 @@ export const storageBacklog = [
   'entityMessageLegacy',
   'entityMessagePatchThread',
   'entityMessageReact',
-  'entityMessageReferences',
   'entityMessageTyping',
   'getActivity',
   'getDocumentAnchors',
