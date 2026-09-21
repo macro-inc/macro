@@ -110,10 +110,10 @@ export function Transcript(props: { searchTarget?: AgentMessageTarget }) {
   const insets = () =>
     isTouchDevice()
       ? {
-          start: splitPanel?.contentOffsetTop() ?? 0,
+          start: (splitPanel?.contentOffsetTop() ?? 0) + 16,
           end: FloatRegions.hostHeight(),
         }
-      : { start: 0, end: 0 };
+      : { start: 16, end: 0 };
 
   return (
     <div class="relative flex-1 min-h-0" ref={setTranscriptEl}>

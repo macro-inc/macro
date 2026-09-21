@@ -30,8 +30,9 @@
 - The starting page has a compact composer that starts at one line and grows
   with longer prompts or Shift+Enter. Lists, quotes, headings, and other
   non-paragraph blocks expand immediately, even with short text. This also applies
-  to session composers. The editor takes the full width and controls move below;
-  returning to a short paragraph restores the compact row. Height changes animate
+  to session composers. The editor row takes the full width and controls move below.
+  The paperclip sits to the left of the editor in both layouts.
+  Returning to a short paragraph restores the compact row. Height changes animate
   over 150ms, with reduced-motion preferences respected. **Agent** and **Send**
   sit inside the input on the right.
   Direct model selections show only the model name and provider icon in the input.
@@ -462,9 +463,10 @@ The pane does not create PRs or generate their descriptions.
 
 Agent sessions reuse the channel's TanStack `ThreadList`. Opening a session lands
 at the latest message, including when history arrives after the empty view. Short
-transcripts start at the top, with the user prompt followed by the agent response;
-streaming output grows downward into the available space. Only the visible rows and an
-overscan buffer are mounted: scroll to older turns before searching their DOM text.
+transcripts start with 16px of top padding, with the user prompt followed by the
+agent response; streaming output grows downward into the available space. Only
+the visible rows and an overscan buffer are mounted: scroll to older turns before
+searching their DOM text.
 
 Search links add `agent_message_turn=<zero-based turn>&agent_message_author=user|agent`.
 They wait for history to load, then scroll to and highlight the matching folded
