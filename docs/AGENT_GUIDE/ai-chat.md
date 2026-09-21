@@ -385,8 +385,13 @@ In the Agents workspace, saved sessions use the shared top-bar controls: session
 icon, title and action menu, Share, Copy Share Link, and a side-panel toggle.
 There is no breadcrumb because Agents has no subspaces. Unknown model providers
 fall back to the chat icon. The toggle (or `]`) opens the session's Details, Plan,
-Changes, and Activity sections when available, beside the transcript in wide
+Changes, Activity, and References sections when available, beside the transcript in wide
 layouts or over it in narrow layouts; it does not open another split.
+`References` is the same section documents show: one row per channel message that
+`@`-mentioned or shared the session (sender, channel chip, time, and a two-line
+message excerpt) and per document that mentions it (author and document chip).
+Click a row to open that message or document in a split. The section is hidden
+until at least one reference exists, and only lists channels you belong to.
 New conversation pages have no disabled session action buttons. Older chats
 also have one header row, and empty chats show a simple conversation prompt
 instead of the standalone recent-sessions and tips surface.
