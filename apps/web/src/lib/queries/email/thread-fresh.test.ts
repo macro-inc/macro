@@ -7,7 +7,8 @@ const getThread = vi.hoisted(() => vi.fn());
 vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
   enableGraphqlSoup: { key: 'enable-graphql-soup' },
-  isFeatureEnabled: () => false,
+  // Authoritative lifecycle reads must bypass GraphQL even when it is enabled.
+  isFeatureEnabled: () => true,
 }));
 vi.mock('@service-email/client', () => ({ emailClient: { getThread } }));
 

@@ -118,9 +118,10 @@ export async function fetchAndCacheThread(
 }
 
 /**
- * Fetch fresh thread pages until the requested message is present or the
- * server has no more pages. Drafts have no internal date and sort after sent
- * messages, so lifecycle reconciliation cannot assume they are on page one.
+ * Read authoritative thread pages directly from REST, without GraphQL's
+ * in-flight deduplication or offline cache fallback. Drafts have no internal
+ * date and sort after sent messages, so continue until the requested message
+ * is present or the server has no more pages.
  */
 export async function fetchFreshEmailThread(
   threadId: string,
@@ -130,18 +131,15 @@ export async function fetchFreshEmailThread(
   let merged: Thread | undefined;
 
   while (true) {
-    const page = !isFeatureEnabled(enableGraphqlSoup)
-      ? (
-          await throwOnErr(
-            async () =>
-              await emailClient.getThread({
-                thread_id: threadId,
-                offset,
-                limit: DEFAULT_THREAD_MESSAGES_LIMIT,
-              })
-          )
-        ).thread
-      : await fetchGraphqlEmailThread(threadId, offset);
+    const page = (
+      await throwOnErr(() =>
+        emailClient.getThread({
+          thread_id: threadId,
+          offset,
+          limit: DEFAULT_THREAD_MESSAGES_LIMIT,
+        })
+      )
+    ).thread;
 
     merged = merged
       ? { ...page, messages: [...merged.messages, ...page.messages] }

@@ -483,3 +483,113 @@ it('reports delivery specifically when it races draft deletion', async () => {
   expect(showThread).toHaveBeenCalledWith('thread');
   root.dispose();
 });
+
+it.each([true, false])(
+  'does not send a recovery draft when pre-send persistence discovers delivery (immediate effect: %s)',
+  async (immediateEffect) => {
+    const context = createComposeContext();
+    const root = mountEmailComposer(context);
+    root.edit('Previously saved');
+    await vi.advanceTimersByTimeAsync(600);
+    const lifecycle = vi.mocked(context.draftLifecycle.observe).mock.results[0]
+      .value;
+    const sent = {
+      type: 'sent' as const,
+      draftId: 'draft',
+      threadId: 'thread',
+      inboxId: 'inbox',
+      observedAt: Date.now(),
+    };
+    vi.mocked(lifecycle.refresh).mockImplementationOnce(async () => {
+      if (immediateEffect) context.setDraftLifecycle(sent);
+      return sent;
+    });
+    vi.mocked(context.drafts.saveDraft)
+      .mockRejectedValueOnce(new Error('Message already sent'))
+      .mockResolvedValue({ ...response, draftId: 'recovered' });
+    root.edit('Keep this newer text unsent');
+    root.state.context.onSend();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+    if (!immediateEffect) {
+      expect(context.drafts.saveDraft).toHaveBeenCalledTimes(2);
+      // The refresh result already stopped Send before Solid applies the state.
+      context.setDraftLifecycle(sent);
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    expect(context.drafts.saveDraft).toHaveBeenCalledTimes(3);
+    expect(
+      vi.mocked(context.drafts.saveDraft).mock.lastCall?.[0].draft.db_id
+    ).toBeUndefined();
+    expect(root.state.context.disabled()).toBe(false);
+    root.dispose();
+  }
+);
+
+it('recovers local and forwarded attachments without retaining remote-only attachment pills', async () => {
+  const context = createComposeContext();
+  vi.mocked(context.attachmentStorage.uploadAttachments).mockImplementation(
+    async (input) => {
+      for (const file of input.attachments)
+        input.onAttachmentAdded?.(file, `${input.draftId}-attachment`);
+    }
+  );
+  const root = mountEmailComposer(context);
+  const file = new File(['notes'], 'notes.txt');
+  root.edit('Saved with files');
+  root.state.context.onAddAttachments([
+    { type: 'local', file },
+    {
+      type: 'remote',
+      attachmentId: 'remote',
+      url: 'https://example.com/file',
+      fileName: 'remote.txt',
+      contentType: 'text/plain',
+      fileSize: 10,
+    },
+    {
+      type: 'forwarded',
+      attachmentId: 'original-file',
+      fileName: 'forward.txt',
+      mimeType: 'text/plain',
+      fileSize: 10,
+    },
+  ]);
+  await vi.advanceTimersByTimeAsync(600);
+  vi.mocked(context.drafts.saveDraft).mockResolvedValue({
+    ...response,
+    draftId: 'recovered',
+  });
+  root.edit('New text to recover');
+  context.setDraftLifecycle({
+    type: 'sent',
+    draftId: 'draft',
+    threadId: 'thread',
+    inboxId: 'inbox',
+    observedAt: Date.now(),
+  });
+  await vi.advanceTimersByTimeAsync(0);
+
+  expect(context.attachmentStorage.uploadAttachments).toHaveBeenCalledTimes(2);
+  expect(context.attachmentStorage.uploadAttachments).toHaveBeenLastCalledWith(
+    expect.objectContaining({ draftId: 'recovered', attachments: [file] })
+  );
+  expect(
+    context.attachmentStorage.addForwardedAttachments
+  ).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      draftId: 'recovered',
+      attachments: [{ attachmentId: 'original-file' }],
+    })
+  );
+  expect(
+    root.state.context
+      .attachments()
+      .map((attachment) => attachment.attachmentId)
+  ).toEqual(['recovered-attachment', 'original-file']);
+  expect(context.notices.feedback.alert).toHaveBeenCalledWith(
+    'Previously saved attachments could not be copied to the new draft. Please attach those files again.'
+  );
+  root.dispose();
+});

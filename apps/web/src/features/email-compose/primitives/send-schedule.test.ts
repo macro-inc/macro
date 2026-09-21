@@ -18,6 +18,11 @@ function composer(
     const state = mountReplyComposer(composeContext);
     return {
       dispose: state.dispose,
+      edit: state.edit,
+      switchInbox: state.persistDraftOnSenderSwitch,
+      selectedInbox: state.activeInboxId,
+      disabled: state.editingDisabled,
+      sendTime: state.form.sendTime,
       send: () => state.sendEmail(),
       schedule: state.handleSendTimeChange,
     };
@@ -26,12 +31,157 @@ function composer(
   root.edit('Ready to send');
   return {
     dispose: root.dispose,
+    edit: root.edit,
+    switchInbox: root.state.context.onSelectInbox!,
+    selectedInbox: () => root.state.context.selectedInboxId?.(),
+    disabled: root.state.context.disabled,
+    sendTime: root.state.context.sendTime,
     send: root.state.context.onSend,
     schedule: root.state.context.onSendTimeChange!,
   };
 }
 
 describe('send and schedule ordering', () => {
+  it('does not send a reply when delivery overtakes its pre-send save', async () => {
+    const context = createComposeContext();
+    const state = replyComposer(context);
+    state.edit('Previously saved');
+    await vi.advanceTimersByTimeAsync(600);
+    const pending = Promise.withResolvers<PersistedEmailIdentity>();
+    vi.mocked(context.drafts.saveDraft)
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValue({
+        draftId: 'recovered',
+        threadId: 'thread',
+        inboxId: 'inbox',
+      });
+    state.edit('Keep this newer reply unsent');
+    const sending = state.sendEmail();
+    await vi.advanceTimersByTimeAsync(0);
+    context.setDraftLifecycle({
+      type: 'sent',
+      draftId: 'draft',
+      threadId: 'thread',
+      inboxId: 'inbox',
+      observedAt: Date.now(),
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    pending.resolve({ draftId: 'draft', threadId: 'thread', inboxId: 'inbox' });
+    await sending;
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+    expect(state.savedDraftId()).toBe('recovered');
+    expect(decodeBase64Utf8(state.collectDraft()?.body_html ?? '')).toContain(
+      'Keep this newer reply unsent'
+    );
+    state.dispose();
+  });
+
+  it.each(['standalone', 'reply'] as const)(
+    '%s observes the persisted inbox and ignores missing responses during migration',
+    async (kind) => {
+      const context = createComposeContext();
+      context.accounts = {
+        ...context.accounts,
+        inboxes: () => [
+          { id: 'inbox', email_address: 'me@example.com', settings: {} },
+          { id: 'other', email_address: 'other@example.com', settings: {} },
+          { id: 'third', email_address: 'third@example.com', settings: {} },
+        ],
+      };
+      const state = composer(kind, context);
+      state.edit('Move this draft');
+      await vi.advanceTimersByTimeAsync(600);
+      const identity = vi.mocked(context.draftLifecycle.observe).mock
+        .calls[0][0];
+      const pending = Promise.withResolvers<PersistedEmailIdentity>();
+      vi.mocked(context.drafts.saveDraft).mockReturnValueOnce(pending.promise);
+      state.switchInbox('other');
+      await vi.advanceTimersByTimeAsync(0);
+      state.switchInbox('third');
+      expect(state.selectedInbox()).toBe('other');
+      expect(identity.inboxId()).toBe('inbox');
+      expect(identity.draftId()).toBe('draft');
+      context.setDraftLifecycle({
+        type: 'missing',
+        draftId: 'draft',
+        threadId: 'thread',
+        inboxId: 'other',
+        observedAt: Date.now(),
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      // The server deletes the old inbox's draft before the migration response.
+      context.setDraftLifecycle({
+        type: 'missing',
+        draftId: 'draft',
+        threadId: 'thread',
+        inboxId: 'inbox',
+        observedAt: Date.now(),
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(context.notices.feedback.alert).not.toHaveBeenCalled();
+      pending.resolve({
+        draftId: 'moved',
+        threadId: 'moved-thread',
+        inboxId: 'other',
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect([
+        identity.draftId(),
+        identity.threadId(),
+        identity.inboxId(),
+      ]).toEqual(['moved', 'moved-thread', 'other']);
+      expect(context.drafts.saveDraft).toHaveBeenCalledTimes(2);
+      expect(state.selectedInbox()).toBe('other');
+      expect(context.notices.feedback.alert).not.toHaveBeenCalled();
+      expect(state.disabled()).toBe(false);
+      state.dispose();
+    }
+  );
+
+  it.each(['standalone', 'reply'] as const)(
+    '%s defers stale observations until schedule reconciliation completes',
+    async (kind) => {
+      const context = createComposeContext();
+      const state = composer(kind, context);
+      const pending = Promise.withResolvers<void>();
+      vi.mocked(context.delivery.archive).mockReturnValueOnce(pending.promise);
+      const lifecycle = vi.mocked(context.draftLifecycle.observe).mock
+        .results[0].value;
+      const scheduled = {
+        type: 'scheduled' as const,
+        draftId: 'draft',
+        threadId: 'thread',
+        inboxId: 'inbox',
+        sendTime: '2026-12-01T12:00:00Z',
+        observedAt: Date.now(),
+      };
+      vi.mocked(lifecycle.refresh).mockImplementationOnce(async () => {
+        context.setDraftLifecycle(scheduled);
+        return scheduled;
+      });
+      const scheduling = state.schedule(new Date(scheduled.sendTime));
+      await vi.advanceTimersByTimeAsync(0);
+      context.setDraftLifecycle({
+        type: 'editing',
+        draftId: 'draft',
+        threadId: 'thread',
+        inboxId: 'inbox',
+        observedAt: Date.now(),
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(state.sendTime()).toEqual(new Date(scheduled.sendTime));
+      pending.resolve();
+      await scheduling;
+      expect(state.sendTime()).toEqual(new Date(scheduled.sendTime));
+      expect(state.disabled()).toBe(true);
+      expect(context.notices.feedback.success).not.toHaveBeenCalledWith(
+        'Schedule cancelled. This email is editable again.'
+      );
+      state.dispose();
+    }
+  );
   it('keeps reply recipients unchanged while a schedule is pending', async () => {
     const context = createComposeContext();
     const pending = Promise.withResolvers<void>();
@@ -584,8 +734,9 @@ describe('send and schedule ordering', () => {
       state.edit('Moving between inboxes');
       await vi.advanceTimersByTimeAsync(500);
       state.persistDraftOnSenderSwitch('b');
-      state.persistDraftOnSenderSwitch('c');
       finish({ draftId: 'draft-a', threadId: 'thread-a', inboxId: 'inbox' });
+      await vi.advanceTimersByTimeAsync(0);
+      state.persistDraftOnSenderSwitch('c');
       await vi.advanceTimersByTimeAsync(0);
       const inputs = vi
         .mocked(composeContext.drafts.saveDraft)

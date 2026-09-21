@@ -41,17 +41,38 @@ export function createAttachmentPersistence(options: {
   inboxId: Accessor<string | undefined>;
   services: Pick<
     EmailAttachmentStorage,
-    'uploadAttachments' | 'removeAttachment' | 'removeForwardedAttachment'
+    | 'uploadAttachments'
+    | 'addForwardedAttachments'
+    | 'removeAttachment'
+    | 'removeForwardedAttachment'
   >;
 }) {
   // An assigned ID only proves that the attachment record exists. Every save
   // must also wait for content uploads started by earlier concurrent saves.
   const inFlight = new Set<Promise<void>>();
   const [uploading, setUploading] = createSignal(false);
+  let generation = 0;
 
   return {
     uploading,
+    /** Local files can be uploaded again; remote-only draft files cannot be cloned. */
+    detach() {
+      generation += 1;
+      let removed = 0;
+      for (const attachment of options.attachments.list()) {
+        if (attachment.type === 'local') {
+          options.attachments.clearAttachmentId(attachment.file);
+        } else if (attachment.type === 'remote') {
+          options.attachments.removeById(attachment.attachmentId);
+          removed += 1;
+        }
+      }
+      return removed;
+    },
     async upload(draftId: string, inbox = { inboxId: options.inboxId() }) {
+      const uploadGeneration = generation;
+      const stillCurrent = () =>
+        uploadGeneration === generation && options.draftId() === draftId;
       const attachments = options.attachments
         .list()
         .filter(
@@ -66,8 +87,13 @@ export function createAttachmentPersistence(options: {
           draftId: draftId,
           attachments: attachments.map((attachment) => attachment.file),
           inboxId: inbox.inboxId,
-          onAttachmentAdded: options.attachments.assignAttachmentId,
-          onAttachmentUploadFailed: options.attachments.clearAttachmentId,
+          onAttachmentAdded: (file, id) => {
+            if (stillCurrent())
+              options.attachments.assignAttachmentId(file, id);
+          },
+          onAttachmentUploadFailed: (file) => {
+            if (stillCurrent()) options.attachments.clearAttachmentId(file);
+          },
         });
         const settled = run.then(
           () => undefined,
@@ -83,6 +109,17 @@ export function createAttachmentPersistence(options: {
       while (inFlight.size) await Promise.all([...inFlight]);
       // All work has settled; rethrow this save's own upload failure.
       if (run) await run;
+      if (!stillCurrent()) return;
+      const forwarded = options.attachments
+        .list()
+        .filter((attachment) => attachment.type === 'forwarded');
+      if (forwarded.length) {
+        await options.services.addForwardedAttachments({
+          draftId,
+          inboxId: inbox.inboxId,
+          attachments: forwarded.map(({ attachmentId }) => ({ attachmentId })),
+        });
+      }
     },
     remove(attachment: DraftFormAttachment) {
       const state = options.attachments;

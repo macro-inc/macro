@@ -488,6 +488,9 @@ reconciles on email events, tab focus/reconnect, cross-tab schedule changes, and
 short due-time poll. Confirmed delivery closes or disables the old composer and
 stops autosave/delete against the sent ID. Text from an edit that raced delivery
 is preserved as a new unsent draft, never submitted with the sent message ID.
+Recovery re-uploads local attachment files and restores forwarded attachments.
+Remote-only draft attachments cannot be copied after the original draft is gone;
+their pills are removed and a notice asks you to attach those files again.
 
 With the new app views enabled, mobile and tablet Email use a floating, horizontally
 scrolling row of those tabs, with `Open email filters` at the left. The rest of the
