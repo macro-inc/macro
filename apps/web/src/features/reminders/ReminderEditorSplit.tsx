@@ -64,18 +64,26 @@ function referenceMention(
 }
 
 /**
- * The reminder editor, hosted in a split so it previews into the Viewer like any
- * other entity rather than a modal over the list.
+ * Props shared by split and inline-preview reminder detail adapters.
+ *
+ * The host owns close/navigation behavior so the editor content does not need
+ * to know whether it is mounted as a restorable split or Home's detail pane.
+ */
+export type ReminderDetailsProps = {
+  reminderId: string | undefined;
+  onClose: VoidFunction;
+};
+
+/**
+ * Reminder detail content shared by the restorable component split and Home's
+ * inline preview.
  *
  * It fetches the reminder by id (the id is encoded in the split content, so it
  * survives a reload), seeds the shared {@link ReminderForm}, and shows the
  * entity the reminder is about as a preview card. Saving writes through the same
- * mutation the create modal uses and closes the split.
+ * mutation the create modal uses and asks its host to close.
  */
-export function ReminderEditorSplit(props: { reminderId: string }) {
-  const panel = useSplitPanelOrThrow();
-  onMount(() => panel.handle.setDisplayName('Reminder'));
-
+export function ReminderDetails(props: ReminderDetailsProps) {
   const query = useReminderQuery(() => props.reminderId);
   const [updateError, setUpdateError] = createSignal<string>();
   let focusBeforeSave: HTMLElement | undefined;
@@ -98,6 +106,10 @@ export function ReminderEditorSplit(props: { reminderId: string }) {
     const reminder = query.isSuccess ? query.data : undefined;
     return reminder ? referenceMention(reminder) : undefined;
   });
+  const reminderUnavailable = () =>
+    !props.reminderId ||
+    query.isError ||
+    (query.isSuccess && query.data === undefined);
 
   const save = async (values: ReminderFormValues, reminder: Reminder) => {
     if (updateReminder.isPending) return;
@@ -128,7 +140,7 @@ export function ReminderEditorSplit(props: { reminderId: string }) {
     );
     // Neither answer moved — nothing to send, and an empty patch is rejected.
     if (!patch) {
-      panel.handle.close();
+      props.onClose();
       return;
     }
     try {
@@ -139,7 +151,7 @@ export function ReminderEditorSplit(props: { reminderId: string }) {
       toast.success(
         `Reminder updated · ${describeReminderConfirmation(updated.schedule)}`
       );
-      panel.handle.close();
+      props.onClose();
     } catch {
       setUpdateError(
         'We couldn’t save these changes. Your edits are still here—try again.'
@@ -167,30 +179,50 @@ export function ReminderEditorSplit(props: { reminderId: string }) {
                 reference={
                   <Show when={reference()}>
                     {(ref) => (
-                      <div class="flex">
-                        <ItemPreview id={ref().id} type={ref().type} />
+                      <div class="flex flex-col gap-1">
+                        <span class="text-xs font-medium text-ink-muted">
+                          Original item
+                        </span>
+                        <div class="flex">
+                          <ItemPreview id={ref().id} type={ref().type} />
+                        </div>
                       </div>
                     )}
                   </Show>
                 }
-                onCancel={() => panel.handle.close()}
+                onCancel={props.onClose}
                 onSubmit={(values) => void save(values, reminder())}
               />
             )}
           </Match>
-          <Match when={query.isLoading}>
+          <Match when={query.isPending && !!props.reminderId}>
             <div class="flex items-center justify-center py-16 text-ink-muted">
               <SpinnerIcon class="size-5 animate-spin" />
             </div>
           </Match>
-          <Match when={query.isError || !query.data}>
+          <Match when={reminderUnavailable()}>
             <div class="flex flex-col items-center justify-center gap-2 py-16 text-ink-muted">
               <BellIcon class="size-6 text-ink-extra-muted" />
-              <span class="text-sm">This reminder is no longer available.</span>
+              <span class="text-center text-sm">
+                This reminder is unavailable or you no longer have access.
+              </span>
             </div>
           </Match>
         </Switch>
       </div>
     </div>
+  );
+}
+
+/** Restorable split adapter for {@link ReminderDetails}. */
+export function ReminderEditorSplit(props: { reminderId: string | undefined }) {
+  const panel = useSplitPanelOrThrow();
+  onMount(() => panel.handle.setDisplayName('Reminder'));
+
+  return (
+    <ReminderDetails
+      reminderId={props.reminderId}
+      onClose={() => panel.handle.close()}
+    />
   );
 }

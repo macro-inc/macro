@@ -1,8 +1,9 @@
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { getIconConfig } from '@core/component/EntityIcon';
-import { enableCrm } from '@core/constant/featureFlags';
+import { enableCrm, enableReminders } from '@core/constant/featureFlags';
 import BellIcon from '@phosphor/bell.svg';
+import BellSimpleIcon from '@phosphor/bell-simple.svg';
 import BellFillIcon from '@phosphor-fill/bell-fill.svg';
 import CalendarFillIcon from '@phosphor-fill/calendar-fill.svg';
 import EmailFillIcon from '@phosphor-fill/envelope-fill.svg';
@@ -34,6 +35,12 @@ const MOBILE_DOCK_VIEWS: readonly MobileDockView[] = [
     icon: BellIcon,
     iconActive: BellFillIcon,
     pillIcon: BellIcon,
+  },
+  {
+    id: 'reminders',
+    label: 'Reminders',
+    icon: BellSimpleIcon,
+    iconActive: BellFillIcon,
   },
   {
     id: 'calendar',
@@ -69,9 +76,12 @@ const MOBILE_DOCK_VIEWS: readonly MobileDockView[] = [
 export function useMobileDockViews() {
   const calendarEnabled = useCalendarUiFlag();
   const crm = useFeatureFlag(enableCrm);
+  const reminders = useFeatureFlag(enableReminders);
   return createMemo(() =>
     MOBILE_DOCK_VIEWS.filter(
       (view) => view.id !== 'calendar' || calendarEnabled()
-    ).filter((view) => view.id !== 'companies' || crm().enabled)
+    )
+      .filter((view) => view.id !== 'companies' || crm().enabled)
+      .filter((view) => view.id !== 'reminders' || reminders().enabled)
   );
 }

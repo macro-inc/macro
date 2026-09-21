@@ -1,7 +1,9 @@
+import { reminderDetailUrl } from '@app/features/reminders/reminder-navigation';
 import { copyCalendarEventMentionTarget } from '@block-calendar/copy-event-mention';
 import { getChannelParams } from '@block-channel/utils/link';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { enableReminders, isFeatureEnabled } from '@core/constant/featureFlags';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { type EntityData, isGithubPrEntity } from '@entity';
 import { calendarEventLinkTarget } from '../utils';
@@ -43,6 +45,7 @@ const getEntityUrlParams = (
 const getEntityUrl = (entity: EntityData): string => {
   // TODO(dev-rb/github): Return the Macro /pr/:id URL.
   if (isGithubPrEntity(entity)) return entity.metadata.url;
+  if (entity.type === 'reminder') return reminderDetailUrl(entity.id);
 
   return buildSimpleEntityUrl(
     {
@@ -54,10 +57,8 @@ const getEntityUrl = (entity: EntityData): string => {
 };
 
 export const makeCopyLinkAction = () => {
-  // A reminder has no block of its own, so `/app/reminder/{id}` resolves to
-  // nothing the orchestrator can open — there is no link to copy.
   const canExecute = (entity: EntityData): boolean =>
-    entity.type !== 'reminder';
+    entity.type !== 'reminder' || isFeatureEnabled(enableReminders);
 
   const execute = async (entities: EntityData[]) => {
     // Only copy link for the first entity (doesn't make sense for bulk)

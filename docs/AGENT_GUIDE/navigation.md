@@ -13,6 +13,8 @@
 | `/app/component/channels` | Channels list |
 | `/app/component/documents` | Files (documents list) |
 | `/app/component/tasks` | Tasks table |
+| `/app/component/reminders` | Reminders list (Active / Scheduled / Done; feature-gated) |
+| `/app/component/reminder-view~<uuid>` | Reload-safe reminder details; attached reminders link to their original item |
 | `/app/component/agents` | AI chats / agents list |
 | `/app/agents/<uuid>` | Chat agent session with the Agents sidebar |
 | `/app/coders/<uuid>` | Code session with the Agents sidebar |
@@ -120,7 +122,7 @@ stay centered and the preview body fills the remaining height below the divider.
   compact rail and expanded sidebar.
 - Nav: `Go to Assistant`, `Go to Getting Started`, `Go to Home`, `Go to Recent`, `Go to Activity`.
 - Workspace: `Go to Email`, `Go to Channels`, `Go to Calls`, `Go to Files`, `Go to Tasks`,
-  `Go to Calendar`, `Go to Agents`, `Go to Customers`.
+  `Go to Reminders`, `Go to Calendar`, `Go to Agents`, `Go to Customers`.
 - Then `Favorites` (pinned items) and `Latest` (recent channels/DMs with an `Unread` switch).
 - Bottom: button named after the user's email — menu with `Command menu (Ctrl K)`,
   `Settings (Ctrl ;)`, `Log out`.
@@ -202,8 +204,9 @@ changes roll back rather than becoming committed local favorites.
 ## Create menu
 
 On mobile, the bottom dock fits fixed-width buttons in this order: Notifications,
-Calendar, Email, Channels, Files, Agents, Tasks, Calls, and CRM (when enabled). Calendar appears in the
-dock and search scope pills only when the calendar UI flag is enabled.
+Reminders, Calendar, Email, Channels, Files, Agents, Tasks, Calls, and CRM (when enabled).
+Reminders and Calendar appear in the dock and search scope pills only when their
+respective feature flags are enabled.
 Resizing the screen moves views between the dock
 and More views, which always includes Settings and lists the overflow views in
 reverse order. More and the separate bottom-right Search button always retain
@@ -318,6 +321,7 @@ email mentions keep their separate search-service path.
 - `/` — search everything. `j`/`k` — move in lists. `e` — mark done.
 - `g` then `h` — Home (inbox); `g` then `i` remains an alias. Assistant is
   available through its sidebar link or the `Go to Assistant` command.
+- `g` then `m` — Reminders, when reminders are enabled.
 - In Email and Tasks search, `Escape` returns focus to the list and keeps the query.
   Use the search field's clear button to clear it.
 - Splits: `` ` `` split, `Shift+H`/`Shift+L` move focus, `Shift+Esc` maximize.
@@ -396,10 +400,10 @@ Cancel and Escape dismiss the dialog. Use Cancel when
 reviewing dialogs against hosted data; confirmation performs real mutations.
 
 The New reminder dialog uses the same compact panel and fixed action footer.
-Its referenced item is a capped Badge; repeat options use bubble tabs (Does not
-repeat / Weekly / Monthly). Date, time, weekdays, and timezone retain their
-scheduling behavior. Creating a reminder dismisses the composer before saving,
-with success or failure reported by toast.
+Its referenced item is a capped Badge. It stays open with frozen controls while
+saving, preserves the draft and shows an inline retryable error on failure, and
+only closes after a confirmed create. See [reminders.md](reminders.md) for its
+date-language, preset, custom time, and recurrence controls.
 
 Action dialogs share `ActionDialogShell` presentation slots: the same capped selection badges for single and multiple items, compact heading and copy, prominent fields, and an attached footer. Rename, delete, move, reminder creation, and shared confirmations use this layout. Bulk rename keeps bubble tabs and one first-item preview.
 

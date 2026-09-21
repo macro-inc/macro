@@ -2,6 +2,7 @@ import {
   navigateCalendarEntityToTarget,
   navigateChannelEntityToTarget,
 } from '@app/features/next-soup/utils';
+import { ReminderDetails } from '@app/features/reminders/ReminderEditorSplit';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { createContextProvider } from '@solid-primitives/context';
@@ -10,15 +11,14 @@ import {
   createRenderEffect,
   createSignal,
   type JSX,
+  Match,
   on,
   Show,
   Suspense,
+  Switch,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import {
-  type PreviewPanelSelection,
-  previewBlockTarget,
-} from './previewTarget';
+import { type PreviewPanelSelection, previewTarget } from './previewTarget';
 
 export type { PreviewPanelSelection } from './previewTarget';
 
@@ -61,13 +61,21 @@ function PreviewPanelContent(
   const [interactedWith, setInteractedWith] = createSignal(false);
   const [attachHotkeys, previewHotkeyScope] =
     useHotkeyDOMScope('preview-panel');
+  const target = createMemo(() => previewTarget(props.selectedEntity));
+  const blockTarget = createMemo(() => {
+    const value = target();
+    return value.kind === 'block' ? value : undefined;
+  });
+  const reminderTarget = createMemo(() => {
+    const value = target();
+    return value.kind === 'reminder-detail' ? value : undefined;
+  });
 
   const blockInstance = createMemo<
     ReturnType<BlockOrchestrator['createBlockInstance']> | undefined
   >((previous) => {
-    const entity = props.selectedEntity;
-
-    const target = previewBlockTarget(entity);
+    const target = blockTarget();
+    if (!target) return undefined;
 
     if (previous?.type === target.blockType && previous.id === target.blockId) {
       return previous;
@@ -213,9 +221,19 @@ function PreviewPanelContent(
             onFocusOut={props.onFocusOut}
           >
             <Suspense>
-              <Show when={blockInstance()}>
-                {(instance) => <Dynamic component={instance().element} />}
-              </Show>
+              <Switch>
+                <Match when={reminderTarget()}>
+                  {(reminder) => (
+                    <ReminderDetails
+                      reminderId={reminder().reminderId}
+                      onClose={() => props.onFocusOut?.()}
+                    />
+                  )}
+                </Match>
+                <Match when={blockInstance()}>
+                  {(instance) => <Dynamic component={instance().element} />}
+                </Match>
+              </Switch>
             </Suspense>
           </PreviewPanelContext>
         </SplitPanelContext.Provider>

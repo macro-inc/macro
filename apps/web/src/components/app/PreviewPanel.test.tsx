@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   navigateCalendar: vi.fn(),
   mounts: vi.fn(),
   unmounts: vi.fn(),
+  reminderDetails: vi.fn(),
 }));
 
 // Exercise the real preview without loading unrelated blocks or service clients.
@@ -22,7 +23,12 @@ vi.mock('@app/features/next-soup/utils', () => ({
   navigateChannelEntityToTarget: mocks.navigateChannel,
   navigateCalendarEntityToTarget: mocks.navigateCalendar,
   calendarBlockParamsForEntity: vi.fn(),
-  reminderSplitTarget: vi.fn(),
+}));
+vi.mock('@app/features/reminders/ReminderEditorSplit', () => ({
+  ReminderDetails: (props: { reminderId: string }) => {
+    mocks.reminderDetails(props.reminderId);
+    return <div data-testid="reminder-details">{props.reminderId}</div>;
+  },
 }));
 vi.mock('@block-calendar/types', () => ({ CALENDAR_BLOCK_ID: 'calendar' }));
 vi.mock('@block-channel/utils/link', () => ({ getChannelParams: vi.fn() }));
@@ -198,5 +204,15 @@ describe('channel preview navigation', () => {
     expect(mocks.navigateCalendar).toHaveBeenCalledTimes(2);
     expect(view.createBlockInstance).toHaveBeenCalledTimes(1);
     expect(mocks.mounts).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('reminder preview navigation', () => {
+  it('mounts reminder details without creating a document block', () => {
+    const view = setup({ type: 'reminder', id: 'reminder-1' });
+
+    expect(view.getByTestId('reminder-details').textContent).toBe('reminder-1');
+    expect(mocks.reminderDetails).toHaveBeenCalledWith('reminder-1');
+    expect(view.createBlockInstance).not.toHaveBeenCalled();
   });
 });

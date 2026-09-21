@@ -70,6 +70,22 @@ export async function toPlatformNotificationData(
   resolveUserName: UserNameResolver,
   resolveDocumentName: DocumentNameResolver
 ): Promise<PlatformNotificationData | null> {
+  const accentColor = getAccentColorForIcon();
+  const icon = getFaviconUrl(accentColor);
+  const metadata = notification.notification_metadata;
+
+  // A reminder is self-authored and points at its own detail resource. Do not
+  // manufacture an actor/target sentence or resolve its id as a document.
+  if (metadata.tag === 'reminder') {
+    return {
+      title: 'Reminder',
+      options: {
+        body: markdownToPlainText(metadata.content.description),
+        icon,
+      },
+    };
+  }
+
   const actor =
     (await resolveActorName(notification, resolveUserName)) ??
     USER_NAME_FALLBACK;
@@ -85,9 +101,6 @@ export async function toPlatformNotificationData(
 
   const content = getNotificationContent(notification);
   const action = getNotificationAction(notification);
-
-  const accentColor = getAccentColorForIcon();
-  const icon = getFaviconUrl(accentColor);
 
   return {
     title: `${actor}${showTarget ? ` <${targetName}>` : ''}`,

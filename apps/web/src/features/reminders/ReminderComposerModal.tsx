@@ -13,6 +13,7 @@ import { ActionDialogShell, Dialog } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { globalSplitManager } from '../../lib/signals/splitLayout';
 import { ReminderForm } from './ReminderForm';
+import { reminderDetailDestination } from './reminder-navigation';
 import {
   closeReminderComposer,
   reminderComposerOpen,
@@ -81,10 +82,7 @@ export function ReminderComposerModal() {
             label: 'View',
             onClick: () =>
               globalSplitManager()?.openWithSplit(
-                {
-                  type: 'component',
-                  id: `reminder-view~${reminder.id}`,
-                },
+                reminderDetailDestination(reminder.id).content,
                 { activate: true }
               ),
           },

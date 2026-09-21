@@ -1,6 +1,7 @@
 import { LIST_VIEW_PATHS } from '@app/constants/list-views';
 import type { SidebarItem } from '@components/app/app-sidebar/sidebar';
 import { TOKENS } from '@core/hotkey/tokens';
+import BellIcon from '@phosphor/bell.svg';
 import BuildingsIcon from '@phosphor/buildings.svg';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import ChatsCircleIcon from '@phosphor/chats-circle.svg';
@@ -9,6 +10,7 @@ import FolderSimpleIcon from '@phosphor/folder-simple.svg';
 import HouseIcon from '@phosphor/house.svg';
 import ListChecksIcon from '@phosphor/list-checks.svg';
 import AgentIcon from '@phosphor/sparkle.svg';
+import BellFillIcon from '@phosphor-fill/bell-fill.svg';
 import BuildingsFillIcon from '@phosphor-fill/buildings-fill.svg';
 import CalendarBlankFillIcon from '@phosphor-fill/calendar-blank-fill.svg';
 import ChatsCircleFillIcon from '@phosphor-fill/chats-circle-fill.svg';
@@ -52,6 +54,15 @@ const SIDEBAR_NEXT_NAV_ITEMS = [
     iconActive: HouseFillIcon,
     hotkey: 'h',
     hotkeyToken: TOKENS.sidebar.goTo.inbox,
+  },
+  {
+    id: 'reminders',
+    label: 'Reminders',
+    href: LIST_VIEW_PATHS.reminders,
+    icon: BellIcon,
+    iconActive: BellFillIcon,
+    hotkey: 'm',
+    hotkeyToken: TOKENS.sidebar.goTo.reminders,
   },
   {
     id: 'documents',
@@ -122,6 +133,7 @@ const SIDEBAR_NEXT_NAV_ITEMS = [
 export type NavItemGates = {
   showCalendar: boolean;
   showCustomers: boolean;
+  showReminders: boolean;
 };
 
 /**
@@ -136,5 +148,6 @@ export const visibleNavItems = (gates: NavItemGates): SidebarNextNavItem[] =>
   SIDEBAR_NEXT_NAV_ITEMS.filter((item) => {
     if (item.id === 'calendar') return gates.showCalendar;
     if (item.id === 'companies') return gates.showCustomers;
+    if (item.id === 'reminders') return gates.showReminders;
     return true;
   });
