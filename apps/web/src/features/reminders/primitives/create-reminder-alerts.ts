@@ -22,11 +22,12 @@ export function createReminderAlerts(options: {
     const acknowledged = new Set(options.acknowledgedKeys());
     return options.items().filter((item) => !acknowledged.has(item.key));
   });
-  type LiveAlert = { hide: () => void };
+  type LiveAlert = { hide: () => void; freeze: () => void };
   let live: LiveAlert | undefined;
 
   const hide = () => {
     const previous = live;
+    previous?.freeze();
     live = undefined;
     previous?.hide();
   };
@@ -37,10 +38,27 @@ export function createReminderAlerts(options: {
       return;
     }
     if (live) return;
-    const current: LiveAlert = { hide: () => {} };
+    let displayed = pending();
+    let closing = false;
+    const presentation = () => {
+      if (!closing) {
+        const next = pending();
+        if (next.length > 0) displayed = next;
+      }
+      return displayed;
+    };
+    const current: LiveAlert = {
+      hide: () => {},
+      freeze: () => {
+        // The closing toast stays mounted during its exit animation. Keep its
+        // last nonempty contents independent of acknowledgement/new arrivals.
+        displayed = [...presentation()];
+        closing = true;
+      },
+    };
     live = current;
     current.hide = untrack(() =>
-      options.show(pending, () => {
+      options.show(presentation, () => {
         // A teardown (blur, logout, completion) can finish after a new alert opens.
         if (live !== current) return;
         const keys = pending().map((item) => item.key);

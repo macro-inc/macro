@@ -53,7 +53,9 @@ function mount() {
       setLoading,
       setDone,
       setAccount,
-      deliver,
+      get deliver() {
+        return deliver;
+      },
       unsubscribe,
       dispose,
     };
@@ -61,6 +63,21 @@ function mount() {
 }
 
 describe('reminder alert feed', () => {
+  it('rejects deliveries from a disposed account subscription', () => {
+    const h = mount();
+    const aliceDelivery = h.deliver;
+    h.setAccount('bob');
+    expect(h.unsubscribe).toHaveBeenCalledOnce();
+    aliceDelivery(notification);
+    expect(h.alerts()).toEqual([]);
+    h.deliver({ ...notification, id: 'bob-delivery' });
+    expect(h.alerts()).toHaveLength(1);
+    h.setAccount('alice');
+    aliceDelivery(notification);
+    expect(h.alerts()).toEqual([]);
+    h.dispose();
+  });
+
   it('forgets unconfirmed deliveries when the account changes', () => {
     const h = mount();
     h.deliver(notification);
@@ -126,6 +143,8 @@ describe('reminder alert feed', () => {
       expect(h.alerts()).toEqual([]);
       h.setNotifications([]);
       expect(h.alerts()).toEqual([]);
+      h.deliver({ ...notification, id: 'late-replay' });
+      expect(h.alerts()).toEqual([]);
       h.deliver({
         ...notification,
         id: 'next-occurrence',
@@ -140,6 +159,10 @@ describe('reminder alert feed', () => {
       });
       expect(h.alerts()).toHaveLength(1);
       expect(h.alerts()[0].scheduledFor).toBe('2026-09-22T10:00:00.000Z');
+      h.setAccount('bob');
+      h.deliver(notification);
+      expect(h.alerts()).toHaveLength(1);
+      expect(h.alerts()[0].scheduledFor).toBe('2026-09-21T10:00:00.000Z');
       h.dispose();
     }
   );
