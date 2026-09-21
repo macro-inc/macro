@@ -615,14 +615,10 @@ describe('getChannelEntityTarget', () => {
 
     const bulkMarkAsRead = vi.fn(async () => {});
     const channel = { ...channelRow(), notifications: [unread, read, reply] };
-    await openEntityInSplitFromUnifiedList(
-      channel,
-      {
-        referredFrom: 'channels',
-        notificationSource:
-          notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
-      }
-    );
+    await openEntityInSplitFromUnifiedList(channel, {
+      referredFrom: 'channels',
+      notificationSource: notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
+    });
 
     expect(openWithSplit).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'channel', id: 'channel-1' }),
