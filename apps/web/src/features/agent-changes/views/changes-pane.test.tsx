@@ -277,6 +277,38 @@ describe('session controls', () => {
     expect(screen.queryByText(/review note/)).toBeNull();
   });
 
+  it('renders nothing for a host that can never have changes', () => {
+    const context = readyContext();
+    const [coding, setCoding] = createSignal(false);
+    const { controller } = mount(
+      { ...context, host: { ...context.host, canHaveChanges: coding } },
+      () => (
+        <>
+          <ChangesToggle />
+          <ChangesHandoff />
+          <ReviewNotesDock />
+        </>
+      )
+    );
+    controller().review.addNote(
+      {
+        path: 'apps/web/src/a.ts',
+        side: 'additions',
+        lineNumber: 2,
+        endLineNumber: 2,
+      },
+      'Use a constant'
+    );
+    expect(screen.queryByRole('button', { name: /Changes/ })).toBeNull();
+    expect(screen.queryByText('Changes ready to review')).toBeNull();
+    expect(screen.queryByText(/review note/)).toBeNull();
+
+    setCoding(true);
+    expect(screen.getByRole('button', { name: /Changes/ })).toBeTruthy();
+    expect(screen.getByText('Changes ready to review')).toBeTruthy();
+    expect(screen.getByText(/review note/)).toBeTruthy();
+  });
+
   it("opens the note's file from the expanded dock", () => {
     const context = readyContext();
     const { controller } = mount(context, () => <ReviewNotesDock />);

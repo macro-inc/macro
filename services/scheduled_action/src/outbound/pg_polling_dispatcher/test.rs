@@ -6,6 +6,7 @@ use anyhow::Result;
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::{Uuid, generate_uuid_v7};
+use model_owner::Owner;
 use serde_json::json;
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
@@ -153,7 +154,7 @@ fn due_action() -> ScheduledAction {
     let now = Utc::now();
     ScheduledAction {
         id: Some(generate_uuid_v7()),
-        owner: MacroUserIdStr::parse_from_str("macro|polling-dispatcher@test.com")
+        owner: Owner::from_principal_str("macro|polling-dispatcher@test.com")
             .expect("test owner should be valid"),
         name: "test action".to_string(),
         schedule: Schedule::from_cron("0 * * * * *".to_string())

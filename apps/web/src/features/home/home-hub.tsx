@@ -1,7 +1,9 @@
 import { DOCS_BASE } from '@app/constants/docs-links';
 import { LIST_VIEW_PATHS } from '@app/constants/list-views';
+import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useChatInputContext } from '@core/component/AI/context';
 import { EntityIcon, getEntityIconType } from '@core/component/EntityIcon';
 import { useSettingsState } from '@core/constant/SettingsState';
@@ -241,7 +243,7 @@ function useConnectionsCount() {
 
 /** Onboarding rows. Hidden on mobile. */
 export function GettingStartedSection(props: { preferences: HomePreferences }) {
-  const { openSettings } = useSettingsState();
+  const layout = useSplitLayout();
   const connectionsCount = useConnectionsCount();
 
   const showConnectRow = () => connectionsCount() < CONNECTION_GOAL;
@@ -265,7 +267,7 @@ export function GettingStartedSection(props: { preferences: HomePreferences }) {
             <SetupRow
               icon={<PlusIcon class="size-4" />}
               title="Connect your tools"
-              desc="Link your inbox, Linear, Notion, GitHub & more"
+              desc="Connect Linear, Notion, GitHub & more"
               trailing={
                 <span class="flex items-center gap-2">
                   <span class="text-xs tabular-nums text-ink-extra-muted">
@@ -275,7 +277,7 @@ export function GettingStartedSection(props: { preferences: HomePreferences }) {
                   <ChevronRightIcon class="size-4 shrink-0 text-ink-extra-muted" />
                 </span>
               }
-              onActivate={() => openSettings('Connected')}
+              onActivate={() => openAgentsPage(layout, 'connections')}
             />
           </Show>
           <SetupRow

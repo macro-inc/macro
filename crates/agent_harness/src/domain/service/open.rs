@@ -4,6 +4,7 @@
 
 use agent_session::domain::ports::SelectedManagedPersona;
 use agent_session::domain::repository_branch::RepositoryBranch;
+use model_owner::Owner;
 
 use super::*;
 use crate::domain::model::SessionRepository;
@@ -55,13 +56,22 @@ where
         &self,
         request: agent_session::domain::ports::OpenExternalAgentSession,
     ) -> agent_session::domain::error::Result<AgentSession> {
+        // An external session is opened as a person: the thread it claims is
+        // checked against what they may post in, and the announcement is
+        // made in their name. Any other kind of owner is refused before a
+        // row exists for it.
+        let owner_user = request
+            .owner
+            .as_user()
+            .cloned()
+            .ok_or_else(|| AgentSessionError::OwnerNotUser(request.owner.owner_type()))?;
         // The thread linkage is the caller's claim: it is honoured only when
         // the owner can write to that parent and the message sits in it.
         if let Some(thread) = &request.thread {
             self.inner
                 .prompt_context
                 .authorize_origin(
-                    &request.owner,
+                    &owner_user,
                     &AnnounceOrigin {
                         parent: thread.parent.clone(),
                         thread_id: thread.thread_id,
@@ -89,7 +99,7 @@ where
             .create_session(CreateAgentSessionParams {
                 repo_branch: None,
                 id: AgentSessionId::new(),
-                owner_id: request.owner.clone(),
+                owner_id: request.owner,
                 bot_id: request.bot_id,
                 thread_id: request.thread.as_ref().map(|thread| thread.thread_id),
                 originating_message_id: request.thread.as_ref().map(|thread| thread.message_id),
@@ -119,7 +129,7 @@ where
                 origin_message_id: thread.message_id,
                 prompted_message_id: MessageId::first(AuthorKind::User),
                 prompted_content: thread.content,
-                triggered_by: request.owner,
+                triggered_by: owner_user,
             };
             if let Err(error) = self.inner.announcer.announce(announcement).await {
                 tracing::warn!(
@@ -186,6 +196,16 @@ where
                 servers: Vec::new(),
             };
         }
+        // A managed session runs as its owner: its egress spends their
+        // connected apps, the repositories it may pick are the ones they
+        // reach, and its sandbox size is their preference. Only a person has
+        // those, so any other kind of owner is refused before anything is
+        // provisioned.
+        let owner_user = request
+            .owner
+            .as_user()
+            .cloned()
+            .ok_or_else(|| AgentSessionError::OwnerNotUser(request.owner.owner_type()))?;
         // Explicit source choices are a domain decision, before any session or egress grant exists.
         let selected_repo = if let Some(url) = request.repo_url.as_deref() {
             if kind != AgentKind::Cursor {
@@ -205,7 +225,7 @@ where
                 .as_ref()
                 .ok_or(agent_session::domain::error::AgentSessionError::Forbidden)?;
             let reachable = repositories
-                .for_user(&request.owner)
+                .for_user(&owner_user)
                 .await
                 .map_err(into_session_error)?;
             let listed = reachable
@@ -229,11 +249,7 @@ where
             None
         };
         let defaults = self.inner.defaults.for_bot(bot_id);
-        let sandbox_size = self
-            .inner
-            .sessions
-            .user_sandbox_size(&request.owner)
-            .await?;
+        let sandbox_size = self.inner.sessions.user_sandbox_size(&owner_user).await?;
         let session_id = AgentSessionId::new();
         // Same ordering as the trigger path's open: the token has to be minted
         // before the row, because the row is what carries the hash that makes
@@ -241,7 +257,7 @@ where
         let egress = self
             .inner
             .egress
-            .provision(session_id, &request.owner, &mcp_servers)
+            .provision(session_id, &owner_user, &mcp_servers)
             .await
             .map_err(into_session_error)?;
         let session = self
@@ -250,7 +266,7 @@ where
             .create_session(CreateAgentSessionParams {
                 repo_branch: selected_repo.as_ref().map(|(_, branch)| branch.clone()),
                 id: session_id,
-                owner_id: request.owner.clone(),
+                owner_id: request.owner,
                 bot_id,
                 thread_id: None,
                 originating_message_id: None,
@@ -330,7 +346,7 @@ where
                 HarnessCommand::Deliver(DeliverAction {
                     id: AgentActionId::mint(),
                     action: AgentAction::prompt(raw_prompt),
-                    actor: Some(request.owner),
+                    actor: Some(owner_user),
                     announce: None,
                 }),
             )
@@ -477,7 +493,7 @@ where
             .create_session(CreateAgentSessionParams {
                 repo_branch: None,
                 id: session_id,
-                owner_id: origin.sender.clone(),
+                owner_id: Owner::User(origin.sender.clone()),
                 bot_id,
                 thread_id: Some(origin.thread_id),
                 originating_message_id: Some(origin.message_id),

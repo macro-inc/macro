@@ -27,7 +27,6 @@ export const TOKENS = {
 
   // unified list
   unifiedList: {
-    togglePreview: 'unifiedList.togglePreview',
     navigation: {
       parent: 'unifiedList.navigation.parent',
       child: 'unifiedList.navigation.child',

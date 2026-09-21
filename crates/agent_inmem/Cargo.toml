@@ -25,6 +25,7 @@ dashmap = { workspace = true }
 futures = { workspace = true }
 genai_telemetry = { path = "../genai_telemetry" }
 macro_user_id = { path = "../macro_user_id" }
+model_owner = { path = "../model_owner" }
 http = { workspace = true }
 http-body-util = { workspace = true }
 macro_uuid = { path = "../macro_uuid" }

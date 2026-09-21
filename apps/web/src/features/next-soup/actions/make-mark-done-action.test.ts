@@ -1,4 +1,3 @@
-import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import type { EntityData } from '@entity';
 import type { NotificationSource } from '@notifications';
 import { createRoot } from 'solid-js';
@@ -6,11 +5,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SoupState } from '../create-soup-state';
 
 const mocks = vi.hoisted(() => ({
-  controller: {
+  splitHandle: {
     content: vi.fn(() => ({ id: 'other' })),
-    isControllerSplit: vi.fn(() => true),
     referredFrom: vi.fn(() => undefined),
-    resetPreview: vi.fn(),
   },
   executeMarkEntitiesDone: vi.fn(async () => [] as string[]),
   executeMarkEntitiesUndone: vi.fn(async () => {}),
@@ -27,7 +24,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
-  useSplitPanel: () => ({ handle: mocks.controller }),
+  useSplitPanel: () => ({ handle: mocks.splitHandle }),
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
@@ -134,10 +131,8 @@ describe('canExecuteMarkDoneOnView', () => {
 
 describe('makeMarkDoneAction', () => {
   beforeEach(() => {
-    mocks.controller.content.mockReturnValue({ id: 'other' });
-    mocks.controller.isControllerSplit.mockReturnValue(true);
-    mocks.controller.referredFrom.mockReturnValue(undefined);
-    mocks.controller.resetPreview.mockClear();
+    mocks.splitHandle.content.mockReturnValue({ id: 'other' });
+    mocks.splitHandle.referredFrom.mockReturnValue(undefined);
     mocks.executeMarkEntitiesDone.mockClear();
     mocks.executeMarkEntitiesDone.mockResolvedValue([]);
     mocks.executeMarkEntitiesUndone.mockClear();
@@ -153,26 +148,7 @@ describe('makeMarkDoneAction', () => {
     mocks.toNotificationEntityRef.mockReset();
   });
 
-  it('opens the next focused entity in an engaged Preview Controller', async () => {
-    const { soup, focusSet } = createSoup();
-    const { action, dispose } = createAction();
-
-    await action.executeWithSoup([currentEntity], soup);
-
-    expect(focusSet).toHaveBeenCalledWith('next-row');
-    expect(mocks.openEntityInSplitFromUnifiedList).toHaveBeenCalledWith(
-      nextEntity,
-      {
-        splitHandle: mocks.controller as unknown as SplitHandle,
-        mergeHistory: true,
-        notificationSource,
-      }
-    );
-    dispose();
-  });
-
-  it('does not open the next entity when the split is not a Controller', async () => {
-    mocks.controller.isControllerSplit.mockReturnValue(false);
+  it('moves list focus without opening the next entity', async () => {
     const { soup } = createSoup();
     const { action, dispose } = createAction();
 
@@ -182,7 +158,7 @@ describe('makeMarkDoneAction', () => {
     dispose();
   });
 
-  it('uses an explicit navigation handler instead of the split Controller', async () => {
+  it('uses an explicit navigation handler to open the next entity', async () => {
     const { soup } = createSoup();
     const onNavigate = vi.fn();
     const { action, dispose } = createAction();
@@ -261,7 +237,7 @@ describe('makeMarkDoneAction', () => {
 
   it('keeps whole-channel inbox writes ID-based to exclude thread rows', async () => {
     mocks.graphqlSoupEnabled.mockReturnValue(true);
-    mocks.controller.content.mockReturnValue({ id: 'inbox' });
+    mocks.splitHandle.content.mockReturnValue({ id: 'inbox' });
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
       emailIds: [],
       notificationIds: ['channel-notification'],
@@ -287,7 +263,7 @@ describe('makeMarkDoneAction', () => {
 
   it('uses the canonical message entity for inbox channel-thread rows', async () => {
     mocks.graphqlSoupEnabled.mockReturnValue(true);
-    mocks.controller.content.mockReturnValue({ id: 'inbox' });
+    mocks.splitHandle.content.mockReturnValue({ id: 'inbox' });
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
       emailIds: [],
       notificationIds: ['thread-notification'],

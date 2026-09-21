@@ -49,6 +49,13 @@ export type ChangesHost = {
   scopeKey: Accessor<string | undefined>;
   /** Omit for a read-only viewer without agent note controls. */
   agent?: ChangesAgent;
+  /**
+   * Whether the source can ever hold changes. Omit for hosts that always
+   * can (a PR entity); a session host reports false for a chat-only
+   * harness, which hides every Changes control instead of showing an
+   * empty pane.
+   */
+  canHaveChanges?: Accessor<boolean>;
   /** The pull request represented by the source. */
   pullRequestUrl: Accessor<string | undefined>;
   openExternal: (url: string) => void;

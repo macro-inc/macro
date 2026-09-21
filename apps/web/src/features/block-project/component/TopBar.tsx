@@ -10,7 +10,6 @@ import {
   ResponsivePermissionsBadge,
   ToolButton,
 } from '@components/app/ResponsiveBlockToolbar';
-import { PreviewButton } from '@components/app/split-layout/components/PreviewButton';
 import {
   BlockSplitFileMenu,
   type FileOperation,
@@ -149,7 +148,6 @@ export function TopBar() {
               </Show>
             )}
           </For>
-          <PreviewButton />
         </SplitToolbarRight>
       </Show>
       <CreateDialog />

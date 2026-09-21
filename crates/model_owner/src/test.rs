@@ -120,6 +120,25 @@ fn is_user_matches_only_that_user() {
 }
 
 #[test]
+fn as_user_is_only_the_user_kind() {
+    let user = MacroUserIdStr::parse_from_str("macro|hutch@macro.com").unwrap();
+
+    assert_eq!(Owner::User(user.clone()).as_user(), Some(&user));
+    assert_eq!(
+        Owner::from_principal_str("bot|00000000-0000-0000-0000-00000000a1a1")
+            .unwrap()
+            .as_user(),
+        None
+    );
+    assert_eq!(
+        Owner::from_principal_str("01234567-89ab-cdef-0123-456789abcdef")
+            .unwrap()
+            .as_user(),
+        None
+    );
+}
+
+#[test]
 fn display_equals_principal_id() {
     for principal in [
         "macro|hutch@macro.com",

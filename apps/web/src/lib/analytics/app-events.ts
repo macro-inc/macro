@@ -145,7 +145,6 @@ export type AppEvents = {
   command_menu_use: { itemType: string };
   create_menu_open: { from: string };
   hotkey_use: Record<string, unknown>;
-  preview_panel_use: Record<string, unknown>;
   mentions_menu_use: { itemType: string };
   snippets_menu_use: Record<string, unknown>;
   split_created: { from: string };

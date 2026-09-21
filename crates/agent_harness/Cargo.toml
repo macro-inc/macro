@@ -50,6 +50,7 @@ macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model-entity = { path = "../model-entity" }
 model_notifications = { path = "../model_notifications" }
+model_owner = { path = "../model_owner" }
 notification = { path = "../notification" }
 messages = { path = "../messages", features = ["broker", "ports"] }
 opentelemetry = { workspace = true, features = ["trace"] }

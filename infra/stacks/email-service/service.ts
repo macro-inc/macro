@@ -104,7 +104,9 @@ export class EmailService extends pulumi.ComponentResource {
         containerPort: serviceContainerPort,
         service: GatewayService.EMAIL_SERVICE,
         healthCheckPath,
-        pathPatterns: ['/email', '/email/*'],
+        // `/calendar` fronts the Google Calendar watch webhook so its public
+        // URL is independent of the `/email` prefix.
+        pathPatterns: ['/email', '/email/*', '/calendar', '/calendar/*'],
         serviceSecurityGroupId: this.serviceSg.id,
         albSecurityGroupId: gatewayLoadBalancer.albSecurityGroupId,
       },
