@@ -9,6 +9,7 @@ import {
   makeCopyLinkAction,
   makeCreateReminderAction,
   makeDeleteAction,
+  makeDuplicateAsTaskAction,
   makeEditReminderAction,
   makeFavoriteAction,
   makeHideCompanyAction,
@@ -121,6 +122,7 @@ export function createSoupEntityActions(): {
   });
 
   const copyAction = makeCopyAction();
+  const duplicateAsTaskAction = makeDuplicateAsTaskAction();
   const favoriteAction = makeFavoriteAction();
   const muteAction = makeMuteAction({
     notificationSource: () => notificationSource,
@@ -415,6 +417,17 @@ export function createSoupEntityActions(): {
         label: 'Duplicate',
         hotkeyToken: TOKENS.entity.action.copy,
         onClick: handle(copyAction.executeWithSoup),
+      });
+    }
+
+    if (
+      entities.length === 1 &&
+      duplicateAsTaskAction.canExecute(entities[0])
+    ) {
+      middleItems.push({
+        id: 'duplicate-as-task',
+        label: 'Duplicate as Task',
+        onClick: handle(duplicateAsTaskAction.executeWithSoup),
       });
     }
 
