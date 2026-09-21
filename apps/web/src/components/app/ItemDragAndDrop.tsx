@@ -87,6 +87,7 @@ function ItemDragOverlay() {
     if (data.dragType === 'favorite') {
       return data.iconType as EntityIconSelector;
     }
+    if (data.dragType === 'stage') return 'default';
     return getEntityIconType(data as EntityDragData);
   });
 
@@ -97,6 +98,12 @@ function ItemDragOverlay() {
     if (data?.dragType !== 'favorite') return undefined;
     return data.dmRecipientId as string | undefined;
   });
+
+  // Deal stage rows in CRM settings (see StageDragData in settings/Crm)
+  // carry no entity; their chip is the stage dot plus the label.
+  const isStage = createMemo(
+    () => activeDraggable()?.data.dragType === 'stage'
+  );
 
   const centeredOnPointerStyle = createMemo(() => {
     const overlay = state?.active.overlay;
@@ -116,17 +123,24 @@ function ItemDragOverlay() {
       >
         <div class="flex flex-row items-center gap-2">
           <Show
-            when={dmRecipientId()}
-            fallback={<EntityIcon size="xs" targetType={iconType()} />}
+            when={!isStage()}
+            fallback={
+              <span class="size-2 shrink-0 rounded-full bg-accent/70" />
+            }
           >
-            {(recipientId) => (
-              <UserIcon
-                id={recipientId()}
-                size="sm"
-                suppressClick
-                showTooltip={false}
-              />
-            )}
+            <Show
+              when={dmRecipientId()}
+              fallback={<EntityIcon size="xs" targetType={iconType()} />}
+            >
+              {(recipientId) => (
+                <UserIcon
+                  id={recipientId()}
+                  size="sm"
+                  suppressClick
+                  showTooltip={false}
+                />
+              )}
+            </Show>
           </Show>
           <TruncatedText size="xs">
             {activeDraggable()?.data.name}

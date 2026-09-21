@@ -14,6 +14,9 @@ pub mod markdown_backfill;
 #[cfg(feature = "document_create")]
 pub mod create;
 
+#[cfg(feature = "document_create")]
+pub mod starter;
+
 #[cfg(feature = "ports")]
 pub mod upload_finalize;
 
@@ -21,6 +24,10 @@ pub mod models;
 #[cfg(feature = "axum")]
 pub mod permission_token;
 pub mod response;
+
+/// Permission-scoped spreadsheet inspection, calculation, and mutation.
+#[cfg(feature = "ai_tools")]
+pub mod spreadsheet;
 
 #[cfg(feature = "ports")]
 pub mod ports;

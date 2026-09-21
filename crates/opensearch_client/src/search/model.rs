@@ -295,8 +295,11 @@ pub(crate) fn parse_highlight_hit(
 
     Highlight {
         user_id,
+        // A calendar event found only through another copy's title has its
+        // match under `source_names`, so that stands in for the name.
         name: highlight
             .get(keys.title_key)
+            .or_else(|| highlight.get("source_names"))
             .and_then(|v| v.first())
             .map(|v| v.to_string()),
         content: highlight
@@ -439,12 +442,32 @@ pub struct SearchGotoCallRecord {
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 #[serde(untagged)]
 pub enum SearchGotoContent {
+    AgentSessions(SearchGotoAgentSession),
     Documents(SearchGotoDocument),
     Chats(SearchGotoChat),
     Emails(SearchGotoEmail),
     Channels(SearchGotoChannel),
     CallRecords(SearchGotoCallRecord),
     // there is no goto needed for projects
+}
+
+/// Identity of a user-visible folded message within a session.
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct SearchGotoAgentSession {
+    /// Fold-assigned turn number.
+    pub message_turn: u32,
+    /// Side of the conversation within that turn.
+    pub author: AgentSessionAuthor,
+}
+
+/// Author sides emitted by the ACP fold.
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentSessionAuthor {
+    /// User-authored prompt.
+    User,
+    /// Agent-authored response.
+    Agent,
 }
 
 /// This struct represents a single search hit for a given entity

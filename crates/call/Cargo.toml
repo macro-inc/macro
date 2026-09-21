@@ -28,6 +28,7 @@ outbound = [
   "dep:livekit-protocol",
   "dep:macro_aws_config",
   "dep:pgvector",
+  "dep:share_permission_db_utils",
   "dep:sqlx",
   "dep:urlencoding",
   "ports",
@@ -78,6 +79,7 @@ rootcause = { workspace = true }
 pgvector = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
+share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
@@ -87,9 +89,12 @@ utoipa = { workspace = true, optional = true }
 urlencoding = { workspace = true, optional = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+subtle = { workspace = true }
 
 [dev-dependencies]
+base64 = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 mockall = { workspace = true }
+sha2 = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true }

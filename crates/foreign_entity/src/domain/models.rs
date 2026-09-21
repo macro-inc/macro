@@ -1,6 +1,7 @@
 //! Domain models for foreign entity records.
 
 use chrono::{DateTime, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::Value;
 use uuid::Uuid;
 
@@ -99,12 +100,39 @@ pub struct PatchForeignEntity {
     pub stored_for_auth_entity: Option<String>,
 }
 
+/// The identity a by-source foreign entity lookup runs as.
+///
+/// Inbound adapters resolve the transport credential into one of these
+/// variants; the domain decides what each one is allowed to see.
+#[derive(Debug, Clone)]
+pub enum ForeignEntityLookupCaller {
+    /// An internally authenticated service with no acting user.
+    Internal,
+    /// An authenticated Macro user. Every candidate record is access checked.
+    User(MacroUserIdStr<'static>),
+}
+
 /// Errors that can occur during foreign entity operations.
 #[derive(Debug, thiserror::Error)]
 pub enum ForeignEntityError {
     /// The requested foreign entity record was not found.
     #[error("foreign entity not found: {0}")]
     NotFound(Uuid),
+    /// No foreign entity the caller may see matched an external identifier.
+    ///
+    /// Records the caller cannot view are reported the same way as records that
+    /// do not exist, so the lookup never reveals foreign entities stored for
+    /// documents the caller has no access to.
+    #[error("foreign entity not found: {foreign_entity_source}/{foreign_entity_id}")]
+    NotFoundForSource {
+        /// Source system that owns the external identifier.
+        foreign_entity_source: String,
+        /// Identifier assigned by the external system.
+        foreign_entity_id: String,
+    },
+    /// The caller did not present credentials the lookup accepts.
+    #[error("unauthorized")]
+    Unauthorized,
     /// The request was invalid.
     #[error("bad request: {0}")]
     BadRequest(String),

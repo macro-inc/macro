@@ -1,13 +1,15 @@
 //! Stream-candidate adapters over shared webhook event normalization.
 
 use super::{
-    WebhookEventIngestionError, normalized_agent_trigger_event, normalized_channel_event,
-    normalized_document_event, normalized_webhook_event,
+    LifecycleAudience, WebhookEventIngestionError, lifecycle_audience,
+    normalized_agent_session_lifecycle_event, normalized_agent_trigger_event,
+    normalized_channel_event, normalized_document_event, normalized_webhook_event,
 };
 use crate::domain::{
     events::WebhookTopicEvent,
     stream::{StreamAudience, StreamCandidateEvent},
 };
+use agent_session::domain::events::AgentSessionLifecycleEvent;
 use agent_trigger::domain::broker_events::AgentTriggerTopicEvent;
 use channels::domain::broker_events::ChannelTopicEvent;
 use documents::domain::events::DocumentTopicEvent;
@@ -60,6 +62,44 @@ pub(crate) fn agent_trigger_stream_candidate(
             entity_id: audience.entity_id,
             entity_type: audience.entity_type,
         },
+        event: normalized,
+    })
+}
+
+pub(crate) fn agent_session_lifecycle_stream_candidate(
+    event: &Event<AgentSessionLifecycleEvent>,
+) -> Result<StreamCandidateEvent, WebhookEventIngestionError> {
+    let normalized = normalized_agent_session_lifecycle_event(event)?;
+    let audience = match lifecycle_audience(&event.event) {
+        LifecycleAudience::Session => StreamAudience::Entity {
+            entity_id: normalized.entity_id.clone(),
+            entity_type: EntityType::AgentSession,
+        },
+        // The session's grants are gone with it. The owner keeps ownership, so
+        // they must still receive the departure even after losing access to the
+        // parent; the channel or document it came from also still knows its
+        // audience. Deliver to the union of the two.
+        LifecycleAudience::Departed {
+            owner,
+            origin_parent: Some(parent),
+        } => StreamAudience::Any(vec![
+            StreamAudience::Workspace {
+                workspace_id: owner.to_string(),
+            },
+            StreamAudience::Entity {
+                entity_id: parent.entity_id(),
+                entity_type: parent.access_entity_type(),
+            },
+        ]),
+        LifecycleAudience::Departed {
+            owner,
+            origin_parent: None,
+        } => StreamAudience::Workspace {
+            workspace_id: owner.to_string(),
+        },
+    };
+    Ok(StreamCandidateEvent {
+        audience,
         event: normalized,
     })
 }

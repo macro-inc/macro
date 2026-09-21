@@ -98,6 +98,18 @@ impl RepoUrl {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// `owner/name` for a github.com url, the form a person recognizes.
+    ///
+    /// `None` for anything else — a self-hosted host, or a github.com url
+    /// with more or fewer path segments than a repository has — so callers
+    /// fall back to printing the whole url rather than a guessed slug.
+    #[must_use]
+    pub fn github_owner_and_name(&self) -> Option<&str> {
+        let path = self.0.strip_prefix("https://github.com/")?;
+        let (owner, name) = path.split_once('/')?;
+        (!owner.is_empty() && !name.is_empty() && !name.contains('/')).then_some(path)
+    }
 }
 
 impl std::fmt::Display for RepoUrl {
@@ -129,7 +141,7 @@ pub enum RunStatus {
 }
 
 /// A run's state as `GET /v1/agents/{id}/runs/{run}` reports it.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunOutcome {
     /// Where the run is in its lifecycle.
     pub status: RunStatus,
@@ -137,12 +149,20 @@ pub struct RunOutcome {
     pub text: Option<String>,
 }
 
-impl RunOutcome {
+impl RunStatus {
     /// Whether the run has ended, in any way. `Unknown` counts as terminal:
     /// a status this crate cannot read is not one worth polling forever on.
     #[must_use]
     pub fn is_terminal(&self) -> bool {
-        !matches!(self.status, RunStatus::Creating | RunStatus::Running)
+        !matches!(self, Self::Creating | Self::Running)
+    }
+}
+
+impl RunOutcome {
+    /// Whether the run has ended, in any way. See [`RunStatus::is_terminal`].
+    #[must_use]
+    pub fn is_terminal(&self) -> bool {
+        self.status.is_terminal()
     }
 }
 
@@ -153,6 +173,29 @@ pub struct RunListing {
     pub id: CursorRunId,
     /// Where the run is in its lifecycle.
     pub status: RunStatus,
+}
+
+/// Who said one line of an agent's conversation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConversationSpeaker {
+    /// A prompt, whether typed here or on cursor.com.
+    User,
+    /// One of the agent's replies. A turn has several, one per step.
+    Agent,
+}
+
+/// One line of an agent's conversation, as Cursor still holds it.
+///
+/// Prompts and replies only: no tool calls, no reasoning, no run ids and no
+/// timestamps. Enough to find a prompt that was lost, not enough to rebuild
+/// a turn - which is why this supplements captured history rather than
+/// replacing it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConversationLine {
+    /// Who said it.
+    pub speaker: ConversationSpeaker,
+    /// What was said.
+    pub text: String,
 }
 
 /// An MCP server a session should make available to its Cursor agent.
@@ -270,6 +313,119 @@ impl CursorModel {
                 .unwrap_or_default(),
         }
     }
+
+    /// The family this model belongs to, read off its display name.
+    ///
+    /// Cursor's listing carries no provider or family field, so the family is
+    /// inferred: the words before the first version-looking token. `Claude
+    /// Opus 4.8` and `Claude Opus 5` are both `Claude Opus`; `GPT-5.6 Sol` is
+    /// `GPT`; `Kimi K3` is `Kimi`. A name with no version, or one that starts
+    /// with a version (`Auto`, `o3 Pro`), is its own family, so nothing is ever
+    /// forced into a bucket it does not plainly belong to.
+    #[must_use]
+    pub fn family(&self) -> String {
+        model_family(&self.display_name)
+    }
+}
+
+/// A group of models that share a family, as a picker would head them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModelFamily {
+    /// The family's name, e.g. `Claude Opus`.
+    pub name: String,
+    /// A stable id for the family: the name lowercased and hyphenated, e.g.
+    /// `claude-opus`.
+    pub id: String,
+    /// The members, in the order the listing gave them.
+    pub models: Vec<CursorModel>,
+}
+
+impl ModelFamily {
+    /// Bucket models by [`CursorModel::family`], families in order of first
+    /// appearance and each family's members in listing order, so a client that
+    /// renders the groups in order shows the same overall order Cursor did.
+    #[must_use]
+    pub fn group(models: &[CursorModel]) -> Vec<ModelFamily> {
+        let mut families: Vec<ModelFamily> = Vec::new();
+        for model in models {
+            let name = model.family();
+            match families.iter_mut().find(|family| family.name == name) {
+                Some(family) => family.models.push(model.clone()),
+                None => families.push(ModelFamily {
+                    id: family_id(&name),
+                    name,
+                    models: vec![model.clone()],
+                }),
+            }
+        }
+        families
+    }
+
+    /// Whether grouping adds any structure: at least one family with more
+    /// than one member. A listing of singletons is better shown flat than
+    /// under one header per model.
+    #[must_use]
+    pub fn is_informative(families: &[ModelFamily]) -> bool {
+        families.iter().any(|family| family.models.len() > 1)
+    }
+}
+
+/// See [`CursorModel::family`].
+fn model_family(display_name: &str) -> String {
+    let tokens: Vec<&str> = display_name
+        .split_whitespace()
+        .flat_map(split_hyphenated_version)
+        .collect();
+    let family: Vec<&str> = tokens
+        .iter()
+        .take_while(|token| !is_version_token(token))
+        .copied()
+        .collect();
+    if family.is_empty() || family.len() == tokens.len() {
+        display_name.trim().to_owned()
+    } else {
+        family.join(" ")
+    }
+}
+
+/// `GPT-5.6` is a name and a version joined by a hyphen; split it so the
+/// version can be recognised. `gpt-oss` and the like stay whole.
+fn split_hyphenated_version(token: &str) -> Vec<&str> {
+    match token.split_once('-') {
+        Some((head, tail))
+            if !head.is_empty() && tail.chars().next().is_some_and(|c| c.is_ascii_digit()) =>
+        {
+            vec![head, tail]
+        }
+        _ => vec![token],
+    }
+}
+
+/// A version-looking token: alphanumerics and dots, with a digit as the first
+/// or second character. `4.6`, `5`, `K3`, `o3`, `4o`, `R1` — but not `GPT`,
+/// `Sol`, `Fast` or `Mini`.
+fn is_version_token(token: &str) -> bool {
+    let mut chars = token.chars();
+    let starts_with_version = match (chars.next(), chars.next()) {
+        (Some(first), _) if first.is_ascii_digit() => true,
+        (Some(first), Some(second)) => first.is_ascii_alphabetic() && second.is_ascii_digit(),
+        _ => false,
+    };
+    starts_with_version && token.chars().all(|c| c.is_ascii_alphanumeric() || c == '.')
+}
+
+/// A family name as a stable id: lowercase, runs of non-alphanumerics as one
+/// hyphen, no leading or trailing hyphen.
+fn family_id(name: &str) -> String {
+    let mut id = String::with_capacity(name.len());
+    for c in name.chars() {
+        if c.is_ascii_alphanumeric() {
+            id.push(c.to_ascii_lowercase());
+        } else if !id.ends_with('-') {
+            id.push('-');
+        }
+    }
+    id.trim_matches('-').to_owned()
 }
 
 /// One accepted id+params combination for a model.

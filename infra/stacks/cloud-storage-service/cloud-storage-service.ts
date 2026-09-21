@@ -9,14 +9,11 @@ import {
   EcsDeploymentFailureAlarm,
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
-  serviceLoadBalancer,
   ServiceTargetGroup,
 } from '../../packages/resources';
 import { EcrImage } from '../../packages/service';
 import {
-  BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
-  SERVICE_DOMAIN_NAME,
   DopplerEcsEnvironment,
   getKafkaClusterPolicy,
   stack,
@@ -34,14 +31,12 @@ type CreateCloudStorageServiceServiceArgs = {
   ecsClusterArn: pulumi.Output<string> | string;
   vpc: {
     vpcId: pulumi.Output<string> | string;
-    publicSubnetIds: pulumi.Output<string[]> | string[];
     privateSubnetIds: pulumi.Output<string[]> | string[];
   };
   platform: { family: string; architecture: 'amd64' | 'arm64' };
   documentStorageBucketArn: pulumi.Output<string> | string;
   docxUploadBucketArn: pulumi.Output<string> | string;
   serviceContainerPort: number;
-  isPrivate?: boolean;
   containerEnvVars?: { name: string; value: pulumi.Output<string> | string }[];
   healthCheckPath: string;
   secretKeyArns: (pulumi.Output<string> | string)[];
@@ -54,13 +49,9 @@ type CreateCloudStorageServiceServiceArgs = {
 export class CloudStorageService extends pulumi.ComponentResource {
   public role: aws.iam.Role;
   public ecr: awsx.ecr.Repository;
-  public serviceAlbSg: aws.ec2.SecurityGroup;
   public serviceSg: aws.ec2.SecurityGroup;
   public targetGroup: aws.lb.TargetGroup;
-  public lb: aws.lb.LoadBalancer;
-  public listener: aws.lb.Listener;
   public service: awsx.ecs.FargateService;
-  public domain: string;
   public cloudStorageClusterName: pulumi.Output<string> | string;
   public tags: { [key: string]: string };
 
@@ -74,7 +65,6 @@ export class CloudStorageService extends pulumi.ComponentResource {
       docxUploadBucketArn,
       serviceContainerPort,
       healthCheckPath,
-      isPrivate,
       containerEnvVars,
       cloudStorageClusterName,
       secretKeyArns,
@@ -302,12 +292,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
     this.ecr = image.ecr;
 
     // sg
-    const sg = this.initializeSecurityGroups({
-      vpcId: vpc.vpcId,
-      serviceContainerPort,
-    });
-    this.serviceAlbSg = sg.serviceAlbSg;
-    this.serviceSg = sg.serviceSg;
+    this.serviceSg = this.initializeSecurityGroups({ vpcId: vpc.vpcId });
 
     const gatewayTargetGroup = new ServiceTargetGroup(
       `${stack}-${BASE_NAME}`,
@@ -325,19 +310,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // lb
-    const { targetGroup, lb, listener } = serviceLoadBalancer(this, {
-      serviceName: BASE_NAME, // service name
-      serviceContainerPort,
-      healthCheckPath,
-      vpc,
-      albSecurityGroupId: this.serviceAlbSg.id,
-      isPrivate,
-      tags,
-    });
-    this.targetGroup = targetGroup;
-    this.lb = lb;
-    this.listener = listener;
+    this.targetGroup = gatewayTargetGroup.target_group;
 
     const dopplerEcsEnvironment = new DopplerEcsEnvironment(
       BASE_NAME,
@@ -360,17 +333,8 @@ export class CloudStorageService extends pulumi.ComponentResource {
           enable: true,
           rollback: true,
         },
-        // Register tasks in both the legacy ALB's target group and the gateway
-        // target group while we migrate to the gateway. An explicit
-        // `loadBalancers` replaces the list awsx derives from
-        // `portMappings.targetGroup`, so the legacy entry must be listed here
-        // too.
+        // Register tasks only with the shared gateway.
         loadBalancers: [
-          {
-            targetGroupArn: targetGroup.arn,
-            containerName: 'service',
-            containerPort: serviceContainerPort,
-          },
           {
             targetGroupArn: gatewayTargetGroup.target_group.arn,
             containerName: 'service',
@@ -413,7 +377,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
                   name: `${BASE_NAME}-tcp-${stack}`,
                   hostPort: serviceContainerPort,
                   containerPort: serviceContainerPort,
-                  targetGroup,
+                  targetGroup: this.targetGroup,
                 },
               ],
             },
@@ -443,68 +407,19 @@ export class CloudStorageService extends pulumi.ComponentResource {
     this.setupAutoScaling();
 
     this.setupServiceAlarms();
-
-    // domain record
-    const zone = aws.route53.getZoneOutput({ name: BASE_DOMAIN });
-
-    new aws.route53.Record(
-      `${BASE_NAME}-domain-record`,
-      {
-        name: SERVICE_DOMAIN_NAME,
-        type: 'A',
-        zoneId: zone.zoneId,
-        aliases: [
-          {
-            evaluateTargetHealth: false,
-            name: this.lb.dnsName,
-            zoneId: this.lb.zoneId,
-          },
-        ],
-      },
-      { parent: this }
-    );
-
-    this.domain = `https://${SERVICE_DOMAIN_NAME}`;
   }
 
   initializeSecurityGroups({
     vpcId,
-    serviceContainerPort,
   }: {
     vpcId: pulumi.Output<string> | string;
-    serviceContainerPort: number;
   }) {
-    const serviceAlbSg = new aws.ec2.SecurityGroup(
-      `${BASE_NAME}-alb-sg-${stack}`,
-      {
-        name: `${BASE_NAME}-alb-sg-${stack}`,
-        description: `${BASE_NAME} application load balancer security group`,
-        vpcId,
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
     const serviceSg = new aws.ec2.SecurityGroup(
       `${BASE_NAME}-sg-${stack}`,
       {
         name: `${BASE_NAME}-sg-${stack}`,
         vpcId,
         description: `${BASE_NAME} security group that is attached directly to the service`,
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
-    new aws.vpc.SecurityGroupIngressRule(
-      `${BASE_NAME}-alb-in`,
-      {
-        securityGroupId: serviceSg.id,
-        description: 'Allow inbound traffic from the services ALB',
-        referencedSecurityGroupId: serviceAlbSg.id,
-        fromPort: serviceContainerPort,
-        toPort: serviceContainerPort,
-        ipProtocol: 'tcp',
         tags: this.tags,
       },
       { parent: this }
@@ -522,50 +437,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // ALB SG rules
-    new aws.vpc.SecurityGroupIngressRule(
-      `${BASE_NAME}-http`,
-      {
-        securityGroupId: serviceAlbSg.id,
-        description: 'Allow inbound HTTP traffic',
-        cidrIpv4: '0.0.0.0/0',
-        fromPort: 80,
-        ipProtocol: 'tcp',
-        toPort: 80,
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
-    new aws.vpc.SecurityGroupIngressRule(
-      `${BASE_NAME}-https`,
-      {
-        securityGroupId: serviceAlbSg.id,
-        description: 'Allow inbound HTTPS traffic',
-        cidrIpv4: '0.0.0.0/0',
-        fromPort: 443,
-        ipProtocol: 'tcp',
-        toPort: 443,
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
-    new aws.vpc.SecurityGroupEgressRule(
-      `${BASE_NAME}-out-service`,
-      {
-        description: 'Allow traffic to the service security group',
-        securityGroupId: serviceAlbSg.id,
-        referencedSecurityGroupId: serviceSg.id,
-        fromPort: serviceContainerPort,
-        ipProtocol: 'tcp',
-        toPort: serviceContainerPort,
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
-    return { serviceAlbSg, serviceSg };
+    return serviceSg;
   }
 
   setupAutoScaling() {
@@ -584,19 +456,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const lbPortion: pulumi.Output<string> = this.lb.arn.apply((arn) => {
-      const parts = arn.split(':loadbalancer/');
-      return parts[1];
-    });
-
-    const tgPortion: pulumi.Output<string> = this.targetGroup.arn.apply(
-      (arn) => {
-        const parts = arn.split(':');
-        return parts[parts.length - 1];
-      }
-    );
-
-    const resourceLabel = pulumi.interpolate`${lbPortion}/${tgPortion}`;
+    const resourceLabel = pulumi.interpolate`${gatewayLoadBalancer.albArnSuffix}/${this.targetGroup.arnSuffix}`;
 
     // Create an Auto Scaling policy for request count.
     new aws.appautoscaling.Policy(
@@ -719,8 +579,9 @@ export class CloudStorageService extends pulumi.ComponentResource {
     new aws.cloudwatch.MetricAlarm(
       `${BASE_NAME}-http-5xx-alarm`,
       {
-        name: `${BASE_NAME}-http-5xx-${stack}`,
-        metricName: 'HTTPCode_ELB_5XX_Count',
+        name: `${stack}-${BASE_NAME}-http-5xx`,
+        // Target-generated errors can be scoped to this service on the shared ALB.
+        metricName: 'HTTPCode_Target_5XX_Count',
         namespace: 'AWS/ApplicationELB',
         statistic: 'Sum',
         period: 180,
@@ -728,9 +589,10 @@ export class CloudStorageService extends pulumi.ComponentResource {
         threshold: 25,
         comparisonOperator: 'GreaterThanOrEqualToThreshold',
         dimensions: {
-          LoadBalancer: this.lb.arn,
+          LoadBalancer: gatewayLoadBalancer.albArnSuffix,
+          TargetGroup: this.targetGroup.arnSuffix,
         },
-        alarmDescription: `High HTTP 5XX count alarm for ${BASE_NAME} Load Balancer.`,
+        alarmDescription: `High HTTP 5XX count alarm for ${BASE_NAME} gateway target group.`,
         actionsEnabled: true,
         alarmActions: [CLOUD_TRAIL_SNS_TOPIC_ARN],
         tags: this.tags,

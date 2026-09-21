@@ -1,4 +1,6 @@
 [
+  "macro.activity",
+  "macro.agent_session_lifecycle",
   "macro.agent_sessions",
   "macro.bots",
   "macro.calendar",
@@ -9,6 +11,7 @@
   "macro.email",
   "macro.example",
   "macro.mentions",
+  "macro.messages",
   "macro.notifications",
   "macro.projects",
   "macro.properties",

@@ -1,3 +1,4 @@
+import { findNextAutoLinkMatch } from '@core/component/LexicalMarkdown/plugins/links/linksPlugin';
 import { editorIsEmpty } from '@core/component/LexicalMarkdown/utils';
 import { convertDocumentMentionsToLinks } from '@core/component/LexicalMarkdown/utils/convertDocumentMentionsToLinks';
 import { getWebOrigin } from '@core/util/webOrigin';
@@ -280,9 +281,61 @@ function wrapInlineRuns(parent: Element) {
   flush();
 }
 
+/** The autolink strictness shared by the app's editors: bare hosts on common
+ * TLDs link, but code-like tokens such as `parser.ts` do not. */
+const DESCRIPTION_AUTO_LINK_MODE = 'common-tlds';
+
+/**
+ * Wrap the URLs and bare emails in a plain-text string as anchors so the detail
+ * view can open them — emails become `mailto:` links, which `openExternalUrl`
+ * routes to the in-app composer. Returns null when nothing was linked so the
+ * caller can leave the original text node untouched.
+ */
+function linkifyText(text: string, doc: Document): Node[] | null {
+  const nodes: Node[] = [];
+  let rest = text;
+  let linked = false;
+  while (rest) {
+    const match = findNextAutoLinkMatch(rest, DESCRIPTION_AUTO_LINK_MODE);
+    if (!match || match.lastIndex <= match.index) {
+      nodes.push(doc.createTextNode(rest));
+      break;
+    }
+    linked = true;
+    const before = rest.slice(0, match.index);
+    if (before) nodes.push(doc.createTextNode(before));
+    const anchor = doc.createElement('a');
+    anchor.setAttribute('href', match.url);
+    anchor.textContent = rest.slice(match.index, match.lastIndex);
+    nodes.push(anchor);
+    rest = rest.slice(match.lastIndex);
+  }
+  return linked ? nodes : null;
+}
+
+/** Turn bare URLs in text into anchors, leaving text inside existing links alone. */
+function linkifyBareUrls(body: HTMLElement) {
+  const doc = body.ownerDocument;
+  const walker = doc.createTreeWalker(body, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) =>
+      node.parentElement?.closest('a')
+        ? NodeFilter.FILTER_REJECT
+        : NodeFilter.FILTER_ACCEPT,
+  });
+  const textNodes: Text[] = [];
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    textNodes.push(node as Text);
+  }
+  for (const textNode of textNodes) {
+    const replacement = linkifyText(textNode.textContent ?? '', doc);
+    if (replacement) textNode.replaceWith(...replacement);
+  }
+}
+
 function sanitizeDocument(doc: Document, plainText: boolean) {
   if (plainText) breakLines(doc.body);
   sanitizeChildren(doc.body);
+  linkifyBareUrls(doc.body);
   wrapInlineRuns(doc.body);
 }
 

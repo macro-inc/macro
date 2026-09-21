@@ -22,11 +22,7 @@ import {
 import { useLogout } from '@core/auth/logout';
 import { useOpenInstructionsMd } from '@core/component/AI/util/instructions';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  ENABLE_SNIPPETS_FLAG,
-  ENABLE_SNIPPETS_OVERRIDE,
-  LOCAL_ONLY,
-} from '@core/constant/featureFlags';
+import { enableSnippets, LOCAL_ONLY } from '@core/constant/featureFlags';
 import {
   type SettingsTab,
   useSettingsState,
@@ -40,7 +36,7 @@ import {
   openFilePicker,
   openFolderPicker,
 } from '@core/util/upload';
-import IconGear from '@icon/macro-gear.svg';
+import IconGear from '@phosphor/gear.svg';
 import Plus from '@phosphor/plus.svg';
 import LogoutIcon from '@phosphor/sign-out.svg';
 import Upload from '@phosphor/upload.svg';
@@ -146,9 +142,7 @@ export default function GlobalShortcuts() {
   const logout = useLogout();
 
   const handleFileUpload = useHandleFileUpload();
-  const snippetsFlag = useFeatureFlag(ENABLE_SNIPPETS_FLAG, {
-    enabledOverride: ENABLE_SNIPPETS_OVERRIDE,
-  });
+  const snippetsFlag = useFeatureFlag(enableSnippets);
 
   const handleCommandMenu = () => {
     const willOpen = !CommandState.isOpen();

@@ -4,10 +4,7 @@ import type { Attachment, Attachments } from '@core/component/AI/types';
 import { asFileType } from '@core/component/AI/util';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins/mentions';
 import { ENABLE_CHAT_CHANNEL_ATTACHMENT } from '@core/constant/featureFlags';
-import {
-  getCachedItemPreview,
-  isAccessiblePreviewItem,
-} from '@queries/preview';
+import { getItemPreview, isAccessiblePreviewItem } from '@queries/preview';
 import { createSignal } from 'solid-js';
 
 export function useAttachments(initial?: Attachment[]): Attachments {
@@ -45,22 +42,29 @@ export const useChatAttachableHistory = () => {
 };
 
 export const useGetChatAttachmentInfo = () => {
-  // fallback for callers that only have an id: the mentions menu and
-  // attachment pickers render previews, so the item is usually cached
-  const cachedDocumentFileType = (id: string): string | undefined => {
-    const preview = getCachedItemPreview(id);
-    if (!preview || !isAccessiblePreviewItem(preview)) return;
-    if (preview.type !== 'document') return;
-    return preview.fileType;
+  const resolveDocumentFileType = async (
+    id: string
+  ): Promise<string | undefined> => {
+    try {
+      const preview = await getItemPreview(
+        { id, type: 'document' },
+        { requireFresh: true }
+      );
+      if (!isAccessiblePreviewItem(preview) || preview.type !== 'document')
+        return;
+      return preview.fileType;
+    } catch {
+      return undefined;
+    }
   };
 
-  const getDocumentAttachment = (
+  const getDocumentAttachment = async (
     id: string,
     fileType?: string | null
-  ): Attachment | undefined => {
-    // mention nodes use '' when the block name has no file type mapping,
-    // so empty string falls back to the cache too
-    const knownFileType = fileType || cachedDocumentFileType(id);
+  ): Promise<Attachment | undefined> => {
+    // Legacy mention nodes use an empty file type, so resolve those through
+    // the imperative preview reader rather than a synchronous UI cache.
+    const knownFileType = fileType || (await resolveDocumentFileType(id));
     const validFileType = asFileType(knownFileType);
 
     if (!validFileType) {
@@ -88,11 +92,11 @@ export const useGetChatAttachmentInfo = () => {
     };
   };
 
-  const mentionToAttachment = (
+  const mentionToAttachment = async (
     mention: ItemMention
-  ): Attachment | undefined => {
+  ): Promise<Attachment | undefined> => {
     if (mention.itemType === 'document') {
-      return getDocumentAttachment(mention.itemId, mention.fileType);
+      return await getDocumentAttachment(mention.itemId, mention.fileType);
     } else if (mention.itemType === 'skill') {
       return { entity_id: mention.itemId, entity_type: 'skill' };
     } else if (mention.itemType === 'call') {

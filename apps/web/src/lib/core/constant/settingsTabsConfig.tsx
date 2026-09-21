@@ -1,5 +1,4 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import BotIcon from '@icon/wide-bot.svg';
 import BellIcon from '@phosphor/bell-simple.svg';
 import BugIcon from '@phosphor/bug.svg';
 import BuildingsIcon from '@phosphor/buildings.svg';
@@ -10,7 +9,8 @@ import HardDrivesIcon from '@phosphor/hard-drives.svg';
 import KeyIcon from '@phosphor/key.svg';
 import KeyboardIcon from '@phosphor/keyboard.svg';
 import PlugIcon from '@phosphor/plug.svg';
-import RobotIcon from '@phosphor/robot.svg';
+import BotIcon from '@phosphor/robot.svg';
+import AgentIcon from '@phosphor/sparkle.svg';
 import SwatchesIcon from '@phosphor/swatches.svg';
 import TagIcon from '@phosphor/tag-simple.svg';
 import UserIconPhosphor from '@phosphor/user.svg';
@@ -20,16 +20,12 @@ import { useHasPermission } from '../context/user';
 import { isNativeMobilePlatform } from '../mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '../mobile/isTouchDevice';
 import {
-  BOT_MANAGEMENT_FLAG,
-  BOT_MANAGEMENT_OVERRIDE,
+  botManagement,
   DEV_MODE_ENV,
   ENABLE_APP_STORE_QR_CODE,
-  ENABLE_CHAT_V3_AGENTS_FLAG,
-  ENABLE_CHAT_V3_AGENTS_OVERRIDE,
-  ENABLE_CRM_FLAG,
-  ENABLE_CRM_OVERRIDE,
-  ENABLE_NOTIFICATION_SETTINGS_FLAG,
-  ENABLE_NOTIFICATION_SETTINGS_OVERRIDE,
+  enableChatV3Agents,
+  enableCrm,
+  enableNotificationSettings,
 } from './featureFlags';
 import { PERMISSION_IDS } from './permissions';
 import type { SettingsTab } from './SettingsState';
@@ -74,7 +70,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
       { tab: 'CRM', label: 'CRM', icon: BuildingsIcon },
       {
         tab: 'Connected',
-        label: 'Connections',
+        label: 'Integrations',
         icon: CpuIcon,
       },
       { tab: 'Agent', label: 'MCP server', icon: PlugIcon },
@@ -84,7 +80,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
   {
     label: 'Agents',
     items: [
-      { tab: 'Agents', label: 'Agents', icon: RobotIcon },
+      { tab: 'Agents', label: 'Agents', icon: AgentIcon },
       { tab: 'Harness', label: 'Harness', icon: HardDrivesIcon },
     ],
   },
@@ -162,21 +158,10 @@ export const getSettingsTabItem = (
  * surface a tab the panel won't render.
  */
 export const useSettingsTabAvailable = () => {
-  const botManagementFlag = useFeatureFlag(BOT_MANAGEMENT_FLAG, {
-    enabledOverride: BOT_MANAGEMENT_OVERRIDE,
-  });
-  const chatV3AgentsFlag = useFeatureFlag(ENABLE_CHAT_V3_AGENTS_FLAG, {
-    enabledOverride: ENABLE_CHAT_V3_AGENTS_OVERRIDE,
-  });
-  const crmFlag = useFeatureFlag(ENABLE_CRM_FLAG, {
-    enabledOverride: ENABLE_CRM_OVERRIDE,
-  });
-  const notificationSettingsFlag = useFeatureFlag(
-    ENABLE_NOTIFICATION_SETTINGS_FLAG,
-    {
-      enabledOverride: ENABLE_NOTIFICATION_SETTINGS_OVERRIDE,
-    }
-  );
+  const botManagementFlag = useFeatureFlag(botManagement);
+  const chatV3AgentsFlag = useFeatureFlag(enableChatV3Agents);
+  const crmFlag = useFeatureFlag(enableCrm);
+  const notificationSettingsFlag = useFeatureFlag(enableNotificationSettings);
   const hasAdminPanel = useHasPermission(PERMISSION_IDS.WRITE_ADMIN_PANEL);
 
   return (tab: SettingsTab): boolean => {

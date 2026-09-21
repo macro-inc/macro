@@ -25,6 +25,7 @@ import type { PortalScope } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { mergeRegister } from '@lexical/utils';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
@@ -39,7 +40,7 @@ import type { PropertyApiValues } from '@property/types';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
-import { Button, Hotkey, Scroll, ToggleSwitch } from '@ui';
+import { Button, cn, Hotkey, Scroll, ToggleSwitch } from '@ui';
 import {
   $getRoot,
   $getSelection,
@@ -77,6 +78,7 @@ import {
   saveTaskComposerDraft,
   updateDraftTimestamp,
 } from '../util/taskComposerStorage';
+import { EditorSystemMessage } from './EditorSystemMessage';
 import { InlinePropertyValue } from './InlinePropertyValue';
 import { SimilarTasksSection } from './TaskDuplicateList';
 
@@ -755,6 +757,7 @@ export function ComposeTask(props: ComposeTaskProps) {
   };
 
   onMount(() => {
+    splitPanel.handle.setDisplayName('New task');
     const container = containerRef();
     if (container) {
       attachHotkeys(container);
@@ -786,6 +789,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     .withCode()
     .withMedia({ fileDrop: true })
     .withSelectionData()
+    .withFloatingFormatMenu()
     .withHistory()
     .onChange(setContent)
     .onFocusLeave({
@@ -816,7 +820,7 @@ export function ComposeTask(props: ComposeTaskProps) {
               disabled={isCreating()}
               tabIndex={-1}
               tooltip="Continue editing in split"
-              size="icon-sm"
+              size="icon-composer"
             >
               <ArrowsOutIcon />
             </Button>
@@ -840,7 +844,7 @@ export function ComposeTask(props: ComposeTaskProps) {
             onMouseDown={handleClose}
             tabIndex={-1}
             tooltip="Close"
-            size="icon-sm"
+            size="icon-composer"
           >
             <XIcon />
           </Button>
@@ -960,7 +964,9 @@ export function ComposeTask(props: ComposeTaskProps) {
       <Show when={errorMessage()}>
         <div class="w-full border-b border-edge-muted" />
         <div class="p-2">
-          <div class="text-sm text-failure-ink px-3 py-2">{errorMessage()}</div>
+          <EditorSystemMessage variant="error">
+            {errorMessage()}
+          </EditorSystemMessage>
         </div>
       </Show>
 
@@ -979,7 +985,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           onMouseDown={() => attachInputRef?.click()}
           tabIndex={-1}
           tooltip="Attach image or video"
-          size="icon-sm"
+          size="icon-composer"
         >
           <PaperclipIcon />
         </Button>
@@ -995,7 +1001,10 @@ export function ComposeTask(props: ComposeTaskProps) {
             disabled={title().trim().length === 0 || isCreating()}
             variant={title().trim().length === 0 ? 'ghost' : 'accent'}
             depth={3}
-            class="gap-3 rounded-lg border-0"
+            class={cn(
+              'gap-3 rounded-lg border-0',
+              !isTouchDevice() && 'rounded-full h-[33.75px] px-[15px]'
+            )}
           >
             Create Task
             <Hotkey shortcut="cmd+enter" theme="current" />

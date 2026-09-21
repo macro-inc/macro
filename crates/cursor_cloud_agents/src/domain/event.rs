@@ -14,11 +14,11 @@
 mod test;
 
 use crate::domain::model::{CursorRunId, RunStatus};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// One decoded event from a run's stream.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CursorEvent {
     /// The run's lifecycle status changed (also sent once on connect).
     Status {
@@ -53,6 +53,10 @@ pub enum CursorEvent {
         text: Option<String>,
         /// Wall-clock duration of the run.
         duration_ms: Option<u64>,
+        /// What the run did to the repositories it was given — the branch it
+        /// pushed and, when the agent was asked for one, the pull request it
+        /// opened. Absent on runs that touched no repository.
+        git: Option<GitState>,
     },
     /// A keepalive; carries nothing.
     Heartbeat,
@@ -74,10 +78,35 @@ pub enum CursorEvent {
     },
 }
 
+/// What a run left behind in the repositories it was given, as reported by
+/// the terminal `result` event.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GitState {
+    /// One entry per repository the run pushed to. Stacked agents report
+    /// several.
+    #[serde(default)]
+    pub branches: Vec<GitBranch>,
+}
+
+/// One repository's outcome inside a [`GitState`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitBranch {
+    /// The repository, without a scheme — `github.com/macro-inc/macro`.
+    pub repo_url: String,
+    /// The branch Cursor pushed, when it pushed one.
+    #[serde(default)]
+    pub branch: Option<String>,
+    /// The pull request Cursor opened, present only when the agent was
+    /// created with `autoCreatePR`.
+    #[serde(default)]
+    pub pr_url: Option<String>,
+}
+
 /// A `tool_call` event: Cursor sends the same event name for the opening
 /// announcement and every later progress report, distinguished only by
 /// whether the `callId` has been seen before.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolCallEvent {
     /// Cursor's id for the call. May contain a literal newline — see
@@ -114,7 +143,7 @@ pub struct ToolCallEvent {
 /// `args` is included because it is the only other half there is to truncate;
 /// no recording has shown it yet, so it defaults to false like any absent
 /// field.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Truncation {
     /// Cursor truncated the tool's input.
@@ -145,7 +174,7 @@ where
 /// event does. `text-delta` and `thinking-delta` duplicate the `assistant`
 /// and `thinking` events one-for-one — consuming both would double every
 /// chunk — so they land in [`InteractionUpdate::Other`] and are ignored.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum InteractionUpdate {
     /// The user's prompt echoed back into the stream. The one place the
     /// stream states which prompt opened the turn.
@@ -213,6 +242,7 @@ impl CursorEvent {
                     status: payload.status,
                     text: payload.text,
                     duration_ms: payload.duration_ms,
+                    git: payload.git,
                 },
                 Err(_) => Self::unknown(event, data),
             },
@@ -355,6 +385,8 @@ struct ResultPayload {
     text: Option<String>,
     #[serde(default)]
     duration_ms: Option<u64>,
+    #[serde(default)]
+    git: Option<GitState>,
 }
 
 #[derive(Deserialize)]

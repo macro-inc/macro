@@ -1,5 +1,49 @@
 import type { BrowserTursoCacheRolloutDecision } from '@graphql-cache/rollout-policy';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type {
+  GraphqlSoupEntityType,
+  SoupItemFieldsFragment,
+} from './graphql/generated/graphql';
+
+it('maps agent sessions without discarding persona, favorites or notifications', async () => {
+  const { mapGraphqlSoupItem } = await import('./graphql-soup');
+  const mapped = mapGraphqlSoupItem({
+    __typename: 'GraphqlSoupAgentSession',
+    id: 'session',
+    entityType: 'AGENT_SESSION',
+    displayName: 'Fix mentions',
+    sessionName: 'Fix mentions',
+    ownerId: 'macro|owner@example.com',
+    botId: 'bot',
+    bot: {
+      id: 'bot',
+      name: 'Ada',
+      avatarUrl: null,
+    },
+    threadId: null,
+    status: 'acp_ready',
+    createdAt: '2026-01-01',
+    updatedAt: '2026-01-02',
+    viewedAt: null,
+    cacheProjection: null,
+    isFavorited: true,
+    notifications: [],
+    properties: [],
+    frecencyScore: 5,
+  });
+  expect(mapped).toMatchObject({
+    tag: 'agentSession',
+    is_favorited: true,
+    frecency_score: 5,
+    data: {
+      id: 'session',
+      name: 'Fix mentions',
+      bot: { name: 'Ada' },
+      status: 'acp_ready',
+      notifications: [],
+    },
+  });
+});
 
 const mocks = vi.hoisted(() => {
   let enabled = true;
@@ -42,6 +86,7 @@ const mocks = vi.hoisted(() => {
   const realtimeClient = { kind: 'realtime' };
   const replaceSubscriptions = vi.fn();
   const platformFetch = vi.fn();
+  const toastFailure = vi.fn();
   return {
     get enabled() {
       return enabled;
@@ -81,6 +126,7 @@ const mocks = vi.hoisted(() => {
     realtimeClient,
     replaceSubscriptions,
     platformFetch,
+    toastFailure,
     createWorkerCacheHost: vi.fn(
       (options: { onInitializationError?: (error: Error) => void }) => {
         initializationErrorHandler = options.onInitializationError;
@@ -91,9 +137,13 @@ const mocks = vi.hoisted(() => {
   };
 });
 
+vi.mock('@core/component/Toast/Toast', () => ({
+  toast: { failure: mocks.toastFailure },
+}));
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_BEARER_TOKEN_AUTH: false,
-  ENABLE_GRAPHQL_SOUP: () => mocks.graphqlEnabled,
+  enableGraphqlSoup: { key: 'enable-graphql-soup' },
+  isFeatureEnabled: () => mocks.graphqlEnabled,
 }));
 vi.mock('@core/constant/servers', () => ({
   SERVER_HOSTS: { 'document-storage-service': 'http://dss.test' },
@@ -177,6 +227,81 @@ vi.mock('@urql/core', () => ({
     };
   },
 }));
+
+describe('GraphQL Soup chat models', () => {
+  it.each(['openai/gpt-5.6', 'anthropic/claude-sonnet-5', null])(
+    'preserves the saved model (%s) in the shared soup shape',
+    async (model) => {
+      const { mapGraphqlSoupItem } = await import('./graphql-soup');
+      const item = {
+        __typename: 'GraphqlSoupChat',
+        id: 'chat-model',
+        chatName: 'Chat',
+        model,
+        ownerId: 'macro|owner@example.com',
+        entityType: 'CHAT' as GraphqlSoupEntityType,
+        displayName: 'Chat',
+        projectId: null,
+        viewedAt: null,
+        deletedAt: null,
+        cacheProjection: null,
+        frecencyScore: null,
+        isPersistent: true,
+        isFavorited: false,
+        createdAt: '2026-09-11T00:00:00Z',
+        updatedAt: '2026-09-11T00:00:00Z',
+        properties: [],
+        notifications: [],
+      } satisfies SoupItemFieldsFragment;
+
+      expect(mapGraphqlSoupItem(item)).toMatchObject({
+        tag: 'chat',
+        data: { id: item.id, model },
+      });
+    }
+  );
+});
+
+describe('GraphQL Soup document sub types', () => {
+  it.each([
+    [
+      { __typename: 'GraphqlTaskSubType', isCompleted: true },
+      { type: 'task', is_completed: true },
+    ],
+    [{ __typename: 'GraphqlSkillSubType' }, { type: 'skill' }],
+    [{ __typename: 'GraphqlInitiativeDescriptionSubType' }, undefined],
+  ] as const)(
+    'maps %j to the shared soup sub type %j',
+    async (subType, expected) => {
+      const { mapGraphqlSoupItem } = await import('./graphql-soup');
+      const item = {
+        __typename: 'GraphqlSoupDocument',
+        id: 'doc-sub-type',
+        entityType: 'DOCUMENT' as GraphqlSoupEntityType,
+        displayName: 'Plan',
+        documentName: 'Plan',
+        ownerId: 'macro|owner@example.com',
+        fileType: 'md',
+        projectId: null,
+        viewedAt: null,
+        deletedAt: null,
+        cacheProjection: null,
+        frecencyScore: null,
+        isFavorited: false,
+        createdAt: '2026-09-11T00:00:00Z',
+        updatedAt: '2026-09-11T00:00:00Z',
+        subType,
+        properties: [],
+        notifications: [],
+      } satisfies SoupItemFieldsFragment;
+
+      expect(mapGraphqlSoupItem(item)).toMatchObject({
+        tag: 'document',
+        data: { id: item.id, subType: expected },
+      });
+    }
+  );
+});
 
 describe('GraphQL Soup browser cache session gate', () => {
   beforeEach(() => {
@@ -334,6 +459,9 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(soup.getGraphqlSoupClient()).toBe(mocks.realtimeClient);
     expect(soup.graphqlCacheEnabled()).toBe(false);
     expect(mocks.cleanupOrder()).toEqual(['subscriptions', 'host']);
+    expect(mocks.toastFailure).toHaveBeenCalledWith('Local cache unavailable', {
+      subtext: 'Macro will continue without local caching for this session.',
+    });
     expect(warn).toHaveBeenCalledWith(
       'graphql cache async init failed; using uncached client',
       expect.objectContaining({ message: 'injected initialization failure' })

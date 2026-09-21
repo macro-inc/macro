@@ -44,6 +44,10 @@ experimental-features = nix-command flakes
 
 The default shell does not include the Tauri platform dependencies. They are large, so they live in their own shells. For Linux desktop development, use `nix develop .#tauri-linux`. For Android development on x86_64 Linux, use `nix develop .#tauri-android`.
 
+For automated Linux desktop offline tests, use `nix develop .#tauri-e2e` and the
+[native E2E guide](../apps/web/tests/native/README.md). It runs the real Tauri
+webview/native cache with deterministic API fixtures, without the local stack.
+
 ## Run the frontend against hosted services
 
 The web app talks to hosted `*-dev` services when you run `bun run dev` from the web app.
@@ -110,6 +114,13 @@ This command:
 When startup finishes, the command prints the frontend URL and the important service URLs.
 
 Open the frontend URL in your browser.
+
+The local environment supplies both `LOCAL_AWS_URL` (the container endpoint)
+and `LOCAL_AWS_PUBLIC_URL` (the instance's published LocalStack port). SFS and
+other presigned uploads use the public endpoint in browser-facing URLs. If an
+upload attempts `localhost:4566` on a named instance, rebuild the service and
+reload its generated environment; named instances publish storage on their own
+port.
 
 The stack does not create accounts in advance. Passwordless login creates a user
 on demand. Register with any email address. FusionAuth sends you a one-time code
@@ -184,11 +195,24 @@ across instances) debugging containers:
 See `.claude/skills/live-debug/SKILL.md` for query recipes (Tempo/Loki HTTP
 APIs) and the browser-debugging workflow.
 
+For agent turns, use Tempo's TraceQL query
+`{span.gen_ai.operation.name="invoke_agent"}`. The session actor records the
+ACP prompt, output and tool activity on that trace and sends its context in
+`params._meta["macro.dev/trace-context"]`. Macro's in-process runtime restores
+that context so its model calls and backend work appear in the same trace.
+Other runtimes must explicitly consume this metadata to correlate their
+internal spans; their ACP activity is still traced by the session actor.
+
+GenAI content is bounded by `genai_telemetry`; check
+`macro.genai.content_truncated` before using a span for evaluations.
+
 ## Control the Running Stack
 
 While `run_local` is attached:
 
 - Press `r` to rebuild the changed Rust services and reload them.
+- Press `f` to restart Vite with the same frontend port and configuration. This
+  also recovers a stuck frontend reload and leaves backend services and data intact.
 - Press `q` to stop the stack and exit.
 
 Use `q`, not the terminal close button. `q` stops and removes the containers at once. The next start does not have to clean up a stale stack.
@@ -223,6 +247,28 @@ The generated files for an instance live here:
 ```text
 infra/local/generated/<instance>
 ```
+
+### Access a remote dev server through one URL
+
+`run_local` and `run_dev` serve API requests and backend WebSockets through Vite,
+so the browser needs only the frontend port. For example, forward a remote
+instance's frontend with `ssh -N -L 3000:127.0.0.1:20110 your-dev-host`, then open
+`http://localhost:3000/app/`. A WebSocket-capable reverse proxy can instead expose
+that frontend under a different hostname/port, including HTTPS. Vite HMR follows
+the page's origin; no separate HMR or backend port forward is needed.
+
+The launcher sets `VITE_LOCAL_BACKEND_ORIGIN=same-origin` and supplies Vite's
+server-only `MACRO_LOCAL_BACKEND_PROXY` and `MACRO_LOCAL_BACKEND_ROUTES` from the
+selected instance and backend inventory. The proxy preserves paths, query
+strings, cookies, streaming responses and WebSocket upgrades. AI-editing and
+enabled browser telemetry also use same-origin paths. Bare `bun run dev` without
+these variables still uses hosted services; `TAURI_DEV_HOST` remains an explicit
+native HMR override. Keep local dev stacks private: same-origin routing does not
+add authentication or make passwordless local login safe to publish.
+
+The stack launches Vite directly with Node (available in the Nix shell), because
+Bun's Node HTTP compatibility currently hangs on Vite's proxied WebSocket
+upgrades. Bun is still used for dependency installation and builds.
 
 ## Port Conflicts (macOS)
 
@@ -313,18 +359,20 @@ The app is served at `<proxy>/app/`. The bundle resolves its backend from the or
 
 ### Init Snapshots
 
-`stack up` caches the expensive infrastructure initialization. The first cold run:
+`just run_local` and `stack up` both cache the expensive infrastructure initialization. The first cold run:
 
 - Migrates the database
+- Creates the Kafka topics
 - Waits for the FusionAuth kickstart
 - Creates the search indices
 
-It saves these volumes as an init snapshot. The snapshot is content-addressed and stored under `infra/local/generated/.snapshots`. Later runs restore the snapshot and skip the initialization. An input change causes a cache miss and a normal full init.
+It saves these volumes as an init snapshot. The snapshot is content-addressed and stored under `infra/local/generated/.snapshots`. Later runs restore the snapshot and skip the initialization. An input change causes a cache miss and a normal full init — the key *is* the definition of clean state, so the full-delete/full-create guarantee is unchanged.
 
 Useful commands:
 
 ```bash
-just stack up --no-snapshot   # skip the snapshot cache
+just run_local --no-snapshot  # skip the snapshot cache
+just stack up --no-snapshot   # same flag, headless
 ```
 
 Cursor Cloud bakes the snapshot during environment install. Later `stack up` restores it.
@@ -361,6 +409,16 @@ Drop, recreate, and migrate an instance database:
 
 ```bash
 just reset_local --instance agent-a
+```
+
+### Finding out where a bring-up spent its time
+
+Every run prints its slowest stages before the summary. To compare runs, point
+`MACRO_LOCAL_TIMINGS` at a file — each run appends one JSON line of every stage
+and its duration:
+
+```bash
+MACRO_LOCAL_TIMINGS=/tmp/run-local-timings.jsonl just run_local
 ```
 
 For the default instance, omit `--instance`.

@@ -83,26 +83,19 @@ fn build_notification_exists_clause(
     )
 }
 
-fn build_notification_done_clause(entity_id_sql: &str, entity_type: &str, done: bool) -> String {
+fn build_notification_state_clause(
+    entity_id_sql: &str,
+    entity_type: &str,
+    state: item_filters::NotificationState,
+) -> String {
+    use item_filters::NotificationState::*;
     build_notification_exists_clause(
         entity_id_sql,
         entity_type,
-        if done {
-            "un.done = true"
-        } else {
-            "un.done = false"
-        },
-    )
-}
-
-fn build_notification_seen_clause(entity_id_sql: &str, entity_type: &str, seen: bool) -> String {
-    build_notification_exists_clause(
-        entity_id_sql,
-        entity_type,
-        if seen {
-            "un.seen_at IS NOT NULL"
-        } else {
-            "un.seen_at IS NULL"
+        match state {
+            Unseen => "un.state = 'unseen'",
+            Seen => "un.state = 'seen'",
+            Done => "un.state = 'done'",
         },
     )
 }
@@ -171,11 +164,8 @@ fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
             )"#
                 .to_string()
         }
-        filter_ast::ExprFrame::Literal(DocumentLiteral::NotificationDone(done)) => {
-            build_notification_done_clause("fa.entity_id", "document", done)
-        }
-        filter_ast::ExprFrame::Literal(DocumentLiteral::NotificationSeen(seen)) => {
-            build_notification_seen_clause("fa.entity_id", "document", seen)
+        filter_ast::ExprFrame::Literal(DocumentLiteral::NotificationState(state)) => {
+            build_notification_state_clause("fa.entity_id", "document", state)
         }
         filter_ast::ExprFrame::Literal(DocumentLiteral::IncludeCbmAtmNc(true)) => {
             build_task_include_cbm_atm_nc_clause("fa.entity_id")
@@ -263,11 +253,8 @@ fn build_chat_filter(ast: Option<&Expr<ChatLiteral>>) -> String {
             // all chats are important, so if importance is false, exclude them
             filter_ast::ExprFrame::Literal(ChatLiteral::Importance(true)) => String::new(),
             filter_ast::ExprFrame::Literal(ChatLiteral::Importance(false)) => "1=0".to_string(),
-            filter_ast::ExprFrame::Literal(ChatLiteral::NotificationDone(done)) => {
-                build_notification_done_clause("entity_id", "chat", done)
-            }
-            filter_ast::ExprFrame::Literal(ChatLiteral::NotificationSeen(seen)) => {
-                build_notification_seen_clause("entity_id", "chat", seen)
+            filter_ast::ExprFrame::Literal(ChatLiteral::NotificationState(state)) => {
+                build_notification_state_clause("entity_id", "chat", state)
             }
             filter_ast::ExprFrame::Literal(ChatLiteral::CreatedAt(DateLiteral::GreaterThan(dt))) => {
                 format!(r#"entity_id IN (SELECT id FROM "Chat" WHERE "createdAt" > '{}'::timestamptz AND "deletedAt" IS NULL)"#, dt.to_rfc3339())
@@ -321,11 +308,8 @@ fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
         filter_ast::ExprFrame::Literal(ProjectLiteral::Importance(true)) => String::new(),
         // all projects are important, so if importance is false, exclude them
         filter_ast::ExprFrame::Literal(ProjectLiteral::Importance(false)) => "1=0".to_string(),
-        filter_ast::ExprFrame::Literal(ProjectLiteral::NotificationDone(done)) => {
-            build_notification_done_clause("entity_id", "project", done)
-        }
-        filter_ast::ExprFrame::Literal(ProjectLiteral::NotificationSeen(seen)) => {
-            build_notification_seen_clause("entity_id", "project", seen)
+        filter_ast::ExprFrame::Literal(ProjectLiteral::NotificationState(state)) => {
+            build_notification_state_clause("entity_id", "project", state)
         }
         filter_ast::ExprFrame::Literal(ProjectLiteral::CreatedAt(DateLiteral::GreaterThan(dt))) => {
             format!(r#"entity_id IN (SELECT id FROM "Project" WHERE "createdAt" > '{}'::timestamptz AND "deletedAt" IS NULL)"#, dt.to_rfc3339())

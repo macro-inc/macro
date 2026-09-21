@@ -2,7 +2,7 @@ use std::{ops::Deref, sync::Arc, sync::LazyLock};
 
 use crate::domain::models::{
     AddParticipantError, CallRecord, CallRecordPreview, CustomSpeakerAssignment,
-    EditCallRecordRequest, TranscriptSegmentRequest,
+    EditCallRecordRepoArgs, TranscriptSegmentRequest,
 };
 use crate::domain::ports::CallRepository;
 use crate::outbound::pg_call_repo::PgCallRepo;
@@ -96,24 +96,24 @@ fn call_ids_filter(ids: &[Uuid]) -> LiteralTree<CallLiteral> {
     Some(Arc::new(expr))
 }
 
-const CH1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c01);
-const CH2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c02);
-const CALL1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_0000000ca110);
+pub(super) const CH1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c01);
+pub(super) const CH2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c02);
+pub(super) const CALL1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_0000000ca110);
 const CALL2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_0000000ca220);
-const CALL_ARCHIVED: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_0000000ca2ed);
+pub(super) const CALL_ARCHIVED: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_0000000ca2ed);
 const MACRO_USER_A: Uuid = Uuid::from_u128(0xaaaaaaaa_aaaa_aaaa_aaaa_aaaaaaaaaaa1);
 const MACRO_USER_B: Uuid = Uuid::from_u128(0xbbbbbbbb_bbbb_bbbb_bbbb_bbbbbbbbbbb2);
 const MACRO_USER_C: Uuid = Uuid::from_u128(0xcccccccc_cccc_cccc_cccc_ccccccccccc3);
-static USER_A: LazyLock<MacroUserIdStr<'static>> =
+pub(super) static USER_A: LazyLock<MacroUserIdStr<'static>> =
     LazyLock::new(|| MacroUserIdStr::parse_from_str("macro|user-a@test.com").unwrap());
-static USER_B: LazyLock<MacroUserIdStr<'static>> =
+pub(super) static USER_B: LazyLock<MacroUserIdStr<'static>> =
     LazyLock::new(|| MacroUserIdStr::parse_from_str("macro|user-b@test.com").unwrap());
 static USER_C: LazyLock<MacroUserIdStr<'static>> =
     LazyLock::new(|| MacroUserIdStr::parse_from_str("macro|user-c@test.com").unwrap());
 static USER_D: LazyLock<MacroUserIdStr<'static>> =
     LazyLock::new(|| MacroUserIdStr::parse_from_str("macro|user-d@test.com").unwrap());
 
-fn repo(pool: Pool<Postgres>) -> PgCallRepo {
+pub(super) fn repo(pool: Pool<Postgres>) -> PgCallRepo {
     PgCallRepo::new(pool)
 }
 
@@ -743,7 +743,7 @@ async fn archive_call_returns_no_result_when_call_is_missing(
 
 /// Test helper: give `user_id` a brand new team owned by that user. Inserts
 /// the parent `macro_user` and `User` rows that the `team_user` FK requires.
-async fn give_user_a_team(
+pub(super) async fn give_user_a_team(
     pool: &Pool<Postgres>,
     user_id: &str,
     team_id: &Uuid,
@@ -782,19 +782,10 @@ async fn give_user_a_team(
     Ok(())
 }
 
-async fn stored_call_record_share_with_team(
+pub(super) async fn team_entity_access_count(
     pool: &Pool<Postgres>,
     call_id: Uuid,
-) -> anyhow::Result<bool> {
-    Ok(sqlx::query_scalar!(
-        r#"SELECT share_with_team FROM call_records WHERE id = $1"#,
-        call_id,
-    )
-    .fetch_one(pool)
-    .await?)
-}
-
-async fn team_entity_access_count(pool: &Pool<Postgres>, call_id: Uuid) -> anyhow::Result<i64> {
+) -> anyhow::Result<i64> {
     Ok(sqlx::query_scalar!(
         r#"SELECT COUNT(*) as "count!" FROM entity_access WHERE entity_id = $1 AND source_type = 'team'"#,
         call_id,
@@ -803,83 +794,8 @@ async fn team_entity_access_count(pool: &Pool<Postgres>, call_id: Uuid) -> anyho
     .await?)
 }
 
-// -- archive_call grants team view access when share_with_team is true -------
-
-#[sqlx::test(
-    fixtures(path = "../../../fixtures", scripts("call_repo")),
-    migrator = "MACRO_DB_MIGRATIONS"
-)]
-async fn archive_call_grants_team_view_access_when_share_with_team_true(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
-    use sqlx::Row as _;
-
-    let repo = repo(pool.clone());
-    let team_id: Uuid = Uuid::from_u128(0xaaaaaaaa_aaaa_aaaa_aaaa_aaaaaaaaaaaa);
-
-    give_user_a_team(&pool, USER_A.as_ref(), &team_id).await?;
-
-    // share_with_team defaults to TRUE on the fixture call.
-    repo.archive_call(&CALL1).await?;
-
-    let row = sqlx::query(
-        r#"
-        SELECT entity_id, entity_type, source_id, access_level
-        FROM entity_access
-        WHERE entity_id = $1 AND source_type = 'team'
-        "#,
-    )
-    .bind(CALL1)
-    .fetch_one(&pool)
-    .await?;
-
-    assert_eq!(row.get::<Uuid, _>("entity_id"), CALL1);
-    assert_eq!(row.get::<String, _>("entity_type"), "call");
-    assert_eq!(row.get::<String, _>("source_id"), team_id.to_string());
-    assert_eq!(row.get::<AccessLevel, _>("access_level"), AccessLevel::View);
-    assert!(stored_call_record_share_with_team(&pool, CALL1).await?);
-
-    Ok(())
-}
-
-// -- archive_call skips team grant when share_with_team is false -------------
-
-#[sqlx::test(
-    fixtures(path = "../../../fixtures", scripts("call_repo")),
-    migrator = "MACRO_DB_MIGRATIONS"
-)]
-async fn archive_call_skips_team_grant_when_share_with_team_false(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
-    use sqlx::Row as _;
-
-    let repo = repo(pool.clone());
-    let team_id: Uuid = Uuid::from_u128(0xbbbbbbbb_bbbb_bbbb_bbbb_bbbbbbbbbbbb);
-
-    // USER_A is on a team, but the call opted out of team sharing — so no
-    // team-scoped entity_access row should be created at archive time.
-    give_user_a_team(&pool, USER_A.as_ref(), &team_id).await?;
-
-    sqlx::query(r#"UPDATE calls SET share_with_team = false WHERE id = $1"#)
-        .bind(CALL1)
-        .execute(&pool)
-        .await?;
-
-    repo.archive_call(&CALL1).await?;
-
-    let count: i64 = sqlx::query(
-        r#"SELECT COUNT(*) AS count FROM entity_access WHERE entity_id = $1 AND source_type = 'team'"#,
-    )
-    .bind(CALL1)
-    .map(|r: sqlx::postgres::PgRow| r.get::<i64, _>("count"))
-    .fetch_one(&pool)
-    .await?;
-
-    assert_eq!(count, 0);
-    assert!(!stored_call_record_share_with_team(&pool, CALL1).await?);
-
-    Ok(())
-}
+// Team sharing across archive is covered in `team_share/test.rs`: archive
+// neither grants nor revokes anything; canonical state simply carries over.
 
 // -- archive_call preserves id and share_permission_id ------------------------
 
@@ -1467,13 +1383,6 @@ async fn get_call_record_returns_active_call(pool: Pool<Postgres>) -> anyhow::Re
     let repo = repo(pool.clone());
     let now = Utc::now();
 
-    sqlx::query!(
-        r#"UPDATE calls SET share_with_team = false WHERE id = $1"#,
-        CALL1,
-    )
-    .execute(&pool)
-    .await?;
-
     // Ingest two transcript segments into the active call.
     repo.create_transcript_segment(
         &CALL1,
@@ -1516,7 +1425,10 @@ async fn get_call_record_returns_active_call(pool: Pool<Postgres>) -> anyhow::Re
     assert_eq!(record.call_id, CALL1);
     assert_eq!(record.channel_id, CH1);
     assert!(record.is_active);
-    assert!(!record.share_with_team);
+    // Live calls report the pending toggle (on by default); canonical state
+    // is only written when the call is archived.
+    assert_eq!(record.team_share_access_level, None);
+    assert!(record.share_with_team);
     assert_eq!(record.status, None);
     assert!(record.ended_at.is_none());
     assert!(record.duration_ms.is_none());
@@ -1554,13 +1466,6 @@ async fn get_call_record_returns_active_call(pool: Pool<Postgres>) -> anyhow::Re
 async fn get_call_record_returns_archived_call(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool.clone());
 
-    sqlx::query!(
-        r#"UPDATE call_records SET share_with_team = false WHERE id = $1"#,
-        CALL_ARCHIVED,
-    )
-    .execute(&pool)
-    .await?;
-
     let record = repo
         .get_call_record_by_call_id(&CALL_ARCHIVED)
         .await?
@@ -1569,6 +1474,7 @@ async fn get_call_record_returns_archived_call(pool: Pool<Postgres>) -> anyhow::
     assert_eq!(record.call_id, CALL_ARCHIVED);
     assert_eq!(record.channel_id, CH1);
     assert!(!record.is_active);
+    assert_eq!(record.team_share_access_level, None);
     assert!(!record.share_with_team);
     assert_eq!(record.status, None);
     assert!(record.ended_at.is_some());
@@ -2051,43 +1957,6 @@ async fn get_call_records_by_user_returns_archived_summary(
     Ok(())
 }
 
-#[sqlx::test(
-    fixtures(path = "../../../fixtures", scripts("call_repo")),
-    migrator = "MACRO_DB_MIGRATIONS"
-)]
-async fn get_call_records_by_user_returns_share_with_team(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
-    let repo = repo(pool.clone());
-
-    sqlx::query!(
-        r#"UPDATE call_records SET share_with_team = false WHERE id = $1"#,
-        CALL_ARCHIVED,
-    )
-    .execute(&pool)
-    .await?;
-
-    let records = repo
-        .get_call_records_by_user(USER_A.deref().copied(), 10, &None)
-        .await?;
-
-    let active = records
-        .iter()
-        .find(|r| r.call_id == CALL1)
-        .expect("active call missing");
-    assert!(active.is_active);
-    assert!(active.share_with_team);
-
-    let archived = records
-        .iter()
-        .find(|r| r.call_id == CALL_ARCHIVED)
-        .expect("archived call missing");
-    assert!(!archived.is_active);
-    assert!(!archived.share_with_team);
-
-    Ok(())
-}
-
 // -- delete_call_record -------------------------------------------------------
 
 #[sqlx::test(
@@ -2223,13 +2092,15 @@ async fn patch_call_record_sets_public_link_and_defaults_level_to_view(
 
     repo.patch_call_record(
         &CALL_ARCHIVED,
-        &EditCallRecordRequest {
+        &EditCallRecordRepoArgs {
             share_permission: Some(UpdateSharePermissionRequestV2 {
                 link_share: Some(Some(LinkShare::Public)),
                 link_share_access_level: None,
+                team_share_access_level: None,
                 channel_share_permissions: None,
             }),
-            share_with_team: None,
+            team_share: None,
+            live_share_with_team: None,
             custom_name: None,
         },
     )
@@ -2252,13 +2123,15 @@ async fn patch_call_record_sets_team_link_and_explicit_level(
 
     repo.patch_call_record(
         &CALL_ARCHIVED,
-        &EditCallRecordRequest {
+        &EditCallRecordRepoArgs {
             share_permission: Some(UpdateSharePermissionRequestV2 {
                 link_share: Some(Some(LinkShare::Team)),
                 link_share_access_level: Some(Some(AccessLevel::Edit)),
+                team_share_access_level: None,
                 channel_share_permissions: None,
             }),
-            share_with_team: None,
+            team_share: None,
+            live_share_with_team: None,
             custom_name: None,
         },
     )
@@ -2282,13 +2155,15 @@ async fn patch_call_record_explicit_null_disables_link_sharing(
 
     repo.patch_call_record(
         &CALL_ARCHIVED,
-        &EditCallRecordRequest {
+        &EditCallRecordRepoArgs {
             share_permission: Some(UpdateSharePermissionRequestV2 {
                 link_share: Some(None),
                 link_share_access_level: Some(Some(AccessLevel::Edit)),
+                team_share_access_level: None,
                 channel_share_permissions: None,
             }),
-            share_with_team: None,
+            team_share: None,
+            live_share_with_team: None,
             custom_name: None,
         },
     )
@@ -2317,13 +2192,15 @@ async fn patch_call_record_level_only_update_updates_link_share_access_level(
 
     repo.patch_call_record(
         &CALL_ARCHIVED,
-        &EditCallRecordRequest {
+        &EditCallRecordRepoArgs {
             share_permission: Some(UpdateSharePermissionRequestV2 {
                 link_share: None,
                 link_share_access_level: Some(Some(AccessLevel::Comment)),
+                team_share_access_level: None,
                 channel_share_permissions: None,
             }),
-            share_with_team: None,
+            team_share: None,
+            live_share_with_team: None,
             custom_name: None,
         },
     )
@@ -2350,17 +2227,19 @@ async fn patch_call_record_adds_channel_share_permission(
 
     repo.patch_call_record(
         &CALL_ARCHIVED,
-        &EditCallRecordRequest {
+        &EditCallRecordRepoArgs {
             share_permission: Some(UpdateSharePermissionRequestV2 {
                 link_share: None,
                 link_share_access_level: None,
+                team_share_access_level: None,
                 channel_share_permissions: Some(vec![UpdateChannelSharePermission {
                     operation: UpdateOperation::Add,
                     channel_id: channel_id.clone(),
                     access_level: Some(AccessLevel::View),
                 }]),
             }),
-            share_with_team: None,
+            team_share: None,
+            live_share_with_team: None,
             custom_name: None,
         },
     )
@@ -2425,17 +2304,19 @@ async fn patch_call_record_removes_channel_share_permission(
 
     repo.patch_call_record(
         &CALL_ARCHIVED,
-        &EditCallRecordRequest {
+        &EditCallRecordRepoArgs {
             share_permission: Some(UpdateSharePermissionRequestV2 {
                 link_share: None,
                 link_share_access_level: None,
+                team_share_access_level: None,
                 channel_share_permissions: Some(vec![UpdateChannelSharePermission {
                     operation: UpdateOperation::Remove,
                     channel_id: channel_id.clone(),
                     access_level: None,
                 }]),
             }),
-            share_with_team: None,
+            team_share: None,
+            live_share_with_team: None,
             custom_name: None,
         },
     )
@@ -2469,13 +2350,15 @@ async fn patch_call_record_empty_share_permission_update_is_noop(
 
     repo.patch_call_record(
         &CALL_ARCHIVED,
-        &EditCallRecordRequest {
+        &EditCallRecordRepoArgs {
             share_permission: Some(UpdateSharePermissionRequestV2 {
                 link_share: None,
                 link_share_access_level: None,
+                team_share_access_level: None,
                 channel_share_permissions: None,
             }),
-            share_with_team: None,
+            team_share: None,
+            live_share_with_team: None,
             custom_name: None,
         },
     )
@@ -2499,9 +2382,10 @@ async fn patch_call_record_sets_custom_name_on_archived_record(
 
     repo.patch_call_record(
         &CALL_ARCHIVED,
-        &EditCallRecordRequest {
+        &EditCallRecordRepoArgs {
             share_permission: None,
-            share_with_team: None,
+            team_share: None,
+            live_share_with_team: None,
             custom_name: Some("Q4 sync".to_string()),
         },
     )
@@ -2542,9 +2426,10 @@ async fn patch_call_record_custom_name_overwrites_existing(
 
     repo.patch_call_record(
         &CALL_ARCHIVED,
-        &EditCallRecordRequest {
+        &EditCallRecordRepoArgs {
             share_permission: None,
-            share_with_team: None,
+            team_share: None,
+            live_share_with_team: None,
             custom_name: Some("New name".to_string()),
         },
     )
@@ -2579,9 +2464,10 @@ async fn patch_call_record_custom_name_empty_string_clears_existing(
 
     repo.patch_call_record(
         &CALL_ARCHIVED,
-        &EditCallRecordRequest {
+        &EditCallRecordRepoArgs {
             share_permission: None,
-            share_with_team: None,
+            team_share: None,
+            live_share_with_team: None,
             custom_name: Some(String::new()),
         },
     )
@@ -2614,9 +2500,10 @@ async fn patch_call_record_custom_name_none_is_noop(pool: Pool<Postgres>) -> any
 
     repo.patch_call_record(
         &CALL_ARCHIVED,
-        &EditCallRecordRequest {
+        &EditCallRecordRepoArgs {
             share_permission: None,
-            share_with_team: None,
+            team_share: None,
+            live_share_with_team: None,
             custom_name: None,
         },
     )
@@ -2629,286 +2516,6 @@ async fn patch_call_record_custom_name_none_is_noop(pool: Pool<Postgres>) -> any
     .fetch_one(&pool)
     .await?;
     assert_eq!(stored.as_deref(), Some("Existing"));
-    Ok(())
-}
-
-// -- patch_call_record: share_with_team ---------------------------------------
-
-#[sqlx::test(
-    fixtures(path = "../../../fixtures", scripts("call_repo")),
-    migrator = "MACRO_DB_MIGRATIONS"
-)]
-async fn patch_call_record_share_with_team_true_grants_team_access_on_active_call(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
-    let repo = repo(pool.clone());
-    let team_id: Uuid = Uuid::from_u128(0xaaaaaaaa_aaaa_aaaa_aaaa_aaaaaaaaa001);
-
-    // The active call's created_by is USER_A — that's the team we should grant.
-    give_user_a_team(&pool, USER_A.as_ref(), &team_id).await?;
-
-    repo.patch_call_record(
-        &CALL1,
-        &EditCallRecordRequest {
-            share_permission: None,
-            share_with_team: Some(true),
-            custom_name: None,
-        },
-    )
-    .await?;
-
-    let row = sqlx::query!(
-        r#"
-        SELECT source_id, access_level::text as "access_level"
-        FROM entity_access
-        WHERE entity_id = $1 AND entity_type = 'call' AND source_type = 'team'
-        "#,
-        CALL1,
-    )
-    .fetch_one(&pool)
-    .await?;
-
-    assert_eq!(row.source_id, team_id.to_string());
-    assert_eq!(row.access_level.as_deref(), Some("view"));
-
-    let flag = sqlx::query_scalar!(r#"SELECT share_with_team FROM calls WHERE id = $1"#, CALL1,)
-        .fetch_one(&pool)
-        .await?;
-    assert!(flag);
-
-    Ok(())
-}
-
-#[sqlx::test(
-    fixtures(path = "../../../fixtures", scripts("call_repo")),
-    migrator = "MACRO_DB_MIGRATIONS"
-)]
-async fn patch_call_record_share_with_team_false_removes_team_access(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
-    let repo = repo(pool.clone());
-    let team_id: Uuid = Uuid::from_u128(0xaaaaaaaa_aaaa_aaaa_aaaa_aaaaaaaaa002);
-
-    give_user_a_team(&pool, USER_A.as_ref(), &team_id).await?;
-
-    // Pre-seed a team entity_access row so we can observe the deletion.
-    sqlx::query(
-        r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
-           VALUES ($1, 'call', $2, 'team', 'view')"#,
-    )
-    .bind(CALL1)
-    .bind(team_id.to_string())
-    .execute(&pool)
-    .await?;
-
-    repo.patch_call_record(
-        &CALL1,
-        &EditCallRecordRequest {
-            share_permission: None,
-            share_with_team: Some(false),
-            custom_name: None,
-        },
-    )
-    .await?;
-
-    let count = sqlx::query_scalar!(
-        r#"SELECT COUNT(*) as "count!" FROM entity_access
-           WHERE entity_id = $1 AND source_type = 'team'"#,
-        CALL1,
-    )
-    .fetch_one(&pool)
-    .await?;
-    assert_eq!(count, 0);
-
-    let flag = sqlx::query_scalar!(r#"SELECT share_with_team FROM calls WHERE id = $1"#, CALL1,)
-        .fetch_one(&pool)
-        .await?;
-    assert!(!flag);
-
-    Ok(())
-}
-
-#[sqlx::test(
-    fixtures(path = "../../../fixtures", scripts("call_repo")),
-    migrator = "MACRO_DB_MIGRATIONS"
-)]
-async fn patch_call_record_share_with_team_works_on_archived_record(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
-    let repo = repo(pool.clone());
-    let team_id: Uuid = Uuid::from_u128(0xaaaaaaaa_aaaa_aaaa_aaaa_aaaaaaaaa003);
-
-    // CALL_ARCHIVED was created by USER_A; its team should get View.
-    give_user_a_team(&pool, USER_A.as_ref(), &team_id).await?;
-
-    repo.patch_call_record(
-        &CALL_ARCHIVED,
-        &EditCallRecordRequest {
-            share_permission: None,
-            share_with_team: Some(true),
-            custom_name: None,
-        },
-    )
-    .await?;
-
-    let row = sqlx::query!(
-        r#"
-        SELECT source_id, access_level::text as "access_level"
-        FROM entity_access
-        WHERE entity_id = $1 AND entity_type = 'call' AND source_type = 'team'
-        "#,
-        CALL_ARCHIVED,
-    )
-    .fetch_one(&pool)
-    .await?;
-
-    assert_eq!(row.source_id, team_id.to_string());
-    assert_eq!(row.access_level.as_deref(), Some("view"));
-    assert!(stored_call_record_share_with_team(&pool, CALL_ARCHIVED).await?);
-
-    Ok(())
-}
-
-#[sqlx::test(
-    fixtures(path = "../../../fixtures", scripts("call_repo")),
-    migrator = "MACRO_DB_MIGRATIONS"
-)]
-async fn patch_call_record_share_with_team_false_updates_archived_record_and_removes_team_access(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
-    let repo = repo(pool.clone());
-    let team_id: Uuid = Uuid::from_u128(0xaaaaaaaa_aaaa_aaaa_aaaa_aaaaaaaaa013);
-
-    give_user_a_team(&pool, USER_A.as_ref(), &team_id).await?;
-
-    sqlx::query!(
-        r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
-           VALUES ($1, 'call', $2, 'team', 'view')"#,
-        CALL_ARCHIVED,
-        team_id.to_string(),
-    )
-    .execute(&pool)
-    .await?;
-
-    repo.patch_call_record(
-        &CALL_ARCHIVED,
-        &EditCallRecordRequest {
-            share_permission: None,
-            share_with_team: Some(false),
-            custom_name: None,
-        },
-    )
-    .await?;
-
-    assert_eq!(team_entity_access_count(&pool, CALL_ARCHIVED).await?, 0);
-    assert!(!stored_call_record_share_with_team(&pool, CALL_ARCHIVED).await?);
-
-    Ok(())
-}
-
-#[sqlx::test(
-    fixtures(path = "../../../fixtures", scripts("call_repo")),
-    migrator = "MACRO_DB_MIGRATIONS"
-)]
-async fn patch_call_record_share_with_team_ignores_non_creator_teams(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
-    let repo = repo(pool.clone());
-    let creator_team: Uuid = Uuid::from_u128(0xaaaaaaaa_aaaa_aaaa_aaaa_aaaaaaaaa004);
-    let other_team: Uuid = Uuid::from_u128(0xbbbbbbbb_bbbb_bbbb_bbbb_bbbbbbbbb004);
-    let other_macro_user_id = Uuid::now_v7();
-
-    // USER_A (the call creator) is on `creator_team`.
-    give_user_a_team(&pool, USER_A.as_ref(), &creator_team).await?;
-
-    // Seed a second team whose owner is a different user (USER_B). The repo
-    // must not grant access to this team — the lookup keys off the call's
-    // created_by (USER_A), not off any other user's team membership.
-    sqlx::query(
-        r#"INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $3, $4)"#,
-    )
-    .bind(other_macro_user_id)
-    .bind(USER_B.as_ref())
-    .bind("user-b@test.com")
-    .bind("cus_other")
-    .execute(&pool)
-    .await?;
-    sqlx::query(r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ($1, $2, $3)"#)
-        .bind(USER_B.as_ref())
-        .bind("user-b@test.com")
-        .bind(other_macro_user_id)
-        .execute(&pool)
-        .await?;
-    sqlx::query(r#"INSERT INTO team (id, name, owner_id) VALUES ($1, $2, $3)"#)
-        .bind(other_team)
-        .bind("unrelated team")
-        .bind(USER_B.as_ref())
-        .execute(&pool)
-        .await?;
-    sqlx::query(r#"INSERT INTO team_user (user_id, team_id, team_role) VALUES ($1, $2, 'owner')"#)
-        .bind(USER_B.as_ref())
-        .bind(other_team)
-        .execute(&pool)
-        .await?;
-
-    repo.patch_call_record(
-        &CALL1,
-        &EditCallRecordRequest {
-            share_permission: None,
-            share_with_team: Some(true),
-            custom_name: None,
-        },
-    )
-    .await?;
-
-    let source_ids: Vec<String> = sqlx::query_scalar!(
-        r#"SELECT source_id FROM entity_access
-           WHERE entity_id = $1 AND source_type = 'team'"#,
-        CALL1,
-    )
-    .fetch_all(&pool)
-    .await?;
-
-    assert_eq!(source_ids, vec![creator_team.to_string()]);
-
-    Ok(())
-}
-
-#[sqlx::test(
-    fixtures(path = "../../../fixtures", scripts("call_repo")),
-    migrator = "MACRO_DB_MIGRATIONS"
-)]
-async fn patch_call_record_share_with_team_true_noop_when_creator_has_no_team(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
-    let repo = repo(pool.clone());
-
-    // USER_A is the creator and has no team — the call should succeed but
-    // not create any team entity_access rows.
-    repo.patch_call_record(
-        &CALL1,
-        &EditCallRecordRequest {
-            share_permission: None,
-            share_with_team: Some(true),
-            custom_name: None,
-        },
-    )
-    .await?;
-
-    let count = sqlx::query_scalar!(
-        r#"SELECT COUNT(*) as "count!" FROM entity_access
-           WHERE entity_id = $1 AND source_type = 'team'"#,
-        CALL1,
-    )
-    .fetch_one(&pool)
-    .await?;
-    assert_eq!(count, 0);
-
-    let flag = sqlx::query_scalar!(r#"SELECT share_with_team FROM calls WHERE id = $1"#, CALL1,)
-        .fetch_one(&pool)
-        .await?;
-    assert!(flag);
-
     Ok(())
 }
 

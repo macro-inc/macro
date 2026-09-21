@@ -1,91 +1,80 @@
-import { selectingCommentThreadSignal } from '@block-pdf/signal/click';
-import { useOwnedCommentSelector } from '@block-pdf/signal/permissions';
 import {
   GUTTER_MARGIN,
   MIN_RIGHT_COLUMN_WIDTH,
-  viewerThreeColumnLayout,
+  THREAD_WIDTH,
 } from '@block-pdf/signal/viewerThreeColumnLayout';
-import {
-  threadHeightStore,
-  threadsOnPagePositionStore,
-} from '@block-pdf/store/comments/commentLayout';
+import { usePageCommentLayout } from '@block-pdf/store/comments/commentLayout';
 import {
   useCreateComment,
   useDeleteComment,
   useUpdateComment,
 } from '@block-pdf/store/comments/commentOperations';
-import {
-  activeCommentThreadSignal,
-  useGetCommentById,
-  useIsActiveThreadSelector,
-} from '@block-pdf/store/comments/commentStore';
-import { useBlockId, useIsNestedBlock } from '@core/block';
+import type { CommentId, ThreadId } from '@core/comments/commentType';
 import {
   baseCommentTheme,
   CommentsContext,
   type CommentsContextType,
   Thread,
 } from '@core/comments/Thread';
-import { useCanComment, useIsDocumentOwner } from '@core/signal/permissions';
-import { createMemo, createSelector, For } from 'solid-js';
+import { useUserId } from '@core/context/user';
+import { Key } from '@solid-primitives/keyed';
+import { createSelector } from 'solid-js';
+import { usePdfComments } from '../context/pdf-comments-context';
+import { usePdfDocument } from '../context/pdf-document-context';
 
-export function RightMarginLayout(props: { pageNumber: number }) {
-  const styles = createMemo(() => {
-    const { centerWidth, marginWidth, rightWidth } = viewerThreeColumnLayout();
-    if (!centerWidth) return {};
-    const baseStyles = {
-      minWidth: MIN_RIGHT_COLUMN_WIDTH + 'px',
-      width: rightWidth - GUTTER_MARGIN * 2 + 'px',
-    };
+const rightMarginStyle = {
+  minWidth: `${MIN_RIGHT_COLUMN_WIDTH}px`,
+  width: `${THREAD_WIDTH - GUTTER_MARGIN * 2}px`,
+  right: `${-THREAD_WIDTH + GUTTER_MARGIN}px`,
+};
 
-    const right =
-      rightWidth <= MIN_RIGHT_COLUMN_WIDTH ? -marginWidth : -rightWidth;
-    return {
-      right: right + GUTTER_MARGIN + 'px',
-      ...baseStyles,
-    };
-  });
-
+export function RightMarginLayout(props: { pageIndex: number }) {
   return (
     <div
-      class="rightMargin absolute [transition: width 0.05s linear, right 0.05s linear]"
-      style={styles()}
+      class="rightMargin absolute top-0 z-pdf-comments pointer-events-auto [transition: width 0.05s linear, right 0.05s linear]"
+      style={rightMarginStyle}
     >
-      <CommentsAndSuggestions pageNumber={props.pageNumber} />
+      <CommentsAndSuggestions pageIndex={props.pageIndex} />
     </div>
   );
 }
 
-const useCommentsContext = (): CommentsContextType => {
-  const isNestedBlock = useIsNestedBlock();
-
-  const setActiveThread = activeCommentThreadSignal.set;
-  const setThreadHeight = threadHeightStore.set;
+const useCommentsContext = (
+  setThreadHeight: CommentsContextType['setThreadHeight']
+): CommentsContextType => {
+  const pdf = usePdfDocument();
+  const comments = usePdfComments();
+  const commentsById = comments.byId;
+  const setActiveThread = (threadId: ThreadId | null) => {
+    if (threadId == null) {
+      comments.clearActiveThread();
+    } else {
+      comments.activateThread(threadId);
+    }
+  };
 
   const createComment = useCreateComment();
   const updateComment = useUpdateComment();
   const deleteComment = useDeleteComment();
 
-  const ownedCommentSelector = useOwnedCommentSelector();
-
-  const documentId = useBlockId();
-  const isDocumentOwner = useIsDocumentOwner();
-  const hasPermissions = useCanComment();
-  const canComment = () => {
-    if (isNestedBlock) return false;
-    return hasPermissions();
+  const userId = useUserId();
+  const ownedComment = (id: CommentId) => {
+    const currentUserId = userId();
+    return (
+      currentUserId != null && commentsById().get(id)?.owner === currentUserId
+    );
   };
-
-  const getCommentById = useGetCommentById();
+  const getCommentById = (id: CommentId) => commentsById().get(id);
 
   const commentsContext: CommentsContextType = {
     setActiveThread,
     setThreadHeight,
-    canComment,
-    isDocumentOwner,
+    canComment: () => !pdf.isNested() && pdf.permissions.canComment(),
+    isDocumentOwner: pdf.permissions.isOwner,
     getCommentById,
-    documentId,
-    ownedComment: ownedCommentSelector,
+    documentId: pdf.documentId(),
+    documentType: 'pdf',
+    ownedComment,
     commentOperations: {
       createComment,
       deleteComment,
@@ -98,18 +87,17 @@ const useCommentsContext = (): CommentsContextType => {
   return commentsContext;
 };
 
-function CommentsAndSuggestions(props: { pageNumber: number }) {
-  const threadsOnPage = createMemo(
-    () => threadsOnPagePositionStore.get[props.pageNumber] ?? []
+function CommentsAndSuggestions(props: { pageIndex: number }) {
+  const comments = usePdfComments();
+  const { threads, setThreadHeight } = usePageCommentLayout(
+    () => props.pageIndex
   );
 
-  const isActiveThreadSelector = useIsActiveThreadSelector();
-  const setActiveThreadId = activeCommentThreadSignal.set;
+  const isActiveThreadSelector = createSelector(comments.activeThreadId);
 
-  const [selectedThreadId, setSelectedThreadId] = selectingCommentThreadSignal;
-  const isSelectingThreadSelector = createSelector(selectedThreadId);
+  const isSelectingThreadSelector = createSelector(comments.selectedThreadId);
 
-  const commentTheme = (threadId: number | null) => {
+  const commentTheme = (threadId: ThreadId | null) => {
     const isSelecting = isSelectingThreadSelector(threadId);
     let theme = {
       ...baseCommentTheme,
@@ -121,33 +109,33 @@ function CommentsAndSuggestions(props: { pageNumber: number }) {
     return theme;
   };
 
-  const handleThreadMouseDown = (threadId: number) => (e: MouseEvent) => {
+  const handleThreadMouseDown = (threadId: ThreadId) => (e: MouseEvent) => {
     e.stopPropagation();
-    setSelectedThreadId(threadId);
+    comments.selectThread(threadId);
 
     const handleMouseUp = (e: MouseEvent) => {
       e.stopPropagation();
-      setActiveThreadId(threadId);
+      comments.activateThread(threadId);
       document.removeEventListener('mouseup', handleMouseUp, true);
     };
     document.addEventListener('mouseup', handleMouseUp, true);
   };
 
-  const commentsContext = useCommentsContext();
+  const commentsContext = useCommentsContext(setThreadHeight);
 
   return (
     <CommentsContext.Provider value={commentsContext}>
-      <For each={threadsOnPage()}>
+      <Key each={threads()} by="threadId">
         {(root) => (
           <Thread
-            comment={root}
-            layout={root.layout}
-            isActive={isActiveThreadSelector(root.threadId)}
-            theme={commentTheme(root.threadId)}
-            handleMouseDown={handleThreadMouseDown(root.threadId)}
+            comment={root()}
+            layout={root().layout}
+            isActive={isActiveThreadSelector(root().threadId)}
+            theme={commentTheme(root().threadId)}
+            handleMouseDown={handleThreadMouseDown(root().threadId)}
           />
         )}
-      </For>
+      </Key>
     </CommentsContext.Provider>
   );
 }

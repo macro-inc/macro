@@ -1,4 +1,5 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import { isInBlock } from '@core/block';
 import { toast } from '@core/component/Toast/Toast';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { blockElementSignal } from '@core/signal/blockElement';
@@ -31,6 +32,7 @@ export function PasteNode(props: PasteNodeDecoratorProps) {
   const wrapper = useContext(LexicalWrapperContext);
   const editor = () => wrapper?.editor;
   const selection = () => wrapper?.selection;
+  const portalMount = isInBlock() ? blockElementSignal.get : () => undefined;
 
   const [open, setOpen] = createSignal(false);
   const [menuOpen, setMenuOpen] = createSignal(false);
@@ -135,7 +137,7 @@ export function PasteNode(props: PasteNodeDecoratorProps) {
               <Dropdown.Trigger size="icon-sm" variant="ghost">
                 <DotsThree />
               </Dropdown.Trigger>
-              <Dropdown.Content mount={blockElementSignal.get()}>
+              <Dropdown.Content mount={portalMount()}>
                 <Dropdown.Group>
                   <Dropdown.Item onSelect={copyText}>
                     <Copy class="size-4 shrink-0" />
@@ -190,7 +192,7 @@ export function PasteNode(props: PasteNodeDecoratorProps) {
       >
         <MobileDrawer side="bottom" open={open()} onOpenChange={setOpen}>
           <MobileDrawer.Portal>
-            <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
+            <MobileDrawer.Overlay />
             <MobileDrawer.Content aria-label={originTitle()}>
               <MobileDrawer.Handle />
               <div class="flex items-center justify-between px-4 pb-2 text-xs text-ink-muted shrink-0">

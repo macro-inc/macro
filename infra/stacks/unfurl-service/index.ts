@@ -48,10 +48,8 @@ const unfurlService = new UnfurlService(`unfurl-service-${stack}`, {
       value: stack,
     },
   ],
-  isPrivate: false,
   tags,
 });
 
 export const unfurlServiceSgId = unfurlService.serviceSg.id;
-export const unfurlServiceAlbSgId = unfurlService.serviceAlbSg.id;
 export const unfurlServiceUrl = getServiceUrl(ServiceUrl.UNFURL_SERVICE_URL);

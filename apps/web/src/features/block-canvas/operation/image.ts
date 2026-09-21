@@ -1,21 +1,17 @@
-import { createBlockSignal } from '@core/block';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { copiedItem } from '@core/state/clipboard';
 import { unwrap } from 'solid-js/store';
 import { OPERATION_LOGGING, Tools } from '../constants';
+import { useCanvasDocument } from '../context/canvas-document-context';
 import type { ImageNode, VideoNode } from '../model/CanvasModel';
 import { useCanvasHistory } from '../signal/canvasHistory';
 import { useToolManager } from '../signal/toolManager';
-import { highestOrderSignal, useCanvasNodes } from '../store/canvasData';
+import { useCanvasNodes } from '../store/canvasData';
 import { useRenderState } from '../store/RenderState';
 import { sharedInstance } from '../util/sharedInstance';
 import type { Vector2 } from '../util/vector2';
 import type { Operation, Operator } from './operation';
 
-export const selectedImageSignal = createBlockSignal<{
-  type: 'image' | 'video';
-  id: string;
-}>();
 const minSize = 1;
 
 function _log(message: string) {
@@ -29,19 +25,17 @@ export type ImageOperation = Operation & {
   node: ImageNode | VideoNode;
 };
 
-export const currentImageOperationSignal = createBlockSignal<ImageOperation>();
-
 export const useImage = sharedInstance((): Operator => {
+  const state = useCanvasDocument().state.signals;
   const { pageToCanvas } = useRenderState();
   const { createNode, updateNode, ...nodes } = useCanvasNodes();
   const [currentImageOperation, setCurrentImageOperation] =
-    currentImageOperationSignal;
+    useCanvasDocument().state.signals.currentImageOperation;
   const { setSelectedTool } = useToolManager();
   const history = useCanvasHistory();
-  const highestOrder = highestOrderSignal.get;
+  const [highestOrder] = state.highestOrder;
 
-  const selectedImage = selectedImageSignal.get;
-  const setSelectedImage = selectedImageSignal.set;
+  const [selectedImage, setSelectedImage] = state.selectedImage;
 
   function _applyMousePos(mousePos: Vector2) {
     const op = currentImageOperation();

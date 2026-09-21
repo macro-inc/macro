@@ -1,4 +1,5 @@
 use ::activity::Action;
+use ::activity::Actor;
 use ::activity::EntityType;
 use chrono::Utc;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -94,6 +95,7 @@ fn created_maps_to_created_by_the_actor() {
     let event = envelope(ChannelTopicEvent::Created(ChannelCreatedMetadata {
         channel_id: CHANNEL_ID,
         actor: Actor::new_from_user(user("macro|owner@example.com")),
+        on_behalf_of: None,
         channel_type: ChannelType::Public,
         channel_name: Some("general".to_string()),
         participant_user_ids: vec![user("macro|owner@example.com")],
@@ -103,5 +105,28 @@ fn created_maps_to_created_by_the_actor() {
         panic!("expected activities");
     };
     assert_eq!(activities[0].action, Action::Created);
+    assert_eq!(activities[0].actor.as_ref(), "macro|owner@example.com");
+    assert_eq!(activities[0].subject_id, "macro|owner@example.com");
+}
+
+#[test]
+fn created_by_system_stays_on_the_owner_feed() {
+    let event = envelope(ChannelTopicEvent::Created(ChannelCreatedMetadata {
+        channel_id: CHANNEL_ID,
+        actor: Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID),
+        on_behalf_of: Some(user("macro|owner@example.com")),
+        channel_type: ChannelType::Private,
+        channel_name: Some("Macro Support x owner".to_string()),
+        participant_user_ids: vec![user("macro|owner@example.com")],
+    }));
+
+    let Ingest::Insert(activities) = event.event.ingest(event.event_id) else {
+        panic!("expected activities");
+    };
+    assert_eq!(activities[0].action, Action::Created);
+    assert_eq!(
+        activities[0].actor.as_ref(),
+        Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID).as_ref()
+    );
     assert_eq!(activities[0].subject_id, "macro|owner@example.com");
 }

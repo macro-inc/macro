@@ -1,3 +1,4 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ThemeV3 } from '../types/themeTypes';
 
 export const macroLightTheme = {
@@ -36,7 +37,6 @@ export const macroLightTheme = {
     pink: 'oklch(65.6% 0.241 354.308)',
     surface: 'var(--layer-surface)',
     inset: 'var(--layer-inset)',
-    lift: 'var(--layer-lift)',
     ink: 'var(--color-content-0)',
     'ink-muted': 'var(--color-content-1)',
     'ink-subtle': 'var(--color-content-2)',
@@ -46,20 +46,24 @@ export const macroLightTheme = {
     'link-hover': 'var(--color-accent)',
     'link-visited': 'var(--color-accent)',
     page: 'var(--color-surface-0)',
-    panel: 'var(--color-surface-1)',
+    // Use pure white on mobile without reversing the surface ramp.
+    panel: isTouchDevice()
+      ? 'var(--color-surface-4)'
+      : 'var(--color-surface-1)',
     dialog: 'var(--color-surface-3)',
     menu: 'var(--color-surface-3)',
     tooltip: 'var(--color-surface-2)',
     toast: 'var(--color-surface-2)',
     input: 'transparent',
-    'input-focus': 'var(--color-lift)',
-    message: 'var(--color-lift)',
+    'input-focus': 'var(--color-surface-1)',
+    message: 'var(--color-surface-1)',
     hover: 'color-mix(in oklch, var(--color-content-0) 3%, transparent)',
     active: 'color-mix(in oklch, var(--color-content-0) 6%, transparent)',
     selected: 'color-mix(in oklch, var(--color-accent) 8%, transparent)',
     success: 'var(--color-green)',
     warning: 'var(--color-yellow)',
     failure: 'var(--color-red)',
-    chrome: 'var(--color-surface-4)',
+    chrome:
+      'color-mix(in oklch, var(--color-surface-3) 98%, var(--color-content-0))',
   },
 } satisfies ThemeV3;

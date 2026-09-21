@@ -29,10 +29,15 @@ export interface BaseListEntityProps<E extends EntityData = EntityData> {
   highlighted?: boolean;
   hovered?: boolean;
   hideContentHits?: boolean;
+  /** Opt-in by the data-owning view; keep nonessential setup off initial render. */
+  deferInteractions?: boolean;
   /** Hide the multi-select checkbox (e.g. read-only embeds outside soup). */
   hideCheckbox?: boolean;
   onChecked?: (checked: boolean, shiftKey: boolean) => void;
   onMouseMove?: () => void;
+  showCalendarAttendance?: boolean;
+  /** Lets standalone collections own their tag-filter navigation. */
+  onFilterByTag?: (optionId: string) => void;
   onProjectClick?: (
     entity: ProjectEntity,
     e: PointerEvent | MouseEvent
@@ -61,6 +66,8 @@ export interface LayoutProps {
   streamState?: StreamEvent;
   setSnippetContainerRef: (el: HTMLElement) => void;
   chars: number;
+  showCalendarAttendance?: boolean;
+  onFilterByTag?: (optionId: string) => void;
   onProjectClick?: (
     entity: ProjectEntity,
     e: PointerEvent | MouseEvent

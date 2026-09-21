@@ -2,8 +2,15 @@ import type { MagicChipStatus } from '@macro-inc/lexical-core';
 import type {
   FoldedMessage,
   MessagePart,
+  PendingInteraction,
+  ToolName,
 } from '@service-agent-fold/generated/types';
 import { match } from 'ts-pattern';
+
+/** The tool's own name, without its MCP server namespace. */
+function toolLabel(name: ToolName): string {
+  return name.kind === 'mcp' ? name.tool : name.name;
+}
 
 export type MagicChipActivity = {
   label: string;
@@ -11,20 +18,52 @@ export type MagicChipActivity = {
   busy: boolean;
 };
 
+/** Who is answering, for the chip's header: the persona and its model. */
+export type MagicChipHeader = {
+  /** The persona's name, e.g. `Macro Agent`. */
+  agent?: string;
+  /** The model's display name, when the runtime has reported one. */
+  model?: string;
+  /** The pull request the session's work is on, once the runtime reports one. */
+  pullRequestUrl?: string;
+};
+
+/**
+ * A permission or question the agent is waiting on: the live interaction
+ * from the session's metadata, and whether this viewer may answer (edit
+ * access on the session) or is watching someone else be asked.
+ */
+export type MagicChipInteraction = {
+  request: PendingInteraction;
+  answering: boolean;
+  action?: string;
+  detail?: string;
+  canAnswer: boolean;
+};
+
 /**
  * The one state the chip renders.
  *
- * Three, in the order a turn passes through them: an activity line while the
- * agent works with nothing to show, the answer as it is written with the
- * activity line still under it, and the answer alone once the turn ends.
+ * Four: an activity line while the agent works with nothing to show, the
+ * agent's latest passage as it is written with the activity alongside, a
+ * question the agent has stopped to ask (with that passage beside it), and
+ * the final passage alone once the turn ends. `markdown` is always the
+ * turn's latest text chunk, never the whole turn.
  */
 export type MagicChipPresentation =
   | { kind: 'working'; activity: MagicChipActivity }
   | { kind: 'answering'; markdown: string; activity: MagicChipActivity }
+  | { kind: 'asking'; markdown: string; asking: MagicChipInteraction }
   | { kind: 'settled'; markdown: string };
 
 export type MagicChipPresentationInput = {
   persistedStatus: MagicChipStatus;
+  /**
+   * The interaction the session is blocked on, when it belongs to this chip's
+   * turn. The chip is a turn's surface, so a request made in a later turn
+   * is that turn's chip's to show.
+   */
+  asking?: MagicChipInteraction;
   /**
    * Freshest lifecycle event seen on the live log stream, as its wire string.
    * A stopgap for {@link persistedStatus} being a snapshot from when the chip
@@ -41,6 +80,7 @@ function toolActivity(
 ): MagicChipActivity {
   const busy = part.status === 'pending' || part.status === 'running';
   const failed = part.status === 'failed';
+  const label = toolLabel(part.name);
   return match(part.detail)
     .with({ kind: 'terminal' }, (detail) => ({
       label: failed
@@ -48,12 +88,12 @@ function toolActivity(
         : busy
           ? 'Running command'
           : 'Command finished',
-      detail: detail.command ?? part.label,
+      detail: detail.command ?? label,
       busy,
     }))
     .with({ kind: 'edit' }, (detail) => ({
       label: failed ? 'Edit failed' : busy ? 'Editing files' : 'Files updated',
-      detail: detail.diffs.at(-1)?.path ?? part.label,
+      detail: detail.diffs.at(-1)?.path ?? label,
       busy,
     }))
     .with({ kind: 'read' }, (detail) => ({
@@ -62,7 +102,7 @@ function toolActivity(
         : busy
           ? 'Reading files'
           : 'Finished reading',
-      detail: detail.paths.at(-1) ?? part.label,
+      detail: detail.paths.at(-1) ?? label,
       busy,
     }))
     .with(
@@ -70,72 +110,140 @@ function toolActivity(
       { kind: 'move' },
       { kind: 'search' },
       (detail) => ({
-        label: failed ? `${part.label} failed` : part.label,
-        detail: detail.paths.at(-1) ?? part.label,
+        label: failed ? `${label} failed` : label,
+        detail: detail.paths.at(-1) ?? label,
         busy,
       })
     )
     .with({ kind: 'fetch' }, { kind: 'think' }, { kind: 'other' }, () => ({
-      label: failed ? `${part.label} failed` : part.label,
+      label: failed ? `${label} failed` : label,
       busy,
     }))
+    .with({ kind: 'macro' }, () => ({
+      label: failed ? `${label} failed` : busy ? `Using ${label}` : label,
+      busy,
+    }))
+    .with({ kind: 'user_tool' }, (detail) => ({
+      label:
+        detail.outcome.kind === 'pending'
+          ? `${label} drafted`
+          : `${label} ${detail.outcome.kind.replace('_', ' ')}`,
+      busy: false,
+    }))
+    .with({ kind: 'subagent' }, (detail) => {
+      // What the subagent is doing right now says more than that it exists.
+      const child = detail.children.findLast(
+        (child) =>
+          child.kind === 'tool_use' &&
+          (child.status === 'pending' || child.status === 'running')
+      );
+      if (busy && child?.kind === 'tool_use') return toolActivity(child);
+      return {
+        label: failed
+          ? 'Subagent failed'
+          : busy
+            ? 'Delegating work'
+            : 'Subagent finished',
+        detail: detail.title,
+        busy,
+      };
+    })
     .exhaustive();
 }
 
 function partActivity(part: MessagePart): MagicChipActivity {
-  return match(part)
-    .with({ kind: 'text' }, () => ({ label: 'Writing response', busy: false }))
-    .with({ kind: 'thought' }, ({ text }) => ({
-      label: 'Thinking',
-      detail: text.trim() || undefined,
-      busy: true,
-    }))
-    .with({ kind: 'tool_use' }, toolActivity)
-    .with({ kind: 'permission', outcome: { kind: 'cancelled' } }, () => ({
-      label: 'Permission cancelled',
-      busy: false,
-    }))
-    .with({ kind: 'permission', outcome: { kind: 'selected' } }, () => ({
-      label: 'Resuming work',
-      busy: true,
-    }))
-    .with({ kind: 'permission', outcome: { kind: 'pending' } }, () => ({
-      label: 'Permission needed',
-      busy: false,
-    }))
-    .with({ kind: 'permission', outcome: { kind: 'errored' } }, () => ({
-      label: 'Permission failed',
-      busy: false,
-    }))
-    .with({ kind: 'permission', outcome: { kind: 'unrecognized' } }, () => ({
-      label: 'Permission unavailable',
-      busy: false,
-    }))
-    .with({ kind: 'control', control: { kind: 'set_model' } }, (part) => ({
-      label: 'Model changed',
-      detail: part.control.model,
-      busy: false,
-    }))
-    .with({ kind: 'control', control: { kind: 'compact' } }, () => ({
-      label: 'Context compacted',
-      busy: false,
-    }))
-    .with({ kind: 'control', control: { kind: 'stop' } }, () => ({
-      label: 'Stop requested',
-      busy: false,
-    }))
-    .with({ kind: 'plan' }, ({ entries }) => {
-      const completed = entries.filter(
-        (entry) => entry.status === 'completed'
-      ).length;
-      const current = entries.find((entry) => entry.status === 'in_progress');
-      return {
-        label: `Todos ${completed}/${entries.length}`,
-        detail: current?.content,
-        busy: completed < entries.length,
-      };
-    })
-    .exhaustive();
+  return (
+    match(part)
+      .with({ kind: 'text' }, () => ({
+        label: 'Writing response',
+        busy: false,
+      }))
+      // A user's part, never an agent's; here only so the match stays total.
+      .with({ kind: 'attachment' }, ({ name }) => ({
+        label: 'File attached',
+        detail: name,
+        busy: false,
+      }))
+      .with({ kind: 'thought' }, ({ text }) => ({
+        label: 'Thinking',
+        detail: text.trim() || undefined,
+        busy: true,
+      }))
+      .with({ kind: 'tool_use' }, toolActivity)
+      .with({ kind: 'permission', outcome: { kind: 'cancelled' } }, () => ({
+        label: 'Permission cancelled',
+        busy: false,
+      }))
+      .with({ kind: 'permission', outcome: { kind: 'selected' } }, () => ({
+        label: 'Resuming work',
+        busy: true,
+      }))
+      .with({ kind: 'permission', outcome: { kind: 'pending' } }, () => ({
+        label: 'Permission needed',
+        busy: false,
+      }))
+      .with({ kind: 'permission', outcome: { kind: 'errored' } }, () => ({
+        label: 'Permission failed',
+        busy: false,
+      }))
+      .with({ kind: 'permission', outcome: { kind: 'unrecognized' } }, () => ({
+        label: 'Permission unavailable',
+        busy: false,
+      }))
+      .with({ kind: 'control', control: { kind: 'set_model' } }, (part) => ({
+        label: 'Model changed',
+        detail: part.control.model,
+        busy: false,
+      }))
+      .with({ kind: 'control', control: { kind: 'compact' } }, () => ({
+        label: 'Context compacted',
+        busy: false,
+      }))
+      .with({ kind: 'control', control: { kind: 'stop' } }, () => ({
+        label: 'Stop requested',
+        busy: false,
+      }))
+      .with({ kind: 'elicitation', outcome: { kind: 'pending' } }, () => ({
+        label: 'Waiting for your input',
+        busy: false,
+      }))
+      .with({ kind: 'elicitation', outcome: { kind: 'accepted' } }, () => ({
+        label: 'Resuming work',
+        busy: true,
+      }))
+      .with({ kind: 'elicitation', outcome: { kind: 'completed' } }, () => ({
+        label: 'Resuming work',
+        busy: true,
+      }))
+      .with({ kind: 'elicitation', outcome: { kind: 'declined' } }, () => ({
+        label: 'Question declined',
+        busy: true,
+      }))
+      .with({ kind: 'elicitation', outcome: { kind: 'cancelled' } }, () => ({
+        label: 'Question cancelled',
+        busy: false,
+      }))
+      .with({ kind: 'elicitation', outcome: { kind: 'errored' } }, () => ({
+        label: 'Question refused',
+        busy: false,
+      }))
+      .with({ kind: 'elicitation', outcome: { kind: 'unrecognized' } }, () => ({
+        label: 'Question answered',
+        busy: true,
+      }))
+      .with({ kind: 'plan' }, ({ entries }) => {
+        const completed = entries.filter(
+          (entry) => entry.status === 'completed'
+        ).length;
+        const current = entries.find((entry) => entry.status === 'in_progress');
+        return {
+          label: `Todos ${completed}/${entries.length}`,
+          detail: current?.content,
+          busy: completed < entries.length,
+        };
+      })
+      .exhaustive()
+  );
 }
 
 /** How the turn ended, when it has — every ending but a clean answer. */
@@ -166,10 +274,12 @@ function turnEndedActivity(
         busy: false,
       }))
       .with({ kind: 'other' }, ({ reason }) => ({ label: reason, busy: false }))
-      // The runtime errored the prompt. The chip has one line, so it says that
-      // much and leaves the runtime's message to the session itself.
-      .with({ kind: 'failed' }, () => ({
+      // The runtime errored the prompt. The label says that much; the
+      // runtime's own message goes in the detail line, because some of these
+      // are the user's to act on — a repository Cursor cannot reach, say.
+      .with({ kind: 'failed' }, ({ message }) => ({
         label: "Agent couldn't answer",
+        detail: message,
         busy: false,
       }))
       .exhaustive()
@@ -178,8 +288,8 @@ function turnEndedActivity(
 
 /**
  * What the agent is doing right now, from the parts of an open turn: an
- * unanswered permission request outranks a running tool, which outranks
- * whatever arrived last.
+ * unanswered permission request or question outranks a running tool, which
+ * outranks whatever arrived last.
  */
 function turnInFlightActivity(
   response: FoldedMessage | undefined
@@ -187,10 +297,11 @@ function turnInFlightActivity(
   if (!response) return undefined;
   const blocked = response.parts.findLast(
     (part) =>
-      part.kind === 'permission' &&
-      (part.outcome.kind === 'pending' ||
-        part.outcome.kind === 'errored' ||
-        part.outcome.kind === 'unrecognized')
+      (part.kind === 'permission' &&
+        (part.outcome.kind === 'pending' ||
+          part.outcome.kind === 'errored' ||
+          part.outcome.kind === 'unrecognized')) ||
+      (part.kind === 'elicitation' && part.outcome.kind === 'pending')
   );
   const runningTool = response.parts.findLast(
     (part) =>
@@ -235,27 +346,53 @@ function liveEventActivity(
   return statusActivity(name);
 }
 
-function answerMarkdown(response: FoldedMessage | undefined): string {
+/**
+ * The agent's latest prose: the last text part of the turn, which the fold
+ * appends into as chunks land. A passage written before a tool ran gives way
+ * to what the agent says after it, and when the turn ends cleanly the final
+ * passage is what stays.
+ */
+function latestChunk(response: FoldedMessage | undefined): string {
   return (
-    response?.parts
-      .filter(
-        (part): part is Extract<MessagePart, { kind: 'text' }> =>
-          part.kind === 'text' && Boolean(part.text.trim())
-      )
-      .map((part) => part.text)
-      .join('\n\n') ?? ''
+    response?.parts.findLast(
+      (part): part is Extract<MessagePart, { kind: 'text' }> =>
+        part.kind === 'text' && Boolean(part.text.trim())
+    )?.text ?? ''
   );
+}
+
+/** The one line the chip's header reads for the turn. */
+export function presentationStatus(
+  presentation: MagicChipPresentation
+): MagicChipActivity {
+  return match(presentation)
+    .with({ kind: 'working' }, { kind: 'answering' }, (p) => p.activity)
+    .with({ kind: 'asking' }, ({ asking }) => ({
+      label: asking.answering
+        ? 'Sending answer'
+        : asking.canAnswer
+          ? 'Waiting for you'
+          : 'Waiting for an editor',
+      busy: false,
+    }))
+    .with({ kind: 'settled' }, () => ({ label: 'Done', busy: false }))
+    .exhaustive();
 }
 
 /** Project fold and lifecycle facts into the one state the view renders. */
 export function deriveMagicChipPresentation(
   input: MagicChipPresentationInput
 ): MagicChipPresentation {
-  const { response, prompt, latestEvent, persistedStatus } = input;
+  const { response, prompt, latestEvent, persistedStatus, asking } = input;
 
-  const markdown = answerMarkdown(response);
+  const markdown = latestChunk(response);
   if (response?.stop?.kind === 'end_turn' && markdown) {
     return { kind: 'settled', markdown };
+  }
+  // A question the agent is waiting on outranks whatever else the turn is
+  // doing: nothing moves until it is answered.
+  if (asking) {
+    return { kind: 'asking', markdown, asking };
   }
 
   // Best available answer first: how the turn ended, then what it is doing,

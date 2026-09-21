@@ -9,11 +9,13 @@ import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import {
   createSoupState,
   type GroupMeta,
+  type SortConfig,
   type SoupEntity,
   type SoupRow,
   type SoupState,
 } from '@app/features/next-soup/create-soup-state';
 import type { FilterContext } from '@app/features/next-soup/filters/configs/';
+import { emailItemMatchesImportance } from '@app/features/next-soup/filters/email-signal';
 import {
   compileToAst,
   NIL_UUID,
@@ -39,6 +41,7 @@ import {
   INBOX_FILTER_ENTRY_KEY,
   registerInboxFilterSplit,
 } from '@app/features/next-soup/soup-view/inbox-filter-controllers';
+import { SORT_CONFIGS } from '@app/features/next-soup/soup-view/sort-options';
 import { useSoupFilterPersistence } from '@app/features/next-soup/use-soup-filter-persistence';
 import { deduplicateEntities } from '@app/features/next-soup/utils';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
@@ -50,9 +53,10 @@ import { useEntryState } from '@components/app/split-layout/entry-state';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
   ENABLE_FEATURED_SEARCH_RESULTS,
-  ENABLE_REMINDERS,
-  ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG,
-  ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
+  enableInboxNotifiedSort,
+  enableReminders,
+  enableSupportedSoupForeignEntities,
+  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -79,7 +83,10 @@ import type {
 import type { SoupParams } from '@queries/soup/items';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { soupKeys } from '@queries/soup/keys';
-import { mapApiSoupItemToEntity } from '@queries/soup/transform-utils';
+import {
+  isDisplayableSoupItem,
+  mapApiSoupItemToEntity,
+} from '@queries/soup/transform-utils';
 import { useIsTeamAdmin } from '@queries/team/teams';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { makePersisted } from '@solid-primitives/storage';
@@ -99,9 +106,17 @@ import {
   useContext,
 } from 'solid-js';
 import { unwrap } from 'solid-js/store';
+import {
+  applyDocumentTabScope,
+  withDocumentTabItemScope,
+} from './document-tab-scope';
 
 type DataSource<T> = {
   data: Accessor<T[]>;
+  /** Results are limited to synchronized email metadata. */
+  cachedMail?: Accessor<boolean>;
+  /** Only the active GraphQL source opts rows into deferred interaction setup. */
+  deferRowInteractions?: Accessor<boolean>;
   error: Accessor<Error | null>;
   /** True when the active request has local or network data, including an
    * intentionally empty result. */
@@ -116,7 +131,7 @@ type DataSource<T> = {
   isPlaceholderData: Accessor<boolean>;
   isFetchingNextPage: Accessor<boolean>;
   hasNextPage: Accessor<boolean>;
-  fetchNextPage: VoidFunction;
+  fetchNextPage: () => Promise<void>;
   /**
    * Full refresh (e.g. mobile pull-to-refresh): starts invalidation of every
    * soup query plus notification state, then resolves once the refetch of the
@@ -128,6 +143,10 @@ type DataSource<T> = {
 };
 
 type SoupViewInitializeOptions = {
+  /** Composed views can keep their own state without overwriting legacy tab preferences. */
+  persistFilters?: boolean;
+  /** A composed view may own its ordering independently of legacy tabs. */
+  sortMethod?: Accessor<NonNullable<SoupParams['sort_method']> | undefined>;
   initialQuery?: Query;
   initialClientFilters?: SetPredicatesInput<string>;
   initialSearchText?: string;
@@ -179,6 +198,9 @@ interface SoupViewContextValues {
   setInboxFilter: Setter<string[] | undefined>;
   activeTab: Accessor<string | undefined>;
   setActiveTab: Setter<string | undefined>;
+  /** The sort the rows are rendered in: the active tab's forced sort when
+   * it has one the client can reproduce, else the sort state. */
+  clientSort: Accessor<SortConfig<SoupEntity>[]>;
   getPersistedActiveTab: (view: ListView) => string | undefined;
   viewMode: Accessor<SoupViewMode>;
   setViewMode: Setter<SoupViewMode>;
@@ -261,7 +283,11 @@ const resolveTabId = (
   // A remembered tab can also be flag-gated out of the tab bar (see
   // `useVisibleViewTabs`): restoring the inbox onto Reminders with the flag
   // off would leave a hidden tab active, still querying reminders.
-  if (view === 'inbox' && remembered === 'reminders' && !ENABLE_REMINDERS()) {
+  if (
+    view === 'inbox' &&
+    remembered === 'reminders' &&
+    !isFeatureEnabled(enableReminders)
+  ) {
     return config.default;
   }
   return remembered;
@@ -275,7 +301,7 @@ const persistedPredicatesFor = (
 
 type ApiSortMethod = Exclude<
   NonNullable<SoupParams['sort_method']>,
-  'frecency' | 'touched_by_me'
+  'frecency' | 'touched_by_me' | 'notified_at'
 >;
 const VALID_API_SORT_METHODS: ApiSortMethod[] = [
   'viewed_at',
@@ -306,10 +332,14 @@ export const SoupViewContextProvider: FlowComponent<
     disableLocalSearch: props.disableLocalSearch,
     additionalEntities: props.additionalEntities,
     itemMembershipFilter: props.itemMembershipFilter,
+    sortMethod: props.sortMethod,
+    persistFilters: props.persistFilters,
   });
 
   const queryClient = useQueryClient();
-  const [filterPersistenceEnabled] = useSoupFilterPersistence();
+  const [persistFilterPreference] = useSoupFilterPersistence();
+  const filterPersistenceEnabled = () =>
+    config().persistFilters !== false && persistFilterPreference();
 
   const panel = useSplitPanelOrThrow();
 
@@ -607,7 +637,7 @@ export const SoupViewContextProvider: FlowComponent<
   // List/board display mode — per-entry state so back/forward restores the
   // mode the user left each entry with.
   const [viewMode, setViewMode] = useEntryState<SoupViewMode>('soup.viewMode', {
-    default: 'board',
+    default: isTouchDevice() ? 'list' : 'board',
   });
   const [readFilter, setReadFilter] = makeFlaggedPersisted(
     useEntryState<ReadFilter>('soup.readFilter', { default: 'all' }),
@@ -663,9 +693,27 @@ export const SoupViewContextProvider: FlowComponent<
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
   const isTeamAdmin = useIsTeamAdmin();
+  const notifiedSortFF = useFeatureFlag(enableInboxNotifiedSort);
 
   // Sits below `activeTab`/`userId` because the page direction comes from the
   // active tab's preset, which some views resolve against user context.
+  const activePreset = createMemo(() => {
+    const view = activeListView();
+    return view
+      ? getViewPreset(view, activeTab(), {
+          userId: userId(),
+          isTeamAdmin: isTeamAdmin(),
+        })
+      : undefined;
+  });
+
+  const presetSortMethod = () => {
+    const method = config().sortMethod?.() ?? activePreset()?.sortMethod;
+    return method === 'notified_at' && !notifiedSortFF().enabled
+      ? 'updated_at'
+      : method;
+  };
+
   const soupParams = createMemo(() => {
     const sortId = soup.sort.active()[0]?.id ?? 'updated_at';
 
@@ -680,21 +728,28 @@ export const SoupViewContextProvider: FlowComponent<
     // user's own touches — not to the sort method state, so the preset owns
     // them. Omitted when absent so the server default (desc) applies and
     // the query keys of every existing view stay byte-identical.
-    const preset = view
-      ? getViewPreset(view, activeTab(), {
-          userId: userId(),
-          isTeamAdmin: isTeamAdmin(),
-        })
-      : undefined;
-    const sortDirection = preset?.sortDirection;
+    const sortDirection = activePreset()?.sortDirection;
 
     return {
       // Mail views use a smaller page size
       limit: view === 'mail' ? 30 : 100,
-      sort_method: preset?.sortMethod ?? sortMethod,
+      sort_method: presetSortMethod() ?? sortMethod,
       ...(sortDirection ? { sort_direction: sortDirection } : {}),
     };
   });
+
+  // A tab whose preset forces the notified server sort pins the client sort
+  // to match, so the rows keep the page's order and the date headers bucket
+  // on the same stamp; every other tab sorts by the sort state, so the
+  // inbox's All and Reminders tabs stay on update recency even when a row
+  // carries a notification stamp from a Signal page or a live delivery.
+  const clientSort = createMemo((): SortConfig<SoupEntity>[] =>
+    presetSortMethod() === 'notified_at'
+      ? [SORT_CONFIGS.notified_at]
+      : config().sortMethod?.() === 'touched_by_me'
+        ? []
+        : soup.sort.active()
+  );
 
   // Active deal-stage set (team-customized when present). Drives the
   // Customers view's stage grouping, stage filter and group labels.
@@ -803,6 +858,9 @@ export const SoupViewContextProvider: FlowComponent<
     let next = applyInboxFilter(state);
     next = applyInboxThreadFilter(next);
     next = applyInboxReadFilter(next);
+    if (activeListView() === 'documents') {
+      next = applyDocumentTabScope(next, activeTab(), userId());
+    }
     return next;
   };
 
@@ -894,10 +952,7 @@ export const SoupViewContextProvider: FlowComponent<
   };
 
   const showSupportedForeignEntitiesFF = useFeatureFlag(
-    ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG,
-    {
-      enabledOverride: ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
-    }
+    enableSupportedSoupForeignEntities
   );
   // Create filter context for context-aware filter predicates
   const getFilterContext = (): FilterContext => ({
@@ -907,6 +962,7 @@ export const SoupViewContextProvider: FlowComponent<
     owners: ownerFilter(),
     stages: stageFilter(),
     resolveCompanyStage,
+    companyStageLabel: dealStages.stageLabel,
   });
 
   // This is temporary while we are experimenting/handling
@@ -931,6 +987,7 @@ export const SoupViewContextProvider: FlowComponent<
     view: ListView | undefined
   ): boolean => {
     if (!soupItemMatchesListView(item, view)) return false;
+
     if (
       !soupItemMatchesTagFilter(
         item,
@@ -944,6 +1001,7 @@ export const SoupViewContextProvider: FlowComponent<
     const membershipFilter = config().itemMembershipFilter;
     if (membershipFilter && !membershipFilter(item)) return false;
 
+    if (!isDisplayableSoupItem(item)) return false;
     const entity = mapApiSoupItemToEntity(item) as SoupEntity;
     return (
       soup.predicates.test(entity, getFilterContext()) &&
@@ -961,12 +1019,25 @@ export const SoupViewContextProvider: FlowComponent<
     }),
     () => {
       const view = activeListView();
+      // The clientFilters predicates can't separate signal from noise emails
+      // (the email branch defers to the server), so importance tabs gate
+      // websocket inserts item-side or the insert lands in both tabs. The
+      // importance is captured from the same filter state the query key
+      // compiles from, so a cached tab keeps gating by its own membership
+      // after a tab switch.
+      const emailImportance = queryFilters.state.include.emailImportance;
       return {
         enabled: enabled() && !search.isSearching(),
         showSupportedForeignEntities: showSupportedForeignEntitiesFF().enabled,
         onBeforeGraphqlRefresh: () => groupQueries.resetToInitialPage(),
         meta: {
-          itemFilter: (item) => soupItemMatchesActiveFilters(item, view),
+          itemFilter: withDocumentTabItemScope(
+            view === 'documents' ? activeTab() : undefined,
+            userId(),
+            (item) => soupItemMatchesActiveFilters(item, view)
+          ),
+          insertFilter: (item) =>
+            emailItemMatchesImportance(item, emailImportance),
         },
       };
     }
@@ -991,9 +1062,7 @@ export const SoupViewContextProvider: FlowComponent<
     isFetchingNextPage: () => itemsQuery.isFetchingNextPage,
     isEnabled: () => itemsQuery.isEnabled,
     hasNextPage: () => itemsQuery.hasNextPage,
-    fetchNextPage: () => {
-      void itemsQuery.fetchNextPage();
-    },
+    fetchNextPage: () => itemsQuery.fetchNextPage(),
   };
 
   const items = createMemo<SoupEntity[]>(
@@ -1101,7 +1170,7 @@ export const SoupViewContextProvider: FlowComponent<
 
     transformed = deduplicateEntities(next);
 
-    const sorts = soup.sort.active();
+    const sorts = clientSort();
     if (sorts.length > 0 && !search.isSearching()) {
       transformed.sort((a, b) => {
         for (const sort of sorts) {
@@ -1151,10 +1220,17 @@ export const SoupViewContextProvider: FlowComponent<
     transport: () => itemsQuery.transport,
     queryOptions: () => {
       const view = activeListView();
+      const emailImportance = queryFilters.state.include.emailImportance;
       return {
         enabled: enabled() && !search.isSearching(),
         meta: {
-          itemFilter: (item) => soupItemMatchesActiveFilters(item, view),
+          itemFilter: withDocumentTabItemScope(
+            view === 'documents' ? activeTab() : undefined,
+            userId(),
+            (item) => soupItemMatchesActiveFilters(item, view)
+          ),
+          insertFilter: (item) =>
+            emailItemMatchesImportance(item, emailImportance),
         },
       };
     },
@@ -1331,9 +1407,19 @@ export const SoupViewContextProvider: FlowComponent<
       >();
       const order: string[] = [];
       const now = new Date();
+      // Under the inbox's notified sort a row belongs to the day it was last
+      // notified about, not the day its content last changed — otherwise a
+      // fresh comment on a stale task sits under "Yesterday" while sorting
+      // as today's.
+      const bucketOnNotification =
+        clientSort()[0]?.id === SORT_CONFIGS.notified_at.id;
 
       for (const entity of all) {
-        const ts = entity.sortTs ?? entity.updatedAt ?? entity.createdAt;
+        const ts =
+          (bucketOnNotification ? entity.notifiedAt : undefined) ??
+          entity.sortTs ??
+          entity.updatedAt ??
+          entity.createdAt;
         const bucket = dateBucket(ts, now);
         let group = buckets.get(bucket.key);
 
@@ -1455,6 +1541,10 @@ export const SoupViewContextProvider: FlowComponent<
     initialize,
     source: {
       data: entities,
+      deferRowInteractions: () =>
+        !search.isSearching() && itemsQuery.transport === 'graphql',
+      cachedMail: () =>
+        !search.isSearching() && itemsQueryData()?.cachedMail === true,
       error: () =>
         search.isSearching() ? searchSourceError() : itemsSource.error(),
       hasData: () =>
@@ -1481,15 +1571,13 @@ export const SoupViewContextProvider: FlowComponent<
           (searchQuery.isEnabled && searchQuery.hasNextPage)
         );
       },
-      fetchNextPage: () => {
+      fetchNextPage: async () => {
         if (!enabled()) return;
 
-        if (itemsSource.isEnabled()) {
-          itemsSource.fetchNextPage();
-        }
-        if (searchQuery.isEnabled) {
-          searchQuery.fetchNextPage();
-        }
+        await Promise.all([
+          itemsSource.isEnabled() ? itemsSource.fetchNextPage() : undefined,
+          searchQuery.isEnabled ? searchQuery.fetchNextPage() : undefined,
+        ]);
       },
       refresh: async () => {
         if (!enabled()) return;
@@ -1547,6 +1635,7 @@ export const SoupViewContextProvider: FlowComponent<
     setInboxFilter,
     activeTab,
     setActiveTab,
+    clientSort,
     getPersistedActiveTab,
     viewMode,
     setViewMode,

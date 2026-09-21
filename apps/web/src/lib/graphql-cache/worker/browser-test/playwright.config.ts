@@ -9,6 +9,9 @@ export default defineConfig({
   testMatch: [
     'coordinator.browser.e2e.ts',
     'cache-wasm-packaging.browser.e2e.ts',
+    'notification-projection.browser.e2e.ts',
+    'mail-projection.browser.e2e.ts',
+    'mail-tabs.browser.e2e.ts',
   ],
   timeout: 90_000,
   fullyParallel: false,

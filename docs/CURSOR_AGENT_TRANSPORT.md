@@ -99,23 +99,37 @@ Behaves exactly like Macro Coder: mention it, a session opens, the bot posts the
 magic-chip announcement into the thread, the mention text becomes the first
 prompt, follow-up mentions in the thread route to the same session.
 
-Gated on key registration. A user with no Cursor key registered should not see
-`@cursor` in the mention autocomplete, and a mention that somehow arrives anyway
-must fail with a message telling them to register a key — never silently drop.
+The `enable-cursor-agents` frontend rollout flag controls the built-in `@cursor`
+mention (local override: `VITE_ENABLE_CURSOR_AGENTS`). Custom agents keep their
+channel visibility rules. Within the rollout,
+mentions are offered before key registration. A mention from someone with no
+key must be answered, never silently dropped or turned into a session that
+cannot spawn. The rollout flag is not a backend authorization boundary.
 
-**How the gate works.** The mention autocomplete reads
-`useChannelBotsQuery` → `GET /channels/{id}/bots`
-(`apps/web/src/lib/queries/channel/channel-bots.ts:31`). That endpoint already
-authenticates the caller, so the filter belongs there: omit `@cursor` from the
-response when the caller has no row in `cursor_api_key`. One `LEFT JOIN` on the
-authenticated user.
+**How the keyless mention is handled.** Before `open` creates anything, the
+domain asks `ContainerManager::preflight(kind, owner)`. The Cursor manager
+resolves the owner's configuration through `CursorApiKeys::resolve`: a missing
+key yields `SessionBlocker::CursorNotConnected`, while read/decryption failures
+remain errors. A successful preflight decrypts the key, and spawn resolves it
+again. Codex and Claude perform the same account preflight; providers requiring no user connection take the default `Ok(None)`.
+On a blocker the domain calls `SessionAnnouncer::decline` with a
+`DeclinedMention` and returns without a session row, an egress token, or an
+announcement. `MessageAnnouncer::decline` posts as the bot with the sender's
+current write access into the mention's
+thread. The lexical service composes the explanation and connection chip from real Lexical nodes. The Cursor chip payload is
+`{"appSlug":"cursor","name":"Cursor","target":"harness"}`. The frontend's
+`ConnectAppNode` reads `target: "harness"` as "open Settings → Harness, and
+show connected once this reader's own key status says so".
 
-No new endpoint, no new frontend query, no client-side join, and no window where
-the autocomplete offers a bot that would fail. The check mirrors
-`is_managed_bot` — a hardcoded `CURSOR_BOT_ID` comparison in the channel-bots
-read. When there is a second credential-gated bot, this becomes a
-`requires_user_credential` column on `bots` and the filter goes declarative; for
-one bot that is premature.
+The original design hid `@cursor` until a key existed. That is why nobody
+found it: discovery *is* the feature. Hiding was also never enforcement — a
+mention can arrive from a copied message or another client — so the refusal
+had to live in the harness regardless. The create composer keeps its own
+**Connect Cursor** button for the same reason; it never posts anything.
+
+`CursorContainerManager::spawn` still resolves the key and still fails with
+`HarnessError::CursorNotConnected` when it is gone: sessions opened from the
+create menu, and rows written before the preflight existed, reach it.
 
 Settings needs its own small surface regardless, for the connections tab:
 `GET /me/cursor-key` → `{ registered: bool }`, `PUT` to set, `DELETE` to revoke.
@@ -410,6 +424,90 @@ discipline above is the cost of admission.
 
 ## Lifecycle mapping
 
+### Durable Load History
+
+Cursor restores through ACP `session/load`, not `session/resume`. The implementation
+captures original prompts, complete SSE records, polling bodies, and local
+lifecycle decisions before translating them. Loading uses the same processing
+machine as live delivery and never executes a provider prompt or tool again.
+
+Every replayed ACP frame is appended to `agent_session_log`, including repeated
+conversation content. Only a matching, valid, successfully persisted load
+response selects a new effective-history window, starting at that connection's
+initialization. The selection is atomic with the response under the session's
+ownership fence. The raw audit history is retained; the product log endpoint
+reads the selected indexed range. Generic server and browser folds stage load
+updates separately and replace visible history only on success. Failed or
+incomplete loads preserve the committed conversation; resume does not replace it.
+
+Live recovery uses this same load path. Cursor captures foreign or interrupted
+runs into its native journal without publishing replacement conversation frames.
+Its notifier enqueues a typed, host-local reload requirement; the pipe adapter
+delivers that requirement before a queued prompt response. The session domain
+waits for the current prompt response, queues subsequent commands, and initiates
+`initialize` followed by standard `session/load`. Each successful load therefore
+has its own durable initialization boundary. There is no agent-initiated client
+request or separate history replacement protocol. The notification never waits
+for load while holding Cursor's writer gate; the load reply remains serialized
+with live writers through `ReplayGuard`.
+The requirement is consumed internally, never persisted as a user-facing status.
+Already-dispatched prompts may finish while reload is pending; subsequent commands
+wait at the host's handshake gate. Recovery observed while a load reply is queued
+causes another load before those commands are flushed. Standalone ACP clients
+without the host channel continue serving prompts and expose captured history on
+their next client-initiated load, without unsolicited replacement traffic.
+One pending-reload bit suppresses further background capture until load completes,
+without rejecting already-dispatched prompts. Recovery validates the journal before
+requesting load; unavailable original prompts retain the old visible history rather
+than demanding a replacement known to be incomplete.
+
+Existing sessions without a complete native journal require provider-history
+hydration. If Cursor no longer exposes enough history to reconstruct the
+conversation, load must fail explicitly rather than select an incomplete
+replacement. Operators should account for this retention limitation before
+rollout. The delivered-run watermark remains separate from journal capture
+progress, and local journal sequence numbers are not remote SSE resume tokens.
+
+The journal's atomic owner fence is not a second ownership authority. The
+session service acquires the claim and binds that exact generation once through
+`activate_reserved` and `RuntimeAttachment::on_activate`, which receives the typed
+`SessionClaim` before actor startup. Container providers return attachments;
+transport mapping preserves the callback and shared handshake. Physical
+transports carry frames only. The journal never
+claims ownership or refreshes its fence from a database read.
+
+The browser forwards the effective-history snapshot and buffered/live durable
+rows to Rust `LogIngestion` through WASM `snapshot` and `push_rows`. Ingestion
+retains the snapshot IDs and inclusive `(created_at, id)` boundary, preserving
+Postgres timestamp precision without a JavaScript timestamp comparator. It drops
+only snapshot duplicates and excluded older rows, never distinct ACP replay
+rows, and preserves live delivery order without a moving high-water mark.
+The ID set stays bounded by snapshot size. `FoldMachine` remains append-only;
+raw recording consumers retain the existing `extend` and `push` API.
+
+Routing new commands away from a stale replica does not stop its existing work.
+`PgAgentSessionRepo::claim` can take over when the old replica's heartbeat is
+stale, without notifying its process. `activate_reserved` gives the actor a
+fenced ACP log writer; the next rejected append stops that actor. `run_session`
+then drops its transport, and the pipe pump closes asynchronously. Independently,
+`CursorContainerManager::serve_session` awaits `sync_foreign_runs` inside its
+timer branch: pipe cancellation is not polled again until that await finishes.
+A provider response can therefore reach the native journal after takeover even
+with no new command dispatched to the old replica.
+
+`PgCursorJournal::lock_owner` checks the bound replica/generation while holding
+the `agent_session` row lock through journal commit. Takeover updates that same
+row: either the old append commits before takeover, or it fails after takeover.
+The existing `SessionClaim` is a token, not a transaction-bound storage capability;
+the existing fenced ACP writer only covers ACP log appends. Wrapping a simple
+journal with a preflight ownership check would lose this atomicity. Retain the
+small storage fence rather than introduce a new generic transaction wrapper.
+
+Native SSE records contain only event name, original data, and provider ID.
+Scripted providers emit the same wire-shaped records through the production
+decoder; recorded fixtures retain their original payloads rather than being
+decoded and re-encoded as domain enums.
+
 Most of the sandbox lifecycle is meaningless for Cursor. Stating what each port
 method degenerates to, so the small implementation does not read as an
 oversight:
@@ -452,9 +550,10 @@ The crate is currently shaped for one process, one key, stdio. Four changes:
    Needs an observer port, e.g. `AgentCreated { agent_id, name, url }`, that the
    manager implements by writing the `external_agent_session` row.
 
-4. **Key and repo from arguments, not env.** The bin reads `CURSOR_API_KEY`,
-   `CURSOR_REPO`, `CURSOR_REF`, `CURSOR_MODEL` via `env_var!`. Server-side these
-   are per-session, so they must be constructor arguments.
+4. **Configuration from arguments.** The bin reads `CURSOR_API_KEY`,
+   `CURSOR_REF`, and `CURSOR_MODEL` from environment configuration and leaves
+   the repository unset. Hosted sessions supply configuration and repository
+   selection through constructor arguments.
 
 None of these change the domain or the fixtures. They are adapter-shaped.
 
@@ -564,14 +663,13 @@ reported as bugs:
   without a frame in either direction closes the pipe, reclaiming its tasks
   and its poll; the session parks on a clean disconnect and the next prompt
   resumes it. A parked session mirrors nothing until then.
-- **A provisioning failure does not reach the thread.** The open path
-  announces the session before it spawns, so when spawn fails — most often
-  because the mentioning user has not registered a Cursor key — the session
-  is marked disconnected and the reason goes to a log. What the user sees is
-  a session chip that never answers. `SessionAnnouncer` announces sessions
-  and nothing else, so closing this needs a way to post a failure back to
-  the originating thread. `HarnessError::CursorNotConnected` already carries
-  the sentence to post; it has nowhere to go yet.
+- **A provisioning failure does not reach the thread.** When spawn fails
+  after the session row exists, the session is marked disconnected and the
+  reason goes to a log. The most common cause — the mentioning user has no
+  Cursor key — no longer gets this far: `ContainerManager::preflight` catches
+  it before the row and `SessionAnnouncer::decline` answers in the thread.
+  Other spawn failures (Cursor API down, a key that no longer decrypts) still
+  end in a log rather than a reply.
 - **One run at a time per agent.** Cursor returns `409 agent_busy`. Already
   matched by the service's sequential-turn rule, so this surfaces as a clean
   error rather than a race.
@@ -585,7 +683,8 @@ reported as bugs:
 3. **`CursorContainerManager` + routing** — the manager, `RoutedTransport`,
    `bot_id` on `SpawnContainer`, `is_managed_bot` as a set, composition root.
 4. **Settings + `@cursor` gating** — the connections UI, key validation via
-   `GET /v1/me`, mention-autocomplete filtering.
+   `GET /v1/me`, mention-autocomplete filtering (since replaced by the
+   preflight-and-decline reply above).
 5. **Sessions page link** — the joined read and the provider logo.
 
 Steps 1 and 2 are independent and can go in parallel.
@@ -609,7 +708,8 @@ Steps 1 and 2 are independent and can go in parallel.
 
 Resolved in review: the external table alone (no `agent_session` column), one
 global seeded `@cursor` system bot, channel-bots server-side filtering for the
-mention gate, hardcoded `macro-inc/macro` repo, and omitted model.
+mention gate (later replaced by the in-thread decline, so `@cursor` is offered to
+everyone), hardcoded `macro-inc/macro` repo, and omitted model.
 
 1. **Do we store user keys at all in v1?** **Yes.** Sub-tokens were the
    alternative, and they lose the property that makes this feature legible: the
@@ -617,7 +717,7 @@ mention gate, hardcoded `macro-inc/macro` repo, and omitted model.
    and their repo access. There is no deployment-wide `CURSOR_API_KEY` — the
    manager resolves the session owner's key from `cursor_api_keys` at every
    spawn, resume, and teardown, and a user who has not connected Cursor gets
-   `HarnessError::CursorNotConnected` in the channel rather than a silent skip.
+   the bot's connect reply in the channel rather than a silent skip.
 2. **Lazy or eager agent creation?** **Lazy**, as leaned. `RecordingCursor`
    decorates `CursorAgents` and writes the `external_agent_session` row inside
    `create_agent`, before it returns — so no prompt can be answered by an agent

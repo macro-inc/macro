@@ -1,3 +1,4 @@
+import type { MessageParent } from '@service-storage/messages';
 import {
   type Accessor,
   createSignal,
@@ -13,7 +14,7 @@ import { ThreadReplyInputConnector } from './ThreadReplyInputConnector';
 import { replyInputOffsetX } from './utils/thread-rail-geometry';
 
 type ThreadReplyInputProps = {
-  channelId: string;
+  parent: MessageParent;
   messageId: string;
   replyInputState: Accessor<InputSnapshot | undefined>;
   setReplyInputState: Setter<InputSnapshot | undefined>;
@@ -71,7 +72,7 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
         return (
           <div class="relative" use:droppable>
             <ThreadReplyChannelInput
-              channelId={props.channelId}
+              parent={props.parent}
               threadId={props.messageId}
               replyInputState={props.replyInputState}
               setReplyInputState={props.setReplyInputState}

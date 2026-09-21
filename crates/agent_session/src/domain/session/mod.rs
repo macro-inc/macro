@@ -5,6 +5,7 @@ pub(crate) mod actors;
 // choice: logic in `session`, vocabulary in `types`.
 #[allow(clippy::module_inception)]
 mod session;
+pub(crate) mod telemetry;
 mod types;
 
 #[cfg(test)]
@@ -12,5 +13,6 @@ mod tests;
 
 pub use session::SessionMachine;
 pub use types::{
-    CloseReason, Effect, HandshakeStatus, Input, RuntimeStatus, SessionRestoreSupport, StopReason,
+    CloseReason, Effect, HandshakeStatus, InitializationContext, Input, PermissionPolicy,
+    RuntimeStatus, SessionRestoreSupport, StopReason,
 };

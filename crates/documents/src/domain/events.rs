@@ -14,6 +14,7 @@ use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroDocumentsTopic;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::FileType;
+use model_owner::Owner;
 use serde::{Deserialize, Serialize};
 
 use super::models::FileTypeUpdate;
@@ -25,7 +26,8 @@ pub struct DocumentCreatedMetadata {
     /// The id of the created document.
     pub document_id: String,
     /// The owner (creator) of the document.
-    pub owner: MacroUserIdStr<'static>,
+    #[cfg_attr(feature = "schema", schema(value_type = String))]
+    pub owner: Owner,
     /// Who mechanically created the document. Absent on events published
     /// before attribution: ingest then treats [`Self::owner`] as the actor.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -54,10 +56,21 @@ pub struct DocumentUpdatedMetadata {
     /// The id of the updated document.
     pub document_id: String,
     /// The owner of the document.
-    pub owner: MacroUserIdStr<'static>,
+    #[cfg_attr(feature = "schema", schema(value_type = String))]
+    pub owner: Owner,
     /// The authenticated user who performed the update; `None` for
     /// unauthenticated or internal callers.
     pub actor_user_id: Option<MacroUserIdStr<'static>>,
+    /// Who mechanically updated the document. Absent on events published
+    /// before attribution, and on user-receipt writes (ingest then uses
+    /// [`Self::actor_user_id`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schema", schema(value_type = Option<String>))]
+    pub actor: Option<Actor<'static>>,
+    /// The user whose feed this update belongs on, when different from
+    /// [`Self::actor`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_behalf_of: Option<MacroUserIdStr<'static>>,
     /// New (cleaned) document name; `None` when unchanged.
     pub document_name: Option<String>,
     /// Project id before the update.
@@ -80,6 +93,16 @@ pub struct DocumentDeletedMetadata {
     /// The authenticated user who deleted the document; `None` for
     /// unauthenticated or internal callers.
     pub actor_user_id: Option<MacroUserIdStr<'static>>,
+    /// Who mechanically deleted the document. Absent on events published
+    /// before attribution, and on user-receipt writes (ingest then uses
+    /// [`Self::actor_user_id`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schema", schema(value_type = Option<String>))]
+    pub actor: Option<Actor<'static>>,
+    /// The user whose feed this delete belongs on, when different from
+    /// [`Self::actor`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_behalf_of: Option<MacroUserIdStr<'static>>,
     /// Project the document belonged to, when any.
     pub project_id: Option<String>,
 }
@@ -91,7 +114,8 @@ pub struct DocumentContentUploadedMetadata {
     /// The id of the document whose stored bytes changed.
     pub document_id: String,
     /// The owner of the document (used by the extractor to resolve S3 keys).
-    pub owner: MacroUserIdStr<'static>,
+    #[cfg_attr(feature = "schema", schema(value_type = String))]
+    pub owner: Owner,
     /// File type of the uploaded object (may differ from the document's own
     /// type, e.g. `pdf` for the converted rendition of a docx).
     pub file_type: FileType,
@@ -106,10 +130,39 @@ pub struct DocumentContentUploadedMetadata {
 pub struct DocumentSyncContentUpdatedMetadata {
     /// The id of the live-collab document whose content changed.
     pub document_id: String,
-    /// File type of the sync document (markdown today).
+    /// File type of the sync document, resolved by the document backend.
     pub file_type: FileType,
     /// Version marker for the sync snapshot, when the caller supplies one.
     pub document_version_id: Option<String>,
+    /// Who mechanically changed the content. Absent on events published
+    /// before attribution, and on human-only collab sessions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schema", schema(value_type = Option<String>))]
+    pub actor: Option<Actor<'static>>,
+    /// The user whose feed this edit belongs on, when different from
+    /// [`Self::actor`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_behalf_of: Option<MacroUserIdStr<'static>>,
+}
+
+impl DocumentSyncContentUpdatedMetadata {
+    /// Build metadata from extract-sync strings. Invalid actor or subject
+    /// ids are dropped so a bad payload still extracts the document.
+    pub fn from_extract(
+        document_id: String,
+        file_type: FileType,
+        document_version_id: Option<String>,
+        actor: Option<String>,
+        on_behalf_of: Option<String>,
+    ) -> Self {
+        Self {
+            document_id,
+            file_type,
+            document_version_id,
+            actor: actor.and_then(|id| Actor::try_from(id).ok()),
+            on_behalf_of: on_behalf_of.and_then(|id| MacroUserIdStr::try_from(id).ok()),
+        }
+    }
 }
 
 /// Metadata for [`DocumentTopicEvent::Purged`].
@@ -154,7 +207,8 @@ pub struct DocumentCopiedMetadata {
     /// The specific source version copied, when requested.
     pub source_version_id: Option<i64>,
     /// The owner of the new copy (the copier).
-    pub owner: MacroUserIdStr<'static>,
+    #[cfg_attr(feature = "schema", schema(value_type = String))]
+    pub owner: Owner,
     /// The name of the new document.
     pub document_name: String,
     /// File type of the document, when known.

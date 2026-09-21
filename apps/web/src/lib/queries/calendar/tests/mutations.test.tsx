@@ -1,3 +1,4 @@
+import { previewKeys } from '@queries/preview/keys';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
@@ -101,6 +102,42 @@ const recurringItem = (): CalendarOccurrenceItem =>
         kind: 'timed',
         startsAt: '2026-08-05T09:00:00Z',
         endsAt: '2026-08-05T09:30:00Z',
+      },
+    },
+  }) as unknown as CalendarOccurrenceItem;
+
+const copy = (calendarId: string, title: string) => ({
+  calendarId,
+  title,
+  eventType: 'default',
+  visibility: 'default',
+  transparency: 'opaque',
+  isReadOnly: false,
+  reminders: { useDefault: true, overrides: [] },
+});
+
+const sharedItem = (): CalendarOccurrenceItem =>
+  ({
+    event: {
+      id: 'event-3',
+      title: 'OOO',
+      recurrenceLines: [],
+      calendarId: 'primary',
+      sources: [copy('primary', 'OOO'), copy('shared', '[me] OOO')],
+      time: {
+        kind: 'timed',
+        startsAt: '2026-08-07T13:00:00Z',
+        endsAt: '2026-08-07T17:00:00Z',
+      },
+      attendees: [],
+    },
+    occurrence: {
+      eventId: 'event-3',
+      occurrenceKey: '2026-08-07T13:00:00Z',
+      time: {
+        kind: 'timed',
+        startsAt: '2026-08-07T13:00:00Z',
+        endsAt: '2026-08-07T17:00:00Z',
       },
     },
   }) as unknown as CalendarOccurrenceItem;
@@ -419,7 +456,12 @@ describe('useRsvpCalendarEventMutation', () => {
 
     second.resolve(ok({ id: 'event-1' }));
     await secondMutation;
-    expect(invalidateSpy).toHaveBeenCalledTimes(1);
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: calendarKeys.occurrences._def,
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: previewKeys.item('event-1').queryKey,
+    });
   });
 });
 
@@ -477,6 +519,50 @@ describe('useDeleteCalendarEventMutation', () => {
       expect(items).toHaveLength(2);
     }
   });
+
+  it('drops only the addressed copy of a multi-calendar event', async () => {
+    deleteCalendarEventMock.mockResolvedValue(ok({}));
+    testQueryClient.setQueryData(
+      calendarKeys.occurrences('user', viewportA).queryKey,
+      { items: [sharedItem()], syncStatus: 'ready' }
+    );
+    const remove = renderHook(() => useDeleteCalendarEventMutation());
+
+    await remove.mutateAsync({ eventId: 'event-3', calendarId: 'primary' });
+    expect(deleteCalendarEventMock).toHaveBeenCalledWith('event-3', {
+      calendarId: 'primary',
+      scope: undefined,
+      recurrenceId: undefined,
+    });
+    let items = viewportData(viewportA)?.items ?? [];
+    expect(items).toHaveLength(1);
+    expect(items[0].event.sources?.map((source) => source.calendarId)).toEqual([
+      'shared',
+    ]);
+    expect(items[0].event.calendarId).toBe('shared');
+    expect(items[0].event.title).toBe('[me] OOO');
+
+    await remove.mutateAsync({ eventId: 'event-3', calendarId: 'shared' });
+    items = viewportData(viewportA)?.items ?? [];
+    expect(items).toHaveLength(0);
+  });
+
+  it('drops the canonical copy when no calendar is named', async () => {
+    deleteCalendarEventMock.mockResolvedValue(ok({}));
+    testQueryClient.setQueryData(
+      calendarKeys.occurrences('user', viewportA).queryKey,
+      { items: [sharedItem()], syncStatus: 'ready' }
+    );
+    const remove = renderHook(() => useDeleteCalendarEventMutation());
+
+    await remove.mutateAsync({ eventId: 'event-3' });
+    const items = viewportData(viewportA)?.items ?? [];
+    expect(items).toHaveLength(1);
+    expect(items[0].event.sources?.map((source) => source.calendarId)).toEqual([
+      'shared',
+    ]);
+    expect(items[0].event.calendarId).toBe('shared');
+  });
 });
 
 describe('useUpdateCalendarEventMutation', () => {
@@ -509,5 +595,68 @@ describe('useUpdateCalendarEventMutation', () => {
     expect(recurring?.occurrence.time).toMatchObject({
       startsAt: '2026-08-05T09:00:00Z',
     });
+  });
+
+  it('scopes an optimistic edit to the targeted occurrence, or widens to the series', async () => {
+    const keys = [
+      '2026-08-04T09:00:00Z',
+      '2026-08-05T09:00:00Z',
+      '2026-08-06T09:00:00Z',
+    ];
+    const occurrence = (key: string): CalendarOccurrenceItem =>
+      ({
+        event: {
+          id: 'event-4',
+          title: 'Standup',
+          description: 'series notes',
+          recurrenceLines: ['RRULE:FREQ=DAILY'],
+          time: { kind: 'timed', startsAt: key, endsAt: key },
+          attendees: [],
+        },
+        occurrence: {
+          eventId: 'event-4',
+          occurrenceKey: key,
+          recurrenceId: key,
+          time: { kind: 'timed', startsAt: key, endsAt: key },
+        },
+      }) as unknown as CalendarOccurrenceItem;
+    testQueryClient.setQueryData(
+      calendarKeys.occurrences('user', viewportA).queryKey,
+      { items: keys.map(occurrence), syncStatus: 'ready' }
+    );
+    updateCalendarEventMock.mockResolvedValue(ok({ id: 'event-4' }));
+    const update = renderHook(() => useUpdateCalendarEventMutation());
+    const descriptionAt = (key: string) =>
+      viewportData(viewportA)?.items.find(
+        (item) => item.occurrence.occurrenceKey === key
+      )?.event.description;
+
+    await update.mutateAsync({
+      eventId: 'event-4',
+      scope: 'this_event',
+      recurrenceId: keys[1],
+      occurrenceKey: keys[1],
+      patch: { description: 'this day only' },
+    });
+
+    expect(descriptionAt(keys[0])).toBe('series notes');
+    expect(descriptionAt(keys[1])).toBe('this day only');
+    expect(descriptionAt(keys[2])).toBe('series notes');
+    expect(updateCalendarEventMock).toHaveBeenCalledWith('event-4', {
+      description: 'this day only',
+      calendarId: undefined,
+      scope: 'this_event',
+      recurrenceId: keys[1],
+    });
+
+    await update.mutateAsync({
+      eventId: 'event-4',
+      scope: 'all',
+      patch: { description: 'shared notes' },
+    });
+
+    expect(descriptionAt(keys[0])).toBe('shared notes');
+    expect(descriptionAt(keys[1])).toBe('shared notes');
+    expect(descriptionAt(keys[2])).toBe('shared notes');
   });
 });

@@ -48,6 +48,7 @@ use macro_event_topics::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::FileType;
+use model_owner::Owner;
 use models_properties::{
     DataType, EntityType, PropertyOwner, service::property_option::PropertyOptionValue,
 };
@@ -668,6 +669,7 @@ fn channel_event_cases() -> Vec<(ChannelTopicEvent, ChannelEventDescription)> {
             ChannelTopicEvent::Created(ChannelCreatedMetadata {
                 channel_id: CHANNEL_ID,
                 actor: sender.clone(),
+                on_behalf_of: None,
                 channel_type: ChannelType::Private,
                 channel_name: Some("general".to_string()),
                 participant_user_ids: vec![user_id()],
@@ -824,7 +826,8 @@ fn channel_event_cases() -> Vec<(ChannelTopicEvent, ChannelEventDescription)> {
 }
 
 fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)> {
-    let owner = user_id();
+    let user = user_id();
+    let owner = Owner::User(user.clone());
 
     vec![
         (
@@ -849,7 +852,9 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
             DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
                 document_id: DOCUMENT_ID.to_string(),
                 owner: owner.clone(),
-                actor_user_id: Some(owner.clone()),
+                actor_user_id: Some(user.clone()),
+                actor: None,
+                on_behalf_of: None,
                 document_name: Some("Renamed document".to_string()),
                 previous_project_id: Some(PROJECT_ID.to_string()),
                 project_id: None,
@@ -866,7 +871,9 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
             DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
                 document_id: DOCUMENT_ID.to_string(),
                 owner: owner.clone(),
-                actor_user_id: Some(owner.clone()),
+                actor_user_id: Some(user.clone()),
+                actor: None,
+                on_behalf_of: None,
                 document_name: None,
                 previous_project_id: None,
                 project_id: Some(PROJECT_ID.to_string()),
@@ -882,7 +889,9 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
         (
             DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
                 document_id: DOCUMENT_ID.to_string(),
-                actor_user_id: Some(owner.clone()),
+                actor_user_id: Some(user.clone()),
+                actor: None,
+                on_behalf_of: None,
                 project_id: Some(PROJECT_ID.to_string()),
             }),
             DocumentEventDescription {
@@ -913,6 +922,8 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
                 document_id: DOCUMENT_ID.to_string(),
                 file_type: FileType::Md,
                 document_version_id: None,
+                actor: None,
+                on_behalf_of: None,
             }),
             DocumentEventDescription {
                 action: DocumentIndexAction::ExtractSync {
@@ -965,7 +976,7 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
 }
 
 fn project_event_cases() -> Vec<(ProjectTopicEvent, ProjectEventDescription<'static>)> {
-    let owner = user_id();
+    let owner = Owner::User(user_id());
 
     vec![
         (
@@ -1261,6 +1272,7 @@ fn subscribes_to_declared_search_processing_topics_with_durable_group() {
         "search-processing-service"
     );
     let topics = DeclaredMacroEvent::topics();
+    assert!(topics.contains(&macro_event_topics::MacroAgentSessionLifecycleTopic::TOPIC_STR));
     assert_eq!(MacroChatsTopic::TOPIC_STR, "macro.chats");
     assert!(topics.contains(&MacroCallsTopic::TOPIC_STR));
     assert!(topics.contains(&MacroChannelsTopic::TOPIC_STR));
@@ -1396,7 +1408,7 @@ fn maps_all_document_lifecycle_events_to_index_actions() {
 fn document_extraction_actions_preserve_optional_versions() {
     let content_uploaded = DocumentTopicEvent::ContentUploaded(DocumentContentUploadedMetadata {
         document_id: DOCUMENT_ID.to_string(),
-        owner: user_id(),
+        owner: Owner::User(user_id()),
         file_type: FileType::Pdf,
         document_version_id: None,
     });
@@ -1414,6 +1426,8 @@ fn document_extraction_actions_preserve_optional_versions() {
             document_id: DOCUMENT_ID.to_string(),
             file_type: FileType::Md,
             document_version_id: Some("snapshot-7".to_string()),
+            actor: None,
+            on_behalf_of: None,
         });
     assert_eq!(
         describe_document_event(&sync_content_updated).action,
@@ -1499,6 +1513,41 @@ fn email_envelope_decodes_round_trip() {
     };
     assert_eq!(decoded_event.key(), EMAIL_LINK_ID.to_string());
     assert_eq!(decoded_event.event().event, event);
+}
+
+#[test]
+fn agent_session_lifecycle_decodes_and_routes_by_session() {
+    use ::agent_session::domain::{events::*, model::AgentSessionId};
+    use macro_event_topics::MacroAgentSessionLifecycleTopic;
+
+    let id = AgentSessionId::new_from_uuid(Uuid::from_u128(10));
+    let identity = SessionIdentity {
+        session_id: id,
+        session_name: "Indexed session".into(),
+        bot_id: serde_json::from_value(serde_json::json!(Uuid::from_u128(2))).unwrap(),
+        bot_name: "Agent".into(),
+        owner_id: user_id(),
+        origin: None,
+        audience: vec![],
+    };
+    for event in [
+        AgentSessionLifecycleEvent::Renamed(SessionRenamedMetadata {
+            identity: identity.clone(),
+        }),
+        AgentSessionLifecycleEvent::Deleted(SessionDeletedMetadata { identity }),
+    ] {
+        let message = encoded_message(
+            MacroAgentSessionLifecycleTopic::TOPIC_STR,
+            id,
+            Event::new(event.clone()),
+        );
+        let decoded = DeclaredMacroEvent::decode(&message).unwrap();
+        assert_eq!(ordering_key(&decoded), id.to_string());
+        let DeclaredMacroEvent::AgentSessionLifecycleMacroEvent(decoded) = decoded else {
+            panic!("expected agent-session lifecycle event");
+        };
+        assert_eq!(decoded.event().event, event);
+    }
 }
 
 #[test]
@@ -1614,7 +1663,7 @@ fn calendar_events_shard_by_event_id_so_one_event_stays_ordered() {
 fn project_envelope_decodes_round_trip_with_string_key() {
     let event = ProjectTopicEvent::Restored(ProjectRestoredMetadata {
         project_id: PROJECT_ID.to_string(),
-        owner: user_id(),
+        owner: Owner::User(user_id()),
         actor_user_id: Some(user_id()),
         parent_project_id: Some(PARENT_PROJECT_ID.to_string()),
         restored_project_ids: vec![PROJECT_ID.to_string(), CHILD_PROJECT_ID.to_string()],
@@ -1675,7 +1724,7 @@ fn exact_macro_documents_envelopes_decode_into_document_events() {
                 Uuid::from_u128(1),
                 DocumentTopicEvent::ContentUploaded(DocumentContentUploadedMetadata {
                     document_id: DOCUMENT_ID.to_string(),
-                    owner: user_id(),
+                    owner: Owner::User(user_id()),
                     file_type: FileType::Pdf,
                     document_version_id: Some("convert".to_string()),
                 }),
@@ -1698,6 +1747,8 @@ fn exact_macro_documents_envelopes_decode_into_document_events() {
                     document_id: DOCUMENT_ID.to_string(),
                     file_type: FileType::Md,
                     document_version_id: None,
+                    actor: None,
+                    on_behalf_of: None,
                 }),
             ),
         ),
@@ -1836,7 +1887,7 @@ async fn malformed_and_unsupported_chat_messages_are_commit_safe() {
 async fn unsupported_project_schema_message_is_commit_safe() {
     let event = ProjectTopicEvent::Restored(ProjectRestoredMetadata {
         project_id: PROJECT_ID.to_string(),
-        owner: user_id(),
+        owner: Owner::User(user_id()),
         actor_user_id: Some(user_id()),
         parent_project_id: None,
         restored_project_ids: vec![PROJECT_ID.to_string()],

@@ -54,8 +54,7 @@ export function NotificationStackRow(props: {
     entityId: props.entity.id,
   });
 
-  // The containing split (when any) is the navigation source, so opens from
-  // an engaged preview controller route into its viewer split.
+  // Keep navigation associated with the originating split.
   const panel = useSplitPanel();
 
   const handleClick = async (e: PointerEvent | MouseEvent | KeyboardEvent) => {

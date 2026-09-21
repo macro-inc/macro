@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
 use crate::domain::models::{
-    AdvancedSortParams, EnrichedSoupItem, GroupedSortRequest, IntoSoupReqAst, SimpleSortRequest,
-    SoupErr, SoupProjectionHydration, SoupPropertiesField, SoupRequest, TouchedEntity,
-    TouchedSoupRequest, grouping::ItemGroupingInfo,
+    AdvancedSortParams, EnrichedSoupItem, GroupedSortRequest, IntoSoupReqAst, NotifiedEntity,
+    NotifiedSoupRequest, SimpleSortRequest, SoupErr, SoupProjectionHydration, SoupPropertiesField,
+    SoupRequest, TouchedEntity, TouchedSoupRequest, grouping::ItemGroupingInfo,
 };
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{
-    Frecency, PaginatedCursor, PaginatedOpaqueCursor, SimpleSortMethod, TouchedByMe,
+    Frecency, NotifiedAt, PaginatedCursor, PaginatedOpaqueCursor, SimpleSortMethod, TouchedByMe,
     TypeEraseCursor,
 };
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
@@ -95,6 +95,15 @@ pub trait SoupRepo: Send + Sync + 'static {
         &self,
         req: TouchedSoupRequest<'a>,
     ) -> impl Future<Output = Result<Vec<TouchedEntity>, Self::Err>> + Send;
+
+    /// Fetch one page of notified-at candidates: entities the user holds a
+    /// live notification for, newest notification first, already gated on
+    /// existence, deletion and access, and on the request's entity filters
+    /// where soup owns the fold.
+    fn notified_soup_page<'a>(
+        &self,
+        req: NotifiedSoupRequest<'a>,
+    ) -> impl Future<Output = Result<Vec<NotifiedEntity>, Self::Err>> + Send;
 }
 
 /// The possible outputs of soup — one paginated page per query mode.
@@ -111,6 +120,8 @@ pub enum SoupOutput<T, Item = SoupItem<()>> {
     Frecency(PaginatedCursor<Item, String, Frecency, T>),
     /// Page of a touched-by-me query.
     Touched(PaginatedCursor<Item, String, TouchedByMe, T>),
+    /// Page of a notified-at query.
+    Notified(PaginatedCursor<Item, String, NotifiedAt, T>),
 }
 
 impl<T, Item> SoupOutput<T, Item> {
@@ -123,6 +134,7 @@ impl<T, Item> SoupOutput<T, Item> {
             SoupOutput::Simple(page) => SoupOutput::Simple(page.map(f)),
             SoupOutput::Frecency(page) => SoupOutput::Frecency(page.map(f)),
             SoupOutput::Touched(page) => SoupOutput::Touched(page.map(f)),
+            SoupOutput::Notified(page) => SoupOutput::Notified(page.map(f)),
         }
     }
 
@@ -132,6 +144,7 @@ impl<T, Item> SoupOutput<T, Item> {
             SoupOutput::Simple(page) => page.items,
             SoupOutput::Frecency(page) => page.items,
             SoupOutput::Touched(page) => page.items,
+            SoupOutput::Notified(page) => page.items,
         }
     }
 
@@ -139,7 +152,7 @@ impl<T, Item> SoupOutput<T, Item> {
     pub fn into_simple(self) -> Option<PaginatedCursor<Item, String, SimpleSortMethod, T>> {
         match self {
             SoupOutput::Simple(page) => Some(page),
-            SoupOutput::Frecency(_) | SoupOutput::Touched(_) => None,
+            SoupOutput::Frecency(_) | SoupOutput::Touched(_) | SoupOutput::Notified(_) => None,
         }
     }
 
@@ -147,7 +160,7 @@ impl<T, Item> SoupOutput<T, Item> {
     pub fn into_frecency(self) -> Option<PaginatedCursor<Item, String, Frecency, T>> {
         match self {
             SoupOutput::Frecency(page) => Some(page),
-            SoupOutput::Simple(_) | SoupOutput::Touched(_) => None,
+            SoupOutput::Simple(_) | SoupOutput::Touched(_) | SoupOutput::Notified(_) => None,
         }
     }
 
@@ -155,7 +168,15 @@ impl<T, Item> SoupOutput<T, Item> {
     pub fn into_touched(self) -> Option<PaginatedCursor<Item, String, TouchedByMe, T>> {
         match self {
             SoupOutput::Touched(page) => Some(page),
-            SoupOutput::Simple(_) | SoupOutput::Frecency(_) => None,
+            SoupOutput::Simple(_) | SoupOutput::Frecency(_) | SoupOutput::Notified(_) => None,
+        }
+    }
+
+    /// Returns the page when this is a [`SoupOutput::Notified`] output.
+    pub fn into_notified(self) -> Option<PaginatedCursor<Item, String, NotifiedAt, T>> {
+        match self {
+            SoupOutput::Notified(page) => Some(page),
+            SoupOutput::Simple(_) | SoupOutput::Frecency(_) | SoupOutput::Touched(_) => None,
         }
     }
 }
@@ -166,6 +187,7 @@ impl<T, Item> TypeEraseCursor<Item> for SoupOutput<T, Item> {
             SoupOutput::Simple(page) => page.type_erase(),
             SoupOutput::Frecency(page) => page.type_erase(),
             SoupOutput::Touched(page) => page.type_erase(),
+            SoupOutput::Notified(page) => page.type_erase(),
         }
     }
 }

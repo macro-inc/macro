@@ -6,6 +6,7 @@
 
 import type {
   FoldedMessage,
+  MessagePart,
   PlanEntry,
 } from '@service-agent-fold/generated/types';
 import { diffLines } from 'diff';
@@ -48,14 +49,30 @@ export type ChangedFile = {
 };
 
 /**
+ * Every tool call in the transcript, in order, descending into the calls a
+ * subagent made: a file the subagent edited is a file the session edited.
+ */
+function* toolCalls(
+  parts: readonly MessagePart[]
+): Generator<Extract<MessagePart, { kind: 'tool_use' }>> {
+  for (const part of parts) {
+    if (part.kind !== 'tool_use') continue;
+    yield part;
+    if (part.detail.kind === 'subagent') {
+      yield* toolCalls(part.detail.children);
+    }
+  }
+}
+
+/**
  * Every file the session's edit tools touched, in first-touched order, with
  * line stats summed across all edits of that file.
  */
 export function changedFiles(messages: FoldedMessage[]): ChangedFile[] {
   const byPath = new Map<string, ChangedFile>();
   for (const message of messages) {
-    for (const part of message.parts) {
-      if (part.kind !== 'tool_use' || part.detail.kind !== 'edit') continue;
+    for (const part of toolCalls(message.parts)) {
+      if (part.detail.kind !== 'edit') continue;
       for (const diff of part.detail.diffs) {
         const changes = countDiffChanges([diff]);
         const existing = byPath.get(diff.path);
@@ -79,8 +96,7 @@ export function changedFiles(messages: FoldedMessage[]): ChangedFile[] {
 export function activityCounts(messages: FoldedMessage[]): CountItem[] {
   const counts = { edit: 0, read: 0, search: 0, terminal: 0, fetch: 0 };
   for (const message of messages) {
-    for (const part of message.parts) {
-      if (part.kind !== 'tool_use') continue;
+    for (const part of toolCalls(message.parts)) {
       const kind = part.detail.kind;
       if (kind in counts) counts[kind as keyof typeof counts] += 1;
     }

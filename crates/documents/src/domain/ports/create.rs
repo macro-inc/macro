@@ -3,6 +3,7 @@
 use std::future::Future;
 use std::sync::Arc;
 
+use activity::Attribution;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::content::DocumentContent;
@@ -46,6 +47,7 @@ pub trait DocumentCreationService: Send + Sync {
         user_id: MacroUserIdStr<'static>,
         document_id: &str,
         request: &CreateTaskRequest,
+        attribution: &Attribution,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 
     /// Mark a created document's upload/finalization lifecycle as complete.
@@ -83,9 +85,10 @@ where
         user_id: MacroUserIdStr<'static>,
         document_id: &str,
         request: &CreateTaskRequest,
+        attribution: &Attribution,
     ) -> Result<(), DocumentError> {
         (**self)
-            .handle_task_properties(user_id, document_id, request)
+            .handle_task_properties(user_id, document_id, request, attribution)
             .await
     }
 

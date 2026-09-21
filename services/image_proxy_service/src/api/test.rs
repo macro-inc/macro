@@ -15,7 +15,7 @@ use macro_env::Environment;
 use serde_json::{Value, json};
 use tower::ServiceExt;
 
-use super::*;
+use super::{health, mount_at_root_and_prefix, *};
 
 const ACCESS_TOKEN_COOKIE: &str = "macro-access-token";
 const INTERNAL_API_KEY_HEADER: &str = "x-internal-auth-key";
@@ -186,8 +186,57 @@ async fn proxy_rejects_internal_credentials_without_an_acting_user() {
 
 #[tokio::test]
 async fn health_remains_public() {
-    let request = Request::get("/health").body(Body::empty()).unwrap();
-    let (status, _) = send(request).await;
+    for path in ["/health", "/image-proxy/health"] {
+        let request = Request::get(path).body(Body::empty()).unwrap();
+        let (status, _) = send(request).await;
 
-    assert_eq!(status, StatusCode::OK);
+        assert_eq!(status, StatusCode::OK, "{path}");
+    }
+}
+
+#[tokio::test]
+async fn health_is_reachable_at_root_and_gateway_prefix() {
+    for path in ["/health", "/image-proxy/health"] {
+        let response = mount_at_root_and_prefix(health::router())
+            .oneshot(
+                Request::builder()
+                    .uri(path)
+                    .method("GET")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK, "{path}");
+    }
+}
+
+#[tokio::test]
+async fn unprefixed_unknown_path_is_not_rewritten_onto_the_prefix() {
+    let response = mount_at_root_and_prefix(health::router())
+        .oneshot(
+            Request::builder()
+                .uri("/missing")
+                .method("GET")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn prefixed_proxy_reaches_existing_auth() {
+    let request = proxy_request("/image-proxy/proxy?url=http://127.0.0.1/image.png")
+        .body(Body::empty())
+        .unwrap();
+
+    assert_json_response(
+        send(request).await,
+        StatusCode::UNAUTHORIZED,
+        json!({ "message": "unauthorized" }),
+    );
 }

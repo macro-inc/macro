@@ -1,4 +1,4 @@
-import { msg } from '@macro/sdk';
+import { msg } from '@macro-inc/sdk';
 import { Hono } from 'hono';
 import { logger } from 'hono/logger';
 import { macro } from './src/macro';

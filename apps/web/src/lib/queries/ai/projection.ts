@@ -186,6 +186,10 @@ export function createAIProjection<Schema extends z.ZodType>(
     return state;
   };
 
+  // Do not suspend callers while the request is pending: they own the loading
+  // and timeout UI. Retain cached data during refreshes and refetch errors.
+  const state = () => (query.isPending ? undefined : query.data);
+
   /** The projection result: schema-parsed object when a schema is set,
    * otherwise the raw text. Undefined until a result exists (stale results
    * remain visible while refreshing). */
@@ -194,7 +198,7 @@ export function createAIProjection<Schema extends z.ZodType>(
       data: z.infer<Schema> | string | undefined;
       error?: string;
     } => {
-      const raw = query.data?.data;
+      const raw = state()?.data;
       if (raw === null || raw === undefined) return { data: undefined };
 
       const schema = options().schema;
@@ -226,7 +230,7 @@ export function createAIProjection<Schema extends z.ZodType>(
     }
   );
 
-  const status = () => query.data?.status;
+  const status = () => state()?.status;
 
   return {
     /** Parsed result (see above). */
@@ -241,7 +245,7 @@ export function createAIProjection<Schema extends z.ZodType>(
     },
     /** Materialization error (from the projection) or request error message. */
     error: () =>
-      query.data?.error ??
+      state()?.error ??
       query.error?.message ??
       parsedResult().error ??
       undefined,

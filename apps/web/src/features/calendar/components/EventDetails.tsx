@@ -1,6 +1,7 @@
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
+import { isMobile } from '@core/mobile/isMobile';
 import {
   emailToMacroId,
   getDisplayName,
@@ -285,12 +286,17 @@ function ScrollableAttendeeList(props: { attendees: CalendarAttendee[] }) {
 
   return (
     <div class="relative min-w-0 flex-1">
-      <div ref={setScrollContainer} class="max-h-40 overflow-y-auto pr-4">
+      <div
+        ref={setScrollContainer}
+        class="max-h-40 overflow-y-auto pr-4 mobile:max-h-none mobile:overflow-visible mobile:pr-0"
+      >
         <div class="flex flex-col gap-3">
           <CalendarAttendeeList attendees={props.attendees} />
         </div>
       </div>
-      <ScrollIndicators scrollRef={scrollContainer} appearance="gradient" />
+      <Show when={!isMobile()}>
+        <ScrollIndicators scrollRef={scrollContainer} appearance="gradient" />
+      </Show>
     </div>
   );
 }
@@ -380,7 +386,7 @@ function EventRemindersItem(props: {
     resolveReminderOverrides(
       props.event.reminders,
       props.defaultReminders,
-      props.event.eventType
+      props.event.reminderEventType ?? props.event.eventType
     ).toSorted((a, b) => a.minutes - b.minutes)
   );
 
@@ -515,7 +521,12 @@ export function EventDetails(props: {
     event.preventDefault();
     const target = parseMacroAppLink(anchor.href);
     if (target) {
-      openDocument(target.blockName, target.documentId);
+      openDocument(
+        target.blockName,
+        target.documentId,
+        undefined,
+        event.shiftKey
+      );
       return;
     }
     openExternalUrl(anchor.href);
@@ -538,10 +549,16 @@ export function EventDetails(props: {
         aria-hidden="true"
         class="mt-0.5 flex size-5 items-center justify-center sm:size-4"
       >
-        <span
-          class="size-4 rounded-sm sm:size-3"
-          style={{ 'background-color': props.event.calendar.color }}
-        />
+        <span class="flex size-4 gap-px overflow-hidden rounded-sm sm:size-3">
+          <For each={props.event.visibleCalendars}>
+            {(calendar) => (
+              <span
+                class="min-w-0 flex-1"
+                style={{ 'background-color': calendar.color }}
+              />
+            )}
+          </For>
+        </span>
       </span>
       <div class="flex min-w-0 flex-col gap-1">
         <div class="select-text text-lg font-semibold leading-snug text-ink sm:text-base">
@@ -550,6 +567,11 @@ export function EventDetails(props: {
         <div class="select-text text-sm text-ink-muted sm:text-xs">
           {formatEventSchedule(props.event, props.timeFormat)}
         </div>
+        <Show when={props.event.eventType === 'out_of_office'}>
+          <div class="select-text text-sm text-ink-extra-muted sm:text-xs">
+            Out of office
+          </div>
+        </Show>
         <Show when={recurrenceDescription()}>
           {(description) => (
             <div class="select-text text-sm text-ink-extra-muted sm:text-xs">
@@ -620,9 +642,15 @@ export function EventDetails(props: {
   );
 }
 
-/** Displays attendees in a full-width collapsible popover section. */
+/**
+ * Displays attendees in a full-width collapsible popover section. `actions`
+ * are icon buttons for the header row's trailing edge — the copy-emails and
+ * email-guests pair Google Calendar puts there — rendered beside the
+ * disclosure trigger rather than inside it, since a button cannot nest one.
+ */
 export function EventAttendeesSection(props: {
   attendees: CalendarAttendee[];
+  actions?: JSX.Element;
 }) {
   return (
     <Show when={props.attendees.length > 0}>
@@ -630,17 +658,20 @@ export function EventAttendeesSection(props: {
         defaultOpen
         class="border-edge-muted text-sm text-ink-muted sm:border-t sm:text-xs"
       >
-        <Collapsible.Trigger class="group flex w-full items-center gap-4 px-4 py-4 text-left hover:bg-hover hover:text-ink sm:gap-3">
-          <UsersIcon class="size-5 shrink-0 text-ink-extra-muted sm:size-4" />
-          <span>
-            {props.attendees.length}{' '}
-            {plural('attendee', props.attendees.length)}
-          </span>
-          <CaretDownIcon
-            aria-hidden="true"
-            class="ml-auto size-3 shrink-0 -rotate-90 text-ink-extra-muted transition-transform group-data-expanded:rotate-0"
-          />
-        </Collapsible.Trigger>
+        <div class="flex items-center pr-2">
+          <Collapsible.Trigger class="group flex min-w-0 flex-1 items-center gap-4 py-4 pl-4 pr-2 text-left hover:bg-hover hover:text-ink sm:gap-3">
+            <UsersIcon class="size-5 shrink-0 text-ink-extra-muted sm:size-4" />
+            <span>
+              {props.attendees.length}{' '}
+              {plural('attendee', props.attendees.length)}
+            </span>
+            <CaretDownIcon
+              aria-hidden="true"
+              class="size-3 shrink-0 -rotate-90 text-ink-extra-muted transition-transform group-data-expanded:rotate-0"
+            />
+          </Collapsible.Trigger>
+          <div class="flex shrink-0 items-center gap-1">{props.actions}</div>
+        </div>
         <Collapsible.Content class="data-closed:hidden">
           <div class="flex gap-4 pb-3 pl-4 pt-1.5 sm:gap-3">
             <span aria-hidden="true" class="size-5 shrink-0 sm:size-4" />

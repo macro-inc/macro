@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT c.id, c.hidden\n            FROM crm_companies c\n            JOIN crm_domains d ON d.company_id = c.id\n            WHERE c.team_id = $1\n              AND d.team_id = $1\n              AND LOWER(d.domain) = $2\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "hidden",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "d10c5e6c2a50c028d658c0344e9f99b9fc874cd804534bc2b7bfd8a147379a08"
+}

@@ -1,8 +1,8 @@
-import { normalizeFacetSelection } from '@app/features/soup/filters/facets/selection';
 import type { FacetSelection } from '@app/features/soup/filters/facets/types';
 import { makePersistedState } from '@app/lib/persistence';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { createAssertedContextProvider } from '@core/context/createContext';
+import { useUserId } from '@core/context/user';
 import type { ContextProviderProps } from '@solid-primitives/context';
 import {
   createStore,
@@ -11,7 +11,10 @@ import {
   type SetStoreFunction,
   type Store,
 } from 'solid-js/store';
-import { createInboxViewPersistence } from './persistence';
+import {
+  createInboxViewPersistence,
+  normalizeInboxFacets,
+} from './persistence';
 import type {
   InboxGroupBy,
   InboxTab,
@@ -39,6 +42,7 @@ export const [InboxViewProvider, useInboxView] = createAssertedContextProvider<
   InboxViewProviderProps
 >('InboxView', (props) => {
   const panel = useSplitPanelOrThrow();
+  const userId = useUserId();
   const initial = props.initialState ?? {};
   const initialTab = initial.tab ?? 'signal';
   const [state, setState] = makePersistedState(
@@ -46,11 +50,13 @@ export const [InboxViewProvider, useInboxView] = createAssertedContextProvider<
       tab: initialTab,
       search: initial.search ?? '',
       groupBy: initial.groupBy ?? defaultGroupBy(initialTab),
-      facets: normalizeFacetSelection(initial.facets),
+      facets: normalizeInboxFacets(initial.facets),
     }),
     createInboxViewPersistence({
       handle: panel.handle,
+      userId,
       restoreEntryState: props.initialState === undefined,
+      restorePreferences: initial.facets === undefined,
     })
   );
 
@@ -66,7 +72,7 @@ export const [InboxViewProvider, useInboxView] = createAssertedContextProvider<
   };
 
   const setFacets = (facets: FacetSelection) => {
-    setState('facets', reconcile(normalizeFacetSelection(facets)));
+    setState('facets', reconcile(normalizeInboxFacets(facets)));
   };
 
   return {

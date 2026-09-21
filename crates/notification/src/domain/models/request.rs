@@ -32,6 +32,7 @@ pub enum NotificationCategory {
     Github,
     Reminder,
     Calendar,
+    Agent,
 }
 
 /// Request to send a notification.
@@ -58,6 +59,14 @@ where
 {
     /// Convert this builder into a full request with optional delivery customizers.
     pub fn into_request(self) -> SendNotificationRequest<'a, T, ()> {
+        self.into_request_with_id(Uuid::now_v7())
+    }
+
+    /// As [`Self::into_request`], with the notification id chosen by the
+    /// caller. Creating a notification is idempotent on its id, so a producer
+    /// that derives the id from its own event can be redelivered that event
+    /// without notifying twice.
+    pub fn into_request_with_id(self, notification_id: Uuid) -> SendNotificationRequest<'a, T, ()> {
         let SendNotificationRequestBuilder {
             notification_entity,
             secondary_notification_entity,
@@ -66,7 +75,7 @@ where
             recipient_ids,
         } = self;
         SendNotificationRequest {
-            uuid_to_write: Uuid::now_v7(),
+            uuid_to_write: notification_id,
             req: SendNotificationRequestBuilder {
                 notification_entity,
                 secondary_notification_entity,
@@ -267,10 +276,13 @@ impl NotificationStatus {
     /// returns true if we should be clearing the relevant push notifications
     /// for this notification
     pub(crate) fn should_clear_push_notifs(&self) -> bool {
-        match self {
-            NotificationStatus::Seen => true,
-            NotificationStatus::Done(x) => *x,
-        }
+        use super::NotificationAction;
+        let action = match self {
+            NotificationStatus::Seen => NotificationAction::MarkSeen,
+            NotificationStatus::Done(true) => NotificationAction::MarkDone,
+            NotificationStatus::Done(false) => NotificationAction::Reopen,
+        };
+        action.should_clear_push_notifications()
     }
 }
 
@@ -299,10 +311,8 @@ pub struct UpdateNotificationsForEntitiesRequest<'a> {
 /// Optional filters for listing user notifications.
 #[derive(Debug, Clone)]
 pub struct NotificationListFilters {
-    /// Filter by done status. `None` means include both done and not-done notifications.
-    pub done: Option<bool>,
-    /// Filter by seen status. `None` means include both seen and unseen notifications.
-    pub seen: Option<bool>,
+    /// Exact states to include. Empty means no state restriction.
+    pub states: Vec<super::NotificationState>,
     /// Optional user-facing notification categories to include. Empty means include all types.
     pub include_types: Vec<NotificationCategory>,
     /// Optional specific entities to include. Empty means include all entities.
@@ -313,8 +323,7 @@ impl NotificationListFilters {
     /// Default product behavior: list active notifications, which excludes done notifications.
     pub fn active() -> Self {
         Self {
-            done: Some(false),
-            seen: None,
+            states: super::NotificationState::ACTIVE.to_vec(),
             include_types: Vec::new(),
             entities: Vec::new(),
         }

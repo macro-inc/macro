@@ -127,6 +127,34 @@ impl<'de> XmlTaggedParsed<'de> for ParsedGroupMention<'de> {
     const TAG_NAME: &'static str = "m-group-mention";
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
+pub struct ParsedAgentSessionMention<'a> {
+    #[serde(borrow)]
+    pub id: Cow<'a, str>,
+    #[serde(borrow, default)]
+    pub label: Option<Cow<'a, str>>,
+}
+
+impl<'de> XmlTaggedParsed<'de> for ParsedAgentSessionMention<'de> {
+    const TAG_NAME: &'static str = "m-agent-session-mention";
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
+pub struct ParsedPullRequestMention<'a> {
+    #[serde(borrow)]
+    pub id: Cow<'a, str>,
+    #[serde(borrow, default)]
+    pub label: Option<Cow<'a, str>>,
+}
+
+impl<'de> XmlTaggedParsed<'de> for ParsedPullRequestMention<'de> {
+    const TAG_NAME: &'static str = "m-pr-mention";
+}
+
 #[derive(Debug)]
 pub enum XmlTag<'de> {
     Link(ParsedLink<'de>),
@@ -135,6 +163,8 @@ pub enum XmlTag<'de> {
     Contact(ParsedContactMention<'de>),
     Date(ParsedDateMention<'de>),
     Group(ParsedGroupMention<'de>),
+    AgentSession(ParsedAgentSessionMention<'de>),
+    PullRequest(ParsedPullRequestMention<'de>),
 }
 
 fn parse_xml_tag(s: &str) -> IResult<&str, XmlTag<'_>> {
@@ -145,6 +175,8 @@ fn parse_xml_tag(s: &str) -> IResult<&str, XmlTag<'_>> {
         ParsedContactMention::parse.map(XmlTag::Contact),
         ParsedDateMention::parse.map(XmlTag::Date),
         ParsedGroupMention::parse.map(XmlTag::Group),
+        ParsedAgentSessionMention::parse.map(XmlTag::AgentSession),
+        ParsedPullRequestMention::parse.map(XmlTag::PullRequest),
     ))
     .parse(s)
 }
@@ -157,6 +189,8 @@ fn is_recognized_tag_name(name: &str) -> bool {
         ParsedContactMention::TAG_NAME,
         ParsedDateMention::TAG_NAME,
         ParsedGroupMention::TAG_NAME,
+        ParsedAgentSessionMention::TAG_NAME,
+        ParsedPullRequestMention::TAG_NAME,
     ]
     .iter()
     .any(|recognized| recognized.eq_ignore_ascii_case(name))
@@ -233,6 +267,14 @@ pub trait XmlFormatter: Sized {
     ) -> std::fmt::Result;
     fn format_date(date: &ParsedDateMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result;
     fn format_group(group: &ParsedGroupMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result;
+    fn format_agent_session(
+        session: &ParsedAgentSessionMention<'_>,
+        f: &mut Formatter<'_>,
+    ) -> std::fmt::Result;
+    fn format_pull_request(
+        pr: &ParsedPullRequestMention<'_>,
+        f: &mut Formatter<'_>,
+    ) -> std::fmt::Result;
 
     fn format_xml_text(text: ParsedXmlText<'_>) -> ReformattedXmlText<Self> {
         use std::fmt::Display;
@@ -288,6 +330,20 @@ pub trait XmlFormatter: Sized {
                         Adapter(|f: &mut Formatter<'_>| Self::format_group(&g, f))
                     )
                 }
+                TextSegment::Xml(XmlTag::AgentSession(s)) => {
+                    write!(
+                        acc,
+                        "{}",
+                        Adapter(|f: &mut Formatter<'_>| Self::format_agent_session(&s, f))
+                    )
+                }
+                TextSegment::Xml(XmlTag::PullRequest(p)) => {
+                    write!(
+                        acc,
+                        "{}",
+                        Adapter(|f: &mut Formatter<'_>| Self::format_pull_request(&p, f))
+                    )
+                }
                 TextSegment::Plain(s) => {
                     write!(
                         acc,
@@ -339,6 +395,35 @@ impl XmlFormatter for PlainTextFormatter {
     fn format_group(group: &ParsedGroupMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "@{}", group.group_alias)
     }
+
+    fn format_agent_session(
+        session: &ParsedAgentSessionMention<'_>,
+        f: &mut Formatter<'_>,
+    ) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            session
+                .label
+                .as_deref()
+                .filter(|label| !label.is_empty())
+                .unwrap_or("Agent session")
+        )
+    }
+
+    fn format_pull_request(
+        pr: &ParsedPullRequestMention<'_>,
+        f: &mut Formatter<'_>,
+    ) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            pr.label
+                .as_deref()
+                .filter(|label| !label.is_empty())
+                .unwrap_or("Pull request")
+        )
+    }
 }
 
 /// xml formatter which completely removes the inner text of all xml tags
@@ -373,6 +458,20 @@ impl XmlFormatter for NullXmlFormatter {
     }
 
     fn format_group(_group: &ParsedGroupMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "")
+    }
+
+    fn format_agent_session(
+        _session: &ParsedAgentSessionMention<'_>,
+        f: &mut Formatter<'_>,
+    ) -> std::fmt::Result {
+        write!(f, "")
+    }
+
+    fn format_pull_request(
+        _pr: &ParsedPullRequestMention<'_>,
+        f: &mut Formatter<'_>,
+    ) -> std::fmt::Result {
         write!(f, "")
     }
 }

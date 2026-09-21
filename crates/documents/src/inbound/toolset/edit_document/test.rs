@@ -9,7 +9,8 @@ use crate::domain::models::{
     DocumentTeamShareResponse, EditDocumentServiceArgs, GithubPullRequestsResponse,
     ImportEmailAttachmentRepoArgs, LocationQueryParams, TaskBranchName,
 };
-use crate::domain::ports::editing::{EditResult, EditingWorkerService};
+use crate::domain::permission_token::decode_permission_token;
+use crate::domain::ports::editing::{EditMode, EditResult, EditingWorkerService};
 use crate::domain::response::{
     CreateDocumentResponseData, DocumentResponse, GetDocumentResponseData, LocationResponseV3,
 };
@@ -22,6 +23,7 @@ use macro_sync_service_jwt::DocumentPermissionToken;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
 use model::{document::DocumentBasic, sync_service::SyncServiceVersionID};
 use model_entity::Entity;
+use model_owner::Owner;
 use sync_service_client::SyncServiceClient;
 use uuid::Uuid;
 
@@ -32,8 +34,7 @@ fn document_with_file_type(file_type: Option<&str>) -> DocumentBasic {
     DocumentBasic {
         document_id: TEST_DOCUMENT_ID.to_string(),
         document_name: "Test document".to_string(),
-        owner: MacroUserIdStr::try_from(TEST_USER_ID.to_string())
-            .expect("test user id should be valid"),
+        owner: Owner::from_principal_str(TEST_USER_ID).expect("test user id should be valid"),
         file_type: file_type.map(str::to_string),
         sub_type: None,
         branched_from_id: None,
@@ -205,6 +206,7 @@ impl DocumentService for FakeDocumentService {
         _user_id: MacroUserIdStr<'static>,
         _document_id: &str,
         _request: &CreateTaskRequest,
+        _attribution: &activity::Attribution,
     ) -> Result<(), DocumentError> {
         panic!("unexpected handle_task_properties call")
     }
@@ -256,6 +258,7 @@ impl DocumentCreationService for FakeDocumentService {
         _user_id: MacroUserIdStr<'static>,
         _document_id: &str,
         _request: &CreateTaskRequest,
+        _attribution: &activity::Attribution,
     ) -> Result<(), DocumentError> {
         panic!("unexpected handle_task_properties call")
     }
@@ -391,19 +394,39 @@ impl EntityAccessService for FakeEntityAccessService {
 #[derive(Clone, Default)]
 struct FakeEditingWorker {
     edit_calls: Arc<Mutex<Vec<String>>>,
+    modes: Arc<Mutex<Vec<EditMode>>>,
+    tokens: Arc<Mutex<Vec<DocumentPermissionToken>>>,
 }
 
 impl EditingWorkerService for FakeEditingWorker {
+    async fn spreadsheet(
+        &self,
+        _document_id: &str,
+        _document_token: &DocumentPermissionToken,
+        _request: &crate::domain::spreadsheet::SpreadsheetRequest,
+    ) -> anyhow::Result<crate::domain::spreadsheet::SpreadsheetResponse> {
+        panic!("unexpected spreadsheet call")
+    }
+
     async fn edit(
         &self,
         document_id: &str,
-        _document_token: &DocumentPermissionToken,
+        document_token: &DocumentPermissionToken,
         _instructions: &str,
+        mode: EditMode,
     ) -> anyhow::Result<EditResult> {
         self.edit_calls
             .lock()
             .expect("edit calls lock poisoned")
             .push(document_id.to_string());
+        self.modes
+            .lock()
+            .expect("edit modes lock poisoned")
+            .push(mode);
+        self.tokens
+            .lock()
+            .expect("edit tokens lock poisoned")
+            .push(document_token.clone());
 
         Ok(EditResult {
             edits_applied: 1,
@@ -449,20 +472,48 @@ fn request_context() -> RequestContext {
 async fn call_edit_document(
     file_type: &str,
 ) -> (ToolResult<EditDocumentResponse>, FakeEditingWorker) {
+    call_edit_document_as(file_type, None).await
+}
+
+async fn call_edit_document_as(
+    file_type: &str,
+    actor: Option<BotId>,
+) -> (ToolResult<EditDocumentResponse>, FakeEditingWorker) {
+    call_edit_document_with(file_type, actor, false).await
+}
+
+async fn call_edit_document_with(
+    file_type: &str,
+    actor: Option<BotId>,
+    fast: bool,
+) -> (ToolResult<EditDocumentResponse>, FakeEditingWorker) {
     let editing = FakeEditingWorker::default();
     let tool = EditDocument {
         document_id: TEST_DOCUMENT_ID.to_string(),
         instructions: "tidy up the imports".to_string(),
+        fast,
     };
 
-    let result = tool
-        .call(
-            tool_context(FakeDocumentService::new(file_type), editing.clone()),
-            request_context(),
-        )
-        .await;
+    let mut context = tool_context(FakeDocumentService::new(file_type), editing.clone());
+    if let Some(actor) = actor {
+        context.0 = context.0.with_actor(actor);
+    }
+    let result = tool.call(context, request_context()).await;
 
     (result, editing)
+}
+
+fn minted_token_actor(editing: &FakeEditingWorker) -> Option<String> {
+    let token = editing
+        .tokens
+        .lock()
+        .expect("edit tokens lock poisoned")
+        .first()
+        .expect("edit minted a document token")
+        .clone();
+    decode_permission_token(&token, "unused-jwt-secret")
+        .expect("edit token should decode")
+        .actor
 }
 
 #[tokio::test]
@@ -496,6 +547,32 @@ async fn rejects_non_markdown_document_without_calling_the_worker() {
 /// into sync-service when its upload finalizes, and a location check during
 /// that window would reject an edit the sync handshake is designed to serve.
 #[tokio::test]
+async fn fast_flag_selects_the_fast_pipeline() {
+    let (_, editing) = call_edit_document_with("md", None, true).await;
+    assert_eq!(
+        *editing.modes.lock().expect("edit modes lock poisoned"),
+        vec![EditMode::Fast]
+    );
+
+    let (_, editing) = call_edit_document("md").await;
+    assert_eq!(
+        *editing.modes.lock().expect("edit modes lock poisoned"),
+        vec![EditMode::Supervised]
+    );
+}
+
+/// `fast` is optional on the wire so existing callers keep working.
+#[test]
+fn fast_defaults_to_false() {
+    let tool: EditDocument = serde_json::from_value(serde_json::json!({
+        "document_id": TEST_DOCUMENT_ID,
+        "instructions": "x",
+    }))
+    .expect("fast should be optional");
+    assert!(!tool.fast);
+}
+
+#[tokio::test]
 async fn allows_markdown_document() {
     let (result, editing) = call_edit_document("md").await;
 
@@ -504,6 +581,56 @@ async fn allows_markdown_document() {
     assert_eq!(
         *editing.edit_calls.lock().expect("edit calls lock poisoned"),
         vec![TEST_DOCUMENT_ID.to_string()]
+    );
+
+    let token = editing
+        .tokens
+        .lock()
+        .expect("edit tokens lock poisoned")
+        .first()
+        .expect("edit minted a document token")
+        .clone();
+    let claims =
+        decode_permission_token(&token, "unused-jwt-secret").expect("edit token should decode");
+    assert_eq!(
+        claims.user_id.as_ref().map(|user| user.as_ref()),
+        Some(TEST_USER_ID)
+    );
+    assert_eq!(
+        claims.actor.as_deref(),
+        Some(bot_id::MACRO_AI_BOT_ID.into_storage_id().as_ref())
+    );
+}
+
+#[tokio::test]
+async fn edit_token_carries_the_context_actor() {
+    let (result, editing) = call_edit_document_as("md", Some(BotId::TEST_A)).await;
+    result.expect("a markdown document should be editable");
+
+    assert_eq!(
+        minted_token_actor(&editing).as_deref(),
+        Some(BotId::TEST_A.into_storage_id().as_ref())
+    );
+}
+
+#[test]
+fn tool_writes_are_delegated_from_the_context_actor_to_the_requesting_user() {
+    let user = MacroUserIdStr::try_from(TEST_USER_ID.to_string()).expect("valid user");
+    let default_context =
+        tool_context(FakeDocumentService::new("md"), FakeEditingWorker::default());
+    assert_eq!(default_context.actor, bot_id::MACRO_AI_BOT_ID);
+
+    let attribution = default_context
+        .0
+        .with_actor(BotId::TEST_A)
+        .attribution(user);
+    assert_eq!(
+        attribution.actor().as_ref(),
+        BotId::TEST_A.into_storage_id().as_ref()
+    );
+    assert_eq!(
+        attribution.on_behalf_of().as_ref().map(|id| id.as_ref()),
+        Some(TEST_USER_ID)
     );
 }
 

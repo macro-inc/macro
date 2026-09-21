@@ -1,16 +1,17 @@
-import {
-  activeCommentThreadSignal,
-  highlightedCommentThreadsSignal,
-  markStore,
-  threadStore,
-} from '@block-md/comments/commentStore';
-import { mdStore } from '@block-md/signal/markdownBlockData';
+import { ChannelInput } from '@channel/Input';
+import { buildPostMessageSendPayload } from '@channel/Input/message-payload';
 import {
   MobileDrawer,
   scrollToFocusedInput,
 } from '@components/app/mobile/MobileDrawer';
 import { getAndClearCommentMentions } from '@core/comments';
-import type { CommentOperations, Root } from '@core/comments/commentType';
+import {
+  type CommentId,
+  type CommentOperations,
+  isDraftThreadId,
+  type MessageCommentOperations,
+  type Root,
+} from '@core/comments/commentType';
 import { NewReplyInput } from '@core/comments/Inputs';
 import {
   CommentsContext,
@@ -23,9 +24,12 @@ import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/me
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
-import { Button } from '@ui';
+import { useContacts } from '@queries/contacts/contacts';
+import { usePostTypingUpdateMutation } from '@queries/messages/typing';
+import { Button, cn } from '@ui';
 import { $setSelection } from 'lexical';
 import { createMemo, createSignal, Show, useContext } from 'solid-js';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 
 /**
  * `baseCommentTheme` minus its `select-text` on message text. The drawer is
@@ -35,7 +39,7 @@ import { createMemo, createSignal, Show, useContext } from 'solid-js';
  * spans would win over the parent's select-none, so the theme must not
  * stamp it. Typing areas opt back in via the drawer's contenteditable rule.
  */
-const drawerCommentTheme = createTheme({ root: 'text-sm' });
+const drawerCommentTheme = createTheme({ root: 'text-base' });
 
 /**
  * Focus target for the drawer's opening focus pass: the draft composer's
@@ -67,8 +71,12 @@ function PinnedReplyComposer(props: {
     <ThreadContext.Provider value={{ mentionsSignal }}>
       <StaticMarkdownContext theme={drawerCommentTheme}>
         <div
-          class="shrink-0 px-3"
-          classList={{ 'pb-(--safe-bottom)': !virtualKeyboardVisible() }}
+          class={cn(
+            'shrink-0 px-3',
+            virtualKeyboardVisible()
+              ? 'pb-4'
+              : 'pb-[max(16px,var(--mobile-sheet-safe-padding))]'
+          )}
         >
           <NewReplyInput
             textValue={text()}
@@ -92,6 +100,58 @@ function PinnedReplyComposer(props: {
   );
 }
 
+/** The pinned composer for a document whose comments are shared messages. */
+function MessagePinnedReplyComposer(props: {
+  root: Root;
+  createComment: MessageCommentOperations['createComment'];
+}) {
+  const context = useContext(CommentsContext);
+  const typing = usePostTypingUpdateMutation();
+  // Workspace users for @-mentions, matching the legacy comment composer.
+  const participants = useContacts();
+  const parent = () => ({ type: 'document' as const, id: context.documentId });
+  return (
+    <StaticMarkdownContext theme={drawerCommentTheme}>
+      <div
+        class="shrink-0 px-3"
+        classList={{ 'pb-(--safe-bottom)': !virtualKeyboardVisible() }}
+      >
+        <ChannelInput
+          parent={parent()}
+          participants={participants}
+          input={{ mode: 'reply', placeholder: 'Reply...' }}
+          autofocus={false}
+          onStartTyping={() =>
+            typing.mutate({
+              parent: parent(),
+              threadId: String(props.root.threadId),
+              action: 'start',
+            })
+          }
+          onStopTyping={() =>
+            typing.mutate({
+              parent: parent(),
+              threadId: String(props.root.threadId),
+              action: 'stop',
+            })
+          }
+          onSend={async (snapshot) => {
+            const { thread_id: _threadId, ...message } =
+              buildPostMessageSendPayload({ snapshot }).message;
+            const created = await props.createComment({
+              ...message,
+              threadId: props.root.threadId,
+            });
+            // Throw on failure so the composer is not cleared and the draft
+            // survives for a retry (createComment resolves null, not rejects).
+            if (!created) throw new Error('Failed to post reply');
+          }}
+        />
+      </div>
+    </StaticMarkdownContext>
+  );
+}
+
 /**
  * Bottom-sheet presentation of the active comment thread for touch devices,
  * replacing the floating margin cards used with a pointer. Opens on explicit
@@ -104,24 +164,20 @@ function PinnedReplyComposer(props: {
  * Must be mounted inside the `CommentsContext` provider (see CommentMargin).
  */
 export function CommentThreadDrawer() {
-  const threads = threadStore.get;
-  const [marks] = markStore;
-  const md = mdStore.get;
-
-  const activeCommentThread = activeCommentThreadSignal.get;
-  const setActiveCommentThread = activeCommentThreadSignal.set;
-  const setHighlightedCommentThreads = highlightedCommentThreadsSignal.set;
+  const { state } = useMarkdownDocument();
+  const { comments: commentState, setCommentState } = state;
+  const md = state.editor.md;
 
   const parentCommentsContext = useContext(CommentsContext);
   // Messages report their inline-edit state; while any edit input is open,
   // the pinned reply composer hides so two inputs never compete.
   const [editingMessageIds, setEditingMessageIds] = createSignal<
-    ReadonlySet<number>
+    ReadonlySet<CommentId>
   >(new Set());
   const messageEditing = () => editingMessageIds().size > 0;
   const drawerCommentsContext = {
     ...parentCommentsContext,
-    setMessageEditing: (commentId: number, editing: boolean) =>
+    setMessageEditing: (commentId: CommentId, editing: boolean) =>
       setEditingMessageIds((prev) => {
         if (prev.has(commentId) === editing) return prev;
         const next = new Set(prev);
@@ -132,19 +188,19 @@ export function CommentThreadDrawer() {
   };
 
   const activeRoot = createMemo<Root | undefined>(() => {
-    const active = activeCommentThread();
-    return active == null ? undefined : threads[active];
+    const active = commentState.activeCommentThread;
+    return active == null ? undefined : commentState.threads[active];
   });
 
   const firstMarkElement = (root: Root) =>
-    Object.values(marks[root.anchorId]?.markNodes ?? {})[0];
+    Object.values(commentState.marks[root.anchorId]?.markNodes ?? {})[0];
 
   // Server threads in document order, from their marks' positions (viewport
   // rects preserve relative document order; this works with the margin
   // hidden, since marks live in the editor itself).
   const orderedThreadIds = createMemo(() => {
-    return Object.values(threads)
-      .filter((root): root is Root => !!root && root.threadId !== -1)
+    return Object.values(commentState.threads)
+      .filter((root): root is Root => !!root && !isDraftThreadId(root.threadId))
       .map((root) => {
         const rect = firstMarkElement(root)?.getBoundingClientRect();
         return {
@@ -158,7 +214,7 @@ export function CommentThreadDrawer() {
   });
 
   const pagerIndex = createMemo(() => {
-    const active = activeCommentThread();
+    const active = commentState.activeCommentThread;
     return active == null ? -1 : orderedThreadIds().indexOf(active);
   });
 
@@ -174,9 +230,9 @@ export function CommentThreadDrawer() {
     // editor update (see CommentsProvider) — and the old selection has
     // served its purpose anyway.
     md.editor?.update(() => $setSelection(null));
-    setActiveCommentThread(target);
-    setHighlightedCommentThreads([target]);
-    const root = threads[target];
+    setCommentState('activeCommentThread', target);
+    setCommentState('highlightedCommentThreads', [target]);
+    const root = commentState.threads[target];
     if (root) {
       firstMarkElement(root)?.scrollIntoView({
         behavior: 'smooth',
@@ -191,8 +247,8 @@ export function CommentThreadDrawer() {
     // selection still sits inside the comment mark. Clear it so tapping the
     // highlight again registers as a selection change and reopens the drawer.
     md.editor?.update(() => $setSelection(null));
-    setActiveCommentThread(null);
-    setHighlightedCommentThreads([]);
+    setCommentState('activeCommentThread', null);
+    setCommentState('highlightedCommentThreads', []);
   };
 
   return (
@@ -210,7 +266,7 @@ export function CommentThreadDrawer() {
       initialFocusEl={getCommentComposerInput() ?? undefined}
     >
       <MobileDrawer.Portal>
-        <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
+        <MobileDrawer.Overlay />
         <MobileDrawer.Content
           aria-label="Comments"
           // Viewing a thread opens at a fixed half-screen height — short
@@ -290,12 +346,24 @@ export function CommentThreadDrawer() {
               // Hidden, not unmounted, while a message edit is open — an
               // in-progress reply draft survives the edit.
               <div classList={{ hidden: messageEditing() }}>
-                <PinnedReplyComposer
-                  root={root}
-                  createComment={
-                    parentCommentsContext.commentOperations.createComment
+                <Show
+                  when={parentCommentsContext.messageOperations}
+                  fallback={
+                    <PinnedReplyComposer
+                      root={root}
+                      createComment={
+                        parentCommentsContext.commentOperations.createComment
+                      }
+                    />
                   }
-                />
+                >
+                  {(operations) => (
+                    <MessagePinnedReplyComposer
+                      root={root}
+                      createComment={operations().createComment}
+                    />
+                  )}
+                </Show>
               </div>
             )}
           </Show>

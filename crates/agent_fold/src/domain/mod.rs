@@ -5,16 +5,24 @@
 mod error;
 /// Collapsing a protocol log into messages.
 pub mod fold;
+/// Harness-specific `_meta` and raw-input extraction.
+pub mod harness;
+/// Durable snapshot and live-row ingestion around the append-only protocol fold.
+pub mod ingestion;
+/// A fold that also reports what each frame meant for the turn.
+pub mod lifecycle;
 /// The raw log vocabulary the fold consumes.
 pub mod log;
-/// Harness-specific `_meta` extraction.
-pub mod meta;
 /// The renderable message vocabulary.
 pub mod model;
+/// Projection of ACP model configuration into domain model choices.
+pub mod model_selection;
 /// The driving query port and the driven log-source port.
 pub mod ports;
 /// The domain service answering queries by folding on read.
 pub mod service;
+/// Unconfirmed client actions folded on a fork of the confirmed history.
+pub mod speculation;
 
 #[cfg(test)]
 mod test;

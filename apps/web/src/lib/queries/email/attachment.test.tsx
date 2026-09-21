@@ -1,9 +1,7 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { err, ok, type Result } from 'neverthrow';
-import type { JSX } from 'solid-js';
-import { render } from 'solid-js/web';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useUploadDraftAttachmentsMutation } from './attachment';
+import { mountEmailMutation } from './tests/mutation';
 
 const addDraftAttachmentMock = vi.hoisted(() => vi.fn());
 const removeDraftAttachmentMock = vi.hoisted(() => vi.fn());
@@ -29,33 +27,6 @@ vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: toastFailureMock },
 }));
 
-let testQueryClient: QueryClient;
-let dispose: (() => void) | undefined;
-
-function renderHook<T>(factory: () => T): T {
-  let hook!: T;
-  dispose = render(
-    () => (
-      <QueryClientProvider client={testQueryClient}>
-        {(() => {
-          hook = factory();
-          return null as unknown as JSX.Element;
-        })()}
-      </QueryClientProvider>
-    ),
-    document.body
-  );
-  return hook;
-}
-
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((r) => {
-    resolve = r;
-  });
-  return { promise, resolve };
-}
-
 // jsdom's File lacks arrayBuffer()
 const file = () => {
   const f = new File([new Uint8Array([1, 2, 3])], 'demo.pdf', {
@@ -69,9 +40,6 @@ const file = () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  testQueryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
   addDraftAttachmentMock.mockResolvedValue(
     ok({
       attachment_id: 'att-1',
@@ -82,19 +50,14 @@ beforeEach(() => {
   removeDraftAttachmentMock.mockResolvedValue(ok(undefined));
 });
 
-afterEach(() => {
-  dispose?.();
-  dispose = undefined;
-});
-
 describe('useUploadDraftAttachmentsMutation', () => {
   it('assigns the attachment id before the content upload completes', async () => {
-    const upload = deferred<Result<void, never>>();
+    const upload = Promise.withResolvers<Result<void, never>>();
     uploadToPresignedUrlMock.mockReturnValue(upload.promise);
     const onAttachmentAdded = vi.fn();
     const attachment = file();
 
-    const mutation = renderHook(() => useUploadDraftAttachmentsMutation());
+    const mutation = mountEmailMutation(useUploadDraftAttachmentsMutation);
     const pending = mutation.mutateAsync({
       draftID: 'draft-1',
       attachments: [attachment],
@@ -119,7 +82,7 @@ describe('useUploadDraftAttachmentsMutation', () => {
     const onAttachmentUploadFailed = vi.fn();
     const attachment = file();
 
-    const mutation = renderHook(() => useUploadDraftAttachmentsMutation());
+    const mutation = mountEmailMutation(useUploadDraftAttachmentsMutation);
     await expect(
       mutation.mutateAsync({
         draftID: 'draft-1',
@@ -138,7 +101,7 @@ describe('useUploadDraftAttachmentsMutation', () => {
     const onAttachmentUploadFailed = vi.fn();
     const attachment = file();
 
-    const mutation = renderHook(() => useUploadDraftAttachmentsMutation());
+    const mutation = mountEmailMutation(useUploadDraftAttachmentsMutation);
     await expect(
       mutation.mutateAsync({
         draftID: 'draft-1',
@@ -163,7 +126,7 @@ describe('useUploadDraftAttachmentsMutation', () => {
     const onAttachmentUploadFailed = vi.fn();
     const attachment = file();
 
-    const mutation = renderHook(() => useUploadDraftAttachmentsMutation());
+    const mutation = mountEmailMutation(useUploadDraftAttachmentsMutation);
     await expect(
       mutation.mutateAsync({
         draftID: 'draft-1',

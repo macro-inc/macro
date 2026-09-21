@@ -3,7 +3,6 @@ import {
   optimisticMutationDispositionOf,
 } from '@graphql-cache/exchange/optimistic';
 import type { Client, OperationResult } from '@urql/core';
-import { match } from 'ts-pattern';
 import {
   type NotificationEntityInput,
   type NotificationUpdateOperation,
@@ -60,19 +59,19 @@ function createOptimisticUpdateNotificationsData({
   notificationIds,
   operation,
 }: GraphqlUpdateNotificationsArgs): UpdateNotificationsMutation {
-  const viewedAt =
-    operation === 'MARK_SEEN' ? new Date().toISOString() : undefined;
   const updateNotifications: OptimisticNotificationPatch[] =
     notificationIds.map((id) => {
       const identity = {
         __typename: 'GraphqlNotification' as const,
         id,
       };
-      return match(operation)
-        .with('MARK_SEEN', () => ({ ...identity, seen: true, viewedAt }))
-        .with('MARK_DONE', () => ({ ...identity, done: true }))
-        .with('MARK_UNDONE', () => ({ ...identity, done: false }))
-        .exhaustive();
+      // The generic scalar cache cannot apply conditional transitions. A
+      // guessed Seen patch would reopen Done, and a guessed viewedAt would
+      // overwrite history. Let authoritative replies settle seen/reopen;
+      // view-local overlays provide safe optimistic feedback in the meantime.
+      return operation === 'MARK_DONE'
+        ? { ...identity, state: 'DONE' as const }
+        : identity;
     });
 
   // GraphQL result types model complete server data, while the cache

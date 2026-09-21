@@ -77,15 +77,40 @@ export type SearchCachePage = {
   nextCursor: SearchCursor | null;
 };
 
-/** Exact initial-page request over the canonical GraphQL Soup filter input. */
+/** Maximum server-page membership evidence in one reconciliation request. */
+export const MAX_RECONCILIATION_BASELINE = 5_000;
+
+/** Initial-page candidates, optionally reconciled with same-query server pages. */
 export type EntityFilterCacheArgs = {
   filters: Record<string, unknown>;
   sortMethod: 'CREATED_AT' | 'UPDATED_AT' | 'VIEWED_AT' | 'VIEWED_UPDATED';
   sortDirection: 'ASC' | 'DESC';
   limit: number;
+  /** Omit for exact evaluation; even an empty array requests reconciliation. */
+  baseline?: Array<{ key: string; sortTimestamp: string }>;
+  /** Explicit cached-Mail pagination, independent of server cursors. */
+  mail?: { view: 'ALL' | 'INBOX' | 'DRAFTS' | 'SENT'; cursor?: string };
 };
 
 export type EntityFilterCacheResult =
+  | {
+      kind: 'mail-page';
+      revision: CacheRevision;
+      keys: string[];
+      /** View-correct timestamps aligned with keys, independent of cached previews. */
+      sortTimestamps: string[];
+      nextCursor: string | null;
+      optimistic: boolean;
+    }
+  | { kind: 'stale-cursor'; revision: CacheRevision }
+  | {
+      kind: 'reconciled';
+      revision: CacheRevision;
+      keys: string[];
+      /** Survivors backed only by previous server membership evidence. */
+      retainedKeys: string[];
+      optimistic: boolean;
+    }
   | {
       kind: 'complete';
       revision: CacheRevision;
@@ -570,6 +595,7 @@ export type CachePush =
       keys: string[];
     }
   | { kind: 'cache-changed'; revision: CacheRevision }
+  | { kind: 'cache-hydrated'; revision: CacheRevision }
   | { kind: 'mutation-settled'; settlement: MutationSettlement };
 
 export type WorkerMessage = CacheResponse | CachePush;
@@ -644,6 +670,7 @@ export function isCachePush(value: unknown): value is CachePush {
         isWireStringArray(value.keys)
       );
     case 'cache-changed':
+    case 'cache-hydrated':
       return (
         hasOnlyWireKeys(value, ['kind', 'revision']) &&
         isCacheRevision(value.revision)

@@ -1,5 +1,6 @@
 import type { EventInput } from '@fullcalendar/core';
 import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
+import type { CalendarEventSourceContent } from '@service-storage/generated/schemas/calendarEventSourceContent';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import type { EventReminders } from '@service-storage/generated/schemas/eventReminders';
 import type { EventType } from '@service-storage/generated/schemas/eventType';
@@ -31,8 +32,14 @@ export interface CalendarSource {
   color: string;
   /** Connected inbox address, when the source came from a visible calendar. */
   emailAddress?: string;
+  /** Connected inbox link that syncs this calendar, for grouping by account. */
+  emailLinkId?: string;
   /** Whether this source is its connected inbox's primary calendar. */
   isPrimary?: boolean;
+  /** Whether this is a subscribed system calendar (holidays, birthdays). */
+  isSubscription?: boolean;
+  /** A persistent sync failure isolated to this calendar, for a settings badge. */
+  syncError?: string;
 }
 
 /** Calendar occurrence data, independent from FullCalendar. */
@@ -47,7 +54,7 @@ export interface CalendarEvent {
   recurrenceId?: string;
   /** Whether this materialized occurrence was cancelled. */
   isCancelled: boolean;
-  /** Whether the canonical event source is read-only. */
+  /** Whether the displayed copy's calendar prohibits editing it. */
   isReadOnly: boolean;
   /** Direct conference join URL, when available. */
   conferenceUrl?: string;
@@ -66,12 +73,28 @@ export interface CalendarEvent {
   creatorEmail?: string;
   /** Attendees and their RSVP metadata. */
   attendees: CalendarAttendee[];
-  /** Per-user reminder configuration; absent means the calendar default. */
+  /**
+   * Reminder configuration of the primary copy, the one Macro's alerts
+   * follow whichever copy a chip shows. Absent means the calendar default.
+   */
   reminders?: EventReminders;
+  /** Calendar whose defaults `reminders` resolve against: the primary copy's. */
+  reminderCalendarId?: string;
+  /**
+   * Event type of the primary copy. Status types such as out of office never
+   * resolve `reminders` to the calendar defaults.
+   */
+  reminderEventType?: EventType;
   /** Provider event type; absent means a regular event. */
   eventType?: EventType;
-  /** Canonical calendar entity id, for resolving default reminders. */
+  /** Calendar of the copy this chip shows. Mutations address that copy. */
   calendarId?: string;
+  /**
+   * Calendars whose visibility governs this chip: every calendar the event
+   * is synced from, or the overlay id for a teammate's out-of-office event.
+   * Empty when the event has no copy data, in which case `calendar` decides.
+   */
+  sourceCalendarIds: string[];
   /** Raw recurrence rules attached to the canonical event. */
   recurrenceLines: string[];
   /** Original IANA timezone for a timed occurrence. */
@@ -84,8 +107,14 @@ export interface CalendarEvent {
   end: string;
   /** Whether the canonical occurrence is all-day rather than timed. */
   allDay: boolean;
-  /** Calendar source that owns the event. */
+  /** Calendar of the copy this chip shows. */
   calendar: CalendarSource;
+  /**
+   * Every shown calendar the event is on, the displayed copy's first. A chip
+   * draws one color bar per entry, so an event synced to several calendars
+   * reads as one event that belongs to each of them.
+   */
+  visibleCalendars: CalendarSource[];
   /** Optional event location. */
   location?: string;
   /** Optional event description. */
@@ -103,10 +132,83 @@ function optionalText(value: string | null | undefined) {
   return value ?? undefined;
 }
 
-/** Maps one backend occurrence projection into the calendar event model. */
+/** How an occurrence is attributed to the calendars the viewer is showing. */
+interface CalendarOccurrenceMappingOptions {
+  sourceById?: ReadonlyMap<string, CalendarSource>;
+  isSourceVisible?: (sourceId: string) => boolean;
+}
+
+/** A copy of an event on a calendar the viewer is showing, with that calendar. */
+interface ShownEventCopy {
+  copy: CalendarEventSourceContent;
+  calendar: CalendarSource;
+}
+
+/**
+ * The copies whose calendar is shown and loaded, in the server's
+ * canonical-first order (primary calendar, then freshest). The first one is
+ * the copy a chip displays.
+ */
+function shownEventCopies(
+  sources: CalendarEventSourceContent[],
+  options: CalendarOccurrenceMappingOptions
+): ShownEventCopy[] {
+  return sources.flatMap((copy) => {
+    if (options.isSourceVisible?.(copy.calendarId) === false) return [];
+    const calendar = options.sourceById?.get(copy.calendarId);
+    return calendar ? [{ copy, calendar }] : [];
+  });
+}
+
+/**
+ * The copy to display when no shown copy's calendar is loaded: the first
+ * copy whose calendar is shown, falling back to the canonical copy when none
+ * of them is.
+ */
+function selectEventSource(
+  sources: CalendarEventSourceContent[],
+  isSourceVisible?: (sourceId: string) => boolean
+): CalendarEventSourceContent | undefined {
+  return (
+    sources.find((source) => isSourceVisible?.(source.calendarId) !== false) ??
+    sources[0]
+  );
+}
+
+/**
+ * Whether an event renders under a per-source visibility predicate: it
+ * stays visible while any of its calendars is shown. The displayed calendar
+ * is the fallback for events without copy data.
+ */
+export function isCalendarEventVisible(
+  event: Pick<CalendarEvent, 'calendar' | 'sourceCalendarIds'>,
+  isSourceVisible?: (sourceId: string) => boolean
+): boolean {
+  if (!isSourceVisible) return true;
+  const sourceIds =
+    event.sourceCalendarIds.length > 0
+      ? event.sourceCalendarIds
+      : [event.calendar.id];
+  return sourceIds.some(isSourceVisible);
+}
+
+/** Calendar whose defaults the event's reminders resolve against. */
+export function reminderCalendarIdOf(
+  event: Pick<CalendarEvent, 'reminderCalendarId' | 'calendarId'>
+) {
+  return event.reminderCalendarId ?? event.calendarId;
+}
+
+/**
+ * Maps one backend occurrence projection into the single chip it renders as,
+ * showing the first copy whose calendar the viewer has on and loaded, and
+ * listing every such calendar the event is synced to. The entity itself
+ * carries the canonical copy's content, so an event with no copy data reads
+ * the same as its first copy.
+ */
 export function mapCalendarOccurrence(
   item: CalendarOccurrenceItem,
-  source: CalendarSource = DEFAULT_CALENDAR_SOURCE
+  options: CalendarOccurrenceMappingOptions = {}
 ): CalendarEvent {
   const { event, occurrence } = item;
   const time = occurrence.time;
@@ -114,6 +216,18 @@ export function mapCalendarOccurrence(
     time.kind === 'timed'
       ? { allDay: false, start: time.startsAt, end: time.endsAt }
       : { allDay: true, start: time.startDate, end: time.endDate };
+  const sources = event.sources ?? [];
+  const shown = shownEventCopies(sources, options);
+  const copy =
+    shown[0]?.copy ?? selectEventSource(sources, options.isSourceVisible);
+  const content = copy ?? event;
+  const canonical = sources[0] ?? event;
+  const calendarId = copy?.calendarId ?? event.calendarId ?? undefined;
+  const source =
+    shown[0]?.calendar ??
+    (calendarId ? options.sourceById?.get(calendarId) : undefined) ??
+    DEFAULT_CALENDAR_SOURCE;
+  const visibleCalendars = shown.map(({ calendar }) => calendar);
 
   return {
     ...range,
@@ -123,24 +237,28 @@ export function mapCalendarOccurrence(
     recurrenceId: occurrence.recurrenceId ?? undefined,
     recurrenceLines: event.recurrenceLines ?? [],
     isCancelled: occurrence.isCancelled,
-    isReadOnly: event.isReadOnly,
+    isReadOnly: content.isReadOnly,
     conferenceUrl: event.conferenceUrl ?? undefined,
     conferenceProvider:
       (event.conferenceProvider as ConferenceProvider | null | undefined) ??
       undefined,
     organizerName: event.organizerName ?? undefined,
     organizerEmail: event.organizerEmail ?? undefined,
-    creatorName: optionalText(event.creatorName),
-    creatorEmail: optionalText(event.creatorEmail),
+    creatorName: optionalText(content.creatorName),
+    creatorEmail: optionalText(content.creatorEmail),
     attendees: event.attendees ?? [],
-    reminders: event.reminders ?? undefined,
-    eventType: event.eventType ?? undefined,
-    calendarId: event.calendarId ?? undefined,
+    reminders: canonical.reminders ?? undefined,
+    reminderCalendarId: canonical.calendarId ?? undefined,
+    reminderEventType: canonical.eventType ?? undefined,
+    eventType: content.eventType ?? undefined,
+    calendarId,
+    sourceCalendarIds: sources.map((candidate) => candidate.calendarId),
     timeZone: time.kind === 'timed' ? (time.timeZone ?? undefined) : undefined,
-    title: event.title,
+    title: content.title,
     calendar: source,
-    location: event.location ?? undefined,
-    description: event.description ?? undefined,
+    visibleCalendars: visibleCalendars.length > 0 ? visibleCalendars : [source],
+    location: content.location ?? undefined,
+    description: content.description ?? undefined,
   };
 }
 

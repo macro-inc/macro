@@ -114,6 +114,21 @@ describe('buildEntityData', () => {
       });
       expect(e).toEqual({ ...base, type: 'channel', channelType: 'team' });
     });
+
+    it('passes isParticipant through when provided', () => {
+      const e = buildEntityData({
+        ...base,
+        blockName: 'channel',
+        channelType: 'team',
+        isParticipant: false,
+      });
+      expect(e).toEqual({
+        ...base,
+        type: 'channel',
+        channelType: 'team',
+        isParticipant: false,
+      });
+    });
   });
 
   describe('email', () => {

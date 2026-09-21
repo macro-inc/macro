@@ -1,9 +1,6 @@
-//! Revert a soft-deleted chat.
-
 use anyhow::Context;
+use model_owner::Owner;
 
-/// Clear `deleted_at`, restore the chat to user history, and detach from a
-/// deleted project if necessary.
 #[tracing::instrument(err, skip(tx))]
 pub(crate) async fn revert_delete_chat(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
@@ -23,21 +20,28 @@ pub(crate) async fn revert_delete_chat(
     .fetch_one(&mut **tx)
     .await
     .context("unable to update chat")?;
+    let chat_owner = Owner::from_principal_str(&chat_owner).context("invalid chat owner")?;
 
-    sqlx::query!(
-        r#"
+    let chat_uuid = macro_uuid::string_to_uuid(chat_id)?;
+    entity_registry_db_utils::clear_deleted(tx, chat_uuid).await?;
+
+    // Only a user has a history feed; bot- and team-owned chats leave it alone.
+    if let Owner::User(owner_user_id) = &chat_owner {
+        sqlx::query!(
+            r#"
         INSERT INTO "UserHistory" ("userId", "itemId", "itemType", "createdAt", "updatedAt")
         VALUES ($1, $2, $3, NOW(), NOW())
         ON CONFLICT ("userId", "itemId", "itemType") DO UPDATE
         SET "updatedAt" = NOW();
         "#,
-        chat_owner,
-        chat_id,
-        "chat",
-    )
-    .execute(&mut **tx)
-    .await
-    .context("unable to add chat to history")?;
+            owner_user_id.as_ref(),
+            chat_id,
+            "chat",
+        )
+        .execute(&mut **tx)
+        .await
+        .context("unable to add chat to history")?;
+    }
 
     if let Some(project_id) = project_id {
         let is_deleted = sqlx::query!(

@@ -35,8 +35,15 @@ export type {
   ListRestoreFocusOptions,
 } from './types';
 export {
+  type ListDetailNavigation,
+  type ListDetailNavigationOptions,
+  type ListDetailNavigationTarget,
+  useListDetailNavigation,
+} from './use-list-detail-navigation';
+export {
   type ListInteractionActivation,
   type ListInteractionActivationIntent,
+  type ListInteractionBeforeMoveEvent,
   type ListInteractionDisclosure,
   type ListInteractionNavigation,
   type ListInteractionNavigationEvent,

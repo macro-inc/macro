@@ -16,16 +16,17 @@ import {
 } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
-  ContextMenuContent,
   MenuGroup,
   MenuItem,
   MenuSeparator,
 } from '@core/component/ContextMenu';
 import type { EntityIconSelector } from '@core/component/EntityIcon';
-import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
+import {
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { EntityData } from '@entity';
-import { ContextMenu } from '@kobalte/core/context-menu';
 import { Tooltip as KobalteTooltip } from '@kobalte/core/tooltip';
 import { isChannelNotification } from '@notifications/notification-helpers';
 import { getChannelNotificationParams } from '@notifications/notification-navigation';
@@ -34,7 +35,6 @@ import CaretDownIcon from '@phosphor/caret-down.svg';
 import {
   favoriteEntityKey,
   useFavoritesData,
-  useRemoveFavoriteMutation,
   useReorderFavoritesMutation,
 } from '@queries/favorites/favorites';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
@@ -54,6 +54,7 @@ import {
   type ParentProps,
   Show,
 } from 'solid-js';
+import { FavoriteContextMenu } from '../FavoriteContextMenu';
 
 /**
  * Drag data carried by favorite row sortables. Distinct from `EntityDragData`
@@ -192,7 +193,7 @@ export const FavoritesSection = (props: {
   const unreadNotificationsByChannel = createMemo(() => {
     // TODO(dev-rb/notifications): Restore favorite notification badges,
     // previews, and actions from notifications attached to favorite Soup items.
-    if (ENABLE_GRAPHQL_SOUP()) {
+    if (isFeatureEnabled(enableGraphqlSoup)) {
       return new Map<string, UnifiedNotification[]>();
     }
 
@@ -200,8 +201,7 @@ export const FavoritesSection = (props: {
     for (const notification of notificationSource.notifications()) {
       if (
         !isChannelNotification(notification) ||
-        notification.viewed_at ||
-        notification.done
+        notification.state !== 'unseen'
       ) {
         continue;
       }
@@ -342,7 +342,6 @@ const FavoriteRow = (props: {
   const muteAction = makeMuteAction({
     notificationSource: () => notificationSource,
   });
-  const removeMutation = useRemoveFavoriteMutation();
   // Favorites already store the canonical notification type (`email_thread`),
   // which the mute mapping accepts as-is.
   const favoriteAsEntity = () =>
@@ -404,32 +403,11 @@ const FavoriteRow = (props: {
   };
 
   const open = (e: MouseEvent) => openFavorite(e.shiftKey);
-  const canOpenInNewSplit = () =>
-    globalSplitManager()?.canAppendSplit() ?? false;
-  const canOpenFullscreen = () => layout.getSplitCount() > 1;
-  const openInCurrentSplit = () => openFavorite(false);
-  const openInNewSplit = () => {
-    if (canOpenInNewSplit()) openFavorite(true);
-  };
-  const openFullscreen = () => {
-    const split = layout.replaceAllSplits(content(), {
-      referredFrom: 'sidebar',
-    });
-    globalSplitManager()?.returnFocus();
-    return split;
-  };
   const markAllAsRead = () => {
     void notificationSource.bulkMarkAsRead(props.notifications());
   };
   const markAllAsDone = () => {
     void notificationSource.bulkMarkAsDone(props.notifications());
-  };
-
-  const removeFromFavorites = () => {
-    removeMutation.mutate({
-      entityType: props.favorite.entityType,
-      entityId: props.favorite.entityId,
-    });
   };
 
   const isUnreadChannelFavorite = () =>
@@ -482,36 +460,12 @@ const FavoriteRow = (props: {
         sortable.isActiveDraggable && 'opacity-40'
       )}
     >
-      <ContextMenu onOpenChange={setContextMenuOpen}>
-        <ContextMenu.Trigger class="w-full h-7">
-          <Show when={isUnreadChannelFavorite()} fallback={row}>
-            <FavoriteChannelHoverCard
-              channelId={props.favorite.entityId}
-              notifications={props.notifications()}
-              disabled={contextMenuOpen()}
-              onOpenChange={setHoverPreviewOpen}
-            >
-              {row}
-            </FavoriteChannelHoverCard>
-          </Show>
-        </ContextMenu.Trigger>
-
-        <ContextMenu.Portal>
-          <ContextMenuContent class="text-xs text-ink-muted">
-            <MenuGroup>
-              <MenuItem
-                text="Open in new split"
-                onClick={openInNewSplit}
-                disabled={!canOpenInNewSplit()}
-              />
-              <Show when={canOpenFullscreen()}>
-                <MenuItem text="Open fullscreen" onClick={openFullscreen} />
-              </Show>
-              <MenuItem
-                text="Open in current split"
-                onClick={openInCurrentSplit}
-              />
-            </MenuGroup>
+      <FavoriteContextMenu
+        favorite={props.favorite}
+        triggerClass="h-7"
+        onOpenChange={setContextMenuOpen}
+        additionalActions={
+          <>
             <Show when={props.notifications().length > 0}>
               <MenuSeparator />
               <MenuGroup>
@@ -532,16 +486,20 @@ const FavoriteRow = (props: {
                 />
               </MenuGroup>
             </Show>
-            <MenuSeparator />
-            <MenuGroup>
-              <MenuItem
-                text="Remove from favorites"
-                onClick={removeFromFavorites}
-              />
-            </MenuGroup>
-          </ContextMenuContent>
-        </ContextMenu.Portal>
-      </ContextMenu>
+          </>
+        }
+      >
+        <Show when={isUnreadChannelFavorite()} fallback={row}>
+          <FavoriteChannelHoverCard
+            channelId={props.favorite.entityId}
+            notifications={props.notifications()}
+            disabled={contextMenuOpen()}
+            onOpenChange={setHoverPreviewOpen}
+          >
+            {row}
+          </FavoriteChannelHoverCard>
+        </Show>
+      </FavoriteContextMenu>
     </div>
   );
 };

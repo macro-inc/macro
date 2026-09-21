@@ -160,6 +160,115 @@ test('direct cutover lazily deletes only the former normalized-cache IDB', async
   expect(browserErrors).toEqual([]);
 });
 
+test('a suspended owner resumes without replacement or cache loss', async ({
+  context,
+  page,
+  browserName,
+}, testInfo) => {
+  test.skip(
+    browserName !== 'chromium',
+    'CDP lifecycle control is Chromium-only'
+  );
+  const scope = `cache-suspension-${crypto.randomUUID()}`;
+  const path = `${harnessPath(testInfo.project.name, 'cache-lifecycle.html')}?treatment=true&scope=${scope}`;
+  await page.goto(path);
+  await page.evaluate(async () => {
+    await window.cacheLifecycleHarness.startSingle();
+    await window.cacheLifecycleHarness.write('preserve-through-suspension');
+  });
+  const before = await page.evaluate(() => window.cacheLifecycleHarness.read());
+  expect(before).toMatchObject({ kind: 'hit' });
+  const follower = await context.newPage();
+  await follower.goto(path);
+  await follower.evaluate(() => window.cacheLifecycleHarness.startSingle());
+
+  const cdp = await context.newCDPSession(page);
+  const { targetInfos } = await cdp.send('Target.getTargets');
+  const engine = targetInfos.find(
+    (target) =>
+      target.type === 'worker' && target.url.includes('cache.engine-worker')
+  );
+  if (!engine) throw new Error('missing cache engine target');
+  const { sessionId } = await cdp.send('Target.attachToTarget', {
+    targetId: engine.targetId,
+    flatten: false,
+  });
+  const paused = new Promise<void>((resolve) => {
+    cdp.on('Target.receivedMessageFromTarget', (event) => {
+      if (
+        event.sessionId === sessionId &&
+        JSON.parse(event.message).method === 'Debugger.paused'
+      )
+        resolve();
+    });
+  });
+  const debug = async (id: number, method: string) => {
+    await cdp.send('Target.sendMessageToTarget', {
+      sessionId,
+      message: JSON.stringify({ id, method }),
+    });
+  };
+  await debug(1, 'Debugger.enable');
+  await debug(2, 'Debugger.pause');
+  await paused;
+  try {
+    await cdp.send('Page.setWebLifecycleState', { state: 'frozen' });
+    // CDP page freezing alone need not pause a lock-holding worker in Chrome.
+    // Explicitly pause its event loop, keeping its lock held, while the other
+    // page keeps the coordinator running beyond multiple heartbeat deadlines.
+    await new Promise((resolve) => setTimeout(resolve, 16_000));
+    const { targetInfos: suspendedTargets } =
+      await cdp.send('Target.getTargets');
+    expect(
+      suspendedTargets.some((target) => target.targetId === engine.targetId)
+    ).toBe(true);
+  } finally {
+    const { targetInfos: remainingTargets } =
+      await cdp.send('Target.getTargets');
+    if (
+      remainingTargets.some((target) => target.targetId === engine.targetId)
+    ) {
+      await debug(3, 'Debugger.resume');
+    }
+    await cdp.send('Page.setWebLifecycleState', { state: 'active' });
+    await cdp.detach();
+  }
+
+  expect(
+    await page.evaluate(() => window.cacheLifecycleHarness.read())
+  ).toEqual(before);
+  expect(
+    await page.evaluate(() => window.cacheLifecycleHarness.engineWorkerCount())
+  ).toBe(1);
+  expect(
+    await follower.evaluate(() =>
+      window.cacheLifecycleHarness.engineWorkerCount()
+    )
+  ).toBe(0);
+  expect(
+    await follower.evaluate(() => window.cacheLifecycleHarness.read())
+  ).toEqual(before);
+});
+
+test('a silently terminated engine still recovers after releasing its owner lock', async ({
+  page,
+}, testInfo) => {
+  await page.goto(
+    `${harnessPath(testInfo.project.name, 'cache-lifecycle.html')}?treatment=true`
+  );
+  await page.evaluate(() => window.cacheLifecycleHarness.startSingle());
+  const result = await page.evaluate(() =>
+    window.cacheLifecycleHarness.abruptOwnerLoss()
+  );
+  expect(result).toMatchObject({
+    oldRequestRejected: true,
+    replacement: { kind: 'miss' },
+  });
+  expect(
+    await page.evaluate(() => window.cacheLifecycleHarness.engineWorkerCount())
+  ).toBe(2);
+});
+
 test('production cache-wasm Turso engine preserves graceful data and atomically recovers abrupt loss', async ({
   context,
   page,

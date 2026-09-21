@@ -11,6 +11,7 @@ use model_notifications::{
     ChannelReplyMetadata, CommonChannelMetadata, DocumentMentionMetadata,
     NotificationDocumentSubType,
 };
+use model_owner::Owner;
 use notification_hex::domain::{
     models::SendNotificationRequestBuilder, service::NotificationIngress,
 };
@@ -194,12 +195,15 @@ where
                             secondary_notification_entity,
                             notification: DocumentMentionMetadata {
                                 document_name: document.document_name,
-                                owner: document.owner,
+                                owner: Owner::User(document.owner),
                                 file_type: document.file_type,
                                 sub_type: match document.sub_type.as_deref() {
                                     Some("task") => Some(NotificationDocumentSubType::Task),
                                     Some("snippet") => Some(NotificationDocumentSubType::Snippet),
                                     Some("skill") => Some(NotificationDocumentSubType::Skill),
+                                    Some("initiative_description") => {
+                                        Some(NotificationDocumentSubType::InitiativeDescription)
+                                    }
                                     _ => None,
                                 },
                                 channel: to_channel_mention_metadata(mention),

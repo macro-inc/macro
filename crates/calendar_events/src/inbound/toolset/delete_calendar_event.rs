@@ -56,6 +56,15 @@ pub struct DeleteCalendarEvent {
     #[schemars(description = "The event's id, from ListCalendarEvents or CreateCalendarEvent.")]
     pub event_id: uuid::Uuid,
 
+    /// Calendar whose copy of the event is deleted.
+    #[schemars(
+        description = "The `calendarId` of the copy to delete, from the `copies` of its \
+                       ListCalendarEvents entry, for an event synced from more than one \
+                       calendar. Omit to delete the event's primary copy."
+    )]
+    #[serde(default)]
+    pub calendar_id: Option<uuid::Uuid>,
+
     /// Deletion scope.
     #[schemars(
         description = "How much of a recurring series to remove: \"all\" (default), \
@@ -123,7 +132,7 @@ where
 
         service_context
             .mutations
-            .delete_event(&requester_id, self.event_id, scope)
+            .delete_event(&requester_id, self.event_id, self.calendar_id, scope)
             .await
             .map_err(|error| mutation_tool_error("delete the calendar event", error))?;
 

@@ -172,6 +172,13 @@ pub struct CreateAgentRequest {
     /// empty list.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub mcp_servers: Vec<McpServerSelection>,
+    /// Ask Cursor to push its work to a generated branch and open a pull
+    /// request against the starting ref. Cursor spells the field `autoCreatePR`,
+    /// which the struct's camel case would mangle to `autoCreatePr`, so the
+    /// rename is explicit. Omitted when false so a repo-less agent — which has
+    /// nothing to open a pull request against — sends no opinion at all.
+    #[serde(rename = "autoCreatePR", skip_serializing_if = "std::ops::Not::not")]
+    pub auto_create_pr: bool,
 }
 
 /// `POST /v1/agents` response: the agent and its first run together.
@@ -212,6 +219,31 @@ pub struct RunDetail {
 pub struct ListRunsResponse {
     /// The agent's runs, newest first.
     pub items: Vec<RunListItem>,
+    /// Cursor for the next page, absent on the last page.
+    #[serde(default, rename = "nextCursor")]
+    pub next_cursor: Option<String>,
+}
+
+/// `GET /v0/agents/{id}/conversation` response.
+///
+/// Deliberately the older API version: v1 has no conversation endpoint, and
+/// this one answers for agents v1 created.
+#[derive(Debug, Deserialize)]
+pub struct ConversationResponse {
+    /// The agent's prompts and replies, oldest first.
+    pub messages: Vec<ConversationMessage>,
+}
+
+/// One message in a `GET /v0/agents/{id}/conversation` response.
+#[derive(Debug, Deserialize)]
+pub struct ConversationMessage {
+    /// `user_message` or `assistant_message`. Anything else is skipped rather
+    /// than guessed at, so a kind Cursor adds cannot be read as a prompt.
+    #[serde(rename = "type")]
+    pub kind: String,
+    /// The message text. Absent on a kind that carries none.
+    #[serde(default)]
+    pub text: Option<String>,
 }
 
 /// One run in a `GET /v1/agents/{id}/runs` page.
@@ -304,4 +336,80 @@ impl CreateRunResponse {
             Self::Wrapped { run } | Self::Bare(run) => run.id,
         }
     }
+}
+
+/// The envelope Cursor wraps an error status in: `{"error": {"code", "message"}}`.
+///
+/// `message` is read as well as `code` because Cursor files more than one
+/// distinct failure under `validation_error`, and the wording is the only
+/// thing that tells a branch it could not verify apart from a malformed
+/// model id. This crate still has its own wording for the cases it acts on;
+/// everything else keeps the raw body instead.
+#[derive(Debug, Deserialize)]
+pub struct ApiErrorEnvelope {
+    /// The error itself.
+    pub error: ApiErrorCode,
+}
+
+/// The two halves of an error body.
+#[derive(Debug, Deserialize)]
+pub struct ApiErrorCode {
+    /// Cursor's error code, e.g. `repository_access`.
+    pub code: String,
+    /// Cursor's human-readable wording. Defaulted so a body with only a code
+    /// still classifies by it.
+    #[serde(default)]
+    pub message: String,
+}
+
+/// `GET /v1/agents/{id}/artifacts` response.
+///
+/// The listing is the agent's whole artifact directory, not one run's output:
+/// artifacts persist across runs and Cursor offers no run filter, so `items`
+/// on a later turn still contains everything earlier turns wrote.
+#[derive(Debug, Deserialize)]
+pub struct ListArtifactsResponse {
+    /// Every artifact the agent has written so far. Defaulted so a bare `{}`
+    /// for an agent that has written none reads as empty; the docs show only
+    /// the populated shape, so this is a guard, not an observed answer.
+    #[serde(default)]
+    pub items: Vec<ArtifactListing>,
+}
+
+/// One artifact in a `GET /v1/agents/{id}/artifacts` page.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtifactListing {
+    /// Workspace-relative path, always under `artifacts/`, e.g.
+    /// `artifacts/screenshot.png`. This is both the artifact's identity and
+    /// the value the download endpoint takes.
+    pub path: String,
+    /// Size in bytes. Videos run to tens of megabytes, so a caller deciding
+    /// whether to fetch something has this before it commits to the body.
+    #[serde(default)]
+    pub size_bytes: u64,
+    /// When Cursor last wrote the artifact, as the RFC 3339 string it sends.
+    ///
+    /// Kept as text because nothing in this crate reads a Cursor timestamp as
+    /// a moment in time — parsing one here would mean adding a date library
+    /// to serve a field that is currently only compared for equality, which is
+    /// exactly what a change detector needs it for.
+    #[serde(default)]
+    pub updated_at: String,
+}
+
+/// `GET /v1/agents/{id}/artifacts/download` response.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtifactDownloadResponse {
+    /// A presigned S3 GET url. It carries its own credentials in the query
+    /// string, so it must be fetched without this crate's API key.
+    pub url: String,
+    /// When the presigned url stops working, as the RFC 3339 string Cursor
+    /// sends. Text for the same reason as [`ArtifactListing::updated_at`];
+    /// the expiry that matters in practice is the documented 15 minutes,
+    /// which a caller honours by fetching promptly rather than by storing
+    /// the url.
+    #[serde(default)]
+    pub expires_at: String,
 }

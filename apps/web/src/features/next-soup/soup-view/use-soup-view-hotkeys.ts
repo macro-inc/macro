@@ -15,6 +15,7 @@ import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isScopeInActiveBranch } from '@core/hotkey/utils';
 import {
+  type EntityData,
   filterNotDoneNotifications,
   filterValidNotifications,
   isSearchEntity,
@@ -31,6 +32,9 @@ import {
 } from './soup-view-tabs';
 
 type UseSoupViewHotkeysOptions = {
+  onOpenProject?: (id: string) => void;
+  onOpenEntity?: (entity: EntityData, event?: KeyboardEvent) => boolean;
+  disableTabHotkeys?: boolean;
   scopeId: string;
   soup: SoupState;
   splitHandle: SplitHandle;
@@ -153,7 +157,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     scopeId,
     description: 'Open',
     hide: true,
-    keyDownHandler: () => {
+    keyDownHandler: (event) => {
       const focusedRow = soup.focus.row();
       if (!focusedRow) return false;
 
@@ -180,6 +184,12 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       const entity = soup.focus.item();
       if (!entity) return false;
 
+      if (entity.type === 'project' && options.onOpenProject) {
+        options.onOpenProject(entity.id);
+        return true;
+      }
+      if (options.onOpenEntity?.(entity, event)) return true;
+
       const contentHitData = isSearchEntity(entity)
         ? entity.search.contentHitData
         : undefined;
@@ -197,47 +207,6 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       return true;
     },
     displayPriority: 4,
-  }).withGroup(group);
-
-  // cmd+enter - Focus preview block
-  registerHotkey({
-    hotkey: ['cmd+enter'],
-    scopeId,
-    description: 'Focus Preview',
-    condition: () => splitHandle.isControllerSplit(),
-    keyDownHandler: () => {
-      const manager = globalSplitManager();
-      const viewerId = splitHandle.viewerId();
-      if (splitHandle.isControllerSplit() && viewerId && manager) {
-        manager.activateSplit(viewerId);
-        manager.returnFocus();
-        return true;
-      }
-      return false;
-    },
-    displayPriority: 4,
-  }).withGroup(group);
-
-  // opt+enter - Open in place of the whole Preview Pair
-  registerHotkey({
-    hotkey: ['opt+enter'],
-    scopeId,
-    description: 'Open to replace preview',
-    condition: () =>
-      splitHandle.isControllerSplit() && soup.focus.id() !== undefined,
-    keyDownHandler: () => {
-      const entity = soup.focus.item();
-      if (!entity) return false;
-      markReminderSeenOnOpen(entity, notificationSource);
-      openEntityInSplitFromUnifiedList(entity, {
-        splitHandle,
-        replacePreview: true,
-        referredFrom: currentView(),
-        notificationSource,
-      });
-      return true;
-    },
-    hide: true,
   }).withGroup(group);
 
   // x - Toggle select item
@@ -363,6 +332,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
 
   const visibleViewTabs = useVisibleViewTabs();
   const getTabKeys = () => {
+    if (options.disableTabHotkeys) return [];
     const view = currentView();
     if (!view || !isTabbedView(view)) return [];
     return visibleViewTabs(view).map((t) => t.value);

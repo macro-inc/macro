@@ -10,15 +10,13 @@
  * folded transcript (`state/session-summary.ts`).
  */
 
-import { SidePanel, useSidePanel } from '@components/app/side-panel';
-import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
-import { registerHotkey } from '@core/hotkey/hotkeys';
-import { TOKENS } from '@core/hotkey/tokens';
+import { SidePanel } from '@components/app/side-panel';
 import { formatDate } from '@core/util/date';
 import { openExternalUrl } from '@core/util/url';
 import GitBranch from '@phosphor/git-branch.svg';
-import { createMemo, For, onCleanup, Show } from 'solid-js';
+import { createMemo, For, Show } from 'solid-js';
 import { useAgentSession } from '../../context/AgentSessionContext';
+import { sessionStatus } from '../../state/session-status';
 import {
   activityCounts,
   changedFiles,
@@ -30,10 +28,11 @@ import {
   SessionStatusPill,
   TodoList,
 } from '../../ui';
-import { harnessTitle } from '../AgentSplitHeader';
+import { AgentPullRequestChip } from '../AgentPullRequestChip';
+import { harnessTitle, sessionRepositoryUrl } from '../AgentSplitHeader';
 
 export function AgentSidePanelSections() {
-  const { session, bot, metadata, messages, status } = useAgentSession();
+  const { session, bot, metadata, messages } = useAgentSession();
 
   const plan = createMemo(() => latestPlan(messages()));
   const files = createMemo(() => changedFiles(messages()));
@@ -43,32 +42,12 @@ export function AgentSidePanelSections() {
     deletions: files().reduce((sum, file) => sum + file.deletions, 0),
   }));
 
-  // `]` toggles the panel, registered at the split scope so it works from
-  // anywhere in the split (the md block's TopBar registration, verbatim).
-  const sidePanel = useSidePanel();
-  const splitPanel = useSplitPanel();
-  if (splitPanel?.splitHotkeyScope) {
-    const reg = registerHotkey({
-      hotkey: ']',
-      scopeId: splitPanel.splitHotkeyScope,
-      hotkeyToken: TOKENS.block.toggleSidePanel,
-      description: 'Toggle Side Panel',
-      keyDownHandler: () => {
-        if (!sidePanel) return false;
-        if (!sidePanel.hasSections()) return false;
-        sidePanel.toggle();
-        return true;
-      },
-    });
-    onCleanup(() => reg.dispose());
-  }
-
   return (
     <>
       <SidePanel.Section id="details" title="Details" defaultOpen order={10}>
         <SidePanel.Grid>
           <SidePanel.Row label="Status">
-            <SessionStatusPill status={status()} />
+            <SessionStatusPill status={sessionStatus(metadata())} />
           </SidePanel.Row>
           <Show when={bot()?.name}>
             {(name) => (
@@ -93,7 +72,7 @@ export function AgentSidePanelSections() {
               </SidePanel.Row>
             )}
           </Show>
-          <Show when={session()?.repoUrl}>
+          <Show when={sessionRepositoryUrl(session())}>
             {(url) => (
               <SidePanel.Row label="Repository">
                 <button
@@ -104,6 +83,13 @@ export function AgentSidePanelSections() {
                   <GitBranch class="size-3 shrink-0" />
                   <span class="truncate">{repoName(url())}</span>
                 </button>
+              </SidePanel.Row>
+            )}
+          </Show>
+          <Show when={session()?.pullRequestUrl}>
+            {(url) => (
+              <SidePanel.Row label="Pull request">
+                <AgentPullRequestChip url={url()} />
               </SidePanel.Row>
             )}
           </Show>

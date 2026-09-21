@@ -5,31 +5,14 @@ import {
   type IUpdateFindControlStateEvent,
 } from '@block-pdf/PdfViewer/EventBus';
 import type { FindController } from '@block-pdf/PdfViewer/FindController';
-import { useScrollToCommentThread } from '@block-pdf/store/comments/commentOperations';
-import { activeCommentThreadSignal } from '@block-pdf/store/comments/commentStore';
-import {
-  createBlockEffect,
-  createBlockSignal,
-  createBlockStore,
-  useBlockId,
-} from '@core/block';
 import { useReferralCode } from '@core/context/user';
-import {
-  setTempRedirectLocation,
-  type TempRedirectLocation,
-} from '@core/signal/location';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { waitForSignal } from '@core/util/waitForSignal';
 import { createCallback } from '@solid-primitives/rootless';
-import { type Accessor, createMemo } from 'solid-js';
+import type { Accessor } from 'solid-js';
 import { z } from 'zod';
-import { pdfViewLocation } from './document';
-import {
-  updateFindControlStateSignal,
-  useGetRootViewer,
-  viewerHasVisiblePagesSignal,
-  viewerReadySignal,
-} from './pdfViewer';
+import { usePdfDocument } from '../context/pdf-document-context';
+import { usePdfViewer } from '../context/pdf-viewer-context';
 
 export { URL_PARAMS };
 
@@ -60,13 +43,6 @@ export enum LocationType {
   Precise = 'precise',
   Annotation = 'annotation',
 }
-
-type LocationTypeMap = {
-  general: GeneralLocation;
-  precise: PreciseLocation;
-  annotation: AnnotationLocation;
-  search: SearchLocation;
-};
 
 /**
  * Types of PDF locations, ordered by increasing precision.
@@ -106,6 +82,8 @@ export interface AnnotationLocation {
   id: string;
 }
 
+export type PdfShareLocation = PreciseLocation | AnnotationLocation;
+
 export interface SearchLocation {
   type: 'search';
   pageIndex: number;
@@ -127,74 +105,10 @@ export const PdfOrderInfoSchema = z.object({
 
 export type PdfOrderInfo = z.infer<typeof PdfOrderInfoSchema>;
 
-export const locationChangedSignal = createBlockSignal<boolean>(false);
-
-export const pendingLocationParamsSignal =
-  createBlockSignal<LocationBlockParams>();
-
-export const searchLocationPendingSignal = createBlockSignal<boolean>(false);
-
 const useIsViewerReadyForScroll = () => {
-  const viewerHasVisiblePages = viewerHasVisiblePagesSignal.get;
-  return createMemo(() => viewerReadySignal() && viewerHasVisiblePages());
+  const rootViewer = usePdfViewer().root;
+  return () => rootViewer.isReady() && rootViewer.hasVisiblePages();
 };
-
-createBlockEffect(() => {
-  const getViewer = useGetRootViewer();
-  const goToLinkLocationFromParams = useGoToLinkLocationFromParams();
-  const isViewerReady = useIsViewerReadyForScroll();
-
-  const params = pendingLocationParamsSignal();
-
-  if (isViewerReady() && params) {
-    // TODO: do we need to clear all overlays here
-    getViewer()?.clearAllOverlays();
-
-    goToLinkLocationFromParams(params);
-  }
-});
-
-export const locationStore = createBlockStore<{
-  general: GeneralLocation | undefined;
-  precise: PreciseLocation | undefined;
-  annotation: AnnotationLocation | undefined;
-  search: SearchLocation | undefined;
-}>({
-  general: undefined,
-  precise: undefined,
-  annotation: undefined,
-  search: undefined,
-});
-
-export function useSetLocationStore() {
-  const setLocationStore_ = locationStore.set;
-
-  const setLocationStore = <T extends PdfLocationType>(
-    type: T,
-    location: Omit<LocationTypeMap[T], 'type'> | undefined
-  ): void => {
-    if (type === 'precise') {
-      setLocationStore_('annotation', undefined);
-    }
-
-    const l: LocationTypeMap[T] | undefined = location
-      ? ({
-          ...location,
-          type,
-        } as LocationTypeMap[T])
-      : undefined;
-    setLocationStore_(type, l);
-  };
-
-  return createCallback(setLocationStore);
-}
-
-export const generalPopupLocationSignal = createBlockSignal<{
-  pageIndex: number;
-  element: HTMLElement;
-  hasHighlight?: boolean;
-  hasComment?: boolean;
-} | null>(null);
 
 /**
  * Converts a location into URL parameters for sharing.
@@ -269,29 +183,27 @@ export function selectLocationForFidelity(
 }
 
 export function useCreateShareUrl() {
-  const locationStore_ = locationStore.get;
-  const blockId = useBlockId();
+  const pdf = usePdfDocument();
+  const rootViewer = usePdfViewer().root;
   const referralCode = useReferralCode();
 
-  /**
-   * Creates a shareable URL with location information at the specified fidelity level.
-   *
-   * @param fidelity - Desired fidelity level for the share URL
-   * @param copy - Whether to copy the URL to the clipboard
-   * @returns URL string with location parameters
-   */
   const createShareUrl = (
     fidelity: PdfLocationType,
     copy: boolean = true
   ): string => {
+    const shareLocation = pdf.shareLocation();
     const locations = {
-      general: locationStore_.general,
-      precise: locationStore_.precise,
-      annotation: locationStore_.annotation,
-      search: locationStore_.search,
+      general: {
+        type: 'general',
+        pageIndex: rootViewer.currentPageNumber(),
+        y: 0,
+      } satisfies GeneralLocation,
+      precise: shareLocation?.type === 'precise' ? shareLocation : undefined,
+      annotation:
+        shareLocation?.type === 'annotation' ? shareLocation : undefined,
     };
-    const location = selectLocationForFidelity(fidelity, locations);
-    const url = locationToUrl(location);
+    const selectedLocation = selectLocationForFidelity(fidelity, locations);
+    const url = locationToUrl(selectedLocation);
     const params = Object.fromEntries(new URL(url).searchParams);
     const code = referralCode();
     if (code) {
@@ -300,7 +212,7 @@ export function useCreateShareUrl() {
     const updatedUrl = buildSimpleEntityUrl(
       {
         type: 'pdf',
-        id: blockId,
+        id: pdf.documentId(),
       },
       params
     );
@@ -496,7 +408,6 @@ async function applyCustomHighlights(
     return;
   }
 
-  // Log pageMatches and pageMatchesLength for debugging
   const pageMatches = findController.pageMatches;
   const pageMatchesLength = findController.pageMatchesLength;
 
@@ -542,43 +453,14 @@ async function applyCustomHighlights(
   viewer.markPageHighlightsSelected(pageIndex);
 }
 
-export const useGoToTempRedirect = () => {
-  const [activeThreadId, setActiveThreadId] = activeCommentThreadSignal;
-  const scrollToCommentThread = useScrollToCommentThread();
-
-  return (documentId: string, state: TempRedirectLocation) => {
-    if (state.itemId !== documentId) {
-      return;
-    }
-    setTempRedirectLocation(undefined);
-
-    const threadId = state.location?.threadId;
-    if (!threadId) return;
-
-    const prevActiveThreadId = activeThreadId();
-    setActiveThreadId(threadId);
-
-    // if the thread is already active, scroll to it directly
-    // Note that there is already a block effect in comment operations that will
-    // scroll to a new active thread signal on change
-    if (prevActiveThreadId === threadId) {
-      scrollToCommentThread(threadId);
-    }
-  };
-};
-
-/**
- * Go to the given location in the pdf viewer
- *
- * @param location - The location to go to
- */
 function useGoToPdfLocation() {
-  const getRootViewer = useGetRootViewer();
-  const findControllerStateEventSignal = updateFindControlStateSignal.get;
-  const setSearchLocationPending = searchLocationPendingSignal.set;
+  const pdfViewer = usePdfViewer();
+  const rootRuntime = pdfViewer.root;
+  const rootViewer = rootRuntime.instance;
+  const findControllerStateEventSignal = rootRuntime.findControlState;
 
   const go = async (location: PdfLocation): Promise<void> => {
-    const viewer = getRootViewer();
+    const viewer = rootViewer();
     if (!viewer) return;
 
     switch (location.type) {
@@ -606,7 +488,6 @@ function useGoToPdfLocation() {
         });
         return;
       case 'search':
-        // Go to the page of the match
         await viewer.scrollTo({
           pageNumber: location.pageIndex,
           yPos: 0,
@@ -647,7 +528,6 @@ function useGoToPdfLocation() {
           return;
         }
 
-        // Break early if we can't find the match
         if (findControllerStateEvent.state === FindState.NOT_FOUND) {
           console.warn('unable to find match', { location });
           // TODO: fallback to raw query
@@ -684,7 +564,6 @@ function useGoToPdfLocation() {
         findController._highlightMatches = false;
         findController._updatePage(pageIdx);
 
-        // Apply custom highlights based on macro_em tags
         await applyCustomHighlights(
           viewer,
           currentScrollTop,
@@ -712,9 +591,12 @@ function useGoToPdfLocation() {
 
   return async (location: PdfLocation) => {
     if (location.type === 'search') {
-      setSearchLocationPending(true);
-      await go(location);
-      setSearchLocationPending(false);
+      pdfViewer.beginSearchNavigation();
+      try {
+        await go(location);
+      } finally {
+        pdfViewer.endSearchNavigation();
+      }
       return;
     }
 
@@ -723,22 +605,24 @@ function useGoToPdfLocation() {
 }
 
 const useGoToPreviousLocation = () => {
-  const getViewer = useGetRootViewer();
-  const getViewLocation = pdfViewLocation.get;
+  const pdf = usePdfDocument();
+  const viewer = usePdfViewer().root.instance;
   const isViewerReady = useIsViewerReadyForScroll();
 
   return async () => {
-    const viewer = getViewer();
+    const rootViewer = viewer();
 
-    await waitForSignal(getViewLocation, (location) => !!location, 300).then(
-      (prevLocationHash) => {
-        waitForSignal(isViewerReady).then(() => {
-          if (viewer && prevLocationHash) {
-            viewer.goToLocationHash(prevLocationHash);
-          }
-        });
-      }
-    );
+    await waitForSignal(
+      pdf.persistedViewLocation,
+      (location) => !!location,
+      300
+    ).then((prevLocationHash) => {
+      waitForSignal(isViewerReady).then(() => {
+        if (rootViewer && prevLocationHash) {
+          rootViewer.goToLocationHash(prevLocationHash);
+        }
+      });
+    });
   };
 };
 

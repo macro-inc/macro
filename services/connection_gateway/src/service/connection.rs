@@ -1,4 +1,3 @@
-use crate::constants::SLOW_WEBSOCKET_OPERATION_THRESHOLD;
 use crate::model::{
     connection::{Connection, StoredConnectionEntity},
     message::{Message, OutgoingMessage},
@@ -147,18 +146,23 @@ impl ConnectionManager {
     /// IMPORTANT: this removes all entities associated with the connection_id
     /// and not just a specific entity like document, chat, channel activity.
     pub async fn remove_connection(&self, connection_id: &str) -> Result<()> {
-        // if the connection exists, then we kill the task
-        // that forwards the messages to the websocket
-        if let Some(connection) = self.connections.get(connection_id) {
-            // Only abort the task if it has not already been aborted
+        // Removing twice is the normal case, not an edge one: a refused send
+        // removes the connection and aborts its forwarder, and the socket
+        // handler removes it again when it sees that task end. Taking the
+        // entry out is the one step that cannot happen twice, so it is what
+        // the count and the abort hang off - `fetch_sub` on a count already
+        // at zero wraps to `usize::MAX`.
+        if let Some((_, connection)) = self.connections.remove(connection_id) {
+            self.connection_count
+                .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+            // Killing the task that forwards messages to the websocket.
             if !connection.abort_handle.is_finished() {
                 connection.abort_handle.abort();
             }
         }
-        self.connections.remove(connection_id);
-        self.connection_count
-            .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
 
+        // Unconditional: a connection this instance never held still has rows
+        // to clear, and the delete is idempotent.
         self.persistence
             .remove_all_entries_for_by_connection_id(connection_id)
             .await?;
@@ -200,9 +204,19 @@ impl ConnectionManager {
         Ok(())
     }
 
-    /// Sends a message to a a connection
-    /// If the connection is not found, or dropped, then we remove the connection id
-    /// from the map, and should kill (TODO:) any remaining tasks associated with the connection
+    /// Offers a message to a connection's outbound queue, and drops the
+    /// connection if it will not take it.
+    ///
+    /// Never waits. The queue is this connection's alone but the callers are
+    /// everyone, so a consumer that has stopped draining must cost them
+    /// nothing: waiting for capacity here is indistinguishable from being
+    /// down to whoever is publishing, and a publisher holding its own
+    /// deadline fails the work behind the send rather than the one delivery.
+    ///
+    /// A full queue is not a slow consumer, it is a consumer already a whole
+    /// queue behind, so it is treated the same as a closed one: the
+    /// connection goes, which also aborts the forwarder that stopped
+    /// draining, and the client reconnects.
     #[tracing::instrument(
         name = "connection_gateway.queue_send",
         err,
@@ -211,7 +225,6 @@ impl ConnectionManager {
             connection.id = id,
             connection.queue.observed_depth = tracing::field::Empty,
             connection.queue.max_capacity = tracing::field::Empty,
-            connection.queue.wait_ms = tracing::field::Empty,
         )
     )]
     pub async fn send_message(&self, id: &str, message: Message) -> Result<()> {
@@ -227,25 +240,13 @@ impl ConnectionManager {
         span.record("connection.queue.observed_depth", depth as u64);
         span.record("connection.queue.max_capacity", max_capacity as u64);
 
-        let started = tokio::time::Instant::now();
-        let mut send = std::pin::pin!(sender.send(OutgoingMessage::Message(message)));
-        let result = tokio::select! {
-            result = &mut send => result,
-            () = tokio::time::sleep(SLOW_WEBSOCKET_OPERATION_THRESHOLD) => {
-                let depth = max_capacity.saturating_sub(sender.capacity());
-                tracing::warn!(
-                    connection.id = id,
-                    connection.queue.observed_depth = depth,
-                    connection.queue.max_capacity = max_capacity,
-                    "websocket outbound queue send is blocked"
-                );
-                send.await
-            }
-        };
-        let wait = started.elapsed();
-        span.record("connection.queue.wait_ms", wait.as_millis() as u64);
-
-        if let Err(err) = result {
+        if let Err(err) = sender.try_send(OutgoingMessage::Message(message)) {
+            tracing::warn!(
+                connection.id = id,
+                connection.queue.observed_depth = depth,
+                connection.queue.max_capacity = max_capacity,
+                "websocket outbound queue would not take a message; dropping the connection"
+            );
             self.remove_connection(id).await?;
             anyhow::bail!("failed to send message: {}", err);
         }

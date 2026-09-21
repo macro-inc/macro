@@ -1,4 +1,5 @@
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
+import { agentsRouteFromSegments } from '@app/features/agents-view/core/route';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
@@ -25,8 +26,11 @@ export function decodePairs(segments: string[]): SplitContent[] {
     const type = segments[i];
     const id = segments[i + 1];
     if (!type || !id) break;
+    const agentsRoute = agentsRouteFromSegments(type, id);
 
-    if (type === 'settings') {
+    if (agentsRoute) {
+      pairs.push({ type: 'component', id: agentsRoute });
+    } else if (type === 'settings') {
       // `settings/<tab>` is the URL form of the docked settings panel; it maps
       // to the internal `component/settings` content. The active tab is read
       // reactively from the URL by SettingsPanelComponentWrapper, so it isn't
@@ -34,6 +38,8 @@ export function decodePairs(segments: string[]): SplitContent[] {
       // layoutManager for the matching encode.
       pairs.push({ type: 'component', id: 'settings' });
     } else if (type === 'component') {
+      // Ignore placeholders left in URLs saved before Preview Pair removal.
+      if (id === 'preview-empty' || id === 'non-member-channel') continue;
       pairs.push({ type: 'component', id });
     } else {
       const resolvedType = resolveBlockAlias(type as BlockName | BlockAlias);
@@ -111,30 +117,14 @@ export function useSplitPanel() {
   return useContext(SplitPanelContext);
 }
 
-/**
- * A Preview Pair occupies two slots but behaves as one logical split, and its
- * Viewer is never independently closable.
- */
-export function shouldShowSplitCloseButton(
-  manager: SplitManager,
-  handle: SplitHandle
-) {
-  const logicalSplitCount =
-    manager.splits().length - manager.previewPairs().length;
-  return logicalSplitCount > 1 && !handle.isViewerSplit();
+/** Whether closing this split leaves another split visible. */
+export function shouldShowSplitCloseButton(manager: SplitManager) {
+  return manager.getVisibleSplitCount() > 1;
 }
 
-/**
- * Whether content may claim focus automatically when it mounts in the current
- * split. Preview Pair Viewers and inline previews stay passive until the user
- * focuses them.
- *
- * This is intentionally a snapshot: dissolving a Preview Pair later must not
- * trigger delayed autofocus in content that is already mounted.
- */
+/** Inline previews stay passive until the user focuses them. */
 export function useCanAutofocusSplitContent() {
-  const panel = useSplitPanel();
-  return !panel?.handle.isViewerSplit() && !panel?.isInlinePreview;
+  return !useSplitPanel()?.isInlinePreview;
 }
 
 /**

@@ -6,9 +6,12 @@ use channels::domain::{
         ChannelEventAttachment, ChannelMessageAttachmentCreatedMetadata,
         ChannelMessageDeletedMetadata, ChannelMessagePostedMetadata, ChannelTopicEvent,
     },
-    models::{ChannelSender, ChannelType, SimpleMention},
+    models::{ChannelSender, ChannelType},
 };
-use chat::domain::events::{ChatMessageDeletedMetadata, ChatTopicEvent, ChatUpdatedMetadata};
+use chat::domain::events::{
+    ChatMessageDeletedMetadata, ChatMessageRole, ChatMessageSentMetadata, ChatTopicEvent,
+    ChatUpdatedMetadata,
+};
 use chrono::Utc;
 use documents::domain::events::{
     DocumentContentUploadedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata,
@@ -22,6 +25,8 @@ use email::domain::events::{
 };
 use macro_event_broker::{Event, EventBrokerError, MacroEventCollection as _, MessageParts};
 use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::models::SimpleMention;
+use model_owner::Owner;
 use projects::domain::events::{ProjectDeletedMetadata, ProjectTopicEvent};
 use properties::domain::events::{
     EntityPropertiesClearedMetadata, EntityPropertyDeletedMetadata, EntityPropertyUpdatedMetadata,
@@ -61,8 +66,10 @@ fn user() -> MacroUserIdStr<'static> {
 fn updated_event() -> Event<DocumentTopicEvent> {
     Event::new(DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
         document_id: DOCUMENT_ID.to_string(),
-        owner: user(),
+        owner: Owner::User(user()),
         actor_user_id: None,
+        actor: None,
+        on_behalf_of: None,
         document_name: Some("Updated".to_string()),
         previous_project_id: None,
         project_id: None,
@@ -121,7 +128,7 @@ fn subscribes_to_all_existing_soup_source_topics() {
 fn document_lifecycle_events_map_to_updated_and_deleted_patches() {
     let created = DocumentTopicEvent::Created(DocumentCreatedMetadata {
         document_id: DOCUMENT_ID.to_string(),
-        owner: user(),
+        owner: Owner::User(user()),
         actor: None,
         on_behalf_of: None,
         document_name: "Created".to_string(),
@@ -133,6 +140,8 @@ fn document_lifecycle_events_map_to_updated_and_deleted_patches() {
     let deleted = DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
         document_id: DOCUMENT_ID.to_string(),
         actor_user_id: None,
+        actor: None,
+        on_behalf_of: None,
         project_id: None,
     });
 
@@ -150,8 +159,10 @@ fn moving_a_document_out_of_a_project_updates_the_previous_project() {
     let previous_project_id = Uuid::now_v7().to_string();
     let event = DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
         document_id: DOCUMENT_ID.to_string(),
-        owner: user(),
+        owner: Owner::User(user()),
         actor_user_id: None,
+        actor: None,
+        on_behalf_of: None,
         document_name: None,
         previous_project_id: Some(previous_project_id.clone()),
         project_id: None,
@@ -189,7 +200,7 @@ fn search_only_document_events_do_not_emit_patches() {
     let events = [
         DocumentTopicEvent::ContentUploaded(DocumentContentUploadedMetadata {
             document_id: DOCUMENT_ID.to_string(),
-            owner: user(),
+            owner: Owner::User(user()),
             file_type: "pdf".parse().expect("valid file type"),
             document_version_id: Some("convert".to_string()),
         }),
@@ -197,6 +208,8 @@ fn search_only_document_events_do_not_emit_patches() {
             document_id: DOCUMENT_ID.to_string(),
             file_type: "md".parse().expect("valid file type"),
             document_version_id: None,
+            actor: None,
+            on_behalf_of: None,
         }),
         DocumentTopicEvent::Purged(DocumentPurgedMetadata {
             document_id: DOCUMENT_ID.to_string(),
@@ -216,7 +229,7 @@ fn project_deletion_maps_cascade_entities_to_deleted_patches() {
     let chat_id = Uuid::now_v7().to_string();
     let event = ProjectTopicEvent::Deleted(ProjectDeletedMetadata {
         project_id: project_id.clone(),
-        owner: user(),
+        owner: Owner::User(user()),
         actor_user_id: None,
         parent_project_id: None,
         deleted_project_ids: vec![project_id.clone(), child_id.clone()],
@@ -286,6 +299,25 @@ fn deleted_chat_messages_do_not_change_soup() {
     });
 
     assert!(patches_from_chat_event(&event).is_empty());
+}
+
+#[test]
+fn sent_chat_messages_refresh_the_soup_model() {
+    for role in [ChatMessageRole::User, ChatMessageRole::Assistant] {
+        let event = ChatTopicEvent::MessageSent(ChatMessageSentMetadata {
+            chat_id: DOCUMENT_ID.to_string(),
+            message_id: Uuid::now_v7().to_string(),
+            role,
+            model: "openai/gpt-5.6".to_string(),
+            actor_user_id: None,
+            attachment_count: 0,
+        });
+        let patches = patches_from_chat_event(&event);
+        assert_eq!(patches.len(), 1);
+        assert!(matches!(patches[0].patch, Patch::Updated(_)));
+        assert_eq!(patch_entity(&patches[0]).entity_type, EntityType::Chat);
+        assert_eq!(patch_entity(&patches[0]).entity_id, DOCUMENT_ID);
+    }
 }
 
 #[test]
@@ -524,6 +556,37 @@ fn posted_message_mentions_update_referenced_documents_for_channel_members() {
     assert_eq!(patches.len(), 3);
     assert_eq!(patch_entity(&patches[2]).entity_type, EntityType::Document);
     assert_eq!(patch_entity(&patches[2]).entity_id, DOCUMENT_ID);
+    assert_eq!(patches[2].access_source.entity_type, EntityType::Channel);
+    assert_eq!(patches[2].access_source.entity_id, channel_id.to_string());
+}
+
+#[test]
+fn posted_message_mentions_update_referenced_agent_sessions_for_channel_members() {
+    let channel_id = Uuid::now_v7();
+    let session_id = Uuid::now_v7().to_string();
+    let event = ChannelTopicEvent::MessagePosted(ChannelMessagePostedMetadata {
+        channel_id,
+        message_id: Uuid::now_v7(),
+        thread_id: None,
+        sender: ChannelSender::new_from_user(user()),
+        triggered_by: None,
+        channel_type: ChannelType::Private,
+        content: "shared an agent session".to_string(),
+        mentions: vec![SimpleMention {
+            entity_type: "agent_session".to_string(),
+            entity_id: session_id.to_string(),
+        }],
+        attachments: Vec::new(),
+        created_at: Utc::now(),
+    });
+
+    let patches = patches_from_channel_event(&event);
+    assert_eq!(patches.len(), 3);
+    assert_eq!(
+        patch_entity(&patches[2]).entity_type,
+        EntityType::AgentSession
+    );
+    assert_eq!(patch_entity(&patches[2]).entity_id, session_id);
     assert_eq!(patches[2].access_source.entity_type, EntityType::Channel);
     assert_eq!(patches[2].access_source.entity_id, channel_id.to_string());
 }

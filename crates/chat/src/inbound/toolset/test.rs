@@ -297,7 +297,7 @@ mod self_read_guard {
             Ok(model::chat::Chat {
                 id: chat_id.to_string(),
                 name: "Other Chat".to_string(),
-                user_id: "macro|test@example.com".to_string(),
+                user_id: model_owner::Owner::from_principal_str("macro|test@example.com").unwrap(),
                 model: None,
                 project_id: None,
                 created_at: None,
@@ -319,7 +319,8 @@ mod self_read_guard {
             Ok(GetChatResponse {
                 chat: ChatResponse {
                     id: chat_id,
-                    user_id: "macro|test@example.com".to_string(),
+                    user_id: model_owner::Owner::from_principal_str("macro|test@example.com")
+                        .unwrap(),
                     project_id: None,
                     name: "Other Chat".to_string(),
                     messages: Vec::new(),

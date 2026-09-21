@@ -63,15 +63,18 @@ pub enum HarnessError {
     /// A prompt could not be composed for the agent runtime.
     #[error("failed to compose agent prompt: {0}")]
     PromptComposition(rootcause::Report),
-    /// A live peer manages the session but published no address to forward
-    /// to. Transient by construction: only a replica from before addresses
-    /// existed, or one whose first heartbeat has not landed, has no address.
-    #[error("agent session {0} is managed by a live replica with no forwarding address")]
-    ManagerUnreachable(AgentSessionId),
     /// Forwarding a command to the session's managing replica failed.
     #[error("failed to forward an agent session command: {0}")]
     Forward(rootcause::Report),
+    /// The repositories a user reaches through the GitHub App could not be
+    /// listed. Its own variant because the failure is GitHub's, not ours: the
+    /// App's credentials, an installation record, or a call to github.com.
+    #[error("failed to list reachable repositories: {0}")]
+    Repositories(rootcause::Report),
     /// A bot's persisted agent runtime configuration could not be loaded.
     #[error("failed to resolve agent runtime configuration: {0}")]
     RuntimeDirectory(rootcause::Report),
+    /// Who a prompt mentions could not be resolved.
+    #[error("failed to resolve prompt mentions: {0}")]
+    Mentions(rootcause::Report),
 }

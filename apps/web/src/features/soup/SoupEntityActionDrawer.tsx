@@ -40,7 +40,7 @@ export function SoupEntityActionDrawer(props: SoupEntityActionDrawerProps) {
       noOutsidePointerEvents={false}
     >
       <MobileDrawer.Portal>
-        <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
+        <MobileDrawer.Overlay />
         <MobileDrawer.Content aria-label="Entity actions">
           <MobileDrawer.Handle />
 
@@ -62,11 +62,10 @@ export function SoupEntityActionDrawer(props: SoupEntityActionDrawerProps) {
                   <MobileDrawer.Section class="flex flex-col shrink-0">
                     <For each={group.items}>
                       {(action) => (
-                        <button
+                        <MobileDrawer.Item
                           type="button"
                           disabled={action.disabled}
                           class={cn(
-                            'flex items-center gap-3 px-4 py-3 text-sm hover:bg-hover hover-transition-bg text-left not-last:mb-px bg-surface',
                             action.destructive
                               ? 'text-failure-ink'
                               : 'text-ink',
@@ -79,7 +78,7 @@ export function SoupEntityActionDrawer(props: SoupEntityActionDrawerProps) {
                           }}
                         >
                           {action.label}
-                        </button>
+                        </MobileDrawer.Item>
                       )}
                     </For>
                   </MobileDrawer.Section>

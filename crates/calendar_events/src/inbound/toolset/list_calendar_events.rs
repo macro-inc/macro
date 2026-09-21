@@ -49,6 +49,11 @@ pub struct CalendarEventListItem {
     pub description: Option<String>,
     /// Event status: confirmed or tentative.
     pub status: String,
+    /// Provider event type for status-style events (out_of_office,
+    /// focus_time, working_location, birthday, from_gmail); absent for
+    /// regular events.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub event_type: Option<String>,
     /// Whether this occurrence belongs to a recurring series.
     pub is_recurring: bool,
     /// Occurrence key identifying this instance within its recurring series;
@@ -68,6 +73,23 @@ pub struct CalendarEventListItem {
     pub is_read_only: bool,
     /// Calendar the event belongs to, when known.
     pub calendar_id: Option<uuid::Uuid>,
+    /// Every calendar carrying a copy of this event when there is more than
+    /// one, primary first. Pass a copy's `calendarId` to UpdateCalendarEvent
+    /// or DeleteCalendarEvent to address that copy instead of the primary.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub copies: Vec<CalendarEventCopyItem>,
+}
+
+/// One calendar's copy of an event synced from several calendars.
+#[derive(Debug, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarEventCopyItem {
+    /// Calendar holding this copy.
+    pub calendar_id: uuid::Uuid,
+    /// The copy's own title.
+    pub title: String,
+    /// Whether that calendar prohibits modifying the copy.
+    pub is_read_only: bool,
 }
 
 /// Response from the ListCalendarEvents tool.
@@ -202,6 +224,8 @@ where
                     location: event.location.clone(),
                     description: description_preview(event.description.as_deref()),
                     status: event.status.as_str().to_string(),
+                    event_type: (!event.event_type.is_default())
+                        .then(|| event.event_type.as_str().to_string()),
                     is_recurring,
                     recurrence_id: is_recurring.then(|| occurrence.occurrence_key.clone()),
                     attendees: event
@@ -225,6 +249,19 @@ where
                     conference_url: event.conference_url.clone(),
                     is_read_only: event.is_read_only,
                     calendar_id: event.calendar_id,
+                    copies: if event.sources.len() > 1 {
+                        event
+                            .sources
+                            .iter()
+                            .map(|copy| CalendarEventCopyItem {
+                                calendar_id: copy.calendar_id,
+                                title: copy.title.clone(),
+                                is_read_only: copy.is_read_only,
+                            })
+                            .collect()
+                    } else {
+                        Vec::new()
+                    },
                 }
             })
             .collect();

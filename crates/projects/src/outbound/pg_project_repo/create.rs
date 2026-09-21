@@ -1,6 +1,7 @@
 use entity_access_db_utils::{
     AccessLevel, EntityAccessSourceType, EntityType, insert_entity_access_row,
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use model::project::Project;
 use sqlx::{Postgres, Transaction};
 
@@ -12,8 +13,7 @@ pub(super) async fn create_project(
     transaction: &mut Transaction<'_, Postgres>,
     args: &CreateProjectArgs,
 ) -> Result<Project, sqlx::Error> {
-    let project = sqlx::query_as!(
-        Project,
+    let row = sqlx::query!(
         r#"
         INSERT INTO "Project" (name, "userId", "parentId", "createdAt", "updatedAt")
         VALUES ($1, $2, $3, NOW(), NOW())
@@ -32,6 +32,15 @@ pub(super) async fn create_project(
     )
     .fetch_one(transaction.as_mut())
     .await?;
+    let project = super::map_project(
+        row.id,
+        row.name,
+        row.user_id,
+        row.parent_id,
+        row.created_at,
+        row.updated_at,
+        row.deleted_at,
+    )?;
 
     share::create_project_share_permission(transaction, &project.id, &args.share_permission)
         .await?;
@@ -62,6 +71,20 @@ pub(super) async fn create_project(
         AccessLevel::Owner,
     )
     .await?;
+
+    entity_registry_db_utils::insert_entity(
+        transaction,
+        entity_registry_db_utils::NewEntityRecord::new(
+            project_id,
+            entity_registry_db_utils::RegisteredEntityType::Project,
+            model_owner::Owner::User(
+                MacroUserIdStr::try_from(args.user_id.clone())
+                    .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
+            ),
+        ),
+    )
+    .await
+    .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
 
     Ok(project)
 }

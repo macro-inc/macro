@@ -26,12 +26,9 @@ pub enum ChatLiteral {
     /// this node value filters by chat importance. false short-circuits to match nothing.
     #[serde(rename = "imp")]
     Importance(bool),
-    /// this node value filters by notification done state for chats.
-    #[serde(rename = "nd")]
-    NotificationDone(bool),
-    /// this node value filters by notification seen state for chats.
+    /// An entity has a non-deleted notification in this exact state.
     #[serde(rename = "ns")]
-    NotificationSeen(bool),
+    NotificationState(crate::NotificationState),
     /// this node value filters by chat createdAt timestamp
     #[serde(rename = "ca")]
     CreatedAt(DateLiteral),
@@ -99,12 +96,11 @@ impl ExpandFrame<ChatLiteral> for ChatFilters {
             .try_expand(|r| r.map(ChatLiteral::Owner), Expr::or)?;
 
         let importance_node = importance.map(|imp| Expr::Literal(ChatLiteral::Importance(imp)));
-        let notification_done_node = notification_filters
-            .done
-            .map(|done| Expr::Literal(ChatLiteral::NotificationDone(done)));
-        let notification_seen_node = notification_filters
-            .seen
-            .map(|seen| Expr::Literal(ChatLiteral::NotificationSeen(seen)));
+        let notification_state_node = notification_filters
+            .into_unique_states()
+            .into_iter()
+            .map(|state| Expr::Literal(ChatLiteral::NotificationState(state)))
+            .reduce(Expr::or);
 
         Ok([
             project_ids,
@@ -112,8 +108,7 @@ impl ExpandFrame<ChatLiteral> for ChatFilters {
             role,
             owners,
             importance_node,
-            notification_done_node,
-            notification_seen_node,
+            notification_state_node,
         ]
         .into_iter()
         .fold_with(Expr::and))

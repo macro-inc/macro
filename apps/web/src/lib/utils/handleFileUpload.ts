@@ -5,16 +5,12 @@ import { type UploadInput, uploadFiles } from '@core/util/upload';
 import { refetchHistory } from '@queries/history/history';
 import { refetchSoupEntity } from '@queries/soup/cache';
 
-export function useHandleFileUpload({
-  projectId,
-}: {
-  projectId?: string;
-} = {}) {
+export function useHandleFileUpload(options: { projectId?: string } = {}) {
   const { replaceOrInsertSplit, openWithSplit } = useSplitLayout();
 
   return async (files: UploadInput[], withOpen = true) => {
     const results = await uploadFiles(files, 'dss', {
-      projectId,
+      projectId: options.projectId,
     });
 
     const notFailedUploads = results.filter((result) => !result.failed);

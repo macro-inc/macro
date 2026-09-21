@@ -5,6 +5,9 @@
 //! call sites should choose the lifecycle they need (`create_markdown_text` or
 //! `create_text_file`).
 
+#[cfg(test)]
+mod test;
+
 use activity::Attribution;
 use anyhow::Context;
 use base64::Engine;
@@ -12,14 +15,18 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model::document::FileType;
 use sha2::{Digest, Sha256};
 
+use models_permissions::share_permission::LinkShareState;
+
 use crate::domain::content::{DocumentContent, DocumentContentLocation};
 use crate::domain::models::{
-    CreateDocumentRepoArgs, CreateTaskRequest, DocumentError, EMPTY_SHA256, PropertyInput,
+    CreateDocumentRepoArgs, CreateTaskRequest, DocumentError, EMPTY_SHA256, InitialLinkShare,
+    PropertyInput,
 };
 use crate::domain::ports::create::{
     DocumentBytesUpload, DocumentBytesUploadPort, DocumentCreationService,
 };
 use crate::domain::ports::markdown::MarkdownInitializationPort;
+use crate::domain::ports::mentions::DocumentMentionTrackingPort;
 use crate::domain::response::CreateDocumentResponseData;
 
 /// Common metadata for a document that has not been created yet.
@@ -31,6 +38,7 @@ pub struct NewDocumentMetadata {
     created_at: Option<chrono::DateTime<chrono::Utc>>,
     skip_history: bool,
     attribution: Option<Attribution>,
+    initial_link_share: InitialLinkShare,
 }
 
 impl NewDocumentMetadata {
@@ -49,6 +57,7 @@ impl NewDocumentMetadata {
                 created_at: None,
                 skip_history: false,
                 attribution: None,
+                initial_link_share: InitialLinkShare::EntityDefault,
             },
         }
     }
@@ -66,10 +75,12 @@ impl NewDocumentMetadata {
             file_type: kind.file_type,
             project_id: self.project_id,
             team_id: kind.team_id,
+            share_with_team: kind.share_with_team,
             created_at: self.created_at,
             sub_type: kind.subtype.sub_type(),
             skip_history: self.skip_history,
             attribution: self.attribution,
+            initial_link_share: self.initial_link_share,
         }
     }
 }
@@ -111,6 +122,12 @@ impl NewDocumentMetadataBuilder {
         self
     }
 
+    /// Initialize link share to exactly `state` instead of the entity-type default.
+    pub fn initial_link_share(mut self, state: LinkShareState) -> Self {
+        self.metadata.initial_link_share = InitialLinkShare::Exact(state);
+        self
+    }
+
     /// Build the metadata value.
     pub fn build(self) -> NewDocumentMetadata {
         self.metadata
@@ -122,6 +139,7 @@ struct RepoDocumentKind {
     sha: String,
     subtype: RepoDocumentSubtype,
     team_id: Option<uuid::Uuid>,
+    share_with_team: bool,
 }
 
 enum RepoDocumentSubtype {
@@ -129,6 +147,7 @@ enum RepoDocumentSubtype {
     MarkdownTask,
     MarkdownSnippet,
     MarkdownSkill,
+    MarkdownInitiativeDescription,
 }
 
 impl RepoDocumentSubtype {
@@ -140,6 +159,9 @@ impl RepoDocumentSubtype {
                 Some(document_sub_type::DocumentSubType::Snippet)
             }
             RepoDocumentSubtype::MarkdownSkill => Some(document_sub_type::DocumentSubType::Skill),
+            RepoDocumentSubtype::MarkdownInitiativeDescription => {
+                Some(document_sub_type::DocumentSubType::InitiativeDescription)
+            }
         }
     }
 }
@@ -154,7 +176,8 @@ pub enum MarkdownSubtype {
     Task {
         /// Optional property values to assign. Defaults are used when omitted.
         property_values: Option<Vec<PropertyInput>>,
-        /// Whether to share the task with the user's team.
+        /// Consent to share the task with the creator's team. The persisted owner's
+        /// membership, not `team_id`, decides which team receives access.
         share_with_team: bool,
         /// Team to assign the task number within. If omitted, it is inferred only
         /// when the creator belongs to exactly one team.
@@ -166,15 +189,19 @@ pub enum MarkdownSubtype {
     /// A skill document — markdown instructions that AI reads and follows when
     /// the skill is referenced in an AI input.
     Skill,
+    /// An initiative's description document.
+    InitiativeDescription,
 }
 
 impl MarkdownSubtype {
-    /// Convert a simple task flag into the default markdown subtype.
+    /// Convert a simple task flag into the default markdown subtype. A task is
+    /// shared with the team only when the caller resolved one; teamless creators
+    /// get a private task instead of a failed create.
     pub fn from_task_flag(is_task: bool, team_id: Option<uuid::Uuid>) -> Self {
         if is_task {
             Self::Task {
                 property_values: None,
-                share_with_team: true,
+                share_with_team: team_id.is_some(),
                 team_id,
             }
         } else {
@@ -334,6 +361,11 @@ impl NewPlainTextDocumentBuilder<FileType, String> {
                         "skills must be markdown documents".to_string(),
                     ));
                 }
+                MarkdownSubtype::InitiativeDescription => {
+                    return Err(DocumentError::BadRequest(
+                        "initiative descriptions must be markdown documents".to_string(),
+                    ));
+                }
                 MarkdownSubtype::Note => {}
             }
             PlainTextDocumentKind::Text(NonMarkdownFileType::new(self.file_type)?)
@@ -460,33 +492,63 @@ impl CreatedDocument {
 
 /// Service for creating backend-owned document content.
 #[derive(Clone)]
-pub struct DocumentCreator<Svc, MarkdownInit, BytesUpload> {
+pub struct DocumentCreator<Svc, MarkdownInit, BytesUpload, MentionTracker> {
     document_service: Svc,
     markdown_initializer: MarkdownInit,
     bytes_uploader: BytesUpload,
+    mention_tracker: MentionTracker,
 }
 
-impl<Svc, MarkdownInit, BytesUpload> DocumentCreator<Svc, MarkdownInit, BytesUpload> {
+impl<Svc, MarkdownInit, BytesUpload, MentionTracker>
+    DocumentCreator<Svc, MarkdownInit, BytesUpload, MentionTracker>
+{
     /// Construct a document creator.
     pub fn new(
         document_service: Svc,
         markdown_initializer: MarkdownInit,
         bytes_uploader: BytesUpload,
+        mention_tracker: MentionTracker,
     ) -> Self {
         Self {
             document_service,
             markdown_initializer,
             bytes_uploader,
+            mention_tracker,
         }
     }
 }
 
-impl<Svc, MarkdownInit, BytesUpload> DocumentCreator<Svc, MarkdownInit, BytesUpload>
+impl<Svc, MarkdownInit, BytesUpload, MentionTracker>
+    DocumentCreator<Svc, MarkdownInit, BytesUpload, MentionTracker>
 where
     Svc: DocumentCreationService,
     MarkdownInit: MarkdownInitializationPort,
     BytesUpload: DocumentBytesUploadPort,
+    MentionTracker: DocumentMentionTrackingPort,
 {
+    /// Create a blank native workbook. The document service initializes its shared
+    /// sync room before returning; no browser or object-storage upload is needed.
+    pub async fn create_spreadsheet(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        metadata: NewDocumentMetadata,
+    ) -> Result<CreatedDocument, DocumentError> {
+        let args = metadata.into_repo_args(
+            user_id.clone(),
+            RepoDocumentKind {
+                file_type: Some(FileType::Spreadsheet),
+                sha: EMPTY_SHA256.to_string(),
+                subtype: RepoDocumentSubtype::Regular,
+                team_id: None,
+                share_with_team: false,
+            },
+        );
+        self.document_service
+            .create_document(user_id, args, None)
+            .await
+            .map(CreatedDocument::new)
+    }
+
     /// Create a plaintext document using the lifecycle implied by its file type.
     #[tracing::instrument(skip(self, document), err)]
     pub async fn create_plain_text(
@@ -539,7 +601,10 @@ where
             subtype,
         } = document;
         let task = match &subtype {
-            MarkdownSubtype::Note | MarkdownSubtype::Snippet | MarkdownSubtype::Skill => None,
+            MarkdownSubtype::Note
+            | MarkdownSubtype::Snippet
+            | MarkdownSubtype::Skill
+            | MarkdownSubtype::InitiativeDescription => None,
             MarkdownSubtype::Task {
                 property_values,
                 share_with_team,
@@ -565,10 +630,16 @@ where
                     MarkdownSubtype::Task { .. } => RepoDocumentSubtype::MarkdownTask,
                     MarkdownSubtype::Snippet => RepoDocumentSubtype::MarkdownSnippet,
                     MarkdownSubtype::Skill => RepoDocumentSubtype::MarkdownSkill,
+                    MarkdownSubtype::InitiativeDescription => {
+                        RepoDocumentSubtype::MarkdownInitiativeDescription
+                    }
                 },
                 team_id,
+                share_with_team: task.as_ref().is_some_and(|(_, share, _)| *share),
             },
         );
+        let attribution = args.resolved_attribution();
+        let mention_user_id = user_id.clone();
 
         let mut response = self
             .document_service
@@ -596,6 +667,7 @@ where
                             property_values,
                             share_with_team,
                         },
+                        &attribution,
                     )
                     .await?;
             }
@@ -623,6 +695,14 @@ where
                 return Err(error);
             }
         };
+
+        if let Err(error) = self
+            .mention_tracker
+            .track_document_mentions(&document_id, &mention_user_id, &markdown)
+            .await
+        {
+            tracing::error!(error=?error, document_id=%document_id, "unable to track document mentions");
+        }
 
         response.document_response.document_metadata.content =
             DocumentContent::ready(DocumentContentLocation::SyncService);
@@ -652,6 +732,7 @@ where
                 sha: hashes.hex,
                 subtype: RepoDocumentSubtype::Regular,
                 team_id: None,
+                share_with_team: false,
             },
         );
 
@@ -735,7 +816,7 @@ mod tests {
         MarkdownSubtype, NewDocumentMetadata, NewPlainTextDocument, RepoDocumentKind,
         RepoDocumentSubtype, file_shas,
     };
-    use crate::domain::models::ImportEmailAttachmentRepoArgs;
+    use crate::domain::models::{ImportEmailAttachmentRepoArgs, InitialLinkShare};
     use activity::{Actor, Attribution};
     use macro_user_id::user_id::MacroUserIdStr;
     use model::document::FileType;
@@ -754,6 +835,7 @@ mod tests {
             sha: "sha".to_string(),
             subtype: RepoDocumentSubtype::Regular,
             team_id: None,
+            share_with_team: false,
         }
     }
 
@@ -795,6 +877,50 @@ mod tests {
     }
 
     #[test]
+    fn link_share_defaults_to_the_entity_default_unless_set_exactly() {
+        use models_permissions::share_permission::access_level::AccessLevel;
+        use models_permissions::share_permission::{LinkShare, LinkShareState};
+
+        let args = metadata().into_repo_args(owner(), repo_kind());
+        assert_eq!(args.initial_link_share, InitialLinkShare::EntityDefault);
+
+        let state = LinkShareState::On {
+            scope: LinkShare::Team,
+            level: AccessLevel::View,
+        };
+        let args = NewDocumentMetadata::builder("description")
+            .initial_link_share(state)
+            .build()
+            .into_repo_args(owner(), repo_kind());
+        assert_eq!(args.initial_link_share, InitialLinkShare::Exact(state));
+    }
+
+    #[test]
+    fn initiative_description_is_a_markdown_only_subtype_without_task_properties() {
+        let err = NewPlainTextDocument::builder(metadata())
+            .file_type(FileType::Txt)
+            .text("hello")
+            .markdown_subtype(MarkdownSubtype::InitiativeDescription)
+            .build()
+            .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "bad request: initiative descriptions must be markdown documents"
+        );
+
+        NewPlainTextDocument::builder(metadata())
+            .file_type(FileType::Md)
+            .text("# goals")
+            .markdown_subtype(MarkdownSubtype::InitiativeDescription)
+            .build()
+            .unwrap();
+        assert_eq!(
+            RepoDocumentSubtype::MarkdownInitiativeDescription.sub_type(),
+            Some(document_sub_type::DocumentSubType::InitiativeDescription)
+        );
+    }
+
+    #[test]
     fn new_plain_text_rejects_non_markdown_task() {
         let err = NewPlainTextDocument::builder(metadata())
             .file_type(FileType::Txt)
@@ -817,6 +943,28 @@ mod tests {
             .task_flag(true, None)
             .build()
             .unwrap();
+    }
+
+    #[test]
+    fn task_flag_shares_only_when_a_team_was_resolved() {
+        let team_id = uuid::Uuid::from_u128(7);
+        for (resolved_team, expected_share) in [(None, false), (Some(team_id), true)] {
+            let MarkdownSubtype::Task {
+                share_with_team,
+                team_id: numbering_team,
+                property_values,
+            } = MarkdownSubtype::from_task_flag(true, resolved_team)
+            else {
+                panic!("a task flag builds a task subtype");
+            };
+            assert_eq!(share_with_team, expected_share);
+            assert_eq!(numbering_team, resolved_team);
+            assert!(property_values.is_none());
+        }
+        assert!(matches!(
+            MarkdownSubtype::from_task_flag(false, Some(team_id)),
+            MarkdownSubtype::Note
+        ));
     }
 
     #[test]

@@ -1,11 +1,10 @@
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { FileSidePanelSections, SidePanel } from '@components/app/side-panel';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
-import { toast } from '@core/component/Toast/Toast';
-import { createEffect, createSignal, Show } from 'solid-js';
 import { blockData } from '../signal/blockData';
 import { ModalsProvider } from './ModalsProvider';
 import { TopBar } from './TopBar';
+import { VideoContent } from './VideoContent';
 
 export default function BlockVideo() {
   useBlockEntityCommands();
@@ -20,7 +19,10 @@ export default function BlockVideo() {
                 <TopBar />
               </div>
               <div class="w-full grow relative overflow-hidden">
-                <Video />
+                <VideoContent
+                  videoUrl={blockData()?.videoUrl}
+                  fileType={blockData()?.documentMetadata.fileType}
+                />
               </div>
             </div>
           </SidePanel.Layout>
@@ -29,32 +31,3 @@ export default function BlockVideo() {
     </DocumentBlockContainer>
   );
 }
-
-const Video = () => {
-  const videoUrl = () => blockData()?.videoUrl;
-  const [playbackError, setPlaybackError] = createSignal<string>();
-
-  createEffect(() => {
-    const err = playbackError();
-    if (err) {
-      toast.failure(err);
-    }
-  });
-
-  return (
-    <div class="size-full flex flex-col items-center justify-center gap-3 text-ink">
-      <Show when={videoUrl()}>
-        <video
-          class="size-full"
-          controls
-          autoplay
-          src={videoUrl()}
-          onError={(e) => {
-            console.error('video error', e);
-            setPlaybackError('Video playback failed');
-          }}
-        />
-      </Show>
-    </div>
-  );
-};

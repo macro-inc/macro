@@ -6,6 +6,9 @@ import { MobileAuthWelcome } from '@app/features/auth/mobile-onboarding/MobileAu
 import { MobileOnboarding } from '@app/features/auth/mobile-onboarding/MobileOnboarding';
 import { setCookie } from '@app/features/auth/Shared';
 import { ChannelInviteAcceptance } from '@app/features/channel-invitations/ChannelInviteAcceptance';
+import { InviteLinksPortal } from '@app/features/gtm-invite/InviteLinksPortal';
+import { InviteWelcome } from '@app/features/gtm-invite/InviteWelcome';
+import { usePendingInviteRedemption } from '@app/features/gtm-invite/usePendingInviteRedemption';
 import { GlobalShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflictDialog';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
 import { InteractiveOnboardingModal } from '@app/features/onboarding/InteractiveOnboardingModal';
@@ -36,7 +39,7 @@ import { publishLoginSuccess } from '@core/auth/login-events';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
-import { ENABLE_ONBOARDING_V4_OVERRIDE } from '@core/constant/featureFlags';
+import { enableOnboardingV4 } from '@core/constant/featureFlags';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessProvider } from '@core/context/quickAccess';
@@ -356,6 +359,16 @@ const ROUTES: RouteDefinition[] = [
     component: SetupRoute,
   },
   {
+    // A personal GTM invite link (`?token=`): welcome page, then signup.
+    path: '/invite',
+    component: InviteWelcome,
+  },
+  {
+    // Macro staff only: create and track GTM invite links.
+    path: '/internal/invite-links',
+    component: InviteLinksPortal,
+  },
+  {
     path: '/team-invite',
     component: TeamInviteAcceptance,
   },
@@ -420,6 +433,10 @@ function UserInfoSideEffects() {
   const posthog = usePosthog();
 
   useSyncLoginCookie();
+
+  // A signup that started from a GTM invite link finishes its attribution on
+  // the first authenticated load (the welcome page parked the token).
+  usePendingInviteRedemption();
 
   // Set user info for observability and analytics
   const userInfo = useUserInfo();
@@ -496,7 +513,7 @@ function InitialInteractiveOnboardingModal() {
     // `just run_local` sets VITE_ENABLE_ONBOARDING_V4=false; without this the
     // v4-off fallback would still open this legacy modal. Opt in with
     // `just run_local --enable-onboarding`.
-    ENABLE_ONBOARDING_V4_OVERRIDE !== false &&
+    enableOnboardingV4.override !== false &&
     // Onboarding-v4 replaces this modal on desktop; the Layout redirect
     // sends first-time users to /onboarding instead. Desktop waits for the
     // flag to resolve so this doesn't flash before that redirect fires.

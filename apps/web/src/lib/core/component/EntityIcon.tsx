@@ -5,62 +5,83 @@ import {
   isBlockAlias,
   itemToBlockName,
 } from '@core/constant/allBlocks';
-import { USE_WIDE_ICONS } from '@core/constant/featureFlags';
 import type {
   ChannelEntity,
   DocumentEntity,
   EmailEntity,
   EntityData,
+  ForeignEntity,
   NamedSubType,
   ReminderEntity,
 } from '@entity';
-import GithubIcon from '@icon/mcp-github.svg';
-import SkillIcon from '@icon/skill.svg';
-import WideAutomation from '@icon/wide-automation.svg';
-import WideBook from '@icon/wide-book.svg';
-import WideCalendar from '@icon/wide-calendar.svg';
-import PhoneCall from '@icon/wide-call.svg';
-import WideChannel from '@icon/wide-channel.svg';
-import WideChat from '@icon/wide-chat.svg';
-import { AnimatedCompanyIcon } from '@icon/wide-company';
-import { AnimatedContactIcon } from '@icon/wide-contact';
-import WideCsv from '@icon/wide-csv.svg';
-import WideDiagram from '@icon/wide-diagram.svg';
-import WideDocx from '@icon/wide-docx.svg';
-import WideEmail from '@icon/wide-email.svg';
-import WideFileCode from '@icon/wide-file-code.svg';
-import WideFileImage from '@icon/wide-file-image.svg';
-import WideFileMd from '@icon/wide-file-md.svg';
-import WideFiles from '@icon/wide-files.svg';
-import WideFolder from '@icon/wide-folder.svg';
-import WideGlobe from '@icon/wide-globe.svg';
-import WideSnippet from '@icon/wide-snippet.svg';
-import WideStar from '@icon/wide-star.svg';
-import WideTask from '@icon/wide-task.svg';
-import WideUnknown from '@icon/wide-unknown.svg';
-import WideVideo from '@icon/wide-video.svg';
+import Spreadsheet from '@icon/wide-spreadsheet.svg';
+import SpreadsheetBold from '@icon/wide-spreadsheet-bold.svg';
+import AddressBook from '@phosphor/address-book.svg';
 import BellSimple from '@phosphor/bell-simple.svg';
+import Blueprint from '@phosphor/blueprint.svg';
+import BracketsCurly from '@phosphor/brackets-curly.svg';
 import Building from '@phosphor/building.svg';
-import Chat from '@phosphor/chat.svg';
-import Check from '@phosphor/check-fat.svg';
-import FileCode from '@phosphor/code.svg';
+import BuildingOffice from '@phosphor/building-office.svg';
+import Calendar from '@phosphor/calendar.svg';
+import ClockClockwise from '@phosphor/clock-clockwise.svg';
+import Code from '@phosphor/code.svg';
 import Email from '@phosphor/envelope.svg';
 import EmailRead from '@phosphor/envelope-open.svg';
 import File from '@phosphor/file.svg';
 import FileArchive from '@phosphor/file-archive.svg';
+import FileCsv from '@phosphor/file-csv.svg';
+import FileDashed from '@phosphor/file-dashed.svg';
 import FileDoc from '@phosphor/file-doc.svg';
 import FileHtml from '@phosphor/file-html.svg';
-import FileMd from '@phosphor/file-md.svg';
 import FilePdf from '@phosphor/file-pdf.svg';
 import FileVideo from '@phosphor/file-video.svg';
 import Files from '@phosphor/files.svg';
 import Folder from '@phosphor/folder-simple.svg';
-import FolderUser from '@phosphor/folder-user.svg';
+import FolderUser from '@phosphor/folder-simple-user.svg';
+import GitMerge from '@phosphor/git-merge.svg';
+import GitPullRequest from '@phosphor/git-pull-request.svg';
 import GlobeIcon from '@phosphor/globe.svg';
+import HashStraight from '@phosphor/hash-straight.svg';
 import FileImage from '@phosphor/image.svg';
-import Canvas from '@phosphor/pencil-circle.svg';
-import Robot from '@phosphor/robot.svg';
+import ListChecks from '@phosphor/list-checks.svg';
+import PhoneCall from '@phosphor/phone-call.svg';
+import Shapes from '@phosphor/shapes.svg';
+import Sparkle from '@phosphor/sparkle.svg';
 import Users from '@phosphor/users.svg';
+import UsersThree from '@phosphor/users-three.svg';
+import AddressBookBold from '@phosphor-icons/core/bold/address-book-bold.svg';
+import BellSimpleBold from '@phosphor-icons/core/bold/bell-simple-bold.svg';
+import BlueprintBold from '@phosphor-icons/core/bold/blueprint-bold.svg';
+import BracketsCurlyBold from '@phosphor-icons/core/bold/brackets-curly-bold.svg';
+import BuildingBold from '@phosphor-icons/core/bold/building-bold.svg';
+import BuildingOfficeBold from '@phosphor-icons/core/bold/building-office-bold.svg';
+import CalendarBold from '@phosphor-icons/core/bold/calendar-bold.svg';
+import ClockClockwiseBold from '@phosphor-icons/core/bold/clock-clockwise-bold.svg';
+import CodeBold from '@phosphor-icons/core/bold/code-bold.svg';
+import EmailBold from '@phosphor-icons/core/bold/envelope-bold.svg';
+import EmailReadBold from '@phosphor-icons/core/bold/envelope-open-bold.svg';
+import FileArchiveBold from '@phosphor-icons/core/bold/file-archive-bold.svg';
+import FileBold from '@phosphor-icons/core/bold/file-bold.svg';
+import FileCsvBold from '@phosphor-icons/core/bold/file-csv-bold.svg';
+import FileDashedBold from '@phosphor-icons/core/bold/file-dashed-bold.svg';
+import FileDocBold from '@phosphor-icons/core/bold/file-doc-bold.svg';
+import FileHtmlBold from '@phosphor-icons/core/bold/file-html-bold.svg';
+import FilePdfBold from '@phosphor-icons/core/bold/file-pdf-bold.svg';
+import FileVideoBold from '@phosphor-icons/core/bold/file-video-bold.svg';
+import FilesBold from '@phosphor-icons/core/bold/files-bold.svg';
+import FolderBold from '@phosphor-icons/core/bold/folder-simple-bold.svg';
+import FolderUserBold from '@phosphor-icons/core/bold/folder-simple-user-bold.svg';
+import GitMergeBold from '@phosphor-icons/core/bold/git-merge-bold.svg';
+import GitPullRequestBold from '@phosphor-icons/core/bold/git-pull-request-bold.svg';
+import GlobeIconBold from '@phosphor-icons/core/bold/globe-bold.svg';
+import HashStraightBold from '@phosphor-icons/core/bold/hash-straight-bold.svg';
+import FileImageBold from '@phosphor-icons/core/bold/image-bold.svg';
+import ListChecksBold from '@phosphor-icons/core/bold/list-checks-bold.svg';
+import PhoneCallBold from '@phosphor-icons/core/bold/phone-call-bold.svg';
+import ShapesBold from '@phosphor-icons/core/bold/shapes-bold.svg';
+import SparkleBold from '@phosphor-icons/core/bold/sparkle-bold.svg';
+import UsersBold from '@phosphor-icons/core/bold/users-bold.svg';
+import UsersThreeBold from '@phosphor-icons/core/bold/users-three-bold.svg';
 import type { PreviewItem } from '@queries/preview';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import { FileTypeMap } from '@service-storage/fileTypeMap';
@@ -72,6 +93,7 @@ import { match } from 'ts-pattern';
 
 type IconConfig = {
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
+  boldIcon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   foreground: string;
   background: string;
   prettyName: string;
@@ -83,10 +105,14 @@ export type EntityWithValidIcon =
   | ChannelType
   | 'organization'
   | 'default'
+  | 'document'
   | 'sharedProject'
   | 'emailRead'
   | 'emailInvite'
   | 'githubPullRequest'
+  | 'githubPullRequestOpen'
+  | 'githubPullRequestMerged'
+  | 'githubPullRequestClosed'
   | 'archive'
   | 'files'
   | 'crm_company'
@@ -100,230 +126,303 @@ const ARCHIVE_EXTENSIONS = new Set(
 );
 
 export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
+  document: {
+    icon: File,
+    boldIcon: FileBold,
+    foreground: 'text-default',
+    background: 'bg-default/20',
+    prettyName: 'Document',
+  },
   call: {
     icon: PhoneCall,
+    boldIcon: PhoneCallBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Call',
   },
   calendar: {
-    icon: WideCalendar,
+    icon: Calendar,
+    boldIcon: CalendarBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Calendar',
   },
   canvas: {
-    icon: Canvas,
+    icon: Shapes,
+    boldIcon: ShapesBold,
     foreground: 'text-canvas',
     background: 'bg-canvas/20',
     prettyName: 'Canvas',
   },
+  spreadsheet: {
+    icon: Spreadsheet,
+    boldIcon: SpreadsheetBold,
+    foreground: 'text-success',
+    background: 'bg-success/20',
+    prettyName: 'Spreadsheet',
+  },
   html: {
     icon: FileHtml,
+    boldIcon: FileHtmlBold,
     foreground: 'text-html',
     background: 'bg-html/20',
     prettyName: 'Webpage',
   },
   channel: {
-    icon: WideChannel,
+    icon: HashStraight,
+    boldIcon: HashStraightBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Channel',
   },
   public: {
     icon: GlobeIcon,
+    boldIcon: GlobeIconBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Public Channel',
   },
   organization: {
     icon: Building,
+    boldIcon: BuildingBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Organization',
   },
   private: {
-    icon: WideChannel,
+    icon: HashStraight,
+    boldIcon: HashStraightBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Private Channel',
   },
   direct_message: {
     icon: Users,
+    boldIcon: UsersBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Direct Message',
   },
   team: {
-    icon: Users,
+    icon: UsersThree,
+    boldIcon: UsersThreeBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Team Channel',
   },
   email: {
     icon: Email,
+    boldIcon: EmailBold,
     foreground: 'text-email',
     background: 'bg-email/20',
     prettyName: 'Email',
   },
   code: {
-    icon: FileCode,
+    icon: Code,
+    boldIcon: CodeBold,
     foreground: 'text-code',
     background: 'bg-code/20',
     prettyName: 'Code',
   },
   csv: {
-    icon: WideCsv,
+    icon: FileCsv,
+    boldIcon: FileCsvBold,
     foreground: 'text-code',
     background: 'bg-code/20',
     prettyName: 'CSV',
   },
   pdf: {
     icon: FilePdf,
+    boldIcon: FilePdfBold,
     foreground: 'text-pdf',
     background: 'bg-pdf/20',
     prettyName: 'PDF',
   },
   md: {
-    icon: FileMd,
+    icon: File,
+    boldIcon: FileBold,
     foreground: 'text-note',
     background: 'bg-note/20',
     prettyName: 'Note',
   },
   image: {
     icon: FileImage,
+    boldIcon: FileImageBold,
     foreground: 'text-image',
     background: 'bg-image/20',
     prettyName: 'Image',
   },
   write: {
     icon: FileDoc,
+    boldIcon: FileDocBold,
     foreground: 'text-write',
     background: 'bg-write/20',
     prettyName: 'Document',
   },
   chat: {
-    icon: Chat,
+    icon: Sparkle,
+    boldIcon: SparkleBold,
     foreground: 'text-chat',
     background: 'bg-chat/20',
     prettyName: 'Chat',
   },
   project: {
     icon: Folder,
+    boldIcon: FolderBold,
     foreground: 'text-folder',
     background: 'bg-folder/20',
     prettyName: 'Folder',
   },
   sharedProject: {
     icon: FolderUser,
+    boldIcon: FolderUserBold,
     foreground: 'text-folder',
     background: 'bg-folder/20',
     prettyName: 'Shared Folder',
   },
   unknown: {
-    icon: File,
+    icon: FileDashed,
+    boldIcon: FileDashedBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'File',
   },
   files: {
     icon: Files,
+    boldIcon: FilesBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Files',
   },
   archive: {
     icon: FileArchive,
+    boldIcon: FileArchiveBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Archive',
   },
   video: {
     icon: FileVideo,
+    boldIcon: FileVideoBold,
     foreground: 'text-video',
     background: 'bg-video/20',
     prettyName: 'Video',
   },
   contact: {
-    icon: AnimatedContactIcon,
+    icon: AddressBook,
+    boldIcon: AddressBookBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Contact',
   },
   default: {
-    icon: File,
+    icon: FileDashed,
+    boldIcon: FileDashedBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'File',
   },
   emailRead: {
     icon: EmailRead,
+    boldIcon: EmailReadBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Read Email',
   },
   emailInvite: {
-    icon: WideCalendar,
+    icon: Calendar,
+    boldIcon: CalendarBold,
     foreground: 'text-calendar',
     background: 'bg-calendar/20',
     prettyName: 'Calendar Invite',
   },
   githubPullRequest: {
-    icon: GithubIcon,
+    icon: GitPullRequest,
+    boldIcon: GitPullRequestBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'GitHub Pull Request',
   },
+  githubPullRequestOpen: {
+    icon: GitPullRequest,
+    boldIcon: GitPullRequestBold,
+    foreground: 'text-success',
+    background: 'bg-success/20',
+    prettyName: 'Open Pull Request',
+  },
+  githubPullRequestMerged: {
+    icon: GitMerge,
+    boldIcon: GitMergeBold,
+    foreground: 'text-note',
+    background: 'bg-note/20',
+    prettyName: 'Merged Pull Request',
+  },
+  githubPullRequestClosed: {
+    icon: GitPullRequest,
+    boldIcon: GitPullRequestBold,
+    foreground: 'text-failure',
+    background: 'bg-failure/20',
+    prettyName: 'Closed Pull Request',
+  },
   pr: {
-    icon: GithubIcon,
+    icon: GitPullRequest,
+    boldIcon: GitPullRequestBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Pull Request',
   },
   agent: {
-    icon: Robot,
-    foreground: 'text-default',
-    background: 'bg-default/20',
+    icon: Sparkle,
+    boldIcon: SparkleBold,
+    foreground: 'text-chat',
+    background: 'bg-chat/20',
     prettyName: 'Agent',
   },
   task: {
-    icon: Check,
+    icon: ListChecks,
+    boldIcon: ListChecksBold,
     foreground: 'text-task',
     background: 'bg-task/20',
     prettyName: 'Task',
   },
   snippet: {
-    icon: WideSnippet,
+    icon: BracketsCurly,
+    boldIcon: BracketsCurlyBold,
     foreground: 'text-snippet',
     background: 'bg-snippet/20',
     prettyName: 'Snippet',
   },
   skill: {
-    icon: SkillIcon,
+    icon: Blueprint,
+    boldIcon: BlueprintBold,
     foreground: 'text-chat',
     background: 'bg-chat/20',
     prettyName: 'Skill',
   },
   automation: {
-    icon: WideAutomation,
+    icon: ClockClockwise,
+    boldIcon: ClockClockwiseBold,
     foreground: 'text-chat',
     background: 'bg-chat/20',
     prettyName: 'Automation',
   },
   crm_company: {
-    icon: AnimatedCompanyIcon,
+    icon: BuildingOffice,
+    boldIcon: BuildingOfficeBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Company',
   },
   company: {
-    icon: AnimatedCompanyIcon,
+    icon: BuildingOffice,
+    boldIcon: BuildingOfficeBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Company',
   },
   reminder: {
     icon: BellSimple,
+    boldIcon: BellSimpleBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Reminder',
@@ -354,52 +453,6 @@ function validateEntity(entity: string): EntityWithValidIcon {
     return 'default';
   }
 }
-
-const WIDE_ICONS: Record<
-  EntityWithValidIcon,
-  Component<JSX.SvgSVGAttributes<SVGSVGElement>>
-> = {
-  call: PhoneCall,
-  calendar: WideCalendar,
-  canvas: WideDiagram,
-  html: WideFileCode,
-  channel: WideChannel,
-  public: WideGlobe,
-  organization: Building,
-  private: WideChannel,
-  direct_message: WideChat,
-  team: WideChannel,
-  email: WideEmail,
-  code: WideFileCode,
-  csv: WideCsv,
-  pdf: WideBook,
-  md: WideFileMd,
-  image: WideFileImage,
-  write: WideDocx,
-  chat: WideStar,
-  project: WideFolder,
-  sharedProject: WideFolder,
-  unknown: WideUnknown,
-  files: WideFiles,
-  archive: WideUnknown,
-  video: WideVideo,
-  contact: AnimatedContactIcon,
-  default: WideUnknown,
-  emailRead: WideEmail,
-  emailInvite: WideCalendar,
-  githubPullRequest: GithubIcon,
-  pr: GithubIcon,
-  agent: Robot,
-  task: WideTask,
-  snippet: WideSnippet,
-  skill: SkillIcon,
-  automation: WideAutomation,
-  crm_company: AnimatedCompanyIcon,
-  company: AnimatedCompanyIcon,
-  // No wide bell asset exists; the phosphor one carries over, as it does for
-  // `organization` and the github icons.
-  reminder: BellSimple,
-};
 
 const ICON_SIZES = {
   xs: 'w-4 h-4',
@@ -436,6 +489,8 @@ export type EntityIconProps = {
    * fill = "w-fill h-fill"
    */
   size?: keyof typeof ICON_SIZE_CLASSES;
+  /** Use the matching icon weight. Defaults to regular. */
+  weight?: 'regular' | 'bold';
   theme?: 'monochrome';
   /**
    * Whether the item is shared. If true, certain icons will be rendered differently.
@@ -458,17 +513,10 @@ export function EntityIcon(props: EntityIconProps) {
   const getName = () => {
     // Special cases:
     if (props.targetType === 'project' && props.shared) return 'sharedProject';
-    return validateEntity(props.targetType || 'default');
+    return props.targetType || 'default';
   };
 
-  const config = () => ENTITY_ICON_CONFIGS[getName()];
-  const icon = () => {
-    if (USE_WIDE_ICONS) {
-      return WIDE_ICONS[getName()];
-    } else {
-      return config().icon;
-    }
-  };
+  const config = () => getIconConfig(getName(), props.weight);
   const sizeClass = () => ICON_SIZE_CLASSES[props.size ?? 'xs'];
   const isMonochrome = () => props.theme === 'monochrome';
 
@@ -483,7 +531,7 @@ export function EntityIcon(props: EntityIconProps) {
       )}
     >
       {/* size-full: Safari needs a CSS size, not the SVG's % attributes. */}
-      <Dynamic component={icon()} class="size-full" />
+      <Dynamic component={config().icon} class="size-full" />
     </div>
   );
 }
@@ -491,12 +539,19 @@ export function EntityIcon(props: EntityIconProps) {
 export function CustomEntityIcon(
   props: EntityIconProps & {
     icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
+    boldIcon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   }
 ) {
   const config = () =>
     ENTITY_ICON_CONFIGS[validateEntity(props.targetType || 'default')];
   const sizeClass = () => ICON_SIZE_CLASSES[props.size ?? 'xs'];
   const isMonochrome = () => props.theme === 'monochrome';
+  const icon = () => {
+    if (props.weight === 'bold') {
+      return props.boldIcon ?? props.icon ?? config().boldIcon;
+    }
+    return props.icon ?? config().icon;
+  };
   return (
     <div
       class={sizeClass()}
@@ -509,20 +564,21 @@ export function CustomEntityIcon(
       }}
     >
       {/* size-full: see EntityIcon (Safari). */}
-      <Dynamic component={props.icon || config().icon} class="size-full" />
+      <Dynamic component={icon()} class="size-full" />
     </div>
   );
 }
 
 export function getIconConfig(
-  targetType: EntityWithValidIcon | FileType | (string & {})
+  targetType: EntityWithValidIcon | FileType | (string & {}),
+  weight: NonNullable<EntityIconProps['weight']> = 'regular'
 ) {
   const key = validateEntity(targetType);
-  const config = { ...ENTITY_ICON_CONFIGS[key] };
-  if (USE_WIDE_ICONS) {
-    config.icon = WIDE_ICONS[key];
-  }
-  return config;
+  const config = ENTITY_ICON_CONFIGS[key];
+  return {
+    ...config,
+    icon: weight === 'bold' ? config.boldIcon : config.icon,
+  };
 }
 
 type EntityIconData = Pick<EntityData, 'type'> & {
@@ -530,25 +586,50 @@ type EntityIconData = Pick<EntityData, 'type'> & {
   fileType?: DocumentEntity['fileType'] | null;
   subType?: DocumentEntity['subType'];
   isRead?: EmailEntity['isRead'];
-  /** Reminders icon as the entity they reference. */
+  hasIcsAttachment?: EmailEntity['hasIcsAttachment'];
+  foreignSource?: ForeignEntity['foreignSource'];
+  metadata?: ForeignEntity['metadata'];
+  /** Reference metadata carried by reminder entities. */
   referencedEntity?: ReminderEntity['referencedEntity'];
 };
 
+/** The shared entity-to-icon mapping used by lists, previews, and drag images. */
 export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
-  const typeString = match(entity)
-    .with({ type: 'channel' }, (e) => e.channelType || 'channel')
-    .with({ type: 'channel_message' }, (e) => e.channelType || 'channel')
-    .with({ type: 'document' }, (e) => itemToBlockName(e, true) ?? 'default')
-    .with({ type: 'email', isRead: true }, () => 'emailRead')
-    .with({ type: 'email' }, () => 'email')
-    // Always the bell, never the referenced entity's icon: a reminder is a
-    // reminder first, and what it points at is iconed beside its name instead
-    // — see `reminderReferenceIconType`.
-    .with({ type: 'reminder' }, () => 'reminder')
+  return match<EntityIconData, EntityWithValidIcon>(entity)
+    .with({ type: 'document' }, (e) => {
+      if (e.subType?.type === 'task') return 'task';
+      if (e.fileType === 'spreadsheet') return 'spreadsheet';
+      if (e.fileType && isArchiveType(e.fileType)) return 'archive';
+      const blockName = itemToBlockName(e, true);
+      return blockName === 'unknown' ? 'document' : blockName;
+    })
+    .with(
+      { type: 'channel' },
+      { type: 'channel_message' },
+      { type: 'channel_thread' },
+      (e) => (e.channelType === 'direct_message' ? 'direct_message' : 'channel')
+    )
+    .with({ type: 'email' }, (e) =>
+      e.hasIcsAttachment ? 'emailInvite' : e.isRead ? 'emailRead' : 'email'
+    )
+    .with({ type: 'chat' }, () => 'chat')
+    .with({ type: 'agent_session' }, () => 'agent')
+    .with({ type: 'project' }, () => 'project')
     .with({ type: 'calendar_event' }, () => 'calendar')
-    .otherwise((e) => e.type);
-
-  return validateEntity(typeString);
+    .with({ type: 'reminder' }, () => 'reminder')
+    .with({ type: 'call' }, () => 'call')
+    .with({ type: 'automation' }, () => 'automation')
+    .with({ type: 'foreign' }, (e) => {
+      if (e.foreignSource !== 'github_pull_request') return 'default';
+      return match<unknown, EntityWithValidIcon>(e.metadata?.status)
+        .with('open', () => 'githubPullRequestOpen')
+        .with('merged', () => 'githubPullRequestMerged')
+        .with('closed', () => 'githubPullRequestClosed')
+        .otherwise(() => 'githubPullRequest');
+    })
+    .with({ type: 'crm_company' }, () => 'crm_company')
+    .with({ type: 'crm_contact' }, () => 'contact')
+    .exhaustive();
 }
 
 /** What the block resolvers return when they cannot place something. */
@@ -560,7 +641,7 @@ const UNRESOLVED_ICONS: ReadonlySet<string> = new Set(['default', 'unknown']);
  * Synchronous by design: the referenced entity's `fileType`/`subType` are
  * resolved server-side precisely so this costs no fetch per row.
  *
- * A reference that resolves to nothing gets the bell, not the unknown-file
+ * A reference that resolves to nothing gets the reminder icon, not the unknown-file
  * glyph, which on a reminder row reads as breakage rather than as a reminder.
  * That needs both sentinels and neither is falsy: `fileTypeToBlockName`
  * returns the literal `unknown`, and `validateEntity` returns `default`.
@@ -583,8 +664,11 @@ export function reminderReferenceIconType(
   return UNRESOLVED_ICONS.has(iconType) ? 'reminder' : iconType;
 }
 
-export function getEntityIconConfig(entity: EntityData) {
-  return getIconConfig(getEntityIconType(entity));
+export function getEntityIconConfig(
+  entity: EntityData,
+  weight?: EntityIconProps['weight']
+) {
+  return getIconConfig(getEntityIconType(entity), weight);
 }
 
 export function getPreviewItemIconType(item: PreviewItem): EntityWithValidIcon {

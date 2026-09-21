@@ -16,7 +16,7 @@ import { isAfter } from 'date-fns';
 import { match } from 'ts-pattern';
 import { queryClient } from '../../client';
 import { refreshActiveGraphqlSoupQueries } from '../graphql/active-queries';
-import type { SoupApiItemFilter, SoupAstItemsPage } from '../items';
+import type { SoupAstItemsPage } from '../items';
 import { soupKeys } from '../keys';
 import {
   insertGroupedPage,
@@ -33,6 +33,7 @@ import {
   soupNormKey,
   stripSoupNormPrefix,
 } from './normalizer';
+import { raiseNotifiedFloor } from './notified-floor';
 import { ownTouchStamp } from './own-touch';
 import type {
   SoupEntityPartial,
@@ -175,6 +176,51 @@ export function bumpSoupEntityTouchedAt(
 }
 
 /**
+ * Stamp a freshly delivered notification's time on its cached entity so the
+ * inbox's notified_at order moves the row up (and re-buckets its date header)
+ * without waiting for a refetch. Newest wins: an out-of-order delivery never
+ * moves a row back down. The stamp is also recorded as a floor (see
+ * `notified-floor.ts`) so a notified page that was in flight when the
+ * notification landed cannot overwrite it with the previous stamp; the floor
+ * clears once the server's value catches up. Non-notified responses omit the
+ * field, so the field-merge never clears the stamp either.
+ */
+export function bumpSoupEntityNotifiedAt(
+  entityId: string,
+  notifiedAt: string
+): SoupTransaction | undefined {
+  raiseNotifiedFloor(entityId, notifiedAt);
+  const current = getSoupEntityById(entityId);
+  if (!current) return undefined;
+  const existing = current.notified_at ?? undefined;
+  if (!shouldUpdateOptimisticTimestamp(existing, notifiedAt)) return undefined;
+  const frecency_score = current.frecency_score;
+
+  if (current.tag === 'channel') {
+    return optimisticUpdateSoupEntity({
+      tag: 'channel',
+      data: { channel: { id: current.data.channel.id } },
+      frecency_score,
+      notified_at: notifiedAt,
+    });
+  }
+  if (current.tag === 'call') {
+    return optimisticUpdateSoupEntity({
+      tag: 'call',
+      data: { callId: current.data.callId },
+      frecency_score,
+      notified_at: notifiedAt,
+    });
+  }
+  return optimisticUpdateSoupEntity({
+    tag: current.tag,
+    data: { id: current.data.id },
+    frecency_score,
+    notified_at: notifiedAt,
+  } as SoupEntityPartial);
+}
+
+/**
  * Mark stale only the soup queries containing a specific entity.
  * Prefer this over `invalidateAllSoup` when you know the affected entity ID.
  */
@@ -245,8 +291,9 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
     {
       predicate: (query) => {
         if (!partialMatchKey(query.queryKey, soupKeys.items._def)) return false;
-        const filter = query.meta?.itemFilter as SoupApiItemFilter | undefined;
-        return filter ? filter(item) : true;
+        const meta = getSoupQueryMeta(query.meta);
+        if (meta.itemFilter && !meta.itemFilter(item)) return false;
+        return !meta.insertFilter || meta.insertFilter(item);
       },
     },
     (prev) => {
@@ -272,6 +319,7 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
     );
     const filter = meta.itemFilter;
     if (filter && !filter(item)) continue;
+    if (meta.insertFilter && !meta.insertFilter(item)) continue;
 
     const firstPage = prev.pages[0];
 
@@ -392,26 +440,75 @@ export function removeSoupEntitiesFromQueriesReferencing(
   });
 }
 
-/**
- * Serialized-key test for soup queries that exclude done content. The markers
- * a compiled soup query key can carry: `emailView: 'inbox'` (server-side
- * inbox scoping of email views, e.g. mail Important/Noise) and compiled
- * done-filter literals — `NotificationDone` (emails/channels) or `nd`
- * (documents/chats/folders/foreign entities) with a `false` value, produced
- * by the `*Done: false` filter presets.
- */
-function soupQueryExcludesDone(key: QueryKey): boolean {
-  const serialized = JSON.stringify(key);
-  return (
-    serialized.includes('"emailView":"inbox"') ||
-    serialized.includes('"NotificationDone":false') ||
-    serialized.includes('"nd":false') ||
-    // Reminders carry their done state on themselves rather than on a
-    // notification, so `reminderCompleted` — compiled to `remf.comp` — is the
-    // shape the Reminders Active and Scheduled tabs filter on. Without it,
-    // marking a reminder done left the row sitting there until the refetch.
-    serialized.includes('"comp":false')
-  );
+/** Detect positive active-state constraints without misreading OR/NOT subtrees. */
+function soupQueryExcludesDone(
+  key: QueryKey,
+  incomingState?: 'unseen' | 'seen'
+): boolean {
+  type Match = { excludesDone: boolean; acceptsIncoming: boolean };
+  const unknown: Match = { excludesDone: false, acceptsIncoming: true };
+  const combine = (parts: Match[], or = false): Match => ({
+    excludesDone:
+      parts.length > 0 &&
+      (or
+        ? parts.every((p) => p.excludesDone)
+        : parts.some((p) => p.excludesDone)),
+    acceptsIncoming: or
+      ? parts.some((p) => p.acceptsIncoming)
+      : parts.every((p) => p.acceptsIncoming),
+  });
+  const states = (values: unknown[]): Match => ({
+    excludesDone:
+      values.length > 0 && values.every((v) => v === 'unseen' || v === 'seen'),
+    acceptsIncoming:
+      incomingState === undefined || values.includes(incomingState),
+  });
+  const inspect = (value: unknown): Match => {
+    if (!value || typeof value !== 'object') return unknown;
+    if (Array.isArray(value)) return combine(value.map(inspect));
+    const node = value as Record<string, unknown>;
+    // No safe positive witness can be inferred from a negated subtree.
+    if ('!' in node || 'not' in node) return unknown;
+    if ('|' in node)
+      return Array.isArray(node['|'])
+        ? combine(node['|'].map(inspect), true)
+        : unknown;
+    if ('or' in node) {
+      const branches = node.or as { left?: unknown; right?: unknown } | null;
+      return branches
+        ? combine([inspect(branches.left), inspect(branches.right)], true)
+        : unknown;
+    }
+    if ('l' in node || 'literal' in node) {
+      const leaf = (node.l ?? node.literal) as Record<string, unknown> | null;
+      if (!leaf || typeof leaf !== 'object') return unknown;
+      const state = leaf.ns ?? leaf.NotificationState ?? leaf.notificationState;
+      if (typeof state === 'string') return states([state.toLowerCase()]);
+      return leaf.comp === false
+        ? { excludesDone: true, acceptsIncoming: true }
+        : unknown;
+    }
+    const matches: Match[] = [];
+    if (node.emailView === 'inbox') {
+      matches.push({ excludesDone: true, acceptsIncoming: true });
+    }
+    const filter = node.notification_filters as
+      | { states?: unknown[] }
+      | undefined;
+    if (Array.isArray(filter?.states) && filter.states.length) {
+      matches.push(states(filter.states));
+    }
+    // Inbox scoping and DTO selections are witnesses, not terminal nodes:
+    // every sibling state constraint must also accept the arriving state.
+    for (const [field, child] of Object.entries(node)) {
+      if (field !== 'emailView' && field !== 'notification_filters') {
+        matches.push(inspect(child));
+      }
+    }
+    return combine(matches);
+  };
+  const result = inspect(key);
+  return result.excludesDone && result.acceptsIncoming;
 }
 
 /**
@@ -424,6 +521,120 @@ export function removeSoupEntitiesFromDoneFilteredQueries(
   entityIds: Set<string>
 ): SoupTransaction {
   return removeSoupEntitiesWhere(entityIds, soupQueryExcludesDone);
+}
+
+/**
+ * Prepend a cached entity to the done-excluding soup queries (see
+ * `soupQueryExcludesDone`) whose pages don't contain it. A fresh notification
+ * puts its entity back into those feeds server-side, but the client row may
+ * have been optimistically removed when it was marked done — or the feed was
+ * fetched while the entity had nothing outstanding — and the normalized
+ * field merge only patches rows already present, so without this the feeds
+ * would not show the entity again until their next refetch. Grouped pages
+ * and expanded single-group caches (which back grouped views' rows and are
+ * cached with staleTime Infinity) are restored the same way; groups that
+ * can't be resolved locally (e.g. date buckets) invalidate instead.
+ */
+export function restoreSoupEntityToDoneFilteredQueries(
+  entityId: string,
+  incomingState: 'unseen' | 'seen' = 'unseen'
+): void {
+  const shouldRestore = (key: QueryKey) =>
+    soupQueryExcludesDone(key, incomingState);
+  const item = getSoupEntityById(entityId);
+  if (!item) return;
+
+  const cancelQuery = (key: QueryKey) =>
+    queryClient.cancelQueries({
+      queryKey: key,
+      exact: true,
+      predicate: (query) => query.state.data !== undefined,
+    });
+
+  const metaFor = (key: QueryKey) =>
+    getSoupQueryMeta(queryClient.getQueryCache().find({ queryKey: key })?.meta);
+
+  const containsEntity = (items: SoupApiItem[]) =>
+    items.some((existing) => getSoupItemId(existing) === entityId);
+
+  for (const [key, prev] of queryClient.getQueriesData<SoupItemsInfiniteData>({
+    queryKey: soupKeys.items._def,
+  })) {
+    if (!shouldRestore(key)) continue;
+    if (!prev?.pages?.length) continue;
+    if (prev.pages.some((page) => containsEntity(page.items))) continue;
+
+    const flatMeta = metaFor(key);
+    if (flatMeta.itemFilter && !flatMeta.itemFilter(item)) continue;
+    if (flatMeta.insertFilter && !flatMeta.insertFilter(item)) continue;
+
+    cancelQuery(key);
+    queryClient.setQueryData<SoupItemsInfiniteData>(key, {
+      ...prev,
+      pages: prev.pages.map((page, index) =>
+        index === 0 ? { ...page, items: [item, ...page.items] } : page
+      ),
+    });
+  }
+
+  for (const [
+    key,
+    prev,
+  ] of queryClient.getQueriesData<SoupAstItemsInfiniteData>({
+    queryKey: soupKeys.astItems._def,
+  })) {
+    if (!shouldRestore(key)) continue;
+    if (!prev?.pages?.length) continue;
+
+    const meta = metaFor(key);
+    if (meta.itemFilter && !meta.itemFilter(item)) continue;
+    if (meta.insertFilter && !meta.insertFilter(item)) continue;
+
+    const firstPage = prev.pages[0];
+
+    if (firstPage.kind === 'flat') {
+      if (
+        prev.pages.some(
+          (page) => page.kind === 'flat' && containsEntity(page.items)
+        )
+      ) {
+        continue;
+      }
+
+      cancelQuery(key);
+      queryClient.setQueryData<SoupAstItemsInfiniteData>(key, {
+        ...prev,
+        pages: prev.pages.map((page, index) =>
+          index === 0 && page.kind === 'flat'
+            ? { ...page, items: [item, ...page.items] }
+            : page
+        ),
+      });
+      continue;
+    }
+
+    // Grouped parents keep membership entirely on the first page.
+    if (
+      entityId in firstPage.items ||
+      firstPage.groups.some((group) => group.itemIds.includes(entityId))
+    ) {
+      continue;
+    }
+
+    const nextPage = insertGroupedPage(firstPage, item, entityId, meta.groupBy);
+    if (!nextPage) {
+      queryClient.invalidateQueries({ queryKey: key });
+      continue;
+    }
+
+    cancelQuery(key);
+    queryClient.setQueryData<SoupAstItemsInfiniteData>(key, {
+      ...prev,
+      pages: [nextPage, ...prev.pages.slice(1)],
+    });
+  }
+
+  insertGroupQueries(item, entityId, shouldRestore);
 }
 
 /** Remove entities from the soup queries whose key matches the predicate. */
@@ -687,6 +898,10 @@ export function buildSingleEntityFilter(
       ...base,
       reminder_filters: { ids: [entityId] },
     }))
+    .with('agentSession', () => ({
+      ...base,
+      agent_session_filters: { ids: [entityId] },
+    }))
     .exhaustive();
 }
 
@@ -738,7 +953,7 @@ export function optimisticUpdateSoupItemUpdatedAt(
   itemId: string,
   tag: SoupEntityTag,
   updatedAt: string
-) {
+): SoupTransaction | undefined {
   const current = getSoupEntityById(itemId);
   if (!current || current.tag !== tag) return;
 
@@ -751,7 +966,7 @@ export function optimisticUpdateSoupItemUpdatedAt(
     )
       return;
 
-    optimisticUpdateSoupEntity({
+    return optimisticUpdateSoupEntity({
       tag: 'channel',
       data: { channel: { id: itemId, updated_at: updatedAt } },
       frecency_score: current.frecency_score,
@@ -767,7 +982,7 @@ export function optimisticUpdateSoupItemUpdatedAt(
 
     if (!shouldUpdateOptimisticTimestamp(timestamp, updatedAt)) return;
 
-    optimisticUpdateSoupEntity({
+    return optimisticUpdateSoupEntity({
       tag: current.tag,
       data: { id: itemId, updatedAt },
       frecency_score: current.frecency_score,
@@ -797,6 +1012,7 @@ function getSearchResultId(result: UnifiedSearchResponseItem): string {
     .with({ type: 'call' }, (r) => r.call_id)
     .with({ type: 'company' }, (r) => r.id)
     .with({ type: 'calendarEvent' }, (r) => r.id)
+    .with({ type: 'agentSession' }, (r) => r.id)
     .exhaustive();
 }
 

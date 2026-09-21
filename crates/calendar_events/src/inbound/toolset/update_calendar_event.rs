@@ -10,8 +10,8 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 
 use super::{
-    AttendeeInput, CalendarToolContext, EventRemindersInput, EventTimeInput, ToolCalendarEvent,
-    mutation_tool_error,
+    AttendeeInput, CalendarToolContext, EventRemindersInput, EventTimeInput, OutOfOfficeInput,
+    ToolCalendarEvent, mutation_tool_error,
 };
 use crate::domain::{
     models::{AttendeeResponseStatus, CalendarEventPatch, ConferenceChange},
@@ -102,6 +102,15 @@ pub struct UpdateCalendarEvent {
     /// Event to update.
     #[schemars(description = "The event's id, from ListCalendarEvents or CreateCalendarEvent.")]
     pub event_id: uuid::Uuid,
+
+    /// Calendar whose copy of the event is updated.
+    #[schemars(
+        description = "The `calendarId` of the copy to update, from the `copies` of its \
+                       ListCalendarEvents entry, for an event synced from more than one \
+                       calendar. Omit to update the event's primary copy."
+    )]
+    #[serde(default)]
+    pub calendar_id: Option<uuid::Uuid>,
 
     /// Update scope.
     #[schemars(
@@ -194,6 +203,17 @@ pub struct UpdateCalendarEvent {
     )]
     #[serde(default)]
     pub rsvp: Option<RsvpResponseInput>,
+
+    /// Replacement out-of-office decline behavior.
+    #[schemars(
+        description = "Adjust out-of-office decline behavior; only valid on an event that is \
+                       already out of office (its event type cannot be changed). Replaces the \
+                       whole block: set `autoDeclineMode` (\"decline_none\", \"decline_all\", \
+                       or \"decline_new_only\") and optionally `declineMessage`. Omit to leave \
+                       it untouched."
+    )]
+    #[serde(default)]
+    pub out_of_office: Option<OutOfOfficeInput>,
 }
 
 impl ToolAnnotated for UpdateCalendarEvent {
@@ -267,6 +287,7 @@ where
             transparency: None,
             reminders: self.reminders.clone().map(Into::into),
             conference: self.conference.map(Into::into),
+            out_of_office: self.out_of_office.clone().map(Into::into),
         };
 
         // An RSVP is its own provider call, so a call carrying only one runs
@@ -278,7 +299,13 @@ where
             Some(
                 service_context
                     .mutations
-                    .update_event(&requester_id, self.event_id, patch, scope.clone())
+                    .update_event(
+                        &requester_id,
+                        self.event_id,
+                        self.calendar_id,
+                        patch,
+                        scope.clone(),
+                    )
                     .await
                     .map_err(|error| mutation_tool_error("update the calendar event", error))?,
             )
@@ -294,7 +321,13 @@ where
                 };
                 service_context
                     .mutations
-                    .respond_to_event(&requester_id, self.event_id, rsvp.into(), rsvp_scope)
+                    .respond_to_event(
+                        &requester_id,
+                        self.event_id,
+                        self.calendar_id,
+                        rsvp.into(),
+                        rsvp_scope,
+                    )
                     .await
                     .map_err(|error| {
                         let action = if patched.is_some() {

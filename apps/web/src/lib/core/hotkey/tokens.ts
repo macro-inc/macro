@@ -1,4 +1,7 @@
 export const TOKENS = {
+  workspace: {
+    toggleNavigation: 'workspace.toggleNavigation',
+  },
   // soup
   soup: {
     openSearch: 'soup.openSearch',
@@ -24,7 +27,6 @@ export const TOKENS = {
 
   // unified list
   unifiedList: {
-    togglePreview: 'unifiedList.togglePreview',
     navigation: {
       parent: 'unifiedList.navigation.parent',
       child: 'unifiedList.navigation.child',
@@ -77,6 +79,7 @@ export const TOKENS = {
   code: {
     toggleComment: 'code.toggleComment',
     escape: 'code.escape',
+    find: 'code.find',
   },
 
   // calendar
@@ -273,6 +276,8 @@ export const TOKENS = {
     chatNewSplit: 'create.chatNewSplit',
     canvas: 'create.canvas',
     canvasNewSplit: 'create.canvasNewSplit',
+    spreadsheet: 'create.spreadsheet',
+    spreadsheetNewSplit: 'create.spreadsheetNewSplit',
     project: 'create.project',
     projectNewSplit: 'create.projectNewSplit',
     code: 'create.code',

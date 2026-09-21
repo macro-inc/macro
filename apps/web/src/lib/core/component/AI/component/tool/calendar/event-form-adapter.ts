@@ -2,11 +2,32 @@ import type {
   EventEditorInitialValues,
   EventEditorSubmitValues,
 } from '@app/features/calendar/components/composer/event-form-model';
+import type { EventEditorOutOfOffice } from '@app/features/calendar/components/composer/out-of-office';
 import type {
+  AutoDeclineModeInput,
   CreateCalendarEvent,
   EventTimeInput,
 } from '@service-cognition/generated/tools/types';
 import { format, isValid, parseISO, subDays } from 'date-fns';
+
+/** The calendar tools abbreviate the email service's decline mode names. */
+const TOOL_TO_EDITOR_DECLINE_MODE: Record<
+  AutoDeclineModeInput,
+  EventEditorOutOfOffice['autoDeclineMode']
+> = {
+  decline_none: 'decline_none',
+  decline_all: 'decline_all_conflicting_invitations',
+  decline_new_only: 'decline_only_new_conflicting_invitations',
+};
+
+const EDITOR_TO_TOOL_DECLINE_MODE: Record<
+  EventEditorOutOfOffice['autoDeclineMode'],
+  AutoDeclineModeInput
+> = {
+  decline_none: 'decline_none',
+  decline_all_conflicting_invitations: 'decline_all',
+  decline_only_new_conflicting_invitations: 'decline_new_only',
+};
 
 const DATE_VALUE = 'yyyy-MM-dd';
 const DATETIME_VALUE = "yyyy-MM-dd'T'HH:mm";
@@ -35,6 +56,7 @@ function cloneReminders(
 export function createCalendarEventToEditorInitialValues(
   event: CreateCalendarEvent
 ): EventEditorInitialValues {
+  const isOutOfOffice = event.eventType === 'out_of_office';
   const common = {
     title: event.title,
     recurrenceLines: [...(event.recurrenceLines ?? [])],
@@ -48,6 +70,16 @@ export function createCalendarEventToEditorInitialValues(
       ? ('google_meet' as const)
       : ('none' as const),
     reminders: cloneReminders(event.reminders),
+    eventType: isOutOfOffice ? ('out_of_office' as const) : undefined,
+    outOfOffice: isOutOfOffice
+      ? {
+          autoDeclineMode:
+            TOOL_TO_EDITOR_DECLINE_MODE[
+              event.outOfOffice?.autoDeclineMode ?? 'decline_none'
+            ],
+          declineMessage: event.outOfOffice?.declineMessage ?? '',
+        }
+      : undefined,
   };
 
   if (event.time.kind === 'allDay') {
@@ -114,6 +146,9 @@ export function editorSubmitValuesToCreateCalendarEvent(
   values: EventEditorSubmitValues,
   original: CreateCalendarEvent
 ): CreateCalendarEvent {
+  // A create's submit values carry `outOfOffice` exactly while the editor kind
+  // is out of office, so its presence decides the tool's event type.
+  const outOfOffice = values.outOfOffice;
   return {
     ...original,
     title: values.title,
@@ -123,10 +158,27 @@ export function editorSubmitValuesToCreateCalendarEvent(
     attendees: attendees(values.guestEmails, original.attendees),
     recurrenceLines: values.recurrenceLines ?? original.recurrenceLines ?? [],
     calendarId: values.calendarId,
-    addGoogleMeet:
-      values.conference === undefined
+    addGoogleMeet: outOfOffice
+      ? false
+      : values.conference === undefined
         ? original.addGoogleMeet
         : values.conference === 'google_meet',
     reminders: cloneReminders(values.reminders ?? original.reminders),
+    eventType: outOfOffice
+      ? 'out_of_office'
+      : original.eventType === 'out_of_office'
+        ? 'default'
+        : original.eventType,
+    outOfOffice: outOfOffice
+      ? {
+          autoDeclineMode:
+            EDITOR_TO_TOOL_DECLINE_MODE[
+              outOfOffice.autoDeclineMode ?? 'decline_none'
+            ],
+          ...(outOfOffice.declineMessage
+            ? { declineMessage: outOfOffice.declineMessage }
+            : {}),
+        }
+      : undefined,
   };
 }

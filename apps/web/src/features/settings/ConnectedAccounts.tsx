@@ -1,21 +1,14 @@
 import { ENABLE_EMAIL } from '@core/constant/featureFlags';
-import { usePipedreamMcpFlag } from '@core/pipedream/flag';
 import { Show, Suspense } from 'solid-js';
 import { EmailCard } from './Email';
 import { GitHubCard } from './GitHub';
-import { IntegrationsSection } from './Integrations';
-import { PipedreamIntegrationsSection } from './PipedreamIntegrations';
 import { SettingsPage, SettingsSection } from './primitives';
 
-/**
- * Consolidated "Connections" page: one card per external account the user can
- * link (Gmail, GitHub), followed by the agent's MCP integrations.
- */
+/** Personal account links. Agent MCP integrations live in Connections. */
 export function ConnectedAccounts() {
-  const pipedreamMcp = usePipedreamMcpFlag();
   return (
     <SettingsPage
-      title="Connections"
+      title="Integrations"
       description="Connect your accounts so Macro can work across the tools you already use."
     >
       <SettingsSection title="Accounts">
@@ -30,11 +23,6 @@ export function ConnectedAccounts() {
           </Suspense>
         </div>
       </SettingsSection>
-      <Suspense>
-        <Show when={pipedreamMcp()} fallback={<IntegrationsSection />}>
-          <PipedreamIntegrationsSection />
-        </Show>
-      </Suspense>
     </SettingsPage>
   );
 }

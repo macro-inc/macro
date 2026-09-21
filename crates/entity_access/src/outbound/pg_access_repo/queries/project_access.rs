@@ -3,7 +3,13 @@
 #[cfg(test)]
 mod test;
 
+#[cfg(feature = "explain_binary")]
+use crate::{
+    domain::models::AccessGrant, outbound::pg_access_repo::queries::list_entity_access_grants,
+};
 use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::SourceIds};
+#[cfg(feature = "explain_binary")]
+use model_entity::EntityType;
 use sqlx::PgPool;
 use std::str::FromStr;
 
@@ -83,4 +89,68 @@ pub async fn get_project_access(
         .max();
 
     Ok(highest_level)
+}
+
+#[cfg(feature = "explain_binary")]
+#[tracing::instrument(err, skip(pool, source_ids))]
+pub async fn explain_project_access(
+    pool: &PgPool,
+    project_id: &uuid::Uuid,
+    source_ids: &SourceIds,
+) -> Result<Vec<AccessGrant>, sqlx::Error> {
+    let mut grants =
+        list_entity_access_grants(pool, project_id, EntityType::Project, source_ids).await?;
+    let project_id_str = project_id.to_string();
+
+    let public_levels = sqlx::query_scalar!(
+        r#"
+        SELECT
+            sp."linkShareAccessLevel" AS "access_level!: AccessLevel"
+        FROM "SharePermission" sp
+        WHERE sp."linkShare" = 'PUBLIC'
+          AND sp."linkShareAccessLevel" IS NOT NULL
+          AND sp.id IN (
+              SELECT "sharePermissionId" FROM "ProjectPermission" WHERE "projectId" = $1
+          )
+        "#,
+        &project_id_str
+    )
+    .fetch_all(pool)
+    .await?;
+    grants.extend(
+        public_levels
+            .into_iter()
+            .map(|access_level| AccessGrant::PublicLink { access_level }),
+    );
+
+    if source_ids.0.is_empty() {
+        return Ok(grants);
+    }
+
+    let team_rows = sqlx::query!(
+        r#"
+        SELECT
+            sp."linkShareAccessLevel" AS "access_level!: AccessLevel",
+            owner_team.team_id AS "owner_team_id!"
+        FROM "SharePermission" sp
+        JOIN "ProjectPermission" pp ON pp."sharePermissionId" = sp.id
+        JOIN "Project" p ON p.id = pp."projectId"
+        JOIN team_user owner_team
+          ON owner_team.user_id = p."userId"
+         AND owner_team.team_id::text = ANY($2)
+        WHERE pp."projectId" = $1
+          AND sp."linkShare" = 'TEAM'
+          AND sp."linkShareAccessLevel" IS NOT NULL
+        "#,
+        &project_id_str,
+        &source_ids.0,
+    )
+    .fetch_all(pool)
+    .await?;
+    grants.extend(team_rows.into_iter().map(|row| AccessGrant::TeamLink {
+        access_level: row.access_level,
+        owner_team_id: row.owner_team_id,
+    }));
+
+    Ok(grants)
 }

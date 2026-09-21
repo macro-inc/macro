@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, ServerSentEventsResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddFavoriteData, AddFavoriteErrors, AddFavoriteResponses, AddParticipantsData, AddParticipantsErrors, AddParticipantsResponses, AddPinHandlerData, AddPinHandlerErrors, AddPinHandlerResponses, ApproveHarnessPairingData, ApproveHarnessPairingErrors, ApproveHarnessPairingResponses, BulkWakeupSyncServiceDocumentsData, BulkWakeupSyncServiceDocumentsErrors, BulkWakeupSyncServiceDocumentsResponses, CallWebhookData, CallWebhookErrors, CallWebhookResponses, CheckActiveCallData, CheckActiveCallErrors, CheckActiveCallResponses, ClaimHarnessPairingData, ClaimHarnessPairingErrors, ClaimHarnessPairingResponses, CopyDocumentData, CopyDocumentErrors, CopyDocumentResponses, CreateAgentData, CreateAgentErrors, CreateAgentResponses, CreateAnchorData, CreateAnchorErrors, CreateAnchorResponses, CreateChannelData, CreateChannelErrors, CreateChannelResponses, CreateChannelScopedBotData, CreateChannelScopedBotErrors, CreateChannelScopedBotResponses, CreateCollabSurfaceTokenData, CreateCollabSurfaceTokenErrors, CreateCollabSurfaceTokenResponses, CreateCommentData, CreateCommentErrors, CreateCommentResponses, CreateCrmCommentData, CreateCrmCommentErrors, CreateCrmCommentResponses, CreateCrmCompanyData, CreateCrmCompanyErrors, CreateCrmCompanyResponses, CreateCrmContactData, CreateCrmContactErrors, CreateCrmContactResponses, CreateDocumentData, CreateDocumentErrors, CreateDocumentResponses, CreateEntityMentionData, CreateEntityMentionErrors, CreateEntityMentionResponses, CreateHarnessPairingData, CreateHarnessPairingErrors, CreateHarnessPairingResponses, CreateInstructionsHandlerData, CreateInstructionsHandlerErrors, CreateInstructionsHandlerResponses, CreateMarkdownHandlerData, CreateMarkdownHandlerErrors, CreateMarkdownHandlerResponses, CreateProjectHandlerData, CreateProjectHandlerErrors, CreateProjectHandlerResponses, CreateReminderData, CreateReminderErrors, CreateReminderResponses, CreateSkillHandlerData, CreateSkillHandlerErrors, CreateSkillHandlerResponses, CreateSnippetHandlerData, CreateSnippetHandlerErrors, CreateSnippetHandlerResponses, CreateTaskHandlerData, CreateTaskHandlerErrors, CreateTaskHandlerResponses, CreateUserApiKeyData, CreateUserApiKeyErrors, CreateUserApiKeyResponses, CreateViewHandlerData, CreateViewHandlerErrors, CreateViewHandlerResponses, CreateWebhookData, CreateWebhookErrors, CreateWebhookResponses, DeleteAnchorData, DeleteAnchorErrors, DeleteAnchorResponses, DeleteCallRecordData, DeleteCallRecordErrors, DeleteCallRecordResponses, DeleteChannelData, DeleteChannelErrors, DeleteChannelResponses, DeleteCollabSurfaceData, DeleteCollabSurfaceErrors, DeleteCollabSurfaceResponses, DeleteCommentData, DeleteCommentErrors, DeleteCommentResponses, DeleteCrmCommentData, DeleteCrmCommentErrors, DeleteCrmCommentResponses, DeleteDocumentData, DeleteDocumentErrors, DeleteDocumentResponses, DeleteEntityMentionData, DeleteEntityMentionErrors, DeleteEntityMentionResponses, DeleteHarnessData, DeleteHarnessErrors, DeleteHarnessResponses, DeleteHistoryHandlerData, DeleteHistoryHandlerErrors, DeleteHistoryHandlerResponses, DeleteMessageData, DeleteMessageErrors, DeleteMessageResponses, DeleteProjectHandlerData, DeleteProjectHandlerErrors, DeleteProjectHandlerResponses, DeleteReminderData, DeleteReminderErrors, DeleteReminderResponses, DeleteSelfHarnessData, DeleteSelfHarnessErrors, DeleteSelfHarnessResponses, DeleteUserApiKeyData, DeleteUserApiKeyErrors, DeleteUserApiKeyResponses, DeleteUserDocumentViewLocationData, DeleteUserDocumentViewLocationErrors, DeleteUserDocumentViewLocationResponses, DeleteViewHandlerData, DeleteViewHandlerErrors, DeleteViewHandlerResponses, DeleteWebhookData, DeleteWebhookErrors, DeleteWebhookResponses, EditAnchorData, EditAnchorErrors, EditAnchorResponses, EditCallRecordData, EditCallRecordErrors, EditCallRecordResponses, EditCallTranscriptData, EditCallTranscriptErrors, EditCallTranscriptResponses, EditCommentData, EditCommentErrors, EditCommentResponses, EditCrmCommentData, EditCrmCommentErrors, EditCrmCommentResponses, EditDocumentData, EditDocumentErrors, EditDocumentResponses, EditProjectV2Data, EditProjectV2Errors, EditProjectV2Responses, EditThreadV2Data, EditThreadV2Errors, EditThreadV2Responses, EnsureCollabSurfaceData, EnsureCollabSurfaceErrors, EnsureCollabSurfaceResponses, ExcludeDefaultViewHandlerData, ExcludeDefaultViewHandlerErrors, ExcludeDefaultViewHandlerResponses, ExportDocumentData, ExportDocumentErrors, ExportDocumentResponses, GetActiveCallsData, GetActiveCallsErrors, GetActiveCallsResponses, GetActivityData, GetActivityErrors, GetActivityResponses, GetAttachmentReferencesData, GetAttachmentReferencesErrors, GetAttachmentReferencesResponses, GetBatchCallRecordPreviewData, GetBatchCallRecordPreviewErrors, GetBatchCallRecordPreviewResponses, GetBatchChannelPreviewData, GetBatchChannelPreviewErrors, GetBatchChannelPreviewResponses, GetBatchPreviewHandlerData, GetBatchPreviewHandlerErrors, GetBatchPreviewHandlerResponses, GetBatchProjectPreviewData, GetBatchProjectPreviewErrors, GetBatchProjectPreviewResponses, GetCallRecordData, GetCallRecordErrors, GetCallRecordResponses, GetChannelAttachmentsData, GetChannelAttachmentsErrors, GetChannelAttachmentsResponses, GetChannelData, GetChannelErrors, GetChannelJoinLinkData, GetChannelJoinLinkErrors, GetChannelJoinLinkResponses, GetChannelMessagesData, GetChannelMessagesErrors, GetChannelMessagesResponses, GetChannelParticipantsData, GetChannelParticipantsErrors, GetChannelParticipantsResponses, GetChannelResponses, GetChannelsData, GetChannelsErrors, GetChannelsResponses, GetCollabSurfaceData, GetCollabSurfaceErrors, GetCollabSurfaceResponses, GetCompanyData, GetCompanyErrors, GetCompanyResponses, GetContactByEmailData, GetContactByEmailErrors, GetContactByEmailResponses, GetContactData, GetContactErrors, GetContactResponses, GetCrmTeamSettingsData, GetCrmTeamSettingsErrors, GetCrmTeamSettingsResponses, GetDocumentAnchorsData, GetDocumentAnchorsErrors, GetDocumentAnchorsResponses, GetDocumentBranchNameData, GetDocumentBranchNameErrors, GetDocumentBranchNameResponses, GetDocumentByTeamSlugData, GetDocumentByTeamSlugErrors, GetDocumentByTeamSlugResponses, GetDocumentCommentsData, GetDocumentCommentsErrors, GetDocumentCommentsResponses, GetDocumentData, GetDocumentErrors, GetDocumentGithubPullRequestsData, GetDocumentGithubPullRequestsErrors, GetDocumentGithubPullRequestsResponses, GetDocumentListHandlerData, GetDocumentListHandlerErrors, GetDocumentListHandlerResponses, GetDocumentLocationV3Data, GetDocumentLocationV3Errors, GetDocumentLocationV3Responses, GetDocumentPermissionsTokenData, GetDocumentPermissionsTokenErrors, GetDocumentPermissionsTokenResponses, GetDocumentPermissionsV2Data, GetDocumentPermissionsV2Errors, GetDocumentPermissionsV2Responses, GetDocumentProcessingResultData, GetDocumentProcessingResultErrors, GetDocumentProcessingResultResponses, GetDocumentResponses, GetDocumentShortIdData, GetDocumentShortIdErrors, GetDocumentShortIdResponses, GetDocumentTeamShareData, GetDocumentTeamShareErrors, GetDocumentTeamShareResponses, GetDocumentVersionData, GetDocumentVersionErrors, GetDocumentVersionResponses, GetDocumentViewsHandlerData, GetDocumentViewsHandlerErrors, GetDocumentViewsHandlerResponses, GetEntityPermissionData, GetEntityPermissionErrors, GetEntityPermissionResponses, GetForeignEntityData, GetForeignEntityErrors, GetForeignEntityResponses, GetHarnessPairingData, GetHarnessPairingErrors, GetHarnessPairingResponses, GetHistoryHandlerData, GetHistoryHandlerErrors, GetHistoryHandlerResponses, GetInstructionsHandlerData, GetInstructionsHandlerErrors, GetInstructionsHandlerResponses, GetItemsSoupData, GetItemsSoupErrors, GetItemsSoupResponses, GetLocationHandlerData, GetLocationHandlerErrors, GetLocationHandlerResponses, GetMessageWithContextData, GetMessageWithContextErrors, GetMessageWithContextResponses, GetOrCreateCallData, GetOrCreateCallErrors, GetOrCreateCallResponses, GetOrCreateDmData, GetOrCreateDmErrors, GetOrCreateDmResponses, GetOrCreatePrivateData, GetOrCreatePrivateErrors, GetOrCreatePrivateResponses, GetPendingProjectsHandlerData, GetPendingProjectsHandlerErrors, GetPendingProjectsHandlerResponses, GetPinsHandlerData, GetPinsHandlerErrors, GetPinsHandlerResponses, GetProjectContentHandlerData, GetProjectContentHandlerErrors, GetProjectContentHandlerResponses, GetProjectHandlerData, GetProjectHandlerErrors, GetProjectHandlerResponses, GetProjectPermissionsV2Data, GetProjectPermissionsV2Errors, GetProjectPermissionsV2Responses, GetProjectsHandlerData, GetProjectsHandlerErrors, GetProjectsHandlerResponses, GetProjectUserAccessLevelData, GetProjectUserAccessLevelErrors, GetProjectUserAccessLevelResponses, GetReminderData, GetReminderErrors, GetReminderResponses, GetRingStatusData, GetRingStatusErrors, GetRingStatusResponses, GetSelfBotData, GetSelfBotErrors, GetSelfBotResponses, GetSelfHarnessData, GetSelfHarnessErrors, GetSelfHarnessResponses, GetSystemSkillsHandlerData, GetSystemSkillsHandlerErrors, GetSystemSkillsHandlerResponses, GetThreadRepliesData, GetThreadRepliesErrors, GetThreadRepliesResponses, GetUserDocumentsHandlerData, GetUserDocumentsHandlerErrors, GetUserDocumentsHandlerResponses, GetUserDocumentViewLocationData, GetUserDocumentViewLocationErrors, GetUserDocumentViewLocationResponses, GetViewsHandlerData, GetViewsHandlerErrors, GetViewsHandlerResponses, GetWebhookData, GetWebhookErrors, GetWebhookResponses, HandlerData, HandlerErrors, HandlerResponses, HealthHandlerData, HealthHandlerResponses, IngestTranscriptData, IngestTranscriptErrors, IngestTranscriptResponses, InitializeUserDocumentsData, InitializeUserDocumentsErrors, InitializeUserDocumentsResponses, InstallSyncData, InstallSyncErrors, JobProcessingResultHandlerData, JobProcessingResultHandlerErrors, JobProcessingResultHandlerResponses, JoinChannelByCodeData, JoinChannelByCodeErrors, JoinChannelByCodeResponses, JoinChannelData, JoinChannelErrors, JoinChannelResponses, LeaveChannelData, LeaveChannelErrors, LeaveChannelResponses, LeaveOrEndCallData, LeaveOrEndCallErrors, LeaveOrEndCallResponses, ListAgentsData, ListAgentsErrors, ListAgentsResponses, ListBotChannelsData, ListBotChannelsErrors, ListBotChannelsResponses, ListCompanyContactsData, ListCompanyContactsErrors, ListCompanyContactsResponses, ListCrmCommentsData, ListCrmCommentsErrors, ListCrmCommentsResponses, ListFavoritesData, ListFavoritesErrors, ListFavoritesResponses, ListHarnessAgentsData, ListHarnessAgentsErrors, ListHarnessAgentsResponses, ListHarnessesData, ListHarnessesErrors, ListHarnessesResponses, ListHarnessSessionsData, ListHarnessSessionsErrors, ListHarnessSessionsResponses, ListOccurrencesData, ListOccurrencesErrors, ListOccurrencesResponses, ListRemindersData, ListRemindersErrors, ListRemindersResponses, ListUserApiKeysData, ListUserApiKeysErrors, ListUserApiKeysResponses, ListWebhooksData, ListWebhooksErrors, ListWebhooksResponses, MentionPreviewsData, MentionPreviewsErrors, MentionPreviewsResponses, PatchChannelData, PatchChannelErrors, PatchChannelResponses, PatchMessageData, PatchMessageErrors, PatchMessageResponses, PatchViewHandlerData, PatchViewHandlerErrors, PatchViewHandlerResponses, PatchWebhookData, PatchWebhookErrors, PatchWebhookResponses, PermanentlyDeleteDocumentData, PermanentlyDeleteDocumentErrors, PermanentlyDeleteDocumentResponses, PermanentlyDeleteProjectData, PermanentlyDeleteProjectErrors, PermanentlyDeleteProjectResponses, PostActivityData, PostActivityErrors, PostActivityResponses, PostChannelBotWebhookData, PostChannelBotWebhookErrors, PostChannelBotWebhookResponses, PostChannelMessagesData, PostChannelMessagesErrors, PostChannelMessagesResponses, PostItemsSoupAstData, PostItemsSoupAstErrors, PostItemsSoupAstGroupedData, PostItemsSoupAstGroupedErrors, PostItemsSoupAstGroupedResponses, PostItemsSoupAstResponses, PostItemsSoupData, PostItemsSoupErrors, PostItemsSoupResponses, PostMessageData, PostMessageErrors, PostMessageResponses, PostReactionData, PostReactionErrors, PostReactionResponses, PostTypingData, PostTypingErrors, PostTypingResponses, PresaveDocumentHandlerData, PresaveDocumentHandlerErrors, PresaveDocumentHandlerResponses, PutCrmTeamSettingsData, PutCrmTeamSettingsErrors, PutCrmTeamSettingsResponses, RecentlyDeletedData, RecentlyDeletedErrors, RecentlyDeletedResponses, RemoveBotFromChannelByBotData, RemoveBotFromChannelByBotErrors, RemoveBotFromChannelByBotResponses, RemoveFavoriteByEntityData, RemoveFavoriteByEntityErrors, RemoveFavoriteByEntityResponses, RemoveParticipantsData, RemoveParticipantsErrors, RemoveParticipantsResponses, RemovePinHandlerData, RemovePinHandlerErrors, RemovePinHandlerResponses, ReorderFavoritesData, ReorderFavoritesErrors, ReorderFavoritesResponses, ReorderPinsHandlerData, ReorderPinsHandlerErrors, ReorderPinsHandlerResponses, ResolveChannelMessageData, ResolveChannelMessageErrors, ResolveChannelMessageResponses, RevertDeleteDocumentData, RevertDeleteDocumentErrors, RevertDeleteDocumentResponses, RevertDeleteProjectData, RevertDeleteProjectErrors, RevertDeleteProjectResponses, SaveDocumentHandlerData, SaveDocumentHandlerErrors, SaveDocumentHandlerResponses, SetCompanyHiddenData, SetCompanyHiddenErrors, SetCompanyHiddenResponses, SetContactHiddenData, SetContactHiddenErrors, SetContactHiddenResponses, SetCrmCompanyNameData, SetCrmCompanyNameErrors, SetCrmCompanyNameResponses, SetCrmContactNameData, SetCrmContactNameErrors, SetCrmContactNameResponses, SetDocumentTeamShareData, SetDocumentTeamShareErrors, SetDocumentTeamShareResponses, SetEmailSyncData, SetEmailSyncErrors, SetEmailSyncResponses, SimpleSaveData, SimpleSaveErrors, SimpleSaveResponses, StreamEventsData, StreamEventsErrors, StreamEventsResponse, StreamEventsResponses, ToggleShareWithTeamData, ToggleShareWithTeamErrors, ToggleShareWithTeamResponses, UpdateAgentData, UpdateAgentErrors, UpdateAgentResponses, UpdateReminderData, UpdateReminderErrors, UpdateReminderResponses, UploadExtractFolderHandlerData, UploadExtractFolderHandlerErrors, UploadExtractFolderHandlerResponses, UploadFolderHandlerData, UploadFolderHandlerErrors, UploadFolderHandlerResponses, UpsertHistoryHandlerData, UpsertHistoryHandlerErrors, UpsertHistoryHandlerResponses, UpsertUserDocumentViewLocationData, UpsertUserDocumentViewLocationErrors, UpsertUserDocumentViewLocationResponses, ValidateDocumentPermissionsTokenData, ValidateDocumentPermissionsTokenErrors, ValidateDocumentPermissionsTokenResponses, ValidateWebhookData, ValidateWebhookErrors, ValidateWebhookResponses } from './types.gen';
+import type { AddFavoriteData, AddFavoriteErrors, AddFavoriteResponses, AddParticipantsData, AddParticipantsErrors, AddParticipantsResponses, AddPinHandlerData, AddPinHandlerErrors, AddPinHandlerResponses, ApproveHarnessPairingData, ApproveHarnessPairingErrors, ApproveHarnessPairingResponses, AssignInitiativeTasksData, AssignInitiativeTasksErrors, AssignInitiativeTasksResponses, BulkWakeupSyncServiceDocumentsData, BulkWakeupSyncServiceDocumentsErrors, BulkWakeupSyncServiceDocumentsResponses, CallWebhookData, CallWebhookErrors, CallWebhookResponses, CheckActiveCallData, CheckActiveCallErrors, CheckActiveCallResponses, ClaimHarnessPairingData, ClaimHarnessPairingErrors, ClaimHarnessPairingResponses, CopyDocumentData, CopyDocumentErrors, CopyDocumentResponses, CreateAgentData, CreateAgentErrors, CreateAgentResponses, CreateAnchorData, CreateAnchorErrors, CreateAnchorResponses, CreateChannelData, CreateChannelErrors, CreateChannelResponses, CreateChannelScopedBotData, CreateChannelScopedBotErrors, CreateChannelScopedBotResponses, CreateCollabSurfaceTokenData, CreateCollabSurfaceTokenErrors, CreateCollabSurfaceTokenResponses, CreateCommentData, CreateCommentErrors, CreateCommentResponses, CreateCrmCommentData, CreateCrmCommentErrors, CreateCrmCommentResponses, CreateCrmCompanyData, CreateCrmCompanyErrors, CreateCrmCompanyResponses, CreateCrmContactData, CreateCrmContactErrors, CreateCrmContactResponses, CreateDocumentData, CreateDocumentErrors, CreateDocumentResponses, CreateEntityMentionData, CreateEntityMentionErrors, CreateEntityMentionResponses, CreateHarnessPairingData, CreateHarnessPairingErrors, CreateHarnessPairingResponses, CreateInitiativeData, CreateInitiativeErrors, CreateInitiativeResponses, CreateInstructionsHandlerData, CreateInstructionsHandlerErrors, CreateInstructionsHandlerResponses, CreateMarkdownHandlerData, CreateMarkdownHandlerErrors, CreateMarkdownHandlerResponses, CreateProjectHandlerData, CreateProjectHandlerErrors, CreateProjectHandlerResponses, CreateReminderData, CreateReminderErrors, CreateReminderResponses, CreateSkillHandlerData, CreateSkillHandlerErrors, CreateSkillHandlerResponses, CreateSnippetHandlerData, CreateSnippetHandlerErrors, CreateSnippetHandlerResponses, CreateTaskHandlerData, CreateTaskHandlerErrors, CreateTaskHandlerResponses, CreateUserApiKeyData, CreateUserApiKeyErrors, CreateUserApiKeyResponses, CreateViewHandlerData, CreateViewHandlerErrors, CreateViewHandlerResponses, CreateWebhookData, CreateWebhookErrors, CreateWebhookResponses, DeleteAnchorData, DeleteAnchorErrors, DeleteAnchorResponses, DeleteCallRecordData, DeleteCallRecordErrors, DeleteCallRecordResponses, DeleteChannelData, DeleteChannelErrors, DeleteChannelResponses, DeleteCollabSurfaceData, DeleteCollabSurfaceErrors, DeleteCollabSurfaceResponses, DeleteCommentData, DeleteCommentErrors, DeleteCommentResponses, DeleteCrmCommentData, DeleteCrmCommentErrors, DeleteCrmCommentResponses, DeleteDocumentData, DeleteDocumentErrors, DeleteDocumentResponses, DeleteEntityMentionData, DeleteEntityMentionErrors, DeleteEntityMentionResponses, DeleteHarnessData, DeleteHarnessErrors, DeleteHarnessResponses, DeleteHistoryHandlerData, DeleteHistoryHandlerErrors, DeleteHistoryHandlerResponses, DeleteInitiativeData, DeleteInitiativeErrors, DeleteInitiativeResponses, DeleteMessageData, DeleteMessageErrors, DeleteMessageResponses, DeleteProjectHandlerData, DeleteProjectHandlerErrors, DeleteProjectHandlerResponses, DeleteReminderData, DeleteReminderErrors, DeleteReminderResponses, DeleteSelfHarnessData, DeleteSelfHarnessErrors, DeleteSelfHarnessResponses, DeleteUserApiKeyData, DeleteUserApiKeyErrors, DeleteUserApiKeyResponses, DeleteUserDocumentViewLocationData, DeleteUserDocumentViewLocationErrors, DeleteUserDocumentViewLocationResponses, DeleteViewHandlerData, DeleteViewHandlerErrors, DeleteViewHandlerResponses, DeleteWebhookData, DeleteWebhookErrors, DeleteWebhookResponses, EditAnchorData, EditAnchorErrors, EditAnchorResponses, EditCallRecordData, EditCallRecordErrors, EditCallRecordResponses, EditCallTranscriptData, EditCallTranscriptErrors, EditCallTranscriptResponses, EditCommentData, EditCommentErrors, EditCommentResponses, EditCrmCommentData, EditCrmCommentErrors, EditCrmCommentResponses, EditDocumentData, EditDocumentErrors, EditDocumentResponses, EditProjectV2Data, EditProjectV2Errors, EditProjectV2Responses, EditThreadV2Data, EditThreadV2Errors, EditThreadV2Responses, EnsureCollabSurfaceData, EnsureCollabSurfaceErrors, EnsureCollabSurfaceResponses, EntityMessageCreateData, EntityMessageCreateResponses, EntityMessageDeleteMessageData, EntityMessageDeleteMessageResponses, EntityMessageDeleteThreadData, EntityMessageDeleteThreadResponses, EntityMessageEditData, EntityMessageEditResponses, EntityMessageGetMessageData, EntityMessageGetMessageResponses, EntityMessageGetThreadData, EntityMessageGetThreadResponses, EntityMessageLegacyData, EntityMessageLegacyResponses, EntityMessagePatchThreadData, EntityMessagePatchThreadResponses, EntityMessageReactData, EntityMessageReactResponses, EntityMessageReferencesData, EntityMessageReferencesResponses, EntityMessageTypingData, EntityMessageTypingResponses, ExcludeDefaultViewHandlerData, ExcludeDefaultViewHandlerErrors, ExcludeDefaultViewHandlerResponses, ExportDocumentData, ExportDocumentErrors, ExportDocumentResponses, GetActiveCallsData, GetActiveCallsErrors, GetActiveCallsResponses, GetActivityData, GetActivityErrors, GetActivityResponses, GetAttachmentReferencesData, GetAttachmentReferencesErrors, GetAttachmentReferencesResponses, GetBatchCallRecordPreviewData, GetBatchCallRecordPreviewErrors, GetBatchCallRecordPreviewResponses, GetBatchChannelPreviewData, GetBatchChannelPreviewErrors, GetBatchChannelPreviewResponses, GetBatchPreviewHandlerData, GetBatchPreviewHandlerErrors, GetBatchPreviewHandlerResponses, GetBatchProjectPreviewData, GetBatchProjectPreviewErrors, GetBatchProjectPreviewResponses, GetCallRecordData, GetCallRecordErrors, GetCallRecordResponses, GetChannelAttachmentsData, GetChannelAttachmentsErrors, GetChannelAttachmentsResponses, GetChannelData, GetChannelErrors, GetChannelJoinLinkData, GetChannelJoinLinkErrors, GetChannelJoinLinkResponses, GetChannelMessagesCatchUpData, GetChannelMessagesCatchUpErrors, GetChannelMessagesCatchUpResponses, GetChannelMessagesData, GetChannelMessagesErrors, GetChannelMessagesResponses, GetChannelParticipantsData, GetChannelParticipantsErrors, GetChannelParticipantsResponses, GetChannelResponses, GetChannelsData, GetChannelsErrors, GetChannelsResponses, GetCollabSurfaceData, GetCollabSurfaceErrors, GetCollabSurfaceResponses, GetCompanyData, GetCompanyErrors, GetCompanyResponses, GetContactByEmailData, GetContactByEmailErrors, GetContactByEmailResponses, GetContactData, GetContactErrors, GetContactResponses, GetCrmTeamSettingsData, GetCrmTeamSettingsErrors, GetCrmTeamSettingsResponses, GetDocumentAnchorsData, GetDocumentAnchorsErrors, GetDocumentAnchorsResponses, GetDocumentBranchNameData, GetDocumentBranchNameErrors, GetDocumentBranchNameResponses, GetDocumentByTeamSlugData, GetDocumentByTeamSlugErrors, GetDocumentByTeamSlugResponses, GetDocumentCommentsData, GetDocumentCommentsErrors, GetDocumentCommentsResponses, GetDocumentData, GetDocumentErrors, GetDocumentGithubPullRequestsData, GetDocumentGithubPullRequestsErrors, GetDocumentGithubPullRequestsResponses, GetDocumentListHandlerData, GetDocumentListHandlerErrors, GetDocumentListHandlerResponses, GetDocumentLocationV3Data, GetDocumentLocationV3Errors, GetDocumentLocationV3Responses, GetDocumentPermissionsTokenData, GetDocumentPermissionsTokenErrors, GetDocumentPermissionsTokenResponses, GetDocumentPermissionsV2Data, GetDocumentPermissionsV2Errors, GetDocumentPermissionsV2Responses, GetDocumentProcessingResultData, GetDocumentProcessingResultErrors, GetDocumentProcessingResultResponses, GetDocumentResponses, GetDocumentShortIdData, GetDocumentShortIdErrors, GetDocumentShortIdResponses, GetDocumentTeamShareData, GetDocumentTeamShareErrors, GetDocumentTeamShareResponses, GetDocumentVersionData, GetDocumentVersionErrors, GetDocumentVersionResponses, GetDocumentViewsHandlerData, GetDocumentViewsHandlerErrors, GetDocumentViewsHandlerResponses, GetEntityPermissionData, GetEntityPermissionErrors, GetEntityPermissionResponses, GetForeignEntityBySourceData, GetForeignEntityBySourceErrors, GetForeignEntityBySourceResponses, GetForeignEntityData, GetForeignEntityErrors, GetForeignEntityResponses, GetHarnessPairingData, GetHarnessPairingErrors, GetHarnessPairingResponses, GetHistoryHandlerData, GetHistoryHandlerErrors, GetHistoryHandlerResponses, GetInitiativeData, GetInitiativeErrors, GetInitiativeResponses, GetInstructionsHandlerData, GetInstructionsHandlerErrors, GetInstructionsHandlerResponses, GetItemsSoupData, GetItemsSoupErrors, GetItemsSoupResponses, GetLocationHandlerData, GetLocationHandlerErrors, GetLocationHandlerResponses, GetMessageWithContextData, GetMessageWithContextErrors, GetMessageWithContextResponses, GetOrCreateCallData, GetOrCreateCallErrors, GetOrCreateCallResponses, GetOrCreateDmData, GetOrCreateDmErrors, GetOrCreateDmResponses, GetOrCreatePrivateData, GetOrCreatePrivateErrors, GetOrCreatePrivateResponses, GetPendingProjectsHandlerData, GetPendingProjectsHandlerErrors, GetPendingProjectsHandlerResponses, GetPinsHandlerData, GetPinsHandlerErrors, GetPinsHandlerResponses, GetProjectContentHandlerData, GetProjectContentHandlerErrors, GetProjectContentHandlerResponses, GetProjectHandlerData, GetProjectHandlerErrors, GetProjectHandlerResponses, GetProjectPermissionsV2Data, GetProjectPermissionsV2Errors, GetProjectPermissionsV2Responses, GetProjectsHandlerData, GetProjectsHandlerErrors, GetProjectsHandlerResponses, GetProjectUserAccessLevelData, GetProjectUserAccessLevelErrors, GetProjectUserAccessLevelResponses, GetReminderData, GetReminderErrors, GetReminderResponses, GetRingStatusData, GetRingStatusErrors, GetRingStatusResponses, GetSelfBotData, GetSelfBotErrors, GetSelfBotResponses, GetSelfHarnessData, GetSelfHarnessErrors, GetSelfHarnessResponses, GetSystemSkillsHandlerData, GetSystemSkillsHandlerErrors, GetSystemSkillsHandlerResponses, GetThreadRepliesData, GetThreadRepliesErrors, GetThreadRepliesResponses, GetUserDocumentsHandlerData, GetUserDocumentsHandlerErrors, GetUserDocumentsHandlerResponses, GetUserDocumentViewLocationData, GetUserDocumentViewLocationErrors, GetUserDocumentViewLocationResponses, GetViewsHandlerData, GetViewsHandlerErrors, GetViewsHandlerResponses, GetWebhookData, GetWebhookErrors, GetWebhookResponses, HandlerData, HandlerErrors, HandlerResponses, HealthHandlerData, HealthHandlerResponses, IngestTranscriptData, IngestTranscriptErrors, IngestTranscriptResponses, InitializeUserDocumentsData, InitializeUserDocumentsErrors, InitializeUserDocumentsResponses, InstallSyncData, InstallSyncErrors, JobProcessingResultHandlerData, JobProcessingResultHandlerErrors, JobProcessingResultHandlerResponses, JoinChannelByCodeData, JoinChannelByCodeErrors, JoinChannelByCodeResponses, JoinChannelData, JoinChannelErrors, JoinChannelResponses, LeaveChannelData, LeaveChannelErrors, LeaveChannelResponses, LeaveOrEndCallData, LeaveOrEndCallErrors, LeaveOrEndCallResponses, ListAgentsData, ListAgentsErrors, ListAgentsResponses, ListBotChannelsData, ListBotChannelsErrors, ListBotChannelsResponses, ListCompanyContactsData, ListCompanyContactsErrors, ListCompanyContactsResponses, ListCrmCommentsData, ListCrmCommentsErrors, ListCrmCommentsResponses, ListFavoritesData, ListFavoritesErrors, ListFavoritesResponses, ListHarnessAgentsData, ListHarnessAgentsErrors, ListHarnessAgentsResponses, ListHarnessesData, ListHarnessesErrors, ListHarnessesResponses, ListHarnessSessionsData, ListHarnessSessionsErrors, ListHarnessSessionsResponses, ListInitiativesData, ListInitiativesErrors, ListInitiativesResponses, ListOccurrencesData, ListOccurrencesErrors, ListOccurrencesResponses, ListRemindersData, ListRemindersErrors, ListRemindersResponses, ListTeamOutOfOfficeData, ListTeamOutOfOfficeErrors, ListTeamOutOfOfficeResponses, ListUserApiKeysData, ListUserApiKeysErrors, ListUserApiKeysResponses, ListWebhooksData, ListWebhooksErrors, ListWebhooksResponses, MentionPreviewsData, MentionPreviewsErrors, MentionPreviewsResponses, MessageTimelineData, MessageTimelineResponses, PatchChannelData, PatchChannelErrors, PatchChannelResponses, PatchMessageData, PatchMessageErrors, PatchMessageResponses, PatchViewHandlerData, PatchViewHandlerErrors, PatchViewHandlerResponses, PatchWebhookData, PatchWebhookErrors, PatchWebhookResponses, PermanentlyDeleteDocumentData, PermanentlyDeleteDocumentErrors, PermanentlyDeleteDocumentResponses, PermanentlyDeleteProjectData, PermanentlyDeleteProjectErrors, PermanentlyDeleteProjectResponses, PostActivityData, PostActivityErrors, PostActivityResponses, PostChannelBotWebhookData, PostChannelBotWebhookErrors, PostChannelBotWebhookResponses, PostChannelMessagesData, PostChannelMessagesErrors, PostChannelMessagesResponses, PostItemsSoupAstData, PostItemsSoupAstErrors, PostItemsSoupAstGroupedData, PostItemsSoupAstGroupedErrors, PostItemsSoupAstGroupedResponses, PostItemsSoupAstResponses, PostItemsSoupData, PostItemsSoupErrors, PostItemsSoupResponses, PostMessageData, PostMessageErrors, PostMessageResponses, PostReactionData, PostReactionErrors, PostReactionResponses, PostTypingData, PostTypingErrors, PostTypingResponses, PresaveDocumentHandlerData, PresaveDocumentHandlerErrors, PresaveDocumentHandlerResponses, PutCrmTeamSettingsData, PutCrmTeamSettingsErrors, PutCrmTeamSettingsResponses, PutCrmTeamStagesData, PutCrmTeamStagesErrors, PutCrmTeamStagesResponses, RecentlyDeletedData, RecentlyDeletedErrors, RecentlyDeletedResponses, RemoveBotFromChannelByBotData, RemoveBotFromChannelByBotErrors, RemoveBotFromChannelByBotResponses, RemoveFavoriteByEntityData, RemoveFavoriteByEntityErrors, RemoveFavoriteByEntityResponses, RemoveParticipantsData, RemoveParticipantsErrors, RemoveParticipantsResponses, RemovePinHandlerData, RemovePinHandlerErrors, RemovePinHandlerResponses, ReorderFavoritesData, ReorderFavoritesErrors, ReorderFavoritesResponses, ReorderPinsHandlerData, ReorderPinsHandlerErrors, ReorderPinsHandlerResponses, ResetCrmTeamStagesData, ResetCrmTeamStagesErrors, ResetCrmTeamStagesResponses, ResolveChannelMessageData, ResolveChannelMessageErrors, ResolveChannelMessageResponses, RevertDeleteDocumentData, RevertDeleteDocumentErrors, RevertDeleteDocumentResponses, RevertDeleteProjectData, RevertDeleteProjectErrors, RevertDeleteProjectResponses, SaveDocumentHandlerData, SaveDocumentHandlerErrors, SaveDocumentHandlerResponses, SetChannelPictureData, SetChannelPictureErrors, SetChannelPictureResponses, SetCompanyHiddenData, SetCompanyHiddenErrors, SetCompanyHiddenResponses, SetContactHiddenData, SetContactHiddenErrors, SetContactHiddenResponses, SetCrmCompanyNameData, SetCrmCompanyNameErrors, SetCrmCompanyNameResponses, SetCrmContactNameData, SetCrmContactNameErrors, SetCrmContactNameResponses, SetDocumentTeamShareData, SetDocumentTeamShareErrors, SetDocumentTeamShareResponses, SetEmailSyncData, SetEmailSyncErrors, SetEmailSyncResponses, SimpleSaveData, SimpleSaveErrors, SimpleSaveResponses, StreamEventsData, StreamEventsErrors, StreamEventsResponse, StreamEventsResponses, ToggleShareWithTeamData, ToggleShareWithTeamErrors, ToggleShareWithTeamResponses, UnassignInitiativeTaskData, UnassignInitiativeTaskErrors, UnassignInitiativeTaskResponses, UpdateAgentData, UpdateAgentErrors, UpdateAgentResponses, UpdateInitiativeData, UpdateInitiativeErrors, UpdateInitiativeResponses, UpdateReminderData, UpdateReminderErrors, UpdateReminderResponses, UploadExtractFolderHandlerData, UploadExtractFolderHandlerErrors, UploadExtractFolderHandlerResponses, UploadFolderHandlerData, UploadFolderHandlerErrors, UploadFolderHandlerResponses, UpsertHistoryHandlerData, UpsertHistoryHandlerErrors, UpsertHistoryHandlerResponses, UpsertUserDocumentViewLocationData, UpsertUserDocumentViewLocationErrors, UpsertUserDocumentViewLocationResponses, ValidateDocumentPermissionsTokenData, ValidateDocumentPermissionsTokenErrors, ValidateDocumentPermissionsTokenResponses, ValidateWebhookData, ValidateWebhookErrors, ValidateWebhookResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -236,6 +236,13 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
+     * Return teammates' out-of-office occurrences in the requested viewport.
+     */
+    public listTeamOutOfOffice<ThrowOnError extends boolean = false>(options: Options<ListTeamOutOfOfficeData, ThrowOnError>): RequestResult<ListTeamOutOfOfficeResponses, ListTeamOutOfOfficeErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<ListTeamOutOfOfficeResponses, ListTeamOutOfOfficeErrors, ThrowOnError>({ url: '/calendar-events/team-out-of-office', ...options });
+    }
+    
+    /**
      * Handler for `GET /call/active`.
      *
      * Lists all active calls in channels the caller is an active member of,
@@ -289,8 +296,11 @@ export class Sdk extends HeyApiClient {
     /**
      * Handler for `PATCH /call/record/{call_id}`.
      *
-     * Edits a call record — currently supports updating the record's share
-     * permissions. Access is validated via channel membership
+     * Edits a call record: link/channel share permissions, display name, and
+     * team sharing. Edit access (channel membership) is required for the request.
+     * `sharePermission.teamShareAccessLevel` only accepts `view` or `null`; while
+     * the call is live it sets the pending share-with-team toggle, and once the
+     * call is archived it is additionally authorized against the call's creator.
      */
     public editCallRecord<ThrowOnError extends boolean = false>(options: Options<EditCallRecordData, ThrowOnError>): RequestResult<EditCallRecordResponses, EditCallRecordErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<EditCallRecordResponses, EditCallRecordErrors, ThrowOnError>({
@@ -306,8 +316,10 @@ export class Sdk extends HeyApiClient {
     /**
      * Handler for `POST /call/record/{call_id}/share-with-team/toggle`.
      *
-     * Toggles the `share_with_team` flag on the active call. Returns the new
-     * value as the JSON body.
+     * Flips the live call's share-with-team toggle and returns the new value as
+     * the JSON body. The toggle is applied as canonical team sharing (View for
+     * the creator's team) when the call is archived; archived calls answer 409
+     * and are edited through `PATCH /call/record/{call_id}` instead.
      */
     public toggleShareWithTeam<ThrowOnError extends boolean = false>(options: Options<ToggleShareWithTeamData, ThrowOnError>): RequestResult<ToggleShareWithTeamResponses, ToggleShareWithTeamErrors, ThrowOnError> {
         return (options.client ?? this.client).post<ToggleShareWithTeamResponses, ToggleShareWithTeamErrors, ThrowOnError>({ url: '/call/record/{call_id}/share-with-team/toggle', ...options });
@@ -640,6 +652,13 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
+     * Handler for `GET /channels/{channel_id}/messages/catch-up`.
+     */
+    public getChannelMessagesCatchUp<ThrowOnError extends boolean = false>(options: Options<GetChannelMessagesCatchUpData, ThrowOnError>): RequestResult<GetChannelMessagesCatchUpResponses, GetChannelMessagesCatchUpErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetChannelMessagesCatchUpResponses, GetChannelMessagesCatchUpErrors, ThrowOnError>({ url: '/channels/{channel_id}/messages/catch-up', ...options });
+    }
+    
+    /**
      * Handler for `GET /channels/{channel_id}/messages/{message_id}/context`.
      */
     public getMessageWithContext<ThrowOnError extends boolean = false>(options: Options<GetMessageWithContextData, ThrowOnError>): RequestResult<GetMessageWithContextResponses, GetMessageWithContextErrors, ThrowOnError> {
@@ -687,6 +706,20 @@ export class Sdk extends HeyApiClient {
     public addParticipants<ThrowOnError extends boolean = false>(options: Options<AddParticipantsData, ThrowOnError>): RequestResult<AddParticipantsResponses, AddParticipantsErrors, ThrowOnError> {
         return (options.client ?? this.client).post<AddParticipantsResponses, AddParticipantsErrors, ThrowOnError>({
             url: '/channels/{channel_id}/participants',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Set a channel or group chat profile picture. Requires channel admin or owner access.
+     */
+    public setChannelPicture<ThrowOnError extends boolean = false>(options: Options<SetChannelPictureData, ThrowOnError>): RequestResult<SetChannelPictureResponses, SetChannelPictureErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<SetChannelPictureResponses, SetChannelPictureErrors, ThrowOnError>({
+            url: '/channels/{channel_id}/profile_picture',
             ...options,
             headers: {
                 'Content-Type': 'application/json',
@@ -1023,6 +1056,27 @@ export class Sdk extends HeyApiClient {
     public putCrmTeamSettings<ThrowOnError extends boolean = false>(options: Options<PutCrmTeamSettingsData, ThrowOnError>): RequestResult<PutCrmTeamSettingsResponses, PutCrmTeamSettingsErrors, ThrowOnError> {
         return (options.client ?? this.client).put<PutCrmTeamSettingsResponses, PutCrmTeamSettingsErrors, ThrowOnError>({
             url: '/crm/settings',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Reset the team's deal stages to the defaults; gated like `PUT /crm/stages`.
+     */
+    public resetCrmTeamStages<ThrowOnError extends boolean = false>(options?: Options<ResetCrmTeamStagesData, ThrowOnError>): RequestResult<ResetCrmTeamStagesResponses, ResetCrmTeamStagesErrors, ThrowOnError> {
+        return (options?.client ?? this.client).delete<ResetCrmTeamStagesResponses, ResetCrmTeamStagesErrors, ThrowOnError>({ url: '/crm/stages', ...options });
+    }
+    
+    /**
+     * Replace the team's deal stages; requires `edit_stages_role` (403 otherwise).
+     */
+    public putCrmTeamStages<ThrowOnError extends boolean = false>(options: Options<PutCrmTeamStagesData, ThrowOnError>): RequestResult<PutCrmTeamStagesResponses, PutCrmTeamStagesErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<PutCrmTeamStagesResponses, PutCrmTeamStagesErrors, ThrowOnError>({
+            url: '/crm/stages',
             ...options,
             headers: {
                 'Content-Type': 'application/json',
@@ -1370,9 +1424,10 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * Sets the team-share state of a document. Sharing grants the document
-     * owner's team Edit access; unsharing removes the team's access. Requires
-     * Edit access on the document.
+     * Sets explicit team sharing. Requires a verified acting identity matching
+     * the persisted document owner, not merely effective Edit or Owner access.
+     * Initial enable defaults to Edit; repeated enable preserves the chosen level.
+     * Clear removes only the managed direct grant, not inherited team access.
      */
     public setDocumentTeamShare<ThrowOnError extends boolean = false>(options: Options<SetDocumentTeamShareData, ThrowOnError>): RequestResult<SetDocumentTeamShareResponses, SetDocumentTeamShareErrors, ThrowOnError> {
         return (options.client ?? this.client).put<SetDocumentTeamShareResponses, SetDocumentTeamShareErrors, ThrowOnError>({
@@ -1446,6 +1501,22 @@ export class Sdk extends HeyApiClient {
      */
     public removeFavoriteByEntity<ThrowOnError extends boolean = false>(options: Options<RemoveFavoriteByEntityData, ThrowOnError>): RequestResult<RemoveFavoriteByEntityResponses, RemoveFavoriteByEntityErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<RemoveFavoriteByEntityResponses, RemoveFavoriteByEntityErrors, ThrowOnError>({ url: '/favorites/{entity_type}/{entity_id}', ...options });
+    }
+    
+    /**
+     * Get a visible foreign entity by the identifier its source system assigned.
+     *
+     * `foreign_entity_id` is a wildcard path segment: sources store slashes inside
+     * the identifier, for example `owner/repo/pull/12`.
+     *
+     * Authorization matches the by-id route. Internal service callers see every
+     * record; an authenticated user sees a record only when they have view access
+     * to it, and records they cannot view are reported as `404` so the route never
+     * reveals that a mapping exists. Bot tokens are not accepted here — they use
+     * the by-id route, which mints a bot-scoped receipt.
+     */
+    public getForeignEntityBySource<ThrowOnError extends boolean = false>(options: Options<GetForeignEntityBySourceData, ThrowOnError>): RequestResult<GetForeignEntityBySourceResponses, GetForeignEntityBySourceErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetForeignEntityBySourceResponses, GetForeignEntityBySourceErrors, ThrowOnError>({ url: '/foreign_entity/by_source/{source}/{foreign_entity_id}', ...options });
     }
     
     /**
@@ -1592,6 +1663,76 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
+     * List initiatives the caller can view.
+     */
+    public listInitiatives<ThrowOnError extends boolean = false>(options?: Options<ListInitiativesData, ThrowOnError>): RequestResult<ListInitiativesResponses, ListInitiativesErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListInitiativesResponses, ListInitiativesErrors, ThrowOnError>({ url: '/initiatives', ...options });
+    }
+    
+    /**
+     * Create an initiative owned by the caller.
+     */
+    public createInitiative<ThrowOnError extends boolean = false>(options: Options<CreateInitiativeData, ThrowOnError>): RequestResult<CreateInitiativeResponses, CreateInitiativeErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CreateInitiativeResponses, CreateInitiativeErrors, ThrowOnError>({
+            url: '/initiatives',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Delete the initiative the caller owns.
+     */
+    public deleteInitiative<ThrowOnError extends boolean = false>(options: Options<DeleteInitiativeData, ThrowOnError>): RequestResult<DeleteInitiativeResponses, DeleteInitiativeErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeleteInitiativeResponses, DeleteInitiativeErrors, ThrowOnError>({ url: '/initiatives/{initiative_id}', ...options });
+    }
+    
+    /**
+     * Fetch one initiative the caller can view.
+     */
+    public getInitiative<ThrowOnError extends boolean = false>(options: Options<GetInitiativeData, ThrowOnError>): RequestResult<GetInitiativeResponses, GetInitiativeErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetInitiativeResponses, GetInitiativeErrors, ThrowOnError>({ url: '/initiatives/{initiative_id}', ...options });
+    }
+    
+    /**
+     * Update fields the caller can edit.
+     */
+    public updateInitiative<ThrowOnError extends boolean = false>(options: Options<UpdateInitiativeData, ThrowOnError>): RequestResult<UpdateInitiativeResponses, UpdateInitiativeErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<UpdateInitiativeResponses, UpdateInitiativeErrors, ThrowOnError>({
+            url: '/initiatives/{initiative_id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Assign tasks the caller can edit.
+     */
+    public assignInitiativeTasks<ThrowOnError extends boolean = false>(options: Options<AssignInitiativeTasksData, ThrowOnError>): RequestResult<AssignInitiativeTasksResponses, AssignInitiativeTasksErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<AssignInitiativeTasksResponses, AssignInitiativeTasksErrors, ThrowOnError>({
+            url: '/initiatives/{initiative_id}/tasks',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Unassign one task the caller can edit.
+     */
+    public unassignInitiativeTask<ThrowOnError extends boolean = false>(options: Options<UnassignInitiativeTaskData, ThrowOnError>): RequestResult<UnassignInitiativeTaskResponses, UnassignInitiativeTaskErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<UnassignInitiativeTaskResponses, UnassignInitiativeTaskErrors, ThrowOnError>({ url: '/initiatives/{initiative_id}/tasks/{task_id}', ...options });
+    }
+    
+    /**
      * Gets the instructions document for the current user
      */
     public getInstructionsHandler<ThrowOnError extends boolean = false>(options?: Options<GetInstructionsHandlerData, ThrowOnError>): RequestResult<GetInstructionsHandlerResponses, GetInstructionsHandlerErrors, ThrowOnError> {
@@ -1646,6 +1787,125 @@ export class Sdk extends HeyApiClient {
     public postItemsSoupAstGrouped<ThrowOnError extends boolean = false>(options: Options<PostItemsSoupAstGroupedData, ThrowOnError>): RequestResult<PostItemsSoupAstGroupedResponses, PostItemsSoupAstGroupedErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostItemsSoupAstGroupedResponses, PostItemsSoupAstGroupedErrors, ThrowOnError>({
             url: '/items/soup/ast/grouped',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Read a bounded timeline with lazy thread previews.
+     */
+    public messageTimeline<ThrowOnError extends boolean = false>(options: Options<MessageTimelineData, ThrowOnError>): RequestResult<MessageTimelineResponses, unknown, ThrowOnError> {
+        return (options.client ?? this.client).get<MessageTimelineResponses, unknown, ThrowOnError>({ url: '/messages/{parent_type}/{parent_id}', ...options });
+    }
+    
+    /**
+     * Create a root message or reply.
+     */
+    public entityMessageCreate<ThrowOnError extends boolean = false>(options: Options<EntityMessageCreateData, ThrowOnError>): RequestResult<EntityMessageCreateResponses, unknown, ThrowOnError> {
+        return (options.client ?? this.client).post<EntityMessageCreateResponses, unknown, ThrowOnError>({
+            url: '/messages/{parent_type}/{parent_id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Tombstone one message while preserving replies.
+     */
+    public entityMessageDeleteMessage<ThrowOnError extends boolean = false>(options: Options<EntityMessageDeleteMessageData, ThrowOnError>): RequestResult<EntityMessageDeleteMessageResponses, unknown, ThrowOnError> {
+        return (options.client ?? this.client).delete<EntityMessageDeleteMessageResponses, unknown, ThrowOnError>({ url: '/messages/{parent_type}/{parent_id}/items/{id}', ...options });
+    }
+    
+    /**
+     * Resolve a message within its parent.
+     */
+    public entityMessageGetMessage<ThrowOnError extends boolean = false>(options: Options<EntityMessageGetMessageData, ThrowOnError>): RequestResult<EntityMessageGetMessageResponses, unknown, ThrowOnError> {
+        return (options.client ?? this.client).get<EntityMessageGetMessageResponses, unknown, ThrowOnError>({ url: '/messages/{parent_type}/{parent_id}/items/{id}', ...options });
+    }
+    
+    /**
+     * Edit an owned message.
+     */
+    public entityMessageEdit<ThrowOnError extends boolean = false>(options: Options<EntityMessageEditData, ThrowOnError>): RequestResult<EntityMessageEditResponses, unknown, ThrowOnError> {
+        return (options.client ?? this.client).patch<EntityMessageEditResponses, unknown, ThrowOnError>({
+            url: '/messages/{parent_type}/{parent_id}/items/{id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Change the caller's reaction.
+     */
+    public entityMessageReact<ThrowOnError extends boolean = false>(options: Options<EntityMessageReactData, ThrowOnError>): RequestResult<EntityMessageReactResponses, unknown, ThrowOnError> {
+        return (options.client ?? this.client).post<EntityMessageReactResponses, unknown, ThrowOnError>({
+            url: '/messages/{parent_type}/{parent_id}/items/{id}/reactions',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Resolve an old link under current parent permissions.
+     */
+    public entityMessageLegacy<ThrowOnError extends boolean = false>(options: Options<EntityMessageLegacyData, ThrowOnError>): RequestResult<EntityMessageLegacyResponses, unknown, ThrowOnError> {
+        return (options.client ?? this.client).get<EntityMessageLegacyResponses, unknown, ThrowOnError>({ url: '/messages/{parent_type}/{parent_id}/legacy/{legacy_id}', ...options });
+    }
+    
+    /**
+     * Read source channel threads mentioning this document under both parents' permissions.
+     */
+    public entityMessageReferences<ThrowOnError extends boolean = false>(options: Options<EntityMessageReferencesData, ThrowOnError>): RequestResult<EntityMessageReferencesResponses, unknown, ThrowOnError> {
+        return (options.client ?? this.client).get<EntityMessageReferencesResponses, unknown, ThrowOnError>({ url: '/messages/{parent_type}/{parent_id}/references', ...options });
+    }
+    
+    /**
+     * Explicitly remove a discussion.
+     */
+    public entityMessageDeleteThread<ThrowOnError extends boolean = false>(options: Options<EntityMessageDeleteThreadData, ThrowOnError>): RequestResult<EntityMessageDeleteThreadResponses, unknown, ThrowOnError> {
+        return (options.client ?? this.client).delete<EntityMessageDeleteThreadResponses, unknown, ThrowOnError>({ url: '/messages/{parent_type}/{parent_id}/threads/{id}', ...options });
+    }
+    
+    /**
+     * Open a specific discussion from a link or annotation.
+     */
+    public entityMessageGetThread<ThrowOnError extends boolean = false>(options: Options<EntityMessageGetThreadData, ThrowOnError>): RequestResult<EntityMessageGetThreadResponses, unknown, ThrowOnError> {
+        return (options.client ?? this.client).get<EntityMessageGetThreadResponses, unknown, ThrowOnError>({ url: '/messages/{parent_type}/{parent_id}/threads/{id}', ...options });
+    }
+    
+    /**
+     * Update a discussion's lifecycle and placement.
+     */
+    public entityMessagePatchThread<ThrowOnError extends boolean = false>(options: Options<EntityMessagePatchThreadData, ThrowOnError>): RequestResult<EntityMessagePatchThreadResponses, unknown, ThrowOnError> {
+        return (options.client ?? this.client).patch<EntityMessagePatchThreadResponses, unknown, ThrowOnError>({
+            url: '/messages/{parent_type}/{parent_id}/threads/{id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Broadcast typing within an authorized discussion.
+     */
+    public entityMessageTyping<ThrowOnError extends boolean = false>(options: Options<EntityMessageTypingData, ThrowOnError>): RequestResult<EntityMessageTypingResponses, unknown, ThrowOnError> {
+        return (options.client ?? this.client).post<EntityMessageTypingResponses, unknown, ThrowOnError>({
+            url: '/messages/{parent_type}/{parent_id}/typing',
             ...options,
             headers: {
                 'Content-Type': 'application/json',

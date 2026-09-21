@@ -12,8 +12,9 @@
 use crate::engine::{
     AffectedOperationsResultWire, ClaimedMutationWire, CommitOptimisticWriteResultWire,
     DeferOptimisticWriteResultWire, EngineHandle, EnqueueOptimisticMutationResultWire,
-    MutationUpsertKindWire, ReadResultWire, RecordSelectionResultWire,
-    RollbackOptimisticWriteResultWire, WriteRegistration, WriteRequest, WriteResultWire,
+    EntityFilterRequest, EntityFilterResult, MutationUpsertKindWire, ReadResultWire,
+    RecordSelectionResultWire, RollbackOptimisticWriteResultWire, WriteRegistration, WriteRequest,
+    WriteResultWire,
 };
 use crate::{
     CacheState, InitializedCache, emit_cache_changed, emit_mutation_settled, emit_ops_affected,
@@ -25,6 +26,9 @@ use cache_core::search::{SearchPage, SearchRequest};
 use cache_turso::TursoFileDatabase;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, Runtime, State};
+
+#[cfg(test)]
+mod test;
 
 type Variables = serde_json::Map<String, serde_json::Value>;
 
@@ -129,6 +133,15 @@ pub async fn graphql_cache_search(
     engine_handle(&state)?.search(request).await
 }
 
+/// Evaluates Soup filters over native projections, including cached Mail pages.
+#[tauri::command]
+pub async fn graphql_cache_entity_filter(
+    state: State<'_, CacheState>,
+    request: EntityFilterRequest,
+) -> Result<EntityFilterResult, String> {
+    engine_handle(&state)?.entity_filter(request).await
+}
+
 /// Active-query registration installed by a network write.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -185,11 +198,17 @@ pub enum HydrationResultWire {
         data: serde_json::Value,
         /// Revision installed by the hydration write.
         revision: String,
+        /// Whether this hydration changed the effective cache view.
+        #[serde(rename = "revisionAdvanced")]
+        revision_advanced: bool,
     },
     /// Every response field was cache-only.
     Void {
         /// Revision installed by the hydration write.
         revision: String,
+        /// Whether this hydration changed the effective cache view.
+        #[serde(rename = "revisionAdvanced")]
+        revision_advanced: bool,
     },
 }
 
@@ -229,9 +248,11 @@ pub async fn graphql_cache_hydrate<R: Runtime>(
         Some(data) => HydrationResultWire::Data {
             data,
             revision: result.write_result.revision,
+            revision_advanced: result.write_result.revision_advanced,
         },
         None => HydrationResultWire::Void {
             revision: result.write_result.revision,
+            revision_advanced: result.write_result.revision_advanced,
         },
     })
 }

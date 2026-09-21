@@ -1,5 +1,5 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { ENABLE_REMINDERS } from '@core/constant/featureFlags';
+import { enableReminders, isFeatureEnabled } from '@core/constant/featureFlags';
 import type { EntityData } from '@entity';
 import { openEntityInSplitFromUnifiedList } from '../utils';
 import type { EntityActionListState } from './entity-action-context';
@@ -9,12 +9,11 @@ import type { EntityActionListState } from './entity-action-context';
  *
  * Opens the reminder's editor the same way a row click does: through
  * {@link openEntityInSplitFromUnifiedList}, which resolves the reminder to its
- * `reminder-view` split and previews it into the Viewer when driven from a
- * Preview Pair. Single-entity only, like creating one.
+ * `reminder-view` split. Single-entity only, like creating one.
  */
 export const makeEditReminderAction = () => {
   const canExecute = (entity: EntityData): boolean =>
-    ENABLE_REMINDERS() && entity.type === 'reminder';
+    isFeatureEnabled(enableReminders) && entity.type === 'reminder';
 
   const execute = (entities: EntityData[]) => {
     const [entity] = entities;

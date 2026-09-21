@@ -3,7 +3,15 @@ import type {
   AgentContextDecoratorProps,
   AgentContextNode,
 } from './nodes/AgentContextNode';
+import type {
+  AgentSessionMentionDecoratorProps,
+  AgentSessionMentionNode,
+} from './nodes/AgentSessionMentionNode';
 import type { AwaitDecoratorProps, AwaitNode } from './nodes/AwaitNode';
+import type {
+  ConnectAppDecoratorProps,
+  ConnectAppNode,
+} from './nodes/ConnectAppNode';
 import type {
   ContactMentionDecoratorProps,
   ContactMentionNode,
@@ -127,6 +135,10 @@ export interface NodeDecoratorMap {
     klass: typeof DateMentionNode;
     props: DateMentionDecoratorProps;
   };
+  AgentSessionMentionNode: {
+    klass: typeof AgentSessionMentionNode;
+    props: AgentSessionMentionDecoratorProps;
+  };
   PullRequestMentionNode: {
     klass: typeof PullRequestMentionNode;
     props: PullRequestMentionDecoratorProps;
@@ -162,6 +174,10 @@ export interface NodeDecoratorMap {
   TagMentionNode: {
     klass: typeof TagMentionNode;
     props: TagMentionDecoratorProps;
+  };
+  ConnectAppNode: {
+    klass: typeof ConnectAppNode;
+    props: ConnectAppDecoratorProps;
   };
   WatermarkNode: {
     klass: typeof WatermarkNode;

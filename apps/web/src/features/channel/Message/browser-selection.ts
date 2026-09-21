@@ -49,3 +49,22 @@ export function getRenderedMessageReplyText(
   const text = (explicitText || renderedText || preview?.textContent)?.trim();
   return text || undefined;
 }
+
+/**
+ * Look up a mounted message by id and return the same reply-preview fields
+ * the hover Reply action captures. Keyboard and swipe replies have no click
+ * target, so they need this DOM lookup instead.
+ */
+export function getMessageReplyPreviewTexts(messageId: string): {
+  selectedText?: string;
+  renderedText?: string;
+} {
+  const messageRoot = document.querySelector<HTMLElement>(
+    `[data-message-id="${messageId}"]`
+  );
+  if (!messageRoot) return {};
+  return {
+    selectedText: getSelectedMessageText(messageRoot, messageId),
+    renderedText: getRenderedMessageReplyText(messageRoot, messageId),
+  };
+}

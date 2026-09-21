@@ -13,6 +13,7 @@ use model::document::DocumentMetadata;
 use model::document::ID;
 use model::document::VersionID;
 use model::document::VersionIDWithTimeStamps;
+use model_owner::Owner;
 use tracing::instrument;
 
 /// Creates a blank docx document
@@ -145,7 +146,7 @@ pub async fn create_blank_docx(
     Ok(DocumentMetadata {
         document_id: document.id,
         document_version_id: document_version.id,
-        owner: user_id,
+        owner: Owner::User(user_id),
         document_name: document_name.to_string(),
         file_type: Some(FileType::Docx.as_str().to_string()),
         sha: None,
@@ -186,7 +187,10 @@ mod tests {
 
         assert!(!document_metadata.document_id.is_empty());
         assert_eq!(document_metadata.document_name, "document-name".to_string());
-        assert_eq!(document_metadata.owner.as_ref(), "macro|user@user.com");
+        assert_eq!(
+            document_metadata.owner,
+            Owner::from_principal_str("macro|user@user.com").unwrap()
+        );
 
         Ok(())
     }

@@ -17,11 +17,11 @@ import { useUserId, useUserInfo } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { setActiveTabId } from '@core/signal/settingsTab';
 import { createChat } from '@core/util/create';
-import { AnimatedProfileIcon } from '@icon/wide-profile';
 import BookOpenIcon from '@phosphor/book-open.svg';
 import PaletteIcon from '@phosphor/palette.svg';
 import PlayCircleIcon from '@phosphor/play-circle.svg';
 import PlugsIcon from '@phosphor/plugs.svg';
+import ProfileIcon from '@phosphor/user-circle.svg';
 import { useGithubLinkStatusQuery } from '@queries/auth/github-link';
 import { isRealNamePart, useOwnUserName } from '@queries/auth/user-name-self';
 import { useEmailLinksQuery } from '@queries/email/link';
@@ -46,10 +46,7 @@ import type {
   GettingStartedSection as GettingStartedSectionConfig,
 } from './getting-started-types';
 
-/**
- * Where new users arrive: activating actions in collapsible sections. Acts as
- * a Preview Pair Controller — action results open in the adjacent Viewer.
- */
+/** Actions that help new users get started. */
 export function GettingStarted() {
   const userId = useUserId();
 
@@ -93,34 +90,19 @@ function GettingStartedContent() {
   // isFirstTimeOnboarding.
   const [tutorialOpen, setTutorialOpen] = createSignal(false);
 
-  /**
-   * Open content beside the list: re-engage a manually-closed Viewer first so
-   * the open lands there instead of replacing this panel, then route through
-   * this panel's handle (a Controller-handle open is rewritten into its
-   * Viewer). No-ops into a plain open on mobile or when there's no room.
-   */
-  const openInPreview = (content: SplitContent) => {
-    if (
-      !isMobile() &&
-      !panel.handle.isControllerSplit() &&
-      panel.handle.canEngagePreview()
-    ) {
-      panel.handle.engagePreview();
-    }
-    openWithSplit(content, { handle: panel.handle });
+  const openContent = (content: SplitContent) => {
+    openWithSplit(content, { handle: panel.handle, preferNewSplit: true });
   };
 
   const openSettingsTab = (tab: SettingsTab) => {
-    setActiveTabId(tab);
     if (isMobile()) {
-      // Mobile has no Preview Pair; the docked settings split is the
-      // full-screen path there.
+      // The mobile entry point opens this section in the settings sheet.
       openSettingsInSplit(tab);
       return;
     }
-    // Deliberately not openSettings(): on desktop it collapses to solo
-    // settings, destroying the Controller/Viewer pair.
-    openInPreview({ type: 'component', id: 'settings' });
+    setActiveTabId(tab);
+    // Keep getting started open beside settings when space allows.
+    openContent({ type: 'component', id: 'settings' });
   };
 
   const openChatPrompt = async (prompt: string): Promise<boolean> => {
@@ -142,7 +124,7 @@ function GettingStartedContent() {
       attachments: [],
       model: defaultModelForPlan(hasPaidAccess()),
     });
-    openInPreview({ type: 'chat', id: result.chatId });
+    openContent({ type: 'chat', id: result.chatId });
     return true;
   };
 
@@ -198,12 +180,12 @@ function GettingStartedContent() {
               window.open(DOCS_BASE, '_blank', 'noopener,noreferrer');
               return;
             }
-            openInPreview({ type: 'md', id: documentId });
+            openContent({ type: 'md', id: documentId });
           },
         },
         {
           id: 'set-name',
-          icon: AnimatedProfileIcon,
+          icon: ProfileIcon,
           title: 'Set your name & profile picture',
           description: 'Introduce yourself in Account settings',
           onActivate: () => openSettingsTab('Account'),
@@ -272,12 +254,6 @@ function GettingStartedContent() {
 
   onMount(() => {
     panel.handle.setDisplayName('Getting started');
-    // Preview is always on for Getting Started (no user toggle): engage
-    // whenever this panel isn't itself someone's Viewer. engagePreview
-    // no-ops on mobile and when there's no room; action opens re-engage if
-    // the Viewer was closed (see openInPreview).
-    if (panel.handle.isViewerSplit()) return;
-    panel.handle.engagePreview();
   });
 
   return (

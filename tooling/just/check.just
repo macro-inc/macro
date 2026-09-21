@@ -28,7 +28,8 @@ check *ARGS:
     if [ -z "$changed" ]; then echo "no changed files — nothing to check"; exit 0; fi
 
     rs=$(grep -E '^(crates|services|tooling)/.*\.rs$' <<<"$changed" || true)
-    js=$(grep -E '^(apps/web|packages|services/(analytics-proxy|ai-editing-worker|lexical-service|websocket-service))/.*\.(ts|tsx)$' <<<"$changed" || true)
+    # Match packages/sdk/biome.jsonc: preserve generator output verbatim.
+    js=$(grep -E '^(apps/web|packages|services/(analytics-proxy|ai-editing-worker|lexical-service|websocket-service))/.*\.(ts|tsx)$' <<<"$changed" | grep -v '^packages/sdk/generated/' || true)
     sg=$(grep -E '^(apps|crates|packages|services|tooling)/.*\.(rs|ts|tsx)$' <<<"$changed" || true)
 
     fail=0
@@ -38,12 +39,16 @@ check *ARGS:
         || { echo "   fix: cargo fmt"; fail=1; }
     fi
     if [ -n "$js" ]; then
-      echo "── biome (apps/web format + lint, same flags as CI)"
+      # Both tools run in apps/web. Absolute paths also reach package and
+      # service files; quoted arguments preserve literal path characters.
+      js_paths=()
+      while IFS= read -r f; do js_paths+=("$PWD/$f"); done <<<"$js"
+      echo "── biome (changed JS/TS format + lint, same flags as CI)"
       (cd apps/web && bunx --bun @biomejs/biome ci --colors=off --no-errors-on-unmatched \
-          --error-on-warnings $(sed 's|^apps/web/||' <<<"$js")) \
+          --error-on-warnings "${js_paths[@]}") \
         || { echo "   fix: bun run fix, then re-check"; fail=1; }
       echo "── oxlint (warn-only; docs/STYLE_GUIDE.md FE-12)"
-      (cd apps/web && bunx --yes oxlint@1.73.0 $(sed 's|^apps/web/||' <<<"$js")) || fail=1
+      (cd apps/web && bunx --yes oxlint@1.73.0 "${js_paths[@]}") || fail=1
     fi
     if [ -n "$sg" ]; then
       echo "── ast-grep code rules (rule ids map to docs/STYLE_GUIDE.md)"

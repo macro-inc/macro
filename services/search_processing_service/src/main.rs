@@ -47,6 +47,17 @@ mod process;
 pub type BackfillServiceImpl =
     BackfillOrchestrator<PgBackfillSource, SqsSearchEventPublisher, DirectPropertyBackfillIndexer>;
 
+/// Production wiring for the authoritative agent-session search projection.
+pub type AgentSessionIndexer = domain::agent_session_index::AgentSessionIndexService<
+    agent_session::domain::search::indexing::SearchSnapshotServiceImpl<
+        agent_session::outbound::postgres::search::PgSearchIndexingRepo,
+        agent_fold::domain::service::FoldedMessageService<
+            agent_session::outbound::postgres::PgAgentSessionRepo,
+        >,
+    >,
+    outbound::agent_session_search::OpenSearchAgentSessionIndex,
+>;
+
 /// Resolve a read-replica macrodb URL and
 /// connect a small pool. Returns `None` when the replica URL is missing,
 /// blank. Failures
@@ -216,6 +227,22 @@ async fn main() -> anyhow::Result<()> {
 
     let sqs_client = Arc::new(sqs_client);
 
+    let session_repo = agent_session::outbound::postgres::PgAgentSessionRepo::new(db.clone());
+    // Waiting advisory locks must not exhaust the pool used to read ACP logs.
+    let session_lock_pool = PgPoolOptions::new()
+        .max_connections(10)
+        .connect_lazy(config.database_url.as_ref())?;
+    let agent_session_indexer = Arc::new(AgentSessionIndexer::new(
+        agent_session::domain::search::indexing::SearchSnapshotServiceImpl::new(
+            agent_session::outbound::postgres::search::PgSearchIndexingRepo::new(
+                db.clone(),
+                session_lock_pool,
+            ),
+            agent_fold::domain::service::FoldedMessageService::new(session_repo),
+        ),
+        outbound::agent_session_search::OpenSearchAgentSessionIndex(opensearch_client.clone()),
+    ));
+
     let backfill_service = Arc::new(BackfillOrchestrator::new(
         PgBackfillSource::new(backfill_db, config.backfill_page_sizes()?),
         SqsSearchEventPublisher::new(sqs_client.clone()),
@@ -263,6 +290,7 @@ async fn main() -> anyhow::Result<()> {
         run_search_processing_workers(search_processing_context, config.worker_count);
 
         let kafka_processing_context = KafkaProcessingContext {
+            agent_session_indexer: agent_session_indexer.clone(),
             db: db.clone(),
             opensearch_client: opensearch_client.clone(),
             s3_client: s3_client.clone(),
@@ -292,6 +320,7 @@ async fn main() -> anyhow::Result<()> {
 
     let api_result = api::setup_and_serve(
         ApiContext {
+            agent_session_indexer,
             db,
             authorization_state,
             opensearch_client,

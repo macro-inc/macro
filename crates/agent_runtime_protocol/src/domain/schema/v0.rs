@@ -12,6 +12,7 @@
 //! the agent's raw ACP traffic.
 
 use agent_client_protocol::RawJsonRpcMessage;
+use agent_client_protocol::schema::v1::SessionConfigOption;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use specta::Type;
 use specta_typescript::Unknown;
@@ -43,6 +44,8 @@ pub enum SystemEvent {
     AcpReady,
     /// The session transport closed or failed and no more frames will arrive.
     Disconnected,
+    /// The hosted provider recovered history; the client must reload when idle.
+    ReloadRequired,
     /// An application-defined event name with no protocol-level meaning yet.
     Unknown(String),
 }
@@ -54,6 +57,7 @@ impl SystemEvent {
         match self {
             Self::AcpReady => "acp_ready",
             Self::Disconnected => "disconnected",
+            Self::ReloadRequired => "reload_required",
             Self::Unknown(name) => name,
         }
     }
@@ -76,6 +80,7 @@ impl<'de> Deserialize<'de> for SystemEvent {
         Ok(match String::deserialize(deserializer)?.as_str() {
             "acp_ready" => Self::AcpReady,
             "disconnected" => Self::Disconnected,
+            "reload_required" => Self::ReloadRequired,
             name => Self::Unknown(name.to_owned()),
         })
     }
@@ -102,6 +107,24 @@ pub struct AcpMessage(
     #[specta(type = std::collections::HashMap<String, Unknown>)] pub RawJsonRpcMessage,
 );
 
+/// The result of probing a fresh ACP subprocess.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum ModelProbeResult {
+    /// The raw options returned by `session/new`.
+    Available {
+        /// Session configuration options exactly as the agent returned them.
+        #[serde(rename = "configOptions")]
+        #[specta(type = Vec<Unknown>)]
+        config_options: Vec<SessionConfigOption>,
+    },
+    /// A safe, operator-actionable failure description.
+    Error {
+        /// Failure text safe to return across the runtime connection.
+        message: String,
+    },
+}
+
 /// Agent Service to Agent Runtime traffic on the logical protocol stream.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -109,6 +132,12 @@ pub struct AcpMessage(
 pub enum ToRuntimeMessage {
     /// An ACP message routed to the hosted agent.
     Acp(AcpMessage),
+    /// Probe a separate fresh agent process for its session configuration.
+    ///
+    /// The request carries no parameters: it asks this connection's one
+    /// configured harness what it advertises. Answers are therefore
+    /// interchangeable, so nothing correlates a response to a request.
+    ModelProbeRequest,
 }
 
 /// Agent Runtime to Agent Service traffic on the logical protocol stream.
@@ -123,5 +152,10 @@ pub enum ToServerMessage {
         /// The event name.
         #[specta(type = String)]
         event: SystemEvent,
+    },
+    /// An answer to a connection-level model probe.
+    ModelProbeResponse {
+        /// Raw options or a safe failure.
+        result: ModelProbeResult,
     },
 }

@@ -12,9 +12,11 @@ use uuid::Uuid;
 use item_filters::ast::{LiteralTree, call::CallLiteral};
 use notification::domain::models::apple::VoipPushPayload;
 
+use models_permissions::share_permission::team_share::TeamShareFacts;
+
 use crate::domain::models::{
-    CustomSpeakerAssignment, DeletedCallRecordStorageKeys, EditCallRecordRequest,
-    EditCallTranscriptRequest,
+    CustomSpeakerAssignment, DeletedCallRecordStorageKeys, EditCallRecordRepoArgs,
+    EditCallRecordRequest, EditCallTranscriptRequest,
 };
 
 use super::models::{
@@ -34,13 +36,16 @@ pub trait CallRepository: Send + Sync + 'static {
 
     /// Create a new call record, or return `None` if one already exists for
     /// this channel (unique-constraint conflict).
+    ///
+    /// The live `share_with_team` intent starts at its default (on); canonical
+    /// team sharing is only written when the call is archived.
     fn create_call<'a>(
         &self,
         call_id: &Uuid,
         channel_id: &Uuid,
         room_name: &str,
         created_by: MacroUserIdStr<'a>,
-    ) -> impl Future<Output = Result<Option<Call>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<Call>, CallError>> + Send;
 
     /// Get an active call by channel ID.
     fn get_call_by_channel_id(
@@ -133,20 +138,32 @@ pub trait CallRepository: Send + Sync + 'static {
         egress_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Flip the `share_with_team` flag on an active call. Returns the new
-    /// value along with the call's `channel_id`.
+    /// Load the canonical team-share facts (persisted creator, the creator's
+    /// team, current explicit grant, revision) the owner policy authorizes
+    /// against. Works for active and archived calls alike.
+    fn get_team_share_facts(
+        &self,
+        call_id: &Uuid,
+    ) -> impl Future<Output = Result<TeamShareFacts, CallError>> + Send;
+
+    /// Flip the live `share_with_team` intent on an active call. Returns the
+    /// new value along with the call's `channel_id`. Archived calls answer
+    /// [`CallError::Conflict`]: their team sharing is canonical and edited
+    /// through [`CallRepository::patch_call_record`].
     fn toggle_share_with_team(
         &self,
         call_id: &Uuid,
-    ) -> impl Future<Output = Result<(bool, Uuid), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<(bool, Uuid), CallError>> + Send;
 
     /// Archive an active call to the permanent `call_records` and
     /// `call_record_participants` tables, then delete the ephemeral rows.
+    /// The live `share_with_team` intent is translated into canonical team
+    /// sharing (View for the creator's current team) in the same transaction.
     /// Returns facts committed by the archive transaction.
     fn archive_call(
         &self,
         call_id: &Uuid,
-    ) -> impl Future<Output = Result<ArchivedCall, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<ArchivedCall, CallError>> + Send;
 
     /// Set the recording key on an archived call record.
     fn set_recording_key(
@@ -272,12 +289,20 @@ pub trait CallRepository: Send + Sync + 'static {
         call_record_id: &Uuid,
     ) -> impl Future<Output = Result<Option<DeletedCallRecordStorageKeys>, Self::Err>> + Send;
 
-    /// Patches a call record.
+    /// Patches a call record (link/channel sharing, team sharing, display name)
+    /// in one transaction.
+    ///
+    /// `args.team_share` is the creator-authorized command for a canonical
+    /// team-share change on an archived call; the repository applies it
+    /// atomically with the rest of the patch and rejects a team level that
+    /// arrives without one. `args.live_share_with_team` instead sets the
+    /// pending intent on an active call and conflicts if the call has been
+    /// archived meanwhile.
     fn patch_call_record(
         &self,
         call_record_id: &Uuid,
-        request: &EditCallRecordRequest,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+        args: &EditCallRecordRepoArgs,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
 
     /// Apply a batch of per-diarized-speaker `custom_speaker` overrides to
     /// the archived `call_record_transcripts` rows for `call_record_id`.
@@ -609,11 +634,28 @@ pub trait CallService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), CallError>> + Send;
 
     /// Edits a [`CallRecord`].
+    ///
+    /// Team sharing (`sharePermission.teamShareAccessLevel`, or the legacy
+    /// `shareWithTeam` alias) only accepts `view`. While the call is live it
+    /// sets the pending intent any Edit-level caller may toggle; once archived
+    /// it is authorized against the persisted creator, not the receipt's
+    /// effective access. Other fields keep requiring the receipt's Edit access.
     fn edit_call_record(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
         request: EditCallRecordRequest,
     ) -> impl Future<Output = Result<(), CallError>> + Send;
+
+    /// Toggle the live `share_with_team` intent on the active call identified
+    /// by the receipt. Authorization is carried in the receipt produced by
+    /// `CallAccessLevelExtractor`; the entity on the receipt must be
+    /// `EntityType::Call` and its `entity_id` must be the call's UUID. The
+    /// intent becomes canonical team sharing when the call is archived.
+    /// Returns the new value; archived calls answer [`CallError::Conflict`].
+    fn toggle_share_with_team(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+    ) -> impl Future<Output = Result<bool, CallError>> + Send;
 
     /// Apply per-diarized-speaker `custom_speaker` overrides to a call's
     /// transcript. Authorization is carried in the receipt; the entity must
@@ -625,16 +667,6 @@ pub trait CallService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<EditAccessLevel>,
         request: EditCallTranscriptRequest,
     ) -> impl Future<Output = Result<(), CallError>> + Send;
-
-    /// Toggle the `share_with_team` flag on the active call identified by the
-    /// receipt. Authorization is carried in the receipt produced by
-    /// `CallAccessLevelExtractor`; the entity on the receipt must be
-    /// `EntityType::Call` and its `entity_id` must be the call's UUID.
-    /// Returns the new value.
-    fn toggle_share_with_team(
-        &self,
-        receipt: EntityAccessReceipt<EditAccessLevel>,
-    ) -> impl Future<Output = Result<bool, CallError>> + Send;
 
     /// Batch-fetch lightweight previews for a list of call ids.
     ///

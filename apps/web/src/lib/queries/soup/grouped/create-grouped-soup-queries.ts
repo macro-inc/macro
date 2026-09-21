@@ -63,6 +63,8 @@ export type CreateGroupedSoupQueriesArgs = {
       groupBy?: GroupByField;
       groupKey?: string;
       itemFilter?: SoupApiItemFilter;
+      /** Gates optimistic cache inserts only — fetched rows never run through it. */
+      insertFilter?: SoupApiItemFilter;
     };
   }>;
 };

@@ -38,7 +38,6 @@ pub struct CreateDocumentArgs<'a> {
 }
 
 /// Creates a new document
-/// NOTE: this is only used in seed_cli at the moment and needs to be deprecated
 #[instrument(skip(db))]
 pub async fn create_document(
     db: &Pool<Postgres>,
@@ -219,6 +218,15 @@ pub async fn create_document_txn(
         AccessLevel::Owner,
     )
     .await?;
+    entity_registry_db_utils::insert_entity(
+        transaction,
+        entity_registry_db_utils::NewEntityRecord::new(
+            macro_uuid::string_to_uuid(&document_id)?,
+            entity_registry_db_utils::RegisteredEntityType::Document,
+            model_owner::Owner::User(user_id.clone()),
+        ),
+    )
+    .await?;
 
     if let Some(attachment) = email_attachment_id {
         crate::document::document_email::create_document_email_record(
@@ -232,7 +240,7 @@ pub async fn create_document_txn(
     Ok(DocumentMetadata::new_document(
         &document_id,
         document_version.id,
-        user_id,
+        model_owner::Owner::User(user_id),
         document_name,
         file_type,
         document_version.sha.as_str(),
@@ -326,6 +334,7 @@ mod tests {
     #[allow(unused_imports)]
     use super::*;
     use chrono::TimeZone;
+    use model_owner::Owner;
     use sqlx::{Pool, Postgres};
 
     #[sqlx::test(fixtures(path = "../../../fixtures", scripts("basic_user_with_documents")))]
@@ -365,7 +374,10 @@ mod tests {
 
         assert!(!document_metadata.document_id.is_empty());
         assert_eq!(document_metadata.document_name, "document-name".to_string());
-        assert_eq!(document_metadata.owner.as_ref(), "macro|user@user.com");
+        assert_eq!(
+            document_metadata.owner,
+            Owner::from_principal_str("macro|user@user.com").unwrap()
+        );
         assert_eq!(document_metadata.project_id.as_deref(), Some("project-one"));
         assert_eq!(document_metadata.project_name.as_deref(), Some("name"));
         assert_eq!(document_metadata.created_at, Some(ts));
@@ -395,7 +407,10 @@ mod tests {
 
         assert!(!document_metadata.document_id.is_empty());
         assert_eq!(document_metadata.document_name, "document-name".to_string());
-        assert_eq!(document_metadata.owner.as_ref(), "macro|user@user.com");
+        assert_eq!(
+            document_metadata.owner,
+            Owner::from_principal_str("macro|user@user.com").unwrap()
+        );
 
         Ok(())
     }
@@ -440,7 +455,10 @@ mod tests {
             "20f603c2-99db-aaaa-0000-1d8b9f95a52f"
         );
         assert_eq!(document_metadata.document_name, "document-name".to_string());
-        assert_eq!(document_metadata.owner.as_ref(), "macro|user@user.com");
+        assert_eq!(
+            document_metadata.owner,
+            Owner::from_principal_str("macro|user@user.com").unwrap()
+        );
         assert_eq!(document_metadata.project_id.as_deref(), Some("project-one"));
         assert_eq!(document_metadata.project_name.as_deref(), Some("name"));
         assert_eq!(document_metadata.created_at, Some(ts));
@@ -473,7 +491,10 @@ mod tests {
             "20f603c2-99db-4f02-aaaa-1d8b9f95a52f"
         );
         assert_eq!(document_metadata.document_name, "document-name".to_string());
-        assert_eq!(document_metadata.owner.as_ref(), "macro|user@user.com");
+        assert_eq!(
+            document_metadata.owner,
+            Owner::from_principal_str("macro|user@user.com").unwrap()
+        );
 
         Ok(())
     }

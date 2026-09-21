@@ -137,15 +137,14 @@ pub async fn add_property_option<
 ) -> Result<(StatusCode, Json<PropertyOption>), AddPropertyOptionErr> {
     let user = user.authorization.user.macro_user_id;
     tracing::info!("adding property option");
+    let team = team.entity_access_receipt.as_ref();
+    state
+        .reject_managed_definition(property_uuid, &user, team)
+        .await?;
 
     let option = state
         .properties_service
-        .add_property_option(
-            &user,
-            team.entity_access_receipt.as_ref(),
-            property_uuid,
-            &request,
-        )
+        .add_property_option(&user, team, property_uuid, &request)
         .await?;
 
     Ok((StatusCode::CREATED, Json(option)))
@@ -209,15 +208,13 @@ pub async fn update_property_option<
     Json(request): Json<UpdatePropertyOptionRequest>,
 ) -> Result<(StatusCode, Json<PropertyOption>), UpdatePropertyOptionErr> {
     let user = user.authorization.user.macro_user_id;
+    let team = team.entity_access_receipt.as_ref();
+    state
+        .reject_managed_definition(def_uuid, &user, team)
+        .await?;
     let updated = state
         .properties_service
-        .update_property_option(
-            &user,
-            team.entity_access_receipt.as_ref(),
-            def_uuid,
-            option_uuid,
-            &request,
-        )
+        .update_property_option(&user, team, def_uuid, option_uuid, &request)
         .await?;
 
     Ok((StatusCode::OK, Json(updated)))
@@ -277,15 +274,14 @@ pub async fn delete_property_option<
 ) -> Result<StatusCode, DeletePropertyOptionErr> {
     let user = user.authorization.user.macro_user_id;
     tracing::info!("deleting property option");
+    let team = team.entity_access_receipt.as_ref();
+    state
+        .reject_managed_definition(def_uuid, &user, team)
+        .await?;
 
     state
         .properties_service
-        .delete_property_option(
-            &user,
-            team.entity_access_receipt.as_ref(),
-            def_uuid,
-            option_uuid,
-        )
+        .delete_property_option(&user, team, def_uuid, option_uuid)
         .await?;
 
     tracing::info!("successfully deleted property option");

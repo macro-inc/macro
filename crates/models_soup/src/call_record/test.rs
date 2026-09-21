@@ -25,6 +25,7 @@ fn record_with_participants(user_ids: &[&str]) -> CallRecord {
         channel_name: None,
         custom_name: None,
         summary: None,
+        team_share_access_level: None,
         share_with_team: true,
         is_active: true,
         status: None,

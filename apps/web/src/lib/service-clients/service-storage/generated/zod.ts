@@ -11,6 +11,12 @@ import * as zod from 'zod';
  */
 export const listAgentsResponseItem = zod
   .object({
+    auto_accept_permissions: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "Whether the agent's sessions approve ACP permission requests without\nasking. `None` means always prompt. Bypass also requires the harness's opt-in."
+      ),
     bot: zod
       .object({
         avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
@@ -77,6 +83,42 @@ export const listAgentsResponseItem = zod
       .describe(
         'Instructions supplied to the agent at the start of a conversation.'
       ),
+    mcp: zod
+      .union([
+        zod
+          .object({
+            scope: zod.enum(['owner_connections']),
+          })
+          .describe(
+            'Whatever apps the person running the session has connected.'
+          ),
+        zod
+          .object({
+            scope: zod.enum(['selected']),
+            servers: zod
+              .array(
+                zod
+                  .object({
+                    app_slug: zod
+                      .string()
+                      .describe('Pipedream app slug, e.g. `linear`.'),
+                    server_name: zod
+                      .string()
+                      .describe('Display name, e.g. `Linear`.'),
+                  })
+                  .describe(
+                    'One Pipedream app an agent lists under [`AgentMcpServers::Selected`].\n\nOnly the catalog identity is stored. Whether a given person has connected\nthe app is theirs, resolved at call time by the egress proxy, never here.'
+                  )
+              )
+              .describe(
+                "The apps, in the order the agent's author picked them."
+              ),
+          })
+          .describe('Exactly these apps, connected or not.'),
+      ])
+      .describe(
+        "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
+      ),
   })
   .describe('A persisted user- or team-owned AI agent.');
 export const listAgentsResponse = zod.array(listAgentsResponseItem);
@@ -86,6 +128,12 @@ export const listAgentsResponse = zod.array(listAgentsResponseItem);
  */
 export const createAgentBody = zod
   .object({
+    auto_accept_permissions: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "Whether the agent's sessions approve ACP permission requests without\nasking. Omit to always prompt."
+      ),
     avatar_url: zod
       .string()
       .nullish()
@@ -112,6 +160,43 @@ export const createAgentBody = zod
       .string()
       .describe(
         'Instructions supplied to the agent at the start of a conversation.'
+      ),
+    mcp: zod
+      .union([
+        zod
+          .object({
+            scope: zod.enum(['owner_connections']),
+          })
+          .describe(
+            'Whatever apps the person running the session has connected.'
+          ),
+        zod
+          .object({
+            scope: zod.enum(['selected']),
+            servers: zod
+              .array(
+                zod
+                  .object({
+                    app_slug: zod
+                      .string()
+                      .describe('Pipedream app slug, e.g. `linear`.'),
+                    server_name: zod
+                      .string()
+                      .describe('Display name, e.g. `Linear`.'),
+                  })
+                  .describe(
+                    'One Pipedream app an agent lists under [`AgentMcpServers::Selected`].\n\nOnly the catalog identity is stored. Whether a given person has connected\nthe app is theirs, resolved at call time by the egress proxy, never here.'
+                  )
+              )
+              .describe(
+                "The apps, in the order the agent's author picked them."
+              ),
+          })
+          .describe('Exactly these apps, connected or not.'),
+      ])
+      .optional()
+      .describe(
+        "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
       ),
     name: zod.string().describe('Display name.'),
     team_id: zod
@@ -130,6 +215,12 @@ export const updateAgentParams = zod.object({
 
 export const updateAgentBody = zod
   .object({
+    auto_accept_permissions: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "Whether the agent's sessions approve ACP permission requests without\nasking. Omit to always prompt."
+      ),
     avatar_url: zod
       .string()
       .nullish()
@@ -157,6 +248,43 @@ export const updateAgentBody = zod
       .describe(
         'Instructions supplied to the agent at the start of a conversation.'
       ),
+    mcp: zod
+      .union([
+        zod
+          .object({
+            scope: zod.enum(['owner_connections']),
+          })
+          .describe(
+            'Whatever apps the person running the session has connected.'
+          ),
+        zod
+          .object({
+            scope: zod.enum(['selected']),
+            servers: zod
+              .array(
+                zod
+                  .object({
+                    app_slug: zod
+                      .string()
+                      .describe('Pipedream app slug, e.g. `linear`.'),
+                    server_name: zod
+                      .string()
+                      .describe('Display name, e.g. `Linear`.'),
+                  })
+                  .describe(
+                    'One Pipedream app an agent lists under [`AgentMcpServers::Selected`].\n\nOnly the catalog identity is stored. Whether a given person has connected\nthe app is theirs, resolved at call time by the egress proxy, never here.'
+                  )
+              )
+              .describe(
+                "The apps, in the order the agent's author picked them."
+              ),
+          })
+          .describe('Exactly these apps, connected or not.'),
+      ])
+      .optional()
+      .describe(
+        "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
+      ),
     name: zod.string().describe('Display name.'),
     team_id: zod
       .uuid()
@@ -169,6 +297,12 @@ export const updateAgentBody = zod
 
 export const updateAgentResponse = zod
   .object({
+    auto_accept_permissions: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "Whether the agent's sessions approve ACP permission requests without\nasking. `None` means always prompt. Bypass also requires the harness's opt-in."
+      ),
     bot: zod
       .object({
         avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
@@ -234,6 +368,42 @@ export const updateAgentResponse = zod
       .string()
       .describe(
         'Instructions supplied to the agent at the start of a conversation.'
+      ),
+    mcp: zod
+      .union([
+        zod
+          .object({
+            scope: zod.enum(['owner_connections']),
+          })
+          .describe(
+            'Whatever apps the person running the session has connected.'
+          ),
+        zod
+          .object({
+            scope: zod.enum(['selected']),
+            servers: zod
+              .array(
+                zod
+                  .object({
+                    app_slug: zod
+                      .string()
+                      .describe('Pipedream app slug, e.g. `linear`.'),
+                    server_name: zod
+                      .string()
+                      .describe('Display name, e.g. `Linear`.'),
+                  })
+                  .describe(
+                    'One Pipedream app an agent lists under [`AgentMcpServers::Selected`].\n\nOnly the catalog identity is stored. Whether a given person has connected\nthe app is theirs, resolved at call time by the egress proxy, never here.'
+                  )
+              )
+              .describe(
+                "The apps, in the order the agent's author picked them."
+              ),
+          })
+          .describe('Exactly these apps, connected or not.'),
+      ])
+      .describe(
+        "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
       ),
   })
   .describe('A persisted user- or team-owned AI agent.');
@@ -317,9 +487,10 @@ export const editAnchorResponse = zod
         originalPage: zod.number(),
         owner: zod.string(),
         page: zod.number(),
+        rootId: zod.uuid().nullish(),
         rotation: zod.number(),
         shouldLockOnSave: zod.boolean(),
-        threadId: zod.number(),
+        threadId: zod.number().nullish(),
         uuid: zod.uuid(),
         wasDeleted: zod.boolean(),
         wasEdited: zod.boolean(),
@@ -359,6 +530,7 @@ export const editAnchorResponse = zod
         pageViewportHeight: zod.number(),
         pageViewportWidth: zod.number(),
         red: zod.number(),
+        rootId: zod.uuid().nullish(),
         text: zod.string(),
         threadId: zod.number().nullish(),
         updatedAt: zod.iso.datetime({}).nullish(),
@@ -395,9 +567,10 @@ export const getDocumentAnchorsResponse = zod.object({
           originalPage: zod.number(),
           owner: zod.string(),
           page: zod.number(),
+          rootId: zod.uuid().nullish(),
           rotation: zod.number(),
           shouldLockOnSave: zod.boolean(),
-          threadId: zod.number(),
+          threadId: zod.number().nullish(),
           uuid: zod.uuid(),
           wasDeleted: zod.boolean(),
           wasEdited: zod.boolean(),
@@ -437,6 +610,7 @@ export const getDocumentAnchorsResponse = zod.object({
           pageViewportHeight: zod.number(),
           pageViewportWidth: zod.number(),
           red: zod.number(),
+          rootId: zod.uuid().nullish(),
           text: zod.string(),
           threadId: zod.number().nullish(),
           updatedAt: zod.iso.datetime({}).nullish(),
@@ -502,9 +676,10 @@ export const createAnchorResponse = zod
         originalPage: zod.number(),
         owner: zod.string(),
         page: zod.number(),
+        rootId: zod.uuid().nullish(),
         rotation: zod.number(),
         shouldLockOnSave: zod.boolean(),
-        threadId: zod.number(),
+        threadId: zod.number().nullish(),
         uuid: zod.uuid(),
         wasDeleted: zod.boolean(),
         wasEdited: zod.boolean(),
@@ -544,6 +719,7 @@ export const createAnchorResponse = zod
         pageViewportHeight: zod.number(),
         pageViewportWidth: zod.number(),
         red: zod.number(),
+        rootId: zod.uuid().nullish(),
         text: zod.string(),
         threadId: zod.number().nullish(),
         updatedAt: zod.iso.datetime({}).nullish(),
@@ -654,9 +830,9 @@ export const editCommentResponse = zod
         .union([
           zod.null(),
           zod
-            .enum(['task', 'snippet', 'skill'])
+            .enum(['task', 'snippet', 'skill', 'initiative_description'])
             .describe(
-              'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
+              'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.\n\nWire, database, and `Display` spellings are all `snake_case` so a\nmulti-word variant serializes identically in every system.'
             ),
         ])
         .optional(),
@@ -841,9 +1017,10 @@ export const createCommentResponse = zod
                 originalPage: zod.number(),
                 owner: zod.string(),
                 page: zod.number(),
+                rootId: zod.uuid().nullish(),
                 rotation: zod.number(),
                 shouldLockOnSave: zod.boolean(),
-                threadId: zod.number(),
+                threadId: zod.number().nullish(),
                 uuid: zod.uuid(),
                 wasDeleted: zod.boolean(),
                 wasEdited: zod.boolean(),
@@ -883,6 +1060,7 @@ export const createCommentResponse = zod
                 pageViewportHeight: zod.number(),
                 pageViewportWidth: zod.number(),
                 red: zod.number(),
+                rootId: zod.uuid().nullish(),
                 text: zod.string(),
                 threadId: zod.number().nullish(),
                 updatedAt: zod.iso.datetime({}).nullish(),
@@ -1008,6 +1186,8 @@ export const listOccurrencesResponseItemsItemEventRemindersOverridesItemMinutesM
 
 export const listOccurrencesResponseItemsItemEventSequenceMin = 0;
 
+export const listOccurrencesResponseItemsItemEventSourcesItemRemindersOverridesItemMinutesMin = 0;
+
 export const listOccurrencesResponse = zod
   .object({
     hasMore: zod.boolean(),
@@ -1109,7 +1289,7 @@ export const listOccurrencesResponse = zod
               isReadOnly: zod
                 .boolean()
                 .describe(
-                  'Whether the current user can edit the canonical source.'
+                  "Whether the canonical source's calendar prohibits editing it."
                 ),
               location: zod
                 .string()
@@ -1171,6 +1351,101 @@ export const listOccurrencesResponse = zod
                 .number()
                 .min(listOccurrencesResponseItemsItemEventSequenceMin)
                 .describe('Provider\/iCalendar sequence number.'),
+              sources: zod
+                .array(
+                  zod
+                    .object({
+                      calendarId: zod
+                        .uuid()
+                        .describe('Calendar this copy lives on.'),
+                      creatorEmail: zod
+                        .string()
+                        .nullish()
+                        .describe('Provider-reported creator email.'),
+                      creatorName: zod
+                        .string()
+                        .nullish()
+                        .describe('Provider-reported creator display name.'),
+                      description: zod
+                        .string()
+                        .nullish()
+                        .describe('Optional event body.'),
+                      eventType: zod
+                        .enum([
+                          'default',
+                          'out_of_office',
+                          'focus_time',
+                          'working_location',
+                          'birthday',
+                          'from_gmail',
+                        ])
+                        .describe(
+                          "Google's event type: ordinary meetings versus the status-style entries\n(working location, out of office, focus time, birthdays) Google renders\nand notifies differently. Immutable at the provider after creation."
+                        ),
+                      isReadOnly: zod
+                        .boolean()
+                        .describe(
+                          "Whether the calendar's access role prohibits editing this copy."
+                        ),
+                      location: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'Optional physical or virtual location label.'
+                        ),
+                      reminders: zod
+                        .object({
+                          overrides: zod
+                            .array(
+                              zod
+                                .object({
+                                  method: zod
+                                    .string()
+                                    .describe(
+                                      'Provider method, stored verbatim; only `popup` fires Macro\nnotifications.'
+                                    ),
+                                  minutes: zod
+                                    .number()
+                                    .min(
+                                      listOccurrencesResponseItemsItemEventSourcesItemRemindersOverridesItemMinutesMin
+                                    )
+                                    .describe(
+                                      'Minutes before the event start.'
+                                    ),
+                                })
+                                .describe(
+                                  "One reminder: how it alerts and how many minutes before the event start\n(before midnight in the calendar's zone for all-day events) it fires."
+                                )
+                            )
+                            .optional()
+                            .describe(
+                              'Explicit reminders replacing the defaults when `use_default` is off.'
+                            ),
+                          useDefault: zod
+                            .boolean()
+                            .describe(
+                              "Whether the calendar's default reminders apply."
+                            ),
+                        })
+                        .describe(
+                          "Per-user reminder configuration for an event, mirroring Google's model:\neither the calendar's default reminders apply, or the explicit overrides\nreplace them entirely."
+                        ),
+                      title: zod.string().describe('Display title.'),
+                      transparency: zod
+                        .enum(['opaque', 'transparent'])
+                        .describe('Whether an event blocks availability.'),
+                      visibility: zod
+                        .enum(['default', 'public', 'private', 'confidential'])
+                        .describe('Visibility of event details.'),
+                    })
+                    .describe(
+                      "The content one provider copy of an event carries.\n\nGoogle keeps these fields per calendar copy: a shared calendar's copy of a\nmember's event can have its own title, type, reminders, and access role.\nThe entity holds its canonical source's values. Every other copy's values\nare read from here so a client can show the copy that belongs to the\ncalendar being viewed."
+                    )
+                )
+                .optional()
+                .describe(
+                  "Content of every active copy of this event, canonical first: the\nprimary calendar's copy, then the freshest. A client picks the copy\nwhose calendar it is showing and falls back to the first. Populated\nonly on the read path, so stored projections omit it."
+                ),
               status: zod
                 .enum(['confirmed', 'tentative', 'cancelled'])
                 .describe('Canonical event status.'),
@@ -1219,7 +1494,9 @@ export const listOccurrencesResponse = zod
                 .enum(['default', 'public', 'private', 'confidential'])
                 .describe('Visibility of event details.'),
             })
-            .describe('A stable, first-class Macro calendar event entity.'),
+            .describe(
+              "A stable, first-class Macro calendar event entity.\n\nContent fields hold the canonical source's values: the account's primary\ncalendar copy when one is synced, else the freshest remaining copy."
+            ),
           occurrence: zod
             .object({
               eventId: zod.uuid().describe('Owning event entity.'),
@@ -1409,6 +1686,89 @@ export const mentionPreviewsResponse = zod
     ),
   })
   .describe('Batch calendar mention preview response.');
+
+/**
+ * @summary Return teammates' out-of-office occurrences in the requested viewport.
+ */
+export const listTeamOutOfOfficeQueryLimitMax = 2000;
+
+export const listTeamOutOfOfficeQueryParams = zod.object({
+  start: zod.iso.datetime({}).describe('Inclusive UTC viewport start.'),
+  end: zod.iso.datetime({}).describe('Exclusive UTC viewport end.'),
+  startDate: zod.iso
+    .date()
+    .optional()
+    .describe('Inclusive local date boundary for all-day events.'),
+  endDate: zod.iso
+    .date()
+    .optional()
+    .describe('Exclusive local date boundary for all-day events.'),
+  limit: zod
+    .number()
+    .min(1)
+    .max(listTeamOutOfOfficeQueryLimitMax)
+    .optional()
+    .describe('Maximum number of occurrences, from 1 through 2,000.'),
+});
+
+export const listTeamOutOfOfficeResponse = zod
+  .object({
+    hasMore: zod.boolean(),
+    items: zod.array(
+      zod
+        .object({
+          eventId: zod.uuid().describe("The teammate's calendar event id."),
+          occurrenceKey: zod
+            .string()
+            .describe('Stable occurrence key within the event.'),
+          ownerId: zod
+            .string()
+            .describe('Macro user id of the teammate who is out.'),
+          time: zod
+            .union([
+              zod
+                .object({
+                  endsAt: zod.iso
+                    .datetime({})
+                    .describe('Exclusive end instant.'),
+                  kind: zod.enum(['timed']),
+                  startsAt: zod.iso
+                    .datetime({})
+                    .describe('Inclusive start instant.'),
+                  timeZone: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'Original IANA time-zone identifier, when supplied.'
+                    ),
+                })
+                .describe('An event with absolute instants.'),
+              zod
+                .object({
+                  endDate: zod.iso.date().describe('Exclusive local end date.'),
+                  kind: zod.enum(['allDay']),
+                  startDate: zod.iso
+                    .date()
+                    .describe('Inclusive local start date.'),
+                })
+                .describe(
+                  "An all-day event using RFC 5545's exclusive end date."
+                ),
+            ])
+            .describe(
+              'The mutually exclusive time shape of a calendar event.\n\nFields are renamed per variant rather than with `rename_all_fields`\nbecause utoipa only honors variant-level serde renames when it\nderives the OpenAPI schema.'
+            ),
+          title: zod
+            .string()
+            .nullish()
+            .describe(
+              "Event title, absent when the event's visibility withholds details."
+            ),
+        })
+        .describe("One teammate's out-of-office occurrence.")
+    ),
+  })
+  .describe('Team out-of-office viewport response.');
 
 /**
  * Lists all active calls in channels the caller is an active member of,
@@ -1604,7 +1964,9 @@ export const getCallRecordResponse = zod
     roomName: zod.string().describe('The RTC room name.'),
     shareWithTeam: zod
       .boolean()
-      .describe("Whether the call is shared with the creator's team."),
+      .describe(
+        "Whether the call is shared with the creator's team. While the call is\nlive this is the pending toggle applied at archive; afterwards it\nmirrors `team_share_access_level`."
+      ),
     startedAt: zod.iso
       .datetime({})
       .describe(
@@ -1626,6 +1988,14 @@ export const getCallRecordResponse = zod
       .describe(
         'AI-generated summary of the call. Only set on archived `call_records`\nonce summarization has run; active calls always return `None`.'
       ),
+    teamShareAccessLevel: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['view', 'comment', 'edit', 'owner'])
+          .describe('Ordered from least to most access top -> bottom'),
+      ])
+      .optional(),
     transcript: zod
       .array(
         zod
@@ -1680,8 +2050,11 @@ export const deleteCallRecordParams = zod.object({
 });
 
 /**
- * Edits a call record — currently supports updating the record's share
-permissions. Access is validated via channel membership
+ * Edits a call record: link/channel share permissions, display name, and
+team sharing. Edit access (channel membership) is required for the request.
+`sharePermission.teamShareAccessLevel` only accepts `view` or `null`; while
+the call is live it sets the pending share-with-team toggle, and once the
+call is archived it is additionally authorized against the call's creator.
  * @summary Handler for `PATCH /call/record/{call_id}`.
  */
 export const editCallRecordParams = zod.object({
@@ -1739,6 +2112,14 @@ export const editCallRecordBody = zod
                 .describe('Ordered from least to most access top -> bottom'),
             ])
             .optional(),
+          teamShareAccessLevel: zod
+            .union([
+              zod.null(),
+              zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+            ])
+            .optional(),
         }),
       ])
       .optional(),
@@ -1746,14 +2127,16 @@ export const editCallRecordBody = zod
       .boolean()
       .nullish()
       .describe(
-        "If `Some(true)`, grant the creator's team View access on the call.\nIf `Some(false)`, revoke the creator's team's access. `None` is a no-op.\nThe team is resolved from the call's `created_by`, not the acting user."
+        'Deprecated alias for `sharePermission.teamShareAccessLevel`:\n`Some(true)` behaves like `\"view\"`, `Some(false)` like `null`, and\n`None` is a no-op. Supplying both with disagreeing values is rejected.\nThe team is resolved from the call\'s `created_by`, not the acting user.'
       ),
   })
-  .describe('Edit call request');
+  .describe('Edit call request, as supplied by inbound callers.');
 
 /**
- * Toggles the `share_with_team` flag on the active call. Returns the new
-value as the JSON body.
+ * Flips the live call's share-with-team toggle and returns the new value as
+the JSON body. The toggle is applied as canonical team sharing (View for
+the creator's team) when the call is archived; archived calls answer 409
+and are edited through `PATCH /call/record/{call_id}` instead.
  * @summary Handler for `POST /call/record/{call_id}/share-with-team/toggle`.
  */
 export const toggleShareWithTeamParams = zod.object({
@@ -2210,6 +2593,12 @@ export const getBatchChannelPreviewResponse = zod
                 channel_type: zod
                   .enum(['public', 'private', 'direct_message', 'team'])
                   .describe('Type of channel.'),
+                profile_picture_id: zod
+                  .uuid()
+                  .nullish()
+                  .describe(
+                    "Static image file used as the channel's profile picture, when accessible."
+                  ),
               })
               .describe('Preview payload returned for accessible channels.')
               .and(
@@ -2653,10 +3042,10 @@ export const postMessageBody = zod
       .array(
         zod
           .object({
-            entity_id: zod.string().describe('Mentioned entity id.'),
+            entity_id: zod.string().describe('Mentioned entity identifier.'),
             entity_type: zod.string().describe('Mentioned entity type.'),
           })
-          .describe('Simple entity mention attached to a message.')
+          .describe('A mention tracked in a message body.')
       )
       .describe('Message mentions.'),
     nonce: zod.string().nullish().describe('Optional optimistic-update nonce.'),
@@ -2721,10 +3110,10 @@ export const patchMessageBody = zod
       .array(
         zod
           .object({
-            entity_id: zod.string().describe('Mentioned entity id.'),
+            entity_id: zod.string().describe('Mentioned entity identifier.'),
             entity_type: zod.string().describe('Mentioned entity type.'),
           })
-          .describe('Simple entity mention attached to a message.')
+          .describe('A mention tracked in a message body.')
       )
       .nullish()
       .describe('Optional replacement mentions.'),
@@ -3003,6 +3392,12 @@ export const postChannelMessagesBody = zod
       .describe(
         'When set, only return top-level messages created at or after this timestamp.'
       ),
+    created_after_exclusive: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'When set, only return top-level messages created strictly after this timestamp.'
+      ),
     created_before: zod.iso
       .datetime({})
       .nullish()
@@ -3015,25 +3410,248 @@ export const postChannelMessagesBody = zod
       .describe('When non-empty, only return messages with these IDs.'),
     notification_filters: zod
       .object({
-        done: zod
-          .boolean()
-          .nullish()
+        states: zod
+          .array(
+            zod
+              .enum(['unseen', 'seen', 'done'])
+              .describe(
+                "The mutually exclusive lifecycle states of a user's notification."
+              )
+          )
+          .optional()
           .describe(
-            'Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications.'
-          ),
-        seen: zod
-          .boolean()
-          .nullish()
-          .describe(
-            'Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications.'
+            'Include entities with a non-deleted notification in any of these exact states.\nEmpty means no notification restriction. Active means `[unseen, seen]`.'
           ),
       })
       .optional()
-      .describe('Notification state filters for channel message queries.'),
+      .describe('Notification-level filters that apply to an entity type.'),
   })
   .describe('Filters for channel message queries.');
 
 export const postChannelMessagesResponse = zod
+  .object({
+    items: zod
+      .array(
+        zod
+          .object({
+            attachments: zod
+              .array(
+                zod
+                  .object({
+                    created_at: zod.iso
+                      .datetime({})
+                      .describe('When the attachment was created.'),
+                    entity_id: zod.string().describe('Entity id.'),
+                    entity_type: zod.string().describe('Type of entity.'),
+                    height: zod
+                      .number()
+                      .nullish()
+                      .describe('Height (for images).'),
+                    id: zod.uuid().describe('Attachment id.'),
+                    width: zod
+                      .number()
+                      .nullish()
+                      .describe('Width (for images).'),
+                  })
+                  .describe('An attachment on a message.')
+              )
+              .describe('Attachments on this message.'),
+            channel_id: zod.uuid().describe('Channel id.'),
+            content: zod.string().describe('Message content.'),
+            created_at: zod.iso
+              .datetime({})
+              .describe('When the message was created.'),
+            deleted_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('When the message was soft-deleted.'),
+            edited_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('When the message was edited.'),
+            id: zod.uuid().describe('Message id.'),
+            reactions: zod
+              .array(
+                zod
+                  .object({
+                    emoji: zod.string().describe('The emoji string.'),
+                    users: zod
+                      .array(zod.string())
+                      .describe('User ids who added this reaction.'),
+                  })
+                  .describe('A reaction with emoji and user list.')
+              )
+              .describe('Reactions on this message.'),
+            sender: zod
+              .object({
+                avatar_url: zod
+                  .string()
+                  .nullish()
+                  .describe('Avatar URL for bot senders.'),
+                id: zod
+                  .string()
+                  .describe('Sender id without the storage namespace prefix.'),
+                name: zod
+                  .string()
+                  .nullish()
+                  .describe('Display name for bot senders.'),
+                triggered_by: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'For an agent (bot) message, the id of the user who triggered it.'
+                  ),
+                type: zod.enum(['user', 'bot']).describe('Public sender type.'),
+              })
+              .describe('Public sender identity for channel messages.'),
+            sender_id: zod.string().describe('Sender user id.'),
+            thread: zod
+              .object({
+                latest_reply_at: zod.iso
+                  .datetime({})
+                  .nullish()
+                  .describe('Timestamp of the latest reply.'),
+                preview: zod
+                  .array(
+                    zod
+                      .object({
+                        attachments: zod
+                          .array(
+                            zod
+                              .object({
+                                created_at: zod.iso
+                                  .datetime({})
+                                  .describe('When the attachment was created.'),
+                                entity_id: zod.string().describe('Entity id.'),
+                                entity_type: zod
+                                  .string()
+                                  .describe('Type of entity.'),
+                                height: zod
+                                  .number()
+                                  .nullish()
+                                  .describe('Height (for images).'),
+                                id: zod.uuid().describe('Attachment id.'),
+                                width: zod
+                                  .number()
+                                  .nullish()
+                                  .describe('Width (for images).'),
+                              })
+                              .describe('An attachment on a message.')
+                          )
+                          .describe('Attachments on this reply.'),
+                        content: zod.string().describe('Reply content.'),
+                        created_at: zod.iso
+                          .datetime({})
+                          .describe('When the reply was created.'),
+                        edited_at: zod.iso
+                          .datetime({})
+                          .nullish()
+                          .describe('When the reply was edited.'),
+                        id: zod.uuid().describe('Reply id.'),
+                        reactions: zod
+                          .array(
+                            zod
+                              .object({
+                                emoji: zod
+                                  .string()
+                                  .describe('The emoji string.'),
+                                users: zod
+                                  .array(zod.string())
+                                  .describe(
+                                    'User ids who added this reaction.'
+                                  ),
+                              })
+                              .describe('A reaction with emoji and user list.')
+                          )
+                          .describe('Reactions on this reply.'),
+                        sender: zod
+                          .object({
+                            avatar_url: zod
+                              .string()
+                              .nullish()
+                              .describe('Avatar URL for bot senders.'),
+                            id: zod
+                              .string()
+                              .describe(
+                                'Sender id without the storage namespace prefix.'
+                              ),
+                            name: zod
+                              .string()
+                              .nullish()
+                              .describe('Display name for bot senders.'),
+                            triggered_by: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'For an agent (bot) message, the id of the user who triggered it.'
+                              ),
+                            type: zod
+                              .enum(['user', 'bot'])
+                              .describe('Public sender type.'),
+                          })
+                          .describe(
+                            'Public sender identity for channel messages.'
+                          ),
+                        sender_id: zod.string().describe('Sender user id.'),
+                        updated_at: zod.iso
+                          .datetime({})
+                          .describe('When the reply was last updated.'),
+                      })
+                      .describe('A thread reply shown in preview.')
+                  )
+                  .describe('Last N replies for thread preview.'),
+                reply_count: zod.number().describe('Total reply count.'),
+              })
+              .describe('Thread metadata and preview replies.'),
+            updated_at: zod.iso
+              .datetime({})
+              .describe('When the message was last updated.'),
+          })
+          .describe('A top-level channel message with thread info.')
+      )
+      .describe('Messages on this page.'),
+    next_cursor: zod
+      .string()
+      .nullish()
+      .describe('Cursor for the next page, null if no more pages.'),
+    previous_cursor: zod
+      .string()
+      .nullish()
+      .describe('Cursor for the previous page, null if no newer page exists.'),
+  })
+  .describe('Paginated response of channel messages.');
+
+/**
+ * @summary Handler for `GET /channels/{channel_id}/messages/catch-up`.
+ */
+export const getChannelMessagesCatchUpParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const getChannelMessagesCatchUpQueryLimitMin = 0;
+
+export const getChannelMessagesCatchUpQueryParams = zod.object({
+  after: zod
+    .string()
+    .describe(
+      'Exclusive RFC3339 lower bound. Messages at this instant are omitted.'
+    ),
+  limit: zod
+    .number()
+    .min(getChannelMessagesCatchUpQueryLimitMin)
+    .optional()
+    .describe('Page size (1-100, default 50)'),
+  cursor: zod
+    .string()
+    .optional()
+    .describe('Base64 encoded cursor value for older messages'),
+  previous_cursor: zod
+    .string()
+    .optional()
+    .describe('Base64 encoded cursor value for newer messages'),
+});
+
+export const getChannelMessagesCatchUpResponse = zod
   .object({
     items: zod
       .array(
@@ -3452,6 +4070,26 @@ export const removeParticipantsBody = zod
   .describe('Request to remove participants.');
 
 /**
+ * @summary Set a channel or group chat profile picture. Requires channel admin or owner access.
+ */
+export const setChannelPictureParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const setChannelPictureBody = zod
+  .object({
+    profile_picture_id: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Static image file id; null restores the default channel icon.'
+      ),
+  })
+  .describe(
+    "Replace a channel's picture, or remove it by sending a null file id."
+  );
+
+/**
  * @summary Handler for `POST /channels/{channel_id}/reaction`.
  */
 export const postReactionParams = zod.object({
@@ -3544,6 +4182,8 @@ export const getCollabSurfaceResponse = zod
         'reminder',
         'skill',
         'agent_session',
+        'scheduled_action',
+        'initiative',
       ])
       .describe('The type of an entity in Macro')
       .describe('Type of the parent entity.'),
@@ -3594,6 +4234,8 @@ export const ensureCollabSurfaceBody = zod
         'reminder',
         'skill',
         'agent_session',
+        'scheduled_action',
+        'initiative',
       ])
       .describe('The type of an entity in Macro')
       .describe('Type of the parent entity access derives from.'),
@@ -3625,6 +4267,8 @@ export const ensureCollabSurfaceResponse = zod
         'reminder',
         'skill',
         'agent_session',
+        'scheduled_action',
+        'initiative',
       ])
       .describe('The type of an entity in Macro')
       .describe('Type of the parent entity.'),
@@ -4657,6 +5301,11 @@ export const getCrmTeamSettingsResponse = zod
       .describe(
         'Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
       ),
+    legacy_stage_ids: zod
+      .record(zod.string(), zod.uuid())
+      .describe(
+        'System stage option id to team stage option id for seeded stages.'
+      ),
     move_closed_deals_role: zod
       .enum(['admin', 'owner'])
       .describe(
@@ -4757,6 +5406,11 @@ export const putCrmTeamSettingsResponse = zod
       .describe(
         'Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
       ),
+    legacy_stage_ids: zod
+      .record(zod.string(), zod.uuid())
+      .describe(
+        'System stage option id to team stage option id for seeded stages.'
+      ),
     move_closed_deals_role: zod
       .enum(['admin', 'owner'])
       .describe(
@@ -4771,6 +5425,53 @@ export const putCrmTeamSettingsResponse = zod
   .describe(
     "The team's CRM configuration (everything on `team_crm_settings`\nexcept the `crm_enabled` killswitch, which is managed via\n`PATCH \/team\/crm` on the auth service)."
   );
+
+/**
+ * @summary Replace the team's deal stages; requires `edit_stages_role` (403 otherwise).
+ */
+export const putCrmTeamStagesBody = zod
+  .object({
+    stages: zod
+      .array(
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .nullish()
+              .describe('Existing stage to keep; omit to add one.'),
+            label: zod
+              .string()
+              .describe(
+                'Label after the update; non-blank and unique within the set.'
+              ),
+          })
+          .describe('One stage in a `PUT \/crm\/stages` body.')
+      )
+      .describe('Stages first to last.'),
+  })
+  .describe(
+    'Request body for `PUT \/crm\/stages`: the whole stage set in order.'
+  );
+
+export const putCrmTeamStagesResponse = zod
+  .object({
+    definition_id: zod.uuid().describe('Team-scoped stage definition id.'),
+    stages: zod
+      .array(
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe(
+                'Property option id companies carry as their stage value.'
+              ),
+            label: zod.string().describe('Label.'),
+          })
+          .describe("One stage of the team's custom pipeline.")
+      )
+      .describe('Stages in pipeline order.'),
+  })
+  .describe("The team's custom stage set.");
 
 /**
  * @summary Gets the users documents to populate their recent document list
@@ -4872,9 +5573,9 @@ export const getUserDocumentsHandlerResponse = zod.object({
               .union([
                 zod.null(),
                 zod
-                  .enum(['task', 'snippet', 'skill'])
+                  .enum(['task', 'snippet', 'skill', 'initiative_description'])
                   .describe(
-                    'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
+                    'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.\n\nWire, database, and `Display` spellings are all `snake_case` so a\nmulti-word variant serializes identically in every system.'
                   ),
               ])
               .optional(),
@@ -5041,9 +5742,9 @@ export const createDocumentResponse = zod.object({
             .union([
               zod.null(),
               zod
-                .enum(['task', 'snippet', 'skill'])
+                .enum(['task', 'snippet', 'skill', 'initiative_description'])
                 .describe(
-                  'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
+                  'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.\n\nWire, database, and `Display` spellings are all `snake_case` so a\nmulti-word variant serializes identically in every system.'
                 ),
             ])
             .optional(),
@@ -5217,9 +5918,9 @@ export const createMarkdownHandlerResponse = zod
         .union([
           zod.null(),
           zod
-            .enum(['task', 'snippet', 'skill'])
+            .enum(['task', 'snippet', 'skill', 'initiative_description'])
             .describe(
-              'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
+              'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.\n\nWire, database, and `Display` spellings are all `snake_case` so a\nmulti-word variant serializes identically in every system.'
             ),
         ])
         .optional(),
@@ -5529,9 +6230,9 @@ export const createTaskHandlerResponse = zod
         .union([
           zod.null(),
           zod
-            .enum(['task', 'snippet', 'skill'])
+            .enum(['task', 'snippet', 'skill', 'initiative_description'])
             .describe(
-              'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
+              'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.\n\nWire, database, and `Display` spellings are all `snake_case` so a\nmulti-word variant serializes identically in every system.'
             ),
         ])
         .optional(),
@@ -5729,6 +6430,11 @@ export const getBatchPreviewHandlerResponse = zod.object({
                     .describe(
                       'A skill document — markdown instructions for AI'
                     ),
+                  zod
+                    .object({
+                      type: zod.enum(['initiative_description']),
+                    })
+                    .describe('The description document of an initiative'),
                 ])
                 .describe(
                   'The sub type of a document preview with associated properties.\nTask-related properties are encoded within the variant to ensure valid states.'
@@ -5859,6 +6565,11 @@ export const getDocumentByTeamSlugResponse = zod.object({
                         .describe(
                           'A skill document — markdown instructions for AI'
                         ),
+                      zod
+                        .object({
+                          type: zod.enum(['initiative_description']),
+                        })
+                        .describe('The description document of an initiative'),
                     ])
                     .describe(
                       'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
@@ -6057,9 +6768,9 @@ export const getDocumentResponse = zod.object({
             .union([
               zod.null(),
               zod
-                .enum(['task', 'snippet', 'skill'])
+                .enum(['task', 'snippet', 'skill', 'initiative_description'])
                 .describe(
-                  'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
+                  'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.\n\nWire, database, and `Display` spellings are all `snake_case` so a\nmulti-word variant serializes identically in every system.'
                 ),
             ])
             .optional(),
@@ -6229,9 +6940,9 @@ export const saveDocumentHandlerResponse = zod.object({
         .union([
           zod.null(),
           zod
-            .enum(['task', 'snippet', 'skill'])
+            .enum(['task', 'snippet', 'skill', 'initiative_description'])
             .describe(
-              'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
+              'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.\n\nWire, database, and `Display` spellings are all `snake_case` so a\nmulti-word variant serializes identically in every system.'
             ),
         ])
         .optional(),
@@ -6287,6 +6998,7 @@ export const editDocumentBody = zod
                     'docx',
                     'pdf',
                     'md',
+                    'spreadsheet',
                     'canvas',
                     'coffee',
                     'cson',
@@ -6766,6 +7478,14 @@ export const editDocumentBody = zod
                 .describe('Ordered from least to most access top -> bottom'),
             ])
             .optional(),
+          teamShareAccessLevel: zod
+            .union([
+              zod.null(),
+              zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+            ])
+            .optional(),
         }),
       ])
       .optional(),
@@ -6908,9 +7628,9 @@ export const copyDocumentResponse = zod
               .union([
                 zod.null(),
                 zod
-                  .enum(['task', 'snippet', 'skill'])
+                  .enum(['task', 'snippet', 'skill', 'initiative_description'])
                   .describe(
-                    'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
+                    'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.\n\nWire, database, and `Display` spellings are all `snake_case` so a\nmulti-word variant serializes identically in every system.'
                   ),
               ])
               .optional(),
@@ -7341,9 +8061,9 @@ export const getDocumentLocationV3Response = zod
               .union([
                 zod.null(),
                 zod
-                  .enum(['task', 'snippet', 'skill'])
+                  .enum(['task', 'snippet', 'skill', 'initiative_description'])
                   .describe(
-                    'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
+                    'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.\n\nWire, database, and `Display` spellings are all `snake_case` so a\nmulti-word variant serializes identically in every system.'
                   ),
               ])
               .optional(),
@@ -7397,9 +8117,9 @@ export const getDocumentLocationV3Response = zod
               .union([
                 zod.null(),
                 zod
-                  .enum(['task', 'snippet', 'skill'])
+                  .enum(['task', 'snippet', 'skill', 'initiative_description'])
                   .describe(
-                    'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
+                    'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.\n\nWire, database, and `Display` spellings are all `snake_case` so a\nmulti-word variant serializes identically in every system.'
                   ),
               ])
               .optional(),
@@ -7464,9 +8184,9 @@ export const getDocumentLocationV3Response = zod
               .union([
                 zod.null(),
                 zod
-                  .enum(['task', 'snippet', 'skill'])
+                  .enum(['task', 'snippet', 'skill', 'initiative_description'])
                   .describe(
-                    'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
+                    'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.\n\nWire, database, and `Display` spellings are all `snake_case` so a\nmulti-word variant serializes identically in every system.'
                   ),
               ])
               .optional(),
@@ -7633,9 +8353,9 @@ export const simpleSaveResponse = zod.object({
         .union([
           zod.null(),
           zod
-            .enum(['task', 'snippet', 'skill'])
+            .enum(['task', 'snippet', 'skill', 'initiative_description'])
             .describe(
-              'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
+              'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.\n\nWire, database, and `Display` spellings are all `snake_case` so a\nmulti-word variant serializes identically in every system.'
             ),
         ])
         .optional(),
@@ -7668,7 +8388,7 @@ export const getDocumentTeamShareResponse = zod
     sharedWithTeam: zod
       .boolean()
       .describe(
-        "Whether the document is currently shared with the owner's team."
+        'Whether explicit team sharing is enabled; inherited team access does not count.'
       ),
     teamId: zod
       .uuid()
@@ -7682,9 +8402,10 @@ export const getDocumentTeamShareResponse = zod
   );
 
 /**
- * @summary Sets the team-share state of a document. Sharing grants the document
-owner's team Edit access; unsharing removes the team's access. Requires
-Edit access on the document.
+ * @summary Sets explicit team sharing. Requires a verified acting identity matching
+the persisted document owner, not merely effective Edit or Owner access.
+Initial enable defaults to Edit; repeated enable preserves the chosen level.
+Clear removes only the managed direct grant, not inherited team access.
  */
 export const setDocumentTeamShareParams = zod.object({
   document_id: zod.string().describe('Document ID'),
@@ -7703,7 +8424,7 @@ export const setDocumentTeamShareResponse = zod
     sharedWithTeam: zod
       .boolean()
       .describe(
-        "Whether the document is currently shared with the owner's team."
+        'Whether explicit team sharing is enabled; inherited team access does not count.'
       ),
     teamId: zod
       .uuid()
@@ -7817,9 +8538,9 @@ export const getDocumentVersionResponse = zod.object({
         .union([
           zod.null(),
           zod
-            .enum(['task', 'snippet', 'skill'])
+            .enum(['task', 'snippet', 'skill', 'initiative_description'])
             .describe(
-              'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
+              'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.\n\nWire, database, and `Display` spellings are all `snake_case` so a\nmulti-word variant serializes identically in every system.'
             ),
         ])
         .optional(),
@@ -7908,6 +8629,41 @@ export const getEntityPermissionResponse = zod
 /**
  * @summary List the caller's favorites.
  */
+export const listFavoritesQueryParams = zod.object({
+  entityType: zod
+    .array(
+      zod
+        .enum([
+          'user',
+          'chat',
+          'channel',
+          'channel_message',
+          'document',
+          'project',
+          'email_thread',
+          'calendar_event',
+          'team',
+          'call',
+          'foreign_entity',
+          'static_file',
+          'crm_company',
+          'crm_contact',
+          'reminder',
+          'skill',
+          'agent_session',
+          'scheduled_action',
+          'initiative',
+        ])
+        .describe('The type of an entity in Macro')
+    )
+    .optional()
+    .describe('Restrict to favorites whose entity is one of these types.'),
+  entityId: zod
+    .array(zod.string())
+    .optional()
+    .describe('Restrict to favorites whose entity is one of these ids.'),
+});
+
 export const listFavoritesResponse = zod
   .object({
     favorites: zod
@@ -7955,6 +8711,8 @@ export const listFavoritesResponse = zod
                 'reminder',
                 'skill',
                 'agent_session',
+                'scheduled_action',
+                'initiative',
               ])
               .describe('The type of an entity in Macro')
               .describe('The type of the favorited entity.'),
@@ -8001,6 +8759,8 @@ export const addFavoriteBody = zod
         'reminder',
         'skill',
         'agent_session',
+        'scheduled_action',
+        'initiative',
       ])
       .describe('The type of an entity in Macro')
       .describe('The type of the entity to favorite.'),
@@ -8048,6 +8808,8 @@ export const addFavoriteResponse = zod
         'reminder',
         'skill',
         'agent_session',
+        'scheduled_action',
+        'initiative',
       ])
       .describe('The type of an entity in Macro')
       .describe('The type of the favorited entity.'),
@@ -8092,6 +8854,8 @@ export const reorderFavoritesBody = zod
                 'reminder',
                 'skill',
                 'agent_session',
+                'scheduled_action',
+                'initiative',
               ])
               .describe('The type of an entity in Macro')
               .describe('The type of the favorited entity.'),
@@ -8129,6 +8893,8 @@ export const removeFavoriteByEntityParams = zod.object({
       'reminder',
       'skill',
       'agent_session',
+      'scheduled_action',
+      'initiative',
     ])
     .describe('The type of the favorited entity.'),
   entity_id: zod.string().describe('The id of the favorited entity.'),
@@ -8137,6 +8903,59 @@ export const removeFavoriteByEntityParams = zod.object({
 export const removeFavoriteByEntityResponseDefault = null;
 
 export const removeFavoriteByEntityResponse = zod.unknown();
+
+/**
+ * `foreign_entity_id` is a wildcard path segment: sources store slashes inside
+the identifier, for example `owner/repo/pull/12`.
+
+Authorization matches the by-id route. Internal service callers see every
+record; an authenticated user sees a record only when they have view access
+to it, and records they cannot view are reported as `404` so the route never
+reveals that a mapping exists. Bot tokens are not accepted here — they use
+the by-id route, which mints a bot-scoped receipt.
+ * @summary Get a visible foreign entity by the identifier its source system assigned.
+ */
+export const getForeignEntityBySourceParams = zod.object({
+  source: zod
+    .string()
+    .describe('Foreign entity source, e.g. github_pull_request'),
+  foreign_entity_id: zod
+    .string()
+    .describe('Identifier assigned by the source system; may contain slashes'),
+});
+
+export const getForeignEntityBySourceResponse = zod
+  .object({
+    createdAt: zod.iso
+      .datetime({})
+      .describe('Timestamp when the record was created.'),
+    foreignEntityId: zod
+      .string()
+      .describe('Identifier assigned by the external system.'),
+    foreignEntitySource: zod
+      .string()
+      .describe('Source system that owns the external identifier.'),
+    id: zod
+      .uuid()
+      .describe('Internal primary key for this foreign entity record.'),
+    metadata: zod
+      .unknown()
+      .describe('Arbitrary metadata stored with the mapping.'),
+    storedForAuthEntity: zod
+      .string()
+      .describe(
+        'Internal auth entity namespace this foreign entity is stored for.'
+      ),
+    storedForId: zod
+      .string()
+      .describe(
+        'Internal entity identifier this foreign entity is stored for.'
+      ),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('Timestamp when the record was last updated.'),
+  })
+  .describe('A persisted mapping to an entity owned by an external system.');
 
 /**
  * @summary Get a visible foreign entity by its internal ID.
@@ -8186,6 +9005,12 @@ it, and creation is throttled in the domain service.
  */
 export const createHarnessPairingBody = zod
   .object({
+    allow_permission_bypass: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Daemon operator consent ceiling. Omitted by older clients; web approval decides.'
+      ),
     host: zod
       .string()
       .nullish()
@@ -8228,6 +9053,12 @@ export const getHarnessPairingResponse = zod
       .string()
       .nullish()
       .describe('Display-only description of the machine.'),
+    requested_allow_permission_bypass: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Daemon operator consent ceiling; false forbids bypass at approval.'
+      ),
     requested_name: zod
       .string()
       .describe('Harness display name the daemon asked for.'),
@@ -8253,6 +9084,12 @@ export const approveHarnessPairingParams = zod.object({
 
 export const approveHarnessPairingBody = zod
   .object({
+    allow_permission_bypass: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether agents may bypass ACP permission requests on this harness.'
+      ),
     name: zod
       .string()
       .nullish()
@@ -8268,6 +9105,12 @@ export const approveHarnessPairingBody = zod
 
 export const approveHarnessPairingResponse = zod
   .object({
+    allow_permission_bypass: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether agents may bypass ACP permission requests on this harness.'
+      ),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
@@ -8328,6 +9171,12 @@ export const claimHarnessPairingResponse = zod
   .object({
     harness: zod
       .object({
+        allow_permission_bypass: zod
+          .boolean()
+          .optional()
+          .describe(
+            'Whether agents may bypass ACP permission requests on this harness.'
+          ),
         connected: zod
           .boolean()
           .describe('Whether the daemon currently holds a runtime connection.'),
@@ -8376,6 +9225,12 @@ export const claimHarnessPairingResponse = zod
  */
 export const listHarnessesResponseItem = zod
   .object({
+    allow_permission_bypass: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether agents may bypass ACP permission requests on this harness.'
+      ),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
@@ -8418,6 +9273,12 @@ export const listHarnessesResponse = zod.array(listHarnessesResponseItem);
  */
 export const getSelfHarnessResponse = zod
   .object({
+    allow_permission_bypass: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether agents may bypass ACP permission requests on this harness.'
+      ),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
@@ -8579,6 +9440,11 @@ export const getHistoryHandlerResponse = zod.object({
                     .describe(
                       'A skill document — markdown instructions for AI'
                     ),
+                  zod
+                    .object({
+                      type: zod.enum(['initiative_description']),
+                    })
+                    .describe('The description document of an initiative'),
                 ])
                 .describe(
                   'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
@@ -8676,6 +9542,427 @@ export const deleteHistoryHandlerResponse = zod.object({
 });
 
 /**
+ * @summary List initiatives the caller can view.
+ */
+export const listInitiativesResponse = zod
+  .object({
+    initiatives: zod
+      .array(
+        zod
+          .object({
+            descriptionDocumentId: zod
+              .uuid()
+              .describe(
+                "Id of the markdown document that holds an initiative's description."
+              ),
+            id: zod
+              .uuid()
+              .describe(
+                'Opaque identifier for an initiative. Minted as UUIDv7 in application code.'
+              ),
+            name: zod.string().describe('Display name.'),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When the initiative was last updated.'),
+          })
+          .describe('List-row view of an initiative.')
+      )
+      .describe('Initiatives the caller can view.'),
+  })
+  .describe('Accessible-initiative list.');
+
+/**
+ * @summary Create an initiative owned by the caller.
+ */
+export const createInitiativeBody = zod
+  .object({
+    description: zod
+      .string()
+      .nullish()
+      .describe(
+        'Initial markdown for the description document. Not stored on the initiative; later\nedits happen in the document editor.'
+      ),
+    memberIds: zod
+      .array(zod.string())
+      .nullish()
+      .describe(
+        'Optional member user ids. Invalid ids fail at the service boundary.'
+      ),
+    name: zod.string().describe('Display name.'),
+    shareWithTeam: zod
+      .boolean()
+      .nullish()
+      .describe("When true, share with the owner's team at create time."),
+  })
+  .describe('Create-initiative HTTP body.');
+
+export const createInitiativeResponse = zod
+  .object({
+    createdAt: zod.iso
+      .datetime({})
+      .describe('When the initiative was created.'),
+    descriptionDocumentId: zod
+      .uuid()
+      .describe(
+        "Id of the markdown document that holds an initiative's description."
+      ),
+    id: zod
+      .uuid()
+      .describe(
+        'Opaque identifier for an initiative. Minted as UUIDv7 in application code.'
+      ),
+    memberIds: zod
+      .array(zod.string())
+      .describe('Member user ids. The owner is never stored here.'),
+    name: zod.string().describe('Display name.'),
+    ownerId: zod.string(),
+    sharePermission: zod.object({
+      channelSharePermissions: zod
+        .array(
+          zod
+            .object({
+              access_level: zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+              channel_id: zod.string().describe('The channel id'),
+            })
+            .describe('The channel share permission')
+        )
+        .nullish()
+        .describe('The channel share permissions for the item'),
+      id: zod.string().describe('The share permission id'),
+      linkShare: zod
+        .union([
+          zod.null(),
+          zod
+            .enum(['PUBLIC', 'TEAM'])
+            .describe('Defines who can access an item through its share link.'),
+        ])
+        .optional(),
+      linkShareAccessLevel: zod
+        .union([
+          zod.null(),
+          zod
+            .enum(['view', 'comment', 'edit', 'owner'])
+            .describe('Ordered from least to most access top -> bottom'),
+        ])
+        .optional(),
+      owner: zod.string().describe('The owner of the item'),
+      teamShareAccessLevel: zod
+        .union([
+          zod.null(),
+          zod
+            .enum(['view', 'comment', 'edit', 'owner'])
+            .describe('Ordered from least to most access top -> bottom'),
+        ])
+        .optional(),
+    }),
+    taskIds: zod
+      .array(zod.string())
+      .describe('Task ids currently assigned to the initiative.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the initiative was last updated.'),
+    userAccessLevel: zod
+      .enum(['view', 'comment', 'edit', 'owner'])
+      .describe('Ordered from least to most access top -> bottom'),
+  })
+  .describe(
+    'Full initiative returned to a caller, including members, tasks, and share state.'
+  );
+
+/**
+ * @summary Fetch one initiative the caller can view.
+ */
+export const getInitiativeParams = zod.object({
+  initiative_id: zod.string().describe('Initiative identifier.'),
+});
+
+export const getInitiativeResponse = zod
+  .object({
+    createdAt: zod.iso
+      .datetime({})
+      .describe('When the initiative was created.'),
+    descriptionDocumentId: zod
+      .uuid()
+      .describe(
+        "Id of the markdown document that holds an initiative's description."
+      ),
+    id: zod
+      .uuid()
+      .describe(
+        'Opaque identifier for an initiative. Minted as UUIDv7 in application code.'
+      ),
+    memberIds: zod
+      .array(zod.string())
+      .describe('Member user ids. The owner is never stored here.'),
+    name: zod.string().describe('Display name.'),
+    ownerId: zod.string(),
+    sharePermission: zod.object({
+      channelSharePermissions: zod
+        .array(
+          zod
+            .object({
+              access_level: zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+              channel_id: zod.string().describe('The channel id'),
+            })
+            .describe('The channel share permission')
+        )
+        .nullish()
+        .describe('The channel share permissions for the item'),
+      id: zod.string().describe('The share permission id'),
+      linkShare: zod
+        .union([
+          zod.null(),
+          zod
+            .enum(['PUBLIC', 'TEAM'])
+            .describe('Defines who can access an item through its share link.'),
+        ])
+        .optional(),
+      linkShareAccessLevel: zod
+        .union([
+          zod.null(),
+          zod
+            .enum(['view', 'comment', 'edit', 'owner'])
+            .describe('Ordered from least to most access top -> bottom'),
+        ])
+        .optional(),
+      owner: zod.string().describe('The owner of the item'),
+      teamShareAccessLevel: zod
+        .union([
+          zod.null(),
+          zod
+            .enum(['view', 'comment', 'edit', 'owner'])
+            .describe('Ordered from least to most access top -> bottom'),
+        ])
+        .optional(),
+    }),
+    taskIds: zod
+      .array(zod.string())
+      .describe('Task ids currently assigned to the initiative.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the initiative was last updated.'),
+    userAccessLevel: zod
+      .enum(['view', 'comment', 'edit', 'owner'])
+      .describe('Ordered from least to most access top -> bottom'),
+  })
+  .describe(
+    'Full initiative returned to a caller, including members, tasks, and share state.'
+  );
+
+/**
+ * @summary Delete the initiative the caller owns.
+ */
+export const deleteInitiativeParams = zod.object({
+  initiative_id: zod.string().describe('Initiative identifier.'),
+});
+
+export const deleteInitiativeResponse = zod.object({
+  success: zod.boolean().describe('Indicates if the request was successful'),
+});
+
+/**
+ * @summary Update fields the caller can edit.
+ */
+export const updateInitiativeParams = zod.object({
+  initiative_id: zod.string().describe('Initiative identifier.'),
+});
+
+export const updateInitiativeBody = zod
+  .object({
+    memberIds: zod
+      .array(zod.string())
+      .nullish()
+      .describe('Full replacement member list when present.'),
+    name: zod.string().nullish().describe('Replacement name.'),
+    sharePermission: zod
+      .union([
+        zod.null(),
+        zod.object({
+          channelSharePermissions: zod
+            .array(
+              zod.object({
+                accessLevel: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .enum(['view', 'comment', 'edit', 'owner'])
+                      .describe(
+                        'Ordered from least to most access top -> bottom'
+                      ),
+                  ])
+                  .optional(),
+                channelId: zod.string().describe('The channel id'),
+                operation: zod.enum(['add', 'remove', 'replace']),
+              })
+            )
+            .nullish()
+            .describe(
+              'Any channel share permissions to be created\/updated\/removed'
+            ),
+          linkShare: zod
+            .union([
+              zod.null(),
+              zod
+                .enum(['PUBLIC', 'TEAM'])
+                .describe(
+                  'Defines who can access an item through its share link.'
+                ),
+            ])
+            .optional(),
+          linkShareAccessLevel: zod
+            .union([
+              zod.null(),
+              zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+            ])
+            .optional(),
+          teamShareAccessLevel: zod
+            .union([
+              zod.null(),
+              zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+            ])
+            .optional(),
+        }),
+      ])
+      .optional(),
+  })
+  .describe(
+    'Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`\npresent is a full replace. The description is edited in its document, not here.'
+  );
+
+export const updateInitiativeResponse = zod
+  .object({
+    createdAt: zod.iso
+      .datetime({})
+      .describe('When the initiative was created.'),
+    descriptionDocumentId: zod
+      .uuid()
+      .describe(
+        "Id of the markdown document that holds an initiative's description."
+      ),
+    id: zod
+      .uuid()
+      .describe(
+        'Opaque identifier for an initiative. Minted as UUIDv7 in application code.'
+      ),
+    memberIds: zod
+      .array(zod.string())
+      .describe('Member user ids. The owner is never stored here.'),
+    name: zod.string().describe('Display name.'),
+    ownerId: zod.string(),
+    sharePermission: zod.object({
+      channelSharePermissions: zod
+        .array(
+          zod
+            .object({
+              access_level: zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+              channel_id: zod.string().describe('The channel id'),
+            })
+            .describe('The channel share permission')
+        )
+        .nullish()
+        .describe('The channel share permissions for the item'),
+      id: zod.string().describe('The share permission id'),
+      linkShare: zod
+        .union([
+          zod.null(),
+          zod
+            .enum(['PUBLIC', 'TEAM'])
+            .describe('Defines who can access an item through its share link.'),
+        ])
+        .optional(),
+      linkShareAccessLevel: zod
+        .union([
+          zod.null(),
+          zod
+            .enum(['view', 'comment', 'edit', 'owner'])
+            .describe('Ordered from least to most access top -> bottom'),
+        ])
+        .optional(),
+      owner: zod.string().describe('The owner of the item'),
+      teamShareAccessLevel: zod
+        .union([
+          zod.null(),
+          zod
+            .enum(['view', 'comment', 'edit', 'owner'])
+            .describe('Ordered from least to most access top -> bottom'),
+        ])
+        .optional(),
+    }),
+    taskIds: zod
+      .array(zod.string())
+      .describe('Task ids currently assigned to the initiative.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the initiative was last updated.'),
+    userAccessLevel: zod
+      .enum(['view', 'comment', 'edit', 'owner'])
+      .describe('Ordered from least to most access top -> bottom'),
+  })
+  .describe(
+    'Full initiative returned to a caller, including members, tasks, and share state.'
+  );
+
+/**
+ * @summary Assign tasks the caller can edit.
+ */
+export const assignInitiativeTasksParams = zod.object({
+  initiative_id: zod.string().describe('Initiative identifier.'),
+});
+
+export const assignInitiativeTasksBody = zod
+  .object({
+    taskIds: zod
+      .array(zod.string())
+      .describe('Task ids to assign, in request order.'),
+  })
+  .describe('Assign-tasks HTTP body.');
+
+export const assignInitiativeTasksResponse = zod
+  .object({
+    results: zod
+      .array(
+        zod
+          .object({
+            status: zod
+              .enum([
+                'assigned',
+                'moved',
+                'notATask',
+                'notFound',
+                'skippedNoPermission',
+              ])
+              .describe('Status written onto one assign result.'),
+            taskId: zod.string().describe('Task id this outcome describes.'),
+          })
+          .describe('Per-task outcome of an assign call.')
+      )
+      .describe('Outcomes in request order after dedupe.'),
+  })
+  .describe('Assign-tasks HTTP response.');
+
+/**
+ * @summary Unassign one task the caller can edit.
+ */
+export const unassignInitiativeTaskParams = zod.object({
+  initiative_id: zod.string().describe('Initiative identifier.'),
+  task_id: zod.string().describe('Task identifier.'),
+});
+
+export const unassignInitiativeTaskResponse = zod.object({
+  success: zod.boolean().describe('Indicates if the request was successful'),
+});
+
+/**
  * @summary Gets the instructions document for the current user
  */
 export const getInstructionsHandlerResponse = zod.object({
@@ -8712,10 +9999,11 @@ export const getItemsSoupQueryParams = zod.object({
       'viewed_updated',
       'frecency',
       'touched_by_me',
+      'notified_at',
     ])
     .optional()
     .describe(
-      'Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me. Defaults to viewed_at.'
+      'Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me, notified_at. Defaults to\nviewed_at.'
     ),
   sort_direction: zod
     .enum(['asc', 'desc'])
@@ -9047,6 +10335,13 @@ export const getItemsSoupResponse = zod
                               .describe(
                                 'A skill document — markdown instructions for AI'
                               ),
+                            zod
+                              .object({
+                                type: zod.enum(['initiative_description']),
+                              })
+                              .describe(
+                                'The description document of an initiative'
+                              ),
                           ])
                           .describe(
                             'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
@@ -9311,6 +10606,12 @@ export const getItemsSoupResponse = zod
                     isPersistent: zod
                       .boolean()
                       .describe('Whether the chat is persistent or not'),
+                    model: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The last model selected for a sent message (`provider\/model` id).'
+                      ),
                     name: zod.string().describe('The name of the chat'),
                     ownerId: zod.string().describe('Who the chat belongs to'),
                     projectId: zod
@@ -9611,6 +10912,11 @@ export const getItemsSoupResponse = zod
                   isRead: zod
                     .boolean()
                     .describe('Whether the thread has been read.'),
+                  isSignal: zod
+                    .boolean()
+                    .describe(
+                      "The denormalized `email_threads.is_signal` importance classification —\nthe same flag the soup Importance filter evaluates, distinct from\n`is_important` (Gmail's IMPORTANT label)."
+                    ),
                   name: zod
                     .string()
                     .nullish()
@@ -11610,6 +12916,8 @@ export const getItemsSoupResponse = zod
                                 'reminder',
                                 'skill',
                                 'agent_session',
+                                'scheduled_action',
+                                'initiative',
                               ])
                               .describe('The type of an entity in Macro')
                               .describe("The referenced entity's type."),
@@ -11676,6 +12984,277 @@ export const getItemsSoupResponse = zod
               tag: zod.enum(['reminder']),
             })
             .describe('Reminder item.'),
+          zod
+            .object({
+              data: zod
+                .object({
+                  properties: zod
+                    .array(
+                      zod
+                        .object({
+                          definition: zod
+                            .object({
+                              created_at: zod.iso.datetime({}),
+                              data_type: zod
+                                .enum([
+                                  'BOOLEAN',
+                                  'DATE',
+                                  'NUMBER',
+                                  'STRING',
+                                  'SELECT_NUMBER',
+                                  'SELECT_STRING',
+                                  'TAG',
+                                  'ENTITY',
+                                  'LINK',
+                                ])
+                                .describe(
+                                  'Data type for property values, determining storage and validation.'
+                                ),
+                              display_name: zod.string(),
+                              id: zod.uuid(),
+                              is_metadata: zod
+                                .boolean()
+                                .describe(
+                                  'Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'
+                                ),
+                              is_multi_select: zod.boolean(),
+                              is_system: zod
+                                .boolean()
+                                .describe(
+                                  'Flag to indicate if this is a system property (stored in DB).'
+                                ),
+                              owner: zod
+                                .union([
+                                  zod
+                                    .object({
+                                      scope: zod.enum(['user']),
+                                      user_id: zod.string(),
+                                    })
+                                    .describe('User-scoped property.'),
+                                  zod
+                                    .object({
+                                      scope: zod.enum(['team']),
+                                      team_id: zod.uuid(),
+                                    })
+                                    .describe('Team-scoped property.'),
+                                  zod
+                                    .object({
+                                      scope: zod.enum(['system']),
+                                    })
+                                    .describe(
+                                      'System-owned property (no user or team owner).'
+                                    ),
+                                ])
+                                .describe(
+                                  'Defines who owns a property - user-scoped, team-scoped, or system.'
+                                ),
+                              specific_entity_type: zod
+                                .union([
+                                  zod.null(),
+                                  zod
+                                    .enum([
+                                      'CALENDAR_EVENT',
+                                      'CALL_RECORD',
+                                      'CHANNEL',
+                                      'CHAT',
+                                      'COMPANY',
+                                      'DOCUMENT',
+                                      'PROJECT',
+                                      'TASK',
+                                      'THREAD',
+                                      'USER',
+                                    ])
+                                    .describe(
+                                      'Type of entity that can be referenced by entity properties.'
+                                    ),
+                                ])
+                                .optional(),
+                              updated_at: zod.iso.datetime({}),
+                            })
+                            .describe(
+                              'Property definition model (service representation).'
+                            ),
+                          id: zod
+                            .uuid()
+                            .describe(
+                              'Globally unique id of the assignment attaching this property to an entity.'
+                            ),
+                          value: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .union([
+                                  zod
+                                    .object({
+                                      type: zod.enum(['Boolean']),
+                                      value: zod
+                                        .boolean()
+                                        .describe(
+                                          'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                        ),
+                                    })
+                                    .describe(
+                                      'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                    ),
+                                  zod
+                                    .object({
+                                      type: zod.enum(['Number']),
+                                      value: zod
+                                        .number()
+                                        .describe(
+                                          'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                        ),
+                                    })
+                                    .describe(
+                                      'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                    ),
+                                  zod
+                                    .object({
+                                      type: zod.enum(['String']),
+                                      value: zod
+                                        .string()
+                                        .describe(
+                                          'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                        ),
+                                    })
+                                    .describe(
+                                      'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                    ),
+                                  zod
+                                    .object({
+                                      type: zod.enum(['Date']),
+                                      value: zod.iso
+                                        .datetime({})
+                                        .describe(
+                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                        ),
+                                    })
+                                    .describe(
+                                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                    ),
+                                  zod
+                                    .object({
+                                      type: zod.enum(['SelectOption']),
+                                      value: zod
+                                        .array(zod.uuid())
+                                        .describe(
+                                          'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                        ),
+                                    })
+                                    .describe(
+                                      'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                    ),
+                                  zod
+                                    .object({
+                                      type: zod.enum(['EntityReference']),
+                                      value: zod
+                                        .array(
+                                          zod
+                                            .object({
+                                              entity_id: zod.string(),
+                                              entity_type: zod
+                                                .enum([
+                                                  'CALENDAR_EVENT',
+                                                  'CALL_RECORD',
+                                                  'CHANNEL',
+                                                  'CHAT',
+                                                  'COMPANY',
+                                                  'DOCUMENT',
+                                                  'PROJECT',
+                                                  'TASK',
+                                                  'THREAD',
+                                                  'USER',
+                                                ])
+                                                .describe(
+                                                  'Type of entity that can be referenced by entity properties.'
+                                                ),
+                                              specific_message_id: zod
+                                                .uuid()
+                                                .nullish()
+                                                .describe(
+                                                  'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Entity reference for entity-type property values.'
+                                            )
+                                        )
+                                        .describe(
+                                          'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                        ),
+                                    })
+                                    .describe(
+                                      'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                    ),
+                                  zod
+                                    .object({
+                                      type: zod.enum(['Link']),
+                                      value: zod
+                                        .array(zod.string())
+                                        .describe(
+                                          'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                        ),
+                                    })
+                                    .describe(
+                                      'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                    ),
+                                ])
+                                .describe(
+                                  'Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to\/from JSONB in the database.'
+                                ),
+                            ])
+                            .optional(),
+                        })
+                        .describe(
+                          'A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.'
+                        )
+                    )
+                    .describe('Properties attached to the entity.'),
+                })
+                .describe(
+                  'Property fields that can be flattened into property-bearing Soup items.'
+                )
+                .and(
+                  zod.object({
+                    botId: zod.uuid().describe('The bot running this session'),
+                    createdAt: zod.iso
+                      .datetime({})
+                      .describe('The time the session was created'),
+                    id: zod.uuid().describe('The agent session uuid'),
+                    name: zod
+                      .string()
+                      .describe('The user-facing name of the session'),
+                    ownerId: zod
+                      .string()
+                      .describe('Who the session belongs to'),
+                    status: zod
+                      .string()
+                      .describe(
+                        "The session's last known status.\n\n`no_messages` until the first system event arrives, `disconnected` if\nthe connection dropped without a clean close, otherwise the wire name\nof the most recent system event (for example `session\/end`)."
+                      ),
+                    threadId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        'The channel thread the session was opened from, when any'
+                      ),
+                    updatedAt: zod.iso
+                      .datetime({})
+                      .describe('The time the session was last modified'),
+                    viewedAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'The time the session was last viewed by the requesting user'
+                      ),
+                  })
+                )
+                .describe(
+                  "An agent session as displayed in Soup.\n\nMirrors [`crate::chat::SoupChat`]: an agent session is the coding-agent\ncounterpart of a chat, so it carries the same identity, ownership, and\nrecency fields plus the session's last known status."
+                ),
+              tag: zod.enum(['agentSession']),
+            })
+            .describe('Agent session item.'),
         ])
         .describe('A single item in the Soup feed.')
         .and(
@@ -11685,6 +13264,12 @@ export const getItemsSoupResponse = zod
               .boolean()
               .describe(
                 'Whether the requesting user has favorited this entity.'
+              ),
+            notified_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe(
+                'When the caller was last notified about this entity, present only\nwhen the page was ordered by `notified_at`. Clients keep the notified\nfeed ordered and date-bucketed on this value.'
               ),
             touched_at: zod.iso
               .datetime({})
@@ -11713,6 +13298,29 @@ export const postItemsSoupBodyLimitMin = 0;
 
 export const postItemsSoupBody = zod
   .object({
+    agent_session_filters: zod
+      .object({
+        ids: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'Agent session ids to filter by. Empty to include all accessible sessions.'
+          ),
+        include: zod
+          .boolean()
+          .optional()
+          .describe(
+            'Opt this query into agent sessions at all. Agent sessions are off by\ndefault — see [`crate::ast::agent_session::AgentSessionLiteral::Include`].\nAsking for specific `ids` or `owners` also opts in.'
+          ),
+        owners: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            "Filter by session owner. Examples: ['macro|user1@user.com']. Empty to\ninclude every owner."
+          ),
+      })
+      .optional()
+      .describe('Filters for agent sessions.'),
     calendar_event_filters: zod
       .object({
         attendees: zod
@@ -11815,21 +13423,21 @@ export const postItemsSoupBody = zod
           ),
         notification_filters: zod
           .object({
-            done: zod
-              .boolean()
-              .nullish()
+            states: zod
+              .array(
+                zod
+                  .enum(['unseen', 'seen', 'done'])
+                  .describe(
+                    "The mutually exclusive lifecycle states of a user's notification."
+                  )
+              )
+              .optional()
               .describe(
-                'Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications.'
-              ),
-            seen: zod
-              .boolean()
-              .nullish()
-              .describe(
-                'Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications.'
+                'Include entities with a non-deleted notification in any of these exact states.\nEmpty means no notification restriction. Active means `[unseen, seen]`.'
               ),
           })
           .optional()
-          .describe('Notification state filters for channel message queries.'),
+          .describe('Notification-level filters that apply to an entity type.'),
         org_id: zod
           .number()
           .nullish()
@@ -11906,21 +13514,21 @@ export const postItemsSoupBody = zod
           ),
         notification_filters: zod
           .object({
-            done: zod
-              .boolean()
-              .nullish()
+            states: zod
+              .array(
+                zod
+                  .enum(['unseen', 'seen', 'done'])
+                  .describe(
+                    "The mutually exclusive lifecycle states of a user's notification."
+                  )
+              )
+              .optional()
               .describe(
-                'Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications.'
-              ),
-            seen: zod
-              .boolean()
-              .nullish()
-              .describe(
-                'Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications.'
+                'Include entities with a non-deleted notification in any of these exact states.\nEmpty means no notification restriction. Active means `[unseen, seen]`.'
               ),
           })
           .optional()
-          .describe('Notification state filters for channel message queries.'),
+          .describe('Notification-level filters that apply to an entity type.'),
         owners: zod
           .array(zod.string())
           .optional()
@@ -11991,21 +13599,21 @@ export const postItemsSoupBody = zod
           ),
         notification_filters: zod
           .object({
-            done: zod
-              .boolean()
-              .nullish()
+            states: zod
+              .array(
+                zod
+                  .enum(['unseen', 'seen', 'done'])
+                  .describe(
+                    "The mutually exclusive lifecycle states of a user's notification."
+                  )
+              )
+              .optional()
               .describe(
-                'Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications.'
-              ),
-            seen: zod
-              .boolean()
-              .nullish()
-              .describe(
-                'Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications.'
+                'Include entities with a non-deleted notification in any of these exact states.\nEmpty means no notification restriction. Active means `[unseen, seen]`.'
               ),
           })
           .optional()
-          .describe('Notification state filters for channel message queries.'),
+          .describe('Notification-level filters that apply to an entity type.'),
         owners: zod
           .array(zod.string())
           .optional()
@@ -12096,6 +13704,12 @@ export const postItemsSoupBody = zod
           .describe(
             'Only include emails that have at least one of these labels. Supports both Gmail system labels (e.g. \"INBOX\", \"CATEGORY_PROMOTIONS\") and user-created labels (e.g. \"github\"). Empty to not filter by included labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter.'
           ),
+        is_read: zod
+          .boolean()
+          .nullish()
+          .describe(
+            "Filter by the email thread's read flag, independently of notification state."
+          ),
         link_ids: zod
           .array(zod.string())
           .optional()
@@ -12104,21 +13718,21 @@ export const postItemsSoupBody = zod
           ),
         notification_filters: zod
           .object({
-            done: zod
-              .boolean()
-              .nullish()
+            states: zod
+              .array(
+                zod
+                  .enum(['unseen', 'seen', 'done'])
+                  .describe(
+                    "The mutually exclusive lifecycle states of a user's notification."
+                  )
+              )
+              .optional()
               .describe(
-                'Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications.'
-              ),
-            seen: zod
-              .boolean()
-              .nullish()
-              .describe(
-                'Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications.'
+                'Include entities with a non-deleted notification in any of these exact states.\nEmpty means no notification restriction. Active means `[unseen, seen]`.'
               ),
           })
           .optional()
-          .describe('Notification state filters for channel message queries.'),
+          .describe('Notification-level filters that apply to an entity type.'),
         project_ids: zod
           .array(zod.string())
           .optional()
@@ -12176,21 +13790,21 @@ export const postItemsSoupBody = zod
           ),
         notification_filters: zod
           .object({
-            done: zod
-              .boolean()
-              .nullish()
+            states: zod
+              .array(
+                zod
+                  .enum(['unseen', 'seen', 'done'])
+                  .describe(
+                    "The mutually exclusive lifecycle states of a user's notification."
+                  )
+              )
+              .optional()
               .describe(
-                'Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications.'
-              ),
-            seen: zod
-              .boolean()
-              .nullish()
-              .describe(
-                'Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications.'
+                'Include entities with a non-deleted notification in any of these exact states.\nEmpty means no notification restriction. Active means `[unseen, seen]`.'
               ),
           })
           .optional()
-          .describe('Notification state filters for channel message queries.'),
+          .describe('Notification-level filters that apply to an entity type.'),
       })
       .optional()
       .describe('Filters for foreign entity records.'),
@@ -12210,21 +13824,21 @@ export const postItemsSoupBody = zod
           ),
         notification_filters: zod
           .object({
-            done: zod
-              .boolean()
-              .nullish()
+            states: zod
+              .array(
+                zod
+                  .enum(['unseen', 'seen', 'done'])
+                  .describe(
+                    "The mutually exclusive lifecycle states of a user's notification."
+                  )
+              )
+              .optional()
               .describe(
-                'Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications.'
-              ),
-            seen: zod
-              .boolean()
-              .nullish()
-              .describe(
-                'Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications.'
+                'Include entities with a non-deleted notification in any of these exact states.\nEmpty means no notification restriction. Active means `[unseen, seen]`.'
               ),
           })
           .optional()
-          .describe('Notification state filters for channel message queries.'),
+          .describe('Notification-level filters that apply to an entity type.'),
         owners: zod
           .array(zod.string())
           .optional()
@@ -12356,6 +13970,7 @@ export const postItemsSoupBody = zod
                 'viewed_updated',
                 'frecency',
                 'touched_by_me',
+                'notified_at',
               ])
               .describe(
                 'Sort options accepted by non-grouped soup API endpoints.'
@@ -12696,6 +14311,13 @@ export const postItemsSoupResponse = zod
                               .describe(
                                 'A skill document — markdown instructions for AI'
                               ),
+                            zod
+                              .object({
+                                type: zod.enum(['initiative_description']),
+                              })
+                              .describe(
+                                'The description document of an initiative'
+                              ),
                           ])
                           .describe(
                             'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
@@ -12960,6 +14582,12 @@ export const postItemsSoupResponse = zod
                     isPersistent: zod
                       .boolean()
                       .describe('Whether the chat is persistent or not'),
+                    model: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The last model selected for a sent message (`provider\/model` id).'
+                      ),
                     name: zod.string().describe('The name of the chat'),
                     ownerId: zod.string().describe('Who the chat belongs to'),
                     projectId: zod
@@ -13260,6 +14888,11 @@ export const postItemsSoupResponse = zod
                   isRead: zod
                     .boolean()
                     .describe('Whether the thread has been read.'),
+                  isSignal: zod
+                    .boolean()
+                    .describe(
+                      "The denormalized `email_threads.is_signal` importance classification —\nthe same flag the soup Importance filter evaluates, distinct from\n`is_important` (Gmail's IMPORTANT label)."
+                    ),
                   name: zod
                     .string()
                     .nullish()
@@ -15259,6 +16892,8 @@ export const postItemsSoupResponse = zod
                                 'reminder',
                                 'skill',
                                 'agent_session',
+                                'scheduled_action',
+                                'initiative',
                               ])
                               .describe('The type of an entity in Macro')
                               .describe("The referenced entity's type."),
@@ -15325,6 +16960,277 @@ export const postItemsSoupResponse = zod
               tag: zod.enum(['reminder']),
             })
             .describe('Reminder item.'),
+          zod
+            .object({
+              data: zod
+                .object({
+                  properties: zod
+                    .array(
+                      zod
+                        .object({
+                          definition: zod
+                            .object({
+                              created_at: zod.iso.datetime({}),
+                              data_type: zod
+                                .enum([
+                                  'BOOLEAN',
+                                  'DATE',
+                                  'NUMBER',
+                                  'STRING',
+                                  'SELECT_NUMBER',
+                                  'SELECT_STRING',
+                                  'TAG',
+                                  'ENTITY',
+                                  'LINK',
+                                ])
+                                .describe(
+                                  'Data type for property values, determining storage and validation.'
+                                ),
+                              display_name: zod.string(),
+                              id: zod.uuid(),
+                              is_metadata: zod
+                                .boolean()
+                                .describe(
+                                  'Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'
+                                ),
+                              is_multi_select: zod.boolean(),
+                              is_system: zod
+                                .boolean()
+                                .describe(
+                                  'Flag to indicate if this is a system property (stored in DB).'
+                                ),
+                              owner: zod
+                                .union([
+                                  zod
+                                    .object({
+                                      scope: zod.enum(['user']),
+                                      user_id: zod.string(),
+                                    })
+                                    .describe('User-scoped property.'),
+                                  zod
+                                    .object({
+                                      scope: zod.enum(['team']),
+                                      team_id: zod.uuid(),
+                                    })
+                                    .describe('Team-scoped property.'),
+                                  zod
+                                    .object({
+                                      scope: zod.enum(['system']),
+                                    })
+                                    .describe(
+                                      'System-owned property (no user or team owner).'
+                                    ),
+                                ])
+                                .describe(
+                                  'Defines who owns a property - user-scoped, team-scoped, or system.'
+                                ),
+                              specific_entity_type: zod
+                                .union([
+                                  zod.null(),
+                                  zod
+                                    .enum([
+                                      'CALENDAR_EVENT',
+                                      'CALL_RECORD',
+                                      'CHANNEL',
+                                      'CHAT',
+                                      'COMPANY',
+                                      'DOCUMENT',
+                                      'PROJECT',
+                                      'TASK',
+                                      'THREAD',
+                                      'USER',
+                                    ])
+                                    .describe(
+                                      'Type of entity that can be referenced by entity properties.'
+                                    ),
+                                ])
+                                .optional(),
+                              updated_at: zod.iso.datetime({}),
+                            })
+                            .describe(
+                              'Property definition model (service representation).'
+                            ),
+                          id: zod
+                            .uuid()
+                            .describe(
+                              'Globally unique id of the assignment attaching this property to an entity.'
+                            ),
+                          value: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .union([
+                                  zod
+                                    .object({
+                                      type: zod.enum(['Boolean']),
+                                      value: zod
+                                        .boolean()
+                                        .describe(
+                                          'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                        ),
+                                    })
+                                    .describe(
+                                      'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                    ),
+                                  zod
+                                    .object({
+                                      type: zod.enum(['Number']),
+                                      value: zod
+                                        .number()
+                                        .describe(
+                                          'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                        ),
+                                    })
+                                    .describe(
+                                      'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                    ),
+                                  zod
+                                    .object({
+                                      type: zod.enum(['String']),
+                                      value: zod
+                                        .string()
+                                        .describe(
+                                          'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                        ),
+                                    })
+                                    .describe(
+                                      'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                    ),
+                                  zod
+                                    .object({
+                                      type: zod.enum(['Date']),
+                                      value: zod.iso
+                                        .datetime({})
+                                        .describe(
+                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                        ),
+                                    })
+                                    .describe(
+                                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                    ),
+                                  zod
+                                    .object({
+                                      type: zod.enum(['SelectOption']),
+                                      value: zod
+                                        .array(zod.uuid())
+                                        .describe(
+                                          'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                        ),
+                                    })
+                                    .describe(
+                                      'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                    ),
+                                  zod
+                                    .object({
+                                      type: zod.enum(['EntityReference']),
+                                      value: zod
+                                        .array(
+                                          zod
+                                            .object({
+                                              entity_id: zod.string(),
+                                              entity_type: zod
+                                                .enum([
+                                                  'CALENDAR_EVENT',
+                                                  'CALL_RECORD',
+                                                  'CHANNEL',
+                                                  'CHAT',
+                                                  'COMPANY',
+                                                  'DOCUMENT',
+                                                  'PROJECT',
+                                                  'TASK',
+                                                  'THREAD',
+                                                  'USER',
+                                                ])
+                                                .describe(
+                                                  'Type of entity that can be referenced by entity properties.'
+                                                ),
+                                              specific_message_id: zod
+                                                .uuid()
+                                                .nullish()
+                                                .describe(
+                                                  'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Entity reference for entity-type property values.'
+                                            )
+                                        )
+                                        .describe(
+                                          'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                        ),
+                                    })
+                                    .describe(
+                                      'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                    ),
+                                  zod
+                                    .object({
+                                      type: zod.enum(['Link']),
+                                      value: zod
+                                        .array(zod.string())
+                                        .describe(
+                                          'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                        ),
+                                    })
+                                    .describe(
+                                      'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                    ),
+                                ])
+                                .describe(
+                                  'Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to\/from JSONB in the database.'
+                                ),
+                            ])
+                            .optional(),
+                        })
+                        .describe(
+                          'A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.'
+                        )
+                    )
+                    .describe('Properties attached to the entity.'),
+                })
+                .describe(
+                  'Property fields that can be flattened into property-bearing Soup items.'
+                )
+                .and(
+                  zod.object({
+                    botId: zod.uuid().describe('The bot running this session'),
+                    createdAt: zod.iso
+                      .datetime({})
+                      .describe('The time the session was created'),
+                    id: zod.uuid().describe('The agent session uuid'),
+                    name: zod
+                      .string()
+                      .describe('The user-facing name of the session'),
+                    ownerId: zod
+                      .string()
+                      .describe('Who the session belongs to'),
+                    status: zod
+                      .string()
+                      .describe(
+                        "The session's last known status.\n\n`no_messages` until the first system event arrives, `disconnected` if\nthe connection dropped without a clean close, otherwise the wire name\nof the most recent system event (for example `session\/end`)."
+                      ),
+                    threadId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        'The channel thread the session was opened from, when any'
+                      ),
+                    updatedAt: zod.iso
+                      .datetime({})
+                      .describe('The time the session was last modified'),
+                    viewedAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'The time the session was last viewed by the requesting user'
+                      ),
+                  })
+                )
+                .describe(
+                  "An agent session as displayed in Soup.\n\nMirrors [`crate::chat::SoupChat`]: an agent session is the coding-agent\ncounterpart of a chat, so it carries the same identity, ownership, and\nrecency fields plus the session's last known status."
+                ),
+              tag: zod.enum(['agentSession']),
+            })
+            .describe('Agent session item.'),
         ])
         .describe('A single item in the Soup feed.')
         .and(
@@ -15334,6 +17240,12 @@ export const postItemsSoupResponse = zod
               .boolean()
               .describe(
                 'Whether the requesting user has favorited this entity.'
+              ),
+            notified_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe(
+                'When the caller was last notified about this entity, present only\nwhen the page was ordered by `notified_at`. Clients keep the notified\nfeed ordered and date-bucketed on this value.'
               ),
             touched_at: zod.iso
               .datetime({})
@@ -15362,6 +17274,12 @@ export const postItemsSoupAstBodyLimitMin = 0;
 
 export const postItemsSoupAstBody = zod
   .object({
+    asf: zod
+      .unknown()
+      .optional()
+      .describe(
+        'Filters applied to agent sessions (wire key `asf`). Like reminders,\nempty\/omitted returns \*\*no\*\* agent sessions: they are opt-in, so the\ncaller must send `inc`, an id, or an owner to get any.'
+      ),
     calf: zod
       .unknown()
       .optional()
@@ -15469,6 +17387,7 @@ export const postItemsSoupAstBody = zod
                 'viewed_updated',
                 'frecency',
                 'touched_by_me',
+                'notified_at',
               ])
               .describe(
                 'Sort options accepted by non-grouped soup API endpoints.'
@@ -15809,6 +17728,13 @@ export const postItemsSoupAstResponse = zod
                               .describe(
                                 'A skill document — markdown instructions for AI'
                               ),
+                            zod
+                              .object({
+                                type: zod.enum(['initiative_description']),
+                              })
+                              .describe(
+                                'The description document of an initiative'
+                              ),
                           ])
                           .describe(
                             'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
@@ -16073,6 +17999,12 @@ export const postItemsSoupAstResponse = zod
                     isPersistent: zod
                       .boolean()
                       .describe('Whether the chat is persistent or not'),
+                    model: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The last model selected for a sent message (`provider\/model` id).'
+                      ),
                     name: zod.string().describe('The name of the chat'),
                     ownerId: zod.string().describe('Who the chat belongs to'),
                     projectId: zod
@@ -16373,6 +18305,11 @@ export const postItemsSoupAstResponse = zod
                   isRead: zod
                     .boolean()
                     .describe('Whether the thread has been read.'),
+                  isSignal: zod
+                    .boolean()
+                    .describe(
+                      "The denormalized `email_threads.is_signal` importance classification —\nthe same flag the soup Importance filter evaluates, distinct from\n`is_important` (Gmail's IMPORTANT label)."
+                    ),
                   name: zod
                     .string()
                     .nullish()
@@ -18374,6 +20311,8 @@ export const postItemsSoupAstResponse = zod
                                 'reminder',
                                 'skill',
                                 'agent_session',
+                                'scheduled_action',
+                                'initiative',
                               ])
                               .describe('The type of an entity in Macro')
                               .describe("The referenced entity's type."),
@@ -18440,6 +20379,277 @@ export const postItemsSoupAstResponse = zod
               tag: zod.enum(['reminder']),
             })
             .describe('Reminder item.'),
+          zod
+            .object({
+              data: zod
+                .object({
+                  properties: zod
+                    .array(
+                      zod
+                        .object({
+                          definition: zod
+                            .object({
+                              created_at: zod.iso.datetime({}),
+                              data_type: zod
+                                .enum([
+                                  'BOOLEAN',
+                                  'DATE',
+                                  'NUMBER',
+                                  'STRING',
+                                  'SELECT_NUMBER',
+                                  'SELECT_STRING',
+                                  'TAG',
+                                  'ENTITY',
+                                  'LINK',
+                                ])
+                                .describe(
+                                  'Data type for property values, determining storage and validation.'
+                                ),
+                              display_name: zod.string(),
+                              id: zod.uuid(),
+                              is_metadata: zod
+                                .boolean()
+                                .describe(
+                                  'Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'
+                                ),
+                              is_multi_select: zod.boolean(),
+                              is_system: zod
+                                .boolean()
+                                .describe(
+                                  'Flag to indicate if this is a system property (stored in DB).'
+                                ),
+                              owner: zod
+                                .union([
+                                  zod
+                                    .object({
+                                      scope: zod.enum(['user']),
+                                      user_id: zod.string(),
+                                    })
+                                    .describe('User-scoped property.'),
+                                  zod
+                                    .object({
+                                      scope: zod.enum(['team']),
+                                      team_id: zod.uuid(),
+                                    })
+                                    .describe('Team-scoped property.'),
+                                  zod
+                                    .object({
+                                      scope: zod.enum(['system']),
+                                    })
+                                    .describe(
+                                      'System-owned property (no user or team owner).'
+                                    ),
+                                ])
+                                .describe(
+                                  'Defines who owns a property - user-scoped, team-scoped, or system.'
+                                ),
+                              specific_entity_type: zod
+                                .union([
+                                  zod.null(),
+                                  zod
+                                    .enum([
+                                      'CALENDAR_EVENT',
+                                      'CALL_RECORD',
+                                      'CHANNEL',
+                                      'CHAT',
+                                      'COMPANY',
+                                      'DOCUMENT',
+                                      'PROJECT',
+                                      'TASK',
+                                      'THREAD',
+                                      'USER',
+                                    ])
+                                    .describe(
+                                      'Type of entity that can be referenced by entity properties.'
+                                    ),
+                                ])
+                                .optional(),
+                              updated_at: zod.iso.datetime({}),
+                            })
+                            .describe(
+                              'Property definition model (service representation).'
+                            ),
+                          id: zod
+                            .uuid()
+                            .describe(
+                              'Globally unique id of the assignment attaching this property to an entity.'
+                            ),
+                          value: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .union([
+                                  zod
+                                    .object({
+                                      type: zod.enum(['Boolean']),
+                                      value: zod
+                                        .boolean()
+                                        .describe(
+                                          'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                        ),
+                                    })
+                                    .describe(
+                                      'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                    ),
+                                  zod
+                                    .object({
+                                      type: zod.enum(['Number']),
+                                      value: zod
+                                        .number()
+                                        .describe(
+                                          'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                        ),
+                                    })
+                                    .describe(
+                                      'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                    ),
+                                  zod
+                                    .object({
+                                      type: zod.enum(['String']),
+                                      value: zod
+                                        .string()
+                                        .describe(
+                                          'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                        ),
+                                    })
+                                    .describe(
+                                      'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                    ),
+                                  zod
+                                    .object({
+                                      type: zod.enum(['Date']),
+                                      value: zod.iso
+                                        .datetime({})
+                                        .describe(
+                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                        ),
+                                    })
+                                    .describe(
+                                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                    ),
+                                  zod
+                                    .object({
+                                      type: zod.enum(['SelectOption']),
+                                      value: zod
+                                        .array(zod.uuid())
+                                        .describe(
+                                          'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                        ),
+                                    })
+                                    .describe(
+                                      'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                    ),
+                                  zod
+                                    .object({
+                                      type: zod.enum(['EntityReference']),
+                                      value: zod
+                                        .array(
+                                          zod
+                                            .object({
+                                              entity_id: zod.string(),
+                                              entity_type: zod
+                                                .enum([
+                                                  'CALENDAR_EVENT',
+                                                  'CALL_RECORD',
+                                                  'CHANNEL',
+                                                  'CHAT',
+                                                  'COMPANY',
+                                                  'DOCUMENT',
+                                                  'PROJECT',
+                                                  'TASK',
+                                                  'THREAD',
+                                                  'USER',
+                                                ])
+                                                .describe(
+                                                  'Type of entity that can be referenced by entity properties.'
+                                                ),
+                                              specific_message_id: zod
+                                                .uuid()
+                                                .nullish()
+                                                .describe(
+                                                  'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Entity reference for entity-type property values.'
+                                            )
+                                        )
+                                        .describe(
+                                          'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                        ),
+                                    })
+                                    .describe(
+                                      'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                    ),
+                                  zod
+                                    .object({
+                                      type: zod.enum(['Link']),
+                                      value: zod
+                                        .array(zod.string())
+                                        .describe(
+                                          'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                        ),
+                                    })
+                                    .describe(
+                                      'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                    ),
+                                ])
+                                .describe(
+                                  'Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to\/from JSONB in the database.'
+                                ),
+                            ])
+                            .optional(),
+                        })
+                        .describe(
+                          'A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.'
+                        )
+                    )
+                    .describe('Properties attached to the entity.'),
+                })
+                .describe(
+                  'Property fields that can be flattened into property-bearing Soup items.'
+                )
+                .and(
+                  zod.object({
+                    botId: zod.uuid().describe('The bot running this session'),
+                    createdAt: zod.iso
+                      .datetime({})
+                      .describe('The time the session was created'),
+                    id: zod.uuid().describe('The agent session uuid'),
+                    name: zod
+                      .string()
+                      .describe('The user-facing name of the session'),
+                    ownerId: zod
+                      .string()
+                      .describe('Who the session belongs to'),
+                    status: zod
+                      .string()
+                      .describe(
+                        "The session's last known status.\n\n`no_messages` until the first system event arrives, `disconnected` if\nthe connection dropped without a clean close, otherwise the wire name\nof the most recent system event (for example `session\/end`)."
+                      ),
+                    threadId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        'The channel thread the session was opened from, when any'
+                      ),
+                    updatedAt: zod.iso
+                      .datetime({})
+                      .describe('The time the session was last modified'),
+                    viewedAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'The time the session was last viewed by the requesting user'
+                      ),
+                  })
+                )
+                .describe(
+                  "An agent session as displayed in Soup.\n\nMirrors [`crate::chat::SoupChat`]: an agent session is the coding-agent\ncounterpart of a chat, so it carries the same identity, ownership, and\nrecency fields plus the session's last known status."
+                ),
+              tag: zod.enum(['agentSession']),
+            })
+            .describe('Agent session item.'),
         ])
         .describe('A single item in the Soup feed.')
         .and(
@@ -18449,6 +20659,12 @@ export const postItemsSoupAstResponse = zod
               .boolean()
               .describe(
                 'Whether the requesting user has favorited this entity.'
+              ),
+            notified_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe(
+                'When the caller was last notified about this entity, present only\nwhen the page was ordered by `notified_at`. Clients keep the notified\nfeed ordered and date-bucketed on this value.'
               ),
             touched_at: zod.iso
               .datetime({})
@@ -18481,6 +20697,12 @@ export const postItemsSoupAstGroupedBody = zod
   .union([
     zod
       .object({
+        asf: zod
+          .unknown()
+          .optional()
+          .describe(
+            'Filters applied to agent sessions (wire key `asf`). Like reminders,\nempty\/omitted returns \*\*no\*\* agent sessions: they are opt-in, so the\ncaller must send `inc`, an id, or an owner to get any.'
+          ),
         calf: zod
           .unknown()
           .optional()
@@ -18643,6 +20865,12 @@ export const postItemsSoupAstGroupedBody = zod
       .describe('Initial grouped soup request.'),
     zod
       .object({
+        asf: zod
+          .unknown()
+          .optional()
+          .describe(
+            'Filters applied to agent sessions (wire key `asf`). Like reminders,\nempty\/omitted returns \*\*no\*\* agent sessions: they are opt-in, so the\ncaller must send `inc`, an id, or an owner to get any.'
+          ),
         calf: zod
           .unknown()
           .optional()
@@ -19179,6 +21407,15 @@ export const postItemsSoupAstGroupedResponse = zod
                                     .describe(
                                       'A skill document — markdown instructions for AI'
                                     ),
+                                  zod
+                                    .object({
+                                      type: zod.enum([
+                                        'initiative_description',
+                                      ]),
+                                    })
+                                    .describe(
+                                      'The description document of an initiative'
+                                    ),
                                 ])
                                 .describe(
                                   'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
@@ -19443,6 +21680,12 @@ export const postItemsSoupAstGroupedResponse = zod
                           isPersistent: zod
                             .boolean()
                             .describe('Whether the chat is persistent or not'),
+                          model: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The last model selected for a sent message (`provider\/model` id).'
+                            ),
                           name: zod.string().describe('The name of the chat'),
                           ownerId: zod
                             .string()
@@ -19749,6 +21992,11 @@ export const postItemsSoupAstGroupedResponse = zod
                         isRead: zod
                           .boolean()
                           .describe('Whether the thread has been read.'),
+                        isSignal: zod
+                          .boolean()
+                          .describe(
+                            "The denormalized `email_threads.is_signal` importance classification —\nthe same flag the soup Importance filter evaluates, distinct from\n`is_important` (Gmail's IMPORTANT label)."
+                          ),
                         name: zod
                           .string()
                           .nullish()
@@ -21840,6 +24088,8 @@ export const postItemsSoupAstGroupedResponse = zod
                                       'reminder',
                                       'skill',
                                       'agent_session',
+                                      'scheduled_action',
+                                      'initiative',
                                     ])
                                     .describe('The type of an entity in Macro')
                                     .describe("The referenced entity's type."),
@@ -21906,6 +24156,279 @@ export const postItemsSoupAstGroupedResponse = zod
                     tag: zod.enum(['reminder']),
                   })
                   .describe('Reminder item.'),
+                zod
+                  .object({
+                    data: zod
+                      .object({
+                        properties: zod
+                          .array(
+                            zod
+                              .object({
+                                definition: zod
+                                  .object({
+                                    created_at: zod.iso.datetime({}),
+                                    data_type: zod
+                                      .enum([
+                                        'BOOLEAN',
+                                        'DATE',
+                                        'NUMBER',
+                                        'STRING',
+                                        'SELECT_NUMBER',
+                                        'SELECT_STRING',
+                                        'TAG',
+                                        'ENTITY',
+                                        'LINK',
+                                      ])
+                                      .describe(
+                                        'Data type for property values, determining storage and validation.'
+                                      ),
+                                    display_name: zod.string(),
+                                    id: zod.uuid(),
+                                    is_metadata: zod
+                                      .boolean()
+                                      .describe(
+                                        'Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'
+                                      ),
+                                    is_multi_select: zod.boolean(),
+                                    is_system: zod
+                                      .boolean()
+                                      .describe(
+                                        'Flag to indicate if this is a system property (stored in DB).'
+                                      ),
+                                    owner: zod
+                                      .union([
+                                        zod
+                                          .object({
+                                            scope: zod.enum(['user']),
+                                            user_id: zod.string(),
+                                          })
+                                          .describe('User-scoped property.'),
+                                        zod
+                                          .object({
+                                            scope: zod.enum(['team']),
+                                            team_id: zod.uuid(),
+                                          })
+                                          .describe('Team-scoped property.'),
+                                        zod
+                                          .object({
+                                            scope: zod.enum(['system']),
+                                          })
+                                          .describe(
+                                            'System-owned property (no user or team owner).'
+                                          ),
+                                      ])
+                                      .describe(
+                                        'Defines who owns a property - user-scoped, team-scoped, or system.'
+                                      ),
+                                    specific_entity_type: zod
+                                      .union([
+                                        zod.null(),
+                                        zod
+                                          .enum([
+                                            'CALENDAR_EVENT',
+                                            'CALL_RECORD',
+                                            'CHANNEL',
+                                            'CHAT',
+                                            'COMPANY',
+                                            'DOCUMENT',
+                                            'PROJECT',
+                                            'TASK',
+                                            'THREAD',
+                                            'USER',
+                                          ])
+                                          .describe(
+                                            'Type of entity that can be referenced by entity properties.'
+                                          ),
+                                      ])
+                                      .optional(),
+                                    updated_at: zod.iso.datetime({}),
+                                  })
+                                  .describe(
+                                    'Property definition model (service representation).'
+                                  ),
+                                id: zod
+                                  .uuid()
+                                  .describe(
+                                    'Globally unique id of the assignment attaching this property to an entity.'
+                                  ),
+                                value: zod
+                                  .union([
+                                    zod.null(),
+                                    zod
+                                      .union([
+                                        zod
+                                          .object({
+                                            type: zod.enum(['Boolean']),
+                                            value: zod
+                                              .boolean()
+                                              .describe(
+                                                'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                              ),
+                                          })
+                                          .describe(
+                                            'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                          ),
+                                        zod
+                                          .object({
+                                            type: zod.enum(['Number']),
+                                            value: zod
+                                              .number()
+                                              .describe(
+                                                'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                              ),
+                                          })
+                                          .describe(
+                                            'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                          ),
+                                        zod
+                                          .object({
+                                            type: zod.enum(['String']),
+                                            value: zod
+                                              .string()
+                                              .describe(
+                                                'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                              ),
+                                          })
+                                          .describe(
+                                            'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                          ),
+                                        zod
+                                          .object({
+                                            type: zod.enum(['Date']),
+                                            value: zod.iso
+                                              .datetime({})
+                                              .describe(
+                                                'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                              ),
+                                          })
+                                          .describe(
+                                            'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          ),
+                                        zod
+                                          .object({
+                                            type: zod.enum(['SelectOption']),
+                                            value: zod
+                                              .array(zod.uuid())
+                                              .describe(
+                                                'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                              ),
+                                          })
+                                          .describe(
+                                            'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                          ),
+                                        zod
+                                          .object({
+                                            type: zod.enum(['EntityReference']),
+                                            value: zod
+                                              .array(
+                                                zod
+                                                  .object({
+                                                    entity_id: zod.string(),
+                                                    entity_type: zod
+                                                      .enum([
+                                                        'CALENDAR_EVENT',
+                                                        'CALL_RECORD',
+                                                        'CHANNEL',
+                                                        'CHAT',
+                                                        'COMPANY',
+                                                        'DOCUMENT',
+                                                        'PROJECT',
+                                                        'TASK',
+                                                        'THREAD',
+                                                        'USER',
+                                                      ])
+                                                      .describe(
+                                                        'Type of entity that can be referenced by entity properties.'
+                                                      ),
+                                                    specific_message_id: zod
+                                                      .uuid()
+                                                      .nullish()
+                                                      .describe(
+                                                        'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                                                      ),
+                                                  })
+                                                  .describe(
+                                                    'Entity reference for entity-type property values.'
+                                                  )
+                                              )
+                                              .describe(
+                                                'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                              ),
+                                          })
+                                          .describe(
+                                            'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                          ),
+                                        zod
+                                          .object({
+                                            type: zod.enum(['Link']),
+                                            value: zod
+                                              .array(zod.string())
+                                              .describe(
+                                                'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                              ),
+                                          })
+                                          .describe(
+                                            'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                          ),
+                                      ])
+                                      .describe(
+                                        'Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to\/from JSONB in the database.'
+                                      ),
+                                  ])
+                                  .optional(),
+                              })
+                              .describe(
+                                'A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.'
+                              )
+                          )
+                          .describe('Properties attached to the entity.'),
+                      })
+                      .describe(
+                        'Property fields that can be flattened into property-bearing Soup items.'
+                      )
+                      .and(
+                        zod.object({
+                          botId: zod
+                            .uuid()
+                            .describe('The bot running this session'),
+                          createdAt: zod.iso
+                            .datetime({})
+                            .describe('The time the session was created'),
+                          id: zod.uuid().describe('The agent session uuid'),
+                          name: zod
+                            .string()
+                            .describe('The user-facing name of the session'),
+                          ownerId: zod
+                            .string()
+                            .describe('Who the session belongs to'),
+                          status: zod
+                            .string()
+                            .describe(
+                              "The session's last known status.\n\n`no_messages` until the first system event arrives, `disconnected` if\nthe connection dropped without a clean close, otherwise the wire name\nof the most recent system event (for example `session\/end`)."
+                            ),
+                          threadId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The channel thread the session was opened from, when any'
+                            ),
+                          updatedAt: zod.iso
+                            .datetime({})
+                            .describe('The time the session was last modified'),
+                          viewedAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe(
+                              'The time the session was last viewed by the requesting user'
+                            ),
+                        })
+                      )
+                      .describe(
+                        "An agent session as displayed in Soup.\n\nMirrors [`crate::chat::SoupChat`]: an agent session is the coding-agent\ncounterpart of a chat, so it carries the same identity, ownership, and\nrecency fields plus the session's last known status."
+                      ),
+                    tag: zod.enum(['agentSession']),
+                  })
+                  .describe('Agent session item.'),
               ])
               .describe('A single item in the Soup feed.')
               .and(
@@ -21915,6 +24438,12 @@ export const postItemsSoupAstGroupedResponse = zod
                     .boolean()
                     .describe(
                       'Whether the requesting user has favorited this entity.'
+                    ),
+                  notified_at: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe(
+                      'When the caller was last notified about this entity, present only\nwhen the page was ordered by `notified_at`. Clients keep the notified\nfeed ordered and date-bucketed on this value.'
                     ),
                   touched_at: zod.iso
                     .datetime({})
@@ -22295,6 +24824,15 @@ export const postItemsSoupAstGroupedResponse = zod
                                     .describe(
                                       'A skill document — markdown instructions for AI'
                                     ),
+                                  zod
+                                    .object({
+                                      type: zod.enum([
+                                        'initiative_description',
+                                      ]),
+                                    })
+                                    .describe(
+                                      'The description document of an initiative'
+                                    ),
                                 ])
                                 .describe(
                                   'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
@@ -22559,6 +25097,12 @@ export const postItemsSoupAstGroupedResponse = zod
                           isPersistent: zod
                             .boolean()
                             .describe('Whether the chat is persistent or not'),
+                          model: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The last model selected for a sent message (`provider\/model` id).'
+                            ),
                           name: zod.string().describe('The name of the chat'),
                           ownerId: zod
                             .string()
@@ -22865,6 +25409,11 @@ export const postItemsSoupAstGroupedResponse = zod
                         isRead: zod
                           .boolean()
                           .describe('Whether the thread has been read.'),
+                        isSignal: zod
+                          .boolean()
+                          .describe(
+                            "The denormalized `email_threads.is_signal` importance classification —\nthe same flag the soup Importance filter evaluates, distinct from\n`is_important` (Gmail's IMPORTANT label)."
+                          ),
                         name: zod
                           .string()
                           .nullish()
@@ -24956,6 +27505,8 @@ export const postItemsSoupAstGroupedResponse = zod
                                       'reminder',
                                       'skill',
                                       'agent_session',
+                                      'scheduled_action',
+                                      'initiative',
                                     ])
                                     .describe('The type of an entity in Macro')
                                     .describe("The referenced entity's type."),
@@ -25022,6 +27573,279 @@ export const postItemsSoupAstGroupedResponse = zod
                     tag: zod.enum(['reminder']),
                   })
                   .describe('Reminder item.'),
+                zod
+                  .object({
+                    data: zod
+                      .object({
+                        properties: zod
+                          .array(
+                            zod
+                              .object({
+                                definition: zod
+                                  .object({
+                                    created_at: zod.iso.datetime({}),
+                                    data_type: zod
+                                      .enum([
+                                        'BOOLEAN',
+                                        'DATE',
+                                        'NUMBER',
+                                        'STRING',
+                                        'SELECT_NUMBER',
+                                        'SELECT_STRING',
+                                        'TAG',
+                                        'ENTITY',
+                                        'LINK',
+                                      ])
+                                      .describe(
+                                        'Data type for property values, determining storage and validation.'
+                                      ),
+                                    display_name: zod.string(),
+                                    id: zod.uuid(),
+                                    is_metadata: zod
+                                      .boolean()
+                                      .describe(
+                                        'Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'
+                                      ),
+                                    is_multi_select: zod.boolean(),
+                                    is_system: zod
+                                      .boolean()
+                                      .describe(
+                                        'Flag to indicate if this is a system property (stored in DB).'
+                                      ),
+                                    owner: zod
+                                      .union([
+                                        zod
+                                          .object({
+                                            scope: zod.enum(['user']),
+                                            user_id: zod.string(),
+                                          })
+                                          .describe('User-scoped property.'),
+                                        zod
+                                          .object({
+                                            scope: zod.enum(['team']),
+                                            team_id: zod.uuid(),
+                                          })
+                                          .describe('Team-scoped property.'),
+                                        zod
+                                          .object({
+                                            scope: zod.enum(['system']),
+                                          })
+                                          .describe(
+                                            'System-owned property (no user or team owner).'
+                                          ),
+                                      ])
+                                      .describe(
+                                        'Defines who owns a property - user-scoped, team-scoped, or system.'
+                                      ),
+                                    specific_entity_type: zod
+                                      .union([
+                                        zod.null(),
+                                        zod
+                                          .enum([
+                                            'CALENDAR_EVENT',
+                                            'CALL_RECORD',
+                                            'CHANNEL',
+                                            'CHAT',
+                                            'COMPANY',
+                                            'DOCUMENT',
+                                            'PROJECT',
+                                            'TASK',
+                                            'THREAD',
+                                            'USER',
+                                          ])
+                                          .describe(
+                                            'Type of entity that can be referenced by entity properties.'
+                                          ),
+                                      ])
+                                      .optional(),
+                                    updated_at: zod.iso.datetime({}),
+                                  })
+                                  .describe(
+                                    'Property definition model (service representation).'
+                                  ),
+                                id: zod
+                                  .uuid()
+                                  .describe(
+                                    'Globally unique id of the assignment attaching this property to an entity.'
+                                  ),
+                                value: zod
+                                  .union([
+                                    zod.null(),
+                                    zod
+                                      .union([
+                                        zod
+                                          .object({
+                                            type: zod.enum(['Boolean']),
+                                            value: zod
+                                              .boolean()
+                                              .describe(
+                                                'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                              ),
+                                          })
+                                          .describe(
+                                            'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                          ),
+                                        zod
+                                          .object({
+                                            type: zod.enum(['Number']),
+                                            value: zod
+                                              .number()
+                                              .describe(
+                                                'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                              ),
+                                          })
+                                          .describe(
+                                            'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                          ),
+                                        zod
+                                          .object({
+                                            type: zod.enum(['String']),
+                                            value: zod
+                                              .string()
+                                              .describe(
+                                                'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                              ),
+                                          })
+                                          .describe(
+                                            'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                          ),
+                                        zod
+                                          .object({
+                                            type: zod.enum(['Date']),
+                                            value: zod.iso
+                                              .datetime({})
+                                              .describe(
+                                                'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                              ),
+                                          })
+                                          .describe(
+                                            'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          ),
+                                        zod
+                                          .object({
+                                            type: zod.enum(['SelectOption']),
+                                            value: zod
+                                              .array(zod.uuid())
+                                              .describe(
+                                                'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                              ),
+                                          })
+                                          .describe(
+                                            'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                          ),
+                                        zod
+                                          .object({
+                                            type: zod.enum(['EntityReference']),
+                                            value: zod
+                                              .array(
+                                                zod
+                                                  .object({
+                                                    entity_id: zod.string(),
+                                                    entity_type: zod
+                                                      .enum([
+                                                        'CALENDAR_EVENT',
+                                                        'CALL_RECORD',
+                                                        'CHANNEL',
+                                                        'CHAT',
+                                                        'COMPANY',
+                                                        'DOCUMENT',
+                                                        'PROJECT',
+                                                        'TASK',
+                                                        'THREAD',
+                                                        'USER',
+                                                      ])
+                                                      .describe(
+                                                        'Type of entity that can be referenced by entity properties.'
+                                                      ),
+                                                    specific_message_id: zod
+                                                      .uuid()
+                                                      .nullish()
+                                                      .describe(
+                                                        'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                                                      ),
+                                                  })
+                                                  .describe(
+                                                    'Entity reference for entity-type property values.'
+                                                  )
+                                              )
+                                              .describe(
+                                                'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                              ),
+                                          })
+                                          .describe(
+                                            'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                          ),
+                                        zod
+                                          .object({
+                                            type: zod.enum(['Link']),
+                                            value: zod
+                                              .array(zod.string())
+                                              .describe(
+                                                'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                              ),
+                                          })
+                                          .describe(
+                                            'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                          ),
+                                      ])
+                                      .describe(
+                                        'Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to\/from JSONB in the database.'
+                                      ),
+                                  ])
+                                  .optional(),
+                              })
+                              .describe(
+                                'A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.'
+                              )
+                          )
+                          .describe('Properties attached to the entity.'),
+                      })
+                      .describe(
+                        'Property fields that can be flattened into property-bearing Soup items.'
+                      )
+                      .and(
+                        zod.object({
+                          botId: zod
+                            .uuid()
+                            .describe('The bot running this session'),
+                          createdAt: zod.iso
+                            .datetime({})
+                            .describe('The time the session was created'),
+                          id: zod.uuid().describe('The agent session uuid'),
+                          name: zod
+                            .string()
+                            .describe('The user-facing name of the session'),
+                          ownerId: zod
+                            .string()
+                            .describe('Who the session belongs to'),
+                          status: zod
+                            .string()
+                            .describe(
+                              "The session's last known status.\n\n`no_messages` until the first system event arrives, `disconnected` if\nthe connection dropped without a clean close, otherwise the wire name\nof the most recent system event (for example `session\/end`)."
+                            ),
+                          threadId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The channel thread the session was opened from, when any'
+                            ),
+                          updatedAt: zod.iso
+                            .datetime({})
+                            .describe('The time the session was last modified'),
+                          viewedAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe(
+                              'The time the session was last viewed by the requesting user'
+                            ),
+                        })
+                      )
+                      .describe(
+                        "An agent session as displayed in Soup.\n\nMirrors [`crate::chat::SoupChat`]: an agent session is the coding-agent\ncounterpart of a chat, so it carries the same identity, ownership, and\nrecency fields plus the session's last known status."
+                      ),
+                    tag: zod.enum(['agentSession']),
+                  })
+                  .describe('Agent session item.'),
               ])
               .describe('A single item in the Soup feed.')
               .and(
@@ -25031,6 +27855,12 @@ export const postItemsSoupAstGroupedResponse = zod
                     .boolean()
                     .describe(
                       'Whether the requesting user has favorited this entity.'
+                    ),
+                  notified_at: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe(
+                      'When the caller was last notified about this entity, present only\nwhen the page was ordered by `notified_at`. Clients keep the notified\nfeed ordered and date-bucketed on this value.'
                     ),
                   touched_at: zod.iso
                     .datetime({})
@@ -25057,6 +27887,2039 @@ export const postItemsSoupAstGroupedResponse = zod
       .describe('Follow-up response for one specific group.'),
   ])
   .describe('Response for grouped soup queries.');
+
+/**
+ * @summary Read a bounded timeline with lazy thread previews.
+ */
+export const messageTimelineParams = zod.object({
+  parent_type: zod.string(),
+  parent_id: zod.string(),
+});
+
+export const messageTimelineQueryParams = zod.object({
+  selection: zod
+    .string()
+    .nullish()
+    .describe(
+      'Serialized MessageTimelineQuery; absent selects the latest roots.'
+    ),
+});
+
+export const messageTimelineResponse = zod
+  .object({
+    items: zod
+      .array(
+        zod
+          .object({
+            attachments: zod
+              .array(
+                zod
+                  .object({
+                    created_at: zod.iso
+                      .datetime({})
+                      .describe('When the attachment was added.'),
+                    entity_id: zod
+                      .string()
+                      .describe('Attached entity identifier.'),
+                    entity_type: zod.string().describe('Attached entity type.'),
+                    height: zod
+                      .number()
+                      .nullish()
+                      .describe('Optional media height.'),
+                    id: zod.uuid().describe('Attachment UUID.'),
+                    width: zod
+                      .number()
+                      .nullish()
+                      .describe('Optional media width.'),
+                  })
+                  .describe('An entity attached to a message.')
+              )
+              .describe('Attached entities.'),
+            bot_profile: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    avatar_url: zod
+                      .string()
+                      .nullish()
+                      .describe('Bot avatar URL.'),
+                    name: zod.string().describe('Bot display name.'),
+                  })
+                  .describe(
+                    'Public bot profile attached to bot-authored messages.'
+                  ),
+              ])
+              .optional(),
+            content: zod.string().describe('Macro Markdown body.'),
+            created_at: zod.iso.datetime({}).describe('Creation time.'),
+            deleted_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('Message tombstone, independent of thread deletion.'),
+            edited_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('Last content edit, if any.'),
+            id: zod.uuid().describe('Message UUID.'),
+            imported_author: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    name: zod
+                      .string()
+                      .describe(
+                        'Original author text; never interpreted as an authenticated principal.'
+                      ),
+                  })
+                  .describe(
+                    'Display attribution for a comment imported from an external document.'
+                  ),
+              ])
+              .optional(),
+            mentions: zod
+              .array(
+                zod
+                  .object({
+                    entity_id: zod
+                      .string()
+                      .describe('Mentioned entity identifier.'),
+                    entity_type: zod
+                      .string()
+                      .describe('Mentioned entity type.'),
+                  })
+                  .describe('A mention tracked in a message body.')
+              )
+              .describe(
+                'Tracked mentions, retained when a caller changes attachments only.'
+              ),
+            parent: zod
+              .union([
+                zod
+                  .object({
+                    id: zod
+                      .uuid()
+                      .describe('A channel, including direct messages.'),
+                    type: zod.enum(['channel']),
+                  })
+                  .describe('A channel, including direct messages.'),
+                zod
+                  .object({
+                    id: zod
+                      .string()
+                      .describe(
+                        'A validated document identifier. Historical document ids need not be UUIDs.'
+                      ),
+                    type: zod.enum(['document']),
+                  })
+                  .describe('A document, including tasks and PDFs.'),
+              ])
+              .describe(
+                'The entity whose permissions and lifecycle govern a message.'
+              ),
+            reactions: zod
+              .array(
+                zod
+                  .object({
+                    emoji: zod.string().describe('Emoji being reacted with.'),
+                    users: zod
+                      .array(zod.string())
+                      .describe('User identifiers.'),
+                  })
+                  .describe('Reaction emoji and the users who added it.')
+              )
+              .describe('Aggregated reactions.'),
+            sender_id: zod
+              .string()
+              .describe('Authenticated actor or owner of imported content.'),
+            thread_id: zod
+              .uuid()
+              .nullish()
+              .describe('Root message UUID for replies; absent on roots.'),
+            triggered_by: zod
+              .string()
+              .nullish()
+              .describe('User who triggered a bot-authored message.'),
+            updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+          })
+          .describe(
+            'Shared message representation for channel timelines and entity discussions.'
+          )
+          .and(
+            zod.object({
+              state: zod
+                .object({
+                  anchor: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .union([
+                          zod
+                            .object({
+                              mark_id: zod
+                                .uuid()
+                                .describe(
+                                  'Mark UUID serialized in the document.'
+                                ),
+                              type: zod.enum(['markdown']),
+                            })
+                            .describe(
+                              'Stable Lexical mark identity, independent of transient node keys.'
+                            ),
+                          zod
+                            .object({
+                              anchor_id: zod
+                                .uuid()
+                                .describe('Highlight annotation UUID.'),
+                              type: zod.enum(['pdf_highlight']),
+                            })
+                            .describe(
+                              'An independently existing PDF highlight.'
+                            ),
+                          zod
+                            .object({
+                              anchor_id: zod
+                                .uuid()
+                                .describe('Placeable annotation UUID.'),
+                              type: zod.enum(['pdf_placeable']),
+                            })
+                            .describe(
+                              'A comment-only placeable PDF annotation.'
+                            ),
+                        ])
+                        .describe(
+                          "A thread's location within its document. Geometry remains annotation-owned."
+                        ),
+                    ])
+                    .optional(),
+                  created_at: zod.iso
+                    .datetime({})
+                    .describe('Creation time of the discussion.'),
+                  deleted_at: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe(
+                      'Explicit deletion of the entire thread, distinct from root deletion.'
+                    ),
+                  resolved: zod
+                    .boolean()
+                    .describe('Whether this discussion has been resolved.'),
+                  root_id: zod
+                    .uuid()
+                    .describe(
+                      'Root message UUID; there is no separate thread identity.'
+                    ),
+                  updated_at: zod.iso
+                    .datetime({})
+                    .describe('Last state change.'),
+                  user_id: zod
+                    .string()
+                    .describe(
+                      'User who owns this discussion, including imported discussions.'
+                    ),
+                })
+                .describe(
+                  'State belonging to a whole thread, keyed by its root message.'
+                ),
+              thread: zod
+                .object({
+                  latest_reply_at: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe('Creation time of the latest live reply.'),
+                  preview: zod
+                    .array(
+                      zod
+                        .object({
+                          attachments: zod
+                            .array(
+                              zod
+                                .object({
+                                  created_at: zod.iso
+                                    .datetime({})
+                                    .describe('When the attachment was added.'),
+                                  entity_id: zod
+                                    .string()
+                                    .describe('Attached entity identifier.'),
+                                  entity_type: zod
+                                    .string()
+                                    .describe('Attached entity type.'),
+                                  height: zod
+                                    .number()
+                                    .nullish()
+                                    .describe('Optional media height.'),
+                                  id: zod.uuid().describe('Attachment UUID.'),
+                                  width: zod
+                                    .number()
+                                    .nullish()
+                                    .describe('Optional media width.'),
+                                })
+                                .describe('An entity attached to a message.')
+                            )
+                            .describe('Attached entities.'),
+                          bot_profile: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  avatar_url: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Bot avatar URL.'),
+                                  name: zod
+                                    .string()
+                                    .describe('Bot display name.'),
+                                })
+                                .describe(
+                                  'Public bot profile attached to bot-authored messages.'
+                                ),
+                            ])
+                            .optional(),
+                          content: zod
+                            .string()
+                            .describe('Macro Markdown body.'),
+                          created_at: zod.iso
+                            .datetime({})
+                            .describe('Creation time.'),
+                          deleted_at: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe(
+                              'Message tombstone, independent of thread deletion.'
+                            ),
+                          edited_at: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('Last content edit, if any.'),
+                          id: zod.uuid().describe('Message UUID.'),
+                          imported_author: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  name: zod
+                                    .string()
+                                    .describe(
+                                      'Original author text; never interpreted as an authenticated principal.'
+                                    ),
+                                })
+                                .describe(
+                                  'Display attribution for a comment imported from an external document.'
+                                ),
+                            ])
+                            .optional(),
+                          mentions: zod
+                            .array(
+                              zod
+                                .object({
+                                  entity_id: zod
+                                    .string()
+                                    .describe('Mentioned entity identifier.'),
+                                  entity_type: zod
+                                    .string()
+                                    .describe('Mentioned entity type.'),
+                                })
+                                .describe(
+                                  'A mention tracked in a message body.'
+                                )
+                            )
+                            .describe(
+                              'Tracked mentions, retained when a caller changes attachments only.'
+                            ),
+                          parent: zod
+                            .union([
+                              zod
+                                .object({
+                                  id: zod
+                                    .uuid()
+                                    .describe(
+                                      'A channel, including direct messages.'
+                                    ),
+                                  type: zod.enum(['channel']),
+                                })
+                                .describe(
+                                  'A channel, including direct messages.'
+                                ),
+                              zod
+                                .object({
+                                  id: zod
+                                    .string()
+                                    .describe(
+                                      'A validated document identifier. Historical document ids need not be UUIDs.'
+                                    ),
+                                  type: zod.enum(['document']),
+                                })
+                                .describe(
+                                  'A document, including tasks and PDFs.'
+                                ),
+                            ])
+                            .describe(
+                              'The entity whose permissions and lifecycle govern a message.'
+                            ),
+                          reactions: zod
+                            .array(
+                              zod
+                                .object({
+                                  emoji: zod
+                                    .string()
+                                    .describe('Emoji being reacted with.'),
+                                  users: zod
+                                    .array(zod.string())
+                                    .describe('User identifiers.'),
+                                })
+                                .describe(
+                                  'Reaction emoji and the users who added it.'
+                                )
+                            )
+                            .describe('Aggregated reactions.'),
+                          sender_id: zod
+                            .string()
+                            .describe(
+                              'Authenticated actor or owner of imported content.'
+                            ),
+                          thread_id: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'Root message UUID for replies; absent on roots.'
+                            ),
+                          triggered_by: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'User who triggered a bot-authored message.'
+                            ),
+                          updated_at: zod.iso
+                            .datetime({})
+                            .describe('Last persisted update.'),
+                        })
+                        .describe(
+                          'Shared message representation for channel timelines and entity discussions.'
+                        )
+                    )
+                    .describe(
+                      'Bounded preview using the canonical message shape.'
+                    ),
+                  reply_count: zod.number().describe('Total live reply count.'),
+                })
+                .describe('Thread counts and its oldest three live replies.'),
+            })
+          )
+          .describe(
+            'Root message with its small thread preview, independent of its parent type.'
+          )
+      )
+      .describe('Root messages with bounded previews.'),
+    next_cursor: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            created_at: zod.iso
+              .datetime({})
+              .describe('Last root creation time.'),
+            id: zod
+              .uuid()
+              .describe('Last root UUID, used to break timestamp ties.'),
+          })
+          .describe('Cursor for a chronological parent timeline.'),
+      ])
+      .optional(),
+    previous_cursor: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            created_at: zod.iso
+              .datetime({})
+              .describe('Last root creation time.'),
+            id: zod
+              .uuid()
+              .describe('Last root UUID, used to break timestamp ties.'),
+          })
+          .describe('Cursor for a chronological parent timeline.'),
+      ])
+      .optional(),
+  })
+  .describe('Bidirectional, bounded timeline page, ordered newest root first.');
+
+/**
+ * @summary Create a root message or reply.
+ */
+export const entityMessageCreateParams = zod.object({
+  parent_type: zod.string(),
+  parent_id: zod.string(),
+});
+
+export const entityMessageCreateBody = zod
+  .object({
+    anchor: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                mark_id: zod.uuid().describe('Serialized mark identifier.'),
+                type: zod.enum(['markdown']),
+              })
+              .describe('Attach a discussion to a stable Markdown mark.'),
+            zod
+              .object({
+                anchor_id: zod
+                  .uuid()
+                  .describe('Highlight annotation identifier.'),
+                type: zod.enum(['pdf_highlight']),
+              })
+              .describe(
+                'Attach an independently existing highlight on this document.'
+              ),
+            zod
+              .object({
+                anchor_id: zod
+                  .uuid()
+                  .describe(
+                    'Client-generated annotation identifier used by optimistic rendering.'
+                  ),
+                height_pct: zod
+                  .number()
+                  .describe('Height as a fraction of the page height.'),
+                page: zod.number().describe('PDF page number.'),
+                type: zod.enum(['pdf_placeable']),
+                width_pct: zod
+                  .number()
+                  .describe('Width as a fraction of the page width.'),
+                x_pct: zod
+                  .number()
+                  .describe(
+                    'Horizontal position as a fraction of the page width.'
+                  ),
+                y_pct: zod
+                  .number()
+                  .describe(
+                    'Vertical position as a fraction of the page height.'
+                  ),
+              })
+              .describe(
+                'Atomically create a placeable annotation with the root message.'
+              ),
+          ])
+          .describe('Location supplied when creating a document discussion.'),
+      ])
+      .optional(),
+    attachments: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Attached entity identifier.'),
+            entity_type: zod.string().describe('Attached entity type.'),
+            height: zod.number().nullish().describe('Optional media height.'),
+            width: zod.number().nullish().describe('Optional media width.'),
+          })
+          .describe('An attachment to add to a message.')
+      )
+      .optional()
+      .describe('Initial attachments.'),
+    content: zod.string().describe('Macro Markdown body.'),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity identifier.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('A mention tracked in a message body.')
+      )
+      .optional()
+      .describe('Mentions tracked by the editor.'),
+    nonce: zod
+      .string()
+      .nullish()
+      .describe('Client nonce for optimistic reconciliation.'),
+    thread_id: zod
+      .uuid()
+      .nullish()
+      .describe('Root to reply to, if this is a reply.'),
+  })
+  .describe(
+    'Create a root or reply. Thread state may only be supplied on a root.'
+  );
+
+export const entityMessageCreateResponse = zod
+  .object({
+    attachments: zod
+      .array(
+        zod
+          .object({
+            created_at: zod.iso
+              .datetime({})
+              .describe('When the attachment was added.'),
+            entity_id: zod.string().describe('Attached entity identifier.'),
+            entity_type: zod.string().describe('Attached entity type.'),
+            height: zod.number().nullish().describe('Optional media height.'),
+            id: zod.uuid().describe('Attachment UUID.'),
+            width: zod.number().nullish().describe('Optional media width.'),
+          })
+          .describe('An entity attached to a message.')
+      )
+      .describe('Attached entities.'),
+    bot_profile: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            avatar_url: zod.string().nullish().describe('Bot avatar URL.'),
+            name: zod.string().describe('Bot display name.'),
+          })
+          .describe('Public bot profile attached to bot-authored messages.'),
+      ])
+      .optional(),
+    content: zod.string().describe('Macro Markdown body.'),
+    created_at: zod.iso.datetime({}).describe('Creation time.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Message tombstone, independent of thread deletion.'),
+    edited_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Last content edit, if any.'),
+    id: zod.uuid().describe('Message UUID.'),
+    imported_author: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            name: zod
+              .string()
+              .describe(
+                'Original author text; never interpreted as an authenticated principal.'
+              ),
+          })
+          .describe(
+            'Display attribution for a comment imported from an external document.'
+          ),
+      ])
+      .optional(),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity identifier.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('A mention tracked in a message body.')
+      )
+      .describe(
+        'Tracked mentions, retained when a caller changes attachments only.'
+      ),
+    parent: zod
+      .union([
+        zod
+          .object({
+            id: zod.uuid().describe('A channel, including direct messages.'),
+            type: zod.enum(['channel']),
+          })
+          .describe('A channel, including direct messages.'),
+        zod
+          .object({
+            id: zod
+              .string()
+              .describe(
+                'A validated document identifier. Historical document ids need not be UUIDs.'
+              ),
+            type: zod.enum(['document']),
+          })
+          .describe('A document, including tasks and PDFs.'),
+      ])
+      .describe('The entity whose permissions and lifecycle govern a message.'),
+    reactions: zod
+      .array(
+        zod
+          .object({
+            emoji: zod.string().describe('Emoji being reacted with.'),
+            users: zod.array(zod.string()).describe('User identifiers.'),
+          })
+          .describe('Reaction emoji and the users who added it.')
+      )
+      .describe('Aggregated reactions.'),
+    sender_id: zod
+      .string()
+      .describe('Authenticated actor or owner of imported content.'),
+    thread_id: zod
+      .uuid()
+      .nullish()
+      .describe('Root message UUID for replies; absent on roots.'),
+    triggered_by: zod
+      .string()
+      .nullish()
+      .describe('User who triggered a bot-authored message.'),
+    updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+  })
+  .describe(
+    'Shared message representation for channel timelines and entity discussions.'
+  );
+
+/**
+ * @summary Resolve a message within its parent.
+ */
+export const entityMessageGetMessageParams = zod.object({
+  parent_type: zod.string(),
+  parent_id: zod.string(),
+  id: zod.uuid(),
+});
+
+export const entityMessageGetMessageResponse = zod
+  .object({
+    attachments: zod
+      .array(
+        zod
+          .object({
+            created_at: zod.iso
+              .datetime({})
+              .describe('When the attachment was added.'),
+            entity_id: zod.string().describe('Attached entity identifier.'),
+            entity_type: zod.string().describe('Attached entity type.'),
+            height: zod.number().nullish().describe('Optional media height.'),
+            id: zod.uuid().describe('Attachment UUID.'),
+            width: zod.number().nullish().describe('Optional media width.'),
+          })
+          .describe('An entity attached to a message.')
+      )
+      .describe('Attached entities.'),
+    bot_profile: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            avatar_url: zod.string().nullish().describe('Bot avatar URL.'),
+            name: zod.string().describe('Bot display name.'),
+          })
+          .describe('Public bot profile attached to bot-authored messages.'),
+      ])
+      .optional(),
+    content: zod.string().describe('Macro Markdown body.'),
+    created_at: zod.iso.datetime({}).describe('Creation time.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Message tombstone, independent of thread deletion.'),
+    edited_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Last content edit, if any.'),
+    id: zod.uuid().describe('Message UUID.'),
+    imported_author: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            name: zod
+              .string()
+              .describe(
+                'Original author text; never interpreted as an authenticated principal.'
+              ),
+          })
+          .describe(
+            'Display attribution for a comment imported from an external document.'
+          ),
+      ])
+      .optional(),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity identifier.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('A mention tracked in a message body.')
+      )
+      .describe(
+        'Tracked mentions, retained when a caller changes attachments only.'
+      ),
+    parent: zod
+      .union([
+        zod
+          .object({
+            id: zod.uuid().describe('A channel, including direct messages.'),
+            type: zod.enum(['channel']),
+          })
+          .describe('A channel, including direct messages.'),
+        zod
+          .object({
+            id: zod
+              .string()
+              .describe(
+                'A validated document identifier. Historical document ids need not be UUIDs.'
+              ),
+            type: zod.enum(['document']),
+          })
+          .describe('A document, including tasks and PDFs.'),
+      ])
+      .describe('The entity whose permissions and lifecycle govern a message.'),
+    reactions: zod
+      .array(
+        zod
+          .object({
+            emoji: zod.string().describe('Emoji being reacted with.'),
+            users: zod.array(zod.string()).describe('User identifiers.'),
+          })
+          .describe('Reaction emoji and the users who added it.')
+      )
+      .describe('Aggregated reactions.'),
+    sender_id: zod
+      .string()
+      .describe('Authenticated actor or owner of imported content.'),
+    thread_id: zod
+      .uuid()
+      .nullish()
+      .describe('Root message UUID for replies; absent on roots.'),
+    triggered_by: zod
+      .string()
+      .nullish()
+      .describe('User who triggered a bot-authored message.'),
+    updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+  })
+  .describe(
+    'Shared message representation for channel timelines and entity discussions.'
+  );
+
+/**
+ * @summary Tombstone one message while preserving replies.
+ */
+export const entityMessageDeleteMessageParams = zod.object({
+  parent_type: zod.string(),
+  parent_id: zod.string(),
+  id: zod.uuid(),
+});
+
+export const entityMessageDeleteMessageQueryParams = zod.object({
+  nonce: zod.string().nullish().describe('Client nonce.'),
+});
+
+export const entityMessageDeleteMessageResponse = zod
+  .object({
+    attachments: zod
+      .array(
+        zod
+          .object({
+            created_at: zod.iso
+              .datetime({})
+              .describe('When the attachment was added.'),
+            entity_id: zod.string().describe('Attached entity identifier.'),
+            entity_type: zod.string().describe('Attached entity type.'),
+            height: zod.number().nullish().describe('Optional media height.'),
+            id: zod.uuid().describe('Attachment UUID.'),
+            width: zod.number().nullish().describe('Optional media width.'),
+          })
+          .describe('An entity attached to a message.')
+      )
+      .describe('Attached entities.'),
+    bot_profile: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            avatar_url: zod.string().nullish().describe('Bot avatar URL.'),
+            name: zod.string().describe('Bot display name.'),
+          })
+          .describe('Public bot profile attached to bot-authored messages.'),
+      ])
+      .optional(),
+    content: zod.string().describe('Macro Markdown body.'),
+    created_at: zod.iso.datetime({}).describe('Creation time.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Message tombstone, independent of thread deletion.'),
+    edited_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Last content edit, if any.'),
+    id: zod.uuid().describe('Message UUID.'),
+    imported_author: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            name: zod
+              .string()
+              .describe(
+                'Original author text; never interpreted as an authenticated principal.'
+              ),
+          })
+          .describe(
+            'Display attribution for a comment imported from an external document.'
+          ),
+      ])
+      .optional(),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity identifier.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('A mention tracked in a message body.')
+      )
+      .describe(
+        'Tracked mentions, retained when a caller changes attachments only.'
+      ),
+    parent: zod
+      .union([
+        zod
+          .object({
+            id: zod.uuid().describe('A channel, including direct messages.'),
+            type: zod.enum(['channel']),
+          })
+          .describe('A channel, including direct messages.'),
+        zod
+          .object({
+            id: zod
+              .string()
+              .describe(
+                'A validated document identifier. Historical document ids need not be UUIDs.'
+              ),
+            type: zod.enum(['document']),
+          })
+          .describe('A document, including tasks and PDFs.'),
+      ])
+      .describe('The entity whose permissions and lifecycle govern a message.'),
+    reactions: zod
+      .array(
+        zod
+          .object({
+            emoji: zod.string().describe('Emoji being reacted with.'),
+            users: zod.array(zod.string()).describe('User identifiers.'),
+          })
+          .describe('Reaction emoji and the users who added it.')
+      )
+      .describe('Aggregated reactions.'),
+    sender_id: zod
+      .string()
+      .describe('Authenticated actor or owner of imported content.'),
+    thread_id: zod
+      .uuid()
+      .nullish()
+      .describe('Root message UUID for replies; absent on roots.'),
+    triggered_by: zod
+      .string()
+      .nullish()
+      .describe('User who triggered a bot-authored message.'),
+    updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+  })
+  .describe(
+    'Shared message representation for channel timelines and entity discussions.'
+  );
+
+/**
+ * @summary Edit an owned message.
+ */
+export const entityMessageEditParams = zod.object({
+  parent_type: zod.string(),
+  parent_id: zod.string(),
+  id: zod.uuid(),
+});
+
+export const entityMessageEditBody = zod
+  .object({
+    attachments: zod
+      .union([
+        zod
+          .object({
+            type: zod.enum(['preserve']),
+          })
+          .describe('Keep current attachments.'),
+        zod
+          .object({
+            type: zod.enum(['replace']),
+            value: zod
+              .array(
+                zod
+                  .object({
+                    entity_id: zod
+                      .string()
+                      .describe('Attached entity identifier.'),
+                    entity_type: zod.string().describe('Attached entity type.'),
+                    height: zod
+                      .number()
+                      .nullish()
+                      .describe('Optional media height.'),
+                    width: zod
+                      .number()
+                      .nullish()
+                      .describe('Optional media width.'),
+                  })
+                  .describe('An attachment to add to a message.')
+              )
+              .describe('Replace all attachments.'),
+          })
+          .describe('Replace all attachments.'),
+        zod
+          .object({
+            type: zod.enum(['delta']),
+            value: zod
+              .object({
+                add: zod
+                  .array(
+                    zod
+                      .object({
+                        entity_id: zod
+                          .string()
+                          .describe('Attached entity identifier.'),
+                        entity_type: zod
+                          .string()
+                          .describe('Attached entity type.'),
+                        height: zod
+                          .number()
+                          .nullish()
+                          .describe('Optional media height.'),
+                        width: zod
+                          .number()
+                          .nullish()
+                          .describe('Optional media width.'),
+                      })
+                      .describe('An attachment to add to a message.')
+                  )
+                  .describe('New attachments to append.'),
+                remove: zod
+                  .array(zod.uuid())
+                  .describe('Existing attachment UUIDs to remove.'),
+              })
+              .describe(
+                'Remove stored attachment identities and append new references.'
+              ),
+          })
+          .describe(
+            'Remove stored attachment identities and append new references.'
+          ),
+      ])
+      .optional()
+      .describe(
+        'Attachment changes interpreted by the common command boundary.'
+      ),
+    content: zod
+      .string()
+      .nullish()
+      .describe('Replacement body; absent preserves current content.'),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity identifier.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('A mention tracked in a message body.')
+      )
+      .nullish()
+      .describe(
+        'Replacement authored mentions; absent preserves current mentions.'
+      ),
+    nonce: zod.string().nullish().describe('Client mutation nonce.'),
+  })
+  .describe(
+    'Partial updates share the same authorship, reference, and delivery rules as edits.'
+  );
+
+export const entityMessageEditResponse = zod
+  .object({
+    attachments: zod
+      .array(
+        zod
+          .object({
+            created_at: zod.iso
+              .datetime({})
+              .describe('When the attachment was added.'),
+            entity_id: zod.string().describe('Attached entity identifier.'),
+            entity_type: zod.string().describe('Attached entity type.'),
+            height: zod.number().nullish().describe('Optional media height.'),
+            id: zod.uuid().describe('Attachment UUID.'),
+            width: zod.number().nullish().describe('Optional media width.'),
+          })
+          .describe('An entity attached to a message.')
+      )
+      .describe('Attached entities.'),
+    bot_profile: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            avatar_url: zod.string().nullish().describe('Bot avatar URL.'),
+            name: zod.string().describe('Bot display name.'),
+          })
+          .describe('Public bot profile attached to bot-authored messages.'),
+      ])
+      .optional(),
+    content: zod.string().describe('Macro Markdown body.'),
+    created_at: zod.iso.datetime({}).describe('Creation time.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Message tombstone, independent of thread deletion.'),
+    edited_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Last content edit, if any.'),
+    id: zod.uuid().describe('Message UUID.'),
+    imported_author: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            name: zod
+              .string()
+              .describe(
+                'Original author text; never interpreted as an authenticated principal.'
+              ),
+          })
+          .describe(
+            'Display attribution for a comment imported from an external document.'
+          ),
+      ])
+      .optional(),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity identifier.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('A mention tracked in a message body.')
+      )
+      .describe(
+        'Tracked mentions, retained when a caller changes attachments only.'
+      ),
+    parent: zod
+      .union([
+        zod
+          .object({
+            id: zod.uuid().describe('A channel, including direct messages.'),
+            type: zod.enum(['channel']),
+          })
+          .describe('A channel, including direct messages.'),
+        zod
+          .object({
+            id: zod
+              .string()
+              .describe(
+                'A validated document identifier. Historical document ids need not be UUIDs.'
+              ),
+            type: zod.enum(['document']),
+          })
+          .describe('A document, including tasks and PDFs.'),
+      ])
+      .describe('The entity whose permissions and lifecycle govern a message.'),
+    reactions: zod
+      .array(
+        zod
+          .object({
+            emoji: zod.string().describe('Emoji being reacted with.'),
+            users: zod.array(zod.string()).describe('User identifiers.'),
+          })
+          .describe('Reaction emoji and the users who added it.')
+      )
+      .describe('Aggregated reactions.'),
+    sender_id: zod
+      .string()
+      .describe('Authenticated actor or owner of imported content.'),
+    thread_id: zod
+      .uuid()
+      .nullish()
+      .describe('Root message UUID for replies; absent on roots.'),
+    triggered_by: zod
+      .string()
+      .nullish()
+      .describe('User who triggered a bot-authored message.'),
+    updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+  })
+  .describe(
+    'Shared message representation for channel timelines and entity discussions.'
+  );
+
+/**
+ * @summary Change the caller's reaction.
+ */
+export const entityMessageReactParams = zod.object({
+  parent_type: zod.string(),
+  parent_id: zod.string(),
+  id: zod.uuid(),
+});
+
+export const entityMessageReactBody = zod
+  .object({
+    add: zod.boolean().describe('Add when true, remove when false.'),
+    emoji: zod.string().describe('Emoji.'),
+    nonce: zod.string().nullish().describe('Client nonce.'),
+  })
+  .describe('Reaction mutation for the authenticated user.');
+
+export const entityMessageReactResponse = zod
+  .object({
+    attachments: zod
+      .array(
+        zod
+          .object({
+            created_at: zod.iso
+              .datetime({})
+              .describe('When the attachment was added.'),
+            entity_id: zod.string().describe('Attached entity identifier.'),
+            entity_type: zod.string().describe('Attached entity type.'),
+            height: zod.number().nullish().describe('Optional media height.'),
+            id: zod.uuid().describe('Attachment UUID.'),
+            width: zod.number().nullish().describe('Optional media width.'),
+          })
+          .describe('An entity attached to a message.')
+      )
+      .describe('Attached entities.'),
+    bot_profile: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            avatar_url: zod.string().nullish().describe('Bot avatar URL.'),
+            name: zod.string().describe('Bot display name.'),
+          })
+          .describe('Public bot profile attached to bot-authored messages.'),
+      ])
+      .optional(),
+    content: zod.string().describe('Macro Markdown body.'),
+    created_at: zod.iso.datetime({}).describe('Creation time.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Message tombstone, independent of thread deletion.'),
+    edited_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Last content edit, if any.'),
+    id: zod.uuid().describe('Message UUID.'),
+    imported_author: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            name: zod
+              .string()
+              .describe(
+                'Original author text; never interpreted as an authenticated principal.'
+              ),
+          })
+          .describe(
+            'Display attribution for a comment imported from an external document.'
+          ),
+      ])
+      .optional(),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity identifier.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('A mention tracked in a message body.')
+      )
+      .describe(
+        'Tracked mentions, retained when a caller changes attachments only.'
+      ),
+    parent: zod
+      .union([
+        zod
+          .object({
+            id: zod.uuid().describe('A channel, including direct messages.'),
+            type: zod.enum(['channel']),
+          })
+          .describe('A channel, including direct messages.'),
+        zod
+          .object({
+            id: zod
+              .string()
+              .describe(
+                'A validated document identifier. Historical document ids need not be UUIDs.'
+              ),
+            type: zod.enum(['document']),
+          })
+          .describe('A document, including tasks and PDFs.'),
+      ])
+      .describe('The entity whose permissions and lifecycle govern a message.'),
+    reactions: zod
+      .array(
+        zod
+          .object({
+            emoji: zod.string().describe('Emoji being reacted with.'),
+            users: zod.array(zod.string()).describe('User identifiers.'),
+          })
+          .describe('Reaction emoji and the users who added it.')
+      )
+      .describe('Aggregated reactions.'),
+    sender_id: zod
+      .string()
+      .describe('Authenticated actor or owner of imported content.'),
+    thread_id: zod
+      .uuid()
+      .nullish()
+      .describe('Root message UUID for replies; absent on roots.'),
+    triggered_by: zod
+      .string()
+      .nullish()
+      .describe('User who triggered a bot-authored message.'),
+    updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+  })
+  .describe(
+    'Shared message representation for channel timelines and entity discussions.'
+  );
+
+/**
+ * @summary Resolve an old link under current parent permissions.
+ */
+export const entityMessageLegacyParams = zod.object({
+  parent_type: zod.string(),
+  parent_id: zod.string(),
+  legacy_id: zod.number(),
+});
+
+export const entityMessageLegacyQueryParams = zod.object({
+  thread: zod
+    .boolean()
+    .optional()
+    .describe('Resolve a thread id instead of a comment id.'),
+});
+
+export const entityMessageLegacyResponse = zod
+  .object({
+    attachments: zod
+      .array(
+        zod
+          .object({
+            created_at: zod.iso
+              .datetime({})
+              .describe('When the attachment was added.'),
+            entity_id: zod.string().describe('Attached entity identifier.'),
+            entity_type: zod.string().describe('Attached entity type.'),
+            height: zod.number().nullish().describe('Optional media height.'),
+            id: zod.uuid().describe('Attachment UUID.'),
+            width: zod.number().nullish().describe('Optional media width.'),
+          })
+          .describe('An entity attached to a message.')
+      )
+      .describe('Attached entities.'),
+    bot_profile: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            avatar_url: zod.string().nullish().describe('Bot avatar URL.'),
+            name: zod.string().describe('Bot display name.'),
+          })
+          .describe('Public bot profile attached to bot-authored messages.'),
+      ])
+      .optional(),
+    content: zod.string().describe('Macro Markdown body.'),
+    created_at: zod.iso.datetime({}).describe('Creation time.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Message tombstone, independent of thread deletion.'),
+    edited_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Last content edit, if any.'),
+    id: zod.uuid().describe('Message UUID.'),
+    imported_author: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            name: zod
+              .string()
+              .describe(
+                'Original author text; never interpreted as an authenticated principal.'
+              ),
+          })
+          .describe(
+            'Display attribution for a comment imported from an external document.'
+          ),
+      ])
+      .optional(),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity identifier.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('A mention tracked in a message body.')
+      )
+      .describe(
+        'Tracked mentions, retained when a caller changes attachments only.'
+      ),
+    parent: zod
+      .union([
+        zod
+          .object({
+            id: zod.uuid().describe('A channel, including direct messages.'),
+            type: zod.enum(['channel']),
+          })
+          .describe('A channel, including direct messages.'),
+        zod
+          .object({
+            id: zod
+              .string()
+              .describe(
+                'A validated document identifier. Historical document ids need not be UUIDs.'
+              ),
+            type: zod.enum(['document']),
+          })
+          .describe('A document, including tasks and PDFs.'),
+      ])
+      .describe('The entity whose permissions and lifecycle govern a message.'),
+    reactions: zod
+      .array(
+        zod
+          .object({
+            emoji: zod.string().describe('Emoji being reacted with.'),
+            users: zod.array(zod.string()).describe('User identifiers.'),
+          })
+          .describe('Reaction emoji and the users who added it.')
+      )
+      .describe('Aggregated reactions.'),
+    sender_id: zod
+      .string()
+      .describe('Authenticated actor or owner of imported content.'),
+    thread_id: zod
+      .uuid()
+      .nullish()
+      .describe('Root message UUID for replies; absent on roots.'),
+    triggered_by: zod
+      .string()
+      .nullish()
+      .describe('User who triggered a bot-authored message.'),
+    updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+  })
+  .describe(
+    'Shared message representation for channel timelines and entity discussions.'
+  );
+
+/**
+ * @summary Read source channel threads mentioning this document under both parents' permissions.
+ */
+export const entityMessageReferencesParams = zod.object({
+  parent_type: zod.string(),
+  parent_id: zod.string(),
+});
+
+export const entityMessageReferencesQueryLimitMin = 0;
+
+export const entityMessageReferencesQueryParams = zod.object({
+  limit: zod
+    .number()
+    .min(entityMessageReferencesQueryLimitMin)
+    .nullish()
+    .describe('Maximum number of roots.'),
+  created_at: zod.iso
+    .datetime({})
+    .nullish()
+    .describe("Last root's creation timestamp."),
+  cursor_id: zod.uuid().nullish().describe("Last root's UUID."),
+});
+
+export const entityMessageReferencesResponse = zod
+  .object({
+    next_cursor: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            created_at: zod.iso
+              .datetime({})
+              .describe('Last root creation time.'),
+            id: zod
+              .uuid()
+              .describe('Last root UUID, used to break timestamp ties.'),
+          })
+          .describe('Cursor for a chronological parent timeline.'),
+      ])
+      .optional(),
+    threads: zod
+      .array(
+        zod
+          .object({
+            can_reply: zod
+              .boolean()
+              .describe(
+                'Whether this viewer currently has permission to reply in the source channel.'
+              ),
+            channel_name: zod
+              .string()
+              .nullish()
+              .describe(
+                "Source channel's current display name, returned only after access checks."
+              ),
+            parent: zod
+              .union([
+                zod
+                  .object({
+                    id: zod
+                      .uuid()
+                      .describe('A channel, including direct messages.'),
+                    type: zod.enum(['channel']),
+                  })
+                  .describe('A channel, including direct messages.'),
+                zod
+                  .object({
+                    id: zod
+                      .string()
+                      .describe(
+                        'A validated document identifier. Historical document ids need not be UUIDs.'
+                      ),
+                    type: zod.enum(['document']),
+                  })
+                  .describe('A document, including tasks and PDFs.'),
+              ])
+              .describe(
+                'The entity whose permissions and lifecycle govern a message.'
+              ),
+            root_id: zod
+              .uuid()
+              .describe(
+                'Source root identity; discovery does not copy its message content.'
+              ),
+          })
+          .describe(
+            'A source channel thread that mentions the requested document.'
+          )
+      )
+      .describe('Accessible channel discussions mentioning the document.'),
+  })
+  .describe('Authorized source threads, deduplicated by root.');
+
+/**
+ * @summary Open a specific discussion from a link or annotation.
+ */
+export const entityMessageGetThreadParams = zod.object({
+  parent_type: zod.string(),
+  parent_id: zod.string(),
+  id: zod.uuid(),
+});
+
+export const entityMessageGetThreadResponse = zod
+  .object({
+    replies: zod
+      .array(
+        zod
+          .object({
+            attachments: zod
+              .array(
+                zod
+                  .object({
+                    created_at: zod.iso
+                      .datetime({})
+                      .describe('When the attachment was added.'),
+                    entity_id: zod
+                      .string()
+                      .describe('Attached entity identifier.'),
+                    entity_type: zod.string().describe('Attached entity type.'),
+                    height: zod
+                      .number()
+                      .nullish()
+                      .describe('Optional media height.'),
+                    id: zod.uuid().describe('Attachment UUID.'),
+                    width: zod
+                      .number()
+                      .nullish()
+                      .describe('Optional media width.'),
+                  })
+                  .describe('An entity attached to a message.')
+              )
+              .describe('Attached entities.'),
+            bot_profile: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    avatar_url: zod
+                      .string()
+                      .nullish()
+                      .describe('Bot avatar URL.'),
+                    name: zod.string().describe('Bot display name.'),
+                  })
+                  .describe(
+                    'Public bot profile attached to bot-authored messages.'
+                  ),
+              ])
+              .optional(),
+            content: zod.string().describe('Macro Markdown body.'),
+            created_at: zod.iso.datetime({}).describe('Creation time.'),
+            deleted_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('Message tombstone, independent of thread deletion.'),
+            edited_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('Last content edit, if any.'),
+            id: zod.uuid().describe('Message UUID.'),
+            imported_author: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    name: zod
+                      .string()
+                      .describe(
+                        'Original author text; never interpreted as an authenticated principal.'
+                      ),
+                  })
+                  .describe(
+                    'Display attribution for a comment imported from an external document.'
+                  ),
+              ])
+              .optional(),
+            mentions: zod
+              .array(
+                zod
+                  .object({
+                    entity_id: zod
+                      .string()
+                      .describe('Mentioned entity identifier.'),
+                    entity_type: zod
+                      .string()
+                      .describe('Mentioned entity type.'),
+                  })
+                  .describe('A mention tracked in a message body.')
+              )
+              .describe(
+                'Tracked mentions, retained when a caller changes attachments only.'
+              ),
+            parent: zod
+              .union([
+                zod
+                  .object({
+                    id: zod
+                      .uuid()
+                      .describe('A channel, including direct messages.'),
+                    type: zod.enum(['channel']),
+                  })
+                  .describe('A channel, including direct messages.'),
+                zod
+                  .object({
+                    id: zod
+                      .string()
+                      .describe(
+                        'A validated document identifier. Historical document ids need not be UUIDs.'
+                      ),
+                    type: zod.enum(['document']),
+                  })
+                  .describe('A document, including tasks and PDFs.'),
+              ])
+              .describe(
+                'The entity whose permissions and lifecycle govern a message.'
+              ),
+            reactions: zod
+              .array(
+                zod
+                  .object({
+                    emoji: zod.string().describe('Emoji being reacted with.'),
+                    users: zod
+                      .array(zod.string())
+                      .describe('User identifiers.'),
+                  })
+                  .describe('Reaction emoji and the users who added it.')
+              )
+              .describe('Aggregated reactions.'),
+            sender_id: zod
+              .string()
+              .describe('Authenticated actor or owner of imported content.'),
+            thread_id: zod
+              .uuid()
+              .nullish()
+              .describe('Root message UUID for replies; absent on roots.'),
+            triggered_by: zod
+              .string()
+              .nullish()
+              .describe('User who triggered a bot-authored message.'),
+            updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+          })
+          .describe(
+            'Shared message representation for channel timelines and entity discussions.'
+          )
+      )
+      .describe('Replies in display order.'),
+    root: zod
+      .object({
+        attachments: zod
+          .array(
+            zod
+              .object({
+                created_at: zod.iso
+                  .datetime({})
+                  .describe('When the attachment was added.'),
+                entity_id: zod.string().describe('Attached entity identifier.'),
+                entity_type: zod.string().describe('Attached entity type.'),
+                height: zod
+                  .number()
+                  .nullish()
+                  .describe('Optional media height.'),
+                id: zod.uuid().describe('Attachment UUID.'),
+                width: zod.number().nullish().describe('Optional media width.'),
+              })
+              .describe('An entity attached to a message.')
+          )
+          .describe('Attached entities.'),
+        bot_profile: zod
+          .union([
+            zod.null(),
+            zod
+              .object({
+                avatar_url: zod.string().nullish().describe('Bot avatar URL.'),
+                name: zod.string().describe('Bot display name.'),
+              })
+              .describe(
+                'Public bot profile attached to bot-authored messages.'
+              ),
+          ])
+          .optional(),
+        content: zod.string().describe('Macro Markdown body.'),
+        created_at: zod.iso.datetime({}).describe('Creation time.'),
+        deleted_at: zod.iso
+          .datetime({})
+          .nullish()
+          .describe('Message tombstone, independent of thread deletion.'),
+        edited_at: zod.iso
+          .datetime({})
+          .nullish()
+          .describe('Last content edit, if any.'),
+        id: zod.uuid().describe('Message UUID.'),
+        imported_author: zod
+          .union([
+            zod.null(),
+            zod
+              .object({
+                name: zod
+                  .string()
+                  .describe(
+                    'Original author text; never interpreted as an authenticated principal.'
+                  ),
+              })
+              .describe(
+                'Display attribution for a comment imported from an external document.'
+              ),
+          ])
+          .optional(),
+        mentions: zod
+          .array(
+            zod
+              .object({
+                entity_id: zod
+                  .string()
+                  .describe('Mentioned entity identifier.'),
+                entity_type: zod.string().describe('Mentioned entity type.'),
+              })
+              .describe('A mention tracked in a message body.')
+          )
+          .describe(
+            'Tracked mentions, retained when a caller changes attachments only.'
+          ),
+        parent: zod
+          .union([
+            zod
+              .object({
+                id: zod
+                  .uuid()
+                  .describe('A channel, including direct messages.'),
+                type: zod.enum(['channel']),
+              })
+              .describe('A channel, including direct messages.'),
+            zod
+              .object({
+                id: zod
+                  .string()
+                  .describe(
+                    'A validated document identifier. Historical document ids need not be UUIDs.'
+                  ),
+                type: zod.enum(['document']),
+              })
+              .describe('A document, including tasks and PDFs.'),
+          ])
+          .describe(
+            'The entity whose permissions and lifecycle govern a message.'
+          ),
+        reactions: zod
+          .array(
+            zod
+              .object({
+                emoji: zod.string().describe('Emoji being reacted with.'),
+                users: zod.array(zod.string()).describe('User identifiers.'),
+              })
+              .describe('Reaction emoji and the users who added it.')
+          )
+          .describe('Aggregated reactions.'),
+        sender_id: zod
+          .string()
+          .describe('Authenticated actor or owner of imported content.'),
+        thread_id: zod
+          .uuid()
+          .nullish()
+          .describe('Root message UUID for replies; absent on roots.'),
+        triggered_by: zod
+          .string()
+          .nullish()
+          .describe('User who triggered a bot-authored message.'),
+        updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+      })
+      .describe(
+        'Shared message representation for channel timelines and entity discussions.'
+      ),
+    state: zod
+      .object({
+        anchor: zod
+          .union([
+            zod.null(),
+            zod
+              .union([
+                zod
+                  .object({
+                    mark_id: zod
+                      .uuid()
+                      .describe('Mark UUID serialized in the document.'),
+                    type: zod.enum(['markdown']),
+                  })
+                  .describe(
+                    'Stable Lexical mark identity, independent of transient node keys.'
+                  ),
+                zod
+                  .object({
+                    anchor_id: zod
+                      .uuid()
+                      .describe('Highlight annotation UUID.'),
+                    type: zod.enum(['pdf_highlight']),
+                  })
+                  .describe('An independently existing PDF highlight.'),
+                zod
+                  .object({
+                    anchor_id: zod
+                      .uuid()
+                      .describe('Placeable annotation UUID.'),
+                    type: zod.enum(['pdf_placeable']),
+                  })
+                  .describe('A comment-only placeable PDF annotation.'),
+              ])
+              .describe(
+                "A thread's location within its document. Geometry remains annotation-owned."
+              ),
+          ])
+          .optional(),
+        created_at: zod.iso
+          .datetime({})
+          .describe('Creation time of the discussion.'),
+        deleted_at: zod.iso
+          .datetime({})
+          .nullish()
+          .describe(
+            'Explicit deletion of the entire thread, distinct from root deletion.'
+          ),
+        resolved: zod
+          .boolean()
+          .describe('Whether this discussion has been resolved.'),
+        root_id: zod
+          .uuid()
+          .describe('Root message UUID; there is no separate thread identity.'),
+        updated_at: zod.iso.datetime({}).describe('Last state change.'),
+        user_id: zod
+          .string()
+          .describe(
+            'User who owns this discussion, including imported discussions.'
+          ),
+      })
+      .describe(
+        'State belonging to a whole thread, keyed by its root message.'
+      ),
+  })
+  .describe(
+    'A discussion with its root and ordered replies, including root tombstones.'
+  );
+
+/**
+ * @summary Explicitly remove a discussion.
+ */
+export const entityMessageDeleteThreadParams = zod.object({
+  parent_type: zod.string(),
+  parent_id: zod.string(),
+  id: zod.uuid(),
+});
+
+export const entityMessageDeleteThreadQueryParams = zod.object({
+  nonce: zod.string().nullish().describe('Client nonce.'),
+});
+
+export const entityMessageDeleteThreadResponse = zod
+  .object({
+    anchor: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                mark_id: zod
+                  .uuid()
+                  .describe('Mark UUID serialized in the document.'),
+                type: zod.enum(['markdown']),
+              })
+              .describe(
+                'Stable Lexical mark identity, independent of transient node keys.'
+              ),
+            zod
+              .object({
+                anchor_id: zod.uuid().describe('Highlight annotation UUID.'),
+                type: zod.enum(['pdf_highlight']),
+              })
+              .describe('An independently existing PDF highlight.'),
+            zod
+              .object({
+                anchor_id: zod.uuid().describe('Placeable annotation UUID.'),
+                type: zod.enum(['pdf_placeable']),
+              })
+              .describe('A comment-only placeable PDF annotation.'),
+          ])
+          .describe(
+            "A thread's location within its document. Geometry remains annotation-owned."
+          ),
+      ])
+      .optional(),
+    created_at: zod.iso
+      .datetime({})
+      .describe('Creation time of the discussion.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'Explicit deletion of the entire thread, distinct from root deletion.'
+      ),
+    resolved: zod
+      .boolean()
+      .describe('Whether this discussion has been resolved.'),
+    root_id: zod
+      .uuid()
+      .describe('Root message UUID; there is no separate thread identity.'),
+    updated_at: zod.iso.datetime({}).describe('Last state change.'),
+    user_id: zod
+      .string()
+      .describe(
+        'User who owns this discussion, including imported discussions.'
+      ),
+  })
+  .describe('State belonging to a whole thread, keyed by its root message.');
+
+/**
+ * @summary Update a discussion's lifecycle and placement.
+ */
+export const entityMessagePatchThreadParams = zod.object({
+  parent_type: zod.string(),
+  parent_id: zod.string(),
+  id: zod.uuid(),
+});
+
+export const entityMessagePatchThreadBody = zod
+  .object({
+    detach_anchor: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Move a Markdown discussion to the document when its marked text is removed.'
+      ),
+    nonce: zod
+      .string()
+      .nullish()
+      .describe('Client nonce for the shared thread update event.'),
+    resolved: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Resolve or reopen the discussion; absent preserves its state.'
+      ),
+  })
+  .describe(
+    'Partial changes to the lifecycle and placement of a document discussion.'
+  );
+
+export const entityMessagePatchThreadResponse = zod
+  .object({
+    anchor: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                mark_id: zod
+                  .uuid()
+                  .describe('Mark UUID serialized in the document.'),
+                type: zod.enum(['markdown']),
+              })
+              .describe(
+                'Stable Lexical mark identity, independent of transient node keys.'
+              ),
+            zod
+              .object({
+                anchor_id: zod.uuid().describe('Highlight annotation UUID.'),
+                type: zod.enum(['pdf_highlight']),
+              })
+              .describe('An independently existing PDF highlight.'),
+            zod
+              .object({
+                anchor_id: zod.uuid().describe('Placeable annotation UUID.'),
+                type: zod.enum(['pdf_placeable']),
+              })
+              .describe('A comment-only placeable PDF annotation.'),
+          ])
+          .describe(
+            "A thread's location within its document. Geometry remains annotation-owned."
+          ),
+      ])
+      .optional(),
+    created_at: zod.iso
+      .datetime({})
+      .describe('Creation time of the discussion.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'Explicit deletion of the entire thread, distinct from root deletion.'
+      ),
+    resolved: zod
+      .boolean()
+      .describe('Whether this discussion has been resolved.'),
+    root_id: zod
+      .uuid()
+      .describe('Root message UUID; there is no separate thread identity.'),
+    updated_at: zod.iso.datetime({}).describe('Last state change.'),
+    user_id: zod
+      .string()
+      .describe(
+        'User who owns this discussion, including imported discussions.'
+      ),
+  })
+  .describe('State belonging to a whole thread, keyed by its root message.');
+
+/**
+ * @summary Broadcast typing within an authorized discussion.
+ */
+export const entityMessageTypingParams = zod.object({
+  parent_type: zod.string(),
+  parent_id: zod.string(),
+});
+
+export const entityMessageTypingBody = zod
+  .object({
+    active: zod.boolean().describe('Whether the caller is typing.'),
+    nonce: zod.string().nullish().describe('Client mutation nonce.'),
+    thread_id: zod
+      .uuid()
+      .nullish()
+      .describe('Root being replied to, absent for the parent composer.'),
+  })
+  .describe('Transient typing update.');
 
 /**
  * @summary Gets the users pinned items
@@ -25149,6 +30012,13 @@ export const getPinsHandlerResponse = zod.object({
                             })
                             .describe(
                               'A skill document — markdown instructions for AI'
+                            ),
+                          zod
+                            .object({
+                              type: zod.enum(['initiative_description']),
+                            })
+                            .describe(
+                              'The description document of an initiative'
                             ),
                         ])
                         .describe(
@@ -25294,6 +30164,13 @@ export const getPinsHandlerResponse = zod.object({
                             })
                             .describe(
                               'A skill document — markdown instructions for AI'
+                            ),
+                          zod
+                            .object({
+                              type: zod.enum(['initiative_description']),
+                            })
+                            .describe(
+                              'The description document of an initiative'
                             ),
                         ])
                         .describe(
@@ -25583,6 +30460,7 @@ export const uploadFolderHandlerBody = zod.object({
                 'docx',
                 'pdf',
                 'md',
+                'spreadsheet',
                 'canvas',
                 'coffee',
                 'cson',
@@ -26077,6 +30955,7 @@ export const uploadFolderHandlerResponse = zod.object({
                     'docx',
                     'pdf',
                     'md',
+                    'spreadsheet',
                     'canvas',
                     'coffee',
                     'cson',
@@ -26699,6 +31578,11 @@ export const getProjectContentHandlerResponse = zod.object({
                       .describe(
                         'A skill document — markdown instructions for AI'
                       ),
+                    zod
+                      .object({
+                        type: zod.enum(['initiative_description']),
+                      })
+                      .describe('The description document of an initiative'),
                   ])
                   .describe(
                     'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
@@ -26824,6 +31708,14 @@ export const getProjectPermissionsV2Response = zod.object({
     ])
     .optional(),
   owner: zod.string().describe('The owner of the item'),
+  teamShareAccessLevel: zod
+    .union([
+      zod.null(),
+      zod
+        .enum(['view', 'comment', 'edit', 'owner'])
+        .describe('Ordered from least to most access top -> bottom'),
+    ])
+    .optional(),
 });
 
 /**
@@ -26927,6 +31819,11 @@ export const recentlyDeletedResponse = zod.object({
                         .describe(
                           'A skill document — markdown instructions for AI'
                         ),
+                      zod
+                        .object({
+                          type: zod.enum(['initiative_description']),
+                        })
+                        .describe('The description document of an initiative'),
                     ])
                     .describe(
                       'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
@@ -27005,35 +31902,37 @@ export const listRemindersQueryLimitMin = 0;
 
 export const listRemindersQueryParams = zod.object({
   entityType: zod
-    .enum([
-      'user',
-      'chat',
-      'channel',
-      'channel_message',
-      'document',
-      'project',
-      'email_thread',
-      'calendar_event',
-      'team',
-      'call',
-      'foreign_entity',
-      'static_file',
-      'crm_company',
-      'crm_contact',
-      'reminder',
-      'skill',
-      'agent_session',
-    ])
+    .array(
+      zod
+        .enum([
+          'user',
+          'chat',
+          'channel',
+          'channel_message',
+          'document',
+          'project',
+          'email_thread',
+          'calendar_event',
+          'team',
+          'call',
+          'foreign_entity',
+          'static_file',
+          'crm_company',
+          'crm_contact',
+          'reminder',
+          'skill',
+          'agent_session',
+          'scheduled_action',
+          'initiative',
+        ])
+        .describe('The type of an entity in Macro')
+    )
     .optional()
-    .describe(
-      'Restrict to reminders attached to this entity type. Requires `entityId`.'
-    ),
+    .describe('Restrict to reminders attached to an entity of these types.'),
   entityId: zod
-    .string()
+    .array(zod.string())
     .optional()
-    .describe(
-      'Restrict to reminders attached to this entity id. Requires `entityType`.'
-    ),
+    .describe('Restrict to reminders attached to these entity ids.'),
   includeCompleted: zod
     .boolean()
     .optional()
@@ -27106,6 +32005,8 @@ export const listRemindersResponse = zod
                     'reminder',
                     'skill',
                     'agent_session',
+                    'scheduled_action',
+                    'initiative',
                   ])
                   .describe('The type of an entity in Macro'),
               ])
@@ -27192,6 +32093,8 @@ export const createReminderBody = zod
             'reminder',
             'skill',
             'agent_session',
+            'scheduled_action',
+            'initiative',
           ])
           .describe('The type of an entity in Macro'),
       ])
@@ -27275,6 +32178,8 @@ export const getReminderResponse = zod
             'reminder',
             'skill',
             'agent_session',
+            'scheduled_action',
+            'initiative',
           ])
           .describe('The type of an entity in Macro'),
       ])
@@ -27418,6 +32323,8 @@ export const updateReminderResponse = zod
             'reminder',
             'skill',
             'agent_session',
+            'scheduled_action',
+            'initiative',
           ])
           .describe('The type of an entity in Macro'),
       ])
@@ -27584,6 +32491,14 @@ export const editThreadV2Body = zod.object({
               .describe('Ordered from least to most access top -> bottom'),
           ])
           .optional(),
+        teamShareAccessLevel: zod
+          .union([
+            zod.null(),
+            zod
+              .enum(['view', 'comment', 'edit', 'owner'])
+              .describe('Ordered from least to most access top -> bottom'),
+          ])
+          .optional(),
       }),
     ])
     .optional(),
@@ -27715,6 +32630,14 @@ export const getDocumentPermissionsV2Response = zod.object({
       ])
       .optional(),
     owner: zod.string().describe('The owner of the item'),
+    teamShareAccessLevel: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['view', 'comment', 'edit', 'owner'])
+          .describe('Ordered from least to most access top -> bottom'),
+      ])
+      .optional(),
   }),
 });
 
@@ -27767,6 +32690,14 @@ export const editProjectV2Body = zod.object({
           ])
           .optional(),
         linkShareAccessLevel: zod
+          .union([
+            zod.null(),
+            zod
+              .enum(['view', 'comment', 'edit', 'owner'])
+              .describe('Ordered from least to most access top -> bottom'),
+          ])
+          .optional(),
+        teamShareAccessLevel: zod
           .union([
             zod.null(),
             zod

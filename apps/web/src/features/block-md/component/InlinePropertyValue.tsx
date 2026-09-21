@@ -1,4 +1,3 @@
-import { useMaybeBlockId } from '@core/block';
 import { Property } from '@property';
 import { usePropertiesContext } from '@property/context/PropertiesContext';
 import type { Property as PropertyT } from '@property/types';
@@ -7,6 +6,8 @@ import { type Component, type JSX, Match, Switch } from 'solid-js';
 
 type InlinePropertyValueProps = {
   property: PropertyT;
+  /** Owning entity ID, when the pill is rendered outside its entity block. */
+  entityId?: string;
   /** Label rendered when the property is empty. Defaults to "None". */
   emptyLabel?: JSX.Element;
   class?: string;
@@ -22,7 +23,6 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
   props
 ) => {
   const ctx = usePropertiesContext();
-  const blockId = useMaybeBlockId();
 
   const isUserEntity = () =>
     props.property.valueType === 'ENTITY' &&
@@ -67,7 +67,10 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
         </Property.Pill>
       </Property.Tooltip>
       <Property.PopoverEditor
-        entitySelfFilter={{ entityType: ctx.entityType, blockId }}
+        entitySelfFilter={{
+          entityType: ctx.entityType,
+          blockId: props.entityId,
+        }}
       />
     </Property.Root>
   );

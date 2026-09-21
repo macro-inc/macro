@@ -106,6 +106,7 @@ pub async fn create_task_handler<
         document_id.clone(),
         AccessLevel::Edit,
         &state.document_permission_jwt_secret,
+        None,
     )
     .map_err(|e| {
         tracing::error!(error=?e, "failed to encode permission token");

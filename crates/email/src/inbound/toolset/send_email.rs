@@ -46,10 +46,10 @@ impl From<EmailRecipient> for ContactInfo {
 pub struct SendEmail {
     /// The subject line of the email.
     pub subject: String,
-    /// The body of the email. Written as Markdown by the AI and rendered in
-    /// the draft composer. At send time the frontend replaces this with the
-    /// base64url-encoded HTML produced by the composer, which is what gets
-    /// sent to recipients.
+    /// The body of the email, written as Markdown. A host with a composer
+    /// (chat) replaces this with the base64url-encoded HTML the composer
+    /// exported before the tool runs; a host without one (an agent session)
+    /// leaves the Markdown, and this tool renders it the same way.
     pub body: String,
     /// The primary recipients (To field).
     pub to: Vec<EmailRecipient>,
@@ -116,6 +116,8 @@ where
         let acting_user = MacroUserIdStr((*request_context.user_id).clone());
         let link = service_context.resolve_link(acting_user.clone()).await?;
 
+        let body = service_context.render_body(&self.body).await?;
+
         let input = CreateDraftInput {
             db_id: None,
             provider_id: None,
@@ -126,8 +128,8 @@ where
             to: self.to.iter().cloned().map(ContactInfo::from).collect(),
             cc: self.cc.iter().cloned().map(ContactInfo::from).collect(),
             bcc: self.bcc.iter().cloned().map(ContactInfo::from).collect(),
-            body_text: None,
-            body_html: Some(self.body.clone()),
+            body_text: body.text,
+            body_html: Some(body.html),
             body_macro: None,
             headers_json: None,
             send_time: None,

@@ -1,6 +1,5 @@
 import { getIsSpecialProject } from '@block-project/isSpecial';
 import { useBlockId } from '@core/block';
-import { DetailsDrawer } from '@core/component/DetailsDrawer';
 import {
   ShareBlockModal,
   ShareDialogContext,
@@ -24,7 +23,6 @@ export function ModalsProvider(props: ParentProps) {
       }}
     >
       {props.children}
-      <DetailsDrawer projectId={id} />
       <Show when={ENABLE_PROJECT_SHARING && !isSpecialProject}>
         <ShareBlockModal name={name()} owner={owner()} />
       </Show>

@@ -20,13 +20,12 @@ use agent_client_protocol::schema::v1::{
     ContentBlock, PromptRequest, SessionNotification, SessionUpdate, ToolCallStatus,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage, RawJsonRpcParams};
-use agent_runtime_protocol::domain::action::COMPACT_COMMAND;
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use agent_session::domain::model::Message;
 use futures::future::BoxFuture;
 
 use crate::domain::agent::close_dangling_tool_calls;
-use crate::domain::session::HistoryEntry;
+use crate::domain::session::{HistoryEntry, UserPrompt};
 
 #[cfg(test)]
 mod test;
@@ -50,11 +49,12 @@ pub trait FrameSource: Send + Sync + 'static {
 /// User prompts open turns and `session/update` notifications fill them in,
 /// mirroring what the live agent pushed into its history as the turn ran. A
 /// `/compact` prompt drops everything recorded before it, exactly as the live
-/// agent's compact handling cleared its history.
+/// agent's compact handling cleared its history - and, by the same rule, a
+/// `/compact` that carried files is a turn like any other.
 #[must_use]
 pub fn replay_history(frames: impl IntoIterator<Item = Message>) -> Vec<HistoryEntry> {
     let mut history = Vec::new();
-    let mut open: Option<(String, Vec<AssistantMessagePart>)> = None;
+    let mut open: Option<(UserPrompt, Vec<AssistantMessagePart>)> = None;
 
     for frame in frames {
         match frame {
@@ -69,21 +69,14 @@ pub fn replay_history(frames: impl IntoIterator<Item = Message>) -> Vec<HistoryE
                 else {
                     continue;
                 };
-                let text: String = prompt
-                    .prompt
-                    .iter()
-                    .filter_map(|block| match block {
-                        ContentBlock::Text(text) => Some(text.text.as_str()),
-                        _ => None,
-                    })
-                    .collect();
+                let prompt = UserPrompt::from_blocks(&prompt.prompt);
                 close_turn(&mut history, &mut open);
-                if text.trim() == COMPACT_COMMAND {
+                if prompt.is_compact_command() {
                     // Compaction dropped everything before it from the
                     // model's context; replaying it back would undo that.
                     history.clear();
                 } else {
-                    open = Some((text, Vec::new()));
+                    open = Some((prompt, Vec::new()));
                 }
             }
             Message::ToServer(ToServerMessage::Acp(acp)) => {
@@ -200,7 +193,7 @@ fn unanswered_call_name(parts: &[AssistantMessagePart], id: &str) -> Option<Stri
 /// Push the open turn into the history, closing whatever it left dangling.
 fn close_turn(
     history: &mut Vec<HistoryEntry>,
-    open: &mut Option<(String, Vec<AssistantMessagePart>)>,
+    open: &mut Option<(UserPrompt, Vec<AssistantMessagePart>)>,
 ) {
     let Some((prompt, mut parts)) = open.take() else {
         return;

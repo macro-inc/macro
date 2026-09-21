@@ -1,7 +1,7 @@
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin';
 import XIcon from '@phosphor/x.svg';
-import { Button, cn, SendButton } from '@ui';
+import { Button, SendButton } from '@ui';
 import { batch, createEffect, createSignal, Show, useContext } from 'solid-js';
 import { CommentsContext, ThreadContext } from './Thread';
 
@@ -17,6 +17,7 @@ function EditBottomRow(props: {
       <Button
         tooltip="Delete Draft"
         size="icon-sm"
+        class="size-7 rounded-full"
         variant="ghost"
         on:click={props.handleCancel}
       >
@@ -100,7 +101,7 @@ export function EditInput(props: {
 
   return (
     <div
-      class={cn('relative p-2 pb-12')}
+      class="relative h-auto px-4 pt-2 pb-11 touch:px-3 touch:pb-12"
       on:click={(e) => {
         e.stopPropagation();
         focusEditor();
@@ -108,7 +109,7 @@ export function EditInput(props: {
     >
       <MarkdownTextarea
         autoLinkMatchMode="common-tlds"
-        class="text-sm wrap-break-word text-ink"
+        class="text-base wrap-break-word text-ink"
         editable={() => true}
         onChange={(value) => {
           setEditState(value);
@@ -156,7 +157,7 @@ export function NewReplyInput(props: {
         when={props.isEditing}
         fallback={
           <div
-            class="cursor-default p-2 text-sm text-ink-placeholder"
+            class="cursor-default p-2 text-base text-ink-placeholder"
             on:click={(e) => {
               e.stopPropagation();
               props.setEditing(true);

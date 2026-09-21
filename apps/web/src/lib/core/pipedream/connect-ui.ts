@@ -36,6 +36,13 @@ export function openPipedreamConnectUI(options: {
   /** The Pipedream app to connect, by name slug (e.g. `linear`). */
   app: string;
   onEvent: (event: PipedreamConnectEvent) => void;
+  /**
+   * Where the iframe mounts; `document.body` by default. A modal dialog
+   * disables pointer events on the body and traps focus inside its content,
+   * so a surface opening this from inside one passes the dialog's content
+   * element to keep the iframe clickable and typeable.
+   */
+  container?: HTMLElement;
 }): PipedreamConnectUI {
   const params = new URLSearchParams({
     token: options.token,
@@ -78,7 +85,7 @@ export function openPipedreamConnectUI(options: {
   };
 
   window.addEventListener('message', onMessage);
-  document.body.appendChild(iframe);
+  (options.container ?? document.body).appendChild(iframe);
 
   return { close: cleanup };
 }

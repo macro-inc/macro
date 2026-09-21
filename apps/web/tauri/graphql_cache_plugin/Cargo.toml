@@ -6,6 +6,8 @@ edition.workspace = true
 [dependencies]
 cache-core = { path = "../../../../crates/client/cache-core" }
 cache-turso = { path = "../../../../crates/client/cache-turso" }
+predicate-index = { path = "../../../../crates/predicate_index" }
+soup-filter-cache-adapter = { path = "../../../../crates/soup_filter_cache_adapter" }
 serde = { workspace = true, features = ["derive"] }
 serde_json = "1"
 tauri = { workspace = true }
@@ -15,3 +17,4 @@ tracing = { workspace = true }
 [dev-dependencies]
 pollster = { workspace = true }
 tempfile = "3"
+soup-filter-projection = { path = "../../../../crates/soup_filter_projection", default-features = false }

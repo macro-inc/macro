@@ -29,7 +29,10 @@ use serde::Serialize;
 use system_properties::{StageOption, SystemPropertyKey};
 use uuid::Uuid;
 
-use crate::domain::{auth::CrmTeamReceipt, model::CrmError, service::CrmService};
+use crate::domain::{
+    auth::CrmTeamReceipt, model::CrmError, service::CrmService,
+    stages::CRM_TEAM_STAGE_DEFINITION_NAME,
+};
 
 pub use get_company::{GetCompany, GetCompanyResponse};
 pub use list_companies::{ListCompanies, ListCompaniesResponse};
@@ -191,7 +194,7 @@ where
     let mut team_stage_definition_ids = Vec::new();
     for def in defs {
         let is_stage_definition = def.definition.id == SystemPropertyKey::STAGE_UUID
-            || (def.definition.display_name.eq_ignore_ascii_case("stage")
+            || (def.definition.display_name == CRM_TEAM_STAGE_DEFINITION_NAME
                 && matches!(
                     def.definition.data_type,
                     DataType::SelectString | DataType::SelectNumber
@@ -262,7 +265,7 @@ pub(crate) fn extract_company_crm_props(
         let is_system_stage = definition_id == SystemPropertyKey::STAGE_UUID;
         let is_team_stage = !is_system_stage
             && (stages.team_stage_definition_ids.contains(&definition_id)
-                || prop.definition.display_name.eq_ignore_ascii_case("stage"));
+                || prop.definition.display_name == CRM_TEAM_STAGE_DEFINITION_NAME);
         let slot = if is_system_stage {
             &mut system_stage
         } else if is_team_stage {
@@ -386,6 +389,10 @@ pub(crate) fn crm_error(err: CrmError) -> ToolCallError {
             "CRM contact not found for the caller's team".to_string()
         }
         CrmError::InvalidRequest(msg) => msg.clone(),
+        CrmError::StageEditRoleRequired(role) => format!(
+            "editing deal stages requires the {} team role",
+            role.as_db_str()
+        ),
         _ => "CRM request failed".to_string(),
     };
 

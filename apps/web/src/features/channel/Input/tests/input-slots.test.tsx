@@ -2,16 +2,20 @@
  * @vitest-environment jsdom
  */
 
+import type { IUser } from '@core/user/types';
 import { render as renderBare, screen } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import userEvent from '@testing-library/user-event';
-import type { JSX } from 'solid-js';
+import { type JSX, onMount } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const editorMocks = vi.hoisted(() => ({
+  cursorEnabled: false,
   clear: vi.fn(),
   focus: vi.fn(),
+  mentionUsers: undefined as (() => IUser[]) | undefined,
+  emitChange: undefined as ((markdown: string) => void) | undefined,
 }));
 
 vi.hoisted(() => {
@@ -30,13 +34,26 @@ vi.hoisted(() => {
   });
 });
 
+vi.mock('@core/component/LexicalMarkdown/utils/create-composer-layout', () => ({
+  createComposerLayout: (
+    _editor: unknown,
+    options: { mode?: () => 'auto' | 'expanded' | 'collapsed' }
+  ) => ({
+    isCompact: () => options.mode?.() !== 'expanded',
+    hasMultilineContent: () => false,
+  }),
+}));
+
 vi.mock('@core/util/upload', () => ({
   chatRuleset: {},
   uploadFile: vi.fn(),
 }));
 
+vi.mock('@core/codex/flag', () => ({
+  useCodexAgentsAccess: () => () => false,
+}));
 vi.mock('@core/cursor/flag', () => ({
-  useCursorAgentsAccess: () => () => true,
+  useCursorAgentsAccess: () => () => editorMocks.cursorEnabled,
 }));
 
 // Several service clients in StaticMarkdown's import graph build websocket
@@ -119,19 +136,29 @@ vi.mock('@core/component/VideoPreview', () => ({
 }));
 
 vi.mock('@core/component/LexicalMarkdown/builder/MarkdownShell', () => ({
-  MarkdownShell: (props: { placeholder?: string; initialValue?: string }) => (
-    <>
-      <div
-        data-testid="markdown-shell"
-        data-initial-value={props.initialValue ?? ''}
-      >
-        {props.placeholder}
-      </div>
-      <Portal>
-        <input data-testid="markdown-portal-input" />
-      </Portal>
-    </>
-  ),
+  MarkdownShell: (props: {
+    placeholder?: string;
+    initialValue?: string;
+    onConnect?: () => void;
+  }) => {
+    onMount(() => {
+      editorMocks.emitChange?.(props.initialValue ?? '');
+      props.onConnect?.();
+    });
+    return (
+      <>
+        <div
+          data-testid="markdown-shell"
+          data-initial-value={props.initialValue ?? ''}
+        >
+          {props.placeholder}
+        </div>
+        <Portal>
+          <input data-testid="markdown-portal-input" />
+        </Portal>
+      </>
+    );
+  },
 }));
 
 vi.mock(
@@ -141,6 +168,9 @@ vi.mock(
       const controls = {
         clear: editorMocks.clear,
         focus: editorMocks.focus,
+        setMarkdown: (markdown: string) => {
+          editorMocks.emitChange?.(markdown);
+        },
       };
       const lexical = {
         focus: vi.fn(),
@@ -158,7 +188,10 @@ vi.mock(
       };
       const builder: any = {
         namespace: () => builder,
-        withMentions: () => builder,
+        withMentions: (options: { users?: () => IUser[] }) => {
+          editorMocks.mentionUsers = options.users;
+          return builder;
+        },
         withEmojis: () => builder,
         withActions: () => builder,
         withLinks: () => builder,
@@ -169,7 +202,10 @@ vi.mock(
         withSelectionData: () => builder,
         withFloatingFormatMenu: () => builder,
         use: () => builder,
-        onChange: () => builder,
+        onChange: (handler: (markdown: string) => void) => {
+          editorMocks.emitChange = handler;
+          return builder;
+        },
         onEnter: () => builder,
         buildHandle: () => handle,
         controls,
@@ -207,6 +243,7 @@ vi.mock('../FormatButtons', () => ({
   FormatButtons: () => <div data-testid="format-buttons" />,
 }));
 
+import { cursorMentionUser } from '../../macroAi';
 import { createInputAttachmentTracker } from '../attachment-tracker';
 import { ChannelInput } from '../ChannelInput';
 import { DropOverlay } from '../DropOverlay';
@@ -223,12 +260,7 @@ const baseInput: InputData = {
   attachments: [],
 };
 
-/**
- * `ChannelInput` reads the stored Cursor API key status to decide whether to
- * offer `@cursor` in the mention typeahead, so it needs a query client even
- * though none of these tests care about that entry. Shadowing `render` keeps
- * every call site below unchanged.
- */
+// Provide query context for the composed input and its decorators.
 const testQueryClient = new QueryClient({
   defaultOptions: { queries: { retry: false } },
 });
@@ -241,8 +273,90 @@ function render(ui: () => JSX.Element) {
 
 describe('Input slots', () => {
   beforeEach(() => {
+    editorMocks.cursorEnabled = false;
     editorMocks.clear.mockClear();
     editorMocks.focus.mockClear();
+    editorMocks.emitChange = undefined;
+    editorMocks.mentionUsers = undefined;
+  });
+
+  it('offers Cursor within its rollout before account setup', () => {
+    editorMocks.cursorEnabled = true;
+    render(() => <ChannelInput input={baseInput} />);
+    expect(editorMocks.mentionUsers?.().map((user) => user.name)).toEqual(
+      expect.arrayContaining(['Cursor', 'Claude', 'Codex'])
+    );
+  });
+
+  it('hides Cursor outside its rollout, including supplied bot entries', () => {
+    render(() => (
+      <ChannelInput
+        input={baseInput}
+        participants={() => [cursorMentionUser()]}
+        bots={() => [cursorMentionUser()]}
+      />
+    ));
+    const names = editorMocks.mentionUsers?.().map((user) => user.name);
+    expect(names).not.toContain('Cursor');
+    expect(names).toEqual(expect.arrayContaining(['Claude', 'Codex']));
+  });
+
+  it('does not start typing when the editor hydrates an empty composer', async () => {
+    const onStartTyping = vi.fn();
+    render(() => (
+      <ChannelInput input={baseInput} onStartTyping={onStartTyping} />
+    ));
+
+    await Promise.resolve();
+    expect(onStartTyping).not.toHaveBeenCalled();
+
+    editorMocks.emitChange?.('hello');
+    expect(onStartTyping).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not start typing when hydrate echoes an existing draft', async () => {
+    const onStartTyping = vi.fn();
+    render(() => (
+      <ChannelInput
+        input={{ ...baseInput, value: 'draft' }}
+        onStartTyping={onStartTyping}
+      />
+    ));
+
+    await Promise.resolve();
+    expect(onStartTyping).not.toHaveBeenCalled();
+
+    editorMocks.emitChange?.('draft');
+    expect(onStartTyping).not.toHaveBeenCalled();
+
+    editorMocks.emitChange?.('draft plus');
+    expect(onStartTyping).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not start typing when a snapshot is restored', async () => {
+    const onStartTyping = vi.fn();
+    let handle: InputHandle | undefined;
+    render(() => (
+      <ChannelInput
+        input={baseInput}
+        onReady={(nextHandle) => {
+          handle = nextHandle;
+        }}
+        onStartTyping={onStartTyping}
+      />
+    ));
+
+    await Promise.resolve();
+    handle?.restoreSnapshot({
+      value: 'restored draft',
+      mentions: [],
+      attachments: [],
+    });
+    expect(onStartTyping).not.toHaveBeenCalled();
+
+    await Promise.resolve();
+    editorMocks.emitChange?.('user typed');
+    expect(onStartTyping).toHaveBeenCalledTimes(1);
   });
 
   it('does not refocus the editor when a portaled editor control is clicked', async () => {
@@ -277,20 +391,25 @@ describe('Input slots', () => {
       })()
     );
 
-    expect(container.querySelector('[data-input-actions]')).toBeTruthy();
-    expect(container.querySelector('[data-input-actions-left]')).toBeTruthy();
-    expect(container.querySelector('[data-input-actions-right]')).toBeTruthy();
+    const layout = container.querySelector('[data-input-layout]');
+    expect(
+      container.querySelector('[data-input-actions-left]')?.parentElement
+    ).toBe(layout);
+    expect(
+      container.querySelector('[data-input-actions-right]')?.parentElement
+    ).toBe(layout);
 
     await user.click(screen.getByRole('button', { name: 'Send message' }));
     const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click');
     await user.click(screen.getByRole('button', { name: 'Attach files' }));
-    await user.click(screen.getByRole('button', { name: 'Format' }));
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Format' })).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Delete reply' }));
 
     expect(onSend).toHaveBeenCalledOnce();
     expect(clickSpy).toHaveBeenCalledOnce();
     clickSpy.mockRestore();
-    expect(onToggleFormatRibbon).toHaveBeenCalledOnce();
+    expect(onToggleFormatRibbon).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledOnce();
     expect(onSend.mock.calls[0]?.[0]?.value).toBe('reply');
   });

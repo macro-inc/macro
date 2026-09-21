@@ -1,8 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import {
-  ENABLE_ACTIVITY_FEED_FLAG,
-  ENABLE_ACTIVITY_FEED_OVERRIDE,
-} from '@core/constant/featureFlags';
+import { enableActivityFeed } from '@core/constant/featureFlags';
 import type { Accessor } from 'solid-js';
 
 /**
@@ -11,8 +8,6 @@ import type { Accessor } from 'solid-js';
  * and the feed query is never issued.
  */
 export function useActivityFeedFlag(): Accessor<boolean> {
-  const flag = useFeatureFlag(ENABLE_ACTIVITY_FEED_FLAG, {
-    enabledOverride: ENABLE_ACTIVITY_FEED_OVERRIDE,
-  });
+  const flag = useFeatureFlag(enableActivityFeed);
   return () => flag().enabled;
 }

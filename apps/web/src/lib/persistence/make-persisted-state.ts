@@ -32,7 +32,11 @@ export type PersistedState<TState extends PersistableState> = [
 export type PersistenceStorage<T> = {
   restore: (current: T) => T | undefined;
   write: (value: T) => unknown;
-  initialize?: (value: T) => void;
+  /**
+   * Initializes storage-owned capture state and provides an untracked reader
+   * for storage mechanisms that pull the current value on demand.
+   */
+  initialize?: (value: T, readCurrent: () => T) => void;
   dispose?: () => void;
 };
 
@@ -96,10 +100,11 @@ export function makePersistedState<TState extends PersistableState>(
     }
   }
 
-  const current = untrack(get);
+  const readCurrent = () => untrack(get);
+  const current = readCurrent();
   for (const storage of storages) {
     try {
-      storage.initialize?.(current);
+      storage.initialize?.(current, readCurrent);
     } catch {
       // Initialization is best effort, matching restores and writes.
     }
@@ -107,7 +112,7 @@ export function makePersistedState<TState extends PersistableState>(
   }
 
   const persistCurrent = () => {
-    const value = untrack(get);
+    const value = readCurrent();
     for (const storage of storages) {
       try {
         storage.write(value);

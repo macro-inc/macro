@@ -10,6 +10,7 @@ import {
   mergeAdjacentMacroEmTags,
 } from '@core/util/searchHighlight';
 import type {
+  AgentSessionEntity,
   CalendarEventEntity,
   CalendarEventEntityTime,
   CallEntity,
@@ -24,13 +25,14 @@ import type {
   EntityData,
   ForeignEntity,
   GithubPullRequestEntity,
-  NamedSubType,
   Notification,
   ProjectEntity,
   ReminderEntity,
   SearchData,
   WithSearch,
 } from '@entity';
+import { toSubType } from '@entity/types/entity';
+import { resolveNotifiedAt } from '@queries/soup/normalized-cache/notified-floor';
 import { resolveOwnTouch } from '@queries/soup/normalized-cache/own-touch';
 import type {
   CallRecordSearchResult,
@@ -53,6 +55,7 @@ import { formatDocumentName } from '@service-storage/util/filename';
 import type { UseQueryResult } from '@tanstack/solid-query';
 import { differenceInMilliseconds } from 'date-fns';
 import { match, P } from 'ts-pattern';
+import { mapAgentSessionSearchResult } from './agent-session-search';
 
 type InnerSearchResult =
   | DocumentSearchResult
@@ -66,6 +69,7 @@ type DisplayableSoupItem = SoupPage['items'][number];
 type SoupDocument = Extract<DisplayableSoupItem, { tag: 'document' }>['data'];
 
 type SoupEntity =
+  | AgentSessionEntity
   | DocumentEntity
   | ChatEntity
   | ProjectEntity
@@ -312,6 +316,8 @@ export const useSearchResponseItemMapper = () => {
     searchQuery: string
   ): (WithSearch<EntityData> | undefined)[] => {
     switch (result.type) {
+      case 'agentSession':
+        return [mapAgentSessionSearchResult(result)];
       case 'company': {
         const primaryDomain = result.domains[0]?.domain;
         const nameHighlight = result.nameHighlighted
@@ -631,16 +637,7 @@ const resolveDocumentEntityName = (
     type: 'document',
     name: entity.name,
     fileType: entity.fileType,
-    subType:
-      entity.subType == null
-        ? null
-        : {
-            type: entity.subType.type,
-            is_completed:
-              'is_completed' in entity.subType
-                ? entity.subType.is_completed
-                : undefined,
-          },
+    subType: toSubType(entity.subType),
   });
 };
 
@@ -671,6 +668,33 @@ function withRawNotifications<T extends SoupEntity>(
   return { ...entity, notifications } as T;
 }
 
+function calendarReminderTimestamp(
+  item: Extract<DisplayableSoupItem, { tag: 'calendarEvent' }>
+): string | undefined {
+  let latest: string | undefined;
+  let latestMs = -Infinity;
+  const include = (timestamp: string | null | undefined) => {
+    const ms = timestamp ? Date.parse(timestamp) : NaN;
+    if (ms > latestMs) {
+      latest = timestamp ?? undefined;
+      latestMs = ms;
+    }
+  };
+
+  include(item.data.lastReminderFiredAt);
+  const notifications = (item as SoupItemWithOptionalNotifications).data
+    .notifications;
+  for (const notification of notifications ?? []) {
+    if (
+      !notification.deleted_at &&
+      notification.notification_metadata.tag === 'calendar_event_reminder'
+    ) {
+      include(notification.created_at);
+    }
+  }
+  return latest;
+}
+
 type ReferencedEntityType = NonNullable<
   ReminderEntity['referencedEntity']
 >['type'];
@@ -697,6 +721,7 @@ function toReferencedEntity(
       P.union(
         'document',
         'chat',
+        'agent_session',
         'project',
         'channel',
         'channel_message',
@@ -720,6 +745,12 @@ export const mapApiSoupItemToEntity = (
   item: DisplayableSoupItem
 ): SoupEntity => {
   const entity = match(item)
+    .with({ tag: 'agentSession' }, (item) => ({
+      ...item.data,
+      type: 'agent_session' as const,
+      name: item.data.name || 'Agent session',
+      frecencyScore: item.frecency_score,
+    }))
     .with({ tag: 'chat' }, (item) => ({
       ...item.data,
       createdAt: item.data.createdAt,
@@ -934,16 +965,7 @@ export const mapApiSoupItemToEntity = (
       viewedAt: item.data.viewedAt,
       fileType: item.data.fileType ?? undefined,
       projectId: item.data.projectId ?? undefined,
-      subType:
-        item.data.subType === null || item.data.subType === undefined
-          ? undefined
-          : {
-              type: item.data.subType.type as NamedSubType,
-              is_completed:
-                'is_completed' in item.data.subType
-                  ? item.data.subType.is_completed
-                  : undefined,
-            },
+      subType: toSubType(item.data.subType) ?? undefined,
       name: resolveDocumentEntityName(item.data),
     }))
     .with({ tag: 'crmCompany' }, (item) => {
@@ -1020,8 +1042,18 @@ export const mapApiSoupItemToEntity = (
   // activity consumer can't move a freshly-touched row back down.
   const touchedAt = resolveOwnTouch(entity.id, item.touched_at ?? null);
   const touched = touchedAt ? { ...entity, touchedAt } : entity;
+  // Calendar sync can update old events long after their reminders fired.
+  // Without the server's notified_at sort, use the attached reminder's
+  // delivery time (or REST delivery stamp) rather than that metadata update.
+  // The explicit server stamp and newer websocket floor still take priority.
+  const notifiedAt = resolveNotifiedAt(
+    entity.id,
+    item.notified_at ??
+      (item.tag === 'calendarEvent' ? calendarReminderTimestamp(item) : null)
+  );
+  const notified = notifiedAt ? { ...touched, notifiedAt } : touched;
 
-  return withRawNotifications(touched, item);
+  return withRawNotifications(notified, item);
 };
 
 const toCalendarEventTime = (

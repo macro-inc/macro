@@ -2,15 +2,8 @@ import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { CommentsProvider } from '@block-md/comments/CommentsProvider';
 import { URL_PARAMS } from '@block-md/constants';
 import { keyNavigationPlugin } from '@block-md/plugins/keyboardNavigation';
-import { markdownBlockErrorSignal } from '@block-md/signal/error';
-import { FindAndReplaceStore } from '@block-md/signal/findAndReplaceStore';
-import { revisionsSignal, rewriteSignal } from '@block-md/signal/rewriteSignal';
 import { SplitBottomPanel } from '@components/app/split-layout/components/SplitBottomPanel';
-import {
-  type BlockName,
-  useBlockId,
-  useMaybeBlockAliasedName,
-} from '@core/block';
+import type { BlockName } from '@core/block';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
 import {
@@ -60,6 +53,7 @@ import {
   generatePlugin,
   horizontalRulePlugin,
   keyboardShortcutsPlugin,
+  listSwipeIndentPlugin,
   listToTablePlugin,
   markdownPastePlugin,
   mentionsPlugin,
@@ -72,6 +66,7 @@ import {
   tableTouchSelectionPlugin,
   tagsPlugin,
   textPastePlugin,
+  trailingParagraphPlugin,
   wordcountPlugin,
 } from '@core/component/LexicalMarkdown/plugins';
 import { actionsPlugin } from '@core/component/LexicalMarkdown/plugins/actions/actionsPlugin';
@@ -136,27 +131,19 @@ import { useUrlParams } from '@core/component/ParamsProvider';
 import { toast } from '@core/component/Toast/Toast';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import {
-  ENABLE_GIT_BLAME,
   ENABLE_MARKDOWN_AI_GENERATE,
   ENABLE_MARKDOWN_COMMENTS,
   ENABLE_MARKDOWN_DIFF,
   ENABLE_MARKDOWN_LIVE_COLLABORATION,
+  enableGitBlame,
+  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { IS_MAC } from '@core/constant/isMac';
 import { useUserId } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { createMethodRegistration } from '@core/orchestrator';
-import {
-  blockFileSignal,
-  blockHandleSignal,
-  blockSourceSignal,
-} from '@core/signal/load';
 import { trackMention } from '@core/signal/mention';
-import { useCanComment, useCanEdit } from '@core/signal/permissions';
-import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import { isSourceDSS, isSourceSyncService } from '@core/util/source';
 import { bufToString } from '@core/util/string';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { type EntityDragEvent, isEntityDragEvent } from '@entity';
@@ -170,7 +157,6 @@ import {
   type PeerIdValidator,
   peerIdPlugin,
 } from '@macro-inc/lexical-core';
-import WarningIcon from '@phosphor/warning.svg';
 import { useDocTags } from '@property/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { onElementConnect } from '@solid-primitives/lifecycle';
@@ -190,19 +176,12 @@ import {
   Suspense,
   untrack,
 } from 'solid-js';
-import {
-  completionSignal,
-  generateContentCallback,
-  generateContextSignal,
-  generatedAndWaitingSignal,
-  generateMenuSignal,
-  isGeneratingSignal,
-} from '../signal/generateSignal';
-import { blockDataSignal, mdStore } from '../signal/markdownBlockData';
-import type { MarkdownRewriteOutput } from '../signal/rewriteSignal';
-import { useBlockSave, useSaveMarkdownDocument } from '../signal/save';
+import { useMarkdownDocument } from '../context/markdown-document-context';
+import { createSaveMarkdownDocumentMutation } from '../queries/markdown-document-operations';
+import { EditorSystemMessage } from './EditorSystemMessage';
 import { MarkdownCollabProvider } from './MarkdownCollabProvider';
 import { MarkdownPopup } from './MarkdownPopup';
+import { isMarkdownEditorLoading } from './markdownEditorLoadingState';
 
 false && fileFolderDrop;
 
@@ -228,60 +207,93 @@ export function MarkdownEditor(props: {
   showLexicalStateDebugger?: boolean;
   onLexicalStateDebuggerClose?: () => void;
 }) {
-  const blockData = blockDataSignal.get;
-  const blockId = useBlockId();
+  const {
+    documentId,
+    kind,
+    documentSource,
+    persistedName: mdDocumentName,
+    permissions,
+    state: documentState,
+  } = useMarkdownDocument();
+  const { canEdit, canComment } = permissions;
+  const blockId = documentId();
   const userId = useUserId();
-  const blockName = useMaybeBlockAliasedName();
+  const documentKind = kind();
+  const sourceBlockName = documentKind === 'document' ? 'md' : documentKind;
   const documentTags = useDocTags(
     blockId,
-    blockName === 'task' ? EntityType.TASK : EntityType.DOCUMENT
+    documentKind === 'task' ? EntityType.TASK : EntityType.DOCUMENT
   );
   const tagApplyTargetLabel = () =>
-    blockName === 'task' ? 'Task' : 'Document';
+    documentKind === 'task' ? 'Task' : 'Document';
 
-  const mdDocumentName = useBlockDocumentName('');
+  const saveDocumentMutation = createSaveMarkdownDocumentMutation();
+  const {
+    md,
+    setMd: setMdStore,
+    error: editorError,
+    setError: setEditorError,
+    findAndReplace: findAndReplaceStore,
+    setFindAndReplace: setFindAndReplaceStore,
+  } = documentState.editor;
+  const { revisions, setRevisions } = documentState.rewrite;
+  const saveBlocked = () => documentState.comments.activeCommentThread === -1;
 
-  const blockHandle = blockHandleSignal.get;
-  const saveMarkdownDocument = useSaveMarkdownDocument();
-  const setMdStore = mdStore.set;
-  const md = mdStore.get;
-  const canEdit = useCanEdit();
-  const canComment = useCanComment();
-  const [findAndReplaceStore, setFindAndReplaceStore] = FindAndReplaceStore;
-  const docSource = blockSourceSignal.get;
-
-  const IS_SYNC = () => {
-    return docSource() && isSourceSyncService(docSource()!);
-  };
+  const IS_SYNC = () => documentSource().type === 'sync';
 
   const debouncedSaveState = debounce(() => {
     const state_ = state();
-    if (!state_ || !canEdit()) return;
+    if (!state_ || !canEdit() || saveBlocked()) return;
     const savableState = getSaveState(editor.getEditorState());
-    saveMarkdownDocument(JSON.stringify(savableState));
+    saveDocumentMutation.mutate({
+      documentId: blockId,
+      text: JSON.stringify(savableState),
+    });
   }, 500);
 
   // flush save state after unblocking
-  const blockSave = useBlockSave();
   createEffect((prev) => {
-    const blockSave_ = blockSave();
+    const saveBlocked_ = saveBlocked();
     // no save on load
-    if (!blockSave_ && prev !== undefined) {
+    if (!saveBlocked_ && prev !== undefined) {
       debouncedSaveState();
     }
 
-    return blockSave_;
+    return saveBlocked_;
   }, undefined);
 
   let editorContainerRef!: HTMLDivElement;
 
   const [clickTargetHeight, setClickTargetHeight] = createSignal(0);
-  const [isGenerating, setIsGenerating] = isGeneratingSignal;
-  const generatedAndWaiting = generatedAndWaitingSignal.get;
-  const [generateMenuOpen, _setGenerateMenuOpen] = generateMenuSignal;
+  const {
+    isGenerating,
+    setIsGenerating,
+    generatedAndWaiting,
+    setGeneratedAndWaiting,
+    completion,
+    setCompletion,
+    generateMenuOpen,
+    setGenerateMenuOpen,
+    setGenerateContext,
+  } = documentState.generation;
+  const completionSignal = [completion, setCompletion] as [
+    typeof completion,
+    typeof setCompletion,
+  ];
+  const isGeneratingSignal = [isGenerating, setIsGenerating] as [
+    typeof isGenerating,
+    typeof setIsGenerating,
+  ];
+  const generatedAndWaitingSignal = [
+    generatedAndWaiting,
+    setGeneratedAndWaiting,
+  ] as [typeof generatedAndWaiting, typeof setGeneratedAndWaiting];
+  const generateMenuSignal = [generateMenuOpen, setGenerateMenuOpen] as [
+    typeof generateMenuOpen,
+    typeof setGenerateMenuOpen,
+  ];
 
   const [editorReady, setEditorReady] = createSignal<boolean>(false);
-  const [editorError, setEditorError] = markdownBlockErrorSignal;
 
   const [highlightLayerRef, setHighlightLayerRef] =
     createSignal<HTMLDivElement>();
@@ -392,7 +404,10 @@ export function MarkdownEditor(props: {
     const dragInsertPosition = getValidDragInsertPosition(editor, res.mousePos);
     if (!dragInsertPosition) return;
 
-    const mentionId = await trackMention(blockId, 'document', res.id);
+    const mentionId =
+      res.item.type === 'agent_session'
+        ? undefined
+        : await trackMention(blockId, 'document', res.id);
 
     let blockParams: Record<string, string> | undefined;
     if (res.blockName === 'channel') {
@@ -542,6 +557,7 @@ export function MarkdownEditor(props: {
     .state<EditorState>(setState, 'json')
     .history(400, props.loroManager)
     .use(tabIndentationPlugin())
+    .use(listSwipeIndentPlugin(isContentEditable))
     .use(selectionDataPlugin(lexicalWrapper))
     .use(horizontalRulePlugin())
     .use(
@@ -613,10 +629,11 @@ export function MarkdownEditor(props: {
     .use(restoreFocusPlugin())
     .use(markdownPastePlugin())
     .use(normalizeEnterPlugin())
+    .use(trailingParagraphPlugin())
     .use(
       checkboxToTaskPlugin({
         currentUserId: userId(),
-        parentTaskId: blockName === 'task' ? blockId : undefined,
+        parentTaskId: documentKind === 'task' ? blockId : undefined,
       })
     )
     .use(
@@ -666,7 +683,7 @@ export function MarkdownEditor(props: {
   if (ENABLE_MARKDOWN_DIFF) {
     plugins.use(
       diffPlugin({
-        revisionsSignal: revisionsSignal,
+        revisionsSignal: [revisions, setRevisions],
         nodeIdMap: lexicalWrapper.mapping!,
       })
     );
@@ -680,7 +697,7 @@ export function MarkdownEditor(props: {
         isGeneratingSignal,
         generatedAndWaitingSignal,
         menuSignal: generateMenuSignal,
-        setContext: generateContextSignal[1],
+        setContext: setGenerateContext,
         accessories: accessoryStore,
         setAccessories: setAccessoryStore,
       })
@@ -851,17 +868,14 @@ export function MarkdownEditor(props: {
 
   const [fileArrayBuffer, setFileArrayBuffer] = createSignal<ArrayBuffer>();
   createEffect(() => {
-    const file = blockFileSignal();
-    if (!file) return;
+    const source = documentSource();
+    if (source.type !== 'dss') return;
 
-    file.arrayBuffer().then(setFileArrayBuffer);
+    source.file.arrayBuffer().then(setFileArrayBuffer);
   });
 
   createEffect(() => {
-    const source = docSource();
-    if (!source) return;
-    if (!isSourceDSS(source)) return;
-    if (!blockData()) return;
+    if (documentSource().type !== 'dss') return;
     if (editorReady()) return;
 
     const buf = fileArrayBuffer();
@@ -932,29 +946,13 @@ export function MarkdownEditor(props: {
     }
   });
 
-  const _generateContentCallback = createCallback((userRequest: string) => {
+  // Temporarily disabled pending port to connection-gateway.
+  const _generateContentCallback = createCallback((_userRequest: string) => {
     setIsGenerating(true);
-    generateContentCallback(userRequest);
-  });
-
-  const setRewriteSignal = rewriteSignal.set;
-  const setRevisionSignal = revisionsSignal.set;
-
-  createMethodRegistration(blockHandle, {
-    setPatches: (args: { patches: MarkdownRewriteOutput['diffs'] }) => {
-      setRewriteSignal(false);
-      setRevisionSignal(args.patches);
-    },
-  });
-
-  createMethodRegistration(blockHandle, {
-    setIsRewriting: () => {
-      setRewriteSignal(true);
-    },
   });
 
   const [blameTooltipStore, setBlameTooltipStore] = createBlameTooltipStore();
-  if (ENABLE_GIT_BLAME()) {
+  if (isFeatureEnabled(enableGitBlame)) {
     plugins.use(
       blameTooltipPlugin({ setState: (s) => setBlameTooltipStore(s) })
     );
@@ -972,18 +970,16 @@ export function MarkdownEditor(props: {
 
   return (
     <LexicalWrapperContext.Provider value={lexicalWrapper}>
-      {/* SCUFFED: are these the right transparency values? */}
       <Show when={editorError()}>
         {(error) => (
-          <div class="pointer-events-none text-alert-ink p-2 bg-alert-bg w-full border-alert/30 border mb-2 flex items-center gap-2">
-            <WarningIcon class="size-6 shrink-0" />
+          <EditorSystemMessage variant="warning" class="mb-2">
             {getErrorDescription(error())}
-          </div>
+          </EditorSystemMessage>
         )}
       </Show>
       {/* Note: the mt-1.5 here is to preserve markdown node margin tops. which means this div should avoid padding and border. */}
       <div
-        class="relative mt-1.5"
+        class="relative mt-1.5 text-base"
         ref={editorContainerRef}
         use:fileFolderDrop={{
           onDrop: (fileEntries, folderEntries, e) => {
@@ -1032,7 +1028,7 @@ export function MarkdownEditor(props: {
           editorFocus={editorFocus}
           style={{ height: `${clickTargetHeight()}px` }}
         />
-        <Show when={!editorReady()}>
+        <Show when={isMarkdownEditorLoading(editorReady(), editorError())}>
           <div
             aria-hidden="true"
             class="pointer-events-none absolute inset-x-0 top-0 flex flex-col gap-2.5 pt-1"
@@ -1047,7 +1043,7 @@ export function MarkdownEditor(props: {
             {getBlankMarkdownPlaceholder(canEdit())}
           </div>
         </Show>
-        <Show when={ENABLE_GIT_BLAME()}>
+        <Show when={isFeatureEnabled(enableGitBlame)}>
           <Suspense>
             <BlameTooltip state={blameTooltipStore} documentId={blockId} />
           </Suspense>
@@ -1120,34 +1116,45 @@ export function MarkdownEditor(props: {
           menu={actionsMenuOperations}
           actionContext={{
             sourceDocumentId: blockId,
-            sourceBlockName: blockName,
+            sourceBlockName,
           }}
         />
 
         <FloatingMenuGroup>
           <FloatingLinkMenu autoLinkMatchMode="common-tlds" />
-          <FloatingEquationMenu />
-          <FloatingTableMenu />
+          <FloatingEquationMenu canEdit={canEdit} />
+          <FloatingTableMenu canEdit={canEdit} />
           <MarkdownPopup
             highlightLayerRef={highlightLayerRef() ?? editorContainerRef}
             lexicalMapping={lexicalWrapper.mapping}
           />
         </FloatingMenuGroup>
 
-        <Show when={FindAndReplaceStore.get.searchIsOpen}>
+        <Show when={findAndReplaceStore.searchIsOpen}>
           <SearchHighlight
             anchorElem={highlightLayerRef() ?? editorContainerRef}
+            listOffset={findAndReplaceStore.listOffset}
+            onStylesChange={(styles) =>
+              setFindAndReplaceStore('styles', styles)
+            }
+            onMatchesChange={(matches) =>
+              setFindAndReplaceStore('matches', matches)
+            }
           />
           <FloatingSearchHighlight
             anchorElem={highlightLayerRef() ?? editorContainerRef}
+            styles={findAndReplaceStore.styles}
+            currentMatch={findAndReplaceStore.currentMatch}
           />
         </Show>
 
         <Show when={ENABLE_MARKDOWN_COMMENTS}>
-          <CommentsProvider
-            activeComment={activeCommentIdParam}
-            loroManager={props.loroManager}
-          />
+          <Suspense>
+            <CommentsProvider
+              activeComment={activeCommentIdParam}
+              loroManager={props.loroManager}
+            />
+          </Suspense>
         </Show>
 
         <Show when={canEdit()}>
@@ -1169,6 +1176,8 @@ export function MarkdownEditor(props: {
             generateCallback={_generateContentCallback}
             menuOpen={generateMenuSignal}
             completionSignal={completionSignal[0]}
+            generatedAndWaiting={generatedAndWaiting}
+            isGenerating={isGenerating}
             editor={editor}
           />
         </Show>

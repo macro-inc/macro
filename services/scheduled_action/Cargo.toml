@@ -56,10 +56,13 @@ macro_db_client = { path = "../../crates/macro_db_client" }
 memory = { path = "../../crates/memory" }
 model = { path = "../../crates/model" }
 model-entity = { path = "../../crates/model-entity" }
+model_owner = { path = "../../crates/model_owner" }
+entity_registry_db_utils = { path = "../../crates/entity_registry/entity_registry_db_utils" }
 model_notifications = { path = "../../crates/model_notifications" }
 notification = { path = "../../crates/notification" }
 utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
 utoipa-swagger-ui = { workspace = true }
+tower = { workspace = true }
 
 macro_aws_config = { path = "../../crates/macro_aws_config" }
 macro_cors = { path = "../../crates/macro_cors" }
@@ -71,3 +74,6 @@ aws-sdk-secretsmanager = { workspace = true }
 
 macro_service_urls = { path = "../../crates/macro_service_urls" }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../../crates/macro_db_migrator" }

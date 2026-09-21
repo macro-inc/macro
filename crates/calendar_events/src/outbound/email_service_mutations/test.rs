@@ -7,7 +7,10 @@ use reqwest::StatusCode;
 use uuid::Uuid;
 
 use super::*;
-use crate::domain::models::{CalendarAttendeeInput, EventReminders, EventTime};
+use crate::domain::models::{
+    CalendarAttendeeInput, EventReminders, EventTime, OutOfOfficeAutoDeclineMode,
+    OutOfOfficeProperties,
+};
 use crate::inbound::mutation_router::{
     CalendarMutationApiError, CalendarUpdateScopeParam, CreateCalendarEventRequest,
     DeleteCalendarEventQuery, RsvpCalendarEventRequest, UpdateCalendarEventRequest,
@@ -33,6 +36,7 @@ fn sample_draft() -> CalendarEventDraft {
         transparency: None,
         reminders: Some(EventReminders::default()),
         conference: Some(crate::domain::models::ConferenceChange::GoogleMeet),
+        out_of_office: None,
     }
 }
 
@@ -58,6 +62,47 @@ fn create_body_matches_the_router_request() {
 }
 
 #[test]
+fn out_of_office_survives_the_create_wire_contract() {
+    let mut draft = sample_draft();
+    draft.attendees.clear();
+    draft.out_of_office = Some(OutOfOfficeProperties {
+        auto_decline_mode: OutOfOfficeAutoDeclineMode::DeclineAllConflictingInvitations,
+        decline_message: Some("Away".to_string()),
+    });
+    let request: CreateCalendarEventRequest =
+        serde_json::from_value(create_body(None, None, &draft)).unwrap();
+
+    let out_of_office = request
+        .out_of_office
+        .expect("out-of-office survives the wire");
+    assert_eq!(
+        out_of_office.auto_decline_mode,
+        OutOfOfficeAutoDeclineMode::DeclineAllConflictingInvitations
+    );
+    assert_eq!(out_of_office.decline_message.as_deref(), Some("Away"));
+}
+
+#[test]
+fn out_of_office_survives_the_update_wire_contract() {
+    let patch = CalendarEventPatch {
+        out_of_office: Some(OutOfOfficeProperties {
+            auto_decline_mode: OutOfOfficeAutoDeclineMode::DeclineOnlyNewConflictingInvitations,
+            decline_message: None,
+        }),
+        ..Default::default()
+    };
+    let request: UpdateCalendarEventRequest =
+        serde_json::from_value(update_body(None, &patch, &CalendarUpdateScope::All)).unwrap();
+
+    assert_eq!(
+        request
+            .out_of_office
+            .map(|properties| properties.auto_decline_mode),
+        Some(OutOfOfficeAutoDeclineMode::DeclineOnlyNewConflictingInvitations)
+    );
+}
+
+#[test]
 fn update_body_matches_the_router_request() {
     let patch = CalendarEventPatch {
         title: Some("Renamed".to_string()),
@@ -71,7 +116,7 @@ fn update_body_matches_the_router_request() {
         ..Default::default()
     };
     let request: UpdateCalendarEventRequest =
-        serde_json::from_value(update_body(&patch, &CalendarUpdateScope::All)).unwrap();
+        serde_json::from_value(update_body(None, &patch, &CalendarUpdateScope::All)).unwrap();
 
     assert_eq!(request.title.as_deref(), Some("Renamed"));
     assert_eq!(request.description.as_deref(), Some(""));
@@ -96,6 +141,7 @@ fn update_body_carries_the_occurrence_scope() {
         ..Default::default()
     };
     let request: UpdateCalendarEventRequest = serde_json::from_value(update_body(
+        None,
         &patch,
         &CalendarUpdateScope::ThisEvent {
             recurrence_id: "2026-08-18T20:00:00+00:00".to_string(),
@@ -130,7 +176,7 @@ fn delete_query_matches_the_router_query() {
             Some("k-2"),
         ),
     ] {
-        let pairs = delete_query(&scope);
+        let pairs = delete_query(None, &scope);
         let map: serde_json::Map<String, serde_json::Value> = pairs
             .into_iter()
             .map(|(key, value)| (key.to_string(), serde_json::Value::String(value)))
@@ -144,6 +190,7 @@ fn delete_query_matches_the_router_query() {
 #[test]
 fn rsvp_body_matches_the_router_request() {
     let body = rsvp_body(
+        None,
         AttendeeResponseStatus::Accepted,
         &CalendarRsvpScope::ThisEvent {
             recurrence_id: "k-1".to_string(),

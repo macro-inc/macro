@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use subtle::ConstantTimeEq;
 use tracing::error;
 use worker::Error;
 
@@ -33,6 +34,8 @@ pub struct AuthToken {
     pub user_id: Option<String>,
     document_id: String,
     pub access_level: AccessLevel,
+    #[serde(default)]
+    pub actor: Option<String>,
 }
 
 impl AuthToken {
@@ -85,13 +88,13 @@ pub fn decode_jwt(
             {
                 // sholud we warn when false?
                 Some(internal_key) => {
-                    let res = internal_key == secrets.internal_api_secret;
+                    let res: bool = internal_key
+                        .as_bytes()
+                        .ct_eq(secrets.internal_api_secret.as_bytes())
+                        .into();
+
                     if !res {
-                        error!(
-                            "provided header: {internal_key}
-did not match expected value: {}",
-                            secrets.internal_api_secret
-                        );
+                        error!("provided internal authentication key did not match expected value");
                     }
                     res
                 }
@@ -103,6 +106,7 @@ did not match expected value: {}",
                     user_id: None,
                     document_id: "TODO should be option".to_string(),
                     access_level: AccessLevel::Admin,
+                    actor: None,
                 });
             }
 
@@ -127,6 +131,39 @@ did not match expected value: {}",
         .context("failed to decode `AuthToken`")?;
 
     Ok(claims)
+}
+
+/// Dedicated access boundary for document HTTP requests. Internal service
+/// credentials do not substitute for a signed, document-scoped user grant.
+pub fn document_access(
+    req: &worker::Request,
+    env: &worker::Env,
+    document_id: &str,
+) -> Result<
+    (crate::domain::document::DocumentAccess, AuthToken),
+    crate::domain::document::DocumentError,
+> {
+    use crate::domain::document::DocumentError;
+
+    let header = req
+        .headers()
+        .get(header_names::AUTHORIZATION)
+        .map_err(|_| DocumentError::Unauthorized)?
+        .ok_or(DocumentError::Unauthorized)?;
+    let token = header
+        .strip_prefix("Bearer ")
+        .ok_or(DocumentError::Unauthorized)?;
+    let claims = macro_sync_service_jwt::decode::<AuthToken>(
+        token,
+        &Secrets::from(env).document_permissions_secret,
+    )
+    .map_err(|_| DocumentError::Unauthorized)?;
+    let access = crate::domain::document::DocumentAccess::authorize(
+        document_id,
+        &claims.document_id,
+        claims.access_level >= AccessLevel::Edit,
+    )?;
+    Ok((access, claims))
 }
 
 #[cfg(test)]

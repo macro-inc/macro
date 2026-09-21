@@ -1,7 +1,14 @@
+const codexAccess = vi.hoisted(() => ({ enabled: true }));
+vi.mock('@core/codex/flag', () => ({
+  useCodexAgentsAccess: () => () => codexAccess.enabled,
+}));
+
 /**
  * @vitest-environment jsdom
  */
 
+import { useAgentModelsQuery } from '@queries/agents/models';
+import type { LoadAgentModelsResponse } from '@service-agent-harness/generated/schemas';
 import {
   fireEvent,
   render,
@@ -9,11 +16,48 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+} from '@tanstack/solid-query';
+import { Suspense } from 'solid-js';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Harness } from './Harness';
 
+vi.mock('./codex/views/CodexHarness', () => ({
+  CodexHarness: () => <div data-testid="codex-harness" />,
+}));
+
+const claudeFlag = vi.hoisted(() => ({ enabled: true, source: vi.fn() }));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: (flag: { key: string }) => {
+    expect(flag.key).toBe('claude-cloud');
+    return () => ({ enabled: claudeFlag.enabled });
+  },
+}));
+
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => 'macro|demo@example.com',
+}));
+vi.mock('@queries/claude-auth/connection', () => ({
+  useClaudeConnectionSource: () => {
+    claudeFlag.source();
+    return {
+      status: () => ({ enabled: true, connected: false, ephemeral: true }),
+      failed: () => false,
+      begin: vi.fn(),
+      complete: vi.fn(),
+      disconnect: vi.fn(),
+      refresh: vi.fn(),
+    };
+  },
+}));
+
 const mocks = vi.hoisted(() => ({
   status: {
+    isSuccess: true,
+    isError: false,
     data: {
       registered: false,
       defaultModelId: null as string | null,
@@ -23,8 +67,14 @@ const mocks = vi.hoisted(() => ({
   },
   models: {
     data: {
-      models: [{ id: 'default-model', displayName: 'Default Model' }],
+      status: 'available' as const,
+      currentModel: 'default-model',
+      models: [{ id: 'default-model', name: 'Default Model' }],
     },
+    isPending: false,
+    isError: false,
+    isSuccess: true,
+    refetch: vi.fn(),
   },
   save: vi.fn(),
   disconnect: vi.fn(),
@@ -35,6 +85,8 @@ const mocks = vi.hoisted(() => ({
 
 const harnessMocks = vi.hoisted(() => ({
   query: {
+    isSuccess: true,
+    isPending: false,
     data: [] as unknown[],
     isError: false,
   },
@@ -65,11 +117,14 @@ vi.mock('@queries/auth/cursor-api-key', () => ({
     mutateAsync: mocks.disconnect,
     isPending: false,
   }),
-  useCursorModelsQuery: () => mocks.models,
   useSetCursorDefaultModel: () => ({
     mutateAsync: mocks.setDefaultModel,
     isPending: false,
   }),
+}));
+
+vi.mock('@queries/agents/models', () => ({
+  useAgentModelsQuery: vi.fn(() => mocks.models),
 }));
 
 vi.mock('@queries/harnesses/harnesses', () => ({
@@ -86,6 +141,9 @@ vi.mock('@queries/harnesses/harnesses', () => ({
     },
     get isError() {
       return Boolean(code()) && harnessMocks.pairing.isError;
+    },
+    get isSuccess() {
+      return Boolean(code()) && !harnessMocks.pairing.isError;
     },
     get error() {
       return harnessMocks.pairing.isError ? new Error('gone') : null;
@@ -133,6 +191,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  codexAccess.enabled = true;
   vi.clearAllMocks();
   mocks.status.data = {
     registered: false,
@@ -140,6 +199,14 @@ beforeEach(() => {
     updatedAt: null,
   };
   mocks.status.isPlaceholderData = false;
+  mocks.models.data = {
+    status: 'available',
+    currentModel: 'default-model',
+    models: [{ id: 'default-model', name: 'Default Model' }],
+  };
+  mocks.models.isPending = false;
+  mocks.models.isError = false;
+  mocks.models.isSuccess = true;
   mocks.save.mockResolvedValue(undefined);
   mocks.disconnect.mockResolvedValue(undefined);
   harnessMocks.query.data = [];
@@ -151,11 +218,117 @@ beforeEach(() => {
 });
 
 describe('Harness', () => {
-  it('shows the three configurable harness options', () => {
+  it.each([false, true])(
+    'offers Codex settings even when rollout access is %s',
+    (enabled) => {
+      codexAccess.enabled = enabled;
+      render(() => <Harness />);
+      expect(screen.getByTestId('codex-harness')).toBeTruthy();
+    }
+  );
+
+  it('offers Claude connection when the rollout flag is off', () => {
+    claudeFlag.enabled = false;
+    claudeFlag.source.mockClear();
+    try {
+      render(() => <Harness />);
+      expect(
+        screen.queryByRole('region', { name: 'Claude Cloud connection' })
+      ).toBeTruthy();
+      expect(claudeFlag.source).toHaveBeenCalled();
+      expect(screen.getByRole('heading', { name: 'Cursor' })).toBeTruthy();
+    } finally {
+      claudeFlag.enabled = true;
+    }
+  });
+
+  it.each(['success', 'error'] as const)(
+    'keeps settings visible while Cursor models load and after %s',
+    async (outcome) => {
+      mocks.status.data.registered = true;
+      let resolveModels!: (models: LoadAgentModelsResponse) => void;
+      let rejectModels!: (error: Error) => void;
+      const response = new Promise<LoadAgentModelsResponse>(
+        (resolve, reject) => {
+          resolveModels = resolve;
+          rejectModels = reject;
+        }
+      );
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      vi.mocked(useAgentModelsQuery).mockImplementationOnce(() =>
+        useQuery(() => ({
+          queryKey: ['pending-cursor-models'],
+          queryFn: () => response,
+        }))
+      );
+      const view = render(() => (
+        <QueryClientProvider client={client}>
+          <Suspense fallback={<p>Settings suspended</p>}>
+            <Harness />
+          </Suspense>
+        </QueryClientProvider>
+      ));
+      expect(screen.queryByText('Settings suspended')).toBeNull();
+      expect(screen.getByText('Loading models…')).toBeTruthy();
+      expect(
+        (
+          screen.getByRole('combobox', {
+            name: 'Default model',
+          }) as HTMLSelectElement
+        ).disabled
+      ).toBe(true);
+
+      if (outcome === 'error') {
+        rejectModels(new Error('Cursor is unavailable'));
+        await waitFor(() =>
+          expect(screen.getByText(/Could not load Cursor models/)).toBeTruthy()
+        );
+        expect(screen.queryByText('Settings suspended')).toBeNull();
+        expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
+      } else {
+        resolveModels({
+          status: 'available',
+          currentModel: 'loaded-model',
+          models: [
+            {
+              id: 'loaded-model',
+              name: 'Loaded Model',
+              group: 'Cursor',
+            },
+          ],
+        });
+        await waitFor(() =>
+          expect(
+            screen.getByRole('option', { name: 'Loaded Model' })
+          ).toBeTruthy()
+        );
+        expect(screen.queryByText('Settings suspended')).toBeNull();
+        expect(
+          (
+            screen.getByRole('combobox', {
+              name: 'Default model',
+            }) as HTMLSelectElement
+          ).disabled
+        ).toBe(false);
+      }
+      view.unmount();
+      client.clear();
+    }
+  );
+
+  it('shows Claude with the Anthropic logo above Cursor in the harness list', () => {
     render(() => <Harness />);
 
     expect(screen.getByRole('heading', { name: 'In-memory' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Cursor' })).toBeTruthy();
+    const claude = screen.getByRole('heading', { name: 'Claude Cloud' });
+    const cursor = screen.getByRole('heading', { name: 'Cursor' });
+    expect(
+      claude.compareDocumentPosition(cursor) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(screen.getByLabelText('Anthropic')).toBeTruthy();
     expect(
       screen.getByRole('heading', { name: 'Bring your own agent' })
     ).toBeTruthy();

@@ -11,9 +11,11 @@ use email::{
 };
 use entity_access::domain::ports::{EntityAccessService, NoOpEntityAccessService};
 use entity_mutation::{EntityMutationService, UnavailableEntityMutationService};
+use favorites::domain::ports::FavoritesMutationService;
 use graphql_activity::{
-    ActivityFeedInput, ActivityOverviewInput, ActivityReader, GraphqlActivityOverview,
-    GraphqlActivityPage, NoOpActivityReader, resolve_activity_feed, resolve_activity_overview,
+    ActivityFeedInput, ActivityOverviewInput, ActivityReader, ActivitySubscriptionRoot,
+    ActivitySubscriptionService, GraphqlActivityOverview, GraphqlActivityPage, NoOpActivityReader,
+    NoOpActivitySubscriptionService, resolve_activity_feed, resolve_activity_overview,
 };
 use graphql_channel::{
     ChannelActivityAuthorizer, ChannelActivityMutationService, ChannelMutationRoot,
@@ -21,11 +23,13 @@ use graphql_channel::{
 };
 use graphql_common::{parse_id, require_authorized_user};
 use graphql_email::{
-    GraphqlEmailMutation, GraphqlEmailQuery, NoOpSoupEmailContentEdgeReader,
-    SoupEmailContentEdgeReader,
+    GraphqlEmailMutation, GraphqlEmailQuery, NoOpSoupEmailContentEdgeReader, SoupEmailEdgeReader,
 };
 use graphql_entity_mutation::EntityMutationRoot;
-use graphql_favorite::{EntityFavoriteEdgeReader, NoOpEntityFavoriteEdgeReader};
+use graphql_favorite::{
+    EntityFavoriteEdgeReader, FavoriteMutationRoot, FavoriteQueryReader, FavoritesFilterInput,
+    GraphqlFavorite, NoOpEntityFavoriteEdgeReader, NoOpFavoriteMutationService, resolve_favorites,
+};
 use graphql_notification::{
     NoOpNotificationMutationService, NoOpSoupNotificationEdgeReader, NotificationMutationRoot,
     NotificationMutationService, NotificationSubscriptionRoot, SoupNotificationEdgeReader,
@@ -64,6 +68,7 @@ use crate::SoupEdges;
 pub struct CompleteMutationRoot<
     W: EntityPropertyWriter,
     M: EntityMutationService,
+    F: FavoritesMutationService,
     E: SoupEntityEdges,
     C: ChannelActivityMutationService,
     N: NotificationMutationService,
@@ -72,6 +77,7 @@ pub struct CompleteMutationRoot<
 >(
     PropertiesMutationRoot<W>,
     EntityMutationRoot<M, E>,
+    FavoriteMutationRoot<F, E>,
     ChannelMutationRoot<C, A>,
     NotificationMutationRoot<N>,
     GraphqlEmailMutation<ES, SoupEmailThreadMutationOutput<E>>,
@@ -80,18 +86,20 @@ pub struct CompleteMutationRoot<
 impl<
     W: EntityPropertyWriter,
     M: EntityMutationService,
+    F: FavoritesMutationService,
     E: SoupEntityEdges,
     C: ChannelActivityMutationService,
     N: NotificationMutationService,
     A: ChannelActivityAuthorizer,
     ES: EmailService,
-> CompleteMutationRoot<W, M, E, C, N, A, ES>
+> CompleteMutationRoot<W, M, F, E, C, N, A, ES>
 {
     /// Construct the composed mutation root.
     fn new() -> Self {
         Self(
             PropertiesMutationRoot::<W>::new(),
             EntityMutationRoot::<M, E>::new(),
+            FavoriteMutationRoot::<F, E>::new(),
             ChannelMutationRoot::<C, A>::new(),
             NotificationMutationRoot::<N>::new(),
             GraphqlEmailMutation::<ES, SoupEmailThreadMutationOutput<E>>::new(),
@@ -99,21 +107,24 @@ impl<
     }
 }
 
-/// Root subscription object combining realtime Soup and notification adapters.
+/// Root subscription object combining realtime Soup, notification, and
+/// activity adapters.
 #[derive(MergedSubscription)]
-pub struct CompleteSubscriptionRoot<R, NS, Auth, St, NR, PR, ER, FR, AR, AcR>(
+pub struct CompleteSubscriptionRoot<R, NS, AS, Auth, St, NR, PR, ER, FR, AR, AcR>(
     SoupSubscriptionRoot<R, Auth, St, NR, PR, ER, FR, AR, AcR>,
     NotificationSubscriptionRoot<NS>,
+    ActivitySubscriptionRoot<AS>,
 )
 where
     R: SoupRealtimeSubscriptionService,
     NS: WebSocketNotificationSubscriptionService<NotificationSubscriptionUpdate<NotifEvent>>,
+    AS: ActivitySubscriptionService,
     Auth: MacroAuthorizationService,
     St: Clone + Send + Sync + 'static,
     MacroAuthorizationState<Auth>: FromRef<St>,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
-    ER: SoupEmailContentEdgeReader,
+    ER: SoupEmailEdgeReader,
     FR: EntityFavoriteEdgeReader,
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader;
@@ -121,22 +132,44 @@ where
 /// GraphQL Soup schema type.
 ///
 /// `S` is the soup query service, `R` the realtime Soup subscription service,
-/// `NS` the realtime notification subscription service, `E` the email service,
-/// `EAS` the entity access service, `Auth` the authorization service, `St` the
-/// embedding axum router state, `W` the property mutation writer, `M` the entity
-/// mutation service, `C` the channel activity mutation service, `N` the notification
+/// `NS` the realtime notification subscription service, `AS` the realtime
+/// activity subscription service, `E` the email service, `EAS` the entity
+/// access service, `Auth` the authorization service, `St` the embedding axum
+/// router state, `W` the property mutation writer, `M` the entity mutation
+/// service, `C` the channel activity mutation service, `N` the notification
 /// mutation service, `NR` the notification edge reader, `PR` the property edge
 /// reader, `ER` the email-content edge reader, `FR` the favorite edge reader,
 /// `AR` the access edge reader, and `AcR` the activity reader.
-pub type SoupSchema<S, R, NS, E, EAS, Auth, St, W, M, C, N, NR, PR, ER, FR, AR, AcR> = Schema<
-    SoupQueryRoot<S, E, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>,
-    CompleteMutationRoot<W, M, SoupEdges<NR, PR, ER, FR, AR, AcR>, C, N, EAS, E>,
-    CompleteSubscriptionRoot<R, NS, Auth, St, NR, PR, ER, FR, AR, AcR>,
->;
+pub type SoupSchema<S, R, NS, AS, E, EAS, Auth, St, W, M, FM, C, N, NR, PR, ER, FR, AR, AcR> =
+    Schema<
+        SoupQueryRoot<S, E, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>,
+        CompleteMutationRoot<W, M, FM, SoupEdges<NR, PR, ER, FR, AR, AcR>, C, N, EAS, E>,
+        CompleteSubscriptionRoot<R, NS, AS, Auth, St, NR, PR, ER, FR, AR, AcR>,
+    >;
 
 /// GraphQL Soup schema type backed by shared query and realtime services.
-pub type SharedSoupSchema<S, R, NS, E, EAS, Auth, St, W, M, C, N, NR, PR, ER, FR, AR, AcR> =
-    SoupSchema<Arc<S>, Arc<R>, Arc<NS>, E, EAS, Auth, St, W, M, C, N, NR, PR, ER, FR, AR, AcR>;
+pub type SharedSoupSchema<S, R, NS, AS, E, EAS, Auth, St, W, M, FM, C, N, NR, PR, ER, FR, AR, AcR> =
+    SoupSchema<
+        Arc<S>,
+        Arc<R>,
+        Arc<NS>,
+        Arc<AS>,
+        E,
+        EAS,
+        Auth,
+        St,
+        W,
+        M,
+        FM,
+        C,
+        N,
+        NR,
+        PR,
+        ER,
+        FR,
+        AR,
+        AcR,
+    >;
 
 /// GraphQL Soup schema type backed by the no-op services, used only for
 /// SDL export or introspection.
@@ -144,12 +177,14 @@ pub type SchemaOnlySoupSchema = SoupSchema<
     NoOpSoupService,
     NoOpSoupRealtimeSubscriptionService,
     NoopWebSocketNotificationSubscriptionService,
+    NoOpActivitySubscriptionService,
     NoOpEmailService,
     NoOpEntityAccessService,
     SchemaOnlyAuthorizationService,
     SchemaOnlyState,
     NoOpEntityPropertyWriter,
     UnavailableEntityMutationService,
+    NoOpFavoriteMutationService,
     NoOpChannelActivityMutationService,
     NoOpNotificationMutationService,
     NoOpSoupNotificationEdgeReader,
@@ -265,23 +300,26 @@ pub fn build_schema() -> SchemaOnlySoupSchema {
         NoOpSoupService,
         NoOpSoupRealtimeSubscriptionService,
         NoopWebSocketNotificationSubscriptionService,
+        NoOpActivitySubscriptionService,
     )
 }
 
 /// Build a GraphQL schema backed by a query service and no-op realtime service.
 #[allow(clippy::type_complexity)]
-pub fn build_schema_with_service<S, E, EAS, Auth, St, W, M, C, N, NR, PR, ER, FR, AR, AcR>(
+pub fn build_schema_with_service<S, E, EAS, Auth, St, W, M, FM, C, N, NR, PR, ER, FR, AR, AcR>(
     service: S,
 ) -> SoupSchema<
     S,
     NoOpSoupRealtimeSubscriptionService,
     NoopWebSocketNotificationSubscriptionService,
+    NoOpActivitySubscriptionService,
     E,
     EAS,
     Auth,
     St,
     W,
     M,
+    FM,
     C,
     N,
     NR,
@@ -302,12 +340,13 @@ where
     MacroAuthorizationState<Auth>: FromRef<St>,
     W: EntityPropertyWriter,
     M: EntityMutationService,
+    FM: FavoritesMutationService,
     C: ChannelActivityMutationService,
     N: NotificationMutationService,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
-    ER: SoupEmailContentEdgeReader,
-    FR: EntityFavoriteEdgeReader,
+    ER: SoupEmailEdgeReader,
+    FR: EntityFavoriteEdgeReader + FavoriteQueryReader,
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader,
 {
@@ -315,21 +354,44 @@ where
         service,
         NoOpSoupRealtimeSubscriptionService,
         NoopWebSocketNotificationSubscriptionService,
+        NoOpActivitySubscriptionService,
     )
 }
 
 /// Build a GraphQL schema backed by query and realtime Soup services.
 #[allow(clippy::type_complexity)]
-pub fn build_schema_with_services<S, R, NS, E, EAS, Auth, St, W, M, C, N, NR, PR, ER, FR, AR, AcR>(
+pub fn build_schema_with_services<
+    S,
+    R,
+    NS,
+    AS,
+    E,
+    EAS,
+    Auth,
+    St,
+    W,
+    M,
+    FM,
+    C,
+    N,
+    NR,
+    PR,
+    ER,
+    FR,
+    AR,
+    AcR,
+>(
     service: S,
     realtime_service: R,
     notification_subscription_service: NS,
-) -> SoupSchema<S, R, NS, E, EAS, Auth, St, W, M, C, N, NR, PR, ER, FR, AR, AcR>
+    activity_subscription_service: AS,
+) -> SoupSchema<S, R, NS, AS, E, EAS, Auth, St, W, M, FM, C, N, NR, PR, ER, FR, AR, AcR>
 where
     S: SoupService + Clone,
     R: SoupRealtimeSubscriptionService + Clone,
     NS: WebSocketNotificationSubscriptionService<NotificationSubscriptionUpdate<NotifEvent>>
         + Clone,
+    AS: ActivitySubscriptionService,
     E: EmailService + EmailUserService,
     EAS: EntityAccessService,
     Auth: MacroAuthorizationService,
@@ -339,21 +401,23 @@ where
     MacroAuthorizationState<Auth>: FromRef<St>,
     W: EntityPropertyWriter,
     M: EntityMutationService,
+    FM: FavoritesMutationService,
     C: ChannelActivityMutationService,
     N: NotificationMutationService,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
-    ER: SoupEmailContentEdgeReader,
-    FR: EntityFavoriteEdgeReader,
+    ER: SoupEmailEdgeReader,
+    FR: EntityFavoriteEdgeReader + FavoriteQueryReader,
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader,
 {
     Schema::build(
         SoupQueryRoot::new(service),
-        CompleteMutationRoot::<W, M, SoupEdges<NR, PR, ER, FR, AR, AcR>, C, N, EAS, E>::new(),
+        CompleteMutationRoot::<W, M, FM, SoupEdges<NR, PR, ER, FR, AR, AcR>, C, N, EAS, E>::new(),
         CompleteSubscriptionRoot(
             SoupSubscriptionRoot::new(realtime_service),
             NotificationSubscriptionRoot::new(notification_subscription_service),
+            ActivitySubscriptionRoot::new(activity_subscription_service),
         ),
     )
     .finish()
@@ -361,18 +425,20 @@ where
 
 /// Build a GraphQL schema backed by an `Arc`-shared query service.
 #[allow(clippy::type_complexity)]
-pub fn build_schema_from_arc<S, E, EAS, Auth, St, W, M, C, N, NR, PR, ER, FR, AR, AcR>(
+pub fn build_schema_from_arc<S, E, EAS, Auth, St, W, M, FM, C, N, NR, PR, ER, FR, AR, AcR>(
     service: Arc<S>,
 ) -> SoupSchema<
     Arc<S>,
     NoOpSoupRealtimeSubscriptionService,
     NoopWebSocketNotificationSubscriptionService,
+    NoOpActivitySubscriptionService,
     E,
     EAS,
     Auth,
     St,
     W,
     M,
+    FM,
     C,
     N,
     NR,
@@ -393,12 +459,13 @@ where
     MacroAuthorizationState<Auth>: FromRef<St>,
     W: EntityPropertyWriter,
     M: EntityMutationService,
+    FM: FavoritesMutationService,
     C: ChannelActivityMutationService,
     N: NotificationMutationService,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
-    ER: SoupEmailContentEdgeReader,
-    FR: EntityFavoriteEdgeReader,
+    ER: SoupEmailEdgeReader,
+    FR: EntityFavoriteEdgeReader + FavoriteQueryReader,
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader,
 {
@@ -407,15 +474,37 @@ where
 
 /// Build a GraphQL schema backed by `Arc`-shared query and realtime services.
 #[allow(clippy::type_complexity)]
-pub fn build_schema_from_arcs<S, R, NS, E, EAS, Auth, St, W, M, C, N, NR, PR, ER, FR, AR, AcR>(
+pub fn build_schema_from_arcs<
+    S,
+    R,
+    NS,
+    AS,
+    E,
+    EAS,
+    Auth,
+    St,
+    W,
+    M,
+    FM,
+    C,
+    N,
+    NR,
+    PR,
+    ER,
+    FR,
+    AR,
+    AcR,
+>(
     service: Arc<S>,
     realtime_service: Arc<R>,
     notification_subscription_service: Arc<NS>,
-) -> SharedSoupSchema<S, R, NS, E, EAS, Auth, St, W, M, C, N, NR, PR, ER, FR, AR, AcR>
+    activity_subscription_service: Arc<AS>,
+) -> SharedSoupSchema<S, R, NS, AS, E, EAS, Auth, St, W, M, FM, C, N, NR, PR, ER, FR, AR, AcR>
 where
     S: SoupService,
     R: SoupRealtimeSubscriptionService,
     NS: WebSocketNotificationSubscriptionService<NotificationSubscriptionUpdate<NotifEvent>>,
+    AS: ActivitySubscriptionService,
     E: EmailService + EmailUserService,
     EAS: EntityAccessService,
     Auth: MacroAuthorizationService,
@@ -425,16 +514,22 @@ where
     MacroAuthorizationState<Auth>: FromRef<St>,
     W: EntityPropertyWriter,
     M: EntityMutationService,
+    FM: FavoritesMutationService,
     C: ChannelActivityMutationService,
     N: NotificationMutationService,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
-    ER: SoupEmailContentEdgeReader,
-    FR: EntityFavoriteEdgeReader,
+    ER: SoupEmailEdgeReader,
+    FR: EntityFavoriteEdgeReader + FavoriteQueryReader,
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader,
 {
-    build_schema_with_services(service, realtime_service, notification_subscription_service)
+    build_schema_with_services(
+        service,
+        realtime_service,
+        notification_subscription_service,
+        activity_subscription_service,
+    )
 }
 
 /// Root entry point for the complete GraphQL API.
@@ -452,8 +547,8 @@ where
     MacroAuthorizationState<Auth>: FromRef<St>,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
-    ER: SoupEmailContentEdgeReader,
-    FR: EntityFavoriteEdgeReader,
+    ER: SoupEmailEdgeReader,
+    FR: EntityFavoriteEdgeReader + FavoriteQueryReader,
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader,
 {
@@ -483,7 +578,7 @@ where
     MacroAuthorizationState<Auth>: FromRef<St>,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
-    ER: SoupEmailContentEdgeReader,
+    ER: SoupEmailEdgeReader,
     FR: EntityFavoriteEdgeReader,
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader,
@@ -517,14 +612,24 @@ where
     MacroAuthorizationState<Auth>: FromRef<St>,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
-    ER: SoupEmailContentEdgeReader,
-    FR: EntityFavoriteEdgeReader,
+    ER: SoupEmailEdgeReader,
+    FR: EntityFavoriteEdgeReader + FavoriteQueryReader,
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader,
 {
     /// Stable id of the authenticated user.
     async fn id(&self) -> async_graphql::ID {
         async_graphql::ID(self.user_id.to_string())
+    }
+
+    /// The authenticated user's favorites in manual order, optionally
+    /// restricted by entity type and entity id.
+    async fn favorites(
+        &self,
+        ctx: &Context<'_>,
+        filter: Option<FavoritesFilterInput>,
+    ) -> async_graphql::Result<Vec<GraphqlFavorite>> {
+        resolve_favorites::<FR>(ctx, &self.user_id, filter.unwrap_or_default().into_model()).await
     }
 
     /// A page of the authenticated user's own activity, newest first.

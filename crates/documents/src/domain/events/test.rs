@@ -1,6 +1,6 @@
 use macro_event_broker::{Event, MacroEvent as _, TopicEvent};
-use macro_user_id::user_id::MacroUserIdStr;
 use model::document::FileType;
+use model_owner::Owner;
 use serde_json::{Value, json};
 use uuid::Uuid;
 
@@ -12,8 +12,8 @@ use super::{
 
 const DOCUMENT_ID: &str = "11111111-1111-1111-1111-111111111111";
 
-fn owner() -> MacroUserIdStr<'static> {
-    MacroUserIdStr::try_from("macro|owner@example.com".to_string()).expect("valid user id")
+fn owner() -> Owner {
+    Owner::from_principal_str("macro|owner@example.com").expect("valid owner")
 }
 
 fn assert_wire_round_trip(event: Event<DocumentTopicEvent>, expected: Value) {
@@ -63,6 +63,8 @@ fn sync_content_updated_serializes_to_the_exact_envelope() {
             document_id: DOCUMENT_ID.to_string(),
             file_type: FileType::Md,
             document_version_id: None,
+            actor: None,
+            on_behalf_of: None,
         }),
     );
 
@@ -116,6 +118,8 @@ fn optional_document_versions_support_present_and_absent_values() {
             document_id: DOCUMENT_ID.to_string(),
             file_type: FileType::Md,
             document_version_id: Some("snapshot-7".to_string()),
+            actor: None,
+            on_behalf_of: None,
         }),
     ];
 
@@ -162,6 +166,8 @@ fn search_event_constructors_use_the_document_key_and_schema_v1() {
         document_id: DOCUMENT_ID.to_string(),
         file_type: FileType::Md,
         document_version_id: None,
+        actor: None,
+        on_behalf_of: None,
     };
     let sync_content_updated =
         DocumentMacroEvent::sync_content_updated(DOCUMENT_ID, sync_metadata.clone());
@@ -206,7 +212,10 @@ fn created_events_without_attribution_still_decode() {
 
     match decoded.event {
         DocumentTopicEvent::Created(metadata) => {
-            assert_eq!(metadata.owner.as_ref(), "macro|owner@example.com");
+            assert_eq!(
+                metadata.owner,
+                Owner::from_principal_str("macro|owner@example.com").unwrap()
+            );
             assert_eq!(metadata.actor, None);
             assert_eq!(metadata.on_behalf_of, None);
         }
@@ -242,4 +251,17 @@ fn existing_v1_document_events_still_decode() {
             reason: InteractionReason::Edited,
         })
     );
+}
+
+#[test]
+fn sync_extract_drops_invalid_attribution_strings() {
+    let metadata = DocumentSyncContentUpdatedMetadata::from_extract(
+        DOCUMENT_ID.to_string(),
+        FileType::Md,
+        None,
+        Some("not-an-actor".to_string()),
+        Some("also-not-a-user".to_string()),
+    );
+    assert_eq!(metadata.actor, None);
+    assert_eq!(metadata.on_behalf_of, None);
 }

@@ -57,6 +57,9 @@ export type CalendarDeletionScope = 'all' | 'this_event' | 'this_and_following';
 /** How much of a recurring series a calendar RSVP answers for. */
 export type CalendarRsvpScope = 'all' | 'this_event';
 
+/** How much of a recurring series a calendar update applies to. */
+export type CalendarUpdateScope = 'all' | 'this_event';
+
 function emailLinkHeaders(linkId?: string): Record<string, string> | undefined {
   return linkId ? { [EMAIL_LINK_ID_HEADER]: linkId } : undefined;
 }
@@ -613,7 +616,11 @@ export const emailClient = {
   },
   async deleteCalendarEvent(
     eventId: string,
-    options?: { scope?: CalendarDeletionScope; recurrenceId?: string }
+    options?: {
+      scope?: CalendarDeletionScope;
+      recurrenceId?: string;
+      calendarId?: string;
+    }
   ) {
     const params = new URLSearchParams();
     if (options?.scope && options.scope !== 'all') {
@@ -621,6 +628,9 @@ export const emailClient = {
     }
     if (options?.recurrenceId) {
       params.set('recurrenceId', options.recurrenceId);
+    }
+    if (options?.calendarId) {
+      params.set('calendarId', options.calendarId);
     }
     const query = params.toString();
     return fetchWithToken<EmptyResponse, CalendarMutationErrorCode>(

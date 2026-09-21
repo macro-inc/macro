@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT d.id FROM \"Document\" d\n               WHERE ($1::text IS NULL OR d.id > $1)\n                 AND (EXISTS (SELECT 1 FROM \"Thread\" t WHERE t.\"documentId\" = d.id)\n                      OR EXISTS (SELECT 1 FROM migrated_comment_thread_id m WHERE m.document_id = d.id))\n               ORDER BY d.id LIMIT $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "bc996dcd91b86d30e494387bacf11fc307ac363e4d1701439b0bc6ad59e29d16"
+}

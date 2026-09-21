@@ -6,18 +6,39 @@
  * projection of them, so this component never needs a model registry of its
  * own. Renders nothing until the harness has advertised its models.
  *
- * Harnesses advertise as many models as they like, so the list scrolls rather
- * than growing without bound: it shows at most `MAX_VISIBLE_ROWS` (or fewer,
- * when the popper has less room than that), leaving the next row half-cut
- * under a gradient so the overflow is visible rather than merely scrollable.
+ * Touch devices get a bottom sheet (`MobileDrawer`, the same chrome as the
+ * split title menu) listing every model with a check on the current one, and
+ * a search field once the catalog is long enough to need one. Desktop keeps
+ * a popover: a compact scrolling list for short catalogs, the searchable
+ * `ModelCatalogPicker` for long ones.
+ *
+ * Harnesses advertise as many models as they like, so the desktop list
+ * scrolls rather than growing without bound: it shows at most
+ * `MAX_VISIBLE_ROWS` (or fewer, when the popper has less room than that),
+ * leaving the next row half-cut under a gradient so the overflow is visible
+ * rather than merely scrollable.
  */
 
+import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
+import {
+  type CatalogModelOption,
+  isLargeModelCatalog,
+  matchesModelQuery,
+} from '@core/component/AI/component/input/modelCatalog';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import Check from '@phosphor/check.svg';
+import SearchIcon from '@phosphor/magnifying-glass.svg';
 import CaretDown from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
 import type { ModelOption } from '@service-agent-fold/generated/types';
-import { cn, Dropdown } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
-import { TextShimmer } from './TextShimmer';
+import { Button, cn, Dropdown } from '@ui';
+import { createMemo, createSignal, For, Show } from 'solid-js';
+import { groupOptions, withoutRedundantGroups } from './model-groups';
+
+/** Compact ghost pill — same size as the short-list trigger and chat's selector. */
+const PILL_TRIGGER_CLASS =
+  'h-6 w-auto max-w-[9rem] min-w-0 justify-start gap-1 rounded-full border-transparent bg-ink/5 px-2 text-left text-sm text-ink-subtle hover:bg-ink/10';
 
 /** Height of one model row — `h-7` on the item, so the cap is exact. */
 const ROW_HEIGHT_PX = 28;
@@ -25,6 +46,8 @@ const ROW_HEIGHT_PX = 28;
 const MAX_VISIBLE_ROWS = 10;
 /** The scroll container's own top padding, inside the capped window. */
 const LIST_PADDING_PX = 6;
+/** Past this many models the sheet gets a search field. */
+const SEARCHABLE_MODEL_COUNT = 8;
 
 /**
  * Ten whole rows plus half of the eleventh, clamped to the room the popper
@@ -39,9 +62,9 @@ export interface AgentModelSelectorProps {
   /** Current model id, when the fold has learned it. */
   model: string | null;
   /**
-   * A change to this model is on the wire. The pill shows it, shimmering,
-   * so the switch is visibly in progress rather than appearing not to have
-   * registered — the request can block for a whole container resume.
+   * A change to this model the fold has shown but `metadata.model` has not
+   * caught up to. The pill reads it as the current model at once and stays
+   * interactive; a runtime rejection later reverts it through the fold.
    */
   changingTo?: string;
   /** The models the harness offers, in the order it listed them. */
@@ -53,57 +76,186 @@ export interface AgentModelSelectorProps {
 
 export function AgentModelSelector(props: AgentModelSelectorProps) {
   const [listRef, setListRef] = createSignal<HTMLElement>();
+  const [sheetOpen, setSheetOpen] = createSignal(false);
+  const [query, setQuery] = createSignal('');
   const shown = () => props.changingTo ?? props.model;
   const label = () =>
     props.options.find((option) => option.id === shown())?.name ??
     shown() ??
     'Model';
+  const options = createMemo(() => withoutRedundantGroups(props.options));
+  const toCatalogOption = (option: ModelOption): CatalogModelOption => ({
+    id: option.id,
+    label: option.name,
+    description: option.description ?? undefined,
+    group: option.group ?? undefined,
+  });
+  const catalogOptions = () => options().map(toCatalogOption);
+  const useCatalog = () => isLargeModelCatalog(catalogOptions());
+  const searchable = () => props.options.length > SEARCHABLE_MODEL_COUNT;
+  const groups = createMemo(() => {
+    const normalizedQuery = query().trim().toLowerCase();
+    const matching = normalizedQuery
+      ? options().filter((option) =>
+          matchesModelQuery(toCatalogOption(option), normalizedQuery)
+        )
+      : options();
+    return groupOptions(matching);
+  });
+  const openSheet = (open: boolean) => {
+    setSheetOpen(open);
+    if (!open) setQuery('');
+  };
+
+  const pick = (id: string) => {
+    openSheet(false);
+    if (id !== props.model) props.onSelect(id);
+  };
+
+  const sheet = (
+    <MobileDrawer
+      side="bottom"
+      open={sheetOpen()}
+      onOpenChange={openSheet}
+      preventScroll={false}
+      preventScrollbarShift={false}
+    >
+      {/* Plain text + caret, like the reference composer — no pill. */}
+      <MobileDrawer.Trigger
+        as={Button}
+        variant="ghost"
+        size="sm"
+        aria-label="Agent model"
+        disabled={props.disabled}
+        class="h-8 max-w-[60vw] min-w-0 justify-start gap-1 rounded-lg border-none bg-transparent px-1.5 text-left text-sm text-ink-subtle hover:bg-hover"
+      >
+        <span class="min-w-0 truncate">{label()}</span>
+        <CaretDown class="size-3.5 shrink-0" />
+      </MobileDrawer.Trigger>
+      <MobileDrawer.Portal>
+        <MobileDrawer.Overlay />
+        <MobileDrawer.Content aria-label="Choose a model">
+          <MobileDrawer.Handle />
+          <Show when={searchable()}>
+            <div class="mx-4 mb-3 flex shrink-0 items-center gap-2 rounded-lg border border-edge-muted bg-surface px-3 py-2">
+              <SearchIcon class="size-3.5 shrink-0 text-ink-muted" />
+              <input
+                type="text"
+                aria-label="Search models"
+                placeholder="Search models"
+                value={query()}
+                onInput={(event) => setQuery(event.currentTarget.value)}
+                class="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-placeholder"
+              />
+            </div>
+          </Show>
+          <MobileDrawer.ScrollBody>
+            <Show when={groups().length === 0}>
+              <div class="px-4 py-6 text-center text-sm text-ink-muted">
+                No models match that search.
+              </div>
+            </Show>
+            <For each={groups()}>
+              {(group) => (
+                <>
+                  <Show when={group.label}>
+                    {(heading) => (
+                      <MobileDrawer.Label>{heading()}</MobileDrawer.Label>
+                    )}
+                  </Show>
+                  <MobileDrawer.Section
+                    role="radiogroup"
+                    aria-label={group.label ?? 'Models'}
+                    class="mb-3 flex shrink-0 flex-col"
+                  >
+                    <For each={group.options}>
+                      {(option) => (
+                        <MobileDrawer.Item
+                          type="button"
+                          role="radio"
+                          aria-checked={option.id === shown()}
+                          title={option.description ?? undefined}
+                          onClick={() => pick(option.id)}
+                        >
+                          <span class="min-w-0 flex-1 truncate">
+                            {option.name}
+                          </span>
+                          <Show when={option.id === shown()}>
+                            <Check class="size-3.5 shrink-0 text-accent" />
+                          </Show>
+                        </MobileDrawer.Item>
+                      )}
+                    </For>
+                  </MobileDrawer.Section>
+                </>
+              )}
+            </For>
+          </MobileDrawer.ScrollBody>
+        </MobileDrawer.Content>
+      </MobileDrawer.Portal>
+    </MobileDrawer>
+  );
+
+  const shortList = (
+    <Dropdown placement="top-start">
+      <Dropdown.Trigger
+        variant="ghost"
+        size="sm"
+        class={PILL_TRIGGER_CLASS}
+        disabled={props.disabled}
+      >
+        {label()}
+        <CaretDown />
+      </Dropdown.Trigger>
+      <Dropdown.Content class="w-60 max-w-[calc(100vw-1rem)] overflow-hidden">
+        {/* The gradients anchor here, outside the scrolling box, and read
+            the menu background through `--color-surface`. */}
+        <div class="relative [--color-surface:var(--color-menu)]">
+          <Dropdown.Group
+            ref={setListRef}
+            class="overflow-y-auto overscroll-contain p-0"
+            style={{ 'max-height': LIST_MAX_HEIGHT }}
+          >
+            <div class="flex flex-col p-1.5">
+              <For each={options()}>
+                {(option) => (
+                  <Dropdown.Item
+                    class={cn(
+                      'h-7 shrink-0 gap-2',
+                      option.id === shown() && 'text-ink font-medium'
+                    )}
+                    title={option.description ?? undefined}
+                    onSelect={() => pick(option.id)}
+                  >
+                    <span class="flex-1 truncate">{option.name}</span>
+                  </Dropdown.Item>
+                )}
+              </For>
+            </div>
+          </Dropdown.Group>
+          <ScrollIndicators scrollRef={listRef} appearance="gradient" />
+        </div>
+      </Dropdown.Content>
+    </Dropdown>
+  );
 
   return (
     <Show when={props.options.length > 0}>
-      <Dropdown placement="top-start">
-        <Dropdown.Trigger
-          variant="ghost"
-          size="sm"
-          class="h-6 gap-1 rounded-full bg-ink/5 px-2 text-xs text-ink-muted hover:bg-ink/10"
-          disabled={props.disabled || props.changingTo !== undefined}
-        >
-          <TextShimmer text={label()} active={props.changingTo !== undefined} />
-          <CaretDown />
-        </Dropdown.Trigger>
-        <Dropdown.Content class="overflow-hidden">
-          {/* The gradients anchor here, outside the scrolling box, and read
-              the menu background through `--color-surface`. */}
-          <div class="relative [--color-surface:var(--color-menu)]">
-            <Dropdown.Group
-              ref={setListRef}
-              class="overflow-y-auto overscroll-contain p-0"
-              style={{ 'max-height': LIST_MAX_HEIGHT }}
-            >
-              <div class="flex flex-col p-1.5">
-                <For each={props.options}>
-                  {(option) => (
-                    <Dropdown.Item
-                      class={cn(
-                        'h-7 shrink-0 gap-2',
-                        option.id === shown() && 'text-ink font-medium'
-                      )}
-                      title={option.description ?? undefined}
-                      onSelect={() => {
-                        if (option.id !== props.model)
-                          props.onSelect(option.id);
-                      }}
-                    >
-                      <span class="flex-1 truncate text-xs">{option.name}</span>
-                    </Dropdown.Item>
-                  )}
-                </For>
-              </div>
-            </Dropdown.Group>
-            <ScrollIndicators scrollRef={listRef} appearance="gradient" />
-          </div>
-        </Dropdown.Content>
-      </Dropdown>
+      <Show when={!isTouchDevice()} fallback={sheet}>
+        <Show when={useCatalog()} fallback={shortList}>
+          <ModelCatalogPicker
+            value={shown()}
+            options={catalogOptions()}
+            onSelect={pick}
+            disabled={props.disabled}
+            ariaLabel="Agent model"
+            searchPlaceholder="Search models"
+            triggerClass={PILL_TRIGGER_CLASS}
+            contentClass="overflow-hidden"
+            placement="top-start"
+          />
+        </Show>
+      </Show>
     </Show>
   );
 }

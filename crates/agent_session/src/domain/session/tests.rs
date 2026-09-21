@@ -8,7 +8,9 @@ use agent_client_protocol::schema::v1::{
     SessionCapabilities, SessionResumeCapabilities, ToolCallUpdate, ToolCallUpdateFields,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
-use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
+use agent_runtime_protocol::domain::action::{
+    AgentAction, AgentActionId, AgentPermissionAction, PermissionAnswer,
+};
 use agent_runtime_protocol::domain::schema::v0::{
     AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage,
 };
@@ -19,11 +21,29 @@ use crate::domain::error::AgentSessionError;
 use crate::domain::model::AgentSessionId;
 
 use super::{
-    CloseReason, Effect, Input, RuntimeStatus, SessionMachine, SessionRestoreSupport, StopReason,
+    CloseReason, Effect, Input, PermissionPolicy, RuntimeStatus, SessionMachine,
+    SessionRestoreSupport, StopReason,
 };
 
 fn machine() -> SessionMachine<u32> {
-    SessionMachine::new(AgentSessionId::TEST_A, "/workspace".to_owned(), Vec::new())
+    machine_under(PermissionPolicy::AutoAccept)
+}
+
+fn machine_under(policy: PermissionPolicy) -> SessionMachine<u32> {
+    SessionMachine::new(
+        AgentSessionId::TEST_A,
+        "/workspace".to_owned(),
+        Vec::new(),
+        policy,
+    )
+}
+
+/// A live machine under `policy`, past the whole handshake.
+fn live_machine_under(policy: PermissionPolicy) -> SessionMachine<u32> {
+    let mut machine = machine_under(policy);
+    begin_opening(&mut machine);
+    machine.handle(session_opened("acp-42"));
+    machine
 }
 
 fn command(text: &str, token: u32) -> Input<u32> {
@@ -34,6 +54,15 @@ fn command_with_id(text: &str, action_id: AgentActionId, token: u32) -> Input<u3
     Input::Command {
         from: Some(MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id")),
         action: AgentAction::prompt(text),
+        action_id,
+        token,
+    }
+}
+
+fn set_model_with_id(model: &str, action_id: AgentActionId, token: u32) -> Input<u32> {
+    Input::Command {
+        from: None,
+        action: AgentAction::set_model(model),
         action_id,
         token,
     }
@@ -140,6 +169,68 @@ fn a_command_while_booting_queues_silently() {
 }
 
 #[test]
+fn recovery_waits_for_prompt_then_loads_with_a_new_durable_boundary() {
+    for active in [false, true] {
+        let mut machine = machine();
+        begin_opening(&mut machine);
+        machine.handle(session_opened("cursor-session"));
+        machine.initialization_persisted(macro_uuid::generate_uuid_v7());
+        let prompt = if active {
+            Some(sent_request_ids(&machine.handle(command("current", 1)))[0].clone())
+        } else {
+            None
+        };
+        let mut effects = machine.handle(Input::Inbound(ToServerMessage::Event {
+            event: SystemEvent::ReloadRequired,
+        }));
+        if let Some(prompt) = prompt {
+            assert!(sent_methods(&effects).is_empty());
+            assert!(matches!(machine.status(), RuntimeStatus::Live { .. }));
+            effects = machine.handle(frame(RawJsonRpcMessage::response(
+                prompt,
+                Ok(serde_json::json!({"stopReason":"end_turn"})),
+            )));
+            assert!(
+                effects
+                    .iter()
+                    .any(|effect| matches!(effect, Effect::Log { .. })),
+                "the answer is logged; the fold reads the turn's end from there"
+            );
+        }
+        assert_eq!(sent_methods(&effects), ["initialize"]);
+        let initialize = sent_request_ids(&effects)[0].clone();
+        assert!(machine.handle(command("queued", 2)).is_empty());
+        let boundary = macro_uuid::generate_uuid_v7();
+        machine.initialization_persisted(boundary);
+        let response = InitializeResponse::new(PROTOCOL_VERSION).agent_capabilities(
+            AgentCapabilities::new()
+                .load_session(true)
+                .session_capabilities(
+                    SessionCapabilities::new().resume(SessionResumeCapabilities::new()),
+                ),
+        );
+        let opening = machine.handle(frame(RawJsonRpcMessage::response(
+            initialize,
+            Ok(serde_json::to_value(response).unwrap()),
+        )));
+        assert_eq!(
+            sent_methods(&opening),
+            ["session/load"],
+            "recovery must not prefer generic resume"
+        );
+        let load = sent_request_ids(&opening)[0].clone();
+        let committed = machine.handle(frame(RawJsonRpcMessage::response(
+            load,
+            Ok(serde_json::json!({})),
+        )));
+        assert!(
+            matches!(&committed[0], Effect::Log { boundary: Some(selected), .. } if selected.initialization_log_id == boundary)
+        );
+        assert_eq!(sent_methods(&committed), ["session/prompt"]);
+    }
+}
+
+#[test]
 fn acp_ready_logs_then_sends_initialize() {
     let mut machine = machine();
 
@@ -149,6 +240,36 @@ fn acp_ready_logs_then_sends_initialize() {
     assert_eq!(sent_request_ids(&effects), [request_id(0)]);
     assert_eq!(effects.len(), 2);
     assert_eq!(machine.status(), RuntimeStatus::Handshaking);
+}
+
+#[test]
+fn recovery_while_a_load_reply_is_queued_loads_again_before_dispatch() {
+    let mut machine = machine();
+    begin_opening(&mut machine);
+    machine.handle(session_opened("cursor-session"));
+    let requirement = || {
+        Input::Inbound(ToServerMessage::Event {
+            event: SystemEvent::ReloadRequired,
+        })
+    };
+    let initialize = sent_request_ids(&machine.handle(requirement()))[0].clone();
+    machine.initialization_persisted(macro_uuid::generate_uuid_v7());
+    let opening = machine.handle(frame(RawJsonRpcMessage::response(
+        initialize,
+        Ok(serde_json::to_value(
+            InitializeResponse::new(PROTOCOL_VERSION)
+                .agent_capabilities(AgentCapabilities::new().load_session(true)),
+        )
+        .unwrap()),
+    )));
+    assert!(machine.handle(requirement()).is_empty());
+    assert!(machine.handle(command("queued", 1)).is_empty());
+    let again = machine.handle(frame(RawJsonRpcMessage::response(
+        sent_request_ids(&opening)[0].clone(),
+        Ok(serde_json::json!({})),
+    )));
+    assert_eq!(sent_methods(&again), ["initialize"]);
+    assert_eq!(machine.pending_count(), 1);
 }
 
 #[test]
@@ -201,8 +322,11 @@ fn a_second_acp_ready_only_logs() {
 #[test]
 fn session_new_success_flushes_the_queue() {
     let mut machine = machine();
+    // One prompt and one model change: at most one turn-occupying action is
+    // ever pending, because the harness dispatches its queue one turn at a
+    // time - the machine asserts that contract rather than managing it.
     machine.handle(command("first", 1));
-    machine.handle(command("second", 2));
+    machine.handle(set_model_with_id("opus", AgentActionId::mint(), 2));
     begin_opening(&mut machine);
 
     let effects = machine.handle(session_opened("acp-42"));
@@ -233,13 +357,88 @@ fn session_new_success_flushes_the_queue() {
 }
 
 #[test]
+fn initial_model_selection_holds_prompts_until_the_runtime_confirms_it() {
+    let mut machine = machine().with_initial_model(Some("gpt-5.6-luna".into()));
+    machine.handle(command("hello", 1));
+    begin_opening(&mut machine);
+    let effects = machine.handle(session_opened("acp-42"));
+    assert_eq!(sent_methods(&effects), ["session/set_config_option"]);
+    let Effect::Send { message, .. } = &effects[1] else {
+        panic!("expected the initial model change");
+    };
+    let request = serde_json::to_value(message).unwrap();
+    assert_eq!(request["params"]["configId"], "model");
+    assert_eq!(request["params"]["value"], "gpt-5.6-luna");
+    assert_eq!(machine.status(), RuntimeStatus::Handshaking);
+    assert_eq!(machine.pending_count(), 1);
+
+    // An unrelated reply cannot release the prompt.
+    let response = serde_json::json!({"configOptions": [{
+        "id": "model", "name": "Model", "type": "select",
+        "currentValue": "gpt-5.6-luna", "options": []
+    }]});
+    assert!(
+        sent_methods(&machine.handle(frame(RawJsonRpcMessage::response(
+            request_id(99),
+            Ok(response.clone()),
+        ))))
+        .is_empty()
+    );
+    let effects = machine.handle(frame(RawJsonRpcMessage::response(
+        request_id(2),
+        Ok(response),
+    )));
+    assert_eq!(sent_methods(&effects), ["session/prompt"]);
+    assert!(matches!(machine.status(), RuntimeStatus::Live { .. }));
+    assert!(
+        effects
+            .iter()
+            .any(|effect| matches!(effect, Effect::PersistAcpSession { .. }))
+    );
+}
+
+#[test]
+fn an_unconfirmed_initial_model_never_prompts_the_runtime_default() {
+    for response in [
+        Err(agent_client_protocol::Error::invalid_params()),
+        Ok(serde_json::json!({})),
+        Ok(serde_json::json!({"configOptions": [{
+            "id": "model", "name": "Model", "type": "select",
+            "currentValue": "gpt-6-astra", "options": []
+        }]})),
+    ] {
+        let mut machine = machine().with_initial_model(Some("gpt-5.6-luna".into()));
+        machine.handle(command("hello", 1));
+        begin_opening(&mut machine);
+        machine.handle(session_opened("acp-42"));
+        let effects = machine.handle(frame(RawJsonRpcMessage::response(request_id(2), response)));
+        assert_eq!(machine.status(), RuntimeStatus::Dead);
+        assert!(sent_methods(&effects).is_empty());
+        assert!(
+            !effects
+                .iter()
+                .any(|effect| matches!(effect, Effect::PersistAcpSession { .. }))
+        );
+        assert!(effects.iter().any(|effect| matches!(
+            effect,
+            Effect::Complete {
+                token: 1,
+                result: Err(_)
+            }
+        )));
+    }
+}
+
+#[test]
 fn reconnect_uses_session_resume_when_the_agent_supports_it() {
     let mut machine = SessionMachine::resume(
         AgentSessionId::TEST_A,
         "acp-42".into(),
         "/workspace".to_owned(),
         Vec::new(),
-    );
+        PermissionPolicy::AutoAccept,
+    )
+    .with_initial_model(Some("a-different-default".into()));
     machine.handle(command("continue", 1));
     machine.handle(acp_ready());
     let initialized = InitializeResponse::new(PROTOCOL_VERSION).agent_capabilities(
@@ -276,6 +475,7 @@ fn reconnect_falls_back_to_session_load() {
         "acp-42".into(),
         "/workspace".to_owned(),
         Vec::new(),
+        PermissionPolicy::AutoAccept,
     );
     machine.handle(acp_ready());
     let initialized = InitializeResponse::new(PROTOCOL_VERSION)
@@ -293,6 +493,7 @@ fn reconnect_stops_when_the_agent_cannot_restore_sessions() {
         "acp-42".into(),
         "/workspace".to_owned(),
         Vec::new(),
+        PermissionPolicy::AutoAccept,
     );
     machine.handle(command("cannot continue", 1));
     machine.handle(acp_ready());
@@ -428,44 +629,276 @@ fn a_live_frame_only_logs() {
 }
 
 #[test]
-fn a_permission_request_prefers_allow_always_so_the_agent_does_not_block() {
-    let outcome = permission_response(vec![
-        PermissionOption::new("once", "Allow once", PermissionOptionKind::AllowOnce),
-        PermissionOption::new("always", "Always allow", PermissionOptionKind::AllowAlways),
-        PermissionOption::new("reject", "Reject", PermissionOptionKind::RejectOnce),
-    ]);
+fn auto_accept_prefers_allow_always_so_the_agent_does_not_block() {
+    let mut machine = live_machine_under(PermissionPolicy::AutoAccept);
+    let effects = machine.handle(permission_request(
+        permission_id(0),
+        vec![
+            PermissionOption::new("once", "Allow once", PermissionOptionKind::AllowOnce),
+            PermissionOption::new("always", "Always allow", PermissionOptionKind::AllowAlways),
+            PermissionOption::new("reject", "Reject", PermissionOptionKind::RejectOnce),
+        ],
+    ));
 
+    assert!(matches!(effects.first(), Some(Effect::Log { .. })));
     assert_eq!(
-        outcome,
+        permission_outcome(&effects[1], &permission_id(0)),
         RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new("always"))
     );
 }
 
 #[test]
-fn a_permission_request_falls_back_to_allow_once() {
-    let outcome = permission_response(vec![
-        PermissionOption::new("once", "Allow once", PermissionOptionKind::AllowOnce),
-        PermissionOption::new("reject", "Reject", PermissionOptionKind::RejectOnce),
-    ]);
+fn auto_accept_falls_back_to_allow_once() {
+    let mut machine = live_machine_under(PermissionPolicy::AutoAccept);
+    let effects = machine.handle(permission_request(
+        permission_id(0),
+        vec![
+            PermissionOption::new("once", "Allow once", PermissionOptionKind::AllowOnce),
+            PermissionOption::new("reject", "Reject", PermissionOptionKind::RejectOnce),
+        ],
+    ));
 
     assert_eq!(
-        outcome,
+        permission_outcome(&effects[1], &permission_id(0)),
         RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new("once"))
     );
 }
 
 #[test]
-fn a_permission_request_without_an_allow_option_is_cancelled() {
-    let outcome = permission_response(Vec::new());
+fn auto_accept_cancels_a_request_without_an_allow_option() {
+    let mut machine = live_machine_under(PermissionPolicy::AutoAccept);
+    let effects = machine.handle(permission_request(permission_id(0), Vec::new()));
 
-    assert_eq!(outcome, RequestPermissionOutcome::Cancelled);
+    assert_eq!(
+        permission_outcome(&effects[1], &permission_id(0)),
+        RequestPermissionOutcome::Cancelled
+    );
 }
 
-fn permission_response(options: Vec<PermissionOption>) -> RequestPermissionOutcome {
-    let mut machine = machine();
-    begin_opening(&mut machine);
-    machine.handle(session_opened("acp-42"));
-    let permission_id = RequestId::Str("agent:permission:0".to_owned());
+#[test]
+fn prompting_holds_the_request_open_and_only_logs_it() {
+    let mut machine = live_machine_under(PermissionPolicy::Prompt);
+    let effects = machine.handle(permission_request(permission_id(0), allow_or_reject()));
+
+    assert!(matches!(effects[..], [Effect::Log { .. }]));
+}
+
+#[test]
+fn a_users_answer_is_sent_as_the_agents_response_and_attributed_to_them() {
+    let mut machine = live_machine_under(PermissionPolicy::Prompt);
+    machine.handle(permission_request(permission_id(0), allow_or_reject()));
+
+    let effects = machine.handle(permission_answer(permission_id(0), "allow", 7));
+
+    let [
+        Effect::Send { from, .. },
+        Effect::Complete {
+            token: 7,
+            result: Ok(()),
+        },
+    ] = &effects[..]
+    else {
+        panic!("expected the response then the caller's completion, got {effects:?}");
+    };
+    assert_eq!(
+        from.as_ref().map(ToString::to_string).as_deref(),
+        Some("macro|owner@example.com")
+    );
+    assert_eq!(
+        permission_outcome(&effects[0], &permission_id(0)),
+        RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new("allow"))
+    );
+    // Answered: a second answer has nothing to resolve.
+    let effects = machine.handle(permission_answer(permission_id(0), "allow", 8));
+    assert!(matches!(
+        effects[..],
+        [Effect::Complete {
+            token: 8,
+            result: Err(AgentSessionError::PermissionRequestNotFound(_))
+        }]
+    ));
+}
+
+#[test]
+fn numeric_request_ids_are_answered_by_the_same_number() {
+    let mut machine = live_machine_under(PermissionPolicy::Prompt);
+    machine.handle(permission_request(RequestId::Number(7), allow_or_reject()));
+
+    let effects = machine.handle(permission_answer(RequestId::Number(7), "reject", 1));
+
+    assert_eq!(
+        permission_outcome(&effects[0], &RequestId::Number(7)),
+        RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new("reject"))
+    );
+}
+
+#[test]
+fn an_answer_naming_an_unoffered_option_is_refused_and_the_request_stays_open() {
+    let mut machine = live_machine_under(PermissionPolicy::Prompt);
+    machine.handle(permission_request(permission_id(0), allow_or_reject()));
+
+    let effects = machine.handle(permission_answer(permission_id(0), "sudo", 1));
+    assert!(matches!(
+        effects[..],
+        [Effect::Complete {
+            token: 1,
+            result: Err(AgentSessionError::PermissionOptionUnknown(_))
+        }]
+    ));
+
+    let effects = machine.handle(permission_answer(permission_id(0), "allow", 2));
+    assert!(matches!(
+        effects[..],
+        [
+            Effect::Send { .. },
+            Effect::Complete {
+                token: 2,
+                result: Ok(())
+            }
+        ]
+    ));
+}
+
+#[test]
+fn a_cancelled_answer_needs_no_option() {
+    let mut machine = live_machine_under(PermissionPolicy::Prompt);
+    machine.handle(permission_request(permission_id(0), allow_or_reject()));
+
+    let effects = machine.handle(Input::Command {
+        from: None,
+        action: AgentAction::RespondToPermission(AgentPermissionAction {
+            request_id: permission_id(0),
+            answer: PermissionAnswer::Cancelled,
+        }),
+        action_id: AgentActionId::mint(),
+        token: 1,
+    });
+
+    assert_eq!(
+        permission_outcome(&effects[0], &permission_id(0)),
+        RequestPermissionOutcome::Cancelled
+    );
+}
+
+#[test]
+fn an_answer_before_the_session_is_live_is_never_queued() {
+    let mut machine = machine_under(PermissionPolicy::Prompt);
+
+    let effects = machine.handle(permission_answer(permission_id(0), "allow", 1));
+
+    assert!(matches!(
+        effects[..],
+        [Effect::Complete {
+            token: 1,
+            result: Err(AgentSessionError::PermissionRequestNotFound(_))
+        }]
+    ));
+    assert_eq!(machine.pending_count(), 0);
+}
+
+#[test]
+fn an_answer_to_a_dead_session_is_a_disconnect() {
+    let mut machine = live_machine_under(PermissionPolicy::Prompt);
+    machine.handle(permission_request(permission_id(0), allow_or_reject()));
+    machine.handle(Input::Closed(CloseReason::TransportClosed));
+
+    let effects = machine.handle(permission_answer(permission_id(0), "allow", 1));
+
+    assert!(matches!(
+        effects[..],
+        [Effect::Complete {
+            token: 1,
+            result: Err(AgentSessionError::Disconnected(_))
+        }]
+    ));
+}
+
+#[test]
+fn stop_cancels_open_permission_requests_after_the_cancel_notification() {
+    let mut machine = live_machine_under(PermissionPolicy::Prompt);
+    machine.handle(permission_request(permission_id(0), allow_or_reject()));
+
+    let effects = machine.handle(Input::Command {
+        from: None,
+        action: AgentAction::Stop,
+        action_id: AgentActionId::mint(),
+        token: 1,
+    });
+
+    assert_eq!(sent_methods(&effects), vec!["session/cancel"]);
+    let [
+        Effect::Send { .. },
+        cancelled @ Effect::Send { .. },
+        Effect::Complete { token: 1, .. },
+    ] = &effects[..]
+    else {
+        panic!("expected cancel, then the cancelled response, then completion; got {effects:?}");
+    };
+    assert_eq!(
+        permission_outcome(cancelled, &permission_id(0)),
+        RequestPermissionOutcome::Cancelled
+    );
+}
+
+#[test]
+fn a_turn_ending_cancels_whatever_the_agent_left_open() {
+    let mut machine = live_machine_under(PermissionPolicy::Prompt);
+    let action_id = AgentActionId::mint();
+    machine.handle(command_with_id("run it", action_id, 1));
+    machine.handle(permission_request(permission_id(0), allow_or_reject()));
+
+    let effects = machine.handle(frame(RawJsonRpcMessage::response(
+        action_id.to_request_id(),
+        Ok(serde_json::json!({ "stopReason": "end_turn" })),
+    )));
+
+    let [Effect::Log { .. }, cancelled @ Effect::Send { .. }] = &effects[..] else {
+        panic!("expected log and cancelled response; got {effects:?}");
+    };
+    assert_eq!(
+        permission_outcome(cancelled, &permission_id(0)),
+        RequestPermissionOutcome::Cancelled
+    );
+}
+
+#[test]
+fn an_abandoned_session_cancels_open_requests_before_stopping() {
+    let mut machine = live_machine_under(PermissionPolicy::Prompt);
+    machine.handle(permission_request(permission_id(0), allow_or_reject()));
+
+    let effects = machine.handle(Input::Closed(CloseReason::Abandoned));
+
+    let [cancelled @ Effect::Send { .. }, Effect::Stop { .. }] = &effects[..] else {
+        panic!("expected the cancelled response then stop; got {effects:?}");
+    };
+    assert_eq!(
+        permission_outcome(cancelled, &permission_id(0)),
+        RequestPermissionOutcome::Cancelled
+    );
+}
+
+#[test]
+fn a_dead_transport_gets_no_cancellations_it_cannot_carry() {
+    let mut machine = live_machine_under(PermissionPolicy::Prompt);
+    machine.handle(permission_request(permission_id(0), allow_or_reject()));
+
+    let effects = machine.handle(Input::Closed(CloseReason::TransportClosed));
+
+    assert!(matches!(effects[..], [Effect::Stop { .. }]));
+}
+
+fn allow_or_reject() -> Vec<PermissionOption> {
+    vec![
+        PermissionOption::new("allow", "Allow once", PermissionOptionKind::AllowOnce),
+        PermissionOption::new("reject", "Reject", PermissionOptionKind::RejectOnce),
+    ]
+}
+
+fn permission_id(n: u64) -> RequestId {
+    RequestId::Str(format!("agent:permission:{n}"))
+}
+
+fn permission_request(id: RequestId, options: Vec<PermissionOption>) -> Input<u32> {
     let (method, params) = RequestPermissionRequest::new(
         "acp-42",
         ToolCallUpdate::new("call-1", ToolCallUpdateFields::new()),
@@ -474,12 +907,25 @@ fn permission_response(options: Vec<PermissionOption>) -> RequestPermissionOutco
     .to_untyped_message()
     .unwrap()
     .into_parts();
+    frame(RawJsonRpcMessage::request(method, params, id).unwrap())
+}
 
-    let effects = machine.handle(frame(
-        RawJsonRpcMessage::request(method, params, permission_id.clone()).unwrap(),
-    ));
+fn permission_answer(request_id: RequestId, option_id: &str, token: u32) -> Input<u32> {
+    Input::Command {
+        from: Some(MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id")),
+        action: AgentAction::RespondToPermission(AgentPermissionAction {
+            request_id,
+            answer: PermissionAnswer::Selected {
+                option_id: option_id.to_owned(),
+            },
+        }),
+        action_id: AgentActionId::mint(),
+        token,
+    }
+}
 
-    assert!(matches!(effects.first(), Some(Effect::Log { .. })));
+/// The outcome carried by a sent permission response to `expected_id`.
+fn permission_outcome(effect: &Effect<u32>, expected_id: &RequestId) -> RequestPermissionOutcome {
     let Effect::Send {
         message:
             ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Response(Response::Result {
@@ -487,11 +933,11 @@ fn permission_response(options: Vec<PermissionOption>) -> RequestPermissionOutco
                 result,
             }))),
         ..
-    } = &effects[1]
+    } = effect
     else {
-        panic!("expected a successful ACP permission response");
+        panic!("expected a successful ACP permission response, got {effect:?}");
     };
-    assert_eq!(id, &permission_id);
+    assert_eq!(id, expected_id);
     serde_json::from_value::<RequestPermissionResponse>(result.clone())
         .unwrap()
         .outcome
@@ -579,11 +1025,13 @@ fn actions_go_out_under_the_ids_they_were_accepted_with() {
     let live_id = AgentActionId::mint();
 
     let mut machine = machine();
-    machine.handle(command_with_id("queued", queued_id.clone(), 1));
+    machine.handle(command_with_id("queued", queued_id, 1));
     let initialize = machine.handle(acp_ready());
     let open = machine.handle(initialized());
     let flushed = machine.handle(session_opened("acp-42"));
-    let live = machine.handle(command_with_id("live", live_id.clone(), 2));
+    // A model change, because the queued prompt's turn is still in flight and
+    // only non-turn actions may go out beside it.
+    let live = machine.handle(set_model_with_id("opus", live_id, 2));
 
     let mut ids = Vec::new();
     for effects in [&initialize, &open, &flushed, &live] {
@@ -613,56 +1061,119 @@ fn stop(token: u32) -> Input<u32> {
 }
 
 #[test]
-fn a_stop_while_booting_drops_the_queued_prompts_instead_of_sending_them() {
+fn a_stop_while_booting_leaves_the_queued_prompt_to_run() {
     let mut machine = machine();
 
     // Queued, because nothing can be sent before the handshake finishes.
     assert!(machine.handle(command("start the work", 1)).is_empty());
     assert_eq!(machine.pending_count(), 1);
 
+    // A stop cancels only the turn that is running - here, none. The queued
+    // prompt stays: it will open the next turn, which its caller can stop in
+    // turn if they meant that too.
     let effects = machine.handle(stop(2));
-
-    // The queued prompt resolves as accepted rather than failed: it was
-    // superseded, and a `Disconnected` here would have the harness resume and
-    // resend the very prompt this stop dropped.
-    assert!(
-        matches!(
-            effects[0],
-            Effect::Complete {
-                token: 1,
-                result: Ok(())
-            }
-        ),
-        "the queued prompt is completed, got {effects:?}"
-    );
-    // Only the stop is left to send once the session opens.
-    assert_eq!(machine.pending_count(), 1);
+    assert!(effects.is_empty(), "nothing completes early: {effects:?}");
+    assert_eq!(machine.pending_count(), 2);
 
     begin_opening(&mut machine);
     let effects = machine.handle(session_opened("acp-1"));
 
-    let methods: Vec<_> = effects
-        .iter()
-        .filter_map(|effect| match effect {
-            Effect::Send {
-                message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Notification(n))),
-                ..
-            } => Some(n.method.to_string()),
-            Effect::Send {
-                message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(r))),
-                ..
-            } => Some(r.method.to_string()),
-            _ => None,
-        })
-        .collect();
-    assert!(
-        !methods.iter().any(|method| method == "session/prompt"),
-        "the dropped prompt must never reach the agent, sent {methods:?}"
+    assert_eq!(
+        sent_methods(&effects),
+        ["session/prompt", "session/cancel"],
+        "the prompt still runs, in the order the actions were accepted"
     );
+}
+
+/// The response answering the in-flight prompt's request id, however the
+/// turn ended.
+fn turn_answered(request_id: RequestId) -> Input<u32> {
+    frame(RawJsonRpcMessage::response(
+        request_id,
+        Ok(serde_json::json!({ "stopReason": "end_turn" })),
+    ))
+}
+
+/// A live machine with `action_id`'s prompt in flight.
+fn machine_with_turn_in_flight(action_id: AgentActionId) -> SessionMachine<u32> {
+    let mut machine = machine();
+    machine.handle(command_with_id("work", action_id, 1));
+    begin_opening(&mut machine);
+    machine.handle(session_opened("acp-42"));
+    machine
+}
+
+/// The machine lets go of the turn on the prompt's answer, whatever shape
+/// the answer takes. What the turn *meant* - its stop reason, its last words
+/// - is the fold's to say, from the same logged frame.
+#[test]
+fn the_prompts_response_releases_the_turn() {
+    for answer in [
+        RawJsonRpcMessage::response(
+            AgentActionId::mint().to_request_id(),
+            Ok(serde_json::json!({"stopReason":"end_turn"})),
+        ),
+        RawJsonRpcMessage::response(
+            AgentActionId::mint().to_request_id(),
+            Err(agent_client_protocol::Error::internal_error()),
+        ),
+        RawJsonRpcMessage::response(
+            AgentActionId::mint().to_request_id(),
+            Ok(serde_json::json!({})),
+        ),
+    ] {
+        let action_id =
+            AgentActionId::from_request_id(answer.response_id().expect("a response has an id"))
+                .expect("the test minted a uuid id");
+        let mut machine = machine_with_turn_in_flight(action_id);
+
+        let effects = machine.handle(frame(answer));
+
+        assert!(
+            matches!(effects[..], [Effect::Log { .. }]),
+            "the answer is logged and nothing else happens here: {effects:?}"
+        );
+        // Released: the next prompt goes straight out rather than queueing
+        // behind a turn the machine still thinks is running.
+        let effects = machine.handle(command("next", 9));
+        assert_eq!(sent_methods(&effects), ["session/prompt"]);
+    }
+}
+
+#[test]
+fn another_requests_response_does_not_end_the_turn() {
+    let action_id = AgentActionId::mint();
+    let mut machine = machine_with_turn_in_flight(action_id);
+
+    // A model change answered while the prompt's turn is still running.
+    let effects = machine.handle(frame(RawJsonRpcMessage::response(
+        AgentActionId::mint().to_request_id(),
+        Ok(serde_json::json!({})),
+    )));
     assert!(
-        methods.iter().any(|method| method == "session/cancel"),
-        "the stop itself is still delivered, sent {methods:?}"
+        matches!(effects[..], [Effect::Log { .. }]),
+        "only logged: {effects:?}"
     );
+
+    // The turn is still in flight: its own answer still releases it.
+    let effects = machine.handle(turn_answered(action_id.to_request_id()));
+    assert!(matches!(effects[..], [Effect::Log { .. }]));
+    let effects = machine.handle(command("next", 9));
+    assert_eq!(sent_methods(&effects), ["session/prompt"]);
+}
+
+#[test]
+fn a_death_mid_turn_is_not_a_turn_end() {
+    let action_id = AgentActionId::mint();
+    let mut machine = machine_with_turn_in_flight(action_id);
+
+    let effects = machine.handle(Input::Closed(CloseReason::TransportClosed));
+
+    assert!(
+        matches!(effects[..], [Effect::Stop { .. }]),
+        "the session stopped; nothing else was answered: {effects:?}"
+    );
+    assert_eq!(machine.status(), RuntimeStatus::Dead);
 }
 
 #[test]
@@ -715,6 +1226,7 @@ fn session_new_carries_the_sessions_workspace() {
         AgentSessionId::TEST_A,
         "/home/operator/code".to_owned(),
         Vec::new(),
+        PermissionPolicy::AutoAccept,
     );
     machine.handle(acp_ready());
     let effects = machine.handle(initialized());
@@ -730,6 +1242,7 @@ fn resume_carries_the_sessions_workspace() {
         "acp-42".into(),
         "/home/operator/code".to_owned(),
         Vec::new(),
+        PermissionPolicy::AutoAccept,
     );
     machine.handle(acp_ready());
     let effects = machine.handle(initialized_with(
@@ -775,6 +1288,7 @@ fn a_ready_connection_still_picks_resume_for_a_session_that_has_one() {
         "acp-42".into(),
         "/workspace".to_owned(),
         Vec::new(),
+        PermissionPolicy::AutoAccept,
     );
 
     let opening = machine.handle(Input::Ready {
@@ -794,6 +1308,7 @@ fn a_ready_connection_that_cannot_restore_stops_the_session() {
         "acp-42".into(),
         "/workspace".to_owned(),
         Vec::new(),
+        PermissionPolicy::AutoAccept,
     );
 
     let effects = machine.handle(Input::Ready {
@@ -850,4 +1365,525 @@ fn the_handshake_result_is_announced_for_the_connection() {
             load: true
         })
     );
+}
+
+#[test]
+fn only_matching_successful_load_selects_its_connection_initialization() {
+    for resume in [false, true] {
+        let mut machine: SessionMachine<u32> = SessionMachine::resume(
+            AgentSessionId::TEST_A,
+            "acp-42".into(),
+            "/workspace".into(),
+            vec![],
+            PermissionPolicy::Prompt,
+        );
+        machine.handle(acp_ready());
+        let initialization_log_id = macro_uuid::generate_uuid_v7();
+        machine.initialization_persisted(initialization_log_id);
+        let capabilities = if resume {
+            AgentCapabilities::new()
+                .load_session(true)
+                .session_capabilities(
+                    SessionCapabilities::new().resume(SessionResumeCapabilities::new()),
+                )
+        } else {
+            AgentCapabilities::new().load_session(true)
+        };
+        machine.handle(initialized_with(
+            InitializeResponse::new(PROTOCOL_VERSION).agent_capabilities(capabilities),
+        ));
+        let unrelated = machine.handle(frame(RawJsonRpcMessage::response(
+            RequestId::Str("another-session:1".into()),
+            Ok(serde_json::json!({})),
+        )));
+        assert!(matches!(unrelated[0], Effect::Log { boundary: None, .. }));
+        let completed = machine.handle(frame(RawJsonRpcMessage::response(
+            request_id(1),
+            Ok(serde_json::json!({})),
+        )));
+        match &completed[0] {
+            Effect::Log { boundary, .. } => assert_eq!(
+                *boundary,
+                (!resume).then_some(crate::domain::model::HistoryBoundary {
+                    initialization_log_id
+                })
+            ),
+            _ => panic!("response must be logged first"),
+        }
+        // Reused response IDs once live cannot select a boundary again.
+        let duplicate = machine.handle(frame(RawJsonRpcMessage::response(
+            request_id(1),
+            Ok(serde_json::json!({})),
+        )));
+        assert!(matches!(duplicate[0], Effect::Log { boundary: None, .. }));
+    }
+}
+
+#[test]
+fn failed_or_interrupted_load_never_selects_history() {
+    for response in [
+        Err(agent_client_protocol::Error::internal_error()),
+        Ok(serde_json::json!(false)),
+    ] {
+        let mut machine: SessionMachine<u32> = SessionMachine::resume(
+            AgentSessionId::TEST_A,
+            "acp-42".into(),
+            "/workspace".into(),
+            vec![],
+            PermissionPolicy::Prompt,
+        );
+        machine.handle(acp_ready());
+        machine.initialization_persisted(macro_uuid::generate_uuid_v7());
+        machine.handle(initialized_with(
+            InitializeResponse::new(PROTOCOL_VERSION)
+                .agent_capabilities(AgentCapabilities::new().load_session(true)),
+        ));
+        let effects = machine.handle(frame(RawJsonRpcMessage::response(request_id(1), response)));
+        assert!(matches!(effects[0], Effect::Log { boundary: None, .. }));
+        assert_eq!(machine.status(), RuntimeStatus::Dead);
+    }
+    let mut machine: SessionMachine<u32> = SessionMachine::resume(
+        AgentSessionId::TEST_A,
+        "acp-42".into(),
+        "/workspace".into(),
+        vec![],
+        PermissionPolicy::Prompt,
+    );
+    machine.handle(acp_ready());
+    machine.initialization_persisted(macro_uuid::generate_uuid_v7());
+    machine.handle(initialized_with(
+        InitializeResponse::new(PROTOCOL_VERSION)
+            .agent_capabilities(AgentCapabilities::new().load_session(true)),
+    ));
+    machine.handle(Input::Closed(CloseReason::TransportClosed));
+    let late = machine.handle(frame(RawJsonRpcMessage::response(
+        request_id(1),
+        Ok(serde_json::json!({})),
+    )));
+    assert!(matches!(late[0], Effect::Log { boundary: None, .. }));
+}
+
+#[test]
+fn load_without_durable_initialization_cannot_become_live() {
+    let mut machine: SessionMachine<u32> = SessionMachine::resume(
+        AgentSessionId::TEST_A,
+        "acp-42".into(),
+        "/workspace".into(),
+        vec![],
+        PermissionPolicy::Prompt,
+    );
+    machine.handle(acp_ready());
+    machine.handle(initialized_with(
+        InitializeResponse::new(PROTOCOL_VERSION)
+            .agent_capabilities(AgentCapabilities::new().load_session(true)),
+    ));
+    let effects = machine.handle(frame(RawJsonRpcMessage::response(
+        request_id(1),
+        Ok(serde_json::json!({})),
+    )));
+    assert!(matches!(
+        effects.as_slice(),
+        [
+            Effect::Log { boundary: None, .. },
+            Effect::Stop {
+                reason: StopReason::InitializationNotPersisted
+            }
+        ]
+    ));
+    assert_eq!(machine.status(), RuntimeStatus::Dead);
+}
+
+#[test]
+fn late_load_response_from_a_previous_actor_cannot_select_history() {
+    fn start() -> (SessionMachine<u32>, RequestId, macro_uuid::Uuid) {
+        let mut machine = SessionMachine::resume(
+            AgentSessionId::TEST_A,
+            "acp-42".into(),
+            "/workspace".into(),
+            vec![],
+            PermissionPolicy::Prompt,
+        )
+        .with_connection_context(macro_uuid::generate_uuid_v7());
+        let initialization = macro_uuid::generate_uuid_v7();
+        machine.initialization_persisted(initialization);
+        let effects = machine.handle(Input::Ready {
+            restore: SessionRestoreSupport {
+                resume: false,
+                load: true,
+            },
+        });
+        let Effect::Send {
+            message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))),
+            ..
+        } = &effects[0]
+        else {
+            panic!("load request")
+        };
+        let id = request.id.clone();
+        (machine, id, initialization)
+    }
+    let (_, old_id, _) = start();
+    let (mut current, new_id, initialization_log_id) = start();
+    assert_ne!(old_id, new_id);
+    let late = current.handle(frame(RawJsonRpcMessage::response(
+        old_id,
+        Ok(serde_json::json!({})),
+    )));
+    assert!(matches!(
+        late.as_slice(),
+        [Effect::Log { boundary: None, .. }]
+    ));
+    assert_eq!(current.status(), RuntimeStatus::Handshaking);
+    let completed = current.handle(frame(RawJsonRpcMessage::response(
+        new_id,
+        Ok(serde_json::json!({})),
+    )));
+    assert!(
+        matches!(completed[0], Effect::Log { boundary: Some(crate::domain::model::HistoryBoundary { initialization_log_id: id }), .. } if id == initialization_log_id)
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Elicitation: held for the user, never answered by the machine itself.
+// ---------------------------------------------------------------------------
+
+mod elicitation {
+    use super::*;
+    use agent_client_protocol::schema::v1::{
+        ClientRequest, CreateElicitationRequest, CreateElicitationResponse, ElicitationAction,
+        ElicitationFormMode, ElicitationRequestScope, ElicitationSchema, ElicitationSessionScope,
+        ElicitationUrlMode, InitializeRequest, SessionId,
+    };
+    use agent_runtime_protocol::domain::action::{ElicitationAnswer, ElicitationRequestId};
+    use std::collections::BTreeMap;
+
+    fn live_machine() -> SessionMachine<u32> {
+        let mut machine = machine();
+        begin_opening(&mut machine);
+        machine.handle(session_opened("acp-42"));
+        machine
+    }
+
+    fn create(id: RequestId, request: CreateElicitationRequest) -> Input<u32> {
+        let (method, params) = request.to_untyped_message().unwrap().into_parts();
+        frame(RawJsonRpcMessage::request(method, params, id).unwrap())
+    }
+
+    fn form_for(session: &'static str) -> CreateElicitationRequest {
+        CreateElicitationRequest::new(
+            ElicitationFormMode::new(
+                ElicitationSessionScope::new(SessionId::new(session)),
+                ElicitationSchema::new(),
+            ),
+            "Which approach?",
+        )
+    }
+
+    fn answer(id: ElicitationRequestId, answer: ElicitationAnswer, token: u32) -> Input<u32> {
+        Input::Command {
+            from: Some(
+                MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
+            ),
+            action: AgentAction::respond_elicitation(id, answer),
+            action_id: AgentActionId::mint(),
+            token,
+        }
+    }
+
+    /// Every JSON-RPC response the machine sent, as `(id, result)`.
+    fn sent_responses(
+        effects: &[Effect<u32>],
+    ) -> Vec<(
+        RequestId,
+        Result<serde_json::Value, agent_client_protocol::Error>,
+    )> {
+        effects
+            .iter()
+            .filter_map(|effect| match effect {
+                Effect::Send {
+                    message:
+                        ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Response(
+                            Response::Result { id, result },
+                        ))),
+                    ..
+                } => Some((id.clone(), Ok(result.clone()))),
+                Effect::Send {
+                    message:
+                        ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Response(
+                            Response::Error { id, error },
+                        ))),
+                    ..
+                } => Some((id.clone(), Err(error.clone()))),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn refusals(effects: &[Effect<u32>]) -> Vec<RequestId> {
+        sent_responses(effects)
+            .into_iter()
+            .filter_map(|(id, result)| match result {
+                Err(error) if error.code == agent_client_protocol::ErrorCode::InvalidParams => {
+                    Some(id)
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn initialize_advertises_both_elicitation_modes() {
+        let mut machine = machine();
+        let effects = machine.handle(acp_ready());
+        let Effect::Send {
+            message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))),
+            ..
+        } = &effects[1]
+        else {
+            panic!("initialize is sent");
+        };
+        let ClientRequest::InitializeRequest(initialize) =
+            ClientRequest::parse_message(&request.method, &request.params).unwrap()
+        else {
+            panic!("the first request is initialize");
+        };
+        let _: &InitializeRequest = &initialize;
+        let elicitation = initialize
+            .client_capabilities
+            .elicitation
+            .expect("elicitation is advertised");
+        assert!(elicitation.form.is_some(), "form mode is advertised");
+        assert!(elicitation.url.is_some(), "url mode is advertised");
+
+        // And on the wire, exactly the shape the protocol documents.
+        let params = serde_json::to_value(&request.params).unwrap();
+        assert_eq!(
+            params["clientCapabilities"]["elicitation"],
+            serde_json::json!({ "form": {}, "url": {} })
+        );
+    }
+
+    #[test]
+    fn a_form_elicitation_is_held_not_answered() {
+        let mut machine = live_machine();
+
+        let effects = machine.handle(create(RequestId::Number(0), form_for("acp-42")));
+
+        assert!(
+            matches!(effects[..], [Effect::Log { .. }]),
+            "held: {effects:?}"
+        );
+        assert_eq!(machine.pending_elicitation(), Some(&RequestId::Number(0)));
+        assert!(matches!(machine.status(), RuntimeStatus::Live { .. }));
+    }
+
+    #[test]
+    fn a_url_elicitation_is_held_too() {
+        let mut machine = live_machine();
+        let request = CreateElicitationRequest::new(
+            ElicitationUrlMode::new(
+                ElicitationSessionScope::new(SessionId::new("acp-42")),
+                "github-oauth-1",
+                "https://agent.example.com/connect?elicitationId=github-oauth-1",
+            ),
+            "Authorize GitHub",
+        );
+
+        let effects = machine.handle(create(RequestId::Str("el-1".to_owned()), request));
+
+        assert!(matches!(effects[..], [Effect::Log { .. }]));
+        assert_eq!(
+            machine.pending_elicitation(),
+            Some(&RequestId::Str("el-1".to_owned()))
+        );
+    }
+
+    #[test]
+    fn a_second_elicitation_while_one_is_held_is_refused_and_the_first_kept() {
+        let mut machine = live_machine();
+        machine.handle(create(RequestId::Number(0), form_for("acp-42")));
+
+        let effects = machine.handle(create(RequestId::Number(1), form_for("acp-42")));
+
+        assert_eq!(refusals(&effects), [RequestId::Number(1)]);
+        assert_eq!(machine.pending_elicitation(), Some(&RequestId::Number(0)));
+    }
+
+    #[test]
+    fn request_scoped_and_foreign_session_elicitations_are_refused() {
+        let mut machine = live_machine();
+
+        let request_scoped = CreateElicitationRequest::new(
+            ElicitationFormMode::new(
+                ElicitationRequestScope::new(RequestId::Number(12)),
+                ElicitationSchema::new(),
+            ),
+            "Workspace name?",
+        );
+        let effects = machine.handle(create(RequestId::Number(0), request_scoped));
+        assert_eq!(refusals(&effects), [RequestId::Number(0)]);
+
+        let effects = machine.handle(create(RequestId::Number(1), form_for("acp-other")));
+        assert_eq!(refusals(&effects), [RequestId::Number(1)]);
+
+        assert_eq!(machine.pending_elicitation(), None);
+    }
+
+    #[test]
+    fn an_unknown_mode_is_refused() {
+        let mut machine = live_machine();
+        let params = serde_json::json!({
+            "sessionId": "acp-42",
+            "mode": "_hologram",
+            "message": "Look here",
+            "projector": "left"
+        });
+        let effects = machine.handle(frame(
+            RawJsonRpcMessage::request(
+                "elicitation/create".to_owned(),
+                params,
+                RequestId::Number(7),
+            )
+            .unwrap(),
+        ));
+
+        assert_eq!(refusals(&effects), [RequestId::Number(7)]);
+        assert_eq!(machine.pending_elicitation(), None);
+    }
+
+    #[test]
+    fn an_answer_with_the_held_id_goes_out_as_a_response_and_frees_the_slot() {
+        let mut machine = live_machine();
+        machine.handle(create(RequestId::Number(0), form_for("acp-42")));
+
+        let content = BTreeMap::from([(
+            "strategy".to_owned(),
+            agent_runtime_protocol::domain::action::ElicitationContentValue::Text(
+                "balanced".to_owned(),
+            ),
+        )]);
+        let effects = machine.handle(answer(
+            ElicitationRequestId::Number(0),
+            ElicitationAnswer::Accept {
+                content: Some(content),
+            },
+            1,
+        ));
+
+        let responses = sent_responses(&effects);
+        assert_eq!(responses.len(), 1, "exactly one response: {effects:?}");
+        let (id, result) = &responses[0];
+        assert_eq!(*id, RequestId::Number(0));
+        let response: CreateElicitationResponse =
+            serde_json::from_value(result.clone().unwrap()).unwrap();
+        assert!(matches!(response.action, ElicitationAction::Accept(_)));
+        assert!(matches!(
+            effects.last(),
+            Some(Effect::Complete {
+                token: 1,
+                result: Ok(())
+            })
+        ));
+        assert_eq!(machine.pending_elicitation(), None);
+
+        // Answering again is a conflict: nothing is held any more.
+        let effects = machine.handle(answer(
+            ElicitationRequestId::Number(0),
+            ElicitationAnswer::Decline,
+            2,
+        ));
+        assert!(matches!(
+            effects[..],
+            [Effect::Complete {
+                token: 2,
+                result: Err(AgentSessionError::ElicitationNotPending(_))
+            }]
+        ));
+    }
+
+    #[test]
+    fn an_answer_with_the_wrong_id_is_refused_and_the_slot_kept() {
+        let mut machine = live_machine();
+        machine.handle(create(RequestId::Number(0), form_for("acp-42")));
+
+        let effects = machine.handle(answer(
+            ElicitationRequestId::Number(99),
+            ElicitationAnswer::Decline,
+            1,
+        ));
+
+        assert!(matches!(
+            effects[..],
+            [Effect::Complete {
+                token: 1,
+                result: Err(AgentSessionError::ElicitationNotPending(_))
+            }]
+        ));
+        assert_eq!(machine.pending_elicitation(), Some(&RequestId::Number(0)));
+    }
+
+    #[test]
+    fn an_answer_before_the_session_is_live_is_refused_not_queued() {
+        let mut machine = machine();
+
+        let effects = machine.handle(answer(
+            ElicitationRequestId::Number(0),
+            ElicitationAnswer::Cancel,
+            1,
+        ));
+
+        assert!(matches!(
+            effects[..],
+            [Effect::Complete {
+                token: 1,
+                result: Err(AgentSessionError::ElicitationNotPending(_))
+            }]
+        ));
+        assert_eq!(machine.pending_count(), 0);
+    }
+
+    #[test]
+    fn a_stop_cancels_the_held_elicitation_before_cancelling_the_turn() {
+        let mut machine = live_machine();
+        machine.handle(create(RequestId::Number(0), form_for("acp-42")));
+
+        let effects = machine.handle(stop(1));
+
+        let responses = sent_responses(&effects);
+        assert_eq!(responses.len(), 1);
+        assert_eq!(responses[0].0, RequestId::Number(0));
+        let response: CreateElicitationResponse =
+            serde_json::from_value(responses[0].1.clone().unwrap()).unwrap();
+        assert!(matches!(response.action, ElicitationAction::Cancel));
+
+        // The cancel answer precedes the cancel notification.
+        let order: Vec<&str> = effects
+            .iter()
+            .filter_map(|effect| match effect {
+                Effect::Send {
+                    message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Response(_))),
+                    ..
+                } => Some("answer"),
+                Effect::Send {
+                    message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Notification(n))),
+                    ..
+                } if n.method.as_ref() == "session/cancel" => Some("cancel"),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(order, ["answer", "cancel"]);
+        assert_eq!(machine.pending_elicitation(), None);
+    }
+
+    #[test]
+    fn a_closed_connection_drops_the_held_elicitation_without_answering() {
+        let mut machine = live_machine();
+        machine.handle(create(RequestId::Number(0), form_for("acp-42")));
+
+        let effects = machine.handle(Input::Closed(CloseReason::TransportClosed));
+
+        assert!(sent_responses(&effects).is_empty());
+        assert_eq!(machine.pending_elicitation(), None);
+        assert_eq!(machine.status(), RuntimeStatus::Dead);
+    }
 }

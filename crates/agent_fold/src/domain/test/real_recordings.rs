@@ -53,11 +53,8 @@ fn every_real_fixture_folds_without_warnings() {
     });
 }
 
-/// The regression pin: a log that opens with `session/load` and carries no
-/// `session/prompt` still derives the agent's side. Before
-/// `begin_turn_without_prompt`, every frame in a log shaped like this had no
-/// open turn to belong to, and the fold silently derived nothing - see that
-/// function's docs.
+/// A successful load reconstructs both sides without session/prompt requests:
+/// the replayed user_message_chunk frames supply the historical prompts.
 #[test]
 fn resumed_no_prompt_still_derives_the_agents_reply() {
     let (messages, warnings) = capturing_warnings(|| fold(parse_log(RESUMED_NO_PROMPT)));
@@ -74,19 +71,16 @@ fn resumed_no_prompt_still_derives_the_agents_reply() {
         "no agent message was derived from a log that is nothing but agent content: {messages:#?}"
     );
     assert!(
-        !messages
+        messages
             .iter()
             .filter(|message| message.author.kind() == crate::domain::model::AuthorKind::User)
             .flat_map(|message| message.parts.iter())
             .any(|part| matches!(part, crate::domain::model::MessagePart::Text { .. })),
-        "this recording carries no session/prompt, so it should derive no user text"
+        "successful load reconstructs user text from user_message_chunk notifications"
     );
 }
 
-/// A resumed session that goes on to take fresh prompts in the same log: the
-/// turn that resumed with no prompt of its own, and the turns that follow it
-/// with real prompts, must both derive correctly in one fold. Neither the
-/// pure-resume nor the pure-fresh-session fixtures cover this mix.
+/// Replayed prompts and subsequent live requests share the same turn numbering.
 #[test]
 fn resumed_and_continued_derives_both_the_resumed_and_the_fresh_turns() {
     let (messages, warnings) = capturing_warnings(|| fold(parse_log(RESUMED_AND_CONTINUED)));
@@ -100,10 +94,9 @@ fn resumed_and_continued_derives_both_the_resumed_and_the_fresh_turns() {
         .iter()
         .filter(|message| message.author == Author::Agent)
         .count();
-    assert!(
-        agent_messages > user_messages,
-        "the resumed turn has an agent side but no prompt of its own, so agent \
-         messages ({agent_messages}) should outnumber user messages ({user_messages})"
+    assert_eq!(
+        agent_messages, user_messages,
+        "replayed user prompts and fresh prompts both survive"
     );
 }
 
@@ -135,15 +128,8 @@ fn streaming_a_real_recording_matches_folding_it() {
     });
 }
 
-/// What only `long_multi_resume` can prove: turn numbering stays unique
-/// across three separate `session/load` boundaries in one fold, not just
-/// one. `TurnId` is a single counter for the whole fold
-/// ([`State::turns_opened`](crate::domain::fold::State)) rather than
-/// anything that resets per resume, but a log with only one resume - like
-/// `resumed_no_prompt` - cannot tell that apart from a counter that happens
-/// to reset correctly the one time it is asked to. Three resumes in one log
-/// can: a reset-per-resume bug would collide the second and third resumed
-/// turn onto ids the first one already used.
+/// Multiple load attempts still produce unique keys in the committed history.
+/// A successful load replaces earlier keys rather than appending duplicates.
 #[test]
 fn three_resumes_in_one_log_derive_distinct_message_ids() {
     let (messages, warnings) = capturing_warnings(|| fold(parse_log(LONG_MULTI_RESUME)));

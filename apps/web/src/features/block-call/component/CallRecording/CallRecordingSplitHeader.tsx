@@ -24,8 +24,8 @@ import {
 } from '@core/component/TopBar/ShareButton';
 import { isMobile } from '@core/mobile/isMobile';
 import { buildEntityData } from '@entity';
-import PhoneCallIcon from '@icon/wide-call.svg';
-import IconShared from '@icon/wide-share.svg';
+import PhoneCallIcon from '@phosphor/phone-call.svg';
+import IconShared from '@phosphor/share.svg';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import { Button } from '@ui';
 import { type Accessor, Show } from 'solid-js';
@@ -55,6 +55,14 @@ export function CallRecordingSplitHeader(props: {
   const shareCtx = useShareDialogContext();
   const callName = () => record().customName ?? record().channelName ?? 'Call';
   const call = useCall(() => record().channelId);
+
+  async function handleJoin() {
+    try {
+      await call.joinCall();
+    } catch (error) {
+      console.error('Failed to join call from recording', error);
+    }
+  }
 
   const shareTool: BlockTool = {
     label: 'Share',
@@ -135,7 +143,7 @@ export function CallRecordingSplitHeader(props: {
         <div class="-order-1">
           <BlockLiveIndicators />
         </div>
-        <Show when={!record().isActive}>
+        <Show when={!isMobile() && !record().isActive}>
           <div class="order-[900] flex items-center">
             <HeaderIsland>
               <Button
@@ -144,7 +152,7 @@ export function CallRecordingSplitHeader(props: {
                 size="icon-xs"
                 class="bg-surface"
                 tooltip="Call Again"
-                onClick={() => call.joinCall()}
+                onClick={handleJoin}
               >
                 <PhoneCallIcon class="size-4" />
               </Button>

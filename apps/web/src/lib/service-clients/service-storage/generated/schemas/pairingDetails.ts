@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PairingDetailsHost } from './pairingDetailsHost';
+import type { PairingDetailsRequestedAllowPermissionBypass } from './pairingDetailsRequestedAllowPermissionBypass';
 import type { PairingDetailsRequestedScope } from './pairingDetailsRequestedScope';
 
 /**
@@ -19,6 +20,8 @@ export interface PairingDetails {
   expires_at: string;
   /** Display-only description of the machine. */
   host?: PairingDetailsHost;
+  /** Daemon operator consent ceiling; false forbids bypass at approval. */
+  requested_allow_permission_bypass?: PairingDetailsRequestedAllowPermissionBypass;
   /** Harness display name the daemon asked for. */
   requested_name: string;
   requested_scope?: PairingDetailsRequestedScope;

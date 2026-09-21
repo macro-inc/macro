@@ -1,0 +1,115 @@
+---
+source: crates/codex_cloud_agents/tests/stdio.rs
+expression: "normalize(&json!({\"initialize\":init,\"new\":new,\"first\":first,\"followup\":second,\"stop\":stopped}),\n&session)"
+---
+{
+  "initialize": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+      "protocolVersion": 1,
+      "agentCapabilities": {
+        "loadSession": true,
+        "promptCapabilities": {
+          "image": false,
+          "audio": false,
+          "embeddedContext": false
+        },
+        "mcpCapabilities": {
+          "http": false,
+          "sse": false
+        },
+        "sessionCapabilities": {},
+        "auth": {}
+      },
+      "authMethods": [],
+      "agentInfo": {
+        "name": "codex_acp",
+        "version": "0.1.0"
+      }
+    }
+  },
+  "new": [
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "result": {
+        "sessionId": "SESSION"
+      }
+    }
+  ],
+  "first": [
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "SESSION",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "Hello 🌍"
+          }
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "result": {
+        "stopReason": "end_turn"
+      }
+    }
+  ],
+  "followup": [
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "SESSION",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "Hello 🌍"
+          }
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 4,
+      "result": {
+        "stopReason": "end_turn"
+      }
+    }
+  ],
+  "stop": [
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "SESSION",
+        "update": {
+          "sessionUpdate": "tool_call",
+          "toolCallId": "running-tool",
+          "title": "sleep 60",
+          "kind": "execute",
+          "status": "in_progress",
+          "rawInput": {
+            "id": "running-tool",
+            "type": "commandExecution",
+            "command": "sleep 60"
+          }
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 5,
+      "result": {
+        "stopReason": "cancelled"
+      }
+    }
+  ]
+}

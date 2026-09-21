@@ -46,8 +46,8 @@ export function InboxEmptyState() {
       <Match when={!emailActive()}>
         <EmptyStatePanel
           graphic={EmptyStateInboxTrayGraphic}
-          title="Your inbox is empty"
-          description="Bring your inbox into Macro to triage signal from noise, reply faster, and let agents work alongside your mail."
+          title="Welcome home"
+          description="Your recent work and notifications will appear here. Connect email to include your inbox, too."
           primaryAction={{
             label: 'Connect email',
             onClick: () => void startAddInbox(),
@@ -72,20 +72,11 @@ export function InboxEmptyState() {
         />
       </Match>
 
-      <Match when={state.tab === 'all'}>
-        <EmptyStatePanel
-          graphic={EmptyStateInboxTrayGraphic}
-          title="Inbox zero"
-          description="You're all caught up. New items will appear here as they arrive."
-          documentationUrl={`${DOCS_BASE}/product/inbox`}
-        />
-      </Match>
-
       <Match when={true}>
         <EmptyStatePanel
           graphic={EmptyStateInboxTrayGraphic}
-          title="Inbox zero"
-          description="You're all caught up. Important items will appear here as they arrive."
+          title="No activity yet"
+          description="Your recent documents, sent emails, AI chats, and notifications will appear here."
           documentationUrl={`${DOCS_BASE}/product/inbox`}
         />
       </Match>

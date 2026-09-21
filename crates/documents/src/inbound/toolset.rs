@@ -5,6 +5,7 @@ mod edit_document;
 mod read_content;
 mod read_metadata;
 mod rename_document;
+mod spreadsheet;
 
 #[cfg(test)]
 mod test;
@@ -14,24 +15,36 @@ use crate::{
     domain::ports::DocumentService,
     domain::ports::create::DocumentCreationService,
     domain::ports::editing::EditingWorkerService,
+    domain::ports::mentions::NoOpDocumentMentionTracker,
     inbound::toolset::{
-        create_document::CreateDocument, edit_document::EditDocument, read_content::ReadContent,
-        read_metadata::ReadMetadata, rename_document::RenameDocument,
+        create_document::CreateDocument,
+        edit_document::EditDocument,
+        read_content::ReadContent,
+        read_metadata::ReadMetadata,
+        rename_document::RenameDocument,
+        spreadsheet::{CalculateSpreadsheet, EditSpreadsheet, ReadSpreadsheet},
     },
     outbound::{
         document_bytes_upload::ReqwestDocumentBytesUploader,
         markdown_init::LexicalSyncMarkdownInitializer,
     },
 };
+use activity::{Actor, Attribution};
 use ai_toolset::AsyncToolCollection;
+use bot_id::BotId;
 use entity_access::domain::ports::EntityAccessService;
 use lexical_client::LexicalClient;
+use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
 
 /// Default backend-owned document creation use case for document tools.
-pub type DefaultDocumentToolCreator<DSvc> =
-    DocumentCreator<Arc<DSvc>, LexicalSyncMarkdownInitializer, ReqwestDocumentBytesUploader>;
+pub type DefaultDocumentToolCreator<DSvc> = DocumentCreator<
+    Arc<DSvc>,
+    LexicalSyncMarkdownInitializer,
+    ReqwestDocumentBytesUploader,
+    NoOpDocumentMentionTracker,
+>;
 
 /// Service context for document AI tools
 pub struct DocumentToolContext<
@@ -56,12 +69,19 @@ pub struct DocumentToolContext<
     /// Editing worker service for the EditDocument tool.
     pub editing: Arc<EDSvc>,
 
+    /// Permission-scoped deterministic spreadsheet workflows.
+    pub spreadsheet: Arc<crate::domain::spreadsheet::SpreadsheetService<DSvc, EDSvc>>,
+
     /// JWT secret used to mint document permission tokens for the editing worker.
     pub document_permission_jwt_secret: String,
 
     /// Records the token usage the editing worker reports. Defaults to a no-op;
     /// the chat path injects the real (Postgres-backed) recorder per request.
     pub recorder: Arc<dyn ai_usage::UsageRecorder>,
+
+    /// The bot these tools act as, on behalf of the requesting user. Defaults
+    /// to Macro AI; hosts running a specific agent set it with [`Self::with_actor`].
+    pub actor: BotId,
 }
 
 impl<
@@ -78,8 +98,10 @@ impl<
             sync_service_client: self.sync_service_client.clone(),
             creator: self.creator.clone(),
             editing: self.editing.clone(),
+            spreadsheet: self.spreadsheet.clone(),
             document_permission_jwt_secret: self.document_permission_jwt_secret.clone(),
             recorder: self.recorder.clone(),
+            actor: self.actor,
         }
     }
 }
@@ -109,7 +131,14 @@ impl<
                 sync_service_client.as_ref().clone(),
             ),
             ReqwestDocumentBytesUploader::default(),
+            NoOpDocumentMentionTracker,
         );
+        let editing = Arc::new(editing);
+        let spreadsheet = Arc::new(crate::domain::spreadsheet::SpreadsheetService::new(
+            service.clone(),
+            editing.clone(),
+            document_permission_jwt_secret.clone(),
+        ));
 
         Self {
             service,
@@ -117,9 +146,11 @@ impl<
             lexical_client,
             sync_service_client,
             creator,
-            editing: Arc::new(editing),
+            editing,
+            spreadsheet,
             document_permission_jwt_secret,
             recorder: Arc::new(ai_usage::NoOpUsageRecorder),
+            actor: bot_id::MACRO_AI_BOT_ID,
         }
     }
 
@@ -127,6 +158,17 @@ impl<
     pub fn with_recorder(mut self, recorder: Arc<dyn ai_usage::UsageRecorder>) -> Self {
         self.recorder = recorder;
         self
+    }
+
+    /// Set the bot these tools act as.
+    pub fn with_actor(mut self, actor: BotId) -> Self {
+        self.actor = actor;
+        self
+    }
+
+    /// Attribution for a write these tools make for `user`.
+    pub fn attribution(&self, user: MacroUserIdStr<'static>) -> Attribution {
+        Attribution::delegated(Actor::new_from_bot(self.actor), user)
     }
 }
 
@@ -144,4 +186,7 @@ where
         .add_tool::<CreateDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<RenameDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<EditDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<ReadSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<CalculateSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<EditSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()
 }

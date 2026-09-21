@@ -107,11 +107,13 @@ impl SessionOpener for RecordingOpener {
         request: OpenExternalAgentSession,
     ) -> crate::domain::error::Result<AgentSession> {
         let session = AgentSession {
+            repo_branch: None,
+            pull_request_url: None,
             id: AgentSessionId::TEST_A,
             name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
             owner_id: request.owner.clone(),
             thread_id: request.thread.as_ref().map(|thread| thread.thread_id),
-            thread_channel_id: request.thread.as_ref().map(|thread| thread.channel_id),
+            thread_parent: request.thread.as_ref().map(|thread| thread.parent.clone()),
             originating_message_id: request.thread.as_ref().map(|thread| thread.message_id),
             bot_id: request.bot_id,
             model: "claude".to_owned(),
@@ -120,6 +122,7 @@ impl SessionOpener for RecordingOpener {
             workspace: request.workspace.clone(),
             sandbox_size: crate::domain::model::SandboxSize::Default,
             instructions: request.instructions.clone(),
+            mcp_servers: Default::default(),
             acp_session_id: None,
             external: None,
             status: SessionStatus::NoMessages,
@@ -134,20 +137,27 @@ impl SessionOpener for RecordingOpener {
         &self,
         request: OpenManagedSession,
     ) -> crate::domain::error::Result<AgentSession> {
+        let bot_id = request
+            .profile
+            .as_ref()
+            .map_or(BotId::TEST_B, |selected| selected.bot_id);
         let session = AgentSession {
+            repo_branch: None,
+            pull_request_url: None,
             id: AgentSessionId::TEST_A,
             name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
             owner_id: request.owner.clone(),
             thread_id: None,
-            thread_channel_id: None,
+            thread_parent: None,
             originating_message_id: None,
-            bot_id: BotId::TEST_A,
+            bot_id,
             model: "claude".to_owned(),
             harness: "opencode".to_owned(),
             repo_url: Some("https://github.com/macro-inc/macro".to_owned()),
             workspace: crate::MANAGED_CONTAINER_WORKSPACE.to_owned(),
             sandbox_size: crate::domain::model::SandboxSize::Default,
             instructions: request.instructions.clone(),
+            mcp_servers: Default::default(),
             acp_session_id: None,
             external: None,
             status: SessionStatus::NoMessages,
@@ -171,38 +181,98 @@ impl SessionOpener for RecordingOpener {
 /// [`OWNER`]. Every other id is unknown.
 struct OneBotDirectory {
     facts: BotFacts,
+    shares_channel_with: Vec<&'static str>,
 }
 
 impl OneBotDirectory {
     fn external_agent() -> Self {
         Self {
+            shares_channel_with: Vec::new(),
             facts: BotFacts {
                 has_agent: true,
                 is_managed: false,
+                is_system: false,
                 owner_user_id: Some(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
+                owner_team_id: None,
                 harness_id: Some(harness_id::HarnessId::TEST_A),
+                managed_profile: None,
+                selected_channels: false,
             },
         }
     }
 
     fn managed_agent() -> Self {
         Self {
+            shares_channel_with: Vec::new(),
             facts: BotFacts {
                 has_agent: true,
                 is_managed: true,
-                owner_user_id: None,
+                is_system: false,
+                owner_user_id: Some(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
+                owner_team_id: None,
                 harness_id: None,
+                managed_profile: Some(crate::domain::ports::ManagedAgentProfile {
+                    model: "persona-model".to_owned(),
+                    harness: "in-memory".to_owned(),
+                    instructions: "persona instructions".to_owned(),
+                    mcp_servers: Default::default(),
+                }),
+                selected_channels: false,
+            },
+        }
+    }
+
+    fn managed_selected_channel_agent() -> Self {
+        Self {
+            shares_channel_with: vec![STRANGER],
+            facts: BotFacts {
+                has_agent: true,
+                is_managed: true,
+                is_system: false,
+                owner_user_id: Some(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
+                owner_team_id: None,
+                harness_id: None,
+                managed_profile: Some(crate::domain::ports::ManagedAgentProfile {
+                    model: "persona-model".to_owned(),
+                    harness: "in-memory".to_owned(),
+                    instructions: "persona instructions".to_owned(),
+                    mcp_servers: Default::default(),
+                }),
+                selected_channels: true,
             },
         }
     }
 
     fn plain_bot() -> Self {
         Self {
+            shares_channel_with: Vec::new(),
             facts: BotFacts {
                 has_agent: false,
                 is_managed: false,
+                is_system: false,
                 owner_user_id: Some(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
+                owner_team_id: None,
                 harness_id: None,
+                managed_profile: None,
+                selected_channels: false,
+            },
+        }
+    }
+
+    /// A fixed first-party coder such as the Cursor bot: managed, owned by
+    /// nobody, and with no persisted profile of its own.
+    fn system_coder() -> Self {
+        Self {
+            shares_channel_with: Vec::new(),
+            facts: BotFacts {
+                has_agent: true,
+                is_managed: true,
+                is_system: true,
+                owner_user_id: None,
+                owner_team_id: None,
+                harness_id: None,
+                managed_profile: None,
+                selected_channels: false,
             },
         }
     }
@@ -211,6 +281,22 @@ impl OneBotDirectory {
 impl BotDirectory for OneBotDirectory {
     async fn bot_facts(&self, bot: BotId) -> crate::domain::error::Result<Option<BotFacts>> {
         Ok((bot == BotId::TEST_A).then(|| self.facts.clone()))
+    }
+
+    async fn user_has_team(
+        &self,
+        _user: MacroUserIdStr<'static>,
+        _team_id: Uuid,
+    ) -> crate::domain::error::Result<bool> {
+        Ok(false)
+    }
+
+    async fn user_shares_channel_with_bot(
+        &self,
+        user: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+    ) -> crate::domain::error::Result<bool> {
+        Ok(self.shares_channel_with.contains(&user.as_ref()))
     }
 }
 
@@ -242,7 +328,7 @@ fn body(bot_id: Option<Uuid>, workspace: &str, owner: Option<&str>) -> String {
         "workspace": workspace,
         "owner": owner,
         "thread": {
-            "channelId": "00000000-0000-0000-0000-000000000001",
+            "parent": {"type": "channel", "id": "00000000-0000-0000-0000-000000000001"},
             "messageId": "00000000-0000-0000-0000-000000000002",
             "content": "fix the flaky test",
         },
@@ -335,7 +421,35 @@ async fn the_owner_opens_a_session_for_their_bot() {
     assert_eq!(response.status(), StatusCode::CREATED);
     // The caller owns their own session; no claimed owner needed.
     let opened = opener.opened.lock().unwrap();
-    assert_eq!(opened[0].owner.as_ref(), OWNER);
+    assert!(matches!(&opened[0].owner, Owner::User(user) if user.as_ref() == OWNER));
+}
+
+#[tokio::test]
+async fn an_external_session_receives_the_saved_agent_profile() {
+    let opener = Arc::new(RecordingOpener::default());
+    let mut bots = OneBotDirectory::external_agent();
+    bots.facts.managed_profile = Some(crate::domain::ports::ManagedAgentProfile {
+        model: "gpt-5.6-luna".into(),
+        harness: harness_id::MACROD_HARNESS_SLUG.into(),
+        instructions: String::new(),
+        mcp_servers: crate::domain::model::AgentMcpServers::OwnerConnections,
+    });
+    let request = as_harness_for(
+        OWNER,
+        body(Some(BotId::TEST_A.as_uuid()), "/srv/agent", None),
+    );
+    let response = router_for(opener.clone(), bots)
+        .oneshot(request)
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let opened = opener.opened.lock().unwrap();
+    let profile = opened[0]
+        .profile
+        .as_ref()
+        .expect("saved profile is forwarded");
+    assert_eq!(profile.model, "gpt-5.6-luna");
+    assert_eq!(profile.harness, harness_id::MACROD_HARNESS_SLUG);
 }
 
 #[tokio::test]
@@ -382,7 +496,7 @@ async fn a_harness_session_is_owned_by_its_verified_acting_user() {
     assert_eq!(response.status(), StatusCode::CREATED);
     let opened = opener.opened.lock().unwrap();
     assert_eq!(opened[0].bot_id, BotId::TEST_A);
-    assert_eq!(opened[0].owner.as_ref(), STRANGER);
+    assert!(matches!(&opened[0].owner, Owner::User(user) if user.as_ref() == STRANGER));
 }
 
 #[tokio::test]
@@ -402,7 +516,7 @@ async fn a_harness_may_not_own_a_session_by_an_unverified_body_claim() {
     assert_eq!(response.status(), StatusCode::CREATED);
     let opened = opener.opened.lock().unwrap();
     assert_eq!(opened[0].bot_id, BotId::TEST_A);
-    assert_eq!(opened[0].owner.as_ref(), OWNER);
+    assert!(matches!(&opened[0].owner, Owner::User(user) if user.as_ref() == OWNER));
 }
 
 #[tokio::test]
@@ -576,6 +690,97 @@ async fn a_managed_open_carries_its_instructions() {
     );
 }
 
+#[tokio::test]
+async fn an_owner_can_select_a_managed_persona() {
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_user(
+        OWNER,
+        serde_json::json!({
+            "botId": BotId::TEST_A.as_uuid(),
+            "prompt": "fix it"
+        })
+        .to_string(),
+    );
+
+    let response = router_for(opener.clone(), OneBotDirectory::managed_agent())
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let managed = opener.managed.lock().unwrap();
+    let selected = managed[0].profile.as_ref().expect("selected persona");
+    assert_eq!(selected.bot_id, BotId::TEST_A);
+    let profile = selected.profile.as_ref().expect("persisted profile");
+    assert_eq!(profile.model, "persona-model");
+    assert_eq!(profile.instructions, "persona instructions");
+}
+
+/// The deployment's own coders are everybody's: a user who could mention the
+/// Cursor bot in a channel can pick it here too. Having no persisted profile,
+/// it is passed through for the harness to stamp with its per-bot defaults.
+#[tokio::test]
+async fn anyone_can_select_a_managed_system_bot() {
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_user(
+        STRANGER,
+        serde_json::json!({ "botId": BotId::TEST_A.as_uuid(), "prompt": "fix it" }).to_string(),
+    );
+
+    let response = router_for(opener.clone(), OneBotDirectory::system_coder())
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let managed = opener.managed.lock().unwrap();
+    let selected = managed[0].profile.as_ref().expect("selected persona");
+    assert_eq!(selected.bot_id, BotId::TEST_A);
+    assert!(selected.profile.is_none());
+}
+
+#[tokio::test]
+async fn a_stranger_cannot_select_someone_elses_managed_persona() {
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_user(
+        STRANGER,
+        serde_json::json!({ "botId": BotId::TEST_A.as_uuid() }).to_string(),
+    );
+
+    let response = router_for(opener.clone(), OneBotDirectory::managed_agent())
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert!(opener.managed.lock().unwrap().is_empty());
+}
+
+/// A selected-channel persona is mentionable in the channels it is installed
+/// in. A co-member who could `@` it there can start a managed session as it
+/// from the composer too.
+#[tokio::test]
+async fn a_channel_co_member_can_select_a_shared_managed_persona() {
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_user(
+        STRANGER,
+        serde_json::json!({ "botId": BotId::TEST_A.as_uuid() }).to_string(),
+    );
+
+    let response = router_for(
+        opener.clone(),
+        OneBotDirectory::managed_selected_channel_agent(),
+    )
+    .oneshot(request)
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let managed = opener.managed.lock().unwrap();
+    let selected = managed[0].profile.as_ref().expect("selected persona");
+    assert_eq!(selected.bot_id, BotId::TEST_A);
+}
+
 /// Whitespace-only instructions are absence stated clumsily, and are
 /// normalized away rather than stored as a section a runtime would splice in
 /// empty.
@@ -613,4 +818,109 @@ async fn an_external_open_carries_its_instructions() {
         opener.opened.lock().unwrap()[0].instructions.as_deref(),
         Some(INSTRUCTIONS)
     );
+}
+
+mod read;
+
+/// The client speculates under an id it mints and sends it alongside the
+/// action's own flattened fields, which are tagged under `type`.
+#[test]
+fn a_control_request_carries_the_callers_action_id() {
+    let action_id = AgentActionId::mint();
+    let request: ControlRequest = serde_json::from_value(serde_json::json!({
+        "type": "prompt",
+        "prompt": "hello",
+        "actionId": action_id,
+    }))
+    .expect("a control request with an action id parses");
+
+    assert_eq!(request.action_id, Some(action_id));
+    assert_eq!(request.action, AgentAction::prompt("hello"));
+}
+
+#[test]
+fn a_control_request_without_an_action_id_names_none() {
+    let request: ControlRequest = serde_json::from_value(serde_json::json!({
+        "type": "compact",
+    }))
+    .expect("a control request without an action id parses");
+
+    assert_eq!(request.action_id, None);
+    assert_eq!(request.action, AgentAction::Compact);
+}
+
+/// A caller that names no id must not put `actionId: null` on the wire: the
+/// field is absent, so an older reader sees exactly what it saw before.
+#[test]
+fn an_unnamed_control_request_omits_the_field() {
+    let body = serde_json::to_value(ControlRequest {
+        action_id: None,
+        action: AgentAction::Stop,
+    })
+    .expect("a control request serializes");
+
+    assert_eq!(body, serde_json::json!({ "type": "stop" }));
+}
+
+/// A client that speculates an action sends the id it speculated under. The
+/// action's own fields are flattened in beside it, so this pins that the
+/// named id survives that flatten rather than being swallowed by the enum.
+#[test]
+fn a_control_request_keeps_the_client_minted_action_id() {
+    let body =
+        r#"{"type":"prompt","prompt":"hi","actionId":"01a0acab-5eff-72d6-91ca-16997a26d13a"}"#;
+    let request: ControlRequest = serde_json::from_str(body).expect("the body parses");
+    assert_eq!(
+        request.action_id.map(|id| id.to_string()).as_deref(),
+        Some("01a0acab-5eff-72d6-91ca-16997a26d13a")
+    );
+}
+
+#[tokio::test]
+async fn managed_repository_and_branch_reach_the_domain() {
+    let opener = Arc::new(RecordingOpener::default());
+    let response = router_for(opener.clone(), OneBotDirectory::system_coder())
+        .oneshot(as_user(
+            OWNER,
+            serde_json::json!({
+                "botId": BotId::TEST_A.as_uuid(),
+                "repoUrl": "https://github.com/macro-inc/macro",
+                "repoBranch": "feature/home"
+            })
+            .to_string(),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let managed = opener.managed.lock().unwrap();
+    assert_eq!(
+        managed[0].repo_url.as_deref(),
+        Some("https://github.com/macro-inc/macro")
+    );
+    assert_eq!(
+        managed[0]
+            .repo_branch
+            .as_ref()
+            .map(|branch| branch.as_str()),
+        Some("feature/home")
+    );
+}
+
+#[tokio::test]
+async fn invalid_repository_branch_is_rejected_before_opening() {
+    let opener = Arc::new(RecordingOpener::default());
+    let response = router_for(opener.clone(), OneBotDirectory::system_coder())
+        .oneshot(as_user(
+            OWNER,
+            serde_json::json!({
+                "botId": BotId::TEST_A.as_uuid(),
+                "repoUrl": "https://github.com/macro-inc/macro",
+                "repoBranch": "../invalid"
+            })
+            .to_string(),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(opener.managed.lock().unwrap().is_empty());
 }

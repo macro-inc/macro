@@ -9,15 +9,13 @@ import {
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { ENABLE_SOUP_GROUP_BY_OVERRIDE } from '@core/constant/featureFlags';
+import { enableSoupGroupBy } from '@core/constant/featureFlags';
 import { createMemo, createSignal, Show } from 'solid-js';
 
 export const SoupViewContextGroup = (props: { hideLabel?: boolean }) => {
   const panel = useSplitPanelOrThrow();
   const { soup, viewMode } = useSoupView();
-  const groupByEnabled = useFeatureFlag('enable-soup-group-by', {
-    enabledOverride: ENABLE_SOUP_GROUP_BY_OVERRIDE,
-  });
+  const groupByEnabled = useFeatureFlag(enableSoupGroupBy);
 
   const [groupOpen, setGroupOpen] = createSignal(false);
 

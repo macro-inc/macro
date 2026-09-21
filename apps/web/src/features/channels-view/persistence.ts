@@ -1,0 +1,265 @@
+import type {
+  MakePersistedStateOptions,
+  PersistenceStorage,
+} from '@app/lib/persistence';
+import {
+  createEntryPersistenceStorage,
+  type EntryPersistenceHandle,
+} from '@components/app/split-layout/entry-persistence';
+import { createUserScopedStorage } from '@core/util/userScopedStorage';
+import type { Accessor } from 'solid-js';
+import { z } from 'zod';
+import {
+  CHANNELS_DEFAULT_RAIL_WIDTH,
+  CHANNELS_DEFAULT_SORT_BY,
+  clampChannelsRailWidth,
+} from './constants';
+import type { ChannelsViewState } from './types';
+
+const CHANNELS_ENTRY_STATE_KEY = 'channels.view';
+const channelsLocalStateStorage = createUserScopedStorage(
+  'macro:channels:view-state:v1'
+);
+const channelsPreferencesStorage = createUserScopedStorage(
+  'macro:channels:preferences:v1'
+);
+
+const channelsExpandedGroupsSchema = z.preprocess(
+  (value) => {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      return value;
+    }
+
+    const groups = value as Record<string, unknown>;
+    return {
+      ...groups,
+      direct_messages: groups.direct_messages ?? groups['direct-messages'],
+    };
+  },
+  z.object({
+    favorites: z.boolean().default(true),
+    channels: z.boolean().default(true),
+    direct_messages: z.boolean().default(true),
+  })
+);
+
+const channelsEntryStateSchemaWithDefaults = z.object({
+  version: z.literal(1).default(1),
+  tab: z.enum(['browse', 'recents']).default('browse'),
+  mobileTab: z
+    .enum(['channels', 'direct_messages', 'recents'])
+    .default('channels'),
+  selectedChannelId: z.string().optional(),
+  expandedGroups: channelsExpandedGroupsSchema.default({
+    favorites: true,
+    channels: true,
+    direct_messages: true,
+  }),
+});
+
+type ChannelsEntryState = z.infer<typeof channelsEntryStateSchemaWithDefaults>;
+
+const DEFAULT_CHANNELS_ENTRY_STATE = {
+  version: 1,
+  tab: 'browse',
+  mobileTab: 'channels',
+  selectedChannelId: undefined,
+  expandedGroups: {
+    favorites: true,
+    channels: true,
+    direct_messages: true,
+  },
+} satisfies ChannelsEntryState;
+
+const channelsPreferencesSchema = z.object({
+  version: z.literal(1).default(1),
+  asideWidth: z
+    .number()
+    .finite()
+    .default(CHANNELS_DEFAULT_RAIL_WIDTH)
+    .transform(clampChannelsRailWidth),
+  sortBy: z
+    .object({
+      channels: z
+        .enum(['viewed_at', 'updated_at', 'created_at'])
+        .default(CHANNELS_DEFAULT_SORT_BY.channels),
+      direct_messages: z
+        .enum(['viewed_at', 'updated_at', 'created_at'])
+        .default(CHANNELS_DEFAULT_SORT_BY.direct_messages),
+    })
+    .default(CHANNELS_DEFAULT_SORT_BY),
+});
+
+type ChannelsPreferences = z.infer<typeof channelsPreferencesSchema>;
+
+const DEFAULT_CHANNELS_PREFERENCES = {
+  version: 1,
+  asideWidth: CHANNELS_DEFAULT_RAIL_WIDTH,
+  sortBy: CHANNELS_DEFAULT_SORT_BY,
+} satisfies ChannelsPreferences;
+
+function selectEntryState(state: ChannelsViewState): ChannelsEntryState {
+  return {
+    version: 1,
+    tab: state.tab,
+    mobileTab: state.mobileTab,
+    ...(state.selectedChannelId === undefined
+      ? {}
+      : { selectedChannelId: state.selectedChannelId }),
+    expandedGroups: state.expandedGroups,
+  };
+}
+
+function restoreChannelsEntryState(
+  current: ChannelsViewState,
+  stored: unknown
+): ChannelsViewState {
+  const result = channelsEntryStateSchemaWithDefaults.safeParse(stored);
+  const restored = result.success ? result.data : DEFAULT_CHANNELS_ENTRY_STATE;
+
+  return {
+    ...current,
+    tab: restored.tab,
+    mobileTab: restored.mobileTab,
+    selectedChannelId: restored.selectedChannelId,
+    expandedGroups: restored.expandedGroups,
+  };
+}
+
+function createChannelsEntryStorage(options: {
+  handle: EntryPersistenceHandle;
+  restore: boolean;
+}): PersistenceStorage<ChannelsViewState> {
+  return createEntryPersistenceStorage({
+    handle: options.handle,
+    key: CHANNELS_ENTRY_STATE_KEY,
+    restore: (current, stored) => {
+      if (!options.restore) return undefined;
+
+      return restoreChannelsEntryState(current, stored);
+    },
+    select: selectEntryState,
+  });
+}
+
+function createChannelsLocalStateStorage(options: {
+  userId: Accessor<string | undefined>;
+  restore: boolean;
+}): PersistenceStorage<ChannelsViewState> {
+  let previous: string | undefined;
+  const serialize = (state: ChannelsViewState) =>
+    JSON.stringify(selectEntryState(state));
+
+  return {
+    restore: (current) => {
+      if (!options.restore) return undefined;
+
+      const userId = options.userId();
+      if (!userId) return undefined;
+
+      const raw = channelsLocalStateStorage.read(userId);
+      if (raw === null) return undefined;
+
+      try {
+        return restoreChannelsEntryState(current, JSON.parse(raw));
+      } catch {
+        return restoreChannelsEntryState(current, undefined);
+      }
+    },
+    initialize: (current) => {
+      previous = serialize(current);
+    },
+    write: (current) => {
+      const userId = options.userId();
+      if (!userId) return;
+
+      const serialized = serialize(current);
+      if (serialized === previous) return;
+
+      previous = serialized;
+      channelsLocalStateStorage.write(userId, serialized);
+    },
+  };
+}
+
+function createChannelsPreferencesStorage(options: {
+  userId: Accessor<string | undefined>;
+  restore: boolean;
+}): PersistenceStorage<ChannelsViewState> {
+  let previous: string | undefined;
+  const serialize = (state: ChannelsViewState) =>
+    JSON.stringify({
+      version: 1,
+      asideWidth: clampChannelsRailWidth(state.asideWidth),
+      sortBy: state.sortBy,
+    } satisfies ChannelsPreferences);
+
+  return {
+    restore: (current) => {
+      if (!options.restore) return undefined;
+
+      const userId = options.userId();
+      if (!userId) return undefined;
+
+      const raw = channelsPreferencesStorage.read(userId);
+      if (raw === null) return undefined;
+
+      try {
+        const result = channelsPreferencesSchema.safeParse(JSON.parse(raw));
+        const restored = result.success
+          ? result.data
+          : DEFAULT_CHANNELS_PREFERENCES;
+
+        return {
+          ...current,
+          asideWidth: restored.asideWidth,
+          sortBy: restored.sortBy,
+        };
+      } catch {
+        return {
+          ...current,
+          asideWidth: DEFAULT_CHANNELS_PREFERENCES.asideWidth,
+          sortBy: DEFAULT_CHANNELS_PREFERENCES.sortBy,
+        };
+      }
+    },
+    initialize: (current) => {
+      previous = serialize(current);
+    },
+    write: (current) => {
+      const userId = options.userId();
+      if (!userId) return;
+
+      const serialized = serialize(current);
+      if (serialized === previous) return;
+
+      previous = serialized;
+      channelsPreferencesStorage.write(userId, serialized);
+    },
+  };
+}
+
+export function createChannelsViewPersistence(options: {
+  handle: EntryPersistenceHandle;
+  userId: Accessor<string | undefined>;
+  restoreEntryState?: boolean;
+  restoreLocalState?: boolean;
+  restorePreferences?: boolean;
+}): MakePersistedStateOptions<ChannelsViewState> {
+  return {
+    storages: [
+      createChannelsPreferencesStorage({
+        userId: options.userId,
+        restore: options.restorePreferences ?? true,
+      }),
+      createChannelsLocalStateStorage({
+        userId: options.userId,
+        restore: options.restoreLocalState ?? true,
+      }),
+      createChannelsEntryStorage({
+        handle: options.handle,
+        restore: options.restoreEntryState ?? true,
+      }),
+    ],
+  };
+}

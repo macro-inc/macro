@@ -14,10 +14,12 @@ import {
   TextNode,
 } from 'lexical';
 import { AgentContextNode } from './nodes/AgentContextNode';
+import { AgentSessionMentionNode } from './nodes/AgentSessionMentionNode';
 import { AwaitNode } from './nodes/AwaitNode';
 import { ClassedBlockNode } from './nodes/ClassedBlockNode';
 import { CommentNode } from './nodes/CommentNode';
 import { CompletionNode } from './nodes/CompletionNode';
+import { ConnectAppNode } from './nodes/ConnectAppNode';
 import { ContactMentionNode } from './nodes/ContactMentionNode';
 import { CustomCodeNode } from './nodes/CustomCodeNode';
 import { DateMentionNode } from './nodes/DateMentionNode';
@@ -83,6 +85,7 @@ export const SupportedNodeTypes = [
   ContactMentionNode,
   DateMentionNode,
   PullRequestMentionNode,
+  AgentSessionMentionNode,
   ReplyTargetNode,
   GroupMentionNode,
   InlineSearchNode,
@@ -110,6 +113,7 @@ export const SupportedNodeTypes = [
   WatermarkNode,
   ThemeMentionNode,
   TagMentionNode,
+  ConnectAppNode,
   UnknownMentionNode,
   AwaitNode,
   MagicChipNode,

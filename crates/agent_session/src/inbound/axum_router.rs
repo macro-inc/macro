@@ -2,8 +2,11 @@
 //!
 //! Every route authenticates its caller and then authorizes them with
 //! [`AgentSessionAccessLevelExtractor`], checked before the handler body
-//! runs: viewing a session or its log needs `View`; renaming, controlling, or
-//! deleting one needs `Owner`. Permission comes from the session's own `entity_access`
+//! runs: viewing a session, its log, or its queue needs `View`; controlling
+//! it - sending, and editing or removing what is queued - needs `Edit`, which
+//! the mention's channel holds, so whoever can prompt the bot through the
+//! thread can prompt it here too; renaming, resizing, or deleting the session
+//! needs `Owner`. Permission comes from the session's own `entity_access`
 //! rows - the owner with owner access, the mention's channel as editor - never
 //! from any channel the session was once rendered in. Handlers only map
 //! transport DTOs to domain types and call the [`AgentSessionService`]; they
@@ -28,7 +31,7 @@ use axum::{
 };
 use chrono::DateTime;
 use chrono::Utc;
-use entity_access::domain::models::{OwnerAccessLevel, ViewAccessLevel};
+use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::AgentSessionAccessLevelExtractor;
 use macro_authorization::{
@@ -37,17 +40,19 @@ use macro_authorization::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use model_owner::Owner;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::domain::error::AgentSessionError;
 use crate::domain::model::{
-    AgentSession, AgentSessionId, ExternalSession, Message, SandboxSize, SessionBot, SessionStatus,
-    StoredAgentSessionLog,
+    AgentSession, AgentSessionId, AgentSessionPreview, ExternalSession, Message, SandboxSize,
+    SessionBot, SessionStatus, StoredAgentSessionLog,
 };
 use crate::domain::ports::{
-    AgentSessionNotificationRecipient, BotDirectory, BotFacts, ControlEvent,
-    OpenExternalAgentSession, OpenManagedSession, SessionOpener, SessionThread,
+    AgentSessionNotificationRecipient, BotDirectory, BotFacts, ControlDisposition, ControlEvent,
+    ManagedPersonaError, OpenExternalAgentSession, OpenManagedSession, SessionOpener,
+    SessionThread, managed_persona_for_owner,
 };
 use crate::domain::service::AgentSessionService;
 use bots::domain::models::BotId;
@@ -169,6 +174,10 @@ where
 {
     Router::new()
         .route(
+            "/preview",
+            post(preview_agent_sessions_handler::<T, Access, Auth>),
+        )
+        .route(
             "/{session_id}",
             get(get_agent_session_handler::<T, Access, Auth>),
         )
@@ -205,6 +214,15 @@ where
         .route(
             "/{session_id}/control",
             post(control_agent_session_handler::<R, Access, Auth>),
+        )
+        .route(
+            "/{session_id}/queue",
+            get(get_agent_session_queue_handler::<R, Access, Auth>),
+        )
+        .route(
+            "/{session_id}/queue/{action_id}",
+            put(edit_queued_action_handler::<R, Access, Auth>)
+                .delete(remove_queued_action_handler::<R, Access, Auth>),
         )
         .route(
             "/{session_id}/sandbox-size",
@@ -262,8 +280,43 @@ impl IntoResponse for AgentSessionApiError {
                 )
                     .into_response()
             }
+            // Same class as a disconnected runtime: nothing is wrong, and
+            // repeating the request will not land. The form the caller is
+            // answering has already resolved (someone else answered, a stop
+            // cancelled it, or the connection that asked is gone).
+            Self::Domain(AgentSessionError::ElicitationNotPending(session_id)) => {
+                tracing::info!(%session_id, "elicitation answer refused: nothing pending under that id");
+                (
+                    StatusCode::CONFLICT,
+                    "the agent is not waiting on that question any more",
+                )
+                    .into_response()
+            }
             Self::Domain(AgentSessionError::Forbidden) => {
                 (StatusCode::FORBIDDEN, "forbidden").into_response()
+            }
+            // Already dispatched, removed, or never queued: the caller's
+            // entry is not waiting anymore, and there is no un-sending it.
+            Self::Domain(error @ AgentSessionError::QueuedControlNotFound) => {
+                (StatusCode::NOT_FOUND, error.to_string()).into_response()
+            }
+            Self::Domain(
+                error @ (AgentSessionError::QueuedControlNotEditable
+                | AgentSessionError::EmptyQueuedPrompt),
+            ) => (StatusCode::UNPROCESSABLE_ENTITY, error.to_string()).into_response(),
+            Self::Domain(error @ AgentSessionError::ControlQueueFull(_)) => {
+                (StatusCode::UNPROCESSABLE_ENTITY, error.to_string()).into_response()
+            }
+            Self::Domain(error @ AgentSessionError::TooManyPreviewIds(_)) => {
+                (StatusCode::BAD_REQUEST, error.to_string()).into_response()
+            }
+            // Somebody else answered first, or the agent moved on: nothing to
+            // answer anymore, and the transcript already shows how it went.
+            Self::Domain(error @ AgentSessionError::PermissionRequestNotFound(_)) => {
+                (StatusCode::CONFLICT, error.to_string()).into_response()
+            }
+            Self::Domain(error @ AgentSessionError::PermissionOptionUnknown(_)) => {
+                (StatusCode::UNPROCESSABLE_ENTITY, error.to_string()).into_response()
             }
             Self::Domain(error) => {
                 if let AgentSessionError::InvalidName(message) = error {
@@ -330,9 +383,82 @@ pub struct RenameAgentSessionRequest {
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ControlRequest {
+    /// The id the caller already speculated this action under, when it has
+    /// one. Adopted as the accepted id, so a client that renders the action
+    /// optimistically promotes that entry in place instead of retracting it
+    /// and re-speculating under a server id. Re-sending the same id is not a
+    /// second action: see [`ControlResponse`].
+    ///
+    /// Named rather than flattened so it cannot collide with the action's own
+    /// fields, which are tagged under `type`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action_id: Option<AgentActionId>,
     /// The operation to perform.
     #[serde(flatten)]
     pub action: AgentAction,
+}
+
+/// What accepting a control operation did with it, on the wire.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ControlStatusDto {
+    /// The action reached the agent's runtime.
+    Sent,
+    /// A turn was running; the action waits in the session's queue and
+    /// dispatches when that turn ends. Until then `GET .../queue` lists it,
+    /// and it can be edited or removed under its action id.
+    Queued,
+}
+
+impl From<ControlDisposition> for ControlStatusDto {
+    fn from(disposition: ControlDisposition) -> Self {
+        match disposition {
+            ControlDisposition::Sent => Self::Sent,
+            ControlDisposition::Queued => Self::Queued,
+        }
+    }
+}
+
+/// Response body for a control operation.
+///
+/// Clients deserialize this, so both derives are used.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ControlResponse {
+    /// Matches `requestId` on the folded message this action derives once it
+    /// dispatches, and names the queue entry until then. The caller's own
+    /// `actionId` when it supplied one; a freshly minted id otherwise.
+    pub action_id: AgentActionId,
+    /// Whether the action went out or waits in the queue.
+    pub status: ControlStatusDto,
+}
+
+// The queue entry's wire shape lives in the domain (`QueuedActionDto`,
+// re-exported here) because two transports serve it byte-identically: this
+// router's GET and the realtime queue snapshot.
+pub use crate::domain::model::QueuedActionDto;
+
+/// Response body for a session's queue: everything waiting, oldest first.
+///
+/// A wrapper rather than a bare array so that anything which is about the
+/// response rather than about an entry has somewhere to go later without
+/// breaking every client.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionQueueResponse {
+    /// The waiting actions, in dispatch order.
+    pub entries: Vec<QueuedActionDto>,
+}
+
+/// Request body for editing a queued prompt.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EditQueuedActionRequest {
+    /// The new raw prompt text, replacing the old wholesale. Never blank: a
+    /// prompt with nothing to say is a removal, and there is an endpoint for
+    /// that.
+    #[schema(min_length = 1)]
+    pub prompt: String,
 }
 
 /// Response body describing an agent session.
@@ -347,10 +473,17 @@ pub struct AgentSessionResponse {
     pub name: String,
     /// The user who created and owns the session.
     pub owner_id: String,
+    /// Whether the caller may drive the session - prompt it, answer its
+    /// questions, stop it - rather than only watch. Edit access; the
+    /// creator owns the session, so a create response always says so.
+    pub can_edit: bool,
     /// The root message of the thread the session was created from, if any.
     pub thread_id: Option<Uuid>,
+    /// The channel or document `thread_id` lives in, when the session was
+    /// spawned from a thread.
+    pub thread_parent: Option<messages::domain::models::MessageParent>,
     /// The channel `thread_id` lives in, when the session was spawned from a
-    /// thread.
+    /// channel thread. Derived from `thread_parent`.
     pub thread_channel_id: Option<Uuid>,
     /// The exact message that invoked the bot, if any.
     pub originating_message_id: Option<Uuid>,
@@ -363,6 +496,8 @@ pub struct AgentSessionResponse {
     /// The repository the session works with, when one was stated.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub repo_url: Option<String>,
+    /// The session's linked pull request.
+    pub pull_request_url: Option<String>,
     /// The directory the session's harness runs in on its runtime.
     pub workspace: String,
     /// Compute tier of the managed sandbox.
@@ -401,27 +536,36 @@ pub struct ExternalSessionResponse {
 
 impl From<ExternalSession> for ExternalSessionResponse {
     fn from(external: ExternalSession) -> Self {
+        let url = external.web_url();
         Self {
             provider: external.provider,
             name: external.external_name,
-            url: external.external_url,
+            url,
         }
     }
 }
 
-impl From<AgentSession> for AgentSessionResponse {
-    fn from(session: AgentSession) -> Self {
+impl AgentSessionResponse {
+    /// Describe `session` to a caller whose edit access is `can_edit`.
+    pub fn new(session: AgentSession, can_edit: bool) -> Self {
+        let thread_channel_id = match &session.thread_parent {
+            Some(messages::domain::models::MessageParent::Channel(channel_id)) => Some(*channel_id),
+            Some(messages::domain::models::MessageParent::Document(_)) | None => None,
+        };
         Self {
             id: session.id.as_uuid(),
             name: session.name,
             owner_id: session.owner_id.to_string(),
+            can_edit,
             thread_id: session.thread_id,
-            thread_channel_id: session.thread_channel_id,
+            thread_parent: session.thread_parent,
+            thread_channel_id,
             originating_message_id: session.originating_message_id,
             bot_id: session.bot_id.as_uuid(),
             model: session.model,
             harness: session.harness,
             repo_url: session.repo_url,
+            pull_request_url: session.pull_request_url,
             workspace: session.workspace,
             sandbox_size: session.sandbox_size,
             instructions: session.instructions,
@@ -454,7 +598,7 @@ pub async fn get_agent_session_handler<
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
-    _access: AgentSessionAccessLevelExtractor<ViewAccessLevel, Access, Auth>,
+    access: AgentSessionAccessLevelExtractor<ViewAccessLevel, Access, Auth>,
     State(state): State<AgentSessionRouterState<T, Access, Auth>>,
     Path(session_id): Path<Uuid>,
 ) -> Result<Json<AgentSessionResponse>, AgentSessionApiError> {
@@ -462,8 +606,156 @@ pub async fn get_agent_session_handler<
         .service
         .get_session(AgentSessionId::new_from_uuid(session_id))
         .await?;
+    let can_edit = access
+        .entity_access_receipt
+        .entity_permission()
+        .satisfies::<EditAccessLevel>();
 
-    Ok(Json(session.into()))
+    Ok(Json(AgentSessionResponse::new(session, can_edit)))
+}
+
+/// Request body for `POST /agent-sessions/preview`.
+///
+/// Clients serialize this, so both derives are used.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewAgentSessionsRequest {
+    /// The sessions to preview. Duplicates are collapsed server-side; at most
+    /// [`MAX_PREVIEW_SESSION_IDS`](crate::domain::model::MAX_PREVIEW_SESSION_IDS)
+    /// distinct ids per request.
+    pub session_ids: Vec<Uuid>,
+}
+
+/// Response body for `POST /agent-sessions/preview`: one entry per distinct
+/// requested id, in no particular order.
+///
+/// Clients deserialize this, so both derives are used.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewAgentSessionsResponse {
+    /// What the caller may see of each requested session.
+    pub previews: Vec<AgentSessionPreviewDto>,
+}
+
+/// What one requested id resolved to, on the wire.
+///
+/// Tagged the same way the chat and document preview endpoints tag theirs
+/// (`type` in `access` / `no_access` / `does_not_exist`), so a client that
+/// renders those chips can render this one with the same branch.
+///
+/// Clients deserialize this, so both derives are used.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum AgentSessionPreviewDto {
+    /// The caller may view the session.
+    Access(Box<AgentSessionPreviewData>),
+    /// The session exists but the caller holds no grant on it.
+    NoAccess(WithAgentSessionId),
+    /// No session with this id exists.
+    DoesNotExist(WithAgentSessionId),
+}
+
+/// Just a session id, for the preview variants that carry nothing else.
+///
+/// Clients deserialize this, so both derives are used.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WithAgentSessionId {
+    /// The session id.
+    pub id: Uuid,
+}
+
+/// The fields a chip renders for a session the caller may view.
+///
+/// Clients deserialize this, so both derives are used.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionPreviewData {
+    /// The session id.
+    pub id: Uuid,
+    /// User-facing session name.
+    pub name: String,
+    /// The user who owns the session.
+    pub owner_id: String,
+    /// The bot running the agent.
+    pub bot_id: Uuid,
+    /// Minimal identity of the session's bot, when available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bot: Option<SessionBot>,
+    /// The session's last known status.
+    pub status: SessionStatusDto,
+    /// When the session was created.
+    pub created_at: DateTime<Utc>,
+    /// When the session was last modified.
+    pub modified_at: DateTime<Utc>,
+}
+
+impl From<AgentSessionPreview> for AgentSessionPreviewDto {
+    fn from(preview: AgentSessionPreview) -> Self {
+        match preview {
+            AgentSessionPreview::Access(data) => Self::Access(Box::new(AgentSessionPreviewData {
+                id: data.id.as_uuid(),
+                name: data.name,
+                owner_id: data.owner_id.to_string(),
+                bot_id: data.bot_id.as_uuid(),
+                bot: data.bot,
+                status: data.status.into(),
+                created_at: data.created_at,
+                modified_at: data.modified_at,
+            })),
+            AgentSessionPreview::NoAccess(id) => {
+                Self::NoAccess(WithAgentSessionId { id: id.as_uuid() })
+            }
+            AgentSessionPreview::DoesNotExist(id) => {
+                Self::DoesNotExist(WithAgentSessionId { id: id.as_uuid() })
+            }
+        }
+    }
+}
+
+#[utoipa::path(
+    post,
+    path = "/agent-sessions/preview",
+    tag = "agent-sessions",
+    operation_id = "preview_agent_sessions",
+    request_body = PreviewAgentSessionsRequest,
+    responses(
+        (status = 200, body = PreviewAgentSessionsResponse),
+        (status = 400, body = String, description = "more than the maximum number of session ids"),
+        (status = 401, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// Preview a batch of agent sessions for rendering chips.
+///
+/// No per-id access extractor: a chip has to render for a session the caller
+/// cannot open, so access is answered per id in the body rather than
+/// enforced on the request. The caller learns the fields a chip shows for
+/// sessions they may view, and only existence for the rest.
+#[tracing::instrument(skip_all, fields(actor = %caller.acting_entity()), err(Debug))]
+pub async fn preview_agent_sessions_handler<
+    T: AgentSessionService,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<AgentSessionRouterState<T, Access, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, ActingUser>,
+    Json(request): Json<PreviewAgentSessionsRequest>,
+) -> Result<Json<PreviewAgentSessionsResponse>, AgentSessionApiError> {
+    let previews = state
+        .service
+        .preview_sessions(
+            &caller.authorization.user.macro_user_id,
+            request
+                .session_ids
+                .into_iter()
+                .map(AgentSessionId::new_from_uuid)
+                .collect(),
+        )
+        .await?;
+    Ok(Json(PreviewAgentSessionsResponse {
+        previews: previews.into_iter().map(Into::into).collect(),
+    }))
 }
 
 #[utoipa::path(
@@ -532,15 +824,24 @@ async fn ensure_harness_serves_session<R: AgentSessionNotificationRecipient>(
     responses(
         (
             status = 200,
-            body = AgentActionId,
-            description = "Accepted; matches `requestId` on the folded message this action derives"
+            body = ControlResponse,
+            description = "Accepted. `sent` reached the runtime; `queued` waits for the \
+                           running turn to end and can be edited or removed meanwhile."
         ),
         (status = 401, body = String),
         (status = 403, body = String),
+        (status = 422, body = String),
         (status = 500, body = String),
     )
 )]
 /// Perform a control operation on a live agent session.
+///
+/// Edit access suffices: whoever can prompt the bot through its thread can
+/// prompt it here.
+///
+/// A caller may name the action with `actionId`; the response echoes it.
+/// Re-posting an id the session still holds queued or in flight reports that
+/// action's status rather than accepting a duplicate.
 #[tracing::instrument(
     skip_all,
     fields(
@@ -555,12 +856,12 @@ pub async fn control_agent_session_handler<
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
-    _access: AgentSessionAccessLevelExtractor<OwnerAccessLevel, Access, Auth>,
+    access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
     State(state): State<AgentSessionControlState<R, Access, Auth>>,
     caller: MacroAuthorizationExtractor<Auth, UserBotOrHarness>,
     Path(session_id): Path<Uuid>,
     Json(req): Json<ControlRequest>,
-) -> Result<Json<AgentActionId>, AgentSessionApiError> {
+) -> Result<Json<ControlResponse>, AgentSessionApiError> {
     ensure_harness_serves_session(
         &caller.authorization,
         state.recipient.as_ref(),
@@ -568,23 +869,175 @@ pub async fn control_agent_session_handler<
     )
     .await?;
 
+    let principal = match &caller.authorization {
+        UserBotOrHarnessAuthorization::User(_) => crate::domain::control::ControlPrincipal::User,
+        authorization => crate::domain::control::ControlPrincipal::Runtime(
+            authorization
+                .acting_user()
+                .map(|user| user.macro_user_id.clone()),
+        ),
+    };
+
+    let accepted = state
+        .recipient
+        .control_event(
+            AgentSessionId::new_from_uuid(session_id),
+            ControlEvent::authorized(
+                req.action,
+                req.action_id,
+                principal,
+                access.entity_access_receipt,
+            )?,
+        )
+        .await?;
+
+    Ok(Json(ControlResponse {
+        action_id: accepted.action_id,
+        status: accepted.disposition.into(),
+    }))
+}
+
+#[utoipa::path(
+    get,
+    path = "/agent-sessions/{session_id}/queue",
+    tag = "agent-sessions",
+    operation_id = "get_agent_session_queue",
+    params(("session_id" = Uuid, Path, description = "ID of the agent session")),
+    responses(
+        (status = 200, body = AgentSessionQueueResponse),
+        (status = 401, body = String),
+        (status = 403, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// The actions waiting to dispatch in this session, oldest first.
+#[tracing::instrument(skip_all, fields(session_id = %session_id), err(Debug))]
+pub async fn get_agent_session_queue_handler<
+    R: AgentSessionNotificationRecipient,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    _access: AgentSessionAccessLevelExtractor<ViewAccessLevel, Access, Auth>,
+    State(state): State<AgentSessionControlState<R, Access, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, UserBotOrHarness>,
+    Path(session_id): Path<Uuid>,
+) -> Result<Json<AgentSessionQueueResponse>, AgentSessionApiError> {
+    let session_id = AgentSessionId::new_from_uuid(session_id);
+    ensure_harness_serves_session(&caller.authorization, state.recipient.as_ref(), session_id)
+        .await?;
+
+    let entries = state.recipient.queued_controls(session_id).await?;
+    Ok(Json(AgentSessionQueueResponse {
+        entries: entries.into_iter().map(Into::into).collect(),
+    }))
+}
+
+#[utoipa::path(
+    put,
+    path = "/agent-sessions/{session_id}/queue/{action_id}",
+    tag = "agent-sessions",
+    operation_id = "edit_queued_action",
+    params(
+        ("session_id" = Uuid, Path, description = "ID of the agent session"),
+        ("action_id" = Uuid, Path, description = "ID the action was accepted under"),
+    ),
+    request_body = EditQueuedActionRequest,
+    responses(
+        (status = 204),
+        (status = 401, body = String),
+        (status = 403, body = String),
+        (status = 404, body = String, description = "Already dispatched or never queued"),
+        (status = 422, body = String, description = "The queued action carries no text"),
+        (status = 500, body = String),
+    )
+)]
+/// Replace a queued prompt's text before it dispatches.
+#[tracing::instrument(
+    skip_all,
+    fields(actor = %caller.acting_entity(), session_id = %session_id, %action_id),
+    err(Debug)
+)]
+pub async fn edit_queued_action_handler<
+    R: AgentSessionNotificationRecipient,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    _access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
+    State(state): State<AgentSessionControlState<R, Access, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, UserBotOrHarness>,
+    Path((session_id, action_id)): Path<(Uuid, Uuid)>,
+    Json(request): Json<EditQueuedActionRequest>,
+) -> Result<StatusCode, AgentSessionApiError> {
+    let session_id = AgentSessionId::new_from_uuid(session_id);
+    ensure_harness_serves_session(&caller.authorization, state.recipient.as_ref(), session_id)
+        .await?;
+    if request.prompt.trim().is_empty() {
+        return Err(AgentSessionError::EmptyQueuedPrompt.into());
+    }
+
     let actor = caller
         .authorization
         .acting_user()
         .map(|user| user.macro_user_id.clone());
-
-    let action_id = state
+    state
         .recipient
-        .control_event(
-            AgentSessionId::new_from_uuid(session_id),
-            ControlEvent {
-                action: req.action,
-                actor,
-            },
+        .edit_queued_control(
+            session_id,
+            AgentActionId::from_uuid(action_id),
+            request.prompt,
+            actor,
         )
         .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
 
-    Ok(Json(action_id))
+#[utoipa::path(
+    delete,
+    path = "/agent-sessions/{session_id}/queue/{action_id}",
+    tag = "agent-sessions",
+    operation_id = "remove_queued_action",
+    params(
+        ("session_id" = Uuid, Path, description = "ID of the agent session"),
+        ("action_id" = Uuid, Path, description = "ID the action was accepted under"),
+    ),
+    responses(
+        (status = 204),
+        (status = 401, body = String),
+        (status = 403, body = String),
+        (status = 404, body = String, description = "Already dispatched or never queued"),
+        (status = 500, body = String),
+    )
+)]
+/// Remove a queued action before it dispatches. There is no un-sending: an
+/// action that already went out answers 404.
+#[tracing::instrument(
+    skip_all,
+    fields(actor = %caller.acting_entity(), session_id = %session_id, %action_id),
+    err(Debug)
+)]
+pub async fn remove_queued_action_handler<
+    R: AgentSessionNotificationRecipient,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    _access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
+    State(state): State<AgentSessionControlState<R, Access, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, UserBotOrHarness>,
+    Path((session_id, action_id)): Path<(Uuid, Uuid)>,
+) -> Result<StatusCode, AgentSessionApiError> {
+    let session_id = AgentSessionId::new_from_uuid(session_id);
+    ensure_harness_serves_session(&caller.authorization, state.recipient.as_ref(), session_id)
+        .await?;
+
+    let actor = caller
+        .authorization
+        .acting_user()
+        .map(|user| user.macro_user_id.clone());
+    state
+        .recipient
+        .remove_queued_control(session_id, AgentActionId::from_uuid(action_id), actor)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[utoipa::path(
@@ -744,6 +1197,8 @@ pub async fn put_agent_sandbox_size_handler<
 /// decodes its own response type.
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct AgentSessionLogEntryDto {
+    /// Durable transport row identity; together with `createdAt`, its order cursor.
+    pub id: Uuid,
     /// When the log recorded the frame.
     ///
     /// The frame itself carries no time, so this comes from the log row. It is
@@ -798,6 +1253,7 @@ pub enum LogDirectionDto {
 impl From<StoredAgentSessionLog> for AgentSessionLogEntryDto {
     fn from(stored: StoredAgentSessionLog) -> Self {
         Self {
+            id: stored.id,
             created_at: stored.created_at,
             user_id: stored.entry.user_id.map(|user| user.to_string()),
             message: stored.entry.content,
@@ -819,7 +1275,10 @@ pub struct AgentSessionLogResponse {
     /// out who sent them: the sender of an agent message is this session's
     /// bot, and nothing else names it.
     pub bot: SessionBot,
-    /// Every logged frame, oldest first. Folding depends on this order.
+    /// Effective history in ascending `(createdAt, id)` order.
+    /// The first row is the inclusive history boundary cursor: buffered rows
+    /// before it are obsolete. Reconcile snapshot overlap by row ID, never content.
+    /// An empty history has no boundary or overlapping rows.
     pub entries: Vec<AgentSessionLogEntryDto>,
 }
 
@@ -838,13 +1297,20 @@ pub struct AgentSessionLogResponse {
 )]
 /// The raw protocol log of one agent session.
 ///
-/// Served unfolded, and whole: the fold is a left fold over the frames from
-/// the beginning, so a reader that skipped any of them would derive different
-/// turn numbering.
+/// Served unfolded from the latest successful load initialization, or the
+/// beginning when no load succeeded. Consumers stage load attempts so failed
+/// or interrupted replay does not become visible conversation content.
 ///
 /// An unknown session is an error: the response has to name the session's
 /// agent, and a session that never existed has none to name.
-#[tracing::instrument(skip_all, fields(session_id = %session_id), err(Debug))]
+#[tracing::instrument(
+    skip_all,
+    fields(
+        session_id = %session_id,
+        agent.session.log.rows = tracing::field::Empty,
+    ),
+    err(Debug)
+)]
 pub async fn get_agent_session_log_handler<
     T: AgentSessionService,
     Access: EntityAccessService,
@@ -858,6 +1324,12 @@ pub async fn get_agent_session_log_handler<
         .service
         .session_log(AgentSessionId::new_from_uuid(session_id))
         .await?;
+
+    // How much history this response carries. Without it the endpoint's
+    // latency cannot be read against the size of the session that produced
+    // it, and "is this slow because the session is huge" costs a trip to the
+    // database to answer.
+    tracing::Span::current().record("agent.session.log.rows", log.entries.len());
 
     Ok(Json(AgentSessionLogResponse {
         bot: log.bot,
@@ -937,20 +1409,22 @@ where
 /// Carries two shapes, told apart by `workspace`. Naming one asks for an
 /// external session: the runtime is the bot operator's, so the caller has to
 /// say which bot and which directory, and must own that bot. Omitting it asks
-/// for a managed session, whose sandbox this deployment provisions from its
-/// own configuration - which is why the fields describing someone else's
-/// runtime must be omitted along with it rather than quietly ignored. Mixing
-/// the two is refused rather than guessed at, so that no request can reach the
-/// managed path carrying a bot the caller was never entitled to name.
+/// for a managed session, whose runtime this deployment provisions. A managed
+/// request may select an authorized persisted persona with `botId`; omitting
+/// it uses the deployment's default coding persona. Fields describing someone
+/// else's runtime must still be omitted rather than quietly ignored. Mixing
+/// the two shapes is refused rather than guessed at.
 ///
 /// Clients serialize this, so both derives are used.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateAgentSessionRequest {
-    /// Bot the session runs for. Bot callers may omit it (their own identity
-    /// is used) and must not name another bot; user callers must supply a
-    /// bot they own. External sessions only: a managed session runs as the
-    /// bot its deployment is configured for.
+    /// Bot the session runs for. On a managed request this optionally selects
+    /// a persisted persona the user owns, may use through team membership, or
+    /// can `@` mention in a shared channel; omitting it uses the deployment's
+    /// default coding persona. On an external request, bot callers may omit it
+    /// (their own identity is used) and must not name another bot; user callers
+    /// must supply a bot they own.
     pub bot_id: Option<Uuid>,
     /// Absolute directory the bot's harness runs in on its runtime. Present
     /// for an external session, absent for a managed one, which runs in the
@@ -960,9 +1434,14 @@ pub struct CreateAgentSessionRequest {
     /// only - an external runtime sends its own first prompt through the
     /// control endpoint. Omitted, the session opens idle.
     pub prompt: Option<String>,
-    /// Repository nominally checked out at `workspace`. Informational and
-    /// optional: having it cloned there is the runtime operator's job.
+    /// Explicit GitHub repository for a managed Cursor session, as one of the
+    /// urls `GET /agent-repositories` lists for the caller. Access is checked
+    /// for the session owner. For external sessions this is informational:
+    /// cloning it is the runtime operator's job.
     pub repo_url: Option<String>,
+    /// Starting branch for a managed coding session's selected repository.
+    /// Omitted, the session starts on the repository's default branch.
+    pub repo_branch: Option<String>,
     /// The user who owns the session. Ignored for user callers, who always
     /// own their own sessions, and for harness callers, whose verified acting
     /// user (owner or confirmed team member) owns the session instead;
@@ -990,8 +1469,13 @@ pub struct CreateAgentSessionRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateSessionThread {
-    /// Channel the mentioning message was posted in.
-    pub channel_id: Uuid,
+    /// Entity the mentioning message was posted in.
+    #[serde(default)]
+    pub parent: Option<messages::domain::models::MessageParent>,
+    /// Channel the mentioning message was posted in. Runtimes built before
+    /// message parents send this instead of `parent`.
+    #[serde(default)]
+    pub channel_id: Option<Uuid>,
     /// Thread the session belongs to; defaults to the message itself, which
     /// is how a top-level mention roots its own thread.
     pub thread_id: Option<Uuid>,
@@ -1044,6 +1528,8 @@ pub enum CreateSessionApiError {
     NotAnAgentBot,
     /// The bot's sessions are opened by the trigger pipeline, not this route.
     ManagedBot,
+    /// The selected persona is served by an external runtime.
+    ExternalPersona,
     /// The caller identified no user to own the session.
     OwnerRequired,
     /// The owner is not a parseable user id.
@@ -1052,6 +1538,8 @@ pub enum CreateSessionApiError {
     InvalidWorkspace(&'static str),
     /// The request mixed the managed and external shapes.
     MixedSessionShape,
+    /// The thread named neither a parent nor a channel.
+    ThreadParentRequired,
     /// The thread already routes to a session; carries it for recovery.
     ThreadSessionExists {
         /// The existing session, when it could be resolved.
@@ -1087,6 +1575,10 @@ impl IntoResponse for CreateSessionApiError {
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "this bot's sessions are opened by the trigger pipeline".to_owned(),
             ),
+            Self::ExternalPersona => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "this persona cannot be started from Macro".to_owned(),
+            ),
             Self::OwnerRequired => (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "owner is required for bot callers".to_owned(),
@@ -1098,9 +1590,13 @@ impl IntoResponse for CreateSessionApiError {
             Self::InvalidWorkspace(reason) => (StatusCode::UNPROCESSABLE_ENTITY, reason.to_owned()),
             Self::MixedSessionShape => (
                 StatusCode::UNPROCESSABLE_ENTITY,
-                "a managed session takes only a prompt; naming a workspace, bot, repo, \
-                 owner or thread asks for an external one"
+                "a managed session may take a prompt, persona and instructions; naming a \
+                 workspace, owner or thread asks for an external one"
                     .to_owned(),
+            ),
+            Self::ThreadParentRequired => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "thread.parent is required".to_owned(),
             ),
             Self::ThreadSessionExists { session_id } => {
                 let body = ThreadSessionExistsResponse {
@@ -1112,6 +1608,13 @@ impl IntoResponse for CreateSessionApiError {
             Self::Domain(AgentSessionError::ThreadSessionExists) => (
                 StatusCode::CONFLICT,
                 "this bot already has a session for this thread".to_owned(),
+            ),
+            Self::Domain(AgentSessionError::InvalidRepositorySelection(reason)) => {
+                (StatusCode::UNPROCESSABLE_ENTITY, reason.to_owned())
+            }
+            Self::Domain(AgentSessionError::Forbidden) => (
+                StatusCode::FORBIDDEN,
+                "repository is not available to this user".to_owned(),
             ),
             Self::Domain(AgentSessionError::UnknownOwner) => (
                 StatusCode::UNPROCESSABLE_ENTITY,
@@ -1176,7 +1679,11 @@ fn resolve_bot(
     }
 }
 
-/// Resolve the user who owns the session.
+/// Resolve who owns the session.
+///
+/// Only ever a user here: every caller this route admits acts as a person,
+/// and the body's `owner` claim is a user id. The type is wider than that so
+/// the row and the runtimes are asked, not told, what kind of owner they got.
 ///
 /// A user caller always owns their own sessions. A harness caller always has a
 /// verified acting user - the owner for a private harness, a confirmed team
@@ -1191,12 +1698,14 @@ fn resolve_bot(
 fn resolve_owner(
     caller: &UserBotOrHarnessAuthorization,
     claimed: Option<String>,
-) -> Result<MacroUserIdStr<'static>, CreateSessionApiError> {
+) -> Result<Owner, CreateSessionApiError> {
     if let Some(user) = caller.acting_user() {
-        return Ok(user.macro_user_id.clone());
+        return Ok(Owner::User(user.macro_user_id.clone()));
     }
     let claimed = claimed.ok_or(CreateSessionApiError::OwnerRequired)?;
-    MacroUserIdStr::try_from(claimed).map_err(|_| CreateSessionApiError::UnparseableOwner)
+    MacroUserIdStr::try_from(claimed)
+        .map(Owner::User)
+        .map_err(|_| CreateSessionApiError::UnparseableOwner)
 }
 
 #[utoipa::path(
@@ -1236,39 +1745,62 @@ pub async fn create_agent_session_handler<
     // absence, whichever shape the request turns out to be.
     let instructions = request.instructions.filter(|text| !text.trim().is_empty());
 
-    // No workspace means the managed shape. It shares this route but not its
-    // authorization: nothing about which bot runs the session is the caller's
-    // to say, so the bot-ownership checks below have nothing to check and are
-    // skipped. That is only sound while the request carries none of the
-    // external fields, which is what this refuses.
+    // No workspace means the managed shape. A bot id selects a managed
+    // persona; the domain resolver owns its user/team/channel authorization
+    // policy. External-only fields remain invalid on this shape.
     let Some(workspace) = request.workspace else {
-        if request.bot_id.is_some()
-            || request.repo_url.is_some()
-            || request.thread.is_some()
-            || request.owner.is_some()
-        {
+        if request.thread.is_some() || request.owner.is_some() {
             return Err(CreateSessionApiError::MixedSessionShape);
         }
         let owner = resolve_owner(&caller.authorization, None)?;
+        let profile = if let Some(bot_id) = request.bot_id {
+            let selected = managed_persona_for_owner(
+                state.bots.as_ref(),
+                BotId::new_from_uuid(bot_id),
+                &owner,
+            )
+            .await
+            .map_err(|error| match error {
+                ManagedPersonaError::Unknown => CreateSessionApiError::UnknownBot,
+                ManagedPersonaError::NotAgent => CreateSessionApiError::NotAnAgentBot,
+                ManagedPersonaError::External => CreateSessionApiError::ExternalPersona,
+                ManagedPersonaError::Forbidden => CreateSessionApiError::NotYourBot,
+                ManagedPersonaError::Lookup(error) => CreateSessionApiError::Domain(error),
+            })?;
+            Some(selected)
+        } else {
+            None
+        };
         let session = state
             .opener
             .open_managed_session(OpenManagedSession {
+                repo_url: request.repo_url,
+                repo_branch: request
+                    .repo_branch
+                    .map(crate::domain::repository_branch::RepositoryBranch::parse)
+                    .transpose()
+                    .map_err(|reason| {
+                        CreateSessionApiError::Domain(
+                            AgentSessionError::InvalidRepositorySelection(reason),
+                        )
+                    })?,
                 owner,
                 prompt: request.prompt,
+                profile,
                 instructions,
             })
             .await?;
         return Ok((
             StatusCode::CREATED,
             Json(CreateAgentSessionResponse {
-                session: session.into(),
+                session: AgentSessionResponse::new(session, true),
             }),
         ));
     };
 
     // An external runtime sends its own first prompt through the control
     // endpoint, so accepting one here would silently drop it.
-    if request.prompt.is_some() {
+    if request.prompt.is_some() || request.repo_branch.is_some() {
         return Err(CreateSessionApiError::MixedSessionShape);
     }
     let bot_id = resolve_bot(&caller.authorization, request.bot_id)?;
@@ -1278,6 +1810,8 @@ pub async fn create_agent_session_handler<
         is_managed,
         owner_user_id,
         harness_id,
+        managed_profile,
+        ..
     } = state
         .bots
         .bot_facts(bot_id)
@@ -1307,16 +1841,28 @@ pub async fn create_agent_session_handler<
     validate_workspace(&workspace)?;
     let owner = resolve_owner(&caller.authorization, request.owner)?;
 
-    let thread = request.thread.map(|thread| SessionThread {
-        channel_id: thread.channel_id,
-        thread_id: thread.thread_id.unwrap_or(thread.message_id),
-        message_id: thread.message_id,
-        content: thread.content,
-    });
+    let thread = request
+        .thread
+        .map(|thread| {
+            let parent = thread
+                .parent
+                .or(thread
+                    .channel_id
+                    .map(messages::domain::models::MessageParent::Channel))
+                .ok_or(CreateSessionApiError::ThreadParentRequired)?;
+            Ok::<_, CreateSessionApiError>(SessionThread {
+                parent,
+                thread_id: thread.thread_id.unwrap_or(thread.message_id),
+                message_id: thread.message_id,
+                content: thread.content,
+            })
+        })
+        .transpose()?;
     let session = match state
         .opener
         .open_external_session(OpenExternalAgentSession {
             bot_id,
+            profile: managed_profile,
             workspace,
             repo_url: request.repo_url,
             owner,
@@ -1346,7 +1892,7 @@ pub async fn create_agent_session_handler<
     Ok((
         StatusCode::CREATED,
         Json(CreateAgentSessionResponse {
-            session: session.into(),
+            session: AgentSessionResponse::new(session, true),
         }),
     ))
 }

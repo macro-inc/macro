@@ -1,6 +1,10 @@
 import { renameItem } from '@core/component/FileList/itemOperations';
 import { toast } from '@core/component/Toast/Toast';
-import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
+import {
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
+import { renameAgentSession } from '@queries/agent-session/entity-mutations';
 import { callKeys } from '@queries/call/keys';
 import { channelKeys } from '@queries/channel/keys';
 import { queryClient } from '@queries/client';
@@ -115,6 +119,10 @@ const getEntityRenameData = (
 const performEntityRename = async (operation: EntityRenameOperation) => {
   const data = getEntityRenameData(operation);
   if (!data) return { success: false };
+  if (data.itemType === 'agent_session') {
+    await renameAgentSession(data.id, data.newName);
+    return { success: true };
+  }
   const success = await renameItem(data);
   return { success };
 };
@@ -170,6 +178,7 @@ const validateEntityRename = (entity: RenamableEntity): void => {
         throw new Error('Direct messages do not support renaming');
       }
       break;
+    case 'agent_session':
     case 'document':
     case 'chat':
     case 'project':
@@ -225,7 +234,7 @@ const renameDssSetData = (
       txns.set(
         soupTransactionKey(itemType, id),
         optimisticUpdateSoupEntity({
-          tag: itemType,
+          tag: itemType === 'agent_session' ? 'agentSession' : itemType,
           data: { id, name: newName },
           frecency_score: score,
           touched_at: ownTouchStamp(id),
@@ -326,7 +335,7 @@ const bulkRenameMutationFn = async (
 ): Promise<BulkRenameDssEntityMutationData> => {
   validateBulkRename(params);
 
-  if (!ENABLE_GRAPHQL_SOUP()) {
+  if (!isFeatureEnabled(enableGraphqlSoup)) {
     return await Promise.all(params.map(performEntityRename));
   }
 
@@ -439,7 +448,7 @@ const bulkRenameOnSettled = (
   }
 };
 
-/** supports channel/document/chat/project/call rename */
+/** Supports channel/document/chat/project/call/agent-session rename. */
 export function createRenameDssEntityMutation(
   callbacks?: MutationCallbacks<
     RenameDssEntityMutationData,
@@ -477,7 +486,7 @@ export function createRenameDssEntityMutation(
   }));
 }
 
-/** supports channel/document/chat/project/call bulk rename */
+/** Supports channel/document/chat/project/call/agent-session bulk rename. */
 export function createBulkRenameDssEntityMutation() {
   return useMutation<
     BulkRenameDssEntityMutationData,

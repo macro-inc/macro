@@ -12,4 +12,4 @@ Get all properties attached to an entity (document, project, CRM company, etc.).
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `entity_id` | string | Yes | The ID of the entity to get properties for. |
-| `entity_type` | `"document"` \| `"project"` \| `"chat"` \| `"thread"` \| `"channel"` \| `"call"` \| `"user"` \| `"company"` | Yes | Canonical entity type accepted when an AI tool targets an entity's properties. |
+| `entity_type` | `"document"` \| `"project"` \| `"chat"` \| `"thread"` \| `"channel"` \| `"call"` \| `"user"` \| `"company"` | Yes | Canonical entity type accepted when an AI tool targets an entity's properties. Tasks are targeted as `document`; email threads (type `email` in ListEntities and search results) are targeted as `thread`. |

@@ -15,6 +15,8 @@ use models_properties::service::property_value::PropertyValue;
 use models_properties::{DataType, EntityReference, EntityType, PropertyOwner};
 use uuid::Uuid;
 
+pub use system_properties::CRM_TEAM_STAGE_DEFINITION_NAME;
+
 /// Map an internal properties storage type to its canonical entity type.
 pub fn canonical_entity_type(entity_type: EntityType) -> AccessEntityType {
     match entity_type {
@@ -53,7 +55,9 @@ pub fn storage_entity_type(entity_type: AccessEntityType) -> Option<EntityType> 
         | AccessEntityType::CrmContact
         | AccessEntityType::Reminder
         | AccessEntityType::Skill
-        | AccessEntityType::AgentSession => None,
+        | AccessEntityType::AgentSession
+        | AccessEntityType::ScheduledAction
+        | AccessEntityType::Initiative => None,
     }
 }
 
@@ -186,6 +190,15 @@ impl<'a> PropertyDefinitionOwner<'a> {
     }
 }
 
+/// Result of resolving an option by value without changing an existing option.
+#[derive(Debug)]
+pub struct GetOrCreatePropertyOptionResult {
+    /// The newly inserted or existing option.
+    pub option: PropertyOption,
+    /// Whether this call inserted the option.
+    pub created: bool,
+}
+
 /// Result of getting or creating an owner's tag definition.
 #[derive(Debug, Clone)]
 pub struct GetOrCreateTagDefinitionResult {
@@ -311,6 +324,48 @@ pub enum EntityOptionUpdateOutcome {
         /// Why the delta was not applied.
         message: String,
     },
+}
+
+/// One option to rewrite in place during a replace.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PropertyOptionRewrite {
+    /// The option to rewrite; keeps its id.
+    pub option_id: Uuid,
+    /// Value after the replace.
+    pub value: PropertyOptionValue,
+    /// Display order after the replace.
+    pub display_order: i32,
+}
+
+/// One option to create during a replace.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PropertyOptionInsert {
+    /// Value of the new option.
+    pub value: PropertyOptionValue,
+    /// Display order of the new option.
+    pub display_order: i32,
+}
+
+/// A whole-set change to a definition's options, applied in one transaction.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct PropertyOptionReplacePlan {
+    /// Options to delete, stripping their ids from entity values.
+    pub delete: Vec<Uuid>,
+    /// Options to rewrite in place.
+    pub rewrite: Vec<PropertyOptionRewrite>,
+    /// Options to create.
+    pub insert: Vec<PropertyOptionInsert>,
+}
+
+/// Outcome of a whole-set option replace.
+#[derive(Debug, Clone)]
+pub enum PropertyOptionReplaceOutcome {
+    /// Every change applied; carries the definition's options afterwards.
+    Replaced(Vec<PropertyOption>),
+    /// An option to delete or rewrite does not belong to the definition.
+    OptionNotFound,
+    /// Two options would share a value; nothing was applied.
+    DuplicateValue,
 }
 
 /// Outcome of an in-place property option update.

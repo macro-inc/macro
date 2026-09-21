@@ -18,6 +18,7 @@ Passing `attendees` replaces the full attendee list — include everyone who sho
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `eventId` | string | Yes | The event's id, from ListCalendarEvents or CreateCalendarEvent. |
+| `calendarId` | string | No | The `calendarId` of the copy to update, from the `copies` of its ListCalendarEvents entry, for an event synced from more than one calendar. Omit to update the event's primary copy. |
 | `scope` | `"all"` \| `"this_event"` | Yes | How much of a recurring series an update applies to. |
 | `recurrenceId` | string | No | The `recurrenceId` of the targeted occurrence, from its ListCalendarEvents entry. Required for "this_event"; omit for "all". |
 | `title` | string | No | Replacement title. Omit to keep the current title. |
@@ -29,3 +30,4 @@ Passing `attendees` replaces the full attendee list — include everyone who sho
 | `conference` | `"google_meet"` \| `"remove"` | No | Change the event's video conference: "google_meet" attaches a fresh Google Meet, "remove" detaches the current conference. Omit to leave it untouched. |
 | `reminders` | EventRemindersInput | No | Replacement notification reminders. `useDefault: true` follows the calendar's own defaults; otherwise `overrides` replaces the whole list with entries of `method` "popup" (a Macro notification) or "email" and `minutes` before the start — an empty list silences the event. Omit to keep the current reminders. |
 | `rsvp` | `"accepted"` \| `"declined"` \| `"tentative"` | No | Set the user's own response to the invitation: "accepted", "declined", or "tentative". Omit to leave their response alone. |
+| `outOfOffice` | OutOfOfficeInput | No | Adjust out-of-office decline behavior; only valid on an event that is already out of office (its event type cannot be changed). Replaces the whole block: set `autoDeclineMode` ("decline_none", "decline_all", or "decline_new_only") and optionally `declineMessage`. Omit to leave it untouched. |

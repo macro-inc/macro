@@ -33,8 +33,9 @@ use crate::{
     domain::{
         models::{
             EnrichedSoupItem, FrecencyQueryInner, GroupedSortRequest, IntoSoupReqAst,
-            SimpleQueryInner, SoupErr, SoupPropertiesField, SoupQuery, SoupRequest,
-            SoupSortDirection, SoupType, TouchedQueryInner, grouping::ItemGroupingInfo,
+            NotifiedQueryInner, SimpleQueryInner, SoupErr, SoupPropertiesField, SoupQuery,
+            SoupRequest, SoupSortDirection, SoupType, TouchedQueryInner,
+            grouping::ItemGroupingInfo,
         },
         ports::{SoupOutput, SoupService},
     },
@@ -55,6 +56,8 @@ enum MockCursorKind {
     FrecencyCursor,
     TouchedSort,
     TouchedCursor,
+    NotifiedSort,
+    NotifiedCursor,
 }
 
 #[derive(Debug)]
@@ -165,6 +168,12 @@ impl SoupService for MockSoup {
             SoupQuery::Touched(TouchedQueryInner(Query::Cursor(..))) => {
                 MockCursorKind::TouchedCursor
             }
+            SoupQuery::Notified(NotifiedQueryInner(Query::Sort(..))) => {
+                MockCursorKind::NotifiedSort
+            }
+            SoupQuery::Notified(NotifiedQueryInner(Query::Cursor(..))) => {
+                MockCursorKind::NotifiedCursor
+            }
         };
         let user_id = req.user.to_string();
         let soup_type = req.soup_type;
@@ -216,6 +225,14 @@ impl SoupService for MockSoup {
 struct MockEmail;
 
 impl EmailService for MockEmail {
+    async fn mark_thread_unread(
+        &self,
+        _macro_id: MacroUserIdStr<'static>,
+        _thread_id: uuid::Uuid,
+    ) -> Result<(), EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
     async fn get_email_thread_previews(
         &self,
         _req: email::domain::models::GetEmailsRequest,
@@ -658,6 +675,14 @@ struct MockEmailLinkResult {
 }
 
 impl EmailService for MockEmailLinkResult {
+    async fn mark_thread_unread(
+        &self,
+        _macro_id: MacroUserIdStr<'static>,
+        _thread_id: uuid::Uuid,
+    ) -> Result<(), EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
     async fn get_email_thread_previews(
         &self,
         _req: email::domain::models::GetEmailsRequest,
@@ -1175,17 +1200,17 @@ async fn it_parses_notification_and_task_filters() {
         .body(axum::body::Body::from(
             serde_json::to_vec(&serde_json::json!({
                 "document_filters": {
-                    "notification_filters": { "done": false, "seen": false },
+                    "notification_filters": { "states": ["unseen"] },
                     "task_filters": { "include_cbm_atm_nc": true }
                 },
                 "chat_filters": {
-                    "notification_filters": { "done": false, "seen": false }
+                    "notification_filters": { "states": ["unseen"] }
                 },
                 "project_filters": {
-                    "notification_filters": { "done": false, "seen": false }
+                    "notification_filters": { "states": ["unseen"] }
                 },
                 "channel_filters": {
-                    "notification_filters": { "done": false, "seen": false }
+                    "notification_filters": { "states": ["unseen"] }
                 }
             }))
             .unwrap(),
@@ -1201,34 +1226,24 @@ async fn it_parses_notification_and_task_filters() {
 
     let filter: EntityFilters = serde_json::from_value(arg.filter).unwrap();
     assert_eq!(
-        filter.document_filters.notification_filters.done,
-        Some(false)
-    );
-    assert_eq!(
-        filter.document_filters.notification_filters.seen,
-        Some(false)
+        filter.document_filters.notification_filters.states,
+        vec![item_filters::NotificationState::Unseen]
     );
     assert_eq!(
         filter.document_filters.task_filters.include_cbm_atm_nc,
         Some(true)
     );
-    assert_eq!(filter.chat_filters.notification_filters.done, Some(false));
-    assert_eq!(filter.chat_filters.notification_filters.seen, Some(false));
     assert_eq!(
-        filter.project_filters.notification_filters.done,
-        Some(false)
+        filter.chat_filters.notification_filters.states,
+        vec![item_filters::NotificationState::Unseen]
     );
     assert_eq!(
-        filter.project_filters.notification_filters.seen,
-        Some(false)
+        filter.project_filters.notification_filters.states,
+        vec![item_filters::NotificationState::Unseen]
     );
     assert_eq!(
-        filter.channel_filters.notification_filters.done,
-        Some(false)
-    );
-    assert_eq!(
-        filter.channel_filters.notification_filters.seen,
-        Some(false)
+        filter.channel_filters.notification_filters.states,
+        vec![item_filters::NotificationState::Unseen]
     );
 }
 
@@ -2038,6 +2053,105 @@ async fn ascending_touched_is_rejected() {
         body,
         json!({
             "message": "sort_direction=asc is not supported with sort_method=touched_by_me"
+        })
+    );
+}
+
+/// notified_at selects the notified query mode from the plain sort param.
+#[tokio::test]
+async fn notified_at_sort_selects_notified_query() {
+    let soup = MockSoup::new();
+    let inner_counter = soup.called.clone();
+    let router: Router = mock_router_with(
+        soup,
+        MockEmailLinkResult {
+            get_link_result: Arc::new(|| Ok(None)),
+        },
+    );
+
+    let request = authenticated_request()
+        .uri("/soup/ast")
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&json!({ "sort_method": "notified_at" })).unwrap(),
+        ))
+        .unwrap();
+
+    let _res = router.oneshot(request).await.unwrap();
+    let guard = inner_counter.lock().unwrap();
+    let req = guard.first().unwrap();
+    assert!(matches!(req.cursor_kind, MockCursorKind::NotifiedSort));
+}
+
+/// A notified page cursor round-trips into the notified query mode. Its
+/// value is a timestamp exactly like the touched cursor's, so this also
+/// proves the `"notified_at"` sort marker keeps it out of the touched arm.
+#[tokio::test]
+async fn notified_cursor_round_trips() {
+    let soup = MockSoup::new();
+    let inner_counter = soup.called.clone();
+    let router: Router = mock_router_with(
+        soup,
+        MockEmailLinkResult {
+            get_link_result: Arc::new(|| Ok(None)),
+        },
+    );
+
+    let cursor = models_pagination::Base64Str::encode_json(models_pagination::Cursor {
+        id: Uuid::new_v4().to_string(),
+        limit: 20usize,
+        val: CursorVal {
+            sort_type: models_pagination::NotifiedAt,
+            last_val: chrono::DateTime::<chrono::Utc>::default(),
+        },
+        filter: EntityFilters::default(),
+    })
+    .type_erase();
+
+    let cursor = cursor
+        .replace('+', "%2B")
+        .replace('/', "%2F")
+        .replace('=', "%3D");
+    let request = authenticated_request()
+        .uri(format!("/soup?cursor={cursor}"))
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&serde_json::json!({})).unwrap(),
+        ))
+        .unwrap();
+
+    let _res = router.oneshot(request).await.unwrap();
+    let guard = inner_counter.lock().unwrap();
+    let req = guard.first().unwrap();
+    assert!(matches!(req.cursor_kind, MockCursorKind::NotifiedCursor));
+}
+
+/// Ascending notified order is rejected like frecency and touched: the
+/// branch orders by the caller's latest notification and never applies the
+/// merged sort a direction would flip.
+#[tokio::test]
+async fn ascending_notified_is_rejected() {
+    let request = authenticated_request()
+        .uri("/soup/ast")
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&json!({
+                "sort_method": "notified_at",
+                "sort_direction": "asc"
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+
+    let (status, body) = send_json(mock_router(), request).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body,
+        json!({
+            "message": "sort_direction=asc is not supported with sort_method=notified_at"
         })
     );
 }

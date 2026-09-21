@@ -1,6 +1,8 @@
 import {
   AgentContextNode,
+  AgentSessionMentionNode,
   AwaitNode,
+  ConnectAppNode,
   ContactMentionNode,
   DateMentionNode,
   DiffInsertNode,
@@ -28,7 +30,9 @@ import {
   setDecorator,
 } from '@macro-inc/lexical-core/decoratorRegistry';
 import { AgentContext } from './component/decorator/AgentContext';
+import { AgentSessionMention } from './component/decorator/AgentSessionMention';
 import { Await } from './component/decorator/Await';
+import { ConnectApp } from './component/decorator/ConnectApp';
 import { ContactMention } from './component/decorator/ContactMention';
 import { DateMention } from './component/decorator/DateMention';
 import { DiffInsert } from './component/decorator/DiffInsert';
@@ -65,6 +69,7 @@ export function initializeLexical() {
   setDecorator(DocumentCardNode, DocumentCard);
   setDecorator(PasteNodeClass, PasteNode);
   setDecorator(PullRequestMentionNode, PullRequestMention);
+  setDecorator(AgentSessionMentionNode, AgentSessionMention);
   setDecorator(ReplyTargetNode, ReplyTarget);
   setDecorator(ContactMentionNode, ContactMention);
   setDecorator(DateMentionNode, DateMention);
@@ -75,6 +80,7 @@ export function initializeLexical() {
   setDecorator(SnapshotNode, Snapshot);
   setDecorator(HtmlRenderNode, HtmlRender);
   setDecorator(ThemeMentionNode, ThemeMention);
+  setDecorator(ConnectAppNode, ConnectApp);
   setDecorator(TagMentionNode, TagMention);
   setDecorator(UnknownMentionNode, UnknownMention);
   setDecorator(WatermarkNode, Watermark);

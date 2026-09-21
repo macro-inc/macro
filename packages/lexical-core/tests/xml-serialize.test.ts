@@ -12,6 +12,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import { NodeReplacements, SupportedNodeTypes } from '../node-list';
 import { $createCustomCodeNode } from '../nodes/CustomCodeNode';
+import { $createDocumentMentionNode } from '../nodes/DocumentMentionNode';
 import { $createEquationNode } from '../nodes/EquationNode';
 import { $createHtmlRenderNode } from '../nodes/HtmlRenderNode';
 import { $createImageNode } from '../nodes/ImageNode';
@@ -296,6 +297,30 @@ describe('xml serialization', () => {
       <doc>
         <p>
           <user-mention userId="u_1" email="a@b.com" name="Alice"/>
+        </p>
+      </doc>"
+    `);
+  });
+
+  it('document mention keeps blockName and blockParams', () => {
+    expect(
+      serialize(() => {
+        const p = $createParagraphNode();
+        p.append(
+          $createDocumentMentionNode({
+            documentId: 'ch-1',
+            documentName: 'bugs',
+            blockName: 'channel',
+            blockParams: { channel_message_id: 'msg-1' },
+          })
+        );
+        $getRoot().append(p);
+      })
+    ).toMatchInlineSnapshot(`
+      "
+      <doc>
+        <p>
+          <document-mention documentId="ch-1" name="bugs" blockName="channel" blockParams="{&quot;channel_message_id&quot;:&quot;msg-1&quot;}"/>
         </p>
       </doc>"
     `);

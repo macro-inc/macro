@@ -6,14 +6,21 @@
 pub mod create;
 pub mod editing;
 pub mod markdown;
+pub mod mentions;
+pub mod sync;
 
 use std::future::Future;
 
 use entity_access::domain::models::{
-    EditAccessLevel, EntityAccessReceipt, MemberTeamRole, OwnerAccessLevel, ViewAccessLevel,
+    AccessError, BotAccessScope, EditAccessLevel, EntityAccessReceipt, EntityType, MemberTeamRole,
+    OwnerAccessLevel, ViewAccessLevel,
 };
+use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{ContentType, DocumentBasic, DocumentMetadata, FileType};
+use models_permissions::share_permission::team_share::{
+    AuthorizedTeamShareCommand, TeamShareFacts,
+};
 use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
 
 use super::content::DocumentContent;
@@ -25,6 +32,8 @@ use super::response::{
 use model::sync_service::SyncServiceVersionID;
 
 use model_entity::Entity;
+
+use activity::Attribution;
 
 use super::models::{
     BranchNameContext, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
@@ -133,23 +142,27 @@ pub trait DocumentRepo: Send + Sync + 'static {
     /// Always inserts a `Document` row. Email-attachment linking and SHA reuse
     /// belong on [`DocumentRepo::import_email_attachment_document`].
     ///
-    /// `share_permission` is the pre-resolved initial share permission — the
+    /// `share_permission` is the pre-resolved initial link permission — the
     /// repository persists it verbatim and carries no share-policy of its own.
+    /// Canonical team state starts NULL; `args.share_with_team` initializes explicit
+    /// task consent from the persisted owner's team inside the same transaction and
+    /// fails with `BadRequest` when that owner has no team.
     fn create_document(
         &self,
         args: CreateDocumentRepoArgs,
         share_permission: SharePermissionV2,
-    ) -> impl Future<Output = Result<DocumentMetadata, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<DocumentMetadata, DocumentError>> + Send;
 
     /// Import an email attachment: link it to a reusable live email document
     /// owned by the same user (matching latest-instance sha), or insert a new
     /// document and link it. Concurrent first-time creates for the same
     /// `(owner, sha)` are serialized so two imports cannot insert duplicates.
+    /// Imports never initialize team consent.
     fn import_email_attachment_document(
         &self,
         args: ImportEmailAttachmentRepoArgs,
         share_permission: SharePermissionV2,
-    ) -> impl Future<Output = Result<EmailImportRepoOutcome, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<EmailImportRepoOutcome, DocumentError>> + Send;
 
     /// Get the link-share preference of the user's team, or `None` when the
     /// user is not on a team.
@@ -171,7 +184,7 @@ pub trait DocumentRepo: Send + Sync + 'static {
     fn edit_document(
         &self,
         args: EditDocumentRepoArgs,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 
     /// Update a document's `updatedAt` timestamp.
     fn update_document_modified(
@@ -223,25 +236,26 @@ pub trait DocumentRepo: Send + Sync + 'static {
         task_short_id: &str,
     ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
 
-    /// Share a document with the given team.
-    fn share_with_team(
+    /// Load persisted ownership, membership and explicit sharing facts for policy.
+    ///
+    /// A document whose canonical state is still NULL but whose owner's team holds a
+    /// legacy direct grant is adopted first, so the facts describe that grant.
+    fn get_team_share_facts(
         &self,
-        team_id: &uuid::Uuid,
         document_id: &str,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<TeamShareFacts, DocumentError>> + Send;
 
-    /// Get the team-share state of a document, resolved against the owner's team.
+    /// Get explicit team-share state, never inferred from inherited grants.
     fn get_team_share(
         &self,
         document_id: &str,
-    ) -> impl Future<Output = Result<DocumentTeamShare, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<DocumentTeamShare, DocumentError>> + Send;
 
-    /// Grant or revoke the document owner's team's access on the document.
+    /// Apply an owner-authorized update after rechecking its facts atomically.
     fn set_team_share(
         &self,
-        document_id: &str,
-        share: bool,
-    ) -> impl Future<Output = Result<DocumentTeamShare, Self::Err>> + Send;
+        command: AuthorizedTeamShareCommand,
+    ) -> impl Future<Output = Result<DocumentTeamShare, DocumentError>> + Send;
 
     /// Get document metadata at a specific version ID.
     fn get_document_metadata_at_version(
@@ -350,6 +364,7 @@ pub trait TaskPropertiesPort: Send + Sync + 'static {
         entity_id: &str,
         property_definition_id: uuid::Uuid,
         value: Option<models_properties::api::requests::SetPropertyValue>,
+        attribution: &Attribution,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Copy all task property values from one task to another.
@@ -360,7 +375,36 @@ pub trait TaskPropertiesPort: Send + Sync + 'static {
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
-/// Use case for relaying document content-upload events.
+/// Mint the edit receipt a [`TaskPropertiesPort`] adapter writes task
+/// properties with.
+///
+/// A bot creating the task for a user gets a bot receipt scoped to that user,
+/// so the property write publishes the same delegated attribution as the
+/// document itself. Every other attribution writes as `user_id`.
+pub async fn task_property_edit_receipt<A: EntityAccessService>(
+    entity_access: &A,
+    user_id: &MacroUserIdStr<'_>,
+    attribution: &Attribution,
+    task_id: &str,
+) -> Result<EntityAccessReceipt<EditAccessLevel>, AccessError> {
+    if let Attribution::Delegated { actor, subject } = attribution
+        && let Some(bot) = actor.as_bot()
+    {
+        return entity_access
+            .generate_bot_entity_access_receipt(
+                bot.bot_id(),
+                BotAccessScope::user(subject.clone()),
+                task_id,
+                EntityType::Document,
+            )
+            .await;
+    }
+    entity_access
+        .generate_entity_access_receipt(user_id, None, task_id, EntityType::Document)
+        .await
+}
+
+/// Use cases for relaying document content-change events.
 pub trait DocumentContentEventService: Send + Sync + 'static {
     /// Load the document owner and publish a content-uploaded event.
     fn publish_content_uploaded(
@@ -368,6 +412,15 @@ pub trait DocumentContentEventService: Send + Sync + 'static {
         document_id: &str,
         file_type: FileType,
         document_version_id: Option<String>,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+
+    /// Resolve the stored file type and publish a sync-content event. Sync callers
+    /// supply document identity and attribution without interpreting the content.
+    fn publish_sync_content_updated(
+        &self,
+        document_id: &str,
+        actor: Option<String>,
+        on_behalf_of: Option<String>,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 }
 
@@ -513,6 +566,7 @@ pub trait DocumentService: Send + Sync + 'static {
         user_id: MacroUserIdStr<'static>,
         document_id: &str,
         request: &CreateTaskRequest,
+        attribution: &Attribution,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 
     /// Returns the raw bytes of the cached Loro snapshot, or `None` if no snapshot exists.

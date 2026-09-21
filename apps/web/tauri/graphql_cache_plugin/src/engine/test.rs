@@ -1,6 +1,8 @@
 use super::*;
 use pollster::block_on;
 
+mod soup;
+
 const QUERY: &str = r#"query Soup($input: SoupInput!) {
     user { id soup(input: $input) { nextCursor items { __typename id } } }
 }"#;
@@ -134,6 +136,27 @@ fn write_then_read_round_trips() {
         panic!("expected hit");
     };
     assert_eq!(data, soup_data(false));
+}
+
+#[test]
+fn identical_hydration_does_not_advance_the_native_revision() {
+    let handle = spawn_handle();
+    let hydrate = || {
+        block_on(handle.hydrate_query(
+            HYDRATION_QUERY.to_string(),
+            Some("Soup".to_string()),
+            variables(),
+            soup_data(true),
+            None,
+        ))
+        .unwrap()
+        .write_result
+    };
+    let first = hydrate();
+    let duplicate = hydrate();
+    assert!(first.revision_advanced);
+    assert!(!duplicate.revision_advanced);
+    assert_eq!(first.revision, duplicate.revision);
 }
 
 #[test]

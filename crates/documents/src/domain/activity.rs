@@ -13,6 +13,30 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use super::events::DocumentTopicEvent;
+use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::Owner;
+
+fn actor_from_owner(owner: &Owner) -> Option<Actor<'static>> {
+    match owner {
+        Owner::User(user) => Some(Actor::new_from_user(user.clone())),
+        Owner::Bot(bot_id) => Some(Actor::new_from_bot(*bot_id)),
+        Owner::Team(_) => None,
+    }
+}
+
+/// Attribution for `updated` / `deleted` events. Bot receipts publish `actor`;
+/// user receipts (and events from before attribution) only `actor_user_id`.
+/// `None` when neither is set, e.g. internal callers.
+fn mutation_attribution(
+    actor: &Option<Actor<'static>>,
+    actor_user_id: &Option<MacroUserIdStr<'static>>,
+    on_behalf_of: &Option<MacroUserIdStr<'static>>,
+) -> Option<Attribution> {
+    let actor = actor
+        .clone()
+        .or_else(|| actor_user_id.clone().map(Actor::new_from_user))?;
+    Some(Attribution::new(actor, on_behalf_of.clone()))
+}
 
 impl ActivitySource for DocumentTopicEvent {
     /// Maps one `macro.documents` event to its ingest outcome.
@@ -37,54 +61,76 @@ impl ActivitySource for DocumentTopicEvent {
 
         match self {
             DocumentTopicEvent::Created(metadata) => {
-                let actor = metadata
+                match metadata
                     .actor
                     .clone()
-                    .unwrap_or_else(|| Actor::new_from_user(metadata.owner.clone()));
-                let attribution = match metadata.on_behalf_of.clone() {
-                    Some(subject) => Attribution::delegated(actor, subject),
-                    None => Attribution::direct(actor),
-                };
-                single(
-                    attribution,
+                    .or_else(|| actor_from_owner(&metadata.owner))
+                {
+                    Some(actor) => single(
+                        Attribution::new(actor, metadata.on_behalf_of.clone()),
+                        CommonAction::Created,
+                        &metadata.document_id,
+                        metadata.created_at.unwrap_or_else(|| event_time(event_id)),
+                    ),
+                    None => Ingest::Ignore,
+                }
+            }
+            DocumentTopicEvent::Updated(metadata) => {
+                match mutation_attribution(
+                    &metadata.actor,
+                    &metadata.actor_user_id,
+                    &metadata.on_behalf_of,
+                ) {
+                    Some(attribution) => single(
+                        attribution,
+                        CommonAction::Edited,
+                        &metadata.document_id,
+                        event_time(event_id),
+                    ),
+                    None => Ingest::Ignore,
+                }
+            }
+            DocumentTopicEvent::Deleted(metadata) => {
+                match mutation_attribution(
+                    &metadata.actor,
+                    &metadata.actor_user_id,
+                    &metadata.on_behalf_of,
+                ) {
+                    Some(attribution) => single(
+                        attribution,
+                        CommonAction::Deleted,
+                        &metadata.document_id,
+                        event_time(event_id),
+                    ),
+                    None => Ingest::Ignore,
+                }
+            }
+            // The copy is a new document; its creation is the activity.
+            DocumentTopicEvent::Copied(metadata) => match actor_from_owner(&metadata.owner) {
+                Some(actor) => single(
+                    Attribution::direct(actor),
                     CommonAction::Created,
                     &metadata.document_id,
-                    metadata.created_at.unwrap_or_else(|| event_time(event_id)),
-                )
+                    event_time(event_id),
+                ),
+                None => Ingest::Ignore,
+            },
+            DocumentTopicEvent::Purged(metadata) => {
+                Ingest::Purge(vec![(EntityType::Document, metadata.document_id.clone())])
             }
-            DocumentTopicEvent::Updated(metadata) => match &metadata.actor_user_id {
+            // Extraction-pipeline noise, not user activity.
+            DocumentTopicEvent::ContentUploaded(_) => Ingest::Ignore,
+            // Only AI-attributed sessions carry an actor; human-only collab
+            // sessions stay unattributed.
+            DocumentTopicEvent::SyncContentUpdated(metadata) => match metadata.actor.clone() {
                 Some(actor) => single(
-                    Attribution::direct(Actor::new_from_user(actor.clone())),
+                    Attribution::new(actor, metadata.on_behalf_of.clone()),
                     CommonAction::Edited,
                     &metadata.document_id,
                     event_time(event_id),
                 ),
                 None => Ingest::Ignore,
             },
-            DocumentTopicEvent::Deleted(metadata) => match &metadata.actor_user_id {
-                Some(actor) => single(
-                    Attribution::direct(Actor::new_from_user(actor.clone())),
-                    CommonAction::Deleted,
-                    &metadata.document_id,
-                    event_time(event_id),
-                ),
-                None => Ingest::Ignore,
-            },
-            // The copy is a new document; its creation is the activity.
-            DocumentTopicEvent::Copied(metadata) => single(
-                Attribution::direct(Actor::new_from_user(metadata.owner.clone())),
-                CommonAction::Created,
-                &metadata.document_id,
-                event_time(event_id),
-            ),
-            DocumentTopicEvent::Purged(metadata) => {
-                Ingest::Purge(vec![(EntityType::Document, metadata.document_id.clone())])
-            }
-            // Extraction-pipeline noise, not user activity.
-            DocumentTopicEvent::ContentUploaded(_) => Ingest::Ignore,
-            // Carries no actor today; becomes an Edited activity once collab
-            // edits are attributed.
-            DocumentTopicEvent::SyncContentUpdated(_) => Ingest::Ignore,
             // Session lifecycle (first join / last leave), no actor.
             DocumentTopicEvent::Interaction(_) => Ingest::Ignore,
         }

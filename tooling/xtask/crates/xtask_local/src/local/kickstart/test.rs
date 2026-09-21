@@ -42,6 +42,7 @@ fn kickstart_without_google_has_no_idp_requests() {
     let doc = build(
         3000,
         8080,
+        8085,
         "function populate() {}",
         "function reconcile() {}",
         None,
@@ -68,6 +69,7 @@ fn kickstart_with_google_adds_lambda_and_both_idps_after_the_application() {
     let doc = build(
         3000,
         8080,
+        8085,
         "function populate() {}",
         "function reconcile() {}",
         Some(&google),
@@ -119,6 +121,7 @@ fn kickstart_adopts_the_default_tenant() {
     let doc = build(
         3000,
         8080,
+        8085,
         "function populate() {}",
         "function reconcile() {}",
         None,
@@ -198,6 +201,7 @@ fn the_github_idp_id_follows_the_env_the_service_reads() {
     let doc = build(
         3000,
         8080,
+        8085,
         "function populate() {}",
         "function reconcile() {}",
         None,
@@ -226,6 +230,7 @@ fn the_github_idp_is_created_under_both_the_name_and_the_id_the_service_uses() {
     let doc = build(
         3000,
         8080,
+        8085,
         "function populate() {}",
         "function reconcile() {}",
         None,
@@ -263,6 +268,7 @@ fn kickstart_without_github_creates_no_github_idp() {
     let doc = build(
         3000,
         8080,
+        8085,
         "function populate() {}",
         "function reconcile() {}",
         None,
@@ -277,5 +283,58 @@ fn kickstart_without_github_creates_no_github_idp() {
             .any(|request| request["url"]
                 .as_str()
                 .is_some_and(|url| url.contains(identity::GITHUB_IDP_ID)))
+    );
+}
+
+fn authorized_redirects(
+    frontend_port: u16,
+    auth_port: u16,
+    doc_cognition_port: u16,
+) -> Vec<String> {
+    let doc = build(
+        frontend_port,
+        auth_port,
+        doc_cognition_port,
+        "function populate() {}",
+        "function reconcile() {}",
+        None,
+        None,
+    );
+    doc["requests"]
+        .as_array()
+        .expect("requests")
+        .iter()
+        .find(|request| {
+            request["url"].as_str()
+                == Some(&format!("/api/application/{}", identity::APPLICATION_ID))
+        })
+        .expect("application request")["body"]["application"]["oauthConfiguration"]
+        ["authorizedRedirectURLs"]
+        .as_array()
+        .expect("authorizedRedirectURLs")
+        .iter()
+        .filter_map(|url| url.as_str().map(ToOwned::to_owned))
+        .collect()
+}
+
+/// The DCS MCP-connector callback is an instance host port. Hardcoding 8085
+/// leaves a named `--port-base` stack authorizing a port nothing binds.
+#[test]
+fn dcs_oauth_redirect_follows_the_instance_port() {
+    let default = authorized_redirects(3000, 8080, 8085);
+    assert!(
+        default.contains(&"http://localhost:8085/oauth/redirect".to_string()),
+        "default instance keeps the historical DCS callback: {default:?}"
+    );
+
+    // `--instance macro-dev --port-base 31000` publishes DCS on 31014.
+    let named = authorized_redirects(31010, 31011, 31014);
+    assert!(
+        named.contains(&"http://localhost:31014/oauth/redirect".to_string()),
+        "named instance must authorize the derived DCS port: {named:?}"
+    );
+    assert!(
+        !named.iter().any(|url| url.contains("localhost:8085")),
+        "named instance must not keep the default DCS callback: {named:?}"
     );
 }

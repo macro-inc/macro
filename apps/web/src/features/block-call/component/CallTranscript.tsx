@@ -1,10 +1,10 @@
 import { Message } from '@channel/Message';
 import { Thread } from '@channel/Thread/Thread';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
+import type { MessageData } from '@core/messages/types';
 import { formatVideoTimestamp } from '@core/util/duration';
 import Subtitles from '@phosphor/subtitles.svg';
-import { senderFromStorageId } from '@queries/channel/message-sender';
-import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
+import { senderFromStorageId } from '@queries/messages/message-sender';
 import type { CallRecordTranscriptSegment } from '@service-storage/generated/schemas/callRecordTranscriptSegment';
 import {
   createEffect,
@@ -48,11 +48,16 @@ function shouldGroupWithPrevious(
 
 function segmentToApiChannelMessage(
   s: CallRecordTranscriptSegment,
-  channelId: string
-): ApiChannelMessage {
+  _channelId: string
+): MessageData & {
+  thread: {
+    reply_count: number;
+    latest_reply_at?: string | null;
+    preview: MessageData[];
+  };
+} {
   return {
     id: s.segmentId ?? `transcript-${s.sequenceNum}`,
-    channel_id: channelId,
     content: s.content,
     sender: senderFromStorageId(s.speakerId),
     sender_id: s.speakerId,

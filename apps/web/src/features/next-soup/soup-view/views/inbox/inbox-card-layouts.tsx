@@ -7,8 +7,7 @@ import { EntityIcon, getEntityIconType } from '@core/component/EntityIcon';
 import { ItemPreview } from '@core/component/ItemPreview';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import {
-  createTheme,
-  twoLineClampMarkdownTheme,
+  inlineWrappingMarkdownTheme,
   unifiedListMarkdownTheme,
 } from '@core/component/LexicalMarkdown/theme';
 import { UserIcon } from '@core/component/UserIcon';
@@ -22,9 +21,11 @@ import {
   type EntityData,
   isGithubPrEntity,
   type Notification,
+  UnreadIndicator,
   unreadFilterFn,
   type WithNotification,
 } from '@entity';
+import { formatCompactRelativeTimestamp } from '@entity/utils/timestamp';
 import MacroLogo from '@icon/macro-logo.svg';
 import GithubIcon from '@icon/mcp-github.svg';
 import { formatCalendarReminderTime } from '@notifications';
@@ -39,13 +40,15 @@ import ChatCircleIcon from '@phosphor-icons/core/regular/chat-circle.svg?compone
 import ChatTextIcon from '@phosphor-icons/core/regular/chat-text.svg?component-solid';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import PhoneIcon from '@phosphor-icons/core/regular/phone.svg?component-solid';
+import QuestionIcon from '@phosphor-icons/core/regular/question.svg?component-solid';
+import AgentIcon from '@phosphor-icons/core/regular/sparkle.svg?component-solid';
 import UserPlusIcon from '@phosphor-icons/core/regular/user-plus.svg?component-solid';
 import {
   PropertiesProvider,
   type PropertySaveHandler,
 } from '@property/context/PropertiesContext';
 import type { PropertyApiValues, Property as PropertyT } from '@property/types';
-import { senderFromStorageId } from '@queries/channel/message-sender';
+import { senderFromStorageId } from '@queries/messages/message-sender';
 import type { ItemEntity } from '@queries/preview';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-storage/generated/schemas';
@@ -56,7 +59,6 @@ import { Dynamic } from 'solid-js/web';
 import { match, P } from 'ts-pattern';
 import { InboxCard } from './InboxCard';
 import {
-  formatCompactRelativeTimestamp,
   getGithubTitle,
   getInboxTaskProperties,
   getNotificationTag,
@@ -73,6 +75,8 @@ export interface InboxCardLayoutProps {
   onClick?: (event: MouseEvent) => void;
   /** Set false when a parent list owns keyboard focus and activation. */
   focusable?: boolean;
+  /** Render unread state beside the title instead of in a row gutter. */
+  showUnreadIndicator?: boolean;
 }
 
 /** Glyph size inside the card's avatar bubble — grows with the circle on
@@ -119,7 +123,13 @@ const getNotificationSenderFallbackName = (
   notification: Notification
 ): string | undefined => {
   const content = notification.notification_metadata.content as
-    | { sender?: string; senderGithubLogin?: string }
+    | {
+        sender?: string;
+        senderDisplayName?: string | null;
+        senderGithubLogin?: string;
+        botName?: string;
+        mentionedBy?: string;
+      }
     | undefined;
 
   switch (notification.notification_metadata.tag) {
@@ -127,8 +137,17 @@ const getNotificationSenderFallbackName = (
       return content?.sender ?? undefined;
     case 'ai_response':
       return 'Macro agent';
+    case 'agent_session_settled':
+    case 'agent_session_waiting_for_input':
+      return content?.botName;
+    case 'agent_session_mentioned':
+      return content?.mentionedBy ?? content?.botName;
     case 'channel_message_send':
       return content?.sender ?? notification.sender_id ?? undefined;
+    case 'commented_on_document':
+    case 'mentioned_in_document_comment':
+    case 'replied_to_document_comment_thread':
+      return content?.senderDisplayName ?? undefined;
     case 'github_pr_status_changed':
     case 'github_review_requested':
     case 'github_pr_comment':
@@ -271,6 +290,15 @@ const tagBubbleIcon = (tag: NotificationTag) =>
       <UserPlusIcon class={AVATAR_GLYPH_CLASS} />
     ))
     .with('call_started', () => () => <PhoneIcon class={AVATAR_GLYPH_CLASS} />)
+    .with('agent_session_settled', () => () => (
+      <AgentIcon class={AVATAR_GLYPH_CLASS} />
+    ))
+    .with('agent_session_waiting_for_input', () => () => (
+      <QuestionIcon class={AVATAR_GLYPH_CLASS} />
+    ))
+    .with('agent_session_mentioned', () => () => (
+      <AtIcon class={AVATAR_GLYPH_CLASS} />
+    ))
     .with('reminder', () => () => <BellSimpleIcon class={AVATAR_GLYPH_CLASS} />)
     .with('calendar_event_reminder', () => () => (
       <CalendarBlankIcon class={AVATAR_GLYPH_CLASS} />
@@ -516,6 +544,7 @@ function BaseCard(props: {
   highlighted?: boolean;
   onClick?: (event: MouseEvent) => void;
   focusable?: boolean;
+  showUnreadIndicator?: boolean;
   /** Contents of the avatar bubble (glyph or avatar); the circle is ours. */
   icon: JSX.Element;
   /**
@@ -542,6 +571,9 @@ function BaseCard(props: {
       </div>
       <InboxCard.Body class="contents">
         <InboxCard.Header class="col-start-2 row-start-1 self-center">
+          <Show when={props.showUnreadIndicator && props.item.unread}>
+            <UnreadIndicator active class="mobile:hidden" />
+          </Show>
           <InboxCard.Title class="flex items-center gap-1">
             {props.titleLeading}
             {/* A flex row can't ellipsize bare text, so the text run always
@@ -581,14 +613,6 @@ function CardMarkdownLine(props: { text?: string; class?: string }) {
     </Show>
   );
 }
-
-const inlineWrappingMarkdownTheme = createTheme(
-  {
-    root: 'md inline pr-[2px] cursor-default',
-    paragraph: 'md-p text-[1em] inline',
-  },
-  twoLineClampMarkdownTheme
-);
 
 /**
  * The two-line clamped markdown body (the channel-style message preview),
@@ -800,6 +824,7 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
 
   const senderName = createSenderDisplayName(senderId);
   const currentUserId = useUserId();
+
   const senderLabel = () =>
     senderId() === currentUserId() ? 'You' : senderName();
 
@@ -889,6 +914,9 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
       <InboxCard.Body class="contents">
         <div class={cn('col-start-2 row-start-2')}>
           <InboxCard.Header class="self-center">
+            <Show when={props.showUnreadIndicator && props.item.unread}>
+              <UnreadIndicator active class="mobile:hidden" />
+            </Show>
             <InboxCard.Title class="flex items-center gap-1">
               <span class="truncate">{text().title}</span>
             </InboxCard.Title>
@@ -1136,6 +1164,76 @@ export function AiCardLayout(props: InboxCardLayoutProps) {
       title={text().title}
     >
       <CardClampedMarkdown text={text().content} />
+    </BaseCard>
+  );
+}
+
+/**
+ * An agent session the user was notified about: it finished, it is asking
+ * them something, or a prompt named them. The row is the session - title,
+ * agent icon, click opens it - and the body is what the agent said or
+ * asked, attributed to the bot (or to whoever wrote the mentioning prompt).
+ */
+export function AgentSessionCardLayout(props: InboxCardLayoutProps) {
+  const meta = () => {
+    const meta = props.item.notification?.notification_metadata;
+    return meta?.tag === 'agent_session_settled' ||
+      meta?.tag === 'agent_session_waiting_for_input' ||
+      meta?.tag === 'agent_session_mentioned'
+      ? meta
+      : undefined;
+  };
+  const mentionedBy = () => {
+    const current = meta();
+    return current?.tag === 'agent_session_mentioned'
+      ? (current.content.mentionedBy ?? undefined)
+      : undefined;
+  };
+  const mentionedByName = createSenderDisplayName(mentionedBy);
+  const currentUserId = useUserId();
+  const senderLabel = () => {
+    const current = meta();
+    if (!current) return undefined;
+    if (mentionedBy()) {
+      return mentionedBy() === currentUserId() ? 'You' : mentionedByName();
+    }
+    return current.content.botName;
+  };
+  const content = () => itemContent(props.item.entity, props.item.notification);
+
+  return (
+    <BaseCard
+      {...props}
+      icon={
+        <Show
+          when={props.item.notification}
+          fallback={
+            <EntityIcon
+              class={AVATAR_GLYPH_CLASS}
+              targetType={getEntityIconType(props.item.entity)}
+              size="fill"
+            />
+          }
+        >
+          <ActionBubble tag={getNotificationTag(props.item.notification)} />
+        </Show>
+      }
+      title={props.item.entity.name}
+    >
+      <InboxCard.Content class="text-sm text-ink/60 line-clamp-2">
+        <Show when={senderLabel()}>
+          {(label) => <span class="mr-1 whitespace-nowrap">{label()}:</span>}
+        </Show>
+        <Show when={content()?.trim()}>
+          {(text) => (
+            <StaticMarkdown
+              markdown={text()}
+              singleLine
+              theme={unifiedListMarkdownTheme}
+            />
+          )}
+        </Show>
+      </InboxCard.Content>
     </BaseCard>
   );
 }
@@ -1604,6 +1702,9 @@ export function InboxCardLayout(props: InboxCardLayoutProps) {
       </Match>
       <Match when={props.item.entity.type === 'channel_thread'}>
         <ChannelThreadCardLayout {...props} />
+      </Match>
+      <Match when={props.item.entity.type === 'agent_session'}>
+        <AgentSessionCardLayout {...props} />
       </Match>
       <Match when={props.item.entity.type === 'reminder'}>
         <ReminderCardLayout {...props} />

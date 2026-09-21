@@ -1,12 +1,12 @@
 //! The daemon's one input: a TOML file describing the Macro deployment it
-//! streams from and the harness it runs per session. See
+//! streams from and the harness it runs. See
 //! `config.example.toml` at the crate root.
 //!
-//! Deliberately credential-free: identity comes from pairing (press `p` in
-//! the control panel), which persists the harness credential in a state file
-//! next to this config.
+//! Pairing (press `p` in the control panel) adds the harness credential to
+//! this file. Treat it as sensitive because that credential is a bearer token.
 
-use serde::Deserialize;
+use harness_id::HarnessId;
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 #[cfg(test)]
@@ -22,15 +22,52 @@ pub struct Config {
     /// How this daemon introduces itself when pairing.
     #[serde(default)]
     pub identity: Identity,
+    /// The approved harness credential, absent until pairing completes.
+    #[serde(default)]
+    pub credentials: Option<HarnessCredentials>,
     /// Unused: kept so existing configs that still declare a webhook listener
     /// continue to parse. The daemon listens over SSE and no longer serves HTTP.
     #[serde(default)]
     #[expect(dead_code, reason = "accepted only so existing configs still parse")]
     server: Option<LegacyServer>,
-    /// The harness process spawned per session.
+    /// The harness process shared by every session.
     pub harness: Harness,
     /// The workspace every session runs against.
     pub workspace: Workspace,
+}
+
+/// Whether the approved harness is private to its owner or shared with a team.
+///
+/// This can differ from [`Identity::scope`], which remains the requested scope
+/// for the next pairing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HarnessScope {
+    /// Owned by one user.
+    User,
+    /// Owned by a team.
+    Team,
+}
+
+/// The credential pairing minted for this daemon.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HarnessCredentials {
+    /// The registered harness this daemon serves.
+    pub harness_id: HarnessId,
+    /// The bearer token (`mhns_...`).
+    pub token: String,
+    /// The approved harness ownership scope.
+    pub scope: HarnessScope,
+}
+
+impl HarnessCredentials {
+    /// Whether this credential has the expected non-empty bearer-token shape.
+    pub fn is_valid(&self) -> bool {
+        self.token
+            .strip_prefix("mhns_")
+            .is_some_and(|secret| !secret.is_empty())
+    }
 }
 
 /// The Macro deployment this harness's sessions live in.
@@ -50,7 +87,7 @@ pub struct MacroApi {
 }
 
 impl MacroApi {
-    /// The dial-in URL for a session on this deployment's runtime gateway:
+    /// The dial-in URL for this deployment's runtime gateway:
     /// the API base with a websocket scheme.
     pub fn gateway_url(&self) -> String {
         let base = self.api_url.trim_end_matches('/');
@@ -71,6 +108,9 @@ impl MacroApi {
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Identity {
+    /// Whether the next pairing may enable permission bypass. Requires web approval.
+    #[serde(default)]
+    pub allow_permission_bypass: bool,
     /// Requested harness display name; the approving user may rename it.
     /// Defaults to this machine's hostname.
     #[serde(default)]
@@ -108,7 +148,7 @@ struct LegacyServer {
     signing_secret: Option<String>,
 }
 
-/// The harness process spawned per session. Generic on purpose: any binary
+/// The harness process shared by every session. Generic on purpose: any binary
 /// speaking ACP over stdio fits here - opencode, claude, hermes - so a new
 /// harness is a config change, not code.
 #[derive(Debug, Clone, Deserialize)]

@@ -36,10 +36,12 @@ where
     ) -> Result<(), PropertiesErr> {
         let user_id = match access.auth() {
             EntityAccessAuth::Internal => return Ok(()),
-            EntityAccessAuth::Authenticated(user_id) => user_id,
-            EntityAccessAuth::Bot(_) | EntityAccessAuth::Unauthenticated => {
+            EntityAccessAuth::Unauthenticated => {
                 return Err(PropertiesErr::PermissionDenied);
             }
+            EntityAccessAuth::Authenticated(_) | EntityAccessAuth::Bot(_) => access
+                .acting_user_id()
+                .ok_or(PropertiesErr::PermissionDenied)?,
         };
         if referenced_task_ids.is_empty() {
             return Ok(());

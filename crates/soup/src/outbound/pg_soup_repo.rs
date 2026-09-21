@@ -1,9 +1,9 @@
 use crate::{
     domain::{
         models::{
-            AdvancedSortParams, GroupedSortRequest, SimpleSortQuery, SimpleSortRequest,
-            SoupProjectionHydration, SoupPropertiesField, TouchedEntity, TouchedSoupRequest,
-            grouping::ItemGroupingInfo,
+            AdvancedSortParams, GroupedSortRequest, NotifiedEntity, NotifiedSoupRequest,
+            SimpleSortQuery, SimpleSortRequest, SoupProjectionHydration, SoupPropertiesField,
+            TouchedEntity, TouchedSoupRequest, grouping::ItemGroupingInfo,
         },
         ports::SoupRepo,
     },
@@ -11,6 +11,7 @@ use crate::{
         ExpandedDynamicCursorArgs, GroupedDynamicCursorArgs,
     },
 };
+use item_filters::ast::EntityFilterAst;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Identify, SortOn};
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
@@ -18,9 +19,12 @@ use models_soup::{SoupProperty, item::SoupItem};
 use readonly_pool::ReadOnlyPool;
 use system_properties::SystemPropertyKey;
 
+mod agent_session;
 mod calendar_event;
+mod candidate_gates;
 mod expanded;
 pub mod grouping;
+mod notified;
 mod touched;
 mod unexpanded;
 
@@ -85,27 +89,51 @@ impl SoupRepo for PgSoupRepo {
                 )
                 .await?
             }
+            // The unfiltered arms route through the same dynamic builder as
+            // the filtered ones. An empty `EntityFilterAst` folds to no
+            // predicates and keeps all three entity arms, so the SQL is
+            // semantically identical to the hand-written queries this
+            // replaced — but it gets their shape: a lightweight `TopItems`
+            // stage that applies the cursor and LIMIT before any detail join,
+            // a flattenable per-arm `entity_access` semi-join instead of a
+            // materialised whole-corpus CTE, and a sort expression fixed at
+            // build time so the ORDER BY can be served by an index.
             SimpleSortQuery::FilterFrecency(f) => {
-                expanded::by_cursor::no_frecency_expanded_generic_soup_with_projection(
+                expanded::dynamic::expanded_dynamic_cursor_soup_with_projection(
                     &self.pool.0,
-                    req.user_id,
-                    req.limit,
-                    f,
+                    ExpandedDynamicCursorArgs {
+                        user_id: req.user_id,
+                        limit: req.limit,
+                        cursor: f.map_filter(|_| EntityFilterAst::default()),
+                        exclude_frecency: true,
+                    },
                 )
                 .await?
             }
             SimpleSortQuery::NoFilter(f) => {
-                expanded::by_cursor::expanded_generic_cursor_soup_with_projection(
+                expanded::dynamic::expanded_dynamic_cursor_soup_with_projection(
                     &self.pool.0,
-                    req.user_id,
-                    req.limit,
-                    f,
+                    ExpandedDynamicCursorArgs {
+                        user_id: req.user_id,
+                        limit: req.limit,
+                        cursor: f.map_filter(|_| EntityFilterAst::default()),
+                        exclude_frecency: false,
+                    },
                 )
                 .await?
             }
         };
         items.extend(
-            calendar_event::cursor_soup(&self.pool.0, calendar_req)
+            calendar_event::cursor_soup(&self.pool.0, calendar_req.clone())
+                .await?
+                .into_iter()
+                .map(|item| SoupProjectionHydration {
+                    item,
+                    document_server_facts: None,
+                }),
+        );
+        items.extend(
+            agent_session::cursor_soup(&self.pool.0, calendar_req)
                 .await?
                 .into_iter()
                 .map(|item| SoupProjectionHydration {
@@ -127,14 +155,22 @@ impl SoupRepo for PgSoupRepo {
         let mut items = match req.cursor {
             SimpleSortQuery::ItemsFilter(_) => not_implemented(req).await?,
             SimpleSortQuery::ItemsAndFrecencyFilter(_) => not_implemented(req).await?,
+            // Same substitution as the expanded path above; this arm has
+            // always answered with the expanded query.
             SimpleSortQuery::FilterFrecency(f) => {
-                expanded::by_cursor::no_frecency_expanded_generic_soup(
+                expanded::dynamic::expanded_dynamic_cursor_soup_with_projection(
                     &self.pool.0,
-                    req.user_id,
-                    req.limit,
-                    f,
+                    ExpandedDynamicCursorArgs {
+                        user_id: req.user_id,
+                        limit: req.limit,
+                        cursor: f.map_filter(|_| EntityFilterAst::default()),
+                        exclude_frecency: true,
+                    },
                 )
                 .await?
+                .into_iter()
+                .map(|hydration| hydration.item)
+                .collect()
             }
             SimpleSortQuery::NoFilter(f) => {
                 unexpanded::by_cursor::unexpanded_generic_cursor_soup(
@@ -146,7 +182,8 @@ impl SoupRepo for PgSoupRepo {
                 .await?
             }
         };
-        items.extend(calendar_event::cursor_soup(&self.pool.0, calendar_req).await?);
+        items.extend(calendar_event::cursor_soup(&self.pool.0, calendar_req.clone()).await?);
+        items.extend(agent_session::cursor_soup(&self.pool.0, calendar_req).await?);
         sort_and_truncate(&mut items, sort, limit);
         Ok(items)
     }
@@ -175,7 +212,16 @@ impl SoupRepo for PgSoupRepo {
         )
         .await?;
         items.extend(
-            calendar_event::by_ids(&self.pool.0, calendar_req)
+            calendar_event::by_ids(&self.pool.0, calendar_req.clone())
+                .await?
+                .into_iter()
+                .map(|item| SoupProjectionHydration {
+                    item,
+                    document_server_facts: None,
+                }),
+        );
+        items.extend(
+            agent_session::by_ids(&self.pool.0, calendar_req)
                 .await?
                 .into_iter()
                 .map(|item| SoupProjectionHydration {
@@ -194,7 +240,8 @@ impl SoupRepo for PgSoupRepo {
         let mut items =
             unexpanded::by_ids::unexpanded_soup_by_ids(&self.pool.0, req.user_id, req.entities)
                 .await?;
-        items.extend(calendar_event::by_ids(&self.pool.0, calendar_req).await?);
+        items.extend(calendar_event::by_ids(&self.pool.0, calendar_req.clone()).await?);
+        items.extend(agent_session::by_ids(&self.pool.0, calendar_req).await?);
         Ok(items)
     }
 
@@ -240,6 +287,13 @@ impl SoupRepo for PgSoupRepo {
         req: TouchedSoupRequest<'a>,
     ) -> Result<Vec<TouchedEntity>, Self::Err> {
         touched::touched_soup_page(&self.pool.0, req).await
+    }
+
+    async fn notified_soup_page<'a>(
+        &self,
+        req: NotifiedSoupRequest<'a>,
+    ) -> Result<Vec<NotifiedEntity>, Self::Err> {
+        notified::notified_soup_page(&self.pool.0, req).await
     }
 }
 
@@ -291,8 +345,9 @@ fn type_err<E: std::fmt::Display>(e: E) -> sqlx::Error {
 ///
 /// This helper collects entity references from items that support properties
 /// and performs one bulk lookup. System properties are always included, plus
-/// the caller's own and team tag properties. Tasks use `EntityType::Task` while
-/// regular documents use `EntityType::Document`.
+/// the caller's own and team tag properties and the team's CRM stage
+/// definition. Tasks use `EntityType::Task` while regular documents use
+/// `EntityType::Document`.
 #[tracing::instrument(err, skip(db, items))]
 pub(crate) async fn populate_properties(
     db: &sqlx::PgPool,
@@ -337,7 +392,8 @@ pub(crate) async fn populate_properties(
                 SoupItem::Channel(_)
                 | SoupItem::ChannelThread(_)
                 | SoupItem::ForeignEntity(_)
-                | SoupItem::Reminder(_) => None,
+                | SoupItem::Reminder(_)
+                | SoupItem::AgentSession(_) => None,
             }
             .map(|properties| properties.iter().cloned().map(SoupProperty::from).collect())
             .unwrap_or_default();
@@ -399,6 +455,7 @@ macro_rules! map_soup_type {
                 ::models_soup::chat::SoupChat {
                     id: Uuid::parse_str(&r.id).map_err(type_err)?,
                     name: r.name,
+                    model: r.model,
                     owner_id: MacroUserIdStr::parse_from_str(&r.user_id)
                         .map_err(type_err)?
                         .into_owned(),

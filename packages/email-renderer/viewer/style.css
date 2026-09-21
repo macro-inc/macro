@@ -1,0 +1,5 @@
+body { margin: 24px; font: 14px/1.5 'Inter Variable', sans-serif; }
+header { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+input[type=number] { width: 70px; }
+main { padding-top: 16px; }
+#email-host { background: inherit; }

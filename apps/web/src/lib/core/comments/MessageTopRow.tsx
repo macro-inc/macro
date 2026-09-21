@@ -69,12 +69,8 @@ function MessageRowUI(
         'mb-3': !props.hideBottomMargin,
       }}
     >
-      <div
-        class={cn(
-          'flex items-center w-full flex-row gap-2 group-hover:truncate',
-          props.isActive && 'truncate'
-        )}
-      >
+      {/* Hover must not change the height used to position margin threads. */}
+      <div class="flex min-w-0 flex-1 items-center gap-2">
         {!props.hideBubble && (
           <div
             class={cn(
@@ -91,11 +87,11 @@ function MessageRowUI(
             />
           </div>
         )}
-        <div class="text-xs touch:text-sm text-ink truncate grow">
+        <div class="min-w-0 flex-1 text-xs touch:text-sm text-ink truncate">
           {displayName()}
         </div>
         <Show when={props.date}>
-          <div class="text-xs touch:text-sm text-ink-placeholder">
+          <div class="shrink-0 whitespace-nowrap text-xs touch:text-sm text-ink-placeholder">
             {formatDate(props.date)}
           </div>
         </Show>
@@ -103,7 +99,7 @@ function MessageRowUI(
       <Show when={props.children}>
         <div
           class={cn(
-            'items-center flex self-center group-hover:opacity-100',
+            'items-center flex shrink-0 self-center group-hover:opacity-100',
             props.actionsVisible || (isMobileWidth() && props.isActive)
               ? 'opacity-100'
               : 'opacity-0'

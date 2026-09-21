@@ -34,6 +34,23 @@ fn test_build_bool_query_owner_or_delegated_link() -> anyhow::Result<()> {
 
     let must = json["bool"]["must"].as_array().expect("must array");
     assert_eq!(must.len(), 1, "one title clause per query: {must:?}");
+    // Either the canonical title or any copy's title satisfies the terms.
+    let titles = &must[0]["bool"];
+    assert_eq!(titles["minimum_should_match"], 1);
+    let fields: Vec<_> = titles["should"]
+        .as_array()
+        .expect("title should array")
+        .iter()
+        .map(|clause| {
+            clause
+                .as_object()
+                .and_then(|object| object.values().next())
+                .and_then(|inner| inner.as_object())
+                .and_then(|inner| inner.keys().next().cloned())
+                .expect("single-field title clause")
+        })
+        .collect();
+    assert_eq!(fields, ["name", "source_names"], "{titles:?}");
 
     Ok(())
 }

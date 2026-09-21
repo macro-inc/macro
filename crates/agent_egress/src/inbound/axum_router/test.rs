@@ -75,6 +75,7 @@ impl EgressService for SpyService {
                 Err(EgressError::MethodNotAllowed(method.clone()))
             }
             Some(EgressError::SessionClosed) => Err(EgressError::SessionClosed),
+            Some(EgressError::RequestTooLarge) => Err(EgressError::RequestTooLarge),
             Some(EgressError::Upstream(_)) => {
                 Err(EgressError::Upstream(rootcause::report!("unreachable")))
             }
@@ -211,6 +212,7 @@ async fn maps_each_refusal_to_the_status_that_tells_the_agent_what_to_do() {
             EgressError::Upstream(rootcause::report!("nope")),
             StatusCode::BAD_GATEWAY,
         ),
+        (EgressError::RequestTooLarge, StatusCode::PAYLOAD_TOO_LARGE),
     ] {
         let service = SpyService::refusing(error);
         let response = call(&service, get("/mcp/datadog", Some("Bearer session"))).await;

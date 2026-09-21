@@ -1,9 +1,13 @@
 use anyhow::{Result, bail};
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
-use macro_user_id::cowlike::CowLike;
+use entity_registry_db_utils::{
+    InsertOutcome, NewEntityRecord, RegisteredEntityType, WriteOutcome, delete_entity,
+    insert_entity,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use model_owner::Owner;
 use sqlx::PgPool;
 use std::str::FromStr;
 
@@ -12,6 +16,9 @@ use crate::domain::models::{
     ScheduledAction,
 };
 use crate::domain::ports::ScheduledActionRepo;
+
+#[cfg(test)]
+mod test;
 
 pub struct PgScheduledActionRepo {
     pool: PgPool,
@@ -42,10 +49,11 @@ fn kind_to_str(kind: &ActionKind) -> &'static str {
 
 impl ScheduledActionRepo for PgScheduledActionRepo {
     async fn create_action(&self, action: ScheduledAction) -> Result<ScheduledAction> {
-        let owner = action.owner.to_string();
+        let owner = action.owner.principal_id();
         let timezone = action.timezone.to_string();
         let kind = kind_to_str(&action.kind);
 
+        let mut tx = self.pool.begin().await?;
         let row = sqlx::query!(
             r#"
             INSERT INTO scheduled_action (owner, name, schedule, kind, timezone, task, next_run_at, enabled)
@@ -61,12 +69,12 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
             action.next_run_at,
             action.enabled,
         )
-        .fetch_one(&self.pool)
+        .fetch_one(&mut *tx)
         .await?;
 
-        Ok(ScheduledAction {
+        let created = ScheduledAction {
             id: Some(row.id),
-            owner: MacroUserIdStr::parse_from_str(&row.owner)?.into_owned(),
+            owner: Owner::from_principal_str(&row.owner)?,
             name: row.name,
             schedule: Schedule::from_cron(row.schedule)?,
             kind: parse_kind(&row.kind)?,
@@ -77,7 +85,21 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
             claimed: row.claimed,
             next_run_at: row.next_run_at,
             enabled: row.enabled,
-        })
+        };
+        match insert_entity(
+            &mut tx,
+            NewEntityRecord::new(
+                row.id,
+                RegisteredEntityType::ScheduledAction,
+                created.owner.clone(),
+            ),
+        )
+        .await?
+        {
+            InsertOutcome::Inserted | InsertOutcome::AlreadyRegistered => {}
+        }
+        tx.commit().await?;
+        Ok(created)
     }
 
     async fn get_actions(&self, user_id: MacroUserIdStr<'static>) -> Result<Vec<ScheduledAction>> {
@@ -98,7 +120,7 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
             .map(|row| {
                 Ok(ScheduledAction {
                     id: Some(row.id),
-                    owner: MacroUserIdStr::parse_from_str(&row.owner)?.into_owned(),
+                    owner: Owner::from_principal_str(&row.owner)?,
                     name: row.name,
                     schedule: Schedule::from_cron(row.schedule)?,
                     kind: parse_kind(&row.kind)?,
@@ -136,7 +158,7 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
             .map(|row| {
                 Ok(ScheduledAction {
                     id: Some(row.id),
-                    owner: MacroUserIdStr::parse_from_str(&row.owner)?.into_owned(),
+                    owner: Owner::from_principal_str(&row.owner)?,
                     name: row.name,
                     schedule: Schedule::from_cron(row.schedule)?,
                     kind: parse_kind(&row.kind)?,
@@ -187,7 +209,7 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
 
         Ok(ScheduledAction {
             id: Some(row.id),
-            owner: MacroUserIdStr::parse_from_str(&row.owner)?.into_owned(),
+            owner: Owner::from_principal_str(&row.owner)?,
             name: row.name,
             schedule: Schedule::from_cron(row.schedule)?,
             kind: parse_kind(&row.kind)?,
@@ -206,6 +228,7 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
         id: &Uuid,
         _macro_user_id: MacroUserIdStr<'static>,
     ) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
         sqlx::query!(
             r#"
             DELETE FROM scheduled_action
@@ -213,9 +236,13 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
             "#,
             *id
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?;
 
+        match delete_entity(&mut tx, *id).await? {
+            WriteOutcome::Applied | WriteOutcome::NotFound => {}
+        }
+        tx.commit().await?;
         Ok(())
     }
 
@@ -307,8 +334,6 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
     }
 
     async fn update_next_run_at(&self, id: &Uuid) -> Result<()> {
-        // Fetch the schedule + timezone so we can recompute `next_run_at`
-        // without the caller having to hold the action in memory.
         let row = sqlx::query!(
             r#"
             SELECT schedule, timezone
@@ -323,7 +348,6 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
         let tz = parse_timezone(&row.timezone)?;
         let schedule = Schedule::from_cron(row.schedule)?;
         let Some(next_run_at) = schedule.next_run_after_now(tz) else {
-            // No future fire time — leave next_run_at untouched.
             return Ok(());
         };
 

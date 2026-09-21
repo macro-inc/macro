@@ -16,7 +16,8 @@ use super::{
 };
 use crate::domain::model::{
     EntityPropertiesKey, EntityPropertyInfo, EntityPropertyMutationSnapshot,
-    GetOrCreateTagDefinitionResult, PropertyDefinitionOwner, TagPromotionOutcome, TagRemapOutcome,
+    GetOrCreatePropertyOptionResult, GetOrCreateTagDefinitionResult, PropertyDefinitionOwner,
+    PropertyOptionReplaceOutcome, PropertyOptionReplacePlan, TagPromotionOutcome, TagRemapOutcome,
     UpdatePropertyOptionOutcome,
 };
 use crate::domain::ports::PropertiesRepo;
@@ -188,6 +189,24 @@ impl PropertiesRepo for PropertiesPgRepo {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn get_or_create_property_option(
+        &self,
+        property_definition_id: Uuid,
+        display_order: i32,
+        value: PropertyOptionValue,
+        color: Option<String>,
+    ) -> Result<GetOrCreatePropertyOptionResult, Self::Err> {
+        property_option_queries::get_or_create_property_option(
+            &self.pool,
+            property_definition_id,
+            display_order,
+            value,
+            color,
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn update_property_option(
         &self,
         option_id: Uuid,
@@ -203,6 +222,16 @@ impl PropertiesRepo for PropertiesPgRepo {
             display_order,
         )
         .await
+    }
+
+    #[tracing::instrument(skip(self, plan), err)]
+    async fn replace_property_options(
+        &self,
+        property_definition_id: Uuid,
+        plan: &PropertyOptionReplacePlan,
+    ) -> Result<PropertyOptionReplaceOutcome, Self::Err> {
+        property_option_queries::replace_property_options(&self.pool, property_definition_id, plan)
+            .await
     }
 
     #[tracing::instrument(skip(self), err)]

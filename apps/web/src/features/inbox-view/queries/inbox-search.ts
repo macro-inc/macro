@@ -17,6 +17,7 @@ const tabTypes: Record<InboxTab, ReadonlySet<InboxTypeFilter>> = {
     'tasks',
     'email',
     'channels',
+    'chats',
     'agents',
     'projects',
     'github',
@@ -24,25 +25,14 @@ const tabTypes: Record<InboxTab, ReadonlySet<InboxTypeFilter>> = {
     'calendar',
   ]),
   noise: new Set(['email']),
-  all: new Set([
-    'documents',
-    'tasks',
-    'email',
-    'channels',
-    'agents',
-    'projects',
-    'github',
-  ]),
   reminders: new Set(['reminders']),
 };
 
-function readFilter(
-  selection: FacetSelection
-): NotificationFilters | undefined {
+function readFilter(selection: FacetSelection): boolean | undefined {
   const active = selection.read ?? [];
   if (active.length !== 1) return undefined;
-  if (active[0] === 'read') return { seen: true };
-  if (active[0] === 'unread') return { seen: false };
+  if (active[0] === 'read') return true;
+  if (active[0] === 'unread') return false;
 
   return undefined;
 }
@@ -79,15 +69,18 @@ export function buildInboxSearchRequest(
   const filtersIncompleteEntities =
     context.tab === 'signal' || context.tab === 'noise';
 
-  const notificationFilters: NotificationFilters = {};
-
-  if (filtersIncompleteEntities) {
-    notificationFilters.done = false;
-  }
-
-  if (notification?.seen !== undefined) {
-    notificationFilters.seen = notification.seen;
-  }
+  const notificationFilters: NotificationFilters = {
+    states:
+      notification === false
+        ? ['unseen']
+        : notification === true
+          ? filtersIncompleteEntities
+            ? ['seen']
+            : ['seen', 'done']
+          : filtersIncompleteEntities
+            ? ['unseen', 'seen']
+            : [],
+  };
 
   const documentTypes = [...types].filter(
     (type) => type === 'documents' || type === 'tasks'
@@ -97,6 +90,7 @@ export function buildInboxSearchRequest(
     filtersIncompleteEntities || notification !== undefined;
 
   const filters: EntityFilters = {
+    agent_session_filters: { ids: [NIL_UUID] },
     calendar_event_filters: { calendar_event_ids: [NIL_UUID] },
     call_filters: { call_ids: [NIL_UUID] },
     channel_filters: { channel_ids: [NIL_UUID] },
@@ -112,6 +106,10 @@ export function buildInboxSearchRequest(
 
   if (types.has('calendar')) {
     filters.calendar_event_filters = {};
+  }
+
+  if (types.has('agents')) {
+    filters.agent_session_filters = { include: true };
   }
 
   if (types.has('channels')) {
@@ -134,7 +132,7 @@ export function buildInboxSearchRequest(
     };
   }
 
-  if (types.has('agents')) {
+  if (types.has('chats')) {
     const chatFilters: NonNullable<EntityFilters['chat_filters']> = {};
 
     if (hasNotificationFilter) {
@@ -171,9 +169,9 @@ export function buildInboxSearchRequest(
       emailFilters.importance = false;
     }
 
-    if (hasNotificationFilter) {
-      emailFilters.notification_filters = notificationFilters;
-    }
+    // Email inbox/read state is independent of user notifications. Applying
+    // a notification predicate here would drop email that has no notification.
+    if (notification !== undefined) emailFilters.is_read = notification;
 
     filters.email_filters = emailFilters;
   }

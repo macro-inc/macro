@@ -12,7 +12,7 @@ Draft, compose, and send an email. ALWAYS use this tool whenever the user asks y
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `subject` | string | Yes | The subject line of the email. |
-| `body` | string | Yes | The body of the email. Written as Markdown by the AI and rendered in the draft composer. At send time the frontend replaces this with the base64url-encoded HTML produced by the composer, which is what gets sent to recipients. |
+| `body` | string | Yes | The body of the email, written as Markdown. A host with a composer (chat) replaces this with the base64url-encoded HTML the composer exported before the tool runs; a host without one (an agent session) leaves the Markdown, and this tool renders it the same way. |
 | `to` | EmailRecipient[] | Yes | The primary recipients (To field). |
 | `cc` | EmailRecipient[] | No | Carbon copy recipients (optional). |
 | `bcc` | EmailRecipient[] | No | Blind carbon copy recipients (optional). |

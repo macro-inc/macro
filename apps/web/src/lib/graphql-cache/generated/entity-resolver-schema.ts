@@ -6,6 +6,10 @@ export const entityResolverSchema = {
       targets: ['GraphqlSoupEmailThread'],
       argumentPaths: [['input', 'threadId']],
     },
+    markEmailThreadUnread: {
+      targets: ['GraphqlSoupEmailThread'],
+      argumentPaths: [['input', 'threadId']],
+    },
     recordChannelActivity: {
       targets: ['GraphqlChannelActivity'],
       argumentPaths: [['input', 'channelId']],

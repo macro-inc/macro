@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH wedged AS (\n                UPDATE calendar_backfill_jobs job\n                SET status = 'pending',\n                    last_error = NULL,\n                    started_at = NULL,\n                    completed_at = NULL,\n                    lease_token = NULL,\n                    lease_expires_at = NULL,\n                    updated_at = now()\n                FROM calendar_sync_outbox outbox,\n                     calendar_accounts account,\n                     email_link_google_scopes scopes\n                WHERE outbox.backfill_job_id = job.id\n                  AND account.id = job.account_id\n                  AND account.email_link_id = job.email_link_id\n                  AND scopes.link_id = job.email_link_id\n                  AND job.kind = 'google_calendar'\n                  AND job.grant_version = scopes.grant_version\n                  AND scopes.granted_scopes @> $2::text[]\n                  AND account.sync_status <> 'disabled'\n                  AND (\n                        -- Dead-lettered: a delivery reached a worker at least\n                        -- once (started_at is set) and failed back to pending,\n                        -- and nothing has touched the job since. started_at\n                        -- separates this from a job merely waiting its turn in a\n                        -- backed-up queue — the drain publishes that one without\n                        -- ever claiming it, so republishing would only duplicate\n                        -- the message still in flight.\n                        (job.status = 'pending'\n                         AND job.started_at IS NOT NULL\n                         AND outbox.published_at IS NOT NULL\n                         AND job.updated_at <= $1)\n                        -- Abandoned: a worker claimed the job and died without\n                        -- releasing or renewing the lease.\n                        OR (job.status = 'running'\n                            AND job.lease_expires_at IS NOT NULL\n                            AND job.lease_expires_at <= $1)\n                  )\n                RETURNING job.id\n            ),\n            republished AS (\n                UPDATE calendar_sync_outbox outbox\n                SET published_at = NULL\n                FROM wedged\n                WHERE outbox.backfill_job_id = wedged.id\n            )\n            SELECT count(*) AS \"reaped!\" FROM wedged\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "reaped!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "b887c6da665cc66e008638eba2cab4e89d5054152d7503868b91984454eee088"
+}

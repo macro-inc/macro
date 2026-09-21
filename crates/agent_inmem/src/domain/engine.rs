@@ -1,36 +1,71 @@
 //! The seam between the ACP surface and the agentic loop that serves it.
 
+use std::sync::Arc;
+
 use agent::types::ChatMessage;
 use agent::{AgentError, StreamPart};
-use macro_user_id::user_id::MacroUserIdStr;
+use ai_tools::user_tool_review::UserToolReviewer;
+use mcp_toolset::RemoteMcpToolSet;
+use model_owner::Owner;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
+use super::user_input::SharedUserInputRequester;
+
+/// The agent's display name and `@` handle, for the turn's system prompt.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentIdentity {
+    /// Display name, e.g. `Grunk`.
+    pub name: String,
+    /// Stable `@` handle without a leading `@`, e.g. `grunk`.
+    pub handle: String,
+}
+
 /// Everything one conversational turn needs.
 pub struct TurnRequest {
-    /// The user the turn acts on behalf of. Tools run with their identity and
-    /// token usage is recorded against them.
-    pub owner: MacroUserIdStr<'static>,
+    /// The session's owner, whom the turn acts on behalf of: tools run with
+    /// their identity and token usage is recorded against them. Both need a
+    /// person, which the engine asks of this rather than assumes.
+    pub owner: Owner,
     /// Model id the turn runs on. Unknown ids fall back to the loop's
     /// default model rather than failing the turn.
     pub model: String,
+    /// Who this agent is. Folded into every turn's system prompt so the
+    /// model can answer "who are you" even when the session has no
+    /// instructions. `None` leaves the standing prompt unnamed.
+    pub identity: Option<AgentIdentity>,
     /// The session's instructions, appended to the engine's own system
     /// prompt. `None` runs the engine's default prompt unchanged.
     pub instructions: Option<String>,
     /// The full conversation, oldest first, ending with the prompt being
     /// answered.
     pub messages: Vec<ChatMessage>,
+    /// Tools of the MCP servers the session was handed, composed next to the
+    /// native Macro tools. `None` when the session has none.
+    pub mcp_tools: Option<RemoteMcpToolSet>,
     /// Cancelling this token stops the turn; the stream ends after the
     /// engine has drained cooperatively.
     pub cancel: CancellationToken,
+    /// User-input capability for model-callable tools. Absent when the ACP
+    /// client did not advertise form elicitation.
+    pub user_input: Option<SharedUserInputRequester>,
+    /// Puts a user tool's call (`SendEmail`, `CreateCalendarEvent`) to the
+    /// user for review mid-turn, so the tool is finished - run as edited, or
+    /// rejected - before the model reads its result. Absent for the same
+    /// reason as `user_input`; a pending call then stays pending.
+    pub reviewer: Option<Arc<dyn UserToolReviewer>>,
 }
 
 /// Runs one conversational turn and streams its parts back.
 ///
 /// The trait is the testing seam: the ACP surface is exercised against a
 /// scripted engine, and production plugs in
-/// [`crate::outbound::rig_engine::RigTurnEngine`].
+/// [`crate::rig_engine::RigTurnEngine`].
 pub trait TurnEngine: Send + Sync + 'static {
+    /// Model ids this engine deployment can run and therefore advertises over
+    /// ACP. The order is the picker order.
+    fn supported_models(&self) -> &[&str];
+
     /// Start the turn. Parts arrive on the returned receiver; the stream
     /// ending is the turn ending, and an `Err` item is a turn-fatal failure.
     fn run_turn(&self, request: TurnRequest) -> mpsc::Receiver<Result<StreamPart, AgentError>>;

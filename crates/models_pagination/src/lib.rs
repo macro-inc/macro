@@ -19,4 +19,4 @@ pub use cursor::{
     Paginate, PaginateOn, Paginated, PaginatedCursor, PaginatedOpaqueCursor, Paginator, Query,
     SortOn, Sortable, TypeEraseCursor,
 };
-pub use sort::{CreatedAt, Frecency, FrecencyValue, SimpleSortMethod, TouchedByMe};
+pub use sort::{CreatedAt, Frecency, FrecencyValue, NotifiedAt, SimpleSortMethod, TouchedByMe};

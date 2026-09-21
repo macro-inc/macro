@@ -75,8 +75,63 @@ fn connection_gateway_url_parses() {
 }
 
 #[test]
+fn connection_gateway_url_has_no_trailing_slash() {
+    for environment in ENVS {
+        let url = ConnectionGatewayUrl::default_for_environment(environment);
+        assert!(
+            !url.as_ref().ends_with('/'),
+            "clients concatenate paths, so {} must not end with /",
+            url.as_ref()
+        );
+    }
+}
+
+#[test]
+fn connection_gateway_websocket_url_parses() {
+    assert_parses_for_all_environments(ConnectionGatewayWebsocketUrl::default_for_environment);
+}
+
+#[test]
+fn connection_gateway_websocket_url_has_no_trailing_slash() {
+    for environment in ENVS {
+        let url = ConnectionGatewayWebsocketUrl::default_for_environment(environment);
+        assert!(
+            !url.as_ref().ends_with('/'),
+            "clients concatenate paths, so {} must not end with /",
+            url.as_ref()
+        );
+    }
+}
+
+#[test]
+fn connection_gateway_websocket_url_is_the_ws_form_of_the_http_url() {
+    for environment in ENVS {
+        let http = ConnectionGatewayUrl::default_for_environment(environment);
+        let websocket = ConnectionGatewayWebsocketUrl::default_for_environment(environment);
+        let expected = http.as_ref().replacen("http", "ws", 1);
+        assert_eq!(
+            websocket.as_ref(),
+            expected,
+            "{environment:?}: websocket URL must be the http URL with the scheme swapped to ws"
+        );
+    }
+}
+
+#[test]
 fn document_cognition_service_url_parses() {
     assert_parses_for_all_environments(DocumentCognitionServiceUrl::default_for_environment);
+}
+
+#[test]
+fn document_cognition_service_url_has_no_trailing_slash() {
+    for environment in ENVS {
+        let url = DocumentCognitionServiceUrl::default_for_environment(environment);
+        assert!(
+            !url.as_ref().ends_with('/'),
+            "clients concatenate paths, so {} must not end with /",
+            url.as_ref()
+        );
+    }
 }
 
 #[test]
@@ -87,6 +142,99 @@ fn notification_service_url_parses() {
 #[test]
 fn static_file_service_url_parses() {
     assert_parses_for_all_environments(StaticFileServiceUrl::default_for_environment);
+}
+
+#[test]
+fn agent_harness_service_url_parses() {
+    assert_parses_for_all_environments(AgentHarnessServiceUrl::default_for_environment);
+}
+
+#[test]
+fn agent_harness_service_url_has_no_trailing_slash() {
+    for environment in ENVS {
+        let url = AgentHarnessServiceUrl::default_for_environment(environment);
+        assert!(
+            !url.as_ref().ends_with('/'),
+            "clients concatenate paths, so {} must not end with /",
+            url.as_ref()
+        );
+    }
+}
+
+#[test]
+fn agent_harness_egress_url_parses() {
+    assert_parses_for_all_environments(AgentHarnessEgressUrl::default_for_environment);
+}
+
+#[test]
+fn agent_harness_egress_url_selects_defaults_without_a_required_config_value() {
+    with_mock_override_env(missing_override, || {
+        for (environment, expected) in [
+            (Environment::Local, "http://localhost:8102"),
+            (
+                Environment::Develop,
+                "https://dev-gateway.macro.com/agent-harness-egress",
+            ),
+            (
+                Environment::Production,
+                "https://gateway.macro.com/agent-harness-egress",
+            ),
+        ] {
+            let url = AgentHarnessEgressUrl::new_for_environment(environment).unwrap();
+            assert_eq!(url.as_str(), expected);
+            assert!(!url.as_str().ends_with('/'));
+        }
+    });
+}
+
+#[test]
+fn agent_harness_egress_url_honors_the_standard_override_for_tunnels() {
+    with_mock_override_env(
+        |name| {
+            assert_eq!(name, "OVERRIDE_AGENT_HARNESS_EGRESS_URL");
+            Ok("https://egress-test.trycloudflare.com".to_owned())
+        },
+        || {
+            for environment in ENVS {
+                let url = AgentHarnessEgressUrl::new_for_environment(environment).unwrap();
+                assert_eq!(url.as_str(), "https://egress-test.trycloudflare.com");
+            }
+        },
+    );
+}
+
+#[test]
+fn mcp_service_url_parses() {
+    assert_parses_for_all_environments(McpServiceUrl::default_for_environment);
+}
+
+#[test]
+fn mcp_service_url_defaults_are_bases_without_a_trailing_slash() {
+    with_mock_override_env(missing_override, || {
+        for (environment, expected) in [
+            (Environment::Local, "http://localhost:8080"),
+            (Environment::Develop, "https://dev-gateway.macro.com/mcp"),
+            (Environment::Production, "https://gateway.macro.com/mcp"),
+        ] {
+            let url = McpServiceUrl::new_for_environment(environment).unwrap();
+            assert_eq!(url.as_str(), expected);
+            assert!(!url.as_str().ends_with('/'));
+        }
+    });
+}
+
+#[test]
+fn mcp_service_url_honors_the_standard_override() {
+    with_mock_override_env(
+        |name| {
+            assert_eq!(name, "OVERRIDE_MCP_SERVICE_URL");
+            Ok("http://mcp-service:8080".to_owned())
+        },
+        || {
+            let url = McpServiceUrl::new_for_environment(Environment::Local).unwrap();
+            assert_eq!(url.as_str(), "http://mcp-service:8080");
+        },
+    );
 }
 
 #[test]
@@ -117,8 +265,32 @@ fn email_service_url_parses() {
 }
 
 #[test]
+fn email_service_url_has_no_trailing_slash() {
+    for environment in ENVS {
+        let url = EmailServiceUrl::default_for_environment(environment);
+        assert!(
+            !url.as_ref().ends_with('/'),
+            "clients concatenate paths, so {} must not end with /",
+            url.as_ref()
+        );
+    }
+}
+
+#[test]
 fn image_proxy_service_url_parses() {
     assert_parses_for_all_environments(ImageProxyServiceUrl::default_for_environment);
+}
+
+#[test]
+fn image_proxy_service_url_has_no_trailing_slash() {
+    for environment in ENVS {
+        let url = ImageProxyServiceUrl::default_for_environment(environment);
+        assert!(
+            !url.as_ref().ends_with('/'),
+            "clients concatenate paths, so {} must not end with /",
+            url.as_ref()
+        );
+    }
 }
 
 #[test]
@@ -230,8 +402,8 @@ crate::service_url! {
         #[derive(Debug, Clone)]
         pub TestEmailServiceUrl {
             local: "http://localhost:8087",
-            dev: "https://email-service-dev.macro.com",
-            prod: "https://email-service.macro.com",
+            dev: "https://dev-gateway.macro.com/email",
+            prod: "https://gateway.macro.com/email",
         },
     }
 }
@@ -269,7 +441,7 @@ fn grouped_defaults_do_not_check_overrides() {
     );
     assert_eq!(
         service_urls.test_email_service_url.as_ref(),
-        "https://email-service.macro.com",
+        "https://gateway.macro.com/email",
     );
 }
 
@@ -302,6 +474,10 @@ fn exported_service_urls_match_local_values() {
         "http://localhost:8082",
     );
     assert_eq!(
+        service_urls.connection_gateway_websocket_url.as_ref(),
+        "ws://localhost:8082",
+    );
+    assert_eq!(
         service_urls.document_cognition_service_url.as_ref(),
         "http://localhost:8085",
     );
@@ -312,6 +488,14 @@ fn exported_service_urls_match_local_values() {
     assert_eq!(
         service_urls.static_file_service_url.as_ref(),
         "http://localhost:8100",
+    );
+    assert_eq!(
+        service_urls.agent_harness_egress_url.as_ref(),
+        "http://localhost:8102",
+    );
+    assert_eq!(
+        service_urls.mcp_service_url.as_ref(),
+        "http://localhost:8080"
     );
     assert_eq!(
         service_urls.unfurl_service_url.as_ref(),
@@ -349,7 +533,7 @@ fn exported_service_urls_match_dev_values() {
     );
     assert_eq!(
         service_urls.auth_service_url.as_ref(),
-        "https://auth-service-dev.macro.com",
+        "https://dev-gateway.macro.com/auth",
     );
     assert_eq!(
         service_urls.document_storage_service_url.as_ref(),
@@ -365,11 +549,15 @@ fn exported_service_urls_match_dev_values() {
     );
     assert_eq!(
         service_urls.connection_gateway_url.as_ref(),
-        "https://connection-gateway-dev.macro.com",
+        "https://dev-gateway.macro.com/connection-gateway",
+    );
+    assert_eq!(
+        service_urls.connection_gateway_websocket_url.as_ref(),
+        "wss://dev-gateway.macro.com/connection-gateway",
     );
     assert_eq!(
         service_urls.document_cognition_service_url.as_ref(),
-        "https://document-cognition-dev.macro.com",
+        "https://dev-gateway.macro.com/cognition",
     );
     assert_eq!(
         service_urls.notification_service_url.as_ref(),
@@ -378,6 +566,18 @@ fn exported_service_urls_match_dev_values() {
     assert_eq!(
         service_urls.static_file_service_url.as_ref(),
         "https://static-file-service-dev.macro.com",
+    );
+    assert_eq!(
+        service_urls.agent_harness_service_url.as_ref(),
+        "https://dev-gateway.macro.com/agent-harness",
+    );
+    assert_eq!(
+        service_urls.agent_harness_egress_url.as_ref(),
+        "https://dev-gateway.macro.com/agent-harness-egress",
+    );
+    assert_eq!(
+        service_urls.mcp_service_url.as_ref(),
+        "https://dev-gateway.macro.com/mcp",
     );
     assert_eq!(
         service_urls.unfurl_service_url.as_ref(),
@@ -389,11 +589,11 @@ fn exported_service_urls_match_dev_values() {
     );
     assert_eq!(
         service_urls.email_service_url.as_ref(),
-        "https://email-service-dev.macro.com",
+        "https://dev-gateway.macro.com/email",
     );
     assert_eq!(
         service_urls.image_proxy_service_url.as_ref(),
-        "https://image-proxy-dev.macro.com",
+        "https://dev-gateway.macro.com/image-proxy",
     );
     assert_eq!(
         service_urls.lexical_service_url.as_ref(),
@@ -412,7 +612,7 @@ fn exported_service_urls_match_prod_values() {
     assert_eq!(service_urls.app_service_url.as_ref(), "https://macro.com");
     assert_eq!(
         service_urls.auth_service_url.as_ref(),
-        "https://auth-service.macro.com",
+        "https://gateway.macro.com/auth",
     );
     assert_eq!(
         service_urls.document_storage_service_url.as_ref(),
@@ -428,11 +628,15 @@ fn exported_service_urls_match_prod_values() {
     );
     assert_eq!(
         service_urls.connection_gateway_url.as_ref(),
-        "https://connection-gateway.macro.com",
+        "https://gateway.macro.com/connection-gateway",
+    );
+    assert_eq!(
+        service_urls.connection_gateway_websocket_url.as_ref(),
+        "wss://gateway.macro.com/connection-gateway",
     );
     assert_eq!(
         service_urls.document_cognition_service_url.as_ref(),
-        "https://document-cognition.macro.com",
+        "https://gateway.macro.com/cognition",
     );
     assert_eq!(
         service_urls.notification_service_url.as_ref(),
@@ -441,6 +645,18 @@ fn exported_service_urls_match_prod_values() {
     assert_eq!(
         service_urls.static_file_service_url.as_ref(),
         "https://static-file-service.macro.com",
+    );
+    assert_eq!(
+        service_urls.agent_harness_service_url.as_ref(),
+        "https://gateway.macro.com/agent-harness",
+    );
+    assert_eq!(
+        service_urls.agent_harness_egress_url.as_ref(),
+        "https://gateway.macro.com/agent-harness-egress",
+    );
+    assert_eq!(
+        service_urls.mcp_service_url.as_ref(),
+        "https://gateway.macro.com/mcp",
     );
     assert_eq!(
         service_urls.unfurl_service_url.as_ref(),
@@ -452,11 +668,11 @@ fn exported_service_urls_match_prod_values() {
     );
     assert_eq!(
         service_urls.email_service_url.as_ref(),
-        "https://email-service.macro.com",
+        "https://gateway.macro.com/email",
     );
     assert_eq!(
         service_urls.image_proxy_service_url.as_ref(),
-        "https://image-proxy.macro.com",
+        "https://gateway.macro.com/image-proxy",
     );
     assert_eq!(
         service_urls.lexical_service_url.as_ref(),
@@ -495,6 +711,10 @@ fn exported_service_url_override_names_are_derived_from_env_var_names() {
         "OVERRIDE_CONNECTION_GATEWAY_URL",
     );
     assert_eq!(
+        ConnectionGatewayWebsocketUrl::local().override_env_var_name(),
+        "OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL",
+    );
+    assert_eq!(
         DocumentCognitionServiceUrl::local().override_env_var_name(),
         "OVERRIDE_DOCUMENT_COGNITION_SERVICE_URL",
     );
@@ -505,6 +725,14 @@ fn exported_service_url_override_names_are_derived_from_env_var_names() {
     assert_eq!(
         StaticFileServiceUrl::local().override_env_var_name(),
         "OVERRIDE_STATIC_FILE_SERVICE_URL",
+    );
+    assert_eq!(
+        AgentHarnessEgressUrl::local().override_env_var_name(),
+        "OVERRIDE_AGENT_HARNESS_EGRESS_URL",
+    );
+    assert_eq!(
+        McpServiceUrl::local().override_env_var_name(),
+        "OVERRIDE_MCP_SERVICE_URL",
     );
     assert_eq!(
         UnfurlServiceUrl::local().override_env_var_name(),

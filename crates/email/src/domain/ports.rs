@@ -1,10 +1,10 @@
 use crate::domain::models::{
     Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, CreateDraftInput,
-    CreatedDraft, EmailErr, EmailFilter, EmailInboxDetails, EmailThreadMetadata,
-    EmailThreadPreview, EnrichedEmailThreadPreview, GetEmailsRequest, Label, Link, LinkLabel,
-    Message, MessageAttachment, MessageLabel, MessageRow, ParsedAddresses, ParsedMessage,
-    ParsedThread, PreviewCursorQuery, RecipientType, ResolvedDraftInput, SenderPolicy,
-    SimpleMessage, SimpleMessageInfo, Thread, ThreadRow, UpdateThreadLabelsResult,
+    CreatedDraft, EmailErr, EmailFilter, EmailInboxDetails, EmailThreadMailProjection,
+    EmailThreadMetadata, EmailThreadPreview, EnrichedEmailThreadPreview, GetEmailsRequest, Label,
+    Link, LinkLabel, Message, MessageAttachment, MessageLabel, MessageRow, ParsedAddresses,
+    ParsedMessage, ParsedThread, PreviewCursorQuery, RecipientType, ResolvedDraftInput,
+    SenderPolicy, SimpleMessage, SimpleMessageInfo, Thread, ThreadRow, UpdateThreadLabelsResult,
     UpsertEmailFilterInput, UpsertedContacts, UserEmailLink, UserProvider,
 };
 use chrono::{DateTime, Utc};
@@ -150,6 +150,13 @@ pub trait EmailRepo: Send + Sync + 'static {
         thread_ids: &[Uuid],
     ) -> impl Future<Output = Result<Vec<EmailThreadMetadata>, Self::Err>> + Send;
 
+    /// Fetch Mail-specific cache facts and previews for a batch of thread IDs.
+    fn thread_mail_projections_by_ids(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        thread_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<EmailThreadMailProjection>, Self::Err>> + Send;
+
     /// Fetch paginated messages for a thread, ordered by internal_date_ts descending.
     fn messages_by_thread_id_paginated(
         &self,
@@ -292,6 +299,17 @@ pub trait EmailRepo: Send + Sync + 'static {
         link_id: Uuid,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Atomically update the UNREAD label assignments and the message/thread read flags.
+    /// `message_ids` must be the messages of the already-authorized thread and inbox.
+    /// An error leaves all three representations unchanged.
+    fn set_thread_read_state(
+        &self,
+        thread_id: Uuid,
+        link_id: Uuid,
+        message_ids: &[Uuid],
+        is_read: bool,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Update the read status for a batch of messages, verified by link_id.
     fn update_message_read_status_batch(
         &self,
@@ -409,6 +427,16 @@ pub trait EmailThreadMetadataService: Send + Sync + 'static {
         &self,
         receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
     ) -> impl Future<Output = Result<HashMap<Uuid, EmailThreadMetadata>, EmailErr>> + Send;
+}
+
+/// Read-only domain service used to hydrate offline Mail projection data.
+pub trait EmailThreadMailProjectionService: Send + Sync + 'static {
+    /// Fetch cache facts and canonical previews for authorized threads in one batch.
+    fn get_email_thread_mail_projections(
+        &self,
+        viewer: MacroUserIdStr<'static>,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> impl Future<Output = Result<HashMap<Uuid, EmailThreadMailProjection>, EmailErr>> + Send;
 }
 
 /// Read-only domain service used to hydrate lightweight email content edges.
@@ -575,6 +603,14 @@ pub trait EmailService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), EmailErr>> + Send {
         async { Err(no_op_email_err()) }
     }
+
+    /// Mark a caller-accessible thread unread using its own inbox's UNREAD label.
+    /// Provider synchronization and read-state updates use the thread-label flow.
+    fn mark_thread_unread(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+        thread_id: Uuid,
+    ) -> impl Future<Output = Result<(), EmailErr>> + Send;
 
     /// Add or remove a label from a caller-accessible thread.
     fn update_thread_labels_for_user(
@@ -825,6 +861,14 @@ impl EmailService for NoOpEmailService {
         Err(no_op_email_err())
     }
 
+    async fn mark_thread_unread(
+        &self,
+        _macro_id: MacroUserIdStr<'static>,
+        _thread_id: Uuid,
+    ) -> Result<(), EmailErr> {
+        Err(no_op_email_err())
+    }
+
     async fn update_thread_project(
         &self,
         _thread_receipt: EntityAccessReceipt<EditAccessLevel>,
@@ -864,6 +908,16 @@ impl EmailThreadMetadataService for NoOpEmailService {
         &self,
         _receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
     ) -> Result<HashMap<Uuid, EmailThreadMetadata>, EmailErr> {
+        Err(no_op_email_err())
+    }
+}
+
+impl EmailThreadMailProjectionService for NoOpEmailService {
+    async fn get_email_thread_mail_projections(
+        &self,
+        _viewer: MacroUserIdStr<'static>,
+        _receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> Result<HashMap<Uuid, EmailThreadMailProjection>, EmailErr> {
         Err(no_op_email_err())
     }
 }

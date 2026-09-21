@@ -1,9 +1,9 @@
 use super::*;
 use crate::domain::{
     models::{
-        AgentChannelScope, BotChannelListCaller, BotChannelType, CreateAgentRequest,
-        CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest, PatchBotRequest,
-        UpdateAgentRequest,
+        AgentChannelScope, AgentMcpServer, AgentMcpServers, BotChannelListCaller, BotChannelType,
+        CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest,
+        PatchBotRequest, UpdateAgentRequest,
     },
     ports::{BotError, BotService},
     service::BotServiceImpl,
@@ -82,6 +82,8 @@ fn create_agent_req(handle: &str, channel_scope: AgentChannelScope) -> CreateAge
         default_model: "cursor-small".to_string(),
         channel_scope,
         channel_ids: Vec::new(),
+        mcp: AgentMcpServers::OwnerConnections,
+        auto_accept_permissions: None,
     }
 }
 
@@ -98,6 +100,8 @@ fn update_agent_req(handle: &str, channel_scope: AgentChannelScope) -> UpdateAge
         default_model: "claude-sonnet-4-5".to_string(),
         channel_scope,
         channel_ids: Vec::new(),
+        mcp: AgentMcpServers::OwnerConnections,
+        auto_accept_permissions: Some(false),
     }
 }
 
@@ -408,6 +412,44 @@ async fn create_user_owned_bot_records_user_owner(pool: PgPool) -> anyhow::Resul
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn bot_profiles_batch_persisted_system_deleted_and_missing_bots(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let mut request = create_req("profile-batch");
+    request.avatar_url = Some("https://static.example/profile-batch.png".to_string());
+    let bot = service.create_bot(user_id(USER_OWNER), request).await?;
+    let missing = BotId::new_from_uuid(Uuid::new_v4());
+    let repo = PgBotsRepo::new(pool);
+
+    let profiles = repo
+        .get_bot_profiles(&[bot.id, bot_id::MACRO_NEW_BOT_ID, missing])
+        .await?;
+    let profile = profiles.get(&bot.id).expect("persisted bot profile");
+    assert_eq!(profile.id, bot.id);
+    assert_eq!(profile.name, bot.name);
+    assert_eq!(profile.avatar_url, bot.avatar_url);
+    assert_eq!(
+        profiles
+            .get(&bot_id::MACRO_NEW_BOT_ID)
+            .expect("system bot profile")
+            .name,
+        bot_id::MACRO_NEW_NAME
+    );
+    assert!(!profiles.contains_key(&missing));
+
+    service.delete_bot(user_id(USER_OWNER), bot.id).await?;
+    assert!(repo.get_bot(bot.id).await?.is_none());
+    assert!(
+        repo.get_bot_profiles(&[bot.id])
+            .await?
+            .contains_key(&bot.id)
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn created_agent_round_trips_every_agent_field(pool: PgPool) -> anyhow::Result<()> {
     let service = service(&pool);
     let created = service
@@ -424,6 +466,7 @@ async fn created_agent_round_trips_every_agent_field(pool: PgPool) -> anyhow::Re
     assert_eq!(created.default_model, "cursor-small");
     assert_eq!(created.channel_scope, AgentChannelScope::All);
     assert!(created.channel_ids.is_empty());
+    assert_eq!(created.auto_accept_permissions, None);
 
     let listed = service.list_agents(user_id(USER_OWNER)).await?;
     assert_eq!(listed.len(), 1);
@@ -431,6 +474,7 @@ async fn created_agent_round_trips_every_agent_field(pool: PgPool) -> anyhow::Re
     assert_eq!(listed[0].instructions, created.instructions);
     assert_eq!(listed[0].harness, created.harness);
     assert_eq!(listed[0].default_model, created.default_model);
+    assert_eq!(listed[0].auto_accept_permissions, None);
 
     let fetched = PgBotsRepo::new(pool.clone())
         .get_agent(created.bot.id)
@@ -440,6 +484,7 @@ async fn created_agent_round_trips_every_agent_field(pool: PgPool) -> anyhow::Re
     assert_eq!(fetched.instructions, created.instructions);
     assert_eq!(fetched.harness, created.harness);
     assert_eq!(fetched.default_model, created.default_model);
+    assert_eq!(fetched.auto_accept_permissions, None);
 
     assert!(service.list_agents(user_id(USER_OTHER)).await?.is_empty());
     Ok(())
@@ -465,6 +510,91 @@ async fn create_team_agent_requires_membership_not_admin(pool: PgPool) -> anyhow
         .await
         .expect_err("a non-member must not create a team agent");
     assert!(matches!(error, BotError::Unauthorized));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_member_can_list_a_team_agent_created_by_someone_else(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::new_v4();
+    insert_team_user(&pool, team_id, TEAM_ADMIN, "admin").await?;
+    insert_team_user(&pool, team_id, TEAM_MEMBER, "member").await?;
+    let service = service(&pool);
+    let mut create = create_agent_req("team-shared", AgentChannelScope::All);
+    create.team_id = Some(team_id);
+    let created = service.create_agent(user_id(TEAM_ADMIN), create).await?;
+
+    let listed = service.list_agents(user_id(TEAM_MEMBER)).await?;
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].bot.id, created.bot.id);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn channel_co_member_can_list_a_selected_agent_they_can_mention(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let channel_id = Uuid::new_v4();
+    insert_channel_member(&pool, channel_id, USER_OWNER).await?;
+    insert_user(&pool, USER_OTHER).await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO comms_channel_participants (channel_id, user_id, role, left_at)
+        VALUES ($1, $2, 'member'::comms_participant_role, NULL)
+        "#,
+        channel_id,
+        USER_OTHER,
+    )
+    .execute(&pool)
+    .await?;
+
+    let service = service(&pool);
+    let mut request = create_agent_req("shared-reviewer", AgentChannelScope::Selected);
+    request.channel_ids = vec![channel_id];
+    let created = service.create_agent(user_id(USER_OWNER), request).await?;
+
+    let listed = service.list_agents(user_id(USER_OTHER)).await?;
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].bot.id, created.bot.id);
+    assert_eq!(listed[0].bot.handle, "shared-reviewer");
+
+    assert!(service.list_agents(user_id(TEAM_OTHER)).await?.is_empty());
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn all_channel_private_agent_is_not_listed_for_a_channel_co_member(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let channel_id = Uuid::new_v4();
+    insert_channel_member(&pool, channel_id, USER_OWNER).await?;
+    insert_user(&pool, USER_OTHER).await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO comms_channel_participants (channel_id, user_id, role, left_at)
+        VALUES ($1, $2, 'member'::comms_participant_role, NULL)
+        "#,
+        channel_id,
+        USER_OTHER,
+    )
+    .execute(&pool)
+    .await?;
+
+    let service = service(&pool);
+    let created = service
+        .create_agent(
+            user_id(USER_OWNER),
+            create_agent_req("private-global", AgentChannelScope::All),
+        )
+        .await?;
+    // All-channel agents are not channel participants unless selected, so a
+    // co-member of some other channel still cannot list them.
+    assert!(service.list_agents(user_id(USER_OTHER)).await?.is_empty());
+    assert_eq!(
+        service.list_agents(user_id(USER_OWNER)).await?[0].bot.id,
+        created.bot.id
+    );
     Ok(())
 }
 
@@ -498,6 +628,7 @@ async fn updated_agent_replaces_every_field_and_selected_channel(
     assert_eq!(updated.harness, "in-memory");
     assert_eq!(updated.default_model, "claude-sonnet-4-5");
     assert_eq!(updated.channel_ids, vec![second]);
+    assert_eq!(updated.auto_accept_permissions, Some(false));
     assert_eq!(
         active_channel_participant_count(&pool, first, created.bot.id).await?,
         0
@@ -511,7 +642,199 @@ async fn updated_agent_replaces_every_field_and_selected_channel(
     assert_eq!(listed.len(), 1);
     assert_eq!(listed[0].bot.handle, "updated-fixer");
     assert_eq!(listed[0].channel_ids, vec![second]);
+    assert_eq!(listed[0].auto_accept_permissions, Some(false));
+
+    let fetched = PgBotsRepo::new(pool.clone())
+        .get_agent(created.bot.id)
+        .await?
+        .expect("updated agent should still be addressable by bot id");
+    assert_eq!(fetched.auto_accept_permissions, Some(false));
     Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn auto_accept_permissions_persists_each_of_its_three_states(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let repo = PgBotsRepo::new(pool.clone());
+    let mut create = create_agent_req("permissive", AgentChannelScope::All);
+    create.auto_accept_permissions = Some(true);
+    let created = service.create_agent(user_id(USER_OWNER), create).await?;
+    assert_eq!(created.auto_accept_permissions, Some(true));
+    assert_eq!(
+        repo.get_agent(created.bot.id)
+            .await?
+            .unwrap()
+            .auto_accept_permissions,
+        Some(true)
+    );
+
+    // An update that says nothing clears the choice back to the kind default.
+    let mut update = update_agent_req("permissive", AgentChannelScope::All);
+    update.auto_accept_permissions = None;
+    service
+        .update_agent(user_id(USER_OWNER), created.bot.id, update)
+        .await?;
+    assert_eq!(
+        repo.get_agent(created.bot.id)
+            .await?
+            .unwrap()
+            .auto_accept_permissions,
+        None
+    );
+    Ok(())
+}
+
+fn mcp_server(app_slug: &str, server_name: &str) -> AgentMcpServer {
+    AgentMcpServer {
+        app_slug: app_slug.to_string(),
+        server_name: server_name.to_string(),
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn selected_mcp_servers_round_trip_and_are_replaced_wholesale(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let selected = |servers: Vec<AgentMcpServer>| AgentMcpServers::Selected { servers };
+    let mut create = create_agent_req("mcp-fixer", AgentChannelScope::All);
+    // Nothing here is connected for anyone: the persona picks from the whole
+    // catalog and the grant is the session owner's business.
+    create.mcp = selected(vec![
+        mcp_server("notion", "Notion"),
+        mcp_server("linear", "Linear"),
+    ]);
+    let created = service.create_agent(user_id(USER_OWNER), create).await?;
+    assert_eq!(
+        created.mcp,
+        selected(vec![
+            mcp_server("notion", "Notion"),
+            mcp_server("linear", "Linear"),
+        ])
+    );
+
+    let fetched = PgBotsRepo::new(pool.clone())
+        .get_agent(created.bot.id)
+        .await?
+        .expect("created agent should be addressable by bot id");
+    // Read back ordered by slug, whatever order they were written in.
+    assert_eq!(
+        fetched.mcp,
+        selected(vec![
+            mcp_server("linear", "Linear"),
+            mcp_server("notion", "Notion"),
+        ])
+    );
+    let listed = service.list_agents(user_id(USER_OWNER)).await?;
+    assert_eq!(listed[0].mcp, fetched.mcp);
+
+    let mut update = update_agent_req("mcp-fixer", AgentChannelScope::All);
+    update.mcp = selected(vec![mcp_server("hubspot", "HubSpot")]);
+    let updated = service
+        .update_agent(user_id(USER_OWNER), created.bot.id, update)
+        .await?;
+    assert_eq!(updated.mcp.servers(), [mcp_server("hubspot", "HubSpot")]);
+    let fetched = PgBotsRepo::new(pool.clone())
+        .get_agent(created.bot.id)
+        .await?
+        .expect("updated agent should still be addressable");
+    assert_eq!(fetched.mcp.servers(), [mcp_server("hubspot", "HubSpot")]);
+
+    let back_to_owner = update_agent_req("mcp-fixer", AgentChannelScope::All);
+    let reverted = service
+        .update_agent(user_id(USER_OWNER), created.bot.id, back_to_owner)
+        .await?;
+    assert_eq!(reverted.mcp, AgentMcpServers::OwnerConnections);
+    let rows = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM agent_mcp_servers WHERE bot_id = $1"#,
+        created.bot.id.as_uuid(),
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(rows, 0);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn mcp_server_selection_is_validated(pool: PgPool) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let selected = |servers: Vec<AgentMcpServer>| AgentMcpServers::Selected { servers };
+
+    let mut bad_slug = create_agent_req("bad-mcp", AgentChannelScope::All);
+    bad_slug.mcp = selected(vec![mcp_server("Linear App", "Linear")]);
+    let error = service
+        .create_agent(user_id(USER_OWNER), bad_slug)
+        .await
+        .expect_err("a slug the proxy could never dial is refused");
+    assert!(matches!(error, BotError::BadRequest(_)));
+
+    let mut duplicate = create_agent_req("bad-mcp", AgentChannelScope::All);
+    duplicate.mcp = selected(vec![
+        mcp_server("linear", "Linear"),
+        mcp_server("linear", "Also"),
+    ]);
+    let error = service
+        .create_agent(user_id(USER_OWNER), duplicate)
+        .await
+        .expect_err("duplicate slugs are refused");
+    assert!(matches!(error, BotError::BadRequest(_)));
+
+    let mut unnamed = create_agent_req("bad-mcp", AgentChannelScope::All);
+    unnamed.mcp = selected(vec![mcp_server("linear", " ")]);
+    let error = service
+        .create_agent(user_id(USER_OWNER), unnamed)
+        .await
+        .expect_err("an unnamed server is refused");
+    assert!(matches!(error, BotError::BadRequest(_)));
+
+    // An explicit empty selection is a valid choice: this persona gets no
+    // connectors at all, not even the owner's.
+    let mut empty = create_agent_req("empty-mcp", AgentChannelScope::All);
+    empty.mcp = selected(Vec::new());
+    let created = service.create_agent(user_id(USER_OWNER), empty).await?;
+    assert_eq!(created.mcp, selected(Vec::new()));
+    Ok(())
+}
+
+#[test]
+fn agent_requests_without_mcp_fields_default_to_owner_connections() {
+    let legacy = json!({
+        "team_id": null,
+        "name": "Legacy",
+        "handle": "legacy",
+        "description": null,
+        "avatar_url": null,
+        "instructions": "",
+        "harness": "cursor",
+        "default_model": "cursor-small",
+        "channel_scope": "all",
+    });
+    let create: CreateAgentRequest = serde_json::from_value(legacy.clone()).unwrap();
+    assert_eq!(create.mcp, AgentMcpServers::OwnerConnections);
+    let update: UpdateAgentRequest = serde_json::from_value(legacy).unwrap();
+    assert_eq!(update.mcp, AgentMcpServers::OwnerConnections);
+}
+
+/// The wire shape is a tagged union, which is what the generated TypeScript
+/// consumes: the scope is the discriminator and the servers ride with it.
+#[test]
+fn agent_mcp_servers_serialize_as_a_tagged_union() {
+    let selected = AgentMcpServers::Selected {
+        servers: vec![mcp_server("linear", "Linear")],
+    };
+    assert_eq!(
+        serde_json::to_value(&selected).unwrap(),
+        json!({"scope": "selected", "servers": [{"app_slug": "linear", "server_name": "Linear"}]})
+    );
+    assert_eq!(
+        serde_json::to_value(AgentMcpServers::OwnerConnections).unwrap(),
+        json!({"scope": "owner_connections"})
+    );
+    let parsed: AgentMcpServers =
+        serde_json::from_value(json!({"scope": "selected", "servers": []})).unwrap();
+    assert_eq!(parsed, AgentMcpServers::Selected { servers: vec![] });
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -1610,5 +1933,43 @@ async fn team_harnesses_back_member_agents_but_not_team_agents_on_private_harnes
         .await?;
     assert_eq!(cleared.harness_id, None);
 
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn persona_create_and_update_cannot_bypass_a_prompt_only_harness(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    insert_user(&pool, USER_OWNER).await?;
+    let harness = insert_harness(&pool, Some(USER_OWNER), None).await?;
+    let service = service(&pool);
+    let mut request = macrod_agent_req("permission-policy", Some(harness));
+    request.auto_accept_permissions = Some(true);
+    assert!(matches!(
+        service
+            .create_agent(user_id(USER_OWNER), request.clone())
+            .await,
+        Err(BotError::BadRequest(_))
+    ));
+    request.auto_accept_permissions = Some(false);
+    let agent = service.create_agent(user_id(USER_OWNER), request).await?;
+    let mut update = update_agent_req("permission-policy", AgentChannelScope::All);
+    update.harness = "macrod".to_owned();
+    update.harness_id = Some(harness);
+    update.auto_accept_permissions = Some(true);
+    assert!(matches!(
+        service
+            .update_agent(user_id(USER_OWNER), agent.bot.id, update)
+            .await,
+        Err(BotError::BadRequest(_))
+    ));
+    assert_eq!(
+        PgBotsRepo::new(pool)
+            .get_agent(agent.bot.id)
+            .await?
+            .unwrap()
+            .auto_accept_permissions,
+        Some(false)
+    );
     Ok(())
 }

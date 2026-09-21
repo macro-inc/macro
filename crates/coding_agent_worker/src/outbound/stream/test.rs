@@ -1,6 +1,5 @@
 use super::*;
-use crate::config::MacroApi;
-use crate::outbound::credentials::{HarnessCredentials, HarnessScope};
+use crate::config::{HarnessCredentials, HarnessScope, MacroApi};
 use harness_id::HarnessId;
 use webhook::domain::models::WebhookFilter;
 

@@ -7,20 +7,19 @@
 //! genuinely means the feed is exhausted.
 
 use activity::VIEW_ACTION_TAGS;
-use item_filters::ast::properties::{PropertyEntityType, properties_filter_matches_propertyless};
 use model_entity::EntityType;
 use sqlx::{PgPool, Row};
 use std::str::FromStr;
-use system_properties::SystemPropertyKey;
 
 use crate::domain::models::{TouchedEntity, TouchedSoupRequest};
-use crate::outbound::pg_soup_repo::expanded::dynamic::{
-    access_semi_join, build_chat_filter, build_document_filter, build_project_filter,
-    build_properties_filter, chat_filter_is_impossible, document_filter_is_impossible,
-    document_filter_needs_task_property_joins, project_filter_is_impossible,
-    properties_filter_can_apply_to,
+use crate::outbound::pg_soup_repo::candidate_gates::{
+    channel_gate, chat_gate, document_gate, email_gate, includes_channels, includes_chats,
+    includes_documents, includes_email_threads, includes_projects, project_gate,
 };
 use crate::outbound::pg_soup_repo::type_err;
+
+/// The candidate row's entity id, as the gates see it.
+const ID_SQL: &str = "ae.entity_id";
 
 /// Renders [`VIEW_ACTION_TAGS`] as a SQL `IN`-list body, e.g. `'opened'`.
 /// The tags are compile-time constants of this workspace, never user input.
@@ -32,127 +31,6 @@ fn view_tags_sql() -> String {
         .join(", ")
 }
 
-/// The per-type `EXISTS` gate for documents: exists, not deleted, accessible,
-/// and matching the request's document + properties filters.
-fn document_gate(req: &TouchedSoupRequest<'_>) -> String {
-    let doc_filter = req.filter.and_then(|f| f.document_filter.as_deref());
-    let props_filter = req.filter.and_then(|f| f.properties_filter.as_deref());
-    // Importance / IncludeCbmAtmNc literals predicate on the dt/ep_assignees/
-    // ep_status aliases, so those joins ride along only when referenced.
-    let task_joins = if document_filter_needs_task_property_joins(doc_filter) {
-        format!(
-            r#"
-                LEFT JOIN document_sub_type dt ON dt.document_id = d.id
-                LEFT JOIN entity_properties ep_assignees
-                    ON dt.sub_type = 'task'
-                    AND ep_assignees.entity_id = d.id
-                    AND ep_assignees.entity_type = 'TASK'
-                    AND ep_assignees.property_definition_id = '{assignees}'
-                LEFT JOIN entity_properties ep_status
-                    ON dt.sub_type = 'task'
-                    AND ep_status.entity_id = d.id
-                    AND ep_status.entity_type = 'TASK'
-                    AND ep_status.property_definition_id = '{status}'
-"#,
-            assignees = SystemPropertyKey::ASSIGNEES_UUID,
-            status = SystemPropertyKey::STATUS_UUID,
-        )
-    } else {
-        String::new()
-    };
-    format!(
-        r#"EXISTS (
-                SELECT 1 FROM "Document" d
-                {task_joins}
-                WHERE d.id = ae.entity_id
-                AND d."deletedAt" IS NULL
-                AND {access}
-                {doc_fold}
-                {props_fold}
-            )"#,
-        access = access_semi_join("d.id", "document"),
-        doc_fold = build_document_filter(doc_filter),
-        props_fold = build_properties_filter(props_filter, "d.id"),
-    )
-}
-
-fn chat_gate(req: &TouchedSoupRequest<'_>) -> String {
-    let chat_filter = req.filter.and_then(|f| f.chat_filter.as_deref());
-    let props_filter = req.filter.and_then(|f| f.properties_filter.as_deref());
-    format!(
-        r#"EXISTS (
-                SELECT 1 FROM "Chat" c
-                WHERE c.id = ae.entity_id
-                AND c."deletedAt" IS NULL
-                AND {access}
-                {chat_fold}
-                {props_fold}
-            )"#,
-        access = access_semi_join("c.id", "chat"),
-        chat_fold = build_chat_filter(chat_filter),
-        props_fold = build_properties_filter(props_filter, "c.id"),
-    )
-}
-
-fn project_gate(req: &TouchedSoupRequest<'_>) -> String {
-    let project_filter = req.filter.and_then(|f| f.project_filter.as_deref());
-    let props_filter = req.filter.and_then(|f| f.properties_filter.as_deref());
-    format!(
-        r#"EXISTS (
-                SELECT 1 FROM "Project" p
-                WHERE p.id = ae.entity_id
-                AND p."deletedAt" IS NULL
-                AND {access}
-                {project_fold}
-                {props_fold}
-            )"#,
-        access = access_semi_join("p.id", "project"),
-        project_fold = build_project_filter(project_filter),
-        props_fold = build_properties_filter(props_filter, "p.id"),
-    )
-}
-
-/// Guards a gate whose body casts `ae.entity_id::uuid`: a malformed id in
-/// the unconstrained TEXT column must drop that one row, not abort the whole
-/// page with a cast error. Nested CASE because SQL `AND` does not guarantee
-/// evaluation order, but CASE arms do.
-fn uuid_guarded(gate: String) -> String {
-    format!(
-        "CASE WHEN ae.entity_id ~ '^[0-9a-fA-F]{{8}}-[0-9a-fA-F]{{4}}-[0-9a-fA-F]{{4}}-[0-9a-fA-F]{{4}}-[0-9a-fA-F]{{12}}$' THEN {gate} ELSE FALSE END"
-    )
-}
-
-/// Channels are participant-gated, not `entity_access` rows, are never
-/// soft-deleted (purges delete their activity instead), and carry no
-/// properties — a properties filter is settled type-wide in
-/// [`included_types`], not per row.
-fn channel_gate() -> String {
-    uuid_guarded(
-        r#"EXISTS (
-                SELECT 1 FROM comms_channel_participants cp
-                WHERE cp.channel_id = ae.entity_id::uuid
-                AND cp.user_id = $1
-                AND cp.left_at IS NULL
-            )"#
-        .to_string(),
-    )
-}
-
-/// Email threads are inbox-scoped: visible iff the thread belongs to one of
-/// the caller's readable links (own + delegated).
-fn email_gate(req: &TouchedSoupRequest<'_>) -> String {
-    let props_filter = req.filter.and_then(|f| f.properties_filter.as_deref());
-    uuid_guarded(format!(
-        r#"EXISTS (
-                SELECT 1 FROM email_threads et
-                WHERE et.id = ae.entity_id::uuid
-                AND et.link_id = ANY($5)
-                {props_fold}
-            )"#,
-        props_fold = build_properties_filter(props_filter, "et.id::text"),
-    ))
-}
-
 /// Which entity types this request can include. A type drops when its own
 /// filter can never match or when an active properties filter can never
 /// match it. Channel and email filter trees never reach here — the domain
@@ -161,35 +39,20 @@ fn email_gate(req: &TouchedSoupRequest<'_>) -> String {
 ///
 /// [`SoupErr::TouchedUnsupportedFilter`]: crate::domain::models::SoupErr::TouchedUnsupportedFilter
 fn included_types(req: &TouchedSoupRequest<'_>) -> Vec<&'static str> {
-    let props = req.filter.and_then(|f| f.properties_filter.as_deref());
     let mut types = Vec::with_capacity(5);
-    if !document_filter_is_impossible(req.filter.and_then(|f| f.document_filter.as_deref()))
-        && properties_filter_can_apply_to(
-            props,
-            &[PropertyEntityType::Document, PropertyEntityType::Task],
-        )
-    {
+    if includes_documents(req.filter) {
         types.push(EntityType::Document.into());
     }
-    if !chat_filter_is_impossible(req.filter.and_then(|f| f.chat_filter.as_deref()))
-        && properties_filter_can_apply_to(props, &[PropertyEntityType::Chat])
-    {
+    if includes_chats(req.filter) {
         types.push(EntityType::Chat.into());
     }
-    if !project_filter_is_impossible(req.filter.and_then(|f| f.project_filter.as_deref()))
-        && properties_filter_can_apply_to(props, &[PropertyEntityType::Project])
-    {
+    if includes_projects(req.filter) {
         types.push(EntityType::Project.into());
     }
-    // Channels carry no properties, so the filter is settled here for the
-    // whole type: include channels only when a propertyless entity can
-    // satisfy the tree (the same gate the simple path's channel leg uses).
-    if props.is_none_or(properties_filter_matches_propertyless) {
+    if includes_channels(req.filter) {
         types.push(EntityType::Channel.into());
     }
-    if properties_filter_can_apply_to(props, &[PropertyEntityType::Thread])
-        && !req.link_ids.is_empty()
-    {
+    if includes_email_threads(req.filter, req.link_ids) {
         types.push(EntityType::EmailThread.into());
     }
     types
@@ -248,11 +111,11 @@ pub(super) async fn touched_soup_page(
         ORDER BY ae.occurred_at DESC, ae.entity_id DESC
         LIMIT $6
         "#,
-        document_gate = document_gate(&req),
-        chat_gate = chat_gate(&req),
-        project_gate = project_gate(&req),
-        channel_gate = channel_gate(),
-        email_gate = email_gate(&req),
+        document_gate = document_gate(ID_SQL, req.filter),
+        chat_gate = chat_gate(ID_SQL, req.filter),
+        project_gate = project_gate(ID_SQL, req.filter),
+        channel_gate = channel_gate(ID_SQL, req.filter),
+        email_gate = email_gate(ID_SQL, req.filter),
     );
 
     let after_ts = req.after.as_ref().map(|a| a.occurred_at);

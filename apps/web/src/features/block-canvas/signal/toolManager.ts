@@ -1,17 +1,15 @@
-import { contextMenuStore } from '@block-canvas/component/ContextMenu';
 import { clamp, lerp, remap } from '@block-canvas/util/math';
 import { getTextNodeHeight } from '@block-canvas/util/style';
-import { createBlockSignal, useIsNestedBlock } from '@core/block';
 import { IS_MAC } from '@core/constant/isMac';
 import { pressedKeys } from '@core/hotkey/state';
-import { useCanEdit } from '@core/signal/permissions';
 import { isEditableInput } from '@core/util/isEditableInput';
 import { createCallback } from '@solid-primitives/rootless';
 import { nanoid } from 'nanoid';
 import { createMemo, createSignal } from 'solid-js';
 import { DRAG_THRESHOLD, type Tool, Tools, ViewOnlyTools } from '../constants';
+import { useCanvasDocument } from '../context/canvas-document-context';
 import type { Operator } from '../operation/operation';
-import { highestOrderSignal, useCanvasNodes } from '../store/canvasData';
+import { useCanvasNodes } from '../store/canvasData';
 import { useRenderState } from '../store/RenderState';
 import { sharedInstance } from '../util/sharedInstance';
 import { type Vector2, vec2 } from '../util/vector2';
@@ -26,42 +24,27 @@ export type DispatchMouseArgs = {
   args: any[];
 };
 
-export const selectedToolSignal = createBlockSignal<Tool>(Tools.Grab);
-export const pressedModifiersSignal = createBlockSignal<Set<string>>(new Set());
-
-export const handlersByToolSignal = createBlockSignal<Map<Tool, Operator[]>>(
-  new Map()
-);
-
-export const mouseDownPositionSignal = createBlockSignal<Vector2>();
-export const mousePositionSignal = createBlockSignal<Vector2>();
-export const lastMousePositionSignal = createBlockSignal<Vector2>();
-export const rawMouseDownPositionSignal = createBlockSignal<Vector2>();
-export const activeTextEditorSignal = createBlockSignal<boolean>(false);
-
-export const middleMousePressedSignal = createBlockSignal<boolean>();
-export const rightMousePressedSignal = createBlockSignal<boolean>();
-
 export const useToolManager = sharedInstance<ToolManager>(createToolManager);
 
 function createToolManager() {
-  const canEdit = useCanEdit();
-  const isNestedBlock = useIsNestedBlock();
-  const [selectedTool, setTool] = selectedToolSignal;
-  const [mouseDownPos, setMouseDownPos] = mouseDownPositionSignal;
-  const [handlersByTool, setHandlersByTool] = handlersByToolSignal;
-  const [middleMousePressed, setMiddleMousePressed] = middleMousePressedSignal;
-  const [mousePosition, setMousePosition] = mousePositionSignal;
-  const [lastMousePosition, setLastMousePosition] = lastMousePositionSignal;
-  const [rawMouseDownPos, setRawMouseDownPos] = rawMouseDownPositionSignal;
+  const canvas = useCanvasDocument();
+  const { canEdit, isNested } = canvas;
+  const state = canvas.state.signals;
+  const [selectedTool, setTool] = state.selectedTool;
+  const [mouseDownPos, setMouseDownPos] = state.mouseDownPosition;
+  const [handlersByTool, setHandlersByTool] = state.handlersByTool;
+  const [middleMousePressed, setMiddleMousePressed] = state.middleMousePressed;
+  const [mousePosition, setMousePosition] = state.mousePosition;
+  const [lastMousePosition, setLastMousePosition] = state.lastMousePosition;
+  const [rawMouseDownPos, setRawMouseDownPos] = state.rawMouseDownPosition;
   const [isDragging, setIsDragging] = createSignal(false);
-  const [activeTextEditor, setActiveTextEditor] = activeTextEditorSignal;
+  const [activeTextEditor, setActiveTextEditor] = state.activeTextEditor;
   const [_previousTouch, setPreviousTouch] = createSignal<Vector2>();
 
   const { clientToCanvas, zoom, pan } = useRenderState();
   const selection = useSelection();
   const history = useCanvasHistory();
-  const highestOrder = highestOrderSignal.get;
+  const [highestOrder] = state.highestOrder;
 
   const ignoreTargets: HTMLElement[] = [];
 
@@ -120,7 +103,7 @@ function createToolManager() {
     setPreviousTouch(currentPos);
   }
 
-  const contextMenu = contextMenuStore.get;
+  const [contextMenu] = canvas.state.stores.contextMenu;
 
   function pointerDown(e: PointerEvent) {
     if (e.pointerType === 'mouse') {
@@ -348,7 +331,7 @@ function createToolManager() {
       // containerRef.addEventListener('pointerenter', pointerEnter);
       containerRef.addEventListener('dblclick', dblClick);
 
-      if (!isNestedBlock) {
+      if (!isNested()) {
         containerRef.addEventListener('wheel', scroll, { passive: false });
       }
     },
@@ -361,7 +344,7 @@ function createToolManager() {
       // containerRef?.removeEventListener('pointerenter', pointerEnter);
       containerRef?.removeEventListener('dblclick', dblClick);
 
-      if (!isNestedBlock) {
+      if (!isNested()) {
         containerRef?.removeEventListener('wheel', scroll);
       }
     },

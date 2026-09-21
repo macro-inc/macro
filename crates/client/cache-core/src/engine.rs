@@ -20,10 +20,13 @@ use crate::normalize::{
     DependencyCompleteness, NormalizeError, RecordUpdates, normalize, normalize_with_dependencies,
     project_hydration_response,
 };
+use crate::predicate::reconciliation::{
+    MAX_RECONCILIATION_BASELINE, PredicateBaselineEntry, PredicateReconciliation,
+};
 use crate::predicate::{
     OptimisticShadowReconciliation, OptimisticUpsertReconciliation, PredicateIndexStorage,
     PredicateQueryResult, ProjectionMutation, ProjectionMutationLayer, ProjectionState,
-    StagedOptimisticProjection, StagedOptimisticProjectionOwner,
+    StagedOptimisticProjection, StagedOptimisticProjectionOwner, apply_authoritative_exact_members,
     apply_authoritative_projection_mutations, apply_authoritative_projection_patch,
     compose_effective_optimistic_projection,
 };
@@ -1755,6 +1758,23 @@ impl<S: Storage> Engine<S> {
                 ProjectionMutation::Delete(record_key) => {
                     authoritative.insert(record_key.clone(), None);
                 }
+                ProjectionMutation::PatchExact {
+                    record_key,
+                    profile,
+                    partition,
+                    remove,
+                    insert,
+                } => {
+                    let state = apply_authoritative_exact_members(
+                        authoritative.get(record_key).and_then(Option::as_ref),
+                        record_key,
+                        profile,
+                        partition,
+                        remove,
+                        insert,
+                    );
+                    authoritative.insert(record_key.clone(), Some(state));
+                }
             }
         }
         let remaining_layers = self
@@ -2398,10 +2418,27 @@ impl<S: PredicateIndexStorage> Engine<S> {
         keys: &[EntityKey<'static>],
         projection_keys: &[PredicateRecordKey],
     ) -> Result<Revisioned<BTreeSet<OpId>>, EngineError<S::Error>> {
+        self.delete_keys_with_projection_changes(
+            keys,
+            projection_keys
+                .iter()
+                .cloned()
+                .map(ProjectionMutation::Delete)
+                .collect(),
+        )
+        .await
+    }
+
+    /// Atomically delete records and update projections that depend on them.
+    pub async fn delete_keys_with_projection_changes(
+        &mut self,
+        keys: &[EntityKey<'static>],
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<Revisioned<BTreeSet<OpId>>, EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
         let affected = self.deps.ops_for_keys(keys.iter());
         self.storage
-            .delete_batch_with_projections(keys, projection_keys)
+            .delete_batch_with_projection_changes(keys, projections)
             .await
             .map_err(EngineError::Storage)?;
         for key in keys {
@@ -2412,6 +2449,27 @@ impl<S: PredicateIndexStorage> Engine<S> {
         }
         self.advance_revision()?;
         Ok(self.revisioned(affected))
+    }
+
+    /// Reconcile server-page membership and local candidates at one engine revision.
+    pub async fn reconcile_predicate_index(
+        &mut self,
+        query: &ValidatedIndexQuery,
+        baseline: &[PredicateBaselineEntry],
+    ) -> Result<Revisioned<PredicateReconciliation>, EngineError<S::Error>> {
+        if baseline.len() > MAX_RECONCILIATION_BASELINE {
+            return Err(RecordSelectionError::TooManyKeys {
+                count: baseline.len(),
+                max: MAX_RECONCILIATION_BASELINE,
+            }
+            .into());
+        }
+        let value = self
+            .storage
+            .reconcile_predicate_index(query, baseline)
+            .await
+            .map_err(EngineError::Storage)?;
+        Ok(self.revisioned(value))
     }
 
     /// Execute a complete generic exact-index query over authoritative and optimistic projections.

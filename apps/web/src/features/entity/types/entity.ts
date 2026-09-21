@@ -23,6 +23,12 @@ export type EntityBase = {
    * helpers may bump it optimistically.
    */
   touchedAt?: DateValue | null;
+  /**
+   * When the viewer was last notified about this entity, present only on
+   * rows from `notified_at` pages. The inbox sorts and date-buckets on it,
+   * and incoming notifications bump it optimistically.
+   */
+  notifiedAt?: DateValue | null;
   createdAt?: DateValue | null;
   updatedAt?: DateValue | null;
   viewedAt?: DateValue | null;
@@ -152,7 +158,17 @@ export type ChannelThreadEntity = EntityBase & {
 
 export type ChatEntity = EntityBase & {
   type: 'chat';
+  model?: string | null;
   projectId?: string;
+  properties?: SoupProperty[];
+};
+
+export type AgentSessionEntity = EntityBase & {
+  type: 'agent_session';
+  botId: string;
+  bot?: { id: string; name: string; avatarUrl?: string | null } | null;
+  threadId?: string | null;
+  status: string;
   properties?: SoupProperty[];
 };
 
@@ -164,6 +180,17 @@ export type SubType = {
   type: NamedSubType;
   is_completed?: boolean;
 } | null;
+
+/** Wire subtypes without a dedicated block, including initiative_description, become null. */
+export const toSubType = (
+  wire: { type: string; is_completed?: boolean } | null | undefined
+): SubType => {
+  if (wire == null) return null;
+  const { type } = wire;
+  return type === 'task' || type === 'snippet' || type === 'skill'
+    ? { type, is_completed: wire.is_completed }
+    : null;
+};
 
 export type BaseDocumentEntity = EntityBase & {
   type: 'document';
@@ -384,6 +411,7 @@ export type CalendarEventEntity = EntityBase & {
 };
 
 export type EntityData =
+  | AgentSessionEntity
   | ChannelEntity
   | ChannelMessageEntity
   | ChannelThreadEntity
@@ -402,6 +430,7 @@ export type EntityData =
   | ForeignEntity;
 
 const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
+  'agent_session',
   'channel',
   'channel_message',
   'channel_thread',

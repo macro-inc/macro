@@ -1,6 +1,6 @@
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 import { PulsingStar } from '@entity/components/PulsingStar';
-import StarIcon from '@icon/wide-star.svg';
+import StarIcon from '@phosphor/sparkle.svg';
 import type { JSX } from 'solid-js';
 import { createSignal, Show } from 'solid-js';
 import { BaseTool } from './BaseTool';
