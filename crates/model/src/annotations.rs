@@ -151,4 +151,3 @@ pub enum AnnotationIncrementalUpdate<'a> {
         response: &'a DeleteUnthreadedAnchorResponse,
     },
 }
-

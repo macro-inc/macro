@@ -173,9 +173,11 @@ pub fn ingest_message_event(event_id: Uuid, event: &MessageTopicEvent) -> Ingest
         },
         // Deleting a message mutates the channel's content.
         MessageTopicEvent::Deleted(m) => match channel(&m.parent) {
-            Some(channel_id) => {
-                common(m.actor.clone(), channel_id, m.deleted_at.unwrap_or_else(now))
-            }
+            Some(channel_id) => common(
+                m.actor.clone(),
+                channel_id,
+                m.deleted_at.unwrap_or_else(now),
+            ),
             None => Ingest::Ignore,
         },
         MessageTopicEvent::AttachmentCreated(m) => match channel(&m.parent) {

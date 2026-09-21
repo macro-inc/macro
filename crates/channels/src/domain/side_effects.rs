@@ -7,7 +7,9 @@ use crate::domain::{
     },
     events::ChannelEvent,
     mention_events::{EntityRef, MentionMacroEvent, MentionMetadata},
-    models::{BotId, BotSenderProfile, ChannelMetadata, ChannelParticipant, ChannelType, MutatedMessage},
+    models::{
+        BotId, BotSenderProfile, ChannelMetadata, ChannelParticipant, ChannelType, MutatedMessage,
+    },
     ports::{
         ChannelContactsDispatcher, ChannelEventDispatcher, ChannelEventHandler,
         ChannelNotificationSender, ChannelRealtimePublisher, ChannelSideEffectContext,
@@ -866,7 +868,6 @@ struct PostedMessageNotificationContext {
 fn is_bot_principal(id: &str) -> bool {
     BotIdStr::parse_from_str(id).is_ok()
 }
-
 
 fn recipients_excluding<'a>(
     recipients: impl IntoIterator<Item = &'a str>,

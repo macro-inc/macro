@@ -6,7 +6,9 @@ use super::{
 };
 use messages::domain::{
     delivery::MessageRealtime,
-    models::{Message, MessageParent, PatchMessageNotificationPolicy, PostMessageNotificationPolicy},
+    models::{
+        Message, MessageParent, PatchMessageNotificationPolicy, PostMessageNotificationPolicy,
+    },
     ports::{MessageChange, MessageEvent, MessageEventPublisher},
 };
 use uuid::Uuid;

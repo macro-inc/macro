@@ -165,8 +165,7 @@ impl messages::domain::api::MessageReader for RecordingMessages {
         _: EntityAccessReceipt<messages::domain::service::MessageView>,
         _: Uuid,
         _: u16,
-    ) -> Result<Vec<messages::domain::models::Message>, messages::domain::ports::MessageError>
-    {
+    ) -> Result<Vec<messages::domain::models::Message>, messages::domain::ports::MessageError> {
         unimplemented!("read path unused by mutation tools")
     }
     async fn resolve_legacy(

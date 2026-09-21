@@ -63,7 +63,12 @@ fn commit_message<M: MacroEventCollection + 'static>(
 /// Keeps the trigger consumer running across transient failures.
 pub async fn supervise(pool: PgPool, kafka_brokers: String, internal_api_key: String) {
     loop {
-        if let Err(error) = run(pool.clone(), kafka_brokers.clone(), internal_api_key.clone()).await
+        if let Err(error) = run(
+            pool.clone(),
+            kafka_brokers.clone(),
+            internal_api_key.clone(),
+        )
+        .await
         {
             tracing::error!(error = ?error, "agent trigger stopped; restarting");
             sleep(Duration::from_secs(1)).await;

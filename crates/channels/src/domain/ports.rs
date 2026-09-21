@@ -6,8 +6,8 @@ use crate::domain::models::{
     ChannelJoinCodeResponse, ChannelMetadata, ChannelParticipant, ChannelPreview,
     ChannelPreviewRow, CreateChannelRequest, CreateChannelResponse, CreateEntityMentionOptions,
     CreatedChannel, EntityMention, GetOrCreateChannelResponse, GetOrCreateDmRequest,
-    GetOrCreatePrivateRequest, PatchChannelRequest, ReferencedShareItem,
-    RemoveParticipantsRequest, Sender,
+    GetOrCreatePrivateRequest, PatchChannelRequest, ReferencedShareItem, RemoveParticipantsRequest,
+    Sender,
 };
 #[cfg(feature = "list")]
 use crate::domain::models::{
@@ -344,7 +344,6 @@ pub trait ChannelRepo: Send + Sync + 'static {
         channel_id: Uuid,
         activity_type: ActivityType,
     ) -> impl Future<Output = Result<Activity, Self::Err>> + Send;
-
 }
 
 /// Service for channel reads and mutations.

@@ -407,7 +407,6 @@ impl ChannelRepo for FakeMutationRepo {
             interacted_at: None,
         })
     }
-
 }
 
 #[derive(Clone, Default)]

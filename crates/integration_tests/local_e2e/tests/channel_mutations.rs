@@ -51,9 +51,7 @@ impl ChannelApiClient {
         let messages_base_url = config
             .get("LOCAL_E2E_MESSAGES_BASE_URL")
             .map(str::to_string)
-            .unwrap_or_else(|| {
-                format!("{}/messages/channel", services.document_storage_url())
-            });
+            .unwrap_or_else(|| format!("{}/messages/channel", services.document_storage_url()));
         Self {
             label: "channels".to_string(),
             mutation_base_url: trim_trailing_slash(&mutation_base_url),
@@ -1028,7 +1026,11 @@ async fn assert_reaction_side_effect_contract(ctx: &ChannelContractContext) -> a
         .await?
     {
         ensure!(
-            reaction_payload_contains_user(changed_message(&event.data), "👍", &ctx.users.bob.user_id),
+            reaction_payload_contains_user(
+                changed_message(&event.data),
+                "👍",
+                &ctx.users.bob.user_id
+            ),
             "{} {} reaction payload missing bob: {}",
             ctx.api.label(),
             event.label,

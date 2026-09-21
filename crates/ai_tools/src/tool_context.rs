@@ -174,8 +174,11 @@ pub type ToolCommsService = ChannelListServiceImpl<
 pub type ToolChannelEventDispatcher = std::sync::Arc<dyn ChannelEventDispatcher>;
 
 /// Type alias for the channel messages service implementation used by AI tools.
-pub type ToolChannelMessagesService =
-    ChannelServiceImpl<PgChannelsRepo, ToolChannelEventDispatcher, NoopChannelReferenceSharePermissions>;
+pub type ToolChannelMessagesService = ChannelServiceImpl<
+    PgChannelsRepo,
+    ToolChannelEventDispatcher,
+    NoopChannelReferenceSharePermissions,
+>;
 
 /// Type alias for the channel AI tool context.
 pub type ToolChannelToolContext =

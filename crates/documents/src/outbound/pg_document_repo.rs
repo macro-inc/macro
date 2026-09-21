@@ -23,9 +23,9 @@ use sqlx::Row;
 
 use crate::domain::content::{DocumentContent, DocumentContentState};
 use crate::domain::models::{
-    BranchNameContext, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
-    DocumentError, DocumentTeamShare, EditDocumentRepoArgs, EmailImportRepoOutcome,
-    ImportEmailAttachmentRepoArgs, TeamTaskMetadata,
+    BranchNameContext, CopyDocumentRepoArgs, CreateDocumentRepoArgs, DocumentError,
+    DocumentTeamShare, EditDocumentRepoArgs, EmailImportRepoOutcome, ImportEmailAttachmentRepoArgs,
+    TeamTaskMetadata,
 };
 use crate::domain::ports::DocumentRepo;
 

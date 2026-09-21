@@ -64,11 +64,10 @@ use super::events::{
     DocumentInteractionMetadata, DocumentMacroEvent, DocumentUpdatedMetadata, InteractionReason,
 };
 use super::models::{
-    CloudFrontConfig, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
-    CreateTaskRequest, DocumentError, DocumentTeamShareResponse, EditDocumentRepoArgs,
-    EditDocumentServiceArgs, EmailImportRepoOutcome, FileTypeUpdate, GithubPullRequest,
-    GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs, LocationQueryParams, TaskBranchName,
-    TeamTaskMetadata,
+    CloudFrontConfig, CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest,
+    DocumentError, DocumentTeamShareResponse, EditDocumentRepoArgs, EditDocumentServiceArgs,
+    EmailImportRepoOutcome, FileTypeUpdate, GithubPullRequest, GithubPullRequestsResponse,
+    ImportEmailAttachmentRepoArgs, LocationQueryParams, TaskBranchName, TeamTaskMetadata,
 };
 #[cfg(feature = "document_create")]
 use super::ports::create::DocumentCreationService;
@@ -1163,10 +1162,9 @@ impl<
         &self,
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<Vec<MessageThread>, DocumentError> {
-        let discussions = self
-            .discussions
-            .as_ref()
-            .ok_or_else(|| DocumentError::Internal(anyhow!("document discussions not configured")))?;
+        let discussions = self.discussions.as_ref().ok_or_else(|| {
+            DocumentError::Internal(anyhow!("document discussions not configured"))
+        })?;
         let access = entity_access_receipt
             .try_into_requirement::<MessageView>()
             .map_err(|_| DocumentError::Unauthorized)?;

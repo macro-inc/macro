@@ -52,9 +52,9 @@ use crate::{
         create::DocumentCreator,
         events::InteractionReason,
         models::{
-            CreateDocumentRepoArgs, CreateTaskRequest, DocumentError,
-            DocumentTeamShareResponse, EditDocumentServiceArgs, GithubPullRequestsResponse,
-            ImportEmailAttachmentRepoArgs, LocationQueryParams, TaskBranchName,
+            CreateDocumentRepoArgs, CreateTaskRequest, DocumentError, DocumentTeamShareResponse,
+            EditDocumentServiceArgs, GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs,
+            LocationQueryParams, TaskBranchName,
         },
         ports::{DocumentContentEventService, DocumentService, create::DocumentCreationService},
         response::{

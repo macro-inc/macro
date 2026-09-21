@@ -1,5 +1,3 @@
-import type { NewThreadAnchor } from '@service-storage/generated/schemas/newThreadAnchor';
-import type { ThreadAnchor } from '@service-storage/generated/schemas/threadAnchor';
 import { positionFromAddress } from './grid-selection';
 
 export const SPREADSHEET_COMMENT_PARAMS = { commentId: 'comment_id' } as const;
@@ -10,23 +8,23 @@ export type SpreadsheetCommentAnchor = {
   range: string;
 };
 
-/** The thread anchor posted with a root comment on a cell range. */
-export function spreadsheetThreadAnchor(
-  anchor: SpreadsheetCommentAnchor
-): NewThreadAnchor {
-  return {
-    type: 'spreadsheet',
-    sheet_id: anchor.sheetId,
-    sheet_name: anchor.sheetName,
-    range: anchor.range,
-  };
-}
-
-/** The cell range a thread is anchored to; absent for workbook comments and other anchors. */
+/**
+ * The cell range a message thread is anchored to, read from the thread's
+ * `state.anchor` (`{ type: 'spreadsheet', sheet_id, sheet_name, range }`);
+ * absent for workbook comments and other anchor types.
+ */
 export function spreadsheetCommentAnchor(
-  anchor: ThreadAnchor | null | undefined
+  anchor: unknown
 ): SpreadsheetCommentAnchor | undefined {
-  if (!anchor || typeof anchor !== 'object' || anchor.type !== 'spreadsheet')
+  if (
+    !anchor ||
+    typeof anchor !== 'object' ||
+    !('type' in anchor) ||
+    anchor.type !== 'spreadsheet' ||
+    !('sheet_id' in anchor) ||
+    !('sheet_name' in anchor) ||
+    !('range' in anchor)
+  )
     return;
   if (
     typeof anchor.sheet_id !== 'string' ||

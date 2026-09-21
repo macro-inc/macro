@@ -528,25 +528,27 @@ async fn run() -> anyhow::Result<()> {
         macro_event_broker.clone(),
     ));
 
-    let document_service = Arc::new(DocumentServiceImpl::new(
-        document_repo,
-        cloudfront_config,
-        sync_service_client.as_ref().clone(),
-        s3_upload_adapter,
-        TaskPropertiesAdapter {
-            system_properties: system_properties_service.clone(),
-            properties: properties_service.clone(),
-            entity_access_service: entity_access_service.clone(),
-        },
-        connection_service,
-        entity_access_management_service.clone(),
-        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
-        macro_event_broker.clone(),
-    )
-    .with_discussions(Arc::new(messages::domain::service::MessageService::new(
-        messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone()),
-        messages::domain::ports::NoMessageEventPublisher,
-    ))));
+    let document_service = Arc::new(
+        DocumentServiceImpl::new(
+            document_repo,
+            cloudfront_config,
+            sync_service_client.as_ref().clone(),
+            s3_upload_adapter,
+            TaskPropertiesAdapter {
+                system_properties: system_properties_service.clone(),
+                properties: properties_service.clone(),
+                entity_access_service: entity_access_service.clone(),
+            },
+            connection_service,
+            entity_access_management_service.clone(),
+            ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
+            macro_event_broker.clone(),
+        )
+        .with_discussions(Arc::new(messages::domain::service::MessageService::new(
+            messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone()),
+            messages::domain::ports::NoMessageEventPublisher,
+        ))),
+    );
 
     let foreign_entity_service = Arc::new(ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(
         db.clone(),

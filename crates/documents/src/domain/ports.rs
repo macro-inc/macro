@@ -37,11 +37,10 @@ use model_entity::Entity;
 use activity::Attribution;
 
 use super::models::{
-    BranchNameContext, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
-    CreateTaskRequest, DocumentError, DocumentTeamShare, DocumentTeamShareResponse,
-    EditDocumentRepoArgs, EditDocumentServiceArgs, EmailImportRepoOutcome,
-    GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs, LocationQueryParams, TaskBranchName,
-    TeamTaskMetadata,
+    BranchNameContext, CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest,
+    DocumentError, DocumentTeamShare, DocumentTeamShareResponse, EditDocumentRepoArgs,
+    EditDocumentServiceArgs, EmailImportRepoOutcome, GithubPullRequestsResponse,
+    ImportEmailAttachmentRepoArgs, LocationQueryParams, TaskBranchName, TeamTaskMetadata,
 };
 
 /// Repository for accessing document data from the database.

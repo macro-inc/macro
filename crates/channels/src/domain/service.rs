@@ -781,7 +781,6 @@ where
             action: GetOrCreateAction::Create,
         })
     }
-
 }
 
 impl<R, E, P, F> ChannelService for ChannelServiceImpl<R, E, P, F>

@@ -5,9 +5,9 @@ use std::sync::{Arc, Mutex};
 use crate::domain::content::DocumentContent;
 use crate::domain::events::InteractionReason;
 use crate::domain::models::{
-    CreateDocumentRepoArgs, CreateTaskRequest, DocumentError,
-    DocumentTeamShareResponse, EditDocumentServiceArgs, GithubPullRequestsResponse,
-    ImportEmailAttachmentRepoArgs, LocationQueryParams, TaskBranchName,
+    CreateDocumentRepoArgs, CreateTaskRequest, DocumentError, DocumentTeamShareResponse,
+    EditDocumentServiceArgs, GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs,
+    LocationQueryParams, TaskBranchName,
 };
 use crate::domain::permission_token::decode_permission_token;
 use crate::domain::ports::editing::{EditMode, EditResult, EditingWorkerService};

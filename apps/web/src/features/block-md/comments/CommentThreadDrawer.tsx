@@ -18,7 +18,7 @@ import CaretLeftIcon from '@phosphor/caret-left.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import { useContacts } from '@queries/contacts/contacts';
 import { usePostTypingUpdateMutation } from '@queries/messages/typing';
-import { Button, cn } from '@ui';
+import { Button } from '@ui';
 import { $setSelection } from 'lexical';
 import { createMemo, createSignal, Show, useContext } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';

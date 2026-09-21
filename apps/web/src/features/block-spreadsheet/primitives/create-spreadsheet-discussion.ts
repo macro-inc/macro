@@ -4,6 +4,7 @@ import type {
   DiscussionThread,
 } from '@core/comments/discussion/types';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
+import type { NewThreadAnchor } from '@service-storage/generated/schemas/newThreadAnchor';
 import type { SimpleMention } from '@service-storage/generated/schemas/simpleMention';
 import type {
   Message,
@@ -11,10 +12,19 @@ import type {
   PostMessage,
 } from '@service-storage/messages';
 import { type Accessor, createMemo } from 'solid-js';
-import {
-  type SpreadsheetCommentAnchor,
-  spreadsheetThreadAnchor,
-} from '../core/spreadsheet-comments';
+import type { SpreadsheetCommentAnchor } from '../core/spreadsheet-comments';
+
+/** The thread anchor posted with a root comment on a cell range. */
+export function spreadsheetThreadAnchor(
+  anchor: SpreadsheetCommentAnchor
+): NewThreadAnchor {
+  return {
+    type: 'spreadsheet',
+    sheet_id: anchor.sheetId,
+    sheet_name: anchor.sheetName,
+    range: anchor.range,
+  };
+}
 
 export function createSpreadsheetDiscussion(options: {
   threads: Accessor<MessageThread[]>;
