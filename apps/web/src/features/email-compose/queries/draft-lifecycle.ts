@@ -137,6 +137,12 @@ export const emailDraftLifecycleSource: EmailDraftLifecycleSource = {
       inboxId?: string;
     }>();
     let refreshVersion = 0;
+    const [requiredReadVersion, setRequiredReadVersion] = createSignal(0);
+    const read = async (identity: Parameters<typeof fetchLifecycle>[0]) => {
+      const version = refreshVersion;
+      const state = await fetchLifecycle(identity);
+      return { state, version };
+    };
     const query = useQuery(() => {
       const draftId = input.draftId() ?? '';
       const threadId = input.threadId() ?? '';
@@ -144,11 +150,16 @@ export const emailDraftLifecycleSource: EmailDraftLifecycleSource = {
       return {
         queryKey: observerQueryKey(draftId, threadId, inboxId),
         enabled: draftId.length > 0 && threadId.length > 0,
-        queryFn: () => fetchLifecycle({ draftId, threadId, inboxId }),
+        queryFn: () => read({ draftId, threadId, inboxId }),
         staleTime: 0,
         refetchOnWindowFocus: 'always' as const,
         refetchOnReconnect: 'always' as const,
-        refetchInterval: (stateQuery) => refreshInterval(stateQuery.state.data),
+        refetchInterval: (stateQuery) =>
+          refreshInterval(
+            stateQuery.state.data?.version === refreshVersion
+              ? stateQuery.state.data.state
+              : undefined
+          ),
       };
     });
 
@@ -159,6 +170,11 @@ export const emailDraftLifecycleSource: EmailDraftLifecycleSource = {
       if (!draftId || !threadId) return undefined;
 
       const version = ++refreshVersion;
+      // Once a mutation needs reconciliation, no earlier observation is
+      // authoritative again, even if the fresh read fails or query-store
+      // notifications are delayed. A later successful poll can satisfy this
+      // barrier without relying on wall-clock timestamp resolution.
+      setRequiredReadVersion(version);
       setRefreshing({ draftId, threadId, inboxId });
       const queryKey = observerQueryKey(draftId, threadId, inboxId);
       try {
@@ -168,14 +184,15 @@ export const emailDraftLifecycleSource: EmailDraftLifecycleSource = {
         await queryClient.cancelQueries({ queryKey, exact: true });
         const result = await queryClient.fetchQuery({
           queryKey,
-          queryFn: () => fetchLifecycle({ draftId, threadId, inboxId }),
+          queryFn: () => read({ draftId, threadId, inboxId }),
           staleTime: 0,
         });
         return version === refreshVersion &&
+          result.version === version &&
           draftId === input.draftId() &&
           threadId === input.threadId() &&
           inboxId === input.inboxId()
-          ? result
+          ? result.state
           : undefined;
       } finally {
         if (version === refreshVersion) setRefreshing(undefined);
@@ -206,8 +223,10 @@ export const emailDraftLifecycleSource: EmailDraftLifecycleSource = {
         pending?.inboxId === input.inboxId()
       )
         return undefined;
-      return query.isSuccess && query.isFetchedAfterMount
-        ? query.data
+      if (!query.isSuccess || !query.isFetchedAfterMount) return undefined;
+      const observation = query.data;
+      return observation.version === requiredReadVersion()
+        ? observation.state
         : undefined;
     };
     return { state, refresh };

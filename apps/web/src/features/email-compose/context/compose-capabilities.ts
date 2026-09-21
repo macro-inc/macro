@@ -175,6 +175,7 @@ export interface EmailDraftLifecycleSource {
     inboxId: Accessor<string | undefined>;
   }): {
     state: Accessor<EmailDraftLifecycleState | undefined>;
+    /** Prior observations stay invalid after failure until a fresh read succeeds. */
     refresh(): Promise<EmailDraftLifecycleState | undefined>;
   };
 }

@@ -480,6 +480,9 @@ space; it must not cover discard, attachment, formatting, or Send controls.
 While a schedule change is pending, immediate send and further schedule changes
 are disabled. Reply recipients cannot be edited or dragged during scheduling,
 sending, or discarding. A failed schedule or unschedule keeps the last confirmed time.
+If a later lifecycle refresh fails, that confirmed result remains in place; stale
+observations must not undo it or create a recovery draft after a failed inbox move.
+Reconciliation resumes when a fresh poll or event-driven read succeeds.
 If scheduling succeeds but marking the thread done fails, the email remains
 scheduled and a notice explains the separate failure. Check the confirmed time
 before retrying; do not treat that notice as a failed schedule.

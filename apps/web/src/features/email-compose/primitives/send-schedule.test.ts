@@ -1,4 +1,11 @@
-import { createSignal } from 'solid-js';
+import { emailKeys } from '@queries/email/keys';
+import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import {
+  createComponent,
+  createMemo,
+  createRoot,
+  createSignal,
+} from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { message } from '../../email-message/tests/messages';
 import type {
@@ -6,9 +13,76 @@ import type {
   PersistedEmailIdentity,
 } from '../context/compose-capabilities';
 import { decodeBase64Utf8 } from '../core/decode-base64';
+import { emailDraftLifecycleSource } from '../queries/draft-lifecycle';
 import { createComposeContext } from '../tests/capabilities';
 import { mountEmailComposer } from '../tests/composer';
-import { mountReplyComposer } from '../tests/reply';
+import { createEmailEditor, setEmailEditorText } from '../tests/editor';
+import { createEmailFormState } from './email-form-state';
+import {
+  createReplyComposer,
+  type ReplyComposerOptions,
+} from './reply-composer';
+
+const fetchLifecycleThread = vi.hoisted(() => vi.fn());
+vi.mock('@queries/email/thread', () => ({
+  fetchFreshEmailThread: fetchLifecycleThread,
+}));
+vi.mock('@core/cross-tab/cross-tab-bus', () => ({
+  createCrossTabBus: () => ({ publish() {}, subscribe: () => () => {} }),
+}));
+
+function replyComposer(
+  composeContext: EmailComposeContext,
+  replyingTo = () => message('parent'),
+  callbacks: Pick<ReplyComposerOptions, 'sideEffectOnSend' | 'onMarkDone'> = {}
+) {
+  return createRoot((dispose) => {
+    const editor = createEmailEditor('Ready to send');
+    const parent = replyingTo();
+    const form = createEmailFormState(
+      {
+        viewerEmail: composeContext.viewerEmail,
+        inboxes: composeContext.accounts.inboxes,
+      },
+      { type: 'replying_to', messageId: parent.db_id },
+      { getMessageById: () => parent, getDraftForMessageReply: () => undefined }
+    );
+    const state = createReplyComposer(
+      {
+        ...callbacks,
+        ...composeContext,
+        focusAfterReplyRequest: () => true,
+        sourceEntityId: 'thread',
+        replyingTo,
+        session: {
+          thread: () => ({
+            db_id: 'thread',
+            link_id: 'inbox',
+            inbox_visible: false,
+          }),
+          recipientOptions: () => [],
+          isPersonalReply: () => false,
+          onDraftRemoved() {},
+          exitToThread: () => false,
+          replyRequest: { replyType: () => undefined, clear() {} },
+        },
+      },
+      () => editor,
+      { container: () => undefined, footer: () => undefined },
+      () => form
+    );
+    state.onContentChange('Ready to send');
+    return {
+      ...state,
+      sendActionDisabled: createMemo(state.sendActionDisabled),
+      dispose,
+      edit(text: string) {
+        setEmailEditorText(editor, text);
+        state.onContentChange(text);
+      },
+    };
+  });
+}
 
 function composer(
   kind: 'standalone' | 'reply',
@@ -41,7 +115,153 @@ function composer(
   };
 }
 
+function composerWithLifecycleQuery(
+  kind: 'standalone' | 'reply',
+  context: EmailComposeContext
+) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+  });
+  let state!: ReturnType<typeof composer>;
+  const disposeProvider = createRoot((dispose) => {
+    createComponent(QueryClientProvider, {
+      client,
+      get children() {
+        state = composer(kind, {
+          ...context,
+          draftLifecycle: emailDraftLifecycleSource,
+        });
+        return null;
+      },
+    });
+    return dispose;
+  });
+  return {
+    ...state,
+    client,
+    dispose() {
+      state.dispose();
+      disposeProvider();
+      client.clear();
+    },
+  };
+}
+
 describe('send and schedule ordering', () => {
+  it.each([
+    ['standalone', false],
+    ['reply', false],
+    ['standalone', true],
+    ['reply', true],
+  ] as const)(
+    '%s keeps a successful schedule change when the authoritative read fails (unschedule: %s)',
+    async (kind, unschedule) => {
+      const context = createComposeContext();
+      const failure = new Error('Lifecycle unavailable');
+      const scheduled = new Date('2026-12-01T12:00:00Z');
+      fetchLifecycleThread
+        .mockReset()
+        .mockResolvedValueOnce({
+          messages: [
+            message('draft', {
+              is_draft: true,
+              scheduled_send_time: unschedule
+                ? scheduled.toISOString()
+                : undefined,
+            }),
+          ],
+        })
+        .mockRejectedValueOnce(failure);
+      const state = composerWithLifecycleQuery(kind, context);
+      const notifications: VoidFunction[] = [];
+      let queueNotification: ReturnType<typeof vi.spyOn> | undefined;
+      try {
+        state.edit('Save before scheduling');
+        await vi.advanceTimersByTimeAsync(600);
+        expect(fetchLifecycleThread).toHaveBeenCalledOnce();
+        queueNotification = vi
+          .spyOn(globalThis, 'queueMicrotask')
+          .mockImplementation((callback) => notifications.push(callback));
+        const expected = unschedule ? null : scheduled;
+        expect(await state.schedule(expected)).toBe(true);
+        expect(fetchLifecycleThread).toHaveBeenCalledTimes(2);
+        expect(context.notices.reportError).toHaveBeenCalledWith(failure);
+        if (unschedule) expect(state.sendTime()).toBeFalsy();
+        else expect(state.sendTime()).toEqual(expected);
+        expect(state.disabled()).toBe(!unschedule);
+        expect(context.notices.feedback.success).not.toHaveBeenCalledWith(
+          'Schedule cancelled. This email is editable again.'
+        );
+      } finally {
+        queueNotification?.mockRestore();
+        for (const notify of notifications) notify();
+        state.dispose();
+      }
+    }
+  );
+
+  it.each(['standalone', 'reply'] as const)(
+    '%s discards deferred missing state when migration and its refresh fail',
+    async (kind) => {
+      const context = createComposeContext();
+      context.accounts.inboxes = () => [
+        { id: 'inbox', email_address: 'me@example.com', settings: {} },
+        { id: 'other', email_address: 'other@example.com', settings: {} },
+      ];
+      fetchLifecycleThread.mockReset().mockResolvedValueOnce({
+        messages: [message('draft', { is_draft: true })],
+      });
+      const state = composerWithLifecycleQuery(kind, context);
+      const notifications: VoidFunction[] = [];
+      let queueNotification: ReturnType<typeof vi.spyOn> | undefined;
+      try {
+        state.edit('Keep this draft');
+        await vi.advanceTimersByTimeAsync(600);
+        const moving = Promise.withResolvers<PersistedEmailIdentity>();
+        vi.mocked(context.drafts.saveDraft).mockReturnValueOnce(moving.promise);
+        state.switchInbox('other');
+        await vi.advanceTimersByTimeAsync(0);
+        expect(state.disabled()).toBe(true);
+
+        // A read during migration cannot establish the final draft state.
+        fetchLifecycleThread.mockResolvedValueOnce({ messages: [] });
+        await state.client.invalidateQueries({
+          queryKey: emailKeys.composeDraftState._def,
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(context.notices.feedback.alert).not.toHaveBeenCalled();
+
+        const failure = new Error('Lifecycle unavailable');
+        fetchLifecycleThread.mockRejectedValueOnce(failure);
+        queueNotification = vi
+          .spyOn(globalThis, 'queueMicrotask')
+          .mockImplementation((callback) => notifications.push(callback));
+        moving.reject(new Error('Move failed'));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(context.notices.reportError).toHaveBeenCalledWith(failure);
+        expect(context.drafts.saveDraft).toHaveBeenCalledTimes(2);
+        expect(context.notices.feedback.alert).not.toHaveBeenCalled();
+        expect(state.disabled()).toBe(false);
+
+        queueNotification.mockRestore();
+        for (const notify of notifications.splice(0)) notify();
+        fetchLifecycleThread.mockResolvedValueOnce({
+          messages: [message('draft', { is_draft: true })],
+        });
+        await state.client.invalidateQueries({
+          queryKey: emailKeys.composeDraftState._def,
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(context.drafts.saveDraft).toHaveBeenCalledTimes(2);
+        expect(context.notices.feedback.alert).not.toHaveBeenCalled();
+      } finally {
+        queueNotification?.mockRestore();
+        for (const notify of notifications) notify();
+        state.dispose();
+      }
+    }
+  );
+
   it('does not send a reply when delivery overtakes its pre-send save', async () => {
     const context = createComposeContext();
     const state = replyComposer(context);

@@ -88,6 +88,58 @@ beforeEach(() => fetchThread.mockReset());
 afterEach(() => {
   cleanup();
   for (const client of clients.splice(0)) client.clear();
+  vi.restoreAllMocks();
+});
+
+it('does not republish cached state when a strict refresh rejects', async () => {
+  vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
+  const failure = new Error('Lifecycle unavailable');
+  fetchThread
+    .mockResolvedValueOnce(thread(false))
+    .mockRejectedValueOnce(failure)
+    .mockResolvedValueOnce(thread(true));
+  const { lifecycle, client } = observe();
+  await waitFor(() => expect(lifecycle.state()?.type).toBe('editing'));
+
+  const notifications: VoidFunction[] = [];
+  const queueNotification = vi
+    .spyOn(globalThis, 'queueMicrotask')
+    .mockImplementation((callback) => notifications.push(callback));
+  const refreshing = lifecycle.refresh();
+  expect(lifecycle.state()).toBeUndefined();
+  await expect(refreshing).rejects.toBe(failure);
+  // Check synchronously as an awaiting composer releases its mutation gate,
+  // before Solid Query's error notification necessarily reaches its store.
+  expect(lifecycle.state()).toBeUndefined();
+  queueNotification.mockRestore();
+  for (const notify of notifications) notify();
+  await client.invalidateQueries({
+    queryKey: emailKeys.composeDraftState._def,
+  });
+  await waitFor(() => expect(lifecycle.state()?.type).toBe('scheduled'));
+});
+
+it('keeps polling when a failed refresh invalidates an earlier terminal state', async () => {
+  vi.useFakeTimers();
+  try {
+    const missing = thread(false);
+    missing.messages = [];
+    const failure = new Error('Lifecycle unavailable');
+    fetchThread
+      .mockResolvedValueOnce(missing)
+      .mockRejectedValueOnce(failure)
+      .mockResolvedValueOnce(thread(false));
+    const { lifecycle } = observe();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(lifecycle.state()?.type).toBe('missing');
+    await expect(lifecycle.refresh()).rejects.toBe(failure);
+    expect(lifecycle.state()).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(fetchThread).toHaveBeenCalledTimes(3);
+    expect(lifecycle.state()?.type).toBe('editing');
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 it.each([true, false])(
@@ -114,8 +166,8 @@ it.each([true, false])(
     expect(lifecycle.state()?.type).toBe(expected);
     expect(
       client
-        .getQueriesData<EmailDraftLifecycleState>({ queryKey })
-        .map(([, state]) => state?.type)
+        .getQueriesData<{ state: EmailDraftLifecycleState }>({ queryKey })
+        .map(([, observation]) => observation?.state.type)
     ).toEqual([expected]);
   }
 );
