@@ -45,10 +45,14 @@ export interface AgentInputProps {
    */
   hasQueuedMessages?: boolean;
   /**
-   * A stop is already on its way. The queue advances when the turn it ends
-   * actually ends, so a second stop does nothing but post again.
+   * Advancing the queue would not advance it right now, so Enter and the
+   * button stay inert (the control reads Stop). Either a stop is already on
+   * its way - the queue advances when the turn it ends actually ends, so a
+   * second stop does nothing but post again - or the prompt that last
+   * advanced is still unconfirmed, so there is no turn the server has opened
+   * for a stop to end.
    */
-  stopPending?: boolean;
+  sendNextHeld?: boolean;
   /**
    * Enter or the send button with an empty input and a queued message. Falls
    * back to `onStop`, which is the mechanism: the queue advances when the
@@ -153,14 +157,14 @@ export function AgentInput(props: AgentInputProps) {
   // Deliberately not gated on `busy`. A speculated stop reads as done
   // everywhere else, so `busy` is already false while the runtime is still
   // winding the turn down - and that is exactly when a waiting message is
-  // most worth advancing. What does gate it is a stop already in flight:
-  // repeating it just posts another cancel for the same turn. Attached files
-  // are something to send in their own right, so they hold it back too.
+  // most worth advancing. What does gate it is `sendNextHeld`: a stop already
+  // in flight, or a previous advance the log has not confirmed yet. Attached
+  // files are something to send in their own right, so they hold it back too.
   const canSendNext = () =>
     markdown().trim().length === 0 &&
     attachments().length === 0 &&
     props.hasQueuedMessages === true &&
-    !props.stopPending &&
+    !props.sendNextHeld &&
     !props.disabled &&
     props.onStop !== undefined;
 

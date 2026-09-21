@@ -20,7 +20,6 @@ import type { SetPredicatesInput } from '@app/features/next-soup/filters/filter-
 import { mergeQuery } from '@app/features/next-soup/filters/filter-store/query-store';
 import type { Query } from '@app/features/next-soup/filters/filter-store/types';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
-import { NonMemberChannelPreview } from '@app/features/next-soup/soup-view/non-member-channel-preview';
 import { SoupView } from '@app/features/next-soup/soup-view/soup-view';
 import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
 import { ReminderEditorSplit } from '@app/features/reminders/ReminderEditorSplit';
@@ -29,7 +28,6 @@ import { SettingsPanelComponentWrapper } from '@app/features/settings/Settings';
 import { TasksView } from '@app/features/tasks-view/tasks-view';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag, usePosthog } from '@app/lib/analytics/posthog';
-import { globalSplitManager } from '@app/signal/splitLayout';
 import { EventComposerSplit } from '@block-calendar/components/EventComposerSplit';
 import { ChannelCompose } from '@block-channel/component/Compose';
 import { ComposeSkill } from '@block-md/component/ComposeSkill';
@@ -53,9 +51,7 @@ import {
 import { useUserContext } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ViewId } from '@core/types/view';
-import EmptyStatePreviewIcon from '@design/empty-state-doc.svg';
 import { useAutomationEntities } from '@queries/agent-schedule/entities';
-import { EmptyStatePanel } from '@ui';
 import {
   type Component,
   createRenderEffect,
@@ -68,7 +64,6 @@ import {
 } from 'solid-js';
 import type { SplitContent } from './layoutManager';
 import { useSplitPanelOrThrow } from './layoutUtils';
-import { previewEmptyStateForContent } from './previewController';
 
 function usePageViewTracking(pageTitle: string) {
   const analytics = useAnalytics();
@@ -703,65 +698,6 @@ registerComponent(
 /** END - APP ROUTES */
 
 registerComponent('loading', () => <LoadingBlock />);
-// Placeholder a Preview Pair's Viewer opens before its Controller has
-// navigated anywhere (see layoutManager engagePreviewMode). Controllers can
-// override the copy via `emptyState` in previewController.ts; resolving it
-// from the live pair (rather than params) keeps the override across URL
-// restore.
-registerComponent('preview-empty', () => {
-  const panel = useSplitPanelOrThrow();
-  onMount(() => panel.handle.setDisplayName('Preview'));
-  const emptyState = () => {
-    const manager = globalSplitManager();
-    const controllerId = manager?.controllerOf(panel.handle.id);
-    const controllerContent = controllerId
-      ? manager?.getSplit(controllerId)?.content()
-      : undefined;
-    return controllerContent
-      ? previewEmptyStateForContent(controllerContent)
-      : undefined;
-  };
-  return (
-    <EmptyStatePanel
-      graphic={EmptyStatePreviewIcon}
-      title={emptyState()?.title ?? 'No content selected'}
-      description={
-        emptyState()?.description ??
-        'Select an item from the connected list to preview it here'
-      }
-      centered
-    />
-  );
-});
-// Join prompt for a channel the viewer can see but hasn't joined, shown in a
-// Preview Pair's Viewer when the controlling list focuses such a row (see
-// openEntityInSplitFromUnifiedList). Params don't round-trip through the URL,
-// so a restored split has none — fall back to the placeholder and let the
-// controller's focus→preview effect re-open the real prompt.
-registerComponent('non-member-channel', (params) => {
-  const panel = useSplitPanelOrThrow();
-  const channelId =
-    typeof params?.channelId === 'string' ? params.channelId : undefined;
-  if (!channelId) {
-    return <RedirectSplit to={{ type: 'component', id: 'preview-empty' }} />;
-  }
-  const channelName =
-    typeof params?.channelName === 'string' ? params.channelName : 'Channel';
-  const memberCount =
-    typeof params?.memberCount === 'number' ? params.memberCount : 0;
-  onMount(() => panel.handle.setDisplayName(channelName));
-  return (
-    <NonMemberChannelPreview
-      channelId={channelId}
-      channelName={channelName}
-      memberCount={memberCount}
-      // Join landed — hand the Viewer off to the real channel block in place.
-      onJoined={() =>
-        panel.handle.replace({ next: { type: 'channel', id: channelId } })
-      }
-    />
-  );
-});
 registerComponent('channel-compose', () => {
   usePageViewTracking('channel-compose');
   return <ChannelCompose />;

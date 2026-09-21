@@ -339,6 +339,10 @@ and DMs section headers.
 
 On touch layouts, the `Recent`, `Channels`, and `DMs` pill tabs each retain
 their own loaded pages and load more as their active list approaches the end.
+With `enable-graphql-soup` enabled, open an unread conversation from each tab
+and return to the list: its top-level notifications should be read, including
+ones older than the global notification feed's loaded page. Notifications for
+separate thread stacks remain unread until that thread is opened.
 
 ## Call lifecycle
 

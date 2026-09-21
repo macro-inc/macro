@@ -35,7 +35,7 @@ vi.mock('@app/features/next-soup/soup-context', () => ({
   useMaybeSoup: () => undefined,
 }));
 vi.mock('@app/signal/splitLayout', () => ({
-  globalSplitManager: () => ({ controllerOf: () => undefined }),
+  globalSplitManager: () => undefined,
 }));
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => undefined,

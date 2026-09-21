@@ -456,20 +456,6 @@ preview replies per thread. Expand a thread to load its replies;
 `Load earlier comments` pages backward. Live updates preserve unsent replies
 and edits while updating the surrounding thread.
 
-The `Include channel mentions` checkbox under the `Discussion` header is off by
-default. Checking it adds channel threads whose messages mention this document,
-each under a `From <channel name>` link to the source channel, after the
-document's own comments. These threads stay channel-owned: replies, edits, and
-reactions post to the channel, `Copy link` yields the channel link, and
-`Resolve` / `Delete discussion` do not appear on them. Only channels the viewer
-can read are listed, and a thread from a channel the viewer cannot post in has
-no reply, edit, or delete controls. The list refreshes on live channel message
-changes, on reconnect, and every 30 seconds while the checkbox is on, so a new
-mention in another channel or a lost channel membership shows up or disappears
-within that interval. A reply draft in a listed thread survives those
-refreshes. Unchecking hides the channel threads again without touching the
-document's comments.
-
 Select text and choose the comment action to create an anchored comment. These
 threads appear beside their text in the margin (or in the active thread drawer
 on phones) and never in the bottom Discussion, including after live updates or
@@ -481,9 +467,8 @@ conversation anchored to the remaining text. On phones, the active Markdown
 thread opens in a drawer with a pinned reply composer; long-press any message
 for edit, delete, copy-link, and reaction actions.
 
-`Resolve` / `Reopen` changes the discussion state. Deleting the root message
-leaves a tombstone and retains its replies. `Delete discussion` explicitly
-removes the whole thread and requests confirmation. `Copy link` targets the
+A document thread carries no thread-level controls above it. Deleting the root
+message leaves a tombstone and retains its replies. `Copy link` targets the
 specific comment with `comment_id=<message id>`. Previously copied numeric links
 still resolve under current document permissions. Deleting an anchored Markdown
 discussion removes its mark while preserving the document text and any

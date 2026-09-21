@@ -314,6 +314,24 @@ const share = () =>
   fireEvent.click(screen.getByRole('button', { name: 'Share' }));
 
 describe('agent session sharing', () => {
+  it.each([false, true])(
+    'shows the standard share form for owners (mobile: %s)',
+    (mobile) => {
+      mocks.mobile = mobile;
+      mountShare(true);
+      expect(
+        screen.getByRole('button', { name: 'Select channel' })
+      ).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Share' })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Copy Link' })).toBeNull();
+      expect(
+        screen.queryByText(
+          'Recipients can view and control this agent session.'
+        )
+      ).toBeNull();
+    }
+  );
+
   it('uses explicit identity outside a block', () => {
     mocks.inBlock = false;
     render(() => (
@@ -346,9 +364,6 @@ describe('agent session sharing', () => {
   });
   it('shares the persisted session instead of its enclosing launcher identity', () => {
     const { onOpenChange } = mountShare(true);
-    expect(
-      screen.getByText('Recipients can view and control this agent session.')
-    ).toBeTruthy();
     expect(screen.queryByText('Can view')).toBeNull();
     expect(screen.queryByText('People with access')).toBeNull();
     expect(mocks.blockPermissionsRead).not.toHaveBeenCalled();

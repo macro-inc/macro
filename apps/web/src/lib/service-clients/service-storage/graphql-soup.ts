@@ -21,6 +21,7 @@ import {
 import { registerCacheHost } from '@graphql-cache/lifecycle';
 import { getBrowserTursoCacheRolloutDecision } from '@graphql-cache/rollout';
 import { getOrCreateCacheScope } from '@graphql-cache/scope';
+import { Telemetry } from '@macro-inc/observability';
 import { notificationStateFromGraphql } from '@notifications/notification-state';
 import { getMacroApiToken } from '@service-auth/fetch';
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
@@ -39,6 +40,7 @@ import {
   createClient,
   type DocumentInput,
   fetchExchange,
+  type Operation,
   type RequestPolicy,
   subscriptionExchange,
 } from '@urql/core';
@@ -400,6 +402,31 @@ export function getGraphqlSoupClient(): Client {
   if (cachedClient) return cachedClient;
   disposeUncachedRealtimeClient();
   cachedClient = (() => {
+    const reportCacheError = (
+      error: unknown,
+      phase: 'initialization' | 'operation',
+      operationKind?: Operation['kind']
+    ) => {
+      try {
+        // Navigation deliberately rejects outstanding reads. Do not turn that
+        // expected shutdown into an error; unexpected disposal still reports.
+        if (
+          error instanceof Error &&
+          error.message === 'cache worker host was disposed for page navigation'
+        )
+          return;
+        // Caught cache failures never reach window.unhandledrejection. Report
+        // them through the Datadog-bound exporter without query/variable data.
+        Telemetry.error(error, {
+          'error.source': 'graphql-cache',
+          'cache.backend': native ? 'native' : 'turso-wasm-opfs',
+          'cache.phase': phase,
+          ...(operationKind ? { 'cache.operation_kind': operationKind } : {}),
+        });
+      } catch {
+        // Observability must not prevent network fallback or cache cleanup.
+      }
+    };
     let host: CacheHost | undefined;
     let websocketClient: GraphqlWsClient | undefined;
     let unregisterHost: () => void = () => undefined;
@@ -414,6 +441,7 @@ export function getGraphqlSoupClient(): Client {
     };
     const onInitializationError = (error: Error) => {
       if (!host || cachedCacheHost !== host) return;
+      reportCacheError(error, 'initialization');
       fallbackAfterInitializationFailure();
       toast.failure('Local cache unavailable', {
         subtext: 'Macro will continue without local caching for this session.',
@@ -442,6 +470,12 @@ export function getGraphqlSoupClient(): Client {
         preferGetMethod: false,
         exchanges: [
           normalizedCacheExchange(host, {
+            onCacheError: (error, operation) => {
+              // Initialization failure already reports before retiring the host;
+              // rejected in-flight operations must not report it again.
+              if (!host || cachedCacheHost !== host) return;
+              reportCacheError(error, 'operation', operation.kind);
+            },
             entityResolvers: {
               GraphqlUser: {
                 emailThread: entityFromArgument('GraphqlSoupEmailThread', [
@@ -473,6 +507,7 @@ export function getGraphqlSoupClient(): Client {
       browserCacheClientActivated = !native;
       return client;
     } catch (error) {
+      reportCacheError(error, 'initialization');
       cleanup();
       cachedCacheHost = undefined;
       cachedCacheCleanup = undefined;

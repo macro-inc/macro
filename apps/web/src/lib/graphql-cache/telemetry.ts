@@ -14,6 +14,7 @@ export const CACHE_TELEMETRY_EVENT_NAMES = [
   'graphql_cache.engine_request',
   'graphql_cache.transaction',
   'graphql_cache.read',
+  'graphql_cache.slow_query',
   'graphql_cache.owner',
   'graphql_cache.stale_drop',
   'graphql_cache.lock_wait',
@@ -158,6 +159,8 @@ export type CacheTelemetryObservation = {
   revisionCategory?: CacheRevisionCategory;
   resetAttempt?: 'wipe-before-open';
   durationMs?: number;
+  /** FNV-1a of the unexpanded SQL template; never SQL text or bound values. */
+  queryFingerprint?: string;
   bytes?: number;
   highWaterBytes?: number;
   usageBytes?: number;
@@ -267,6 +270,11 @@ function sanitizeObservation(
       : {}),
     ...(boundedNumber(input.durationMs, 3_600_000) !== undefined
       ? { durationMs: boundedNumber(input.durationMs, 3_600_000) }
+      : {}),
+    ...(input.name === 'graphql_cache.slow_query' &&
+    typeof input.queryFingerprint === 'string' &&
+    /^[0-9a-f]{16}$/.test(input.queryFingerprint)
+      ? { queryFingerprint: input.queryFingerprint }
       : {}),
     ...(boundedNumber(input.bytes) !== undefined
       ? { bytes: boundedNumber(input.bytes) }
@@ -633,6 +641,7 @@ export function isCacheTelemetryObservation(
       'revisionCategory',
       'resetAttempt',
       'durationMs',
+      'queryFingerprint',
       'bytes',
       'highWaterBytes',
       'usageBytes',

@@ -206,7 +206,7 @@ function SplitCloseButton() {
   });
 
   return (
-    <Show when={shouldShowSplitCloseButton(layout.manager, context.handle)}>
+    <Show when={shouldShowSplitCloseButton(layout.manager)}>
       <Button
         square
         size="icon-sm"
@@ -474,18 +474,10 @@ function SplitHeaderContextMenu(props: ParentProps) {
             disabled={!hasOtherSplits()}
             onClick={() => {
               const currentSplitId = panel.handle.id;
-              // A Preview Pair is one unit: keep the current split's partner so
-              // closing "other" splits from a Viewer doesn't strand it by
-              // removing its Controller (or vice versa).
-              const partnerId =
-                layout.manager.controllerOf(currentSplitId) ??
-                layout.manager.viewerOf(currentSplitId);
-              const kept = new Set([currentSplitId, partnerId]);
-
               const otherSplitIds = layout.manager
                 .splits()
                 .map((split) => split.id)
-                .filter((id) => !kept.has(id));
+                .filter((id) => id !== currentSplitId);
 
               for (const splitId of otherSplitIds) {
                 layout.manager.removeSplit(splitId);

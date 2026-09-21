@@ -1,7 +1,9 @@
 /**
  * The pieces the session pane itself shows: the header toggle, the
  * "changes ready" hand-off card, and the queued-notes chip by the composer.
- * Each renders nothing until a host has mounted the controller.
+ * Each renders nothing until a host has mounted the controller, and nothing
+ * at all while the host reports it can never have changes (a chat-only
+ * harness has no repository to diff).
  */
 
 import { createSignal, Show } from 'solid-js';
@@ -13,15 +15,21 @@ import { useOptionalAgentChanges } from '../context/agent-changes-controller';
 export function ChangesToggle() {
   const controller = useOptionalAgentChanges();
   if (!controller) return null;
-  const { layout, model } = controller;
+  const { available, layout, model, context } = controller;
+  const counts = controller.changeCounts;
   return (
-    <ChangesToggleButton
-      open={layout.changesVisible()}
-      additions={model.changeset()?.additions ?? 0}
-      deletions={model.changeset()?.deletions ?? 0}
-      capturing={model.state().kind === 'capturing'}
-      onToggle={layout.toggle}
-    />
+    <Show when={available()}>
+      <ChangesToggleButton
+        open={layout.changesVisible()}
+        additions={counts()?.additions ?? 0}
+        deletions={counts()?.deletions ?? 0}
+        capturing={
+          !context.host.pullRequestChangeCounts &&
+          model.state().kind === 'capturing'
+        }
+        onToggle={layout.toggle}
+      />
+    </Show>
   );
 }
 
@@ -29,8 +37,9 @@ export function ChangesToggle() {
 export function ChangesHandoff() {
   const controller = useOptionalAgentChanges();
   if (!controller) return null;
-  const { layout, model, review, context } = controller;
+  const { available, layout, model, review, context } = controller;
   const visible = () =>
+    available() &&
     !layout.changesVisible() &&
     model.files().length > 0 &&
     !controller.handoffDismissed();
@@ -38,8 +47,8 @@ export function ChangesHandoff() {
     <Show when={visible()}>
       <ChangesReadyCard
         fileCount={model.files().length}
-        additions={model.changeset()?.additions ?? 0}
-        deletions={model.changeset()?.deletions ?? 0}
+        additions={controller.changeCounts()?.additions ?? 0}
+        deletions={controller.changeCounts()?.deletions ?? 0}
         linkedUrl={context.host.pullRequestUrl()}
         onReview={() => {
           const first = model.files()[0];
@@ -60,9 +69,11 @@ export function ReviewNotesDock() {
   const controller = useOptionalAgentChanges();
   const [expanded, setExpanded] = createSignal(false);
   if (!controller) return null;
-  const { review, context, layout } = controller;
+  const { available, review, context, layout } = controller;
   return (
-    <Show when={context.host.agent && review.queued().length > 0}>
+    <Show
+      when={available() && context.host.agent && review.queued().length > 0}
+    >
       <ReviewNotesChip
         notes={review.queued()}
         expanded={expanded()}

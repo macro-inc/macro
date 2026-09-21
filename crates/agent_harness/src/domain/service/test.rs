@@ -3764,6 +3764,36 @@ impl crate::domain::ports::ReachableRepositories for SelectedRepositories {
     }
 }
 
+/// The agents-view create path names the Cursor bot with no persisted
+/// profile. The deployment default harness is the sandboxed coder's
+/// `opencode`; Cursor sessions must not inherit it.
+#[tokio::test]
+async fn a_cursor_managed_session_is_always_stamped_cursor() {
+    let (service, repo, containers, _, _) = harness();
+    let open = service.open_managed_session(OpenManagedSession {
+        repo_url: None,
+        repo_branch: None,
+        owner: model_owner::Owner::User(sender()),
+        instructions: None,
+        prompt: None,
+        profile: Some(agent_session::domain::ports::SelectedManagedPersona {
+            bot_id: bot_id::CURSOR_BOT_ID,
+            profile: None,
+        }),
+    });
+    let drive = async {
+        while containers.spawned() == 0 {
+            tokio::task::yield_now().await;
+        }
+        let container = containers.container(session_of(&containers)).unwrap();
+        complete_session_handshake(&container).await;
+    };
+    let (opened, _) = tokio::join!(open, drive);
+    let session = repo.get(opened.unwrap().id).await.unwrap();
+    assert_eq!(session.bot_id, bot_id::CURSOR_BOT_ID);
+    assert_eq!(session.harness, "cursor");
+}
+
 fn explicit_cursor_request() -> OpenManagedSession {
     OpenManagedSession {
         owner: model_owner::Owner::User(sender()),
@@ -3814,6 +3844,7 @@ async fn selected_repository_and_branch_are_persisted_for_cursor() {
     };
     let (opened, _) = tokio::join!(open, drive);
     let session = repo.get(opened.unwrap().id).await.unwrap();
+    assert_eq!(session.harness, "cursor");
     assert_eq!(
         session.repo_url.as_deref(),
         Some("https://github.com/macro-inc/macro")

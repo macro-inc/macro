@@ -78,7 +78,7 @@ its existing navigation controls. Block detail panels (including Calendar) have
 the main title when hidden, with separate preferences per block type.
 
 Multiple desktop splits appear as individually bordered, medium-rounded panels with
-6px top, right, and bottom insets and 6px resizable gaps, including preview pairs.
+6px top, right, and bottom insets and 6px resizable gaps.
 The leftmost panel sits flush against the app rail, whose divider is hidden while
 multiple splits are open. A single split stays edge to edge. Touch layouts keep their existing presentation.
 
@@ -137,6 +137,9 @@ not clear its dot — reading or completing the represented items does. The butt
 accessible description is `Unread items` while its dot is active.
 
 The Agents sidebar mixes chat and coding sessions in one newest-first list.
+Use **Search conversations** beside the Conversations heading to filter by title.
+Results stay packed at the top with compact spacing, even with only a few matches;
+clearing the search restores the list.
 Its **New conversation** button opens the unified composer with one **Agent**
 selector on the right. Choosing a coding agent reveals the repository drawer;
 there is no Chat/Code switch. New sessions use the selected agent's default model
@@ -362,6 +365,10 @@ message input; `C Shift+A` requests a new split. It does not open a modal or
 create a session before the user sends. Repeating it focuses the existing draft.
 
 ### Content already open
+
+Splits navigate independently. The retired Preview Pair mode no longer creates
+an adjacent viewer, redirects list navigation, or links split sizes and history.
+Inline details in workspaces continue to use their own navigation stack.
 
 Entity content can be open in only one split or inline preview/detail view at a
 time. Shell components may have duplicate splits when `allowDuplicate` is enabled.
