@@ -5,11 +5,12 @@
  * `<SidePanel.Section>` elements that self-register into the enclosing
  * `<SidePanel.Layout>`.
  *
- * Everything rendered here is derived from state the block already holds —
- * the session record, the fold's metadata, and pure summaries over the
- * folded transcript (`state/session-summary.ts`).
+ * Session details and activity use the live fold; changed files and totals
+ * use the shared PR changes controller.
  */
 
+import { DiffCounts } from '@app/features/agent-changes/components/DiffCounts';
+import { useOptionalAgentChanges } from '@app/features/agent-changes/context/agent-changes-controller';
 import { SidePanel } from '@components/app/side-panel';
 import { formatDate } from '@core/util/date';
 import { openExternalUrl } from '@core/util/url';
@@ -17,18 +18,8 @@ import GitBranch from '@phosphor/git-branch.svg';
 import { createMemo, For, Show } from 'solid-js';
 import { useAgentSession } from '../../context/AgentSessionContext';
 import { sessionStatus } from '../../state/session-status';
-import {
-  activityCounts,
-  changedFiles,
-  changedFileTotals,
-  latestPlan,
-} from '../../state/session-summary';
-import {
-  CountSummary,
-  DiffChanges,
-  SessionStatusPill,
-  TodoList,
-} from '../../ui';
+import { activityCounts, latestPlan } from '../../state/session-summary';
+import { CountSummary, SessionStatusPill, TodoList } from '../../ui';
 import { AgentPullRequestChip } from '../AgentPullRequestChip';
 import { harnessTitle, sessionRepositoryUrl } from '../AgentSplitHeader';
 
@@ -36,9 +27,10 @@ export function AgentSidePanelSections() {
   const { session, bot, metadata, messages } = useAgentSession();
 
   const plan = createMemo(() => latestPlan(messages()));
-  const files = createMemo(() => changedFiles(messages()));
+  const changes = useOptionalAgentChanges();
+  const files = () => changes?.model.files() ?? [];
   const activity = createMemo(() => activityCounts(messages()));
-  const totals = createMemo(() => changedFileTotals(files()));
+  const totals = () => changes?.changeCounts();
 
   return (
     <>
@@ -140,7 +132,11 @@ export function AgentSidePanelSections() {
           }
           defaultOpen
           order={20}
-          actions={<DiffChanges variant="bars" {...totals()} />}
+          actions={
+            <Show when={totals()}>
+              {(counts) => <DiffCounts {...counts()} />}
+            </Show>
+          }
         >
           <div class="flex flex-col gap-1">
             <For each={files()}>
@@ -152,7 +148,7 @@ export function AgentSidePanelSections() {
                   >
                     {file.path}
                   </span>
-                  <DiffChanges
+                  <DiffCounts
                     additions={file.additions}
                     deletions={file.deletions}
                   />

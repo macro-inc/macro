@@ -16,8 +16,7 @@ export function ChangesToggle() {
   const controller = useOptionalAgentChanges();
   if (!controller) return null;
   const { available, layout, model, context } = controller;
-  const counts = () =>
-    context.host.sessionChangeCounts?.() ?? model.changeset();
+  const counts = controller.changeCounts;
   return (
     <Show when={available()}>
       <ChangesToggleButton
@@ -25,7 +24,7 @@ export function ChangesToggle() {
         additions={counts()?.additions ?? 0}
         deletions={counts()?.deletions ?? 0}
         capturing={
-          !context.host.sessionChangeCounts &&
+          !context.host.pullRequestChangeCounts &&
           model.state().kind === 'capturing'
         }
         onToggle={layout.toggle}
@@ -48,8 +47,8 @@ export function ChangesHandoff() {
     <Show when={visible()}>
       <ChangesReadyCard
         fileCount={model.files().length}
-        additions={model.changeset()?.additions ?? 0}
-        deletions={model.changeset()?.deletions ?? 0}
+        additions={controller.changeCounts()?.additions ?? 0}
+        deletions={controller.changeCounts()?.deletions ?? 0}
         linkedUrl={context.host.pullRequestUrl()}
         onReview={() => {
           const first = model.files()[0];

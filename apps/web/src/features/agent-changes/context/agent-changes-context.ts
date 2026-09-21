@@ -56,8 +56,10 @@ export type ChangesHost = {
    * empty pane.
    */
   canHaveChanges?: Accessor<boolean>;
-  /** Live transcript totals for the session toggle; PR hosts use the snapshot. */
-  sessionChangeCounts?: Accessor<{ additions: number; deletions: number }>;
+  /** GitHub API totals; undefined while unavailable, with no estimated fallback. */
+  pullRequestChangeCounts?: Accessor<
+    { additions: number; deletions: number } | undefined
+  >;
   /** The pull request represented by the source. */
   pullRequestUrl: Accessor<string | undefined>;
   openExternal: (url: string) => void;

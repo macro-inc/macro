@@ -42,23 +42,6 @@ export function latestPlan(messages: FoldedMessage[]): PlanEntry[] | undefined {
   return undefined;
 }
 
-export type ChangedFile = {
-  path: string;
-  additions: number;
-  deletions: number;
-};
-
-/** Shared line totals for the session sidebar and header. */
-export function changedFileTotals(files: readonly ChangedFile[]) {
-  return files.reduce(
-    (total, file) => ({
-      additions: total.additions + file.additions,
-      deletions: total.deletions + file.deletions,
-    }),
-    { additions: 0, deletions: 0 }
-  );
-}
-
 /**
  * Every tool call in the transcript, in order, descending into the calls a
  * subagent made: a file the subagent edited is a file the session edited.
@@ -73,30 +56,6 @@ function* toolCalls(
       yield* toolCalls(part.detail.children);
     }
   }
-}
-
-/**
- * Every file the session's edit tools touched, in first-touched order, with
- * line stats summed across all edits of that file.
- */
-export function changedFiles(messages: FoldedMessage[]): ChangedFile[] {
-  const byPath = new Map<string, ChangedFile>();
-  for (const message of messages) {
-    for (const part of toolCalls(message.parts)) {
-      if (part.detail.kind !== 'edit') continue;
-      for (const diff of part.detail.diffs) {
-        const changes = countDiffChanges([diff]);
-        const existing = byPath.get(diff.path);
-        if (existing) {
-          existing.additions += changes.additions;
-          existing.deletions += changes.deletions;
-        } else {
-          byPath.set(diff.path, { path: diff.path, ...changes });
-        }
-      }
-    }
-  }
-  return [...byPath.values()];
 }
 
 /**

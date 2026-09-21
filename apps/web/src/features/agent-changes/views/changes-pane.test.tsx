@@ -234,20 +234,27 @@ describe('session controls', () => {
     expect(toggle.getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('follows live session counts independently of PR captures and hides zero counts', () => {
+  it('uses GitHub API totals without falling back to captured estimates', () => {
     const context = readyContext();
-    const [counts, setCounts] = createSignal({ additions: 8, deletions: 2 });
-    context.host.sessionChangeCounts = counts;
+    const [counts, setCounts] = createSignal<
+      { additions: number; deletions: number } | undefined
+    >({ additions: 8, deletions: 2 });
+    context.host.pullRequestChangeCounts = counts;
     const { controller } = mount(context, () => <ChangesToggle />);
     const toggle = screen.getByRole('button', { name: /Changes/ });
     expect(toggle.textContent).toBe('Changes+8−2');
 
-    // A missing or stale PR capture must not replace the transcript totals.
+    // A missing or stale PR capture must not replace GitHub totals.
     context.setSummary(undefined);
     expect(toggle.textContent).toBe('Changes+8−2');
     context.setSummary({ capturing: true, changeset: mockChangeset() });
     expect(toggle.textContent).toBe('Changes+8−2');
     expect(toggle.querySelector('.animate-pulse')).toBeNull();
+    expect(controller().changeCounts()).toEqual({ additions: 8, deletions: 2 });
+    // Missing GitHub data must not expose the snapshot's +3 / −1 estimates.
+    setCounts(undefined);
+    expect(toggle.textContent).toBe('Changes');
+    expect(controller().changeCounts()).toBeUndefined();
 
     setCounts({ additions: 12, deletions: 0 });
     expect(toggle.textContent).toBe('Changes+12');

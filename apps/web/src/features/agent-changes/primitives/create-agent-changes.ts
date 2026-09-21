@@ -25,6 +25,8 @@ export type AgentChangesController = {
   available: Accessor<boolean>;
   layout: PaneLayoutController;
   model: ChangesModel;
+  /** Authoritative PR totals shared by the session header and sidebar. */
+  changeCounts: Accessor<{ additions: number; deletions: number } | undefined>;
   review: ReviewController;
   diffStyle: Accessor<DiffStyle>;
   setDiffStyle: (style: DiffStyle) => void;
@@ -85,6 +87,10 @@ export function createAgentChanges(options: {
     available: () => host.canHaveChanges?.() ?? true,
     layout,
     model,
+    changeCounts: () =>
+      host.pullRequestChangeCounts
+        ? host.pullRequestChangeCounts()
+        : model.changeset(),
     review,
     diffStyle,
     setDiffStyle,
