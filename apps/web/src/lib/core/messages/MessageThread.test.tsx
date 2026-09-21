@@ -187,9 +187,7 @@ describe('document discussion controls', () => {
   // A document thread carries no thread-level controls of its own: resolve was
   // dead, and deleting a discussion is moving onto the root message's delete.
   it('renders no resolve or delete-discussion control', () => {
-    const view = render(() => (
-      <MessageThread data={message} canWrite canManage />
-    ));
+    const view = render(() => <MessageThread data={message} canWrite />);
     expect(view.queryByRole('button', { name: 'Resolve' })).toBeNull();
     expect(
       view.queryByRole('button', { name: 'Delete discussion' })
@@ -238,7 +236,6 @@ describe('source channel threads in a document', () => {
         parent={channel}
         rootId="root"
         canWrite={canWrite}
-        canManage
       />
     ));
   }

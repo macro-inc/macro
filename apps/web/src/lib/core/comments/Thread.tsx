@@ -199,7 +199,6 @@ function MessageThreadBody(props: ThreadBodyProps) {
           parent={parent()}
           rootId={String(props.comment.threadId)}
           canWrite={context.canComment()}
-          canManage={context.isDocumentOwner()}
           hideReplyInput={props.hideReplyInput}
           onEditingChange={context.setMessageEditing}
           targetId={targetId()}

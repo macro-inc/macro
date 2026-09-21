@@ -42,7 +42,6 @@ export function threadListItem(thread: ThreadData): MessageListItem {
 
 type ThreadOptions = {
   canWrite: boolean;
-  canManage?: boolean;
   buildLink?: (message: MessageData) => string;
   targetId?: string | null;
   expanded?: boolean;

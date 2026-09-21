@@ -34,7 +34,6 @@ vi.mock('@core/messages/DocumentConversation', () => ({
   DocumentConversation: (props: {
     parent: { type: string; id: string };
     canWrite: boolean;
-    canManage: boolean;
     buildLink: (message: { id: string }) => string;
     hideComposer?: boolean;
     hideWhenEmpty?: boolean;
@@ -101,7 +100,6 @@ describe('mobile document discussion accessory behind the flag', () => {
       expect.objectContaining({
         parent: { type: 'document', id: 'document' },
         canWrite: true,
-        canManage: false,
         hideComposer: true,
         hideWhenEmpty: true,
       })

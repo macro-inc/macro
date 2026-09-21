@@ -57,7 +57,6 @@ export function DocumentConversationComposer(props: {
 export function DocumentConversation(props: {
   parent: MessageParent;
   canWrite: boolean;
-  canManage?: boolean;
   targetId?: string | null;
   buildLink?: (message: MessageData) => string;
   label?: string;
@@ -158,7 +157,6 @@ export function DocumentConversation(props: {
                 <MessageThread
                   data={messagesById().get(id)!}
                   canWrite={props.canWrite}
-                  canManage={props.canManage}
                   targetId={target.rootId() === id ? target.messageId() : null}
                   buildLink={props.buildLink}
                 />
