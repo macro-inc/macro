@@ -8,7 +8,8 @@ import type {
 } from '../context/meeting-session';
 import { MeetingPage } from './meeting-page';
 
-function setup(authenticated: boolean, autoJoin: boolean) {
+function setup(authenticated: boolean, startCall: boolean) {
+  const [signedIn, setSignedIn] = createSignal(authenticated);
   const [activeCallId, setActiveCallId] = createSignal<string | null>(null);
   const [source, setSource] = createSignal<MeetingPageState>({
     kind: 'ready',
@@ -41,9 +42,9 @@ function setup(authenticated: boolean, autoJoin: boolean) {
     <MeetingPage
       source={source}
       session={session}
-      authenticated={() => authenticated}
+      authenticated={signedIn}
       author={() => 'Macro Member'}
-      autoJoin={autoJoin}
+      startCall={startCall}
       url="https://macro.com/app/meet/share-token"
       onCopy={async () => undefined}
       renderCall={(onLeave) => (
@@ -56,12 +57,12 @@ function setup(authenticated: boolean, autoJoin: boolean) {
       )}
     />
   ));
-  return Object.assign(session, { setSource });
+  return Object.assign(session, { setSource, setSignedIn });
 }
 
 describe('public meeting prejoin', () => {
-  it('requires a guest name and a deliberate join even with an autojoin URL', async () => {
-    const session = setup(false, true);
+  it('requires a guest name and a deliberate join', async () => {
+    const session = setup(false, false);
     expect(session.join).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Join call' })).toHaveProperty(
       'disabled',
@@ -80,11 +81,35 @@ describe('public meeting prejoin', () => {
     });
   });
 
-  it('autojoins only the authenticated instant-call flow', async () => {
-    const session = setup(true, true);
-    await waitFor(() => expect(session.join).toHaveBeenCalledWith(undefined));
-    expect(screen.queryByRole('textbox', { name: 'Your name' })).toBeNull();
-  });
+  it.each([true, false])(
+    'waits for a click after loading and authentication (creator: %s)',
+    async (creator) => {
+      const session = setup(false, creator);
+      session.setSource({ kind: 'loading' });
+      session.setSignedIn(true);
+      session.setSource({
+        kind: 'ready',
+        title: 'Design review',
+        scheduledStart: null,
+        scheduledEnd: null,
+      });
+      const button = await screen.findByRole('button', {
+        name: creator ? 'Start call' : 'Join call',
+      });
+      expect(session.join).not.toHaveBeenCalled();
+      expect(session.connect).not.toHaveBeenCalled();
+      expect(screen.queryByText('Connected call')).toBeNull();
+      fireEvent.click(screen.getByRole('switch', { name: 'Microphone' }));
+      fireEvent.click(screen.getByRole('switch', { name: 'Camera' }));
+      fireEvent.click(button);
+      await screen.findByText('Connected call');
+      expect(session.join).toHaveBeenCalledExactlyOnceWith(undefined);
+      expect(session.connect).toHaveBeenCalledWith(expect.anything(), {
+        microphoneEnabled: false,
+        cameraEnabled: true,
+      });
+    }
+  );
 
   it('keeps the active call and hangup control visible when its link is revoked', async () => {
     const session = setup(false, false);

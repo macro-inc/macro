@@ -94,7 +94,7 @@ export function ManageMeetingsDialog(props: { onClose: () => void }) {
                   onJoin={(meeting) => {
                     props.onClose();
                     const url = new URL(meeting.url);
-                    navigate(`${url.pathname.replace(/^\/app/, '')}?join=true`);
+                    navigate(url.pathname.replace(/^\/app/, ''));
                   }}
                   onRequestRevoke={setConfirmId}
                   onRevoke={(id) => void revoke(id)}

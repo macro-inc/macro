@@ -25,6 +25,171 @@ import {
 } from '@core/component/TopBar/ShareButton';
 import { isMobile } from '@core/mobile/isMobile';
 import { buildEntityData } from '@entity';
-import IconShared from '@icon/share.svg';
 import PhoneCallIcon from '@phosphor/phone-call.svg';
+import IconShared from '@icon/share.svg';
+import { useCallLinkQuery } from '@queries/call/meetings';
+import type { CallRecord } from '@service-call/client';
+import { useNavigate } from '@solidjs/router';
+import { Button } from '@ui';
+import { type Accessor, Show } from 'solid-js';
+
+export function CallRecordingSplitHeaderLoading() {
+  return (
+    <SplitHeaderLeft>
+      <div class="h-full my-auto flex min-w-0 items-center justify-start gap-3">
+        <div class="ph-no-capture z-split-header-content relative flex h-full max-w-full min-w-0 shrink items-center gap-2">
+          <StaticSplitLabel
+            label="Call Recording"
+            icon={
+              <PhoneCallIcon class="size-4 touch:size-6 shrink-0 text-ink-muted" />
+            }
+          />
+        </div>
+      </div>
+    </SplitHeaderLeft>
+  );
+}
+
+export function CallRecordingSplitHeader(props: {
+  record: Accessor<CallRecord>;
+}) {
+  const record = props.record;
+  const blockId = useBlockId();
+  const shareCtx = useShareDialogContext();
+  const callName = () => record().customName ?? record().channelName ?? 'Call';
+  const navigate = useNavigate();
+  const meeting = useCallLinkQuery(() =>
+    record().channelId ? undefined : record().callId
+  );
+  const shareToken = () =>
+    meeting.isSuccess ? meeting.data?.shareToken : undefined;
+  const canCallAgain = () => Boolean(record().channelId || shareToken());
+  const callAgain = () => {
+    const channelId = record().channelId;
+    if (channelId) {
+      void joinChannelCall(channelId);
+      return;
+    }
+    const token = shareToken();
+    if (token) navigate(getMeetingPath(token));
+  };
+
+  const shareTool: BlockTool = {
+    label: 'Share',
+    icon: IconShared,
+    action: () => shareCtx.open(),
+    buttonComponent: () => <ShareTrigger />,
+    focusTarget: getShareDrawerRecipientInput,
+  };
+
+  const tools: BlockTool[] = [
+    {
+      label: 'Ask Macro',
+      icon: ChatWithAgentIcon,
+      action: () =>
+        openChatWithAgent({
+          type: 'document',
+          id: blockId,
+          name: callName(),
+          fileType: 'call',
+        }),
+      condition: isMobile,
+    },
+    {
+      label: 'Chat',
+      icon: ChatWithAgentIcon,
+      action: () =>
+        openChatWithAgent({
+          type: 'document',
+          id: blockId,
+          name: callName(),
+          fileType: 'call',
+        }),
+      buttonComponent: () => (
+        <ChatWithAgentButton
+          entity={{
+            type: 'document',
+            id: blockId,
+            name: callName(),
+            fileType: 'call',
+          }}
+        />
+      ),
+    },
+    shareTool,
+  ];
+
+  const menuTools: BlockTool[] = [
+    {
+      label: 'Ask Macro',
+      icon: ChatWithAgentIcon,
+      action: () =>
+        openChatWithAgent({
+          type: 'document',
+          id: blockId,
+          name: callName(),
+          fileType: 'call',
+        }),
+    },
+    shareTool,
+  ];
+
+  return (
+    <>
+      <SplitHeaderLeft>
+        <div class="h-full my-auto flex min-w-0 items-center justify-start gap-3">
+          <div class="ph-no-capture z-split-header-content relative flex h-full max-w-full min-w-0 shrink items-center gap-2">
+            <StaticSplitLabel
+              label={callName()}
+              icon={
+                <PhoneCallIcon class="size-4 touch:size-6 shrink-0 text-ink-muted" />
+              }
+            />
+          </div>
+        </div>
+      </SplitHeaderLeft>
+
+      <SplitHeaderRight>
+        <div class="-order-1">
+          <BlockLiveIndicators />
+        </div>
+        <Show when={!isMobile() && !record().isActive && canCallAgain()}>
+          <div class="order-[900] flex items-center">
+            <HeaderIsland>
+              <Button
+                depth={2}
+                variant="outline"
+                size="icon-xs"
+                class="bg-surface"
+                tooltip="Call Again"
                 onClick={callAgain}
+              >
+                <PhoneCallIcon class="size-4" />
+              </Button>
+            </HeaderIsland>
+          </div>
+        </Show>
+      </SplitHeaderRight>
+
+      <ResponsivePermissionsBadge />
+
+      <ResponsiveBlockToolbar
+        tools={tools}
+        menuTools={menuTools}
+        ops={[{ op: 'copy' }]}
+        id={blockId}
+        itemType="call"
+        name={callName()}
+        // Supply the record's current status and optional channel association.
+        entity={buildEntityData({
+          id: record().callId,
+          name: callName(),
+          blockName: 'call',
+          channelId: record().channelId,
+          isActive: record().isActive,
+          status: record().status ?? undefined,
+        })}
+      />
+    </>
+  );
+}

@@ -2,8 +2,10 @@ import { CallStateProvider } from '@channel/Call/CallContext';
 import { CallOverlay } from '@channel/Call/CallOverlay';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { Button } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { type Accessor, createSignal, Show } from 'solid-js';
 import { CalendarActiveCallNotice } from '../components/calendar-active-call-notice';
+import { MeetingCallHeading } from '../components/meeting-call-heading';
+import { MeetingCopyButton } from '../components/meeting-copy-button';
 import type { CalendarCallItem } from '../core/calendar-calls';
 import { CalendarCalls } from '../views/calendar-calls';
 import { CalendarCreateMenuView as CalendarCreateMenu } from '../views/calendar-create-menu';
@@ -204,6 +206,35 @@ export function JoinCallPreview(props: { startInCall?: boolean }) {
   const [title, setTitle] = createSignal('Northwind kickoff');
   const [connected, setConnected] = createSignal(false);
   const controller = createPreviewCallState();
+  const [showInCallPreview, setShowInCallPreview] = createSignal(
+    Boolean(props.startInCall)
+  );
+  const copy = async () => {
+    if (!(await writeClipboardData({ 'text/plain': previewUrl })))
+      throw new Error('Clipboard unavailable');
+  };
+  const renderCall = (onLeave: () => void, name: Accessor<string>) => (
+    <CallOverlay
+      onLeave={onLeave}
+      localName={name()}
+      renderAvatar={(_id, participantName) => (
+        <img
+          src={
+            people.find((person) => person.name === participantName)
+              ?.photoUrl ??
+            (participantName === 'Dana Whitfield' ? '/ness.png' : '/sam.png')
+          }
+          alt={
+            participantName
+              ? `${participantName}'s profile picture`
+              : 'Your profile picture'
+          }
+          class="size-full rounded-full object-cover"
+        />
+      )}
+      showTeamSharing={false}
+    />
+  );
   return (
     <CallStateProvider value={controller}>
       <div class="h-full overflow-auto bg-surface text-ink">
@@ -218,83 +249,85 @@ export function JoinCallPreview(props: { startInCall?: boolean }) {
             Signed in
           </label>
         </div>
-        <MeetingPage
-          source={() => ({
-            kind: 'ready',
-            title: title(),
-            scheduledStart: null,
-            scheduledEnd: null,
-          })}
-          authenticated={member}
-          author={() => 'Eric Hayes'}
-          avatar={
-            <img
-              src="/sam.png"
-              alt="Your profile picture"
-              class="size-full rounded-full object-cover"
-            />
-          }
-          autoJoin={Boolean(props.startInCall)}
-          onRename={
-            member()
-              ? async (name) => {
-                  setTitle(name);
-                }
-              : undefined
-          }
-          url={previewUrl}
-          onCopy={async () => {
-            if (!(await writeClipboardData({ 'text/plain': previewUrl })))
-              throw new Error('Clipboard unavailable');
-          }}
-          session={{
-            shareToken: () => 'preview-only',
-            isInCall: connected,
-            activeCallId: () => (connected() ? 'preview-call' : null),
-            join: async () => ({
-              callId: 'preview-call',
-              channelId: null,
-              roomName: 'preview',
-              serverUrl: '',
-              token: '',
-              participantId: 'guest:preview',
-              shareToken: 'preview-only',
-            }),
-            release: async () => {},
-            connect: async (_credentials, preferences) => {
-              if (controller.isAudioMuted() === preferences.microphoneEnabled)
-                await controller.toggleAudio();
-              setConnected(true);
-            },
-            disconnect: async () => {
-              setConnected(false);
-            },
-          }}
-          renderCall={(onLeave, name) => (
-            <CallOverlay
-              onLeave={onLeave}
-              localName={name()}
-              renderAvatar={(_id, participantName) => (
+        <Show
+          when={showInCallPreview()}
+          fallback={
+            <MeetingPage
+              source={() => ({
+                kind: 'ready',
+                title: title(),
+                scheduledStart: null,
+                scheduledEnd: null,
+              })}
+              authenticated={member}
+              author={() => 'Eric Hayes'}
+              avatar={
                 <img
-                  src={
-                    people.find((person) => person.name === participantName)
-                      ?.photoUrl ??
-                    (participantName === 'Dana Whitfield'
-                      ? '/ness.png'
-                      : '/sam.png')
-                  }
-                  alt={
-                    participantName
-                      ? `${participantName}'s profile picture`
-                      : 'Your profile picture'
-                  }
+                  src="/sam.png"
+                  alt="Your profile picture"
                   class="size-full rounded-full object-cover"
                 />
-              )}
-              showTeamSharing={false}
+              }
+              onRename={
+                member()
+                  ? async (name) => {
+                      setTitle(name);
+                    }
+                  : undefined
+              }
+              url={previewUrl}
+              onCopy={copy}
+              session={{
+                shareToken: () => 'preview-only',
+                isInCall: connected,
+                activeCallId: () => (connected() ? 'preview-call' : null),
+                join: async () => ({
+                  callId: 'preview-call',
+                  channelId: null,
+                  roomName: 'preview',
+                  serverUrl: '',
+                  token: '',
+                  participantId: 'guest:preview',
+                  shareToken: 'preview-only',
+                }),
+                release: async () => {},
+                connect: async (_credentials, preferences) => {
+                  if (
+                    controller.isAudioMuted() === preferences.microphoneEnabled
+                  )
+                    await controller.toggleAudio();
+                  setConnected(true);
+                },
+                disconnect: async () => {
+                  setConnected(false);
+                },
+              }}
+              renderCall={renderCall}
             />
-          )}
-        />
+          }
+        >
+          <main class="ph-no-capture flex h-dvh min-h-0 flex-col bg-surface p-4 text-ink sm:p-6">
+            <header class="flex flex-wrap items-center gap-4 pb-4">
+              <MeetingCallHeading
+                title={title()}
+                onRename={
+                  member()
+                    ? async (name) => {
+                        setTitle(name);
+                      }
+                    : undefined
+                }
+              />
+              <MeetingCopyButton url={previewUrl} onCopy={copy} />
+            </header>
+            <div class="min-h-0 flex-1">
+              {renderCall(
+                () => setShowInCallPreview(false),
+                () => 'Eric Hayes'
+              )}
+            </div>
+          </main>
+        </Show>
       </div>
     </CallStateProvider>
   );

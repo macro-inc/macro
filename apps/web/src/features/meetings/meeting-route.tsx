@@ -63,7 +63,12 @@ function MeetingRouteContent(props: { shareToken: string }) {
           )}
         </Show>
       }
-      autoJoin={search.join === 'true'}
+      startCall={
+        authenticated() === true &&
+        search.start === 'true' &&
+        meeting.isSuccess &&
+        !meeting.data.callId
+      }
       url={getMeetingUrl(props.shareToken)}
       onCopy={() =>
         navigator.clipboard.writeText(getMeetingUrl(props.shareToken))

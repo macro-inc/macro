@@ -57,7 +57,7 @@ it('reuses a created Quick Call and sends only failed invitations on retry', asy
   expect(mocks.navigate).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Call' }));
   await vi.waitFor(() =>
-    expect(mocks.navigate).toHaveBeenCalledWith('/meet/same-call?join=true')
+    expect(mocks.navigate).toHaveBeenCalledWith('/meet/same-call?start=true')
   );
   expect(mocks.create).toHaveBeenCalledOnce();
   expect(mocks.invite.mock.calls.map(([arg]) => arg.email)).toEqual([

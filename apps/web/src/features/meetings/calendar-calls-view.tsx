@@ -86,7 +86,7 @@ export function CalendarCallsView(props: {
     else {
       const destination = new URL(target.path, getWebOrigin());
       if (item.group === 'instant')
-        destination.searchParams.set('join', 'true');
+        destination.searchParams.set('start', 'true');
       navigate(
         `${destination.pathname}${destination.search}${destination.hash}`
       );

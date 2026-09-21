@@ -734,8 +734,11 @@ section listing each connected account with a per-account `Enable` (grant calend
 `Scheduled Call`. `Event` opens the compact event composer.
 While the menu is open, press `E` for Event, `Q` for Quick Call, or `S` for
 Scheduled Call; each item displays its shortcut. Escape or `C` closes the menu.
-`Quick Call` creates a reusable link and opens the call with automatic join;
-share its URL from the call. `Scheduled Call` opens the event composer with the
+`Quick Call` creates a reusable link and opens setup. The creator must press
+`Start call`; invitees must press `Join call`. Loading the page or completing
+authentication never joins automatically, including old `?join=true` URLs.
+`Copy Meeting Url` is available in setup and during the call.
+`Scheduled Call` opens the event composer with the
 `Macro call` switch enabled. It creates the calendar event and its call link only
 when saved. Quick Calls do not create calendar events.
 `All day` and `Macro call` toggles sit

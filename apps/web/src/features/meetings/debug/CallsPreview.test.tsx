@@ -32,7 +32,7 @@ it('mounts the in-call preview already joined and supports leaving', async () =>
   );
   fireEvent.click(screen.getByRole('button', { name: 'Leave simulated call' }));
   await vi.waitFor(() =>
-    expect(screen.getByText('You left the call')).toBeTruthy()
+    expect(screen.getByText('Ready to join?')).toBeTruthy()
   );
 });
 

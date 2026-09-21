@@ -45,7 +45,7 @@ export function CalendarQuickCall() {
         await invite.mutateAsync({ shareToken, email });
         sent.add(email);
       }
-      navigate(`${getMeetingPath(shareToken)}?join=true`);
+      navigate(`${getMeetingPath(shareToken)}?start=true`);
     } catch {
       setError(
         token()
@@ -92,7 +92,7 @@ export function CalendarQuickCall() {
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => navigate(`${getMeetingPath(token()!)}?join=true`)}
+            onClick={() => navigate(`${getMeetingPath(token()!)}?start=true`)}
           >
             Join now
           </Button>

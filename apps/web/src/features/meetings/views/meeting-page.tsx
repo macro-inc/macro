@@ -3,11 +3,9 @@ import { Button, ToggleSwitch } from '@ui';
 import {
   type Accessor,
   children,
-  createEffect,
   createSignal,
   type JSX,
   Match,
-  on,
   Show,
   Switch,
 } from 'solid-js';
@@ -25,7 +23,7 @@ export function MeetingPage(props: {
   authenticated: Accessor<boolean | undefined>;
   author: Accessor<string>;
   avatar?: JSX.Element;
-  autoJoin: boolean;
+  startCall?: boolean;
   url: string;
   onCopy: () => Promise<void>;
   onRename?: (title: string) => Promise<void>;
@@ -52,21 +50,6 @@ export function MeetingPage(props: {
       microphoneEnabled: microphoneEnabled(),
       cameraEnabled: cameraEnabled(),
     });
-
-  // Only an explicit instant-call action opts into auto-joining. Guest links
-  // always wait for a name and a deliberate Join click before accessing media.
-  let autoJoinStarted = false;
-  createEffect(
-    on(
-      () => [props.authenticated(), ready() !== undefined] as const,
-      ([authenticated, loaded]) => {
-        if (!props.autoJoin || autoJoinStarted || !authenticated || !loaded)
-          return;
-        autoJoinStarted = true;
-        void join();
-      }
-    )
-  );
 
   return (
     <main class="ph-no-capture flex h-dvh min-h-0 flex-col bg-surface p-4 text-ink sm:p-6">
@@ -143,7 +126,11 @@ export function MeetingPage(props: {
             >
               <div>
                 <h2 class="text-2xl font-semibold">
-                  {session.hasLeft() ? 'You left the call' : 'Ready to join?'}
+                  {session.hasLeft()
+                    ? 'You left the call'
+                    : props.startCall
+                      ? 'Ready to start?'
+                      : 'Ready to join?'}
                 </h2>
                 <Show when={ready()?.scheduledStart}>
                   {(start) => (
@@ -221,10 +208,14 @@ export function MeetingPage(props: {
               >
                 <Phone class="size-5" />
                 {session.joining()
-                  ? 'Joining…'
+                  ? props.startCall
+                    ? 'Starting…'
+                    : 'Joining…'
                   : session.hasLeft()
                     ? 'Rejoin call'
-                    : 'Join call'}
+                    : props.startCall
+                      ? 'Start call'
+                      : 'Join call'}
               </Button>
               <Show when={session.joining()}>
                 <Button type="button" onClick={() => void session.leave()}>

@@ -19,7 +19,7 @@ export function CalendarCreateMenu(props: {
     setPending(true);
     try {
       const meeting = await create.mutateAsync({ title: 'Quick Call' });
-      navigate(`${getMeetingPath(meeting.shareToken)}?join=true`);
+      navigate(`${getMeetingPath(meeting.shareToken)}?start=true`);
     } catch {
       toast.failure('Could not create the call. Please try again.');
     } finally {
