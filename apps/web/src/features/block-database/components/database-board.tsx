@@ -17,6 +17,7 @@ import {
 import {
   Kanban,
   KanbanCard,
+  KanbanCardInsertion,
   KanbanHandle,
   KanbanLane,
 } from '../../../components/kanban/kanban';
@@ -25,6 +26,7 @@ import {
   type DatabaseCellValue,
   type DatabaseViewColumn,
   groupDatabaseRows,
+  orderDatabaseCards,
   orderDatabaseColumns,
   orderDatabaseGroups,
 } from '../core/database-view';
@@ -39,6 +41,14 @@ import { PropertyIcon } from './property-icon';
 import { SelectPill } from './select-pill';
 
 type BoardGroup = ReturnType<typeof groupDatabaseRows<DatabaseRow>>[number];
+
+export type DatabaseCardPlacement = {
+  rowId: string;
+  value: DatabaseCellValue;
+  beforeId?: string;
+  toLane: string;
+  fromLane: string;
+};
 
 function canMoveTo(column: DatabaseViewColumn, value: DatabaseCellValue) {
   return (
@@ -55,6 +65,7 @@ type DatabaseBoardProps = {
   renderTextValue?: (value: string) => JSX.Element;
   groupColumn: DatabaseViewColumn;
   groupOrder?: string[];
+  cardOrder?: Record<string, string[]>;
   onGroupOrderChange?: (order: string[]) => void;
   canEdit: boolean;
   rowPending: (rowId: string) => boolean;
@@ -62,6 +73,8 @@ type DatabaseBoardProps = {
   createComplete?: (intentId: string) => boolean;
   onOpen: (rowId: string) => void;
   onMove: (rowId: string, value: DatabaseCellValue) => Promise<boolean>;
+  onPlace?: (placement: DatabaseCardPlacement) => Promise<boolean>;
+  projectMove?: (rowId: string, value: DatabaseCellValue) => DatabaseRow[];
   onCreate: (
     value: DatabaseCellValue,
     title: string,
@@ -71,9 +84,19 @@ type DatabaseBoardProps = {
 };
 
 export function DatabaseBoard(props: DatabaseBoardProps) {
+  let viewport: HTMLDivElement | undefined;
   const groups = createMemo(() =>
     orderDatabaseGroups(
-      groupDatabaseRows(props.rows, props.groupColumn, rowValue),
+      groupDatabaseRows(props.rows, props.groupColumn, rowValue).map(
+        (group) => ({
+          ...group,
+          rows: orderDatabaseCards(
+            group.rows,
+            props.cardOrder?.[group.key],
+            (row) => row.rowId
+          ),
+        })
+      ),
       props.groupOrder
     )
   );
@@ -107,30 +130,80 @@ export function DatabaseBoard(props: DatabaseBoardProps) {
         `${rowTitle(row, props.columns)} moved to ${value === null ? 'No ' + props.groupColumn.name : String(value)}.`
       );
   }
-  function reorder(from: string, to: string) {
+  function reorder(from: string, to: string, edge?: 'before' | 'after') {
     if (from === to || !props.onGroupOrderChange) return;
     const order = groups().map((group) => group.key);
     const source = order.indexOf(from);
     const target = order.indexOf(to);
     if (source < 0 || target < 0) return;
     order.splice(source, 1);
-    order.splice(target, 0, from);
+    const insertion =
+      order.indexOf(to) +
+      ((edge ?? (source < target ? 'after' : 'before')) === 'after' ? 1 : 0);
+    if (insertion === source) return;
+    order.splice(insertion, 0, from);
     props.onGroupOrderChange(order);
   }
   return (
-    <div class="min-h-0 flex-1 overflow-auto px-5 py-5 [&_button:focus-visible]:ring-2 [&_button:focus-visible]:ring-ink/50">
+    <div
+      ref={viewport}
+      class="min-h-0 flex-1 overflow-auto px-5 py-5 [&_button:focus-visible]:ring-2 [&_button:focus-visible]:ring-ink/50"
+    >
       <p class="sr-only" role="status" aria-live="polite">
         {announcement()}
       </p>
       <Kanban
+        getViewport={() => viewport}
+        canDropCard={(drop) => {
+          const row = props.rows.find((row) => row.rowId === drop.id);
+          const target = groups().find((group) => group.key === drop.toLane);
+          const source = groups().find((group) => group.key === drop.fromLane);
+          if (
+            !row ||
+            !target ||
+            !props.canEdit ||
+            !props.groupColumn.writable ||
+            !canMoveTo(props.groupColumn, target.value) ||
+            (drop.fromLane === drop.toLane && !props.onPlace)
+          )
+            return false;
+          const value = boardMoveValue(
+            props.groupColumn,
+            rowValue(row, props.groupColumn.id),
+            target.value,
+            source?.value
+          );
+          return props.projectMove
+            ? props
+                .projectMove(row.rowId, value)
+                .some((candidate) => candidate.rowId === row.rowId)
+            : true;
+        }}
         onDrop={(drop) => {
-          if (drop.kind === 'lane') reorder(drop.fromLane, drop.toLane);
-          else if (drop.fromLane !== drop.toLane) {
+          if (drop.kind === 'lane')
+            reorder(drop.fromLane, drop.toLane, drop.edge);
+          else {
             const target = groups().find((group) => group.key === drop.toLane);
             const source = groups().find(
               (group) => group.key === drop.fromLane
             );
-            if (target) void move(drop.id, target.value, source?.value);
+            const row = props.rows.find((row) => row.rowId === drop.id);
+            if (!target || !row) return;
+            if (props.onPlace)
+              void props.onPlace({
+                rowId: drop.id,
+                value: boardMoveValue(
+                  props.groupColumn,
+                  rowValue(row, props.groupColumn.id),
+                  target.value,
+                  source?.value
+                ),
+                beforeId: drop.beforeId,
+                toLane: drop.toLane,
+                fromLane: drop.fromLane,
+              });
+            else if (drop.fromLane !== drop.toLane)
+              void move(drop.id, target.value, source?.value);
           }
         }}
       >
@@ -253,23 +326,26 @@ function BoardLane(
         </Show>
       </KanbanHandle>
       <div class="flex min-h-10 flex-col gap-2">
-        <Key each={props.group.rows} by="rowId">
-          {(row) => (
-            <BoardCard
-              row={row()}
-              laneId={props.group.key}
-              columns={props.columns}
-              visibleColumnIds={props.visibleColumnIds}
-              renderTextValue={props.renderTextValue}
-              groupColumn={props.groupColumn}
-              groups={props.groups}
-              canEdit={props.canEdit && props.groupColumn.writable}
-              pending={props.rowPending(row().rowId)}
-              onOpen={props.onOpen}
-              onMove={props.onMove}
-            />
-          )}
-        </Key>
+        <div class="relative flex flex-col gap-2">
+          <Key each={props.group.rows} by="rowId">
+            {(row) => (
+              <BoardCard
+                row={row()}
+                laneId={props.group.key}
+                columns={props.columns}
+                visibleColumnIds={props.visibleColumnIds}
+                renderTextValue={props.renderTextValue}
+                groupColumn={props.groupColumn}
+                groups={props.groups}
+                canEdit={props.canEdit && props.groupColumn.writable}
+                pending={props.rowPending(row().rowId)}
+                onOpen={props.onOpen}
+                onMove={props.onMove}
+              />
+            )}
+          </Key>
+          <KanbanCardInsertion laneId={props.group.key} />
+        </div>
         <Show when={props.group.rows.length === 0 && !visibleDrafts().length}>
           <div class="flex min-h-20 items-center justify-center rounded-lg border border-dashed border-edge-muted/70 px-4 text-xs text-ink-placeholder">
             {acceptsRecords() ? 'Drop a record here' : 'No records'}
@@ -470,9 +546,11 @@ function BoardCard(props: {
       <button
         type="button"
         class="block min-w-0 w-full rounded-lg p-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-ink/50"
-        onClick={() => props.onOpen(props.row.rowId)}
+        onClick={() => {
+          if (!props.pending) props.onOpen(props.row.rowId);
+        }}
         aria-label={`Open ${title()}`}
-        disabled={props.pending}
+        aria-disabled={props.pending}
       >
         <span
           class="block break-words text-[13px] font-medium leading-5 text-ink"
@@ -524,7 +602,7 @@ function BoardCard(props: {
           </span>
         </Show>
       </button>
-      <Show when={props.canEdit && !props.pending}>
+      <Show when={props.canEdit}>
         <div class="absolute top-3 right-2 flex items-start gap-0.5">
           <KanbanHandle label={`Drag ${title()}`}>
             <button

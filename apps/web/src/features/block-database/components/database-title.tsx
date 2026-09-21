@@ -1,5 +1,5 @@
 import { Tooltip } from '@ui/components/Tooltip';
-import { createSignal, onMount, Show } from 'solid-js';
+import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 
 function TitleEditor(props: {
   name: string;
@@ -110,12 +110,19 @@ export function DatabaseTitle(props: {
   canEdit: boolean;
   autoFocus?: boolean;
   onConfirm?: () => void;
+  onEditReady?: (edit: (() => void) | undefined) => void;
   onRename: (name: string) => Promise<void>;
 }) {
   const [editing, setEditing] = createSignal(
     !!props.autoFocus && props.canEdit
   );
   let titleButton: HTMLButtonElement | undefined;
+  onMount(() =>
+    props.onEditReady?.(() => {
+      if (props.canEdit) setEditing(true);
+    })
+  );
+  onCleanup(() => props.onEditReady?.(undefined));
   return (
     <Show
       when={editing() && props.canEdit}

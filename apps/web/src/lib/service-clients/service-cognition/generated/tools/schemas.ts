@@ -5760,6 +5760,9 @@ export const SaveDatabaseView = z.object({
     }),
     groupBy: z.union([z.string().uuid(), z.null()]).optional(),
     groupOrder: z.array(z.string()).optional(),
+    cardOrder: z
+      .union([z.record(z.array(z.string().uuid())), z.null()])
+      .optional(),
     filters: z
       .array(
         z.object({

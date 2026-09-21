@@ -9,7 +9,11 @@ import {
 import { useUserId } from '@core/context/user';
 import { useUserIndicators } from '@core/state/liveIndicators';
 import { downloadFile } from '@filesystem/download';
+import CaretRightIcon from '@phosphor/caret-right.svg';
+import DotsThreeIcon from '@phosphor/dots-three.svg';
 import DownloadIcon from '@phosphor/download-simple.svg';
+import PencilIcon from '@phosphor/pencil-line.svg';
+import TrashIcon from '@phosphor/trash-simple.svg';
 import UploadIcon from '@phosphor/upload-simple.svg';
 import { downloadDatabaseSnapshot } from '@queries/storage/databases';
 import type {
@@ -17,7 +21,7 @@ import type {
   DatabaseTableDetail,
   ImportDatabaseTableRequest,
 } from '@service-storage/databases';
-import { Button } from '@ui/components/Button';
+import { DeleteDialog } from '@ui/components/DeleteDialog';
 import { Dropdown } from '@ui/components/Dropdown';
 import { createSignal, Show } from 'solid-js';
 import { CsvImportDialog } from '../components/csv-import-dialog';
@@ -31,15 +35,21 @@ export function DatabasePageActions(props: {
   detail: DatabaseDetail;
   table?: DatabaseTableDetail;
   onImported: (tableId: string) => void;
+  onRename: () => void;
+  onDelete: () => Promise<void>;
 }) {
   const userId = useUserId();
   const viewers = useUserIndicators(() => props.detail.database.id);
   const [sharing, setSharing] = createSignal(false);
   const [exporting, setExporting] = createSignal(false);
   const [reading, setReading] = createSignal(false);
+  const [confirmDelete, setConfirmDelete] = createSignal(false);
+  const [deleting, setDeleting] = createSignal(false);
+  const [deleteError, setDeleteError] = createSignal('');
   const [draft, setDraft] = createSignal<{ data: DatabaseCsv; name: string }>();
   let fileInput: HTMLInputElement | undefined;
-  let importButton: HTMLButtonElement | undefined;
+  let menuButton: HTMLButtonElement | undefined;
+  let focusTitleAfterClose = false;
   const editable = () =>
     props.detail.grant === 'edit' || props.detail.grant === 'owner';
   async function selectFile(file: File | undefined) {
@@ -103,6 +113,23 @@ export function DatabasePageActions(props: {
     props.onImported(table.id);
     toast.success('CSV imported');
   }
+  async function removeDatabase() {
+    if (deleting() || props.detail.grant !== 'owner') return;
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      await props.onDelete();
+      setConfirmDelete(false);
+    } catch (error) {
+      setDeleteError(
+        error instanceof Error
+          ? error.message
+          : 'Could not delete this database.'
+      );
+    } finally {
+      setDeleting(false);
+    }
+  }
   return (
     <>
       <LiveIndicators userIds={viewers() ?? []} currentUserId={userId()} />
@@ -115,36 +142,80 @@ export function DatabasePageActions(props: {
           aria-label="Choose CSV file"
           onChange={(event) => void selectFile(event.currentTarget.files?.[0])}
         />
-        <Button
-          ref={importButton}
-          variant="ghost"
-          size="icon-md"
-          label="Import CSV"
-          disabled={reading()}
-          onClick={() => fileInput?.click()}
-        >
-          <UploadIcon class="size-4" />
-        </Button>
       </Show>
       <Dropdown>
         <Dropdown.Trigger
+          ref={menuButton}
           variant="ghost"
-          size="icon-md"
-          aria-label="Download database"
-          disabled={exporting()}
+          size="icon-sm"
+          label="Database actions"
         >
-          <DownloadIcon class="size-4" />
+          <DotsThreeIcon class="size-5" />
         </Dropdown.Trigger>
-        <Dropdown.Content>
-          <Dropdown.Item
-            disabled={!props.table}
-            onSelect={() => void exportFile('csv')}
-          >
-            Current table as CSV
-          </Dropdown.Item>
-          <Dropdown.Item onSelect={() => void exportFile('sqlite')}>
-            Database as SQLite
-          </Dropdown.Item>
+        <Dropdown.Content
+          class="w-56"
+          onCloseAutoFocus={(event) => {
+            if (focusTitleAfterClose) {
+              event.preventDefault();
+              focusTitleAfterClose = false;
+              queueMicrotask(props.onRename);
+            } else if (confirmDelete()) event.preventDefault();
+          }}
+        >
+          <Show when={editable()}>
+            <Dropdown.Group>
+              <Dropdown.Item onSelect={() => (focusTitleAfterClose = true)}>
+                <PencilIcon class="size-4 shrink-0" />
+                Rename
+              </Dropdown.Item>
+            </Dropdown.Group>
+          </Show>
+          <Dropdown.Group>
+            <Show when={editable()}>
+              <Dropdown.Item
+                disabled={reading()}
+                onSelect={() => fileInput?.click()}
+              >
+                <UploadIcon class="size-4 shrink-0" />
+                Import CSV
+              </Dropdown.Item>
+            </Show>
+            <Dropdown.Sub>
+              <Dropdown.SubTrigger disabled={exporting()}>
+                <DownloadIcon class="size-4 shrink-0" />
+                <span class="flex-1">Download</span>
+                <CaretRightIcon class="size-3.5 shrink-0" />
+              </Dropdown.SubTrigger>
+              <Dropdown.SubContent class="w-56">
+                <Dropdown.Item
+                  disabled={!props.table || exporting()}
+                  onSelect={() => void exportFile('csv')}
+                >
+                  Current table as CSV
+                </Dropdown.Item>
+                <Dropdown.Item
+                  disabled={exporting()}
+                  onSelect={() => void exportFile('sqlite')}
+                >
+                  Database as SQLite
+                </Dropdown.Item>
+              </Dropdown.SubContent>
+            </Dropdown.Sub>
+          </Dropdown.Group>
+          <Show when={props.detail.grant === 'owner'}>
+            <Dropdown.Group>
+              <Dropdown.Item
+                class="text-failure-ink"
+                onSelect={() => {
+                  setDeleteError('');
+                  setConfirmDelete(true);
+                }}
+              >
+                <TrashIcon class="size-4 shrink-0" />
+                Delete
+              </Dropdown.Item>
+            </Dropdown.Group>
+          </Show>
         </Dropdown.Content>
       </Dropdown>
       <ShareDialogContext.Provider
@@ -173,10 +244,30 @@ export function DatabasePageActions(props: {
             initialName={value().name}
             onImport={importFile}
             onClose={() => setDraft(undefined)}
-            returnFocus={importButton}
+            returnFocus={menuButton}
           />
         )}
       </Show>
+      <DeleteDialog
+        open={confirmDelete()}
+        onOpenChange={setConfirmDelete}
+        title="Delete database?"
+        pending={deleting()}
+        onDelete={() => void removeDatabase()}
+        body={
+          <>
+            <p>
+              “{props.detail.database.name}” and its tables and views will be
+              moved to Trash.
+            </p>
+            <Show when={deleteError()}>
+              <p role="alert" class="mt-2 text-failure-ink">
+                {deleteError()}
+              </p>
+            </Show>
+          </>
+        }
+      />
     </>
   );
 }

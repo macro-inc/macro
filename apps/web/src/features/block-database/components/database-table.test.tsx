@@ -40,6 +40,7 @@ function setup(canEdit = true) {
   const onOpen = vi.fn();
   const onDuplicate = vi.fn(async () => true);
   const onRequestDelete = vi.fn();
+  const onReorderColumn = vi.fn(async () => {});
   const onWrite = vi.fn(
     async (_rowId: string, _columnId: string, _value: unknown) => true
   );
@@ -67,6 +68,7 @@ function setup(canEdit = true) {
       onOpen={onOpen}
       onDuplicate={onDuplicate}
       onRequestDelete={onRequestDelete}
+      onReorderColumn={onReorderColumn}
       onCreate={vi.fn()}
       onSort={vi.fn()}
       renderCell={(row, column, options) => (
@@ -85,6 +87,7 @@ function setup(canEdit = true) {
     onOpen,
     onDuplicate,
     onRequestDelete,
+    onReorderColumn,
     onWrite,
     setColumns,
     setEditCell,
@@ -113,6 +116,132 @@ afterEach(() => {
 });
 
 describe('spreadsheet interactions', () => {
+  function dragGeometry(scrollLeft = () => 0) {
+    const positions: Record<string, number> = {
+      Name: 40,
+      Computed: 240,
+      Notes: 440,
+    };
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
+      function (this: HTMLElement) {
+        const position = positions[this.getAttribute('aria-label') ?? ''];
+        const x = position === undefined ? undefined : position - scrollLeft();
+        return new DOMRect(
+          x ?? 0,
+          100,
+          x === undefined ? 640 : 200,
+          x === undefined ? 400 : 40
+        );
+      }
+    );
+  }
+
+  it('previews the pointer boundary and drops on that exact side, without no-op indicators', async () => {
+    dragGeometry();
+    const { onReorderColumn } = setup();
+    const title = screen
+      .getByRole('columnheader', { name: 'Name' })
+      .querySelector('span:not([aria-hidden])')!;
+    fireEvent.mouseDown(title, { button: 0, clientX: 70, clientY: 120 });
+    // The near half of the next column is still the original slot.
+    fireEvent.mouseMove(document, { clientX: 260, clientY: 120 });
+    expect(document.querySelector('[data-column-drop-indicator]')).toBeNull();
+    fireEvent.mouseMove(document, { clientX: 420, clientY: 120 });
+    await waitFor(() => {
+      const line = document.querySelector<HTMLElement>(
+        '[data-column-drop-indicator]'
+      );
+      expect(line?.dataset.dropEdge).toBe('after');
+      expect(line?.style.left).toBe('440px');
+    });
+    fireEvent.mouseUp(document, { button: 0, clientX: 420, clientY: 120 });
+    expect(onReorderColumn).toHaveBeenCalledWith('name', 'computed', 'after');
+    expect(document.querySelector('[data-column-drop-indicator]')).toBeNull();
+  });
+
+  it('drops before a column when dragging left, and cancels on Escape without restarting', async () => {
+    dragGeometry();
+    const { onReorderColumn } = setup();
+    const title = screen
+      .getByRole('columnheader', { name: 'Notes' })
+      .querySelector('span:not([aria-hidden])')!;
+    fireEvent.mouseDown(title, { button: 0, clientX: 470, clientY: 120 });
+    fireEvent.mouseMove(document, { clientX: 70, clientY: 120 });
+    await waitFor(() =>
+      expect(
+        document.querySelector<HTMLElement>('[data-column-drop-indicator]')
+          ?.dataset.dropEdge
+      ).toBe('before')
+    );
+    fireEvent.mouseUp(document, { button: 0, clientX: 70, clientY: 120 });
+    expect(onReorderColumn).toHaveBeenCalledWith('notes', 'name', 'before');
+    onReorderColumn.mockClear();
+    fireEvent.mouseDown(title, { button: 0, clientX: 470, clientY: 120 });
+    fireEvent.mouseMove(document, { clientX: 70, clientY: 120 });
+    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.mouseMove(document, { clientX: 100, clientY: 120 });
+    expect(document.querySelector('[data-column-drop-indicator]')).toBeNull();
+    fireEvent.mouseUp(document, { button: 0, clientX: 100, clientY: 120 });
+    expect(onReorderColumn).not.toHaveBeenCalled();
+  });
+
+  it('keeps the drop target when the pointer drifts below the header into the rows', async () => {
+    dragGeometry();
+    const { onReorderColumn } = setup();
+    const title = within(
+      screen.getByRole('columnheader', { name: 'Name' })
+    ).getByText('Name');
+    fireEvent.mouseDown(title, { button: 0, clientX: 70, clientY: 120 });
+    fireEvent.mouseMove(document, { clientX: 420, clientY: 200 });
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-column-drop-indicator]')
+      ).not.toBeNull()
+    );
+    fireEvent.mouseUp(document, { button: 0, clientX: 420, clientY: 200 });
+    expect(onReorderColumn).toHaveBeenCalledWith('name', 'computed', 'after');
+  });
+
+  it('clears the drop preview and leaves order unchanged outside the grid', async () => {
+    dragGeometry();
+    const { onReorderColumn } = setup();
+    const title = screen
+      .getByRole('columnheader', { name: 'Name' })
+      .querySelector('span:not([aria-hidden])')!;
+    fireEvent.mouseDown(title, { button: 0, clientX: 70, clientY: 120 });
+    fireEvent.mouseMove(document, { clientX: 420, clientY: 120 });
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-column-drop-indicator]')
+      ).not.toBeNull()
+    );
+    fireEvent.mouseMove(document, { clientX: 420, clientY: 80 });
+    expect(document.querySelector('[data-column-drop-indicator]')).toBeNull();
+    fireEvent.mouseUp(document, { button: 0, clientX: 420, clientY: 80 });
+    expect(onReorderColumn).not.toHaveBeenCalled();
+  });
+
+  it('cancels a drop when scrolling clips its insertion boundary out of view', async () => {
+    let scrollLeft = 0;
+    dragGeometry(() => scrollLeft);
+    const { onReorderColumn } = setup();
+    const title = within(
+      screen.getByRole('columnheader', { name: 'Notes' })
+    ).getByText('Notes');
+    fireEvent.mouseDown(title, { button: 0, clientX: 470, clientY: 120 });
+    fireEvent.mouseMove(document, { clientX: 50, clientY: 120 });
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-column-drop-indicator]')
+      ).not.toBeNull()
+    );
+    scrollLeft = 70;
+    fireEvent.scroll(screen.getByRole('grid').parentElement!);
+    expect(document.querySelector('[data-column-drop-indicator]')).toBeNull();
+    fireEvent.mouseUp(document, { button: 0, clientX: 50, clientY: 120 });
+    expect(onReorderColumn).not.toHaveBeenCalled();
+  });
+
   it('saves with Enter, moves Down, and types into the next row while the first save is pending', async () => {
     const { onWrite, setRecords } = setup();
     let finishSave!: () => void;

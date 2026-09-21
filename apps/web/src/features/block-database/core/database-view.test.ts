@@ -12,8 +12,10 @@ import {
   isSavedDatabaseViewConfig,
   matchesDatabaseFilter,
   moveDatabaseViewColumn,
+  orderDatabaseCards,
   orderDatabaseColumns,
   orderDatabaseGroups,
+  placeDatabaseCard,
   reconcileDatabaseView,
 } from './database-view';
 
@@ -461,5 +463,128 @@ describe('multi-select boards', () => {
       'Backlog',
       'In progress',
     ]);
+  });
+
+  it('validates optional per-lane card order while accepting older saved views', () => {
+    const saved = {
+      kind: 'database-view',
+      version: 1,
+      databaseId: 'db',
+      tableId: 'table',
+      view: {
+        ...defaultDatabaseView(),
+        cardOrder: { 'value:"Done"': ['second', 'first'], empty: [] },
+      },
+    };
+    expect(isSavedDatabaseViewConfig(saved)).toBe(true);
+    for (const cardOrder of [
+      null,
+      [],
+      { empty: 'row' },
+      { empty: [12] },
+      { empty: {} },
+    ]) {
+      expect(
+        isSavedDatabaseViewConfig({
+          ...saved,
+          view: { ...saved.view, cardOrder },
+        })
+      ).toBe(false);
+    }
+  });
+
+  it('restores separate lane positions for a multi-select record without duplicating or losing cards', () => {
+    const first = { id: 'first' },
+      second = { id: 'second' },
+      third = { id: 'third' };
+    const rows = [first, second, third];
+    expect(
+      orderDatabaseCards(
+        rows,
+        ['deleted', 'third', 'third', 'first'],
+        (row) => row.id
+      )
+    ).toEqual([third, first, second]);
+    expect(
+      orderDatabaseCards([first, third], ['first', 'third'], (row) => row.id)
+    ).toEqual([first, third]);
+    expect(orderDatabaseCards(rows, undefined, (row) => row.id)).toEqual(rows);
+    expect(rows).toEqual([first, second, third]);
+  });
+
+  it('moves cards to precise visible gaps in both directions, including first and last', () => {
+    const order = ['first', 'second', 'third'];
+    expect(placeDatabaseCard(order, order, 'third', 'first')).toEqual([
+      'third',
+      'first',
+      'second',
+    ]);
+    expect(placeDatabaseCard(order, order, 'first', 'third')).toEqual([
+      'second',
+      'first',
+      'third',
+    ]);
+    expect(placeDatabaseCard(order, order, 'first')).toEqual([
+      'second',
+      'third',
+      'first',
+    ]);
+    expect(placeDatabaseCard(order, order, 'first', 'second')).toEqual(order);
+    expect(placeDatabaseCard(order, order, 'first', 'missing')).toEqual(order);
+    expect(order).toEqual(['first', 'second', 'third']);
+  });
+
+  it('retains filtered card slots when reordering or inserting from another lane', () => {
+    const order = [
+      'hidden-first',
+      'first',
+      'hidden-middle',
+      'second',
+      'third',
+      'hidden-last',
+    ];
+    const visible = ['first', 'second', 'third'];
+    expect(placeDatabaseCard(order, visible, 'third', 'first')).toEqual([
+      'hidden-first',
+      'third',
+      'hidden-middle',
+      'first',
+      'second',
+      'hidden-last',
+    ]);
+    expect(placeDatabaseCard(order, visible, 'incoming', 'second')).toEqual([
+      'hidden-first',
+      'first',
+      'hidden-middle',
+      'incoming',
+      'second',
+      'hidden-last',
+      'third',
+    ]);
+    expect(placeDatabaseCard([], [], 'incoming')).toEqual(['incoming']);
+  });
+
+  it('includes new visible cards omitted from saved order and drops duplicate ids', () => {
+    expect(
+      placeDatabaseCard(
+        ['first', 'first'],
+        ['first', 'new', 'third'],
+        'third',
+        'new'
+      )
+    ).toEqual(['first', 'third', 'new']);
+  });
+
+  it('clears manual card positions if schema changes require a different grouping column', () => {
+    const view = {
+      ...defaultDatabaseView(),
+      layout: 'board' as const,
+      groupBy: 'removed',
+      cardOrder: { empty: ['row'] },
+    };
+    expect(reconcileDatabaseView(view, [status]).cardOrder).toBeUndefined();
+    expect(
+      reconcileDatabaseView({ ...view, groupBy: status.id }, [status]).cardOrder
+    ).toEqual(view.cardOrder);
   });
 });

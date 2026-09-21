@@ -1,3 +1,4 @@
+import { deepEqual } from '@core/util/compareUtils';
 import { type DatabaseViewConfig, isDatabaseViewConfig } from './database-view';
 
 export type TableViewState = {
@@ -9,6 +10,21 @@ export type DatabaseViewSelection = {
   views: Record<string, string>;
   drafts: Record<string, TableViewState>;
 };
+
+/** Acknowledging an earlier save must not discard a newer edit or selection. */
+export function clearSavedViewDraft(
+  selection: DatabaseViewSelection,
+  tableId: string,
+  viewId: string,
+  saved: DatabaseViewConfig
+): DatabaseViewSelection {
+  const draft = selection.drafts[tableId];
+  if (draft?.selectedViewId !== viewId || !deepEqual(draft.view, saved))
+    return selection;
+  const drafts = { ...selection.drafts };
+  delete drafts[tableId];
+  return { ...selection, drafts };
+}
 
 /** Old selections remain readable; malformed browser state never prevents opening a database. */
 export function readViewSelection(

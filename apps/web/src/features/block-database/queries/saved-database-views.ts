@@ -12,6 +12,21 @@ import type {
 import { databaseViewKeys } from './keys';
 import { selectSavedDatabaseViews } from './saved-database-view-data';
 
+export type DatabaseBoardOrderPatch = Pick<
+  DatabaseViewConfig,
+  'layout' | 'groupBy'
+> &
+  Partial<Pick<DatabaseViewConfig, 'groupOrder' | 'cardOrder' | 'sorts'>>;
+
+type SaveDatabaseViewInput = {
+  name: string;
+  tableId?: string;
+  preserveName?: boolean;
+} & (
+  | { id?: string; view: DatabaseViewConfig; boardOrder?: never }
+  | { id: string; boardOrder: DatabaseBoardOrderPatch; view?: never }
+);
+
 /** Personal views use the existing saved-views API; no database data is copied. */
 export function useSavedDatabaseViews(
   databaseId: Accessor<string>,
@@ -52,32 +67,37 @@ export function useSavedDatabaseViews(
   }
   const save = useMutation(() => ({
     scope: { id: `database-view:${databaseId()}` },
-    mutationFn: async (input: {
-      id?: string;
-      name: string;
-      view: DatabaseViewConfig;
-      tableId?: string;
-      preserveName?: boolean;
-    }) => {
+    mutationFn: async (input: SaveDatabaseViewInput) => {
       const table = input.tableId ?? tableId();
       if (!table) throw new Error('Select a table before saving a view');
       const name = input.name.trim();
       if (!name) throw new Error('Give your view a name');
-      const available = query.isPending
-        ? []
-        : selectSavedDatabaseViews(
-            query.data?.views ?? [],
-            databaseId(),
-            table
-          );
-      if (input.id && !available.some((view) => view.id === input.id))
+      // Queued mutations must merge against the preceding acknowledgement,
+      // rather than the resource snapshot captured when a drag ended.
+      const available = selectSavedDatabaseViews(
+        queryClient.getQueryData<ViewsResponse>(databaseViewKeys.saved.queryKey)
+          ?.views ?? [],
+        databaseId(),
+        table
+      );
+      const existing = available.find((view) => view.id === input.id);
+      if (input.id && !existing)
         throw new Error('This saved view is no longer available');
+      const view = input.boardOrder
+        ? {
+            ...existing!.view,
+            ...(existing!.view.groupBy !== input.boardOrder.groupBy
+              ? { groupOrder: undefined, cardOrder: undefined }
+              : {}),
+            ...input.boardOrder,
+          }
+        : input.view;
       const config: SavedDatabaseViewConfig = {
         kind: 'database-view',
         version: 1,
         databaseId: databaseId(),
         tableId: table,
-        view: input.view,
+        view,
       };
       if (input.id) {
         await throwOnErr(() =>
@@ -94,7 +114,7 @@ export function useSavedDatabaseViews(
               : view
           )
         );
-        return input.id;
+        return { id: input.id, view };
       }
       const created = await throwOnErr(() =>
         storageServiceClient.views.createSavedView({ name, config })
@@ -103,7 +123,7 @@ export function useSavedDatabaseViews(
         ...views.filter((view) => view.id !== created.id),
         created,
       ]);
-      return created.id;
+      return { id: created.id, view };
     },
     onSuccess: invalidate,
   }));

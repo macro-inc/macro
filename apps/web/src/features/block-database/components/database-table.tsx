@@ -15,6 +15,7 @@ import {
   DragDropProvider,
   DragDropSensors,
   DragOverlay,
+  useDragDropContext,
 } from '@thisbeyond/solid-dnd';
 import {
   type Accessor,
@@ -26,6 +27,7 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
+import { createDragAutoScroll } from '../../../components/drag-drop/create-drag-auto-scroll';
 import type {
   GridCellControl,
   GridCellEditorOptions,
@@ -70,7 +72,11 @@ export function DatabaseTable(props: {
     change: DatabaseColumnTypeChange
   ) => Promise<void>;
   onDeleteColumn?: (columnId: string) => Promise<void>;
-  onReorderColumn?: (columnId: string, targetId: string) => Promise<void>;
+  onReorderColumn?: (
+    columnId: string,
+    targetId: string,
+    edge: 'before' | 'after'
+  ) => Promise<void>;
   onRenameColumn?: (
     columnId: string,
     name: string,
@@ -81,6 +87,14 @@ export function DatabaseTable(props: {
   onMove?: (columnId: string, direction: 'left' | 'right') => void;
 }) {
   const [columnPreview, setColumnPreview] = createSignal<HTMLElement>();
+  const [columnDrop, setColumnDrop] = createSignal<{
+    targetId: string;
+    edge: 'before' | 'after';
+    left: number;
+  }>();
+  let pointerOrigin: { x: number; y: number } | undefined;
+  let scrollContainer!: HTMLDivElement;
+  let gridElement!: HTMLDivElement;
   const headerRenames = new Map<string, () => void>();
   let requestedHeader: string | undefined;
   const focusHeader = () => {
@@ -223,6 +237,66 @@ export function DatabaseTable(props: {
   }
   return (
     <DragDropProvider
+      collisionDetector={(draggable, droppables) => {
+        if (!pointerOrigin || !props.canEdit) {
+          setColumnDrop(undefined);
+          return null;
+        }
+        const x = pointerOrigin.x + draggable.transform.x;
+        const y = pointerOrigin.y + draggable.transform.y;
+        const viewport = scrollContainer.getBoundingClientRect();
+        if (
+          x < viewport.left ||
+          x > viewport.right ||
+          y < viewport.top ||
+          y > viewport.bottom
+        ) {
+          setColumnDrop(undefined);
+          return null;
+        }
+        const headers = droppables
+          .map((droppable) => ({
+            droppable,
+            bounds: droppable.node.getBoundingClientRect(),
+          }))
+          .sort((a, b) => a.bounds.left - b.bounds.left);
+        const target = (
+          headers.find(({ bounds }) => x <= bounds.right) ?? headers.at(-1)
+        )?.droppable;
+        if (!target) {
+          setColumnDrop(undefined);
+          return null;
+        }
+        const bounds = target.node.getBoundingClientRect();
+        const edge = x < bounds.left + bounds.width / 2 ? 'before' : 'after';
+        const boundary = edge === 'before' ? bounds.left : bounds.right;
+        if (boundary < viewport.left || boundary > viewport.right) {
+          setColumnDrop(undefined);
+          return null;
+        }
+        const from = props.columns.findIndex(
+          (column) => column.id === String(draggable.id)
+        );
+        const to = props.columns.findIndex(
+          (column) => column.id === String(target.id)
+        );
+        const insertion = to + Number(edge === 'after');
+        if (
+          from < 0 ||
+          to < 0 ||
+          insertion === from ||
+          insertion === from + 1
+        ) {
+          setColumnDrop(undefined);
+          return null;
+        }
+        setColumnDrop({
+          targetId: String(target.id),
+          edge,
+          left: boundary - gridElement.getBoundingClientRect().left,
+        });
+        return target;
+      }}
       onDragStart={({ draggable }) => {
         const bounds = draggable.node.getBoundingClientRect();
         const copy = draggable.node.cloneNode(true) as HTMLElement;
@@ -233,22 +307,37 @@ export function DatabaseTable(props: {
         copy.style.width = `${bounds.width}px`;
         copy.style.height = `${bounds.height}px`;
         copy.style.opacity = '1';
+        copy.style.margin = '0';
+        copy.style.boxSizing = 'border-box';
         copy.inert = true;
+        copy.setAttribute('aria-hidden', 'true');
+        copy.setAttribute('data-column-drag-preview', '');
         setColumnPreview(copy);
       }}
-      onDragEnd={({ draggable, droppable }) => {
+      onDragEnd={({ draggable }) => {
+        const drop = columnDrop();
+        setColumnDrop(undefined);
         setColumnPreview(undefined);
-        if (props.canEdit && droppable && draggable.id !== droppable.id)
+        pointerOrigin = undefined;
+        if (props.canEdit && drop)
           void props.onReorderColumn?.(
             String(draggable.id),
-            String(droppable.id)
+            drop.targetId,
+            drop.edge
           );
       }}
     >
-      <DragDropSensors />
-      <div class="@container/database-grid min-h-0 flex-1 overflow-auto">
+      <ColumnDragSensors
+        onCancel={() => setColumnDrop(undefined)}
+        scrollContainer={() => scrollContainer}
+      />
+      <div
+        ref={scrollContainer}
+        class="@container/database-grid min-h-0 flex-1 overflow-auto"
+      >
         <div
           ref={(grid) => {
+            gridElement = grid;
             // Closed select triggers also use arrows. The grid owns those keys
             // until an editor or its menu has opened.
             const navigateArrows = (event: KeyboardEvent) => {
@@ -264,7 +353,7 @@ export function DatabaseTable(props: {
           aria-rowcount={props.rows.length + 1}
           aria-colcount={props.columns.length + 1 + Number(props.canEdit)}
           data-grid
-          class="flex min-h-full min-w-fit flex-col"
+          class="relative flex min-h-full min-w-fit flex-col"
           onKeyDown={moveFocus}
           onFocusIn={(event) => {
             const rowId =
@@ -310,6 +399,9 @@ export function DatabaseTable(props: {
                     focusHeader();
                   }}
                   canDrag={props.canEdit && !!props.onReorderColumn}
+                  onDragPointerDown={(event) => {
+                    pointerOrigin = { x: event.clientX, y: event.clientY };
+                  }}
                   relationTables={props.relationTables}
                   onChangeType={props.onChangeColumnType}
                   onDelete={props.onDeleteColumn}
@@ -558,9 +650,24 @@ export function DatabaseTable(props: {
               <div />
             </Show>
           </div>
+          <Show when={columnDrop()}>
+            {(drop) => (
+              <div
+                aria-hidden="true"
+                data-column-drop-indicator
+                data-drop-target={drop().targetId}
+                data-drop-edge={drop().edge}
+                class="pointer-events-none absolute inset-y-0 z-2 w-0.5 -translate-x-1/2 bg-accent"
+                style={{ left: `${drop().left}px` }}
+              />
+            )}
+          </Show>
         </div>
       </div>
-      <DragOverlay class="pointer-events-none select-none bg-panel shadow-md">
+      <DragOverlay
+        class="pointer-events-none select-none bg-panel shadow-md"
+        style={{ 'z-index': 1000 }}
+      >
         {columnPreview()}
       </DragOverlay>
     </DragDropProvider>
@@ -568,7 +675,10 @@ export function DatabaseTable(props: {
 }
 
 function DraggableColumnHeader(
-  props: DatabaseColumnHeaderProps & { canDrag: boolean }
+  props: DatabaseColumnHeaderProps & {
+    canDrag: boolean;
+    onDragPointerDown: (event: MouseEvent) => void;
+  }
 ) {
   const draggable = createDraggable(props.column.id);
   const droppable = createDroppable(props.column.id);
@@ -579,9 +689,58 @@ function DraggableColumnHeader(
         draggable.ref(element);
         droppable.ref(element);
       }}
-      dragHandle={props.canDrag ? draggable.dragActivators : undefined}
+      dragHandle={
+        props.canDrag
+          ? {
+              onMouseDown: (event) => {
+                if (
+                  event.button !== 0 ||
+                  (event.target instanceof Element &&
+                    event.target.closest('button, input'))
+                )
+                  return;
+                props.onDragPointerDown(event);
+                draggable.dragActivators.onmousedown?.(event);
+              },
+            }
+          : undefined
+      }
       dragging={draggable.isActiveDraggable}
-      dropTarget={droppable.isActiveDroppable && !draggable.isActiveDraggable}
     />
   );
+}
+
+function ColumnDragSensors(props: {
+  onCancel: () => void;
+  scrollContainer: () => HTMLElement;
+}) {
+  const context = useDragDropContext();
+  if (!context) throw new Error('ColumnDragSensors requires DragDropProvider');
+  const [state, actions] = context;
+  createDragAutoScroll({ getViewport: props.scrollContainer, axis: 'x' });
+  const cancelDrag = () => {
+    if (!state.active.draggable) return;
+    props.onCancel();
+    // Keep the sensor until mouseup so its next mousemove cannot restart a drag.
+    actions.dragEnd();
+  };
+  const cancel = (event: KeyboardEvent) => {
+    if (event.key !== 'Escape' || !state.active.draggable) return;
+    event.preventDefault();
+    event.stopPropagation();
+    cancelDrag();
+  };
+  const updateDrop = (event: Event) => {
+    if (event.target === props.scrollContainer() && state.active.draggable)
+      actions.detectCollisions();
+  };
+  document.addEventListener('keydown', cancel, true);
+  document.addEventListener('scroll', updateDrop, true);
+  window.addEventListener('blur', cancelDrag);
+  onCleanup(() => {
+    document.removeEventListener('keydown', cancel, true);
+    document.removeEventListener('scroll', updateDrop, true);
+    window.removeEventListener('blur', cancelDrag);
+  });
+  return <DragDropSensors />;
 }

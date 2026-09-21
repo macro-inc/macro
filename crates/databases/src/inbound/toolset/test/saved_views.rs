@@ -59,6 +59,7 @@ fn board() -> SaveDatabaseView {
             layout: ViewLayout::Board,
             group_by: Some(COLUMN_ID),
             group_order: vec![],
+            card_order: None,
             filters: vec![],
             sorts: vec![],
             hidden_columns: vec![],
@@ -200,4 +201,89 @@ async fn multiselect_board_preserves_lane_order_and_rejects_duplicate_keys() {
             .is_err()
     );
     assert_eq!(store.0.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn manual_card_positions_survive_ai_updates_and_can_be_cleared_explicitly() {
+    let store = FakeViews::default();
+    let context = DatabasesToolContext::new(
+        FakeService::default(),
+        FakeAccess::granting(AccessLevel::View),
+        store.clone(),
+    );
+    let first = Uuid::now_v7();
+    let second = Uuid::now_v7();
+    let order = std::collections::BTreeMap::from([
+        (r#"value:"Going""#.into(), vec![second, first]),
+        ("empty".into(), vec![first, second]),
+    ]);
+    let mut command = board();
+    command.view.card_order = Some(order.clone());
+    let created = command
+        .call(ServiceContext(context.clone()), request_context())
+        .await
+        .unwrap();
+    assert_eq!(
+        created.config["view"]["cardOrder"],
+        serde_json::json!(order)
+    );
+
+    command.view.card_order = None;
+    command.view.search = "Ada".into();
+    let updated = command
+        .call(ServiceContext(context.clone()), request_context())
+        .await
+        .unwrap();
+    assert_eq!(updated.view_id, created.view_id);
+    assert_eq!(
+        updated.config["view"]["cardOrder"],
+        serde_json::json!(order)
+    );
+
+    command.view.card_order = Some(Default::default());
+    let cleared = command
+        .call(ServiceContext(context.clone()), request_context())
+        .await
+        .unwrap();
+    assert_eq!(cleared.config["view"]["cardOrder"], serde_json::json!({}));
+
+    command.view.card_order = Some(order);
+    command
+        .call(ServiceContext(context.clone()), request_context())
+        .await
+        .unwrap();
+    command.view.card_order = None;
+    command.view.layout = ViewLayout::Table;
+    command.view.group_by = None;
+    let regrouped = command
+        .call(ServiceContext(context), request_context())
+        .await
+        .unwrap();
+    assert!(regrouped.config["view"].get("cardOrder").is_none());
+    assert_eq!(store.0.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn malformed_lane_keys_and_duplicate_card_positions_never_persist() {
+    let store = FakeViews::default();
+    let context = DatabasesToolContext::new(
+        FakeService::default(),
+        FakeAccess::granting(AccessLevel::View),
+        store.clone(),
+    );
+    let row = Uuid::now_v7();
+    for order in [
+        std::collections::BTreeMap::from([("not-a-lane".into(), vec![row])]),
+        std::collections::BTreeMap::from([("empty".into(), vec![row, row])]),
+    ] {
+        let mut command = board();
+        command.view.card_order = Some(order);
+        assert!(
+            command
+                .call(ServiceContext(context.clone()), request_context())
+                .await
+                .is_err()
+        );
+    }
+    assert!(store.0.lock().unwrap().is_empty());
 }

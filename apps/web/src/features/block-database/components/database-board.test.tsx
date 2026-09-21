@@ -153,6 +153,8 @@ describe('database board', () => {
   it('drags the entire card at its original size without opening the record on drop', async () => {
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
       function (this: HTMLElement) {
+        if (this.classList.contains('overflow-auto'))
+          return new DOMRect(0, 0, 900, 500);
         const label = this.getAttribute('aria-label');
         const x =
           label === 'Done lane' ? 300 : label?.startsWith('No ') ? 600 : 0;
@@ -190,6 +192,11 @@ describe('database board', () => {
     expect(preview.style.width).toBe('250px');
     expect(preview.style.height).toBe('100px');
     expect(preview.style.transform).toBe('none');
+    expect(
+      screen
+        .getByRole('region', { name: 'Done lane' })
+        .querySelector('[data-kanban-insertion="card"]')
+    ).toBeTruthy();
     fireEvent.mouseUp(document, { button: 0, clientX: 510, clientY: 100 });
     fireEvent.click(
       screen.getByRole('button', { name: 'Open Launch project' })

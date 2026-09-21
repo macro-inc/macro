@@ -6199,6 +6199,14 @@ export interface DatabaseViewDefinition {
    */
   groupOrder?: string[];
   /**
+   * Manual row ids per lane, using the same lane keys as groupOrder. Sorting
+   * takes precedence. Omit to preserve an existing view's positions when
+   * groupBy is unchanged; an empty object clears manual positions.
+   */
+  cardOrder?: {
+    [k: string]: string[];
+  } | null;
+  /**
    * Filters are combined with AND.
    */
   filters?: ViewFilter[];

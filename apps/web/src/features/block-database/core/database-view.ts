@@ -1,5 +1,9 @@
 import { match } from 'ts-pattern';
 import type { DatabaseEntityType } from './column-inference';
+import {
+  mergeDatabaseColumnOrder,
+  reorderDatabaseColumns,
+} from './column-order';
 import { relatedRowIds } from './database-relations';
 
 export type DatabaseCellValue = string | number | null;
@@ -53,6 +57,8 @@ export type DatabaseViewConfig = {
   groupBy: string | null;
   /** Lane keys in the user’s preferred order; new lanes follow alphabetically. */
   groupOrder?: string[];
+  /** Manual row ids per lane; a multi-select row can have a different position in each. */
+  cardOrder?: Record<string, string[]>;
   filters: DatabaseFilter[];
   sorts: DatabaseSort[];
   hiddenColumns: string[];
@@ -116,11 +122,16 @@ export function moveDatabaseViewColumn(
   const index = visible.findIndex((column) => column.id === columnId);
   const neighbor = visible[index + (direction === 'left' ? -1 : 1)];
   if (index < 0 || !neighbor) return view;
-  const columnOrder = ordered.map((column) => column.id);
-  const from = columnOrder.indexOf(columnId);
-  const to = columnOrder.indexOf(neighbor.id);
-  [columnOrder[from], columnOrder[to]] = [neighbor.id, columnId];
-  return reconcileDatabaseView({ ...view, columnOrder }, columns);
+  const columnOrder = reorderDatabaseColumns(
+    ordered.map((column) => column.id),
+    view.hiddenColumns,
+    columnId,
+    neighbor.id,
+    direction === 'left' ? 'before' : 'after'
+  );
+  return columnOrder
+    ? reconcileDatabaseView({ ...view, columnOrder }, columns)
+    : view;
 }
 
 export const FILTER_OPERATORS: {
@@ -419,6 +430,12 @@ export function isDatabaseViewConfig(
     (value.groupOrder === undefined ||
       (Array.isArray(value.groupOrder) &&
         value.groupOrder.every((id) => typeof id === 'string'))) &&
+    (value.cardOrder === undefined ||
+      (isRecord(value.cardOrder) &&
+        Object.values(value.cardOrder).every(
+          (ids) =>
+            Array.isArray(ids) && ids.every((id) => typeof id === 'string')
+        ))) &&
     (value.columnOrder === undefined ||
       (Array.isArray(value.columnOrder) &&
         value.columnOrder.every((id) => typeof id === 'string')))
@@ -447,19 +464,21 @@ export function reconcileDatabaseView(
   const columnOrder = orderDatabaseColumns(columns, view.columnOrder).map(
     (column) => column.id
   );
+  const groupBy = columns.some(
+    (column) => column.id === view.groupBy && isBoardGroupColumn(column)
+  )
+    ? view.groupBy
+    : view.layout === 'board'
+      ? (columns.find(isBoardGroupColumn)?.id ?? null)
+      : null;
   return {
     ...view,
     // Canonical schema order keeps a restored default view from looking unsaved.
     columnOrder: columnOrder.every((id, index) => id === columns[index].id)
       ? undefined
       : columnOrder,
-    groupBy: columns.some(
-      (column) => column.id === view.groupBy && isBoardGroupColumn(column)
-    )
-      ? view.groupBy
-      : view.layout === 'board'
-        ? (columns.find(isBoardGroupColumn)?.id ?? null)
-        : null,
+    groupBy,
+    cardOrder: groupBy === view.groupBy ? view.cardOrder : undefined,
     filters: view.filters.filter((filter) => ids.has(filter.columnId)),
     sorts: view.sorts.filter((sort) => ids.has(sort.columnId)),
     hiddenColumns: view.hiddenColumns.filter((id) => ids.has(id)),
@@ -495,4 +514,41 @@ export function orderDatabaseGroups<Row>(
     }
   }
   return [...ordered, ...remaining.values()];
+}
+
+/** Ignore stale ids and append newly visible cards in their existing row order. */
+export function orderDatabaseCards<Row>(
+  rows: readonly Row[],
+  order: readonly string[] | undefined,
+  getId: (row: Row) => string
+): Row[] {
+  const remaining = new Map(rows.map((row) => [getId(row), row]));
+  const ordered: Row[] = [];
+  for (const id of order ?? []) {
+    const row = remaining.get(id);
+    if (row === undefined) continue;
+    ordered.push(row);
+    remaining.delete(id);
+  }
+  return [...ordered, ...remaining.values()];
+}
+
+/** Insert at the displayed gap without moving filtered-out cards from their slots. */
+export function placeDatabaseCard(
+  order: readonly string[],
+  visibleOrder: readonly string[],
+  rowId: string,
+  beforeId?: string
+): string[] {
+  if (
+    beforeId === rowId ||
+    (beforeId !== undefined && !visibleOrder.includes(beforeId))
+  )
+    return [...order];
+  const visible = [...new Set(visibleOrder)].filter((id) => id !== rowId);
+  const insertion =
+    beforeId === undefined ? visible.length : visible.indexOf(beforeId);
+  visible.splice(insertion, 0, rowId);
+  const completeOrder = [...new Set([...order, ...visibleOrder, rowId])];
+  return mergeDatabaseColumnOrder(completeOrder, visible);
 }

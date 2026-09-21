@@ -8,6 +8,7 @@ import {
 import type { DatabaseTableDetail } from '@service-storage/databases';
 import { createMemo, For, type JSX, Show, Suspense } from 'solid-js';
 import { DatabaseRelationCell } from '../components/database-relation-cell';
+import { mergeDatabaseColumnOrder } from '../core/column-order';
 import type { DatabaseRelatedDestination } from '../core/database-relations';
 import {
   type DatabaseViewConfig,
@@ -173,14 +174,21 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
               mutation: { kind: 'delete', columnId },
             })
           }
-          onReorderColumns={(columnIds) =>
-            updateDatabaseColumns({
+          onReorderColumns={(columnIds) => {
+            const current = table();
+            return updateDatabaseColumns({
               databaseId,
               tableId: props.tableId,
-              baseVersion: table().table.version,
-              mutation: { kind: 'order', columnIds },
-            })
-          }
+              baseVersion: current.table.version,
+              mutation: {
+                kind: 'order',
+                columnIds: mergeDatabaseColumnOrder(
+                  current.columns.map(({ column }) => column.id),
+                  columnIds
+                ),
+              },
+            });
+          }}
           onRenameColumn={(columnId, name, previousName) =>
             renameDatabaseColumn({
               databaseId,

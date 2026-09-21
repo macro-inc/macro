@@ -1,7 +1,7 @@
 //! Personal database views, validated against the database schema and persisted
 //! through the owning saved-views storage port.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -107,6 +107,11 @@ pub struct DatabaseViewDefinition {
     /// Omit for alphabetical order; additional lanes follow alphabetically.
     #[serde(default)]
     pub group_order: Vec<String>,
+    /// Manual row ids per lane, using the same lane keys as groupOrder. Sorting
+    /// takes precedence. Omit to preserve an existing view's positions when
+    /// groupBy is unchanged; an empty object clears manual positions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub card_order: Option<BTreeMap<String, Vec<Uuid>>>,
     /// Filters are combined with AND.
     #[serde(default)]
     pub filters: Vec<ViewFilter>,
@@ -197,6 +202,22 @@ fn valid_group_key(key: &str) -> bool {
         serde_json::from_str::<serde_json::Value>(value),
         Ok(serde_json::Value::String(_) | serde_json::Value::Number(_))
     )
+}
+
+fn validate_card_order(order: &BTreeMap<String, Vec<Uuid>>) -> Result<(), DatabaseError> {
+    const MAX_ORDERED_LANES: usize = 1000;
+    const MAX_ORDERED_CARDS: usize = 200_000;
+    if order.len() > MAX_ORDERED_LANES
+        || order.values().map(Vec::len).sum::<usize>() > MAX_ORDERED_CARDS
+        || order.iter().any(|(key, rows)| {
+            !valid_group_key(key) || rows.iter().collect::<HashSet<_>>().len() != rows.len()
+        })
+    {
+        return Err(invalid(
+            "Card order must use valid lane keys and distinct row ids within each lane, with at most 1000 lanes and 200000 positions.",
+        ));
+    }
+    Ok(())
 }
 
 fn filter_value(data_type: DataType, filter: &ViewFilter) -> Result<String, DatabaseError> {
@@ -290,6 +311,9 @@ where
         {
             return Err(invalid("Lane order must contain distinct valid lane keys."));
         }
+        if let Some(order) = &view.card_order {
+            validate_card_order(order)?;
+        }
         if view.layout == ViewLayout::Board {
             let group = view
                 .group_by
@@ -335,13 +359,6 @@ where
                 "operator": filter.operator, "value": value,
             }));
         }
-        let config = serde_json::json!({
-            "kind": "database-view", "version": 1,
-            "databaseId": database.database.id, "tableId": command.table_id,
-            "view": { "layout": view.layout, "groupBy": view.group_by, "groupOrder": view.group_order,
-                "filters": filters, "sorts": view.sorts, "hiddenColumns": view.hidden_columns,
-                "columnOrder": view.column_order, "search": view.search },
-        });
         let existing = self
             .views
             .get_views_for_user(&user_id)
@@ -355,6 +372,25 @@ where
                     && view.config["databaseId"] == database.database.id.to_string()
                     && view.config["tableId"] == command.table_id.to_string()
             });
+        let card_order = view.card_order.clone().or_else(|| {
+            let previous = &existing.as_ref()?.config["view"];
+            if previous["groupBy"] != serde_json::json!(view.group_by) {
+                return None;
+            }
+            let order = serde_json::from_value(previous.get("cardOrder")?.clone()).ok()?;
+            validate_card_order(&order).ok()?;
+            Some(order)
+        });
+        let mut config = serde_json::json!({
+            "kind": "database-view", "version": 1,
+            "databaseId": database.database.id, "tableId": command.table_id,
+            "view": { "layout": view.layout, "groupBy": view.group_by, "groupOrder": view.group_order,
+                "filters": filters, "sorts": view.sorts, "hiddenColumns": view.hidden_columns,
+                "columnOrder": view.column_order, "search": view.search },
+        });
+        if let Some(order) = card_order {
+            config["view"]["cardOrder"] = serde_json::json!(order);
+        }
         let created = existing.is_none();
         let view_id = if let Some(existing) = existing {
             self.views

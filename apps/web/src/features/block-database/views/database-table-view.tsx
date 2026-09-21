@@ -3,6 +3,7 @@ import EyeSlashIcon from '@phosphor/eye-slash.svg';
 import WarningIcon from '@phosphor/warning-circle.svg';
 import XIcon from '@phosphor/x.svg';
 import { until } from '@solid-primitives/promise';
+import { Mutex } from 'async-mutex';
 import {
   type Accessor,
   createMemo,
@@ -17,7 +18,10 @@ import {
   type GridCellEditorOptions,
   type GridCellProps,
 } from '../component/GridCell';
-import { DatabaseBoard } from '../components/database-board';
+import {
+  DatabaseBoard,
+  type DatabaseCardPlacement,
+} from '../components/database-board';
 import { DatabaseTable } from '../components/database-table';
 import type { PropertyCreatorVariant } from '../components/property-creator';
 import { DeleteRecordDialog, RecordPanel } from '../components/record-panel';
@@ -26,14 +30,21 @@ import type {
   DatabaseWriteResult,
 } from '../context/table-source';
 import type { DatabaseColumnType } from '../core/column-inference';
+import {
+  mergeDatabaseColumnOrder,
+  reorderDatabaseColumns,
+} from '../core/column-order';
 import type { DatabaseColumnTypeChange } from '../core/column-schema';
 import {
   applyDatabaseView,
   type DatabaseCellValue,
   type DatabaseViewColumn,
   type DatabaseViewConfig,
+  groupDatabaseRows,
   isBoardGroupColumn,
+  orderDatabaseCards,
   orderDatabaseColumns,
+  placeDatabaseCard,
 } from '../core/database-view';
 import type { DatabasePropertyType } from '../core/property-creation';
 import {
@@ -53,6 +64,17 @@ export type DatabaseTableActions = {
   focusColumn: (columnId: string) => boolean;
   openRecord: (rowId: string) => void;
   pending: Accessor<boolean>;
+};
+
+type CardOrderState = Pick<DatabaseViewConfig, 'sorts' | 'cardOrder'>;
+
+type CardPlacementBurst = {
+  groupBy: string;
+  pending: number;
+  sequence: number;
+  confirmedSequence: number;
+  confirmed: CardOrderState;
+  latest: CardOrderState;
 };
 
 export function DatabaseTableView(props: {
@@ -90,6 +112,11 @@ export function DatabaseTableView(props: {
   const draftRows = createDraftRows(controller);
   const [editColumn, setEditColumn] = createSignal<string>();
   const [schemaError, setSchemaError] = createSignal('');
+  const columnOrderMutex = new Mutex();
+  let columnOrderSequence = 0;
+  let pendingColumnOrders = 0;
+  let confirmedColumnOrder: string[] = [];
+  let cardPlacementBurst: CardPlacementBurst | undefined;
   const [selectedId, setSelectedId] = createSignal<string>();
   const [editCell, setEditCell] = createSignal<{
     rowId: string;
@@ -460,30 +487,164 @@ export function DatabaseTableView(props: {
       hiddenColumns: [...props.view.hiddenColumns, columnId],
     });
   }
-  async function reorderColumn(columnId: string, targetId: string) {
+  async function placeCard(placement: DatabaseCardPlacement) {
+    const column = groupColumn();
+    const row = controller.rows().find((row) => row.rowId === placement.rowId);
+    if (
+      !column ||
+      !row ||
+      !props.canEdit ||
+      !column.writable ||
+      !props.onViewChange
+    )
+      return false;
+    const previous = props.view;
+    const groups = groupDatabaseRows(rows(), column, rowValue);
+    const target = groups.find((group) => group.key === placement.toLane);
+    if (!target) return false;
+    const cardOrder = { ...previous.cardOrder };
+    // Keep every other card where it was shown, including when switching from a sort.
+    // Stored positions for filtered-out rows stay intact.
+    for (const group of groups) {
+      const visible = orderDatabaseCards(
+        group.rows,
+        previous.sorts.length ? undefined : previous.cardOrder?.[group.key],
+        (row) => row.rowId
+      ).map((row) => row.rowId);
+      const existing = cardOrder[group.key] ?? [];
+      cardOrder[group.key] = mergeDatabaseColumnOrder(
+        [...new Set([...existing, ...visible])],
+        visible
+      );
+    }
+    const visibleTarget = orderDatabaseCards(
+      target.rows,
+      cardOrder[placement.toLane],
+      (row) => row.rowId
+    ).map((row) => row.rowId);
+    if (placement.beforeId && !visibleTarget.includes(placement.beforeId))
+      return false;
+    cardOrder[placement.toLane] = placeDatabaseCard(
+      cardOrder[placement.toLane] ?? [],
+      visibleTarget,
+      placement.rowId,
+      placement.beforeId
+    );
+    const order: CardOrderState = { sorts: [], cardOrder };
+    // One burst shares its last confirmed order. A later user sort/group change
+    // starts a fresh baseline rather than inheriting an earlier pending move.
+    const burst: CardPlacementBurst =
+      cardPlacementBurst?.pending &&
+      cardPlacementBurst.groupBy === column.id &&
+      previous.groupBy === column.id &&
+      previous.sorts.length === 0 &&
+      previous.cardOrder === cardPlacementBurst.latest.cardOrder
+        ? cardPlacementBurst
+        : {
+            groupBy: column.id,
+            pending: 0,
+            sequence: 0,
+            confirmedSequence: 0,
+            confirmed: {
+              sorts: previous.sorts,
+              cardOrder: previous.cardOrder,
+            },
+            latest: order,
+          };
+    const sequence = ++burst.sequence;
+    burst.latest = order;
+    cardPlacementBurst = burst;
+    // Retain the source lane's stored position: membership hides it after a move,
+    // and a rejected write can put the card back exactly where it started.
+    props.onViewChange({ ...previous, groupBy: column.id, ...order });
+    if (placement.fromLane === placement.toLane) {
+      burst.confirmed = order;
+      burst.confirmedSequence = sequence;
+      return true;
+    }
+    burst.pending++;
+    try {
+      const saved = await controller.save(
+        {
+          kind: 'cell',
+          rowId: placement.rowId,
+          columnId: column.id,
+          value: placement.value,
+        },
+        column.name
+      );
+      // An older response cannot replace a newer accepted same-lane placement.
+      if (saved && sequence > burst.confirmedSequence) {
+        burst.confirmed = order;
+        burst.confirmedSequence = sequence;
+      }
+      if (
+        !saved &&
+        !disposed &&
+        sequence === burst.sequence &&
+        props.view.groupBy === column.id &&
+        props.view.sorts.length === 0 &&
+        props.view.cardOrder === cardOrder
+      ) {
+        props.onViewChange({ ...props.view, ...burst.confirmed });
+      }
+      return Boolean(saved);
+    } finally {
+      burst.pending--;
+    }
+  }
+
+  async function reorderColumn(
+    columnId: string,
+    targetId: string,
+    edge: 'before' | 'after'
+  ) {
     const order = orderDatabaseColumns(columns(), props.view.columnOrder).map(
       (column) => column.id
     );
-    const visible = order.filter(
-      (id) => !props.view.hiddenColumns.includes(id)
+    const nextOrder = reorderDatabaseColumns(
+      order,
+      props.view.hiddenColumns,
+      columnId,
+      targetId,
+      edge
     );
-    const from = visible.indexOf(columnId);
-    const to = visible.indexOf(targetId);
-    if (from < 0 || to < 0 || from === to) return;
-    visible.splice(to, 0, visible.splice(from, 1)[0]);
-    let visibleIndex = 0;
-    // Hidden columns keep their saved slot while visible headers move past them.
-    const nextOrder = order.map((id) =>
-      props.view.hiddenColumns.includes(id) ? id : visible[visibleIndex++]
-    );
+    if (!nextOrder) return;
     setSchemaError('');
+    // Move immediately; a network round trip must not snap the header back.
+    props.onViewChange?.({ ...props.view, columnOrder: nextOrder });
+    const persist = props.canEdit ? props.onReorderColumns : undefined;
+    if (!persist) return;
+    const sequence = ++columnOrderSequence;
+    if (pendingColumnOrders++ === 0) confirmedColumnOrder = order;
     try {
-      if (props.canEdit) await props.onReorderColumns?.(nextOrder);
-      props.onViewChange?.({ ...props.view, columnOrder: nextOrder });
+      // Each request reads the schema version refreshed by the previous write.
+      // Queue complete orders so a later drop includes all optimistic moves.
+      await columnOrderMutex.runExclusive(async () => {
+        await persist(nextOrder);
+        confirmedColumnOrder = nextOrder;
+      });
+      if (!disposed && sequence === columnOrderSequence) setSchemaError('');
     } catch (error) {
+      if (disposed || sequence !== columnOrderSequence) return;
+      const currentOrder = orderDatabaseColumns(
+        columns(),
+        props.view.columnOrder
+      ).map((column) => column.id);
+      // A view selection made during the write owns its own column layout.
+      if (
+        currentOrder.length === nextOrder.length &&
+        currentOrder.every((id, index) => id === nextOrder[index])
+      )
+        props.onViewChange?.({
+          ...props.view,
+          columnOrder: confirmedColumnOrder,
+        });
       setSchemaError(
         error instanceof Error ? error.message : 'Could not reorder columns.'
       );
+    } finally {
+      pendingColumnOrders--;
     }
   }
   function moveColumn(columnId: string, direction: 'left' | 'right') {
@@ -493,7 +654,12 @@ export function DatabaseTableView(props: {
         columns.findIndex((column) => column.id === columnId) +
           (direction === 'left' ? -1 : 1)
       ];
-    if (target) void reorderColumn(columnId, target.id);
+    if (target)
+      void reorderColumn(
+        columnId,
+        target.id,
+        direction === 'left' ? 'before' : 'after'
+      );
   }
   function clearFilters() {
     props.onViewChange?.({ ...props.view, search: '', filters: [] });
@@ -815,6 +981,10 @@ export function DatabaseTableView(props: {
                     )}
                     groupColumn={group()}
                     groupOrder={props.view.groupOrder}
+                    cardOrder={
+                      props.view.sorts.length ? undefined : props.view.cardOrder
+                    }
+                    onPlace={props.onViewChange ? placeCard : undefined}
                     onGroupOrderChange={(groupOrder) =>
                       props.onViewChange?.({ ...props.view, groupOrder })
                     }
@@ -823,6 +993,21 @@ export function DatabaseTableView(props: {
                     createPending={controller.createPending}
                     createComplete={controller.createComplete}
                     onOpen={open}
+                    projectMove={(rowId, value) =>
+                      applyDatabaseView(
+                        controller.rows().map((row) =>
+                          row.rowId === rowId
+                            ? {
+                                ...row,
+                                cells: { ...row.cells, [group().id]: value },
+                              }
+                            : row
+                        ),
+                        columns(),
+                        props.view,
+                        rowValue
+                      )
+                    }
                     onMove={async (rowId, value) => {
                       const row = controller
                         .rows()

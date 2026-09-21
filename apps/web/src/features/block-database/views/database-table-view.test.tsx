@@ -17,6 +17,7 @@ import {
 } from '../context/table-source';
 import {
   type DatabaseViewColumn,
+  type DatabaseViewConfig,
   defaultDatabaseView,
 } from '../core/database-view';
 import {
@@ -95,6 +96,147 @@ function persistWrites({
   });
 }
 
+function deferWrites(source: DatabaseRowsSource) {
+  const writes: { resolve: () => void; reject: (error: Error) => void }[] = [];
+  vi.mocked(source.write).mockImplementation(
+    (_mutation, version) =>
+      new Promise((resolve, reject) => {
+        writes.push({
+          resolve: () =>
+            resolve({ version: (version ?? 0) + 1, insertedRowIds: [] }),
+          reject,
+        });
+      })
+  );
+  return writes;
+}
+
+function columnOrderFixture() {
+  const { source, setColumns } = sourceFixture();
+  setColumns([
+    ...columns,
+    { ...columns[0], id: 'notes', name: 'Notes' },
+    { ...columns[0], id: 'owner', name: 'Owner' },
+  ]);
+  const [view, setView] = createSignal<DatabaseViewConfig>({
+    ...defaultDatabaseView(),
+    hiddenColumns: ['status'],
+  });
+  const changeView = vi.fn((value: DatabaseViewConfig) => setView(value));
+  const requests: { resolve: () => void; reject: (error: Error) => void }[] =
+    [];
+  const reorder = vi.fn(
+    (_order: string[]) =>
+      new Promise<void>((resolve, reject) => requests.push({ resolve, reject }))
+  );
+  const mounted = render(() => (
+    <DatabaseTableView
+      name="Projects"
+      source={source}
+      canEdit
+      view={view()}
+      onViewChange={changeView}
+      onReorderColumns={reorder}
+      addColumn={() => null}
+    />
+  ));
+  const moveName = async (direction: 'left' | 'right') => {
+    fireEvent.keyDown(
+      screen.getByRole('button', { name: 'Name column menu' }),
+      {
+        key: 'Enter',
+      }
+    );
+    fireEvent.keyDown(
+      await screen.findByRole('menuitem', { name: `Move ${direction}` }),
+      {
+        key: 'Enter',
+      }
+    );
+  };
+  const headers = () =>
+    screen
+      .getAllByRole('button', { name: / column menu$/ })
+      .map((button) => button.getAttribute('aria-label'));
+  return {
+    ...mounted,
+    view,
+    setView,
+    changeView,
+    reorder,
+    requests,
+    moveName,
+    headers,
+  };
+}
+
+function cardPlacementFixture(sorted = false) {
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
+    function (this: HTMLElement) {
+      const lane = this.closest<HTMLElement>('[data-kanban-lane]');
+      if (!lane) return new DOMRect(0, 0, 1000, 800);
+      const x =
+        lane.getAttribute('aria-label') === 'Done lane'
+          ? 0
+          : lane.getAttribute('aria-label') === 'To do lane'
+            ? 320
+            : 640;
+      if (this.hasAttribute('data-kanban-card')) {
+        const index = [...lane.querySelectorAll('[data-kanban-card]')].indexOf(
+          this
+        );
+        return new DOMRect(x + 10, 70 + index * 120, 270, 100);
+      }
+      return new DOMRect(x, 20, 290, 500);
+    }
+  );
+  const fixture = sourceFixture();
+  fixture.setSnapshot({
+    version: 1,
+    rows: [
+      { rowId: 'alpha', cells: { title: 'Alpha', status: 'Done' } },
+      { rowId: 'zeta', cells: { title: 'Zeta', status: 'Done' } },
+      { rowId: 'row', cells: { title: 'Middle', status: 'To do' } },
+    ],
+  });
+  const [view, setView] = createSignal<DatabaseViewConfig>({
+    ...defaultDatabaseView(),
+    layout: 'board',
+    groupBy: 'status',
+    sorts: sorted ? [{ columnId: 'title', direction: 'desc' }] : [],
+  });
+  render(() => (
+    <DatabaseTableView
+      name="Projects"
+      source={fixture.source}
+      canEdit
+      view={view()}
+      onViewChange={setView}
+      addColumn={() => null}
+    />
+  ));
+  const drop = (rowId: string, x: number, y: number) => {
+    const card = document.querySelector<HTMLElement>(
+      `[data-kanban-card="${rowId}"]`
+    )!;
+    const bounds = card.getBoundingClientRect();
+    fireEvent.mouseDown(card.querySelector('button')!, {
+      button: 0,
+      clientX: bounds.left + 30,
+      clientY: bounds.top + 30,
+    });
+    fireEvent.mouseMove(document, { clientX: x, clientY: y });
+    fireEvent.mouseUp(document, { button: 0, clientX: x, clientY: y });
+  };
+  const cards = (lane = 'Done') =>
+    [
+      ...screen
+        .getByRole('region', { name: `${lane} lane` })
+        .querySelectorAll<HTMLElement>('[data-kanban-card]'),
+    ].map((card) => card.dataset.kanbanCard);
+  return { ...fixture, view, setView, drop, cards };
+}
+
 beforeEach(() => {
   const style = document.createElement('style');
   style.textContent = '[role="menu"] { animation-name: none; }';
@@ -114,6 +256,201 @@ afterEach(() => {
   document.head.querySelectorAll('style').forEach((style) => style.remove());
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+});
+
+describe('manual board placement', () => {
+  it('places in the pointer gap immediately and preserves that position while the group save finishes', async () => {
+    const { source, view, drop, cards } = cardPlacementFixture(true);
+    let finish!: () => void;
+    vi.mocked(source.write).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = () => resolve({ version: 2, insertedRowIds: [] });
+        })
+    );
+    expect(cards()).toEqual(['zeta', 'alpha']);
+    drop('row', 100, 200);
+    expect(cards()).toEqual(['zeta', 'row', 'alpha']);
+    expect(view().sorts).toEqual([]);
+    await waitFor(() => expect(source.write).toHaveBeenCalledOnce());
+    // The optimistic card can be moved again before its first write completes.
+    drop('row', 100, 75);
+    expect(cards()).toEqual(['row', 'zeta', 'alpha']);
+    finish();
+    await waitFor(() =>
+      expect(
+        document
+          .querySelector('[data-kanban-card="row"]')
+          ?.getAttribute('aria-busy')
+      ).toBe('false')
+    );
+    expect(cards()).toEqual(['row', 'zeta', 'alpha']);
+    expect(source.write).toHaveBeenCalledOnce();
+  });
+
+  it('reorders inside a lane without changing record values', () => {
+    const { source, view, drop, cards } = cardPlacementFixture();
+    drop('zeta', 100, 75);
+    expect(cards()).toEqual(['zeta', 'alpha']);
+    expect(view().cardOrder?.['value:"Done"']).toEqual(['zeta', 'alpha']);
+    expect(source.write).not.toHaveBeenCalled();
+  });
+
+  it('keeps the latest destination when the same pending card is dragged again', async () => {
+    const { source, drop, cards } = cardPlacementFixture();
+    const saves: (() => void)[] = [];
+    vi.mocked(source.write).mockImplementation(
+      (_mutation, version) =>
+        new Promise((resolve) => {
+          saves.push(() =>
+            resolve({ version: (version ?? 0) + 1, insertedRowIds: [] })
+          );
+        })
+    );
+    drop('row', 100, 200);
+    await waitFor(() => expect(source.write).toHaveBeenCalledOnce());
+    drop('row', 400, 80);
+    expect(cards('To do')).toEqual(['row']);
+    expect(cards()).toEqual(['alpha', 'zeta']);
+    saves[0]();
+    await waitFor(() => expect(source.write).toHaveBeenCalledTimes(2));
+    expect(cards('To do')).toEqual(['row']);
+    saves[1]();
+    await waitFor(() =>
+      expect(
+        document
+          .querySelector('[data-kanban-card="row"]')
+          ?.getAttribute('aria-busy')
+      ).toBe('false')
+    );
+    expect(cards('To do')).toEqual(['row']);
+    expect(
+      vi
+        .mocked(source.write)
+        .mock.calls.map(([mutation, version]) => [
+          mutation.kind === 'cell' && mutation.value,
+          version,
+        ])
+    ).toEqual([
+      ['Done', 1],
+      ['To do', 2],
+    ]);
+  });
+
+  it('restores the original lane and ordering when a cross-lane write fails', async () => {
+    const { source, view, drop, cards } = cardPlacementFixture(true);
+    vi.mocked(source.write).mockRejectedValue(new Error('Connection lost'));
+    drop('row', 100, 200);
+    expect(cards()).toEqual(['zeta', 'row', 'alpha']);
+    await screen.findByRole('alert');
+    await waitFor(() => expect(cards('To do')).toEqual(['row']));
+    expect(cards()).toEqual(['zeta', 'alpha']);
+    expect(view().sorts).toEqual([{ columnId: 'title', direction: 'desc' }]);
+    expect(view().cardOrder).toBeUndefined();
+  });
+
+  it('restores the original sort and stored positions when every queued move fails', async () => {
+    const { source, view, setView, drop, cards } = cardPlacementFixture(true);
+    const originalOrder = {
+      'value:"Done"': ['alpha', 'hidden', 'zeta'],
+      'value:"To do"': ['row'],
+    };
+    setView((view) => ({ ...view, cardOrder: originalOrder }));
+    const writes = deferWrites(source);
+    drop('row', 100, 200);
+    await waitFor(() => expect(writes).toHaveLength(1));
+    drop('row', 400, 80);
+    writes[0].reject(new Error('First move rejected'));
+    await waitFor(() => expect(writes).toHaveLength(2));
+    expect(view().sorts).toEqual([]);
+    writes[1].reject(new Error('Second move rejected'));
+    await waitFor(() =>
+      expect(view().sorts).toEqual([{ columnId: 'title', direction: 'desc' }])
+    );
+    expect(view().cardOrder).toEqual(originalOrder);
+    expect(cards()).toEqual(['zeta', 'alpha']);
+    expect(cards('To do')).toEqual(['row']);
+  });
+
+  it('restores the last successful move when a later queued move fails', async () => {
+    const { source, view, drop, cards } = cardPlacementFixture(true);
+    const writes = deferWrites(source);
+    drop('row', 100, 200);
+    const savedOrder = view().cardOrder;
+    await waitFor(() => expect(writes).toHaveLength(1));
+    drop('row', 400, 80);
+    writes[0].resolve();
+    await waitFor(() => expect(writes).toHaveLength(2));
+    writes[1].reject(new Error('Second move rejected'));
+    await waitFor(() => expect(view().cardOrder).toBe(savedOrder));
+    expect(view().sorts).toEqual([]);
+    expect(cards()).toEqual(['zeta', 'row', 'alpha']);
+    expect(cards('To do')).toEqual([]);
+  });
+
+  it('keeps a newer same-lane placement after an older success and a later failed move', async () => {
+    const { source, view, drop, cards } = cardPlacementFixture(true);
+    const writes = deferWrites(source);
+    drop('row', 100, 200);
+    await waitFor(() => expect(writes).toHaveLength(1));
+    drop('row', 100, 75);
+    const manualOrder = view().cardOrder;
+    expect(cards()).toEqual(['row', 'zeta', 'alpha']);
+    drop('row', 400, 80);
+    writes[0].resolve();
+    await waitFor(() => expect(writes).toHaveLength(2));
+    writes[1].reject(new Error('Later move rejected'));
+    await waitFor(() => expect(view().cardOrder).toBe(manualOrder));
+    expect(view().sorts).toEqual([]);
+    expect(cards()).toEqual(['row', 'zeta', 'alpha']);
+  });
+
+  it('preserves grouping changed while queued moves fail', async () => {
+    const { source, view, setView, setColumns, drop } =
+      cardPlacementFixture(true);
+    setColumns([
+      ...columns,
+      { ...columns[1], id: 'priority', name: 'Priority' },
+    ]);
+    const writes = deferWrites(source);
+    drop('row', 100, 200);
+    await waitFor(() => expect(writes).toHaveLength(1));
+    drop('row', 400, 80);
+    setView((view) => ({ ...view, groupBy: 'priority', cardOrder: undefined }));
+    writes[0].reject(new Error('First move rejected'));
+    await waitFor(() => expect(writes).toHaveLength(2));
+    writes[1].reject(new Error('Second move rejected'));
+    await waitFor(() =>
+      expect(
+        document
+          .querySelector('[data-kanban-card="row"]')
+          ?.getAttribute('aria-busy')
+      ).toBe('false')
+    );
+    expect(view().groupBy).toBe('priority');
+    expect(view().sorts).toEqual([]);
+    expect(view().cardOrder).toBeUndefined();
+  });
+
+  it('preserves a sort selected while an earlier card move fails', async () => {
+    const { source, view, setView, drop } = cardPlacementFixture();
+    let reject!: (error: Error) => void;
+    vi.mocked(source.write).mockImplementation(
+      () =>
+        new Promise((_resolve, fail) => {
+          reject = fail;
+        })
+    );
+    drop('row', 100, 200);
+    await waitFor(() => expect(source.write).toHaveBeenCalledOnce());
+    setView((view) => ({
+      ...view,
+      sorts: [{ columnId: 'title', direction: 'asc' }],
+    }));
+    reject(new Error('Connection lost'));
+    await screen.findByRole('alert');
+    expect(view().sorts).toEqual([{ columnId: 'title', direction: 'asc' }]);
+  });
 });
 
 describe('database table view', () => {
@@ -1411,6 +1748,150 @@ describe('database table view', () => {
         1
       )
     );
+  });
+
+  it('persists menu moves at the neighboring visible edge in both directions', async () => {
+    const { source, setColumns } = sourceFixture();
+    setColumns([...columns, { ...columns[0], id: 'notes', name: 'Notes' }]);
+    const [view, setView] = createSignal({
+      ...defaultDatabaseView(),
+      hiddenColumns: ['status'],
+    });
+    const reorder = vi.fn(async (_order: string[]) => {});
+    render(() => (
+      <DatabaseTableView
+        name="Projects"
+        source={source}
+        canEdit
+        view={view()}
+        onViewChange={setView}
+        onReorderColumns={reorder}
+        addColumn={() => null}
+      />
+    ));
+    const moveName = async (direction: 'left' | 'right') => {
+      fireEvent.keyDown(
+        screen.getByRole('button', { name: 'Name column menu' }),
+        {
+          key: 'Enter',
+        }
+      );
+      fireEvent.keyDown(
+        await screen.findByRole('menuitem', { name: `Move ${direction}` }),
+        {
+          key: 'Enter',
+        }
+      );
+    };
+    await moveName('right');
+    await waitFor(() =>
+      expect(view().columnOrder).toEqual(['notes', 'status', 'title'])
+    );
+    expect(reorder).toHaveBeenNthCalledWith(1, ['notes', 'status', 'title']);
+    await moveName('left');
+    await waitFor(() =>
+      expect(view().columnOrder).toEqual(['title', 'status', 'notes'])
+    );
+    expect(reorder).toHaveBeenNthCalledWith(2, ['title', 'status', 'notes']);
+    expect(source.write).not.toHaveBeenCalled();
+  });
+
+  it('moves immediately and serializes rapid column drops without snapping back on older completion', async () => {
+    const fixture = columnOrderFixture();
+    await fixture.moveName('right');
+    expect(fixture.headers()).toEqual([
+      'Notes column menu',
+      'Name column menu',
+      'Owner column menu',
+    ]);
+    await fixture.moveName('right');
+    expect(fixture.headers()).toEqual([
+      'Notes column menu',
+      'Owner column menu',
+      'Name column menu',
+    ]);
+    expect(fixture.reorder).toHaveBeenCalledTimes(1);
+    expect(fixture.reorder).toHaveBeenNthCalledWith(1, [
+      'notes',
+      'status',
+      'title',
+      'owner',
+    ]);
+
+    fixture.requests[0].resolve();
+    await waitFor(() => expect(fixture.requests).toHaveLength(2));
+    expect(fixture.reorder).toHaveBeenNthCalledWith(2, [
+      'notes',
+      'status',
+      'owner',
+      'title',
+    ]);
+    expect(fixture.headers()).toEqual([
+      'Notes column menu',
+      'Owner column menu',
+      'Name column menu',
+    ]);
+    fixture.requests[1].resolve();
+    expect(fixture.changeView).toHaveBeenCalledTimes(2);
+  });
+
+  it('rolls a rejected final drop back to the last saved order without losing other view edits', async () => {
+    const fixture = columnOrderFixture();
+    await fixture.moveName('right');
+    await fixture.moveName('right');
+    fixture.requests[0].resolve();
+    await waitFor(() => expect(fixture.requests).toHaveLength(2));
+    fixture.setView({ ...fixture.view(), search: 'Plan' });
+    fixture.requests[1].reject(new Error('This table changed. Try again.'));
+    await screen.findByRole('alert');
+    expect(fixture.view().columnOrder).toEqual([
+      'notes',
+      'status',
+      'title',
+      'owner',
+    ]);
+    expect(fixture.view().search).toBe('Plan');
+    expect(fixture.headers()).toEqual([
+      'Notes column menu',
+      'Name column menu',
+      'Owner column menu',
+    ]);
+  });
+
+  it('restores the original order when every queued column move fails', async () => {
+    const fixture = columnOrderFixture();
+    await fixture.moveName('right');
+    await fixture.moveName('right');
+    fixture.requests[0].reject(new Error('First save failed'));
+    await waitFor(() => expect(fixture.requests).toHaveLength(2));
+    expect(fixture.headers()).toEqual([
+      'Notes column menu',
+      'Owner column menu',
+      'Name column menu',
+    ]);
+    fixture.requests[1].reject(new Error('Final save failed'));
+    await screen.findByText('Final save failed');
+    expect(fixture.view().columnOrder).toEqual([
+      'title',
+      'status',
+      'notes',
+      'owner',
+    ]);
+  });
+
+  it('does not overwrite a newly selected layout when a pending reorder fails', async () => {
+    const fixture = columnOrderFixture();
+    await fixture.moveName('right');
+    const selected: DatabaseViewConfig = {
+      ...defaultDatabaseView(),
+      columnOrder: ['owner', 'title', 'notes', 'status'],
+    };
+    fixture.setView(selected);
+    fixture.changeView.mockClear();
+    fixture.requests[0].reject(new Error('Save failed'));
+    await screen.findByText('Save failed');
+    expect(fixture.changeView).not.toHaveBeenCalled();
+    expect(fixture.view()).toEqual(selected);
   });
 
   it('lets viewers move and hide columns while keeping every record accessible and restoring its layout', async () => {

@@ -32,10 +32,9 @@ export type DatabaseColumnHeaderProps = {
   ) => Promise<void>;
   onDelete?: (columnId: string) => Promise<void>;
   relationTables?: { id: string; name: string }[];
-  dragHandle?: JSX.HTMLAttributes<HTMLSpanElement>;
+  dragHandle?: JSX.HTMLAttributes<HTMLDivElement>;
   headerRef?: (element: HTMLDivElement) => void;
   dragging?: boolean;
-  dropTarget?: boolean;
   sortDirection?: 'asc' | 'desc';
   canRename?: boolean;
   onRename?: (
@@ -246,7 +245,6 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
           }}
           classList={{
             'opacity-40': props.dragging,
-            'bg-hover ring-1 ring-inset ring-ink/30': props.dropTarget,
           }}
           role="columnheader"
           aria-label={props.column.name}
@@ -307,15 +305,14 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
               <div
                 class="flex min-h-10 items-center gap-2 px-3 text-xs font-medium text-ink-muted"
                 title={canRename() ? 'Double-click to rename' : undefined}
+                {...props.dragHandle}
               >
                 <PropertyIcon
                   relation={!!props.column.relation}
                   type={props.column.dataType}
                   entityType={props.column.specificEntityType}
                 />
-                <span class="min-w-0 flex-1 truncate" {...props.dragHandle}>
-                  {props.column.name}
-                </span>
+                <span class="min-w-0 flex-1 truncate">{props.column.name}</span>
                 <Show when={props.sortDirection}>
                   <Show
                     when={props.sortDirection === 'asc'}

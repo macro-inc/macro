@@ -52,6 +52,8 @@ describe('saved database view scope', () => {
           ...defaultDatabaseView(),
           columnOrder: ['status', 'name'],
           hiddenColumns: ['status'],
+          groupBy: 'status',
+          cardOrder: { 'value:"Done"': ['second', 'first'], empty: ['third'] },
         },
       })
     );
@@ -61,6 +63,10 @@ describe('saved database view scope', () => {
       'table'
     );
     expect(saved.view.columnOrder).toEqual(['status', 'name']);
+    expect(saved.view.cardOrder).toEqual({
+      'value:"Done"': ['second', 'first'],
+      empty: ['third'],
+    });
     const columns = ['name', 'status', 'new-date'].map((id) => ({
       id,
       name: id,

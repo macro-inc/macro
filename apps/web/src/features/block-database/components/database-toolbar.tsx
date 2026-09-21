@@ -708,7 +708,11 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
                         label: column.name,
                       }))}
                       onChange={(groupBy) =>
-                        change({ groupBy, groupOrder: undefined })
+                        change({
+                          groupBy,
+                          groupOrder: undefined,
+                          cardOrder: undefined,
+                        })
                       }
                     />
                   </label>

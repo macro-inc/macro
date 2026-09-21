@@ -28,7 +28,13 @@ values, and multiple values that would be lost are rejected with an explanation.
 Changing a placement never changes another table that uses the same property.
 A relation can hold multiple records. **Delete column** opens a confirmation;
 it removes this table’s column and values while preserving other tables.
-Drag a column title left or right to reorder it, or use **Move left / Move right**.
+Drag a column header left or right to reorder it, or use **Move left / Move right**.
+An orange insertion line shows the exact boundary before or after the target
+column. Release to place it there; Escape cancels. Original-position and
+offscreen boundaries show no line and do not change the order.
+The pointer can pass over the rows while reordering. Hold it at the grid's left
+or right edge to scroll to other columns. Drops move immediately while saves are
+queued, so another drag does not need to wait for the previous save.
 
 The first nonempty entry in a new default Text column sets its type. A plain number
 becomes Number; starting with `@` and choosing an item makes it the corresponding
@@ -116,6 +122,13 @@ can create a column and choose a suitable type from its header menu.
 Lanes start in alphabetical order, including empty options and a **No …** lane
 for unassigned records. Drag a lane header to reorder lanes, or focus its handle
 and press Alt+Left / Alt+Right. Saved views remember the lane order automatically.
+An orange line marks the lane's before/after insertion boundary. For cards, the
+line follows the gap under the pointer, including gaps within the current lane.
+Release to place the card exactly there. Dragging switches a sorted board to
+manual order without moving its other cards. Saved views remember card positions.
+Escape cancels a drag; releasing outside the board leaves the record unchanged.
+The space beneath a lane's cards also accepts drops. Hold near the board's edge
+to scroll while dragging.
 Drag anywhere on a card into another lane, keeping its original size and shape.
 The card's **Move …** menu offers the same action without dragging. On a multi-select
 board a card can appear in several lanes: moving it replaces that lane's value
@@ -220,13 +233,16 @@ or channels and change or remove their access. Databases do not offer a public
 link. Viewer avatars in the header show other people currently looking at the
 database.
 
-**Download database** offers **Current table as CSV** or **Database as SQLite**.
+The header's **Database actions** (`…`) menu contains **Rename**, **Import CSV**,
+**Download**, and owner-only **Delete**. Rename focuses the existing inline title;
+Delete opens the standard confirmation dialog. Share and AI stay in the header.
+**Download** offers **Current table as CSV** or **Database as SQLite**.
 Exports contain all records, regardless of the current filters. CSV uses column
 labels and preserves text, quoted commas, and line breaks; SQLite contains the
 whole database. A table that changes during CSV export must be downloaded again
 so the file does not mix different versions.
 
-**Import CSV**, beside Download, opens a preview and focuses the new table's name.
+**Import CSV** in the `…` menu opens a preview and focuses the new table's name.
 Confirm **Import** to create a table with the CSV's columns and records. Imported
 values remain Text, preserving leading zeros and large identifiers; use a column's
 type menu afterward to convert it. The limit is 8 MB, 100 columns, and 10,000 rows.

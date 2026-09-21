@@ -4,7 +4,11 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { makePersistedState } from '@app/lib/persistence';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { useCanAutofocusSplitContent } from '@components/app/split-layout/layoutUtils';
+import {
+  returnSplitToRecentListView,
+  useCanAutofocusSplitContent,
+  useSplitPanelOrThrow,
+} from '@components/app/split-layout/layoutUtils';
 import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
@@ -41,13 +45,18 @@ import {
   reconcileDatabaseView,
 } from '../core/database-view';
 import {
+  clearSavedViewDraft,
   type DatabaseViewSelection,
   readViewSelection,
   type TableViewState,
 } from '../core/view-selection';
 import { renameDatabase } from '../queries/rename-database';
-import { useSavedDatabaseViews } from '../queries/saved-database-views';
+import {
+  type DatabaseBoardOrderPatch,
+  useSavedDatabaseViews,
+} from '../queries/saved-database-views';
 import { toViewColumn } from '../queries/table-rows';
+import { trashDatabase } from '../queries/trash-database';
 import { DatabasePageActions } from '../views/database-page-actions';
 import { AddColumnMenu } from './AddColumnMenu';
 import { DatabaseGrid } from './DatabaseGrid';
@@ -55,6 +64,8 @@ import { TableTabs } from './TableTabs';
 
 const Block: Component = () => {
   const databaseId = useBlockId();
+  const panel = useSplitPanelOrThrow();
+  let editTitle: (() => void) | undefined;
   const { replaceOrInsertSplit } = useSplitLayout();
   const orchestrator = useGlobalBlockOrchestrator();
   let requestedRecord: DatabaseRelatedDestination | undefined;
@@ -224,46 +235,55 @@ const Block: Component = () => {
     }
   }
   function changeView(config: DatabaseViewConfig) {
+    const previous = view();
     const laneOrderChanged =
       config.groupOrder !== undefined &&
-      !deepEqual(view().groupOrder, config.groupOrder);
+      !deepEqual(previous.groupOrder, config.groupOrder);
+    const cardOrderChanged =
+      (config.cardOrder !== undefined || config.groupBy === previous.groupBy) &&
+      !deepEqual(previous.cardOrder, config.cardOrder);
     const selected = selectedView();
     const tableId = activeTableId();
     setViewState({ view: config, selectedViewId: selectedViewId() });
-    if (laneOrderChanged && selected && tableId)
-      void persistLaneOrder(tableId, selected.id, selected.name, {
-        ...selected.view,
+    if ((laneOrderChanged || cardOrderChanged) && selected && tableId)
+      void persistBoardOrder(tableId, selected.id, selected.name, {
         layout: config.layout,
         groupBy: config.groupBy,
-        groupOrder: config.groupOrder,
+        ...(laneOrderChanged || config.groupBy !== selected.view.groupBy
+          ? { groupOrder: config.groupOrder }
+          : {}),
+        ...(cardOrderChanged
+          ? { cardOrder: config.cardOrder, sorts: config.sorts }
+          : {}),
       });
   }
-  function clearSavedDraft(tableId: string, config: DatabaseViewConfig) {
-    setSelection((current) => {
-      if (!deepEqual(current.drafts[tableId]?.view, config)) return current;
-      const drafts = { ...current.drafts };
-      delete drafts[tableId];
-      return { ...current, drafts };
-    });
+  function clearSavedDraft(
+    tableId: string,
+    id: string,
+    config: DatabaseViewConfig
+  ) {
+    setSelection((current) =>
+      clearSavedViewDraft(current, tableId, id, config)
+    );
   }
-  async function persistLaneOrder(
+  async function persistBoardOrder(
     tableId: string,
     id: string,
     name: string,
-    config: DatabaseViewConfig
+    boardOrder: DatabaseBoardOrderPatch
   ) {
     try {
-      await saved.save.mutateAsync({
+      const result = await saved.save.mutateAsync({
         tableId,
         id,
         name,
-        view: config,
+        boardOrder,
         preserveName: true,
       });
-      clearSavedDraft(tableId, config);
+      clearSavedDraft(tableId, id, result.view);
     } catch {
       toast.failure(
-        'The lane order could not be saved. Use Save changes to retry.'
+        'The board order could not be saved. Use Save changes to retry.'
       );
     }
   }
@@ -291,10 +311,18 @@ const Block: Component = () => {
           groupBy && groupBy !== original.groupBy
             ? undefined
             : original.groupOrder,
+        cardOrder:
+          groupBy && groupBy !== original.groupBy
+            ? undefined
+            : original.cardOrder,
       },
       columns()
     );
-    const id = await saved.save.mutateAsync({ name, view: config, tableId });
+    const { id } = await saved.save.mutateAsync({
+      name,
+      view: config,
+      tableId,
+    });
     const current = tableId ? tableViews()[tableId] : undefined;
     if (
       current !== originalState &&
@@ -320,7 +348,7 @@ const Block: Component = () => {
         name: selected.name,
         view: config,
       });
-      clearSavedDraft(tableId, config);
+      clearSavedDraft(tableId, selected.id, config);
     }
   }
   async function removeView(id: string) {
@@ -354,6 +382,7 @@ const Block: Component = () => {
                   name={detail()?.database.name ?? 'Database'}
                   canEdit={canEdit()}
                   onConfirm={enterFirstCell}
+                  onEditReady={(edit) => (editTitle = edit)}
                   autoFocus={
                     canAutofocus &&
                     !navigatedFromJK() &&
@@ -390,6 +419,11 @@ const Block: Component = () => {
                 <DatabasePageActions
                   detail={database()}
                   table={activeTable()}
+                  onRename={() => editTitle?.()}
+                  onDelete={async () => {
+                    await trashDatabase(getEntityGraphqlClient(), databaseId);
+                    returnSplitToRecentListView(panel.handle);
+                  }}
                   onImported={(tableId) =>
                     setSelection((current) => ({ ...current, tableId }))
                   }
