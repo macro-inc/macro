@@ -1,11 +1,16 @@
-//! Email-service HTTP adapter for the calendar mutation port.
+//! Calendar-service HTTP adapter for the calendar mutation port.
 //!
-//! The email service is the calendar write authority: it holds the Google
+//! The calendar service is the calendar write authority: it holds the Google
 //! provider client, token minting, and the per-inbox request gate. Hosts
 //! that expose calendar mutations without those dependencies (the AI tool
 //! hosts) implement [`CalendarMutationService`] through this client, so
 //! every mutation flows through the same routes, validation, and error
 //! mapping as user-initiated ones.
+//!
+//! The base URL points at the calendar service's `/calendar` gateway prefix,
+//! so the request paths here are exactly the routes
+//! [`crate::inbound::mutation_router::calendar_mutation_router`] serves
+//! (`/calendars`, `/events`, `/events/{id}`, `/events/{id}/rsvp`).
 
 #[cfg(all(test, feature = "inbound"))]
 mod test;
@@ -30,16 +35,16 @@ const INTERNAL_API_KEY_HEADER: &str = "x-internal-auth-key";
 /// Header carrying the acting Macro user for internal authorization.
 const INTERNAL_MACRO_USER_ID_HEADER: &str = "x-internal-macro-user-id";
 
-/// Calendar mutation client calling the email service with internal
+/// Calendar mutation client calling the calendar service with internal
 /// authorization on behalf of the requesting user.
-pub struct EmailServiceCalendarMutations {
+pub struct CalendarServiceMutations {
     base_url: String,
     internal_api_key: String,
     http: reqwest::Client,
 }
 
-impl EmailServiceCalendarMutations {
-    /// Construct the client for the email service at `base_url`.
+impl CalendarServiceMutations {
+    /// Construct the client for the calendar service at `base_url`.
     pub fn new(base_url: String, internal_api_key: String) -> Self {
         Self {
             base_url: base_url.trim_end_matches('/').to_string(),
@@ -117,7 +122,7 @@ fn error_from_response(status: StatusCode, body: Option<String>) -> CalendarMuta
         return fallback_error(
             status,
             format!(
-                "the email service calendar API returned status {status} with no mutation \
+                "the calendar service API returned status {status} with no mutation \
                  error body"
             ),
         );
@@ -265,7 +270,7 @@ fn rsvp_body(
     }
 }
 
-impl CalendarMutationService for EmailServiceCalendarMutations {
+impl CalendarMutationService for CalendarServiceMutations {
     #[tracing::instrument(skip(self, requester_id, draft), err)]
     async fn create_event(
         &self,
@@ -275,7 +280,7 @@ impl CalendarMutationService for EmailServiceCalendarMutations {
         draft: CalendarEventDraft,
     ) -> Result<CalendarEvent, CalendarMutationError> {
         self.event_from(
-            self.request(reqwest::Method::POST, "/calendar/events", requester_id)
+            self.request(reqwest::Method::POST, "/events", requester_id)
                 .json(&create_body(email_link_id, calendar_id, &draft)),
         )
         .await
@@ -286,7 +291,7 @@ impl CalendarMutationService for EmailServiceCalendarMutations {
         &self,
         requester_id: &str,
     ) -> Result<Vec<VisibleCalendar>, CalendarMutationError> {
-        self.send(self.request(reqwest::Method::GET, "/calendar/calendars", requester_id))
+        self.send(self.request(reqwest::Method::GET, "/calendars", requester_id))
             .await?
             .json::<ListCalendarsWire>()
             .await
@@ -310,7 +315,7 @@ impl CalendarMutationService for EmailServiceCalendarMutations {
         self.event_from(
             self.request(
                 reqwest::Method::PATCH,
-                &format!("/calendar/events/{event_id}"),
+                &format!("/events/{event_id}"),
                 requester_id,
             )
             .json(&update_body(calendar_id, &patch, &scope)),
@@ -329,7 +334,7 @@ impl CalendarMutationService for EmailServiceCalendarMutations {
         self.send(
             self.request(
                 reqwest::Method::DELETE,
-                &format!("/calendar/events/{event_id}"),
+                &format!("/events/{event_id}"),
                 requester_id,
             )
             .query(&delete_query(calendar_id, &scope)),
@@ -350,7 +355,7 @@ impl CalendarMutationService for EmailServiceCalendarMutations {
         self.event_from(
             self.request(
                 reqwest::Method::PUT,
-                &format!("/calendar/events/{event_id}/rsvp"),
+                &format!("/events/{event_id}/rsvp"),
                 requester_id,
             )
             .json(&rsvp_body(calendar_id, response, &scope)),
@@ -358,18 +363,25 @@ impl CalendarMutationService for EmailServiceCalendarMutations {
         .await
     }
 
-    #[tracing::instrument(skip(self, requester_id), err)]
+    /// Not reachable over this transport. Disconnecting a calendar is part of
+    /// an inbox's link lifecycle, served by the email service at
+    /// `DELETE /email/links/{link_id}/calendar` (see
+    /// `email_service::api::email::links::calendar`) — a route the calendar
+    /// service does not mount, and one that stays on the email service after
+    /// the calendar cutover. The AI-tool hosts that construct this client
+    /// never disconnect calendars (the toolset exposes no such tool), so this
+    /// arm exists only to satisfy [`CalendarMutationService`]; issuing the
+    /// request against the calendar service base would 404. It returns a
+    /// domain error instead of firing a request that cannot succeed.
     async fn disconnect_calendar(
         &self,
-        requester_id: &str,
-        email_link_id: Uuid,
+        _requester_id: &str,
+        _email_link_id: Uuid,
     ) -> Result<(), CalendarMutationError> {
-        self.send(self.request(
-            reqwest::Method::DELETE,
-            &format!("/email/links/{email_link_id}/calendar"),
-            requester_id,
+        Err(CalendarMutationError::InvalidInput(
+            "disconnecting a calendar is not available through the calendar-service mutation \
+             client; it is served by the email service's inbox link lifecycle"
+                .to_string(),
         ))
-        .await
-        .map(|_| ())
     }
 }
