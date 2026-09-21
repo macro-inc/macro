@@ -17,6 +17,7 @@ use crate::domain::models::{
     RenameColumnOutcome, Row, RowChange, RowId, SqliteSnapshot, Table, TableDeps, TableId,
     TableVersion, Viewer,
 };
+use crate::domain::models::{ChangeColumnType, ColumnReplacement, ColumnSchemaOutcome};
 
 /// Outbound persistence port for databases, tables, column placements, rows,
 /// and link edges. Implemented by the Postgres repository.
@@ -113,6 +114,29 @@ pub trait DatabasesRepo: Send + Sync + 'static {
         table: &Table,
         column: &Column,
         definition_id: PropertyDefinitionId,
+    ) -> impl Future<Output = Result<Option<TableVersion>, Self::Err>> + Send;
+
+    /// Rebind only this placement and replace its cells under the table CAS.
+    /// Keep its database live until commit; do not change or delete shared definitions.
+    fn replace_column(
+        &self,
+        table: &Table,
+        replacement: &ColumnReplacement,
+    ) -> impl Future<Output = Result<Option<TableVersion>, Self::Err>> + Send;
+
+    /// Delete one placement and its table-local cells/edges atomically, preserving
+    /// its property definition and other placements. Lock and bump link endpoints.
+    fn delete_column(
+        &self,
+        table: &Table,
+        column: &Column,
+    ) -> impl Future<Output = Result<Option<ColumnSchemaOutcome>, Self::Err>> + Send;
+
+    /// Persist a complete, validated column order under the table CAS.
+    fn reorder_columns(
+        &self,
+        table: &Table,
+        column_ids: &[ColumnId],
     ) -> impl Future<Output = Result<Option<TableVersion>, Self::Err>> + Send;
 
     /// Bump a table's version and return the new one.
@@ -216,11 +240,12 @@ pub trait ColumnDefinitionStore: Send + Sync + 'static {
     ) -> impl Future<Output = Result<PropertyDefinitionId, Self::Err>> + Send;
 
     /// Create a fresh database-owned definition through the properties domain.
-    fn create_inferred_definition(
+    fn create_typed_definition(
         &self,
         database_id: DatabaseId,
         name: &str,
         data_type: models_properties::DataType,
+        is_multi_select: bool,
         specific_entity_type: Option<models_properties::EntityType>,
     ) -> impl Future<Output = Result<PropertyDefinitionWithOptions, Self::Err>> + Send;
 
@@ -403,6 +428,32 @@ pub trait DatabasesService: Send + Sync + 'static {
         viewer: Viewer,
         cmd: InferColumnType,
     ) -> impl Future<Output = Result<InferColumnTypeOutcome, DatabaseError>> + Send;
+
+    /// Explicitly change a placement's type with validated lossless conversion.
+    fn change_column_type(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        viewer: Viewer,
+        cmd: ChangeColumnType,
+    ) -> impl Future<Output = Result<ColumnSchemaOutcome, DatabaseError>> + Send;
+
+    /// Delete a placement without affecting its shared definition or other tables.
+    fn delete_column(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        table_id: TableId,
+        column_id: ColumnId,
+        base_version: TableVersion,
+    ) -> impl Future<Output = Result<ColumnSchemaOutcome, DatabaseError>> + Send;
+
+    /// Save the full column order, rejecting missing, duplicate, or foreign IDs.
+    fn reorder_columns(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        table_id: TableId,
+        column_ids: Vec<ColumnId>,
+        base_version: TableVersion,
+    ) -> impl Future<Output = Result<ColumnSchemaOutcome, DatabaseError>> + Send;
 
     /// Extend a select column's allowed options.
     ///

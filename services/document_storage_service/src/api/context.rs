@@ -504,6 +504,19 @@ pub(crate) type DatabasesServiceType = DatabasesServiceImpl<
 pub(crate) type DssDatabasesState =
     DatabasesRouterState<DatabasesServiceType, EntityAccessService, AuthorizationService>;
 
+/// Database onboarding composes transaction-capable owning domain adapters.
+pub(crate) type DssDatabaseStarterState =
+    databases::inbound::starter_router::DatabaseStarterRouterState<
+        databases::domain::starter::DatabaseStarterServiceImpl<
+            databases::outbound::pg_starter::PgDatabaseStarterRepo<
+                properties::outbound::properties_pg_repo::PropertiesPgRepo,
+                saved_views::PgViewStorage,
+            >,
+            DssEventBroker,
+        >,
+        AuthorizationService,
+    >;
+
 /// Type alias for the reminders service.
 pub(crate) type RemindersServiceType = RemindersServiceImpl<PgRemindersRepo>;
 
@@ -600,6 +613,7 @@ pub(crate) struct ApiContext {
     pub reminders_state: DssRemindersState,
     pub initiative_state: DssInitiativeState,
     pub databases_state: DssDatabasesState,
+    pub database_starter_state: DssDatabaseStarterState,
     pub collab_surface_state: DssCollabSurfaceState,
     pub foreign_entity_state: DssForeignEntityState,
     pub macro_event_broker: DssEventBroker,

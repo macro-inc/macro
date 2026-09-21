@@ -506,7 +506,7 @@ pub struct ToolColumn {
     pub is_multi_select: bool,
     /// For a select or tag column, the labels SQL accepts. Writing anything
     /// else is rejected by the statement.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub options: Vec<String>,
     /// Whether SQL may write to this column.
     pub writable: bool,

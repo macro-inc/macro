@@ -20,6 +20,7 @@ import { CHAT_INPUT_TEXT_AREA_ID } from '@core/component/AI/component/input/Chat
 import { getIconConfig } from '@core/component/EntityIcon';
 import {
   enableChatV3Agents,
+  enableDatabases,
   enableReminders,
   enableSnippets,
   isFeatureEnabled,
@@ -398,6 +399,7 @@ export function runCreateAction(
       });
       return;
     case 'database':
+      if (!isFeatureEnabled(enableDatabases)) return;
       createBlock({
         blockName: 'database',
         loading: true,
@@ -554,6 +556,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     launcherHint: 'Tables and boards',
     keywords: ['new', 'make', 'add', 'database', 'table', 'db', 'sql'],
     blockName: 'database',
+    enabled: () => isFeatureEnabled(enableDatabases),
     hotkeyToken: TOKENS.create.database,
     altHotkeyToken: TOKENS.create.databaseNewSplit,
     hotkey: 'b',
@@ -747,9 +750,11 @@ export function useCreateMenuBlocks(
   // flag that resolves after mount would leave the menu as it was until reload.
   const remindersFlag = useFeatureFlag(enableReminders);
   const agentsFlag = useFeatureFlag(enableChatV3Agents);
+  const databasesFlag = useFeatureFlag(enableDatabases);
   return createMemo(() => {
     remindersFlag();
     agentsFlag();
+    databasesFlag();
     return source().filter((block) => {
       if (block.blockName === 'spreadsheet') return spreadsheets();
       if (block.blockName === 'snippet') return snippetsFlag().enabled;

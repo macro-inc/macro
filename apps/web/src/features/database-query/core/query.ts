@@ -11,6 +11,7 @@ export type QueryDefinition = {
   tableId?: string;
   sql: string;
   prompt: string;
+  title?: string;
   displayMode: QueryDisplayMode;
   chart?: QueryChartConfig;
 };
@@ -44,6 +45,7 @@ export type QuerySchema = {
 };
 
 export type QueryProposal = {
+  title?: string;
   sql: string;
   explanation: string;
   displayMode?: QueryDisplayMode;
@@ -212,6 +214,9 @@ export function parseQueryProposal(value: unknown): QueryProposal {
   return {
     sql,
     explanation: record.explanation.trim(),
+    ...(typeof record.title === 'string' && record.title.trim()
+      ? { title: record.title.trim().slice(0, 100) }
+      : {}),
     ...(typeof record.databaseId === 'string' && record.databaseId.trim()
       ? { databaseId: record.databaseId.trim() }
       : {}),

@@ -180,3 +180,70 @@ describe('column header interactions', () => {
     expect(rename).not.toHaveBeenCalled();
   });
 });
+
+it('requires confirmation before deleting a column and retains a failed deletion', async () => {
+  const remove = vi.fn(async () => {
+    throw new Error('This table changed. Refresh and try again.');
+  });
+  render(() => (
+    <DatabaseColumnHeader
+      column={column}
+      canRename
+      onRename={vi.fn()}
+      onSort={vi.fn()}
+      onDelete={remove}
+    />
+  ));
+  fireEvent.keyDown(screen.getByRole('columnheader', { name: 'Name' }), {
+    key: 'Enter',
+  });
+  fireEvent(
+    await screen.findByRole('menuitem', { name: 'Delete column' }),
+    new MouseEvent('pointerup', { button: 0, bubbles: true })
+  );
+  expect(remove).not.toHaveBeenCalled();
+  expect(await screen.findByRole('dialog')).toBeTruthy();
+  await waitFor(() =>
+    expect(document.activeElement?.textContent).toBe('Cancel')
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Delete column' }));
+  await waitFor(() => expect(remove).toHaveBeenCalledExactlyOnceWith('name'));
+  expect((await screen.findByRole('alert')).textContent).toContain(
+    'This table changed.'
+  );
+  expect(screen.getByRole('dialog')).toBeTruthy();
+});
+
+it('uses the type submenu and surfaces lossless conversion failures without changing the label', async () => {
+  const changeType = vi.fn(async () => {
+    throw new Error('Some text cannot become a number without changing it.');
+  });
+  render(() => (
+    <DatabaseColumnHeader
+      column={column}
+      canRename
+      onRename={vi.fn()}
+      onSort={vi.fn()}
+      onChangeType={changeType}
+    />
+  ));
+  fireEvent.keyDown(screen.getByRole('columnheader', { name: 'Name' }), {
+    key: 'Enter',
+  });
+  const submenu = await screen.findByRole('menuitem', { name: 'Change type' });
+  submenu.focus();
+  fireEvent.keyDown(submenu, { key: 'ArrowRight' });
+  fireEvent(
+    await screen.findByRole('menuitem', { name: 'Number' }),
+    new MouseEvent('pointerup', { button: 0, bubbles: true })
+  );
+  await waitFor(() =>
+    expect(changeType).toHaveBeenCalledExactlyOnceWith('name', {
+      dataType: 'NUMBER',
+    })
+  );
+  expect((await screen.findByRole('alert')).textContent).toContain(
+    'Some text cannot become a number'
+  );
+  expect(screen.getByRole('columnheader', { name: 'Name' })).toBeTruthy();
+});

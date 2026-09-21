@@ -19,6 +19,7 @@ fn only_owner_can_share_session_control_with_channel() {
 #[test]
 fn existing_reference_types_keep_view_sharing() {
     for kind in [
+        ReferencedShareItemType::Database,
         ReferencedShareItemType::Document,
         ReferencedShareItemType::Chat,
         ReferencedShareItemType::Project,
@@ -35,4 +36,13 @@ fn existing_reference_types_keep_view_sharing() {
             Some(AccessLevel::View)
         );
     }
+}
+
+#[test]
+fn database_references_round_trip_without_becoming_documents() {
+    assert_eq!(
+        ReferencedShareItemType::from_raw("database"),
+        Some(ReferencedShareItemType::Database)
+    );
+    assert_eq!(ReferencedShareItemType::Database.as_str(), "database");
 }

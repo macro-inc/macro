@@ -58,6 +58,7 @@ fn board() -> SaveDatabaseView {
         view: DatabaseViewDefinition {
             layout: ViewLayout::Board,
             group_by: Some(COLUMN_ID),
+            group_order: vec![],
             filters: vec![],
             sorts: vec![],
             hidden_columns: vec![],
@@ -168,4 +169,35 @@ async fn invalid_table_column_grouping_and_filter_never_persist() {
         );
     }
     assert!(store.0.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn multiselect_board_preserves_lane_order_and_rejects_duplicate_keys() {
+    let store = FakeViews::default();
+    let context = DatabasesToolContext::new(
+        FakeService {
+            multi_select_group: true,
+            ..Default::default()
+        },
+        FakeAccess::granting(AccessLevel::View),
+        store.clone(),
+    );
+    let mut command = board();
+    command.view.group_order = vec![r#"value:"Going""#.into(), "empty".into()];
+    let saved = command
+        .call(ServiceContext(context.clone()), request_context())
+        .await
+        .unwrap();
+    assert_eq!(
+        saved.config["view"]["groupOrder"],
+        serde_json::json!([r#"value:"Going""#, "empty"])
+    );
+    command.view.group_order.push("empty".into());
+    assert!(
+        command
+            .call(ServiceContext(context), request_context())
+            .await
+            .is_err()
+    );
+    assert_eq!(store.0.lock().unwrap().len(), 1);
 }

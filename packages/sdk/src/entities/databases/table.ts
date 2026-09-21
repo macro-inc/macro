@@ -87,6 +87,15 @@ export class DatabaseTable {
     return this.database.addColumn(this, opts);
   }
 
+  /** Persist every column ID exactly once in the requested order. */
+  async reorderColumns(
+    columnIds: string[],
+    baseVersion: TableVersion
+  ): Promise<DatabaseTable> {
+    await this.database.reorderColumns(this, columnIds, baseVersion);
+    return this;
+  }
+
   toJSON(): { id: string; databaseId: string } {
     return { id: this.id, databaseId: this.database.id };
   }

@@ -47,3 +47,4 @@ Results come back as columns and rows. A column whose values are entity ids carr
 | --- | --- | --- | --- |
 | `sql` | string | Yes | The SQL to run, as one string. Several statements are allowed and run in a single transaction — either all of the writes apply or none do. Use the SQL names DescribeDatabase reported, not the names the user says. |
 | `baseVersions` | ToolTableVersion[] | No | Optional versions from a previous QueryDatabase read. Reject the write if a listed table being written changed. Read-only dependencies are not guarded; omit for a read or intentional blind edit. |
+| `display` | `"table"` \| `"scalar"` \| `"bar"` \| `"line"` \| `"pie"` | No | Preferred native result presentation. For an explicit chart request, select bar, line, or pie and return a label column plus numeric values. The app falls back to a table if the data cannot support that display. |

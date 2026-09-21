@@ -1,5 +1,4 @@
 import ArrowClockwiseIcon from '@phosphor/arrow-clockwise.svg';
-import CheckIcon from '@phosphor/check.svg';
 import EyeSlashIcon from '@phosphor/eye-slash.svg';
 import WarningIcon from '@phosphor/warning-circle.svg';
 import XIcon from '@phosphor/x.svg';
@@ -27,13 +26,13 @@ import type {
   DatabaseWriteResult,
 } from '../context/table-source';
 import type { DatabaseColumnType } from '../core/column-inference';
+import type { DatabaseColumnTypeChange } from '../core/column-schema';
 import {
   applyDatabaseView,
   type DatabaseCellValue,
   type DatabaseViewColumn,
   type DatabaseViewConfig,
   isBoardGroupColumn,
-  moveDatabaseViewColumn,
   orderDatabaseColumns,
 } from '../core/database-view';
 import type { DatabasePropertyType } from '../core/property-creation';
@@ -62,9 +61,18 @@ export function DatabaseTableView(props: {
   canEdit: boolean;
   view: DatabaseViewConfig;
   onViewChange?: (view: DatabaseViewConfig) => void;
+  renderTextEditor?: GridCellProps['renderTextEditor'];
+  renderTextValue?: GridCellProps['renderTextValue'];
   renderMentionPicker?: GridCellProps['renderMentionPicker'];
   renderMentionValue?: GridCellProps['renderMentionValue'];
   renderRelationCell?: (props: GridCellProps) => JSX.Element;
+  relationTables?: { id: string; name: string }[];
+  onChangeColumnType?: (
+    columnId: string,
+    change: DatabaseColumnTypeChange
+  ) => Promise<void>;
+  onDeleteColumn?: (columnId: string) => Promise<void>;
+  onReorderColumns?: (columnIds: string[]) => Promise<void>;
   onRenameColumn?: (
     columnId: string,
     name: string,
@@ -80,6 +88,8 @@ export function DatabaseTableView(props: {
 }) {
   const controller = createTableController(props.source, recordSaved);
   const draftRows = createDraftRows(controller);
+  const [editColumn, setEditColumn] = createSignal<string>();
+  const [schemaError, setSchemaError] = createSignal('');
   const [selectedId, setSelectedId] = createSignal<string>();
   const [editCell, setEditCell] = createSignal<{
     rowId: string;
@@ -147,21 +157,6 @@ export function DatabaseTableView(props: {
       ? controller.rows().find((row) => row.rowId === saved.rowId)
       : undefined;
   };
-  const saveStatus = () =>
-    controller.pending()
-      ? 'Saving…'
-      : controller.failure() || draftRows.error()
-        ? 'Change not saved'
-        : props.source.loading()
-          ? 'Loading…'
-          : props.source.refreshing()
-            ? 'Updating…'
-            : props.source.error() || controller.refreshWarning()
-              ? 'Refresh needed'
-              : props.canEdit
-                ? 'Saved'
-                : 'View only';
-
   function recordSaved(
     mutation: DatabaseRowMutation,
     result: DatabaseWriteResult
@@ -217,18 +212,11 @@ export function DatabaseTableView(props: {
     return true;
   }
   function focusColumn(columnId: string) {
-    const field = visibleColumns().find((column) => column.id === columnId);
-    if (
-      !props.canEdit ||
-      props.view.layout !== 'table' ||
-      !field ||
-      !canEditCell(field)
-    )
-      return false;
-    setEditCell({
-      rowId: draftRows.project(rows())[0]?.rowId ?? draftRows.blankId(),
-      columnId,
-    });
+    if (!props.canEdit || props.view.layout !== 'table') return false;
+    // A create response can arrive before the reactive schema mounts its header.
+    // DatabaseTable keeps the request until that header registers itself.
+    setEditColumn(undefined);
+    setEditColumn(columnId);
     return true;
   }
   function open(rowId: string) {
@@ -343,6 +331,8 @@ export function DatabaseTableView(props: {
             }
             value={rowValue(row(), column().id)}
             canEdit={props.canEdit}
+            renderTextEditor={props.renderTextEditor}
+            renderTextValue={props.renderTextValue}
             renderMentionPicker={props.renderMentionPicker}
             renderMentionValue={props.renderMentionValue}
             onMention={(mention) => {
@@ -361,10 +351,15 @@ export function DatabaseTableView(props: {
                 : writeCell(row(), column(), mention.id, undefined, type);
             }}
             onWrite={write}
-            onAddOption={(label) =>
+            onAddOption={(label, value) =>
               draftRows.has(row().rowId)
-                ? draftRows.write(row().rowId, column().id, label, label)
-                : writeCell(row(), column(), label, label)
+                ? draftRows.write(
+                    row().rowId,
+                    column().id,
+                    value ?? label,
+                    label
+                  )
+                : writeCell(row(), column(), value ?? label, label)
             }
           />
         }
@@ -398,7 +393,10 @@ export function DatabaseTableView(props: {
     const group = groupColumn();
     const titleField = titleColumn(columns());
     const values: Record<string, DatabaseCellValue> = {};
-    if (value !== undefined && group?.writable) values[group.id] = value;
+    if (value !== undefined && group?.writable)
+      values[group.id] = group.isMultiSelect
+        ? JSON.stringify(value === null ? [] : [value])
+        : value;
     if (title && titleField?.writable) values[titleField.id] = title;
     const saved = await controller.save(
       { kind: 'create', values },
@@ -462,10 +460,40 @@ export function DatabaseTableView(props: {
       hiddenColumns: [...props.view.hiddenColumns, columnId],
     });
   }
-  function moveColumn(columnId: string, direction: 'left' | 'right') {
-    props.onViewChange?.(
-      moveDatabaseViewColumn(props.view, columns(), columnId, direction)
+  async function reorderColumn(columnId: string, targetId: string) {
+    const order = orderDatabaseColumns(columns(), props.view.columnOrder).map(
+      (column) => column.id
     );
+    const visible = order.filter(
+      (id) => !props.view.hiddenColumns.includes(id)
+    );
+    const from = visible.indexOf(columnId);
+    const to = visible.indexOf(targetId);
+    if (from < 0 || to < 0 || from === to) return;
+    visible.splice(to, 0, visible.splice(from, 1)[0]);
+    let visibleIndex = 0;
+    // Hidden columns keep their saved slot while visible headers move past them.
+    const nextOrder = order.map((id) =>
+      props.view.hiddenColumns.includes(id) ? id : visible[visibleIndex++]
+    );
+    setSchemaError('');
+    try {
+      if (props.canEdit) await props.onReorderColumns?.(nextOrder);
+      props.onViewChange?.({ ...props.view, columnOrder: nextOrder });
+    } catch (error) {
+      setSchemaError(
+        error instanceof Error ? error.message : 'Could not reorder columns.'
+      );
+    }
+  }
+  function moveColumn(columnId: string, direction: 'left' | 'right') {
+    const columns = visibleColumns();
+    const target =
+      columns[
+        columns.findIndex((column) => column.id === columnId) +
+          (direction === 'left' ? -1 : 1)
+      ];
+    if (target) void reorderColumn(columnId, target.id);
   }
   function clearFilters() {
     props.onViewChange?.({ ...props.view, search: '', filters: [] });
@@ -482,6 +510,14 @@ export function DatabaseTableView(props: {
         pending: controller.pending,
       })}
       <div class="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+        <Show when={schemaError()}>
+          <p
+            role="alert"
+            class="border-b border-edge-muted px-5 py-2 text-xs text-failure-ink"
+          >
+            {schemaError()}
+          </p>
+        </Show>
         <Show when={controller.failure()}>
           {(failure) => (
             <div
@@ -689,6 +725,35 @@ export function DatabaseTableView(props: {
                   onCreate={() => void createRow()}
                   onDuplicate={duplicateRow}
                   onRequestDelete={requestDelete}
+                  editColumn={editColumn()}
+                  relationTables={props.relationTables}
+                  onChangeColumnType={props.onChangeColumnType}
+                  onDeleteColumn={
+                    props.onDeleteColumn
+                      ? async (columnId) => {
+                          await props.onDeleteColumn?.(columnId);
+                          props.onViewChange?.({
+                            ...props.view,
+                            columnOrder: props.view.columnOrder?.filter(
+                              (id) => id !== columnId
+                            ),
+                            hiddenColumns: props.view.hiddenColumns.filter(
+                              (id) => id !== columnId
+                            ),
+                            filters: props.view.filters.filter(
+                              (filter) => filter.columnId !== columnId
+                            ),
+                            sorts: props.view.sorts.filter(
+                              (sort) => sort.columnId !== columnId
+                            ),
+                            ...(props.view.groupBy === columnId
+                              ? { groupBy: null, layout: 'table' }
+                              : {}),
+                          });
+                        }
+                      : undefined
+                  }
+                  onReorderColumn={reorderColumn}
                   onRenameColumn={props.onRenameColumn}
                   onSort={sort}
                   onHide={props.onViewChange ? hideColumn : undefined}
@@ -726,28 +791,33 @@ export function DatabaseTableView(props: {
                 fallback={
                   <div class="flex flex-1 flex-col items-start px-5 py-8">
                     <p class="text-sm text-ink-muted">
-                      Add a Status column to start your board.
+                      Choose a Select or Checkbox column to group cards.
                     </p>
-                    <Show when={props.canEdit}>
-                      <div class="mt-3">
-                        {props.addColumn(
-                          'Add Status column',
-                          'SELECT_STRING',
-                          'accent'
-                        )}
-                      </div>
-                    </Show>
+                    <button
+                      type="button"
+                      class="mt-3 rounded-md border border-edge-muted px-3 py-2 text-xs hover:bg-hover"
+                      onClick={() =>
+                        props.onViewChange?.({ ...props.view, layout: 'table' })
+                      }
+                    >
+                      Open table
+                    </button>
                   </div>
                 }
               >
                 {(group) => (
                   <DatabaseBoard
+                    renderTextValue={props.renderTextValue}
                     rows={rows()}
                     columns={columns()}
                     visibleColumnIds={visibleColumns().map(
                       (column) => column.id
                     )}
                     groupColumn={group()}
+                    groupOrder={props.view.groupOrder}
+                    onGroupOrderChange={(groupOrder) =>
+                      props.onViewChange?.({ ...props.view, groupOrder })
+                    }
                     canEdit={props.canEdit && group().writable}
                     rowPending={controller.rowPending}
                     createPending={controller.createPending}
@@ -757,7 +827,19 @@ export function DatabaseTableView(props: {
                       const row = controller
                         .rows()
                         .find((row) => row.rowId === rowId);
-                      return row ? await writeCell(row, group(), value) : false;
+                      return row
+                        ? Boolean(
+                            await controller.save(
+                              {
+                                kind: 'cell',
+                                rowId,
+                                columnId: group().id,
+                                value,
+                              },
+                              group().name
+                            )
+                          )
+                        : false;
                     }}
                     onCreate={(value, title, intentId) =>
                       createRow(value, title, false, intentId)
@@ -773,38 +855,6 @@ export function DatabaseTableView(props: {
             </Show>
           </Show>
         </Show>
-        <div class="flex min-h-9 shrink-0 items-center gap-3 border-t border-edge-muted bg-panel px-5 text-[11px] text-ink-muted">
-          <span class="tabular-nums">
-            {rows().length}
-            {rows().length !== controller.rows().length
-              ? ` of ${controller.rows().length}`
-              : ''}{' '}
-            {controller.rows().length === 1 ? 'record' : 'records'}
-          </span>
-          <Show when={props.view.layout === 'table'}>
-            <span class="hidden text-ink-placeholder sm:inline">
-              {props.canEdit
-                ? 'Click to edit · Arrow keys to navigate'
-                : 'Open a record to see details'}
-            </span>
-          </Show>
-          <Show when={props.view.layout === 'board' && groupColumn()}>
-            <span class="hidden text-ink-placeholder sm:inline">
-              {props.canEdit
-                ? 'Drag to move · Click to open'
-                : 'Click a record to see details'}
-            </span>
-          </Show>
-          <span class="ml-auto flex items-center gap-1.5" role="status">
-            <Show when={saveStatus() === 'Saved'}>
-              <CheckIcon class="size-3 text-success-ink" />
-            </Show>
-            <Show when={controller.failure()}>
-              <WarningIcon class="size-3 text-warning-ink" />
-            </Show>
-            {saveStatus()}
-          </span>
-        </div>
         <Show when={selected()}>
           {(row) => (
             <RecordPanel

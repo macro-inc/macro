@@ -4,15 +4,23 @@ import { Button } from '@ui/components/Button';
 import { Dialog } from '@ui/components/Dialog';
 import { Panel } from '@ui/components/Panel';
 import { createSignal, Show } from 'solid-js';
-import type { DatabaseViewConfig } from '../core/database-view';
+import {
+  type DatabaseViewColumn,
+  type DatabaseViewConfig,
+  isBoardGroupColumn,
+} from '../core/database-view';
+import { ViewSelect } from './view-select';
 
 export function SaveViewDialog(props: {
   mode: 'save' | 'rename' | 'delete';
   initialName: string;
   initialLayout?: DatabaseViewConfig['layout'];
+  initialGroupBy?: string | null;
+  columns?: DatabaseViewColumn[];
   onSubmit: (
     name: string,
-    layout: DatabaseViewConfig['layout']
+    layout: DatabaseViewConfig['layout'],
+    groupBy?: string | null
   ) => Promise<void>;
   onClose: () => void;
   returnFocus?: HTMLElement;
@@ -23,15 +31,28 @@ export function SaveViewDialog(props: {
   const [layout, setLayout] = createSignal<DatabaseViewConfig['layout']>(
     props.initialLayout ?? 'table'
   );
+  const groups = () => (props.columns ?? []).filter(isBoardGroupColumn);
+  const [groupBy, setGroupBy] = createSignal(
+    props.initialGroupBy ?? groups()[0]?.id ?? null
+  );
   const [pending, setPending] = createSignal(false);
   const [error, setError] = createSignal('');
   const submit = async (event: SubmitEvent) => {
     event.preventDefault();
-    if (pending() || !name().trim()) return;
+    if (
+      pending() ||
+      !name().trim() ||
+      (props.mode === 'save' && layout() === 'board' && !groupBy())
+    )
+      return;
     setPending(true);
     setError('');
     try {
-      await props.onSubmit(name().trim(), layout());
+      await props.onSubmit(
+        name().trim(),
+        layout(),
+        layout() === 'board' ? groupBy() : undefined
+      );
       props.onClose();
     } catch {
       setError('Could not save this change. Please try again.');
@@ -118,10 +139,30 @@ export function SaveViewDialog(props: {
                   <KanbanIcon class="size-5 text-ink-muted" />
                   <span class="font-medium">Board</span>
                   <span class="text-xs text-ink-muted">
-                    Cards grouped by status
+                    Cards grouped by a column
                   </span>
                 </button>
               </div>
+            </Show>
+            <Show when={props.mode === 'save' && layout() === 'board'}>
+              <div class="flex items-center gap-3 text-xs text-ink-muted">
+                <span>Group by</span>
+                <ViewSelect
+                  label="Group board by"
+                  value={groupBy() ?? ''}
+                  options={groups().map((column) => ({
+                    value: column.id,
+                    label: column.name,
+                  }))}
+                  onChange={setGroupBy}
+                  placeholder="Choose a column"
+                />
+              </div>
+              <Show when={!groups().length}>
+                <p class="text-xs text-ink-muted">
+                  Add a Select or Checkbox column to group cards.
+                </p>
+              </Show>
             </Show>
             <Show when={props.mode !== 'delete'}>
               <label class="flex flex-col gap-1.5 text-xs font-medium text-ink-muted">
@@ -155,7 +196,11 @@ export function SaveViewDialog(props: {
               <Button
                 type="submit"
                 variant={props.mode === 'delete' ? 'danger' : 'cta'}
-                disabled={pending() || !name().trim()}
+                disabled={
+                  pending() ||
+                  !name().trim() ||
+                  (props.mode === 'save' && layout() === 'board' && !groupBy())
+                }
               >
                 {pending()
                   ? 'Saving…'

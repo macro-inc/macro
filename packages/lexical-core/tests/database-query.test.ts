@@ -42,6 +42,35 @@ function exported(editor: ReturnType<typeof createEditor>) {
     .read(() => $convertToMarkdownString(ALL_TRANSFORMERS));
 }
 describe('database query node', () => {
+  it('persists an independently renamed title through markdown and JSON', () => {
+    const titled = { ...source, title: 'Open projects' };
+    const editor = parse(databaseQueryMarkdown(titled));
+    editor.update(
+      () => {
+        const paragraph = $getRoot().getFirstChild();
+        const node = $isParagraphNode(paragraph)
+          ? paragraph.getFirstChild()
+          : paragraph;
+        if (!$isDatabaseQueryNode(node)) throw new Error('Expected query');
+        node.setQuery({
+          ...node.exportComponentProps(),
+          title: 'Project count',
+        });
+      },
+      { discrete: true }
+    );
+    const restored = createEditor({ nodes: SupportedNodeTypes });
+    restored.setEditorState(
+      restored.parseEditorState(
+        JSON.stringify(editor.getEditorState().toJSON())
+      )
+    );
+    expect(exported(restored)).toBe(
+      databaseQueryMarkdown({ ...titled, title: 'Project count' })
+    );
+    expect(markdownToPlainText(exported(restored))).toBe('Project count');
+    expect(exported(restored)).toContain(source.prompt);
+  });
   it.each(['bar', 'line', 'pie'] as const)(
     'round-trips a live %s chart as a source-only block',
     (displayMode) => {

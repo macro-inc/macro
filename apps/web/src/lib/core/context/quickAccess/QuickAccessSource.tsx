@@ -1,4 +1,6 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { itemToSafeName } from '@core/constant/allBlocks';
+import { enableDatabases } from '@core/constant/featureFlags';
 import {
   useChannelsContext,
   useDmActivityByUserId,
@@ -336,6 +338,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   const { query: agentSessionsQuery, sessions: agentSessionsAccessor } =
     useQuickAccessAgentSessionsQuery();
   const databasesQuery = useDatabasesQuery();
+  const databasesFlag = useFeatureFlag(enableDatabases);
 
   // globally hidden ids
   const [hiddenIds, setHiddenIds] = createSignal<Set<string>>(new Set());
@@ -745,6 +748,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   // Databases are not Soup entities and have no view history, so creation
   // time is the only timestamp to sort on.
   const databaseEntries = createLazyMemo(() => {
+    if (!databasesFlag().enabled) return [];
     const hidden = hiddenIds();
     const entries: IndexEntry[] = [];
     const listed = databasesQuery.isSuccess ? databasesQuery.data : [];
@@ -1066,7 +1070,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     snippetsQuery.refetch();
     skillsQuery.refetch();
     void agentSessionsQuery.refetch();
-    void databasesQuery.refetch();
+    if (databasesFlag().enabled) void databasesQuery.refetch();
   };
 
   return {

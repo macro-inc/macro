@@ -26,10 +26,12 @@ use crate::domain::models::{
 };
 use crate::outbound::rusqlite_executor::{ExecutorLimits, RusqliteExecutor};
 
+mod columns;
 mod discovery;
 mod infer_column_type;
 mod relations;
 mod rename_column;
+mod sharing;
 
 const OWNER: &str = "macro|owner@macro.com";
 const VIEWER: &str = "macro|viewer@macro.com";
@@ -58,6 +60,7 @@ struct World {
     links: HashMap<ColumnId, Vec<(RowId, RowId)>>,
     grants: HashMap<String, Vec<(DatabaseId, AccessGrant)>>,
     published: Vec<(TableId, TableVersion)>,
+    share_updates: Vec<Vec<models_permissions::share_permission::channel_share_permission::UpdateChannelSharePermission>>,
     /// Every `macro.databases` envelope the service handed the broker.
     broker_events: Vec<serde_json::Value>,
     applied: Vec<RowChange>,
@@ -293,6 +296,100 @@ impl DatabasesRepo for FakeRepo {
         };
         w.columns[c].property_definition_id = definition_id;
         w.columns[c].infer_type = false;
+        w.tables[t].version.0 += 1;
+        Ok(Some(w.tables[t].version))
+    }
+    async fn replace_column(
+        &self,
+        table: &Table,
+        replacement: &ColumnReplacement,
+    ) -> Result<Option<TableVersion>, FakeError> {
+        let mut w = self.0.lock().unwrap();
+        let Some(t) = w
+            .tables
+            .iter()
+            .position(|t| t.id == table.id && t.version == table.version)
+        else {
+            return Ok(None);
+        };
+        let Some(c) = w.columns.iter().position(|c| {
+            c.id == replacement.column.id
+                && c.table_id == table.id
+                && c.property_definition_id == replacement.column.property_definition_id
+        }) else {
+            return Ok(None);
+        };
+        w.columns[c].property_definition_id = replacement.definition_id;
+        w.columns[c].config = replacement.config.clone();
+        w.columns[c].infer_type = false;
+        for row in w.rows.entry(table.id).or_default() {
+            row.cells.remove(&replacement.column.property_definition_id);
+            if let Some((_, value)) = replacement.values.iter().find(|(id, _)| *id == row.id) {
+                row.cells.insert(replacement.definition_id, value.clone());
+            }
+        }
+        w.tables[t].version.0 += 1;
+        Ok(Some(w.tables[t].version))
+    }
+    async fn delete_column(
+        &self,
+        table: &Table,
+        column: &Column,
+    ) -> Result<Option<ColumnSchemaOutcome>, FakeError> {
+        let mut w = self.0.lock().unwrap();
+        let Some(t) = w
+            .tables
+            .iter()
+            .position(|t| t.id == table.id && t.version == table.version)
+        else {
+            return Ok(None);
+        };
+        let Some(c) = w
+            .columns
+            .iter()
+            .position(|c| c.id == column.id && c.table_id == table.id)
+        else {
+            return Ok(None);
+        };
+        w.columns.remove(c);
+        w.links.remove(&column.id);
+        for row in w.rows.entry(table.id).or_default() {
+            row.cells.remove(&column.property_definition_id);
+        }
+        w.tables[t].version.0 += 1;
+        let mut table_versions = HashMap::from([(table.id, w.tables[t].version)]);
+        if let Some(ColumnConfig::Link { table_id, .. }) = column.config
+            && table_id != table.id
+            && let Some(target) = w.tables.iter_mut().find(|t| t.id == table_id)
+        {
+            target.version.0 += 1;
+            table_versions.insert(table_id, target.version);
+        }
+        Ok(Some(ColumnSchemaOutcome { table_versions }))
+    }
+    async fn reorder_columns(
+        &self,
+        table: &Table,
+        ids: &[ColumnId],
+    ) -> Result<Option<TableVersion>, FakeError> {
+        let mut w = self.0.lock().unwrap();
+        let Some(t) = w
+            .tables
+            .iter()
+            .position(|t| t.id == table.id && t.version == table.version)
+        else {
+            return Ok(None);
+        };
+        for (index, id) in ids.iter().enumerate() {
+            let Some(c) = w
+                .columns
+                .iter_mut()
+                .find(|c| c.id == *id && c.table_id == table.id)
+            else {
+                return Ok(None);
+            };
+            c.position = format!("{:04}", index + 1);
+        }
         w.tables[t].version.0 += 1;
         Ok(Some(w.tables[t].version))
     }
@@ -556,17 +653,18 @@ impl ColumnDefinitionStore for FakeDefs {
             }
         }
     }
-    async fn create_inferred_definition(
+    async fn create_typed_definition(
         &self,
         database_id: DatabaseId,
         name: &str,
         data_type: DataType,
+        is_multi_select: bool,
         specific_entity_type: Option<PropertyEntityType>,
     ) -> Result<PropertyDefinitionWithOptions, FakeError> {
         let mut def = definition(
             name,
             data_type,
-            false,
+            is_multi_select,
             PropertyOwner::Database { database_id },
         );
         def.definition.specific_entity_type = specific_entity_type;

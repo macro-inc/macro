@@ -24,7 +24,7 @@ mod test;
 pub enum ViewLayout {
     /// Spreadsheet-style table.
     Table,
-    /// Cards grouped by a single select or checkbox field.
+    /// Cards grouped by a select, multi-select, or checkbox field.
     Board,
 }
 
@@ -100,9 +100,13 @@ pub struct ViewSort {
 pub struct DatabaseViewDefinition {
     /// Table or board; chart layouts are not supported by saved database views.
     pub layout: ViewLayout,
-    /// A single-valued select or checkbox column id for a board; null for a table.
+    /// A select, multi-select, or checkbox column id for a board; null for a table.
     #[serde(default)]
     pub group_by: Option<Uuid>,
+    /// Lane keys in display order: `empty` or `value:` followed by a JSON label.
+    /// Omit for alphabetical order; additional lanes follow alphabetically.
+    #[serde(default)]
+    pub group_order: Vec<String>,
     /// Filters are combined with AND.
     #[serde(default)]
     pub filters: Vec<ViewFilter>,
@@ -180,6 +184,19 @@ fn invalid(message: impl Into<String>) -> DatabaseError {
 
 fn storage_error<E: std::error::Error + Send + Sync + 'static>(error: E) -> DatabaseError {
     DatabaseError::Repo(rootcause::Report::new(error).into_dynamic())
+}
+
+fn valid_group_key(key: &str) -> bool {
+    if key == "empty" {
+        return true;
+    }
+    let Some(value) = key.strip_prefix("value:") else {
+        return false;
+    };
+    matches!(
+        serde_json::from_str::<serde_json::Value>(value),
+        Ok(serde_json::Value::String(_) | serde_json::Value::Number(_))
+    )
 }
 
 fn filter_value(data_type: DataType, filter: &ViewFilter) -> Result<String, DatabaseError> {
@@ -267,20 +284,24 @@ where
         if view.column_order.iter().collect::<HashSet<_>>().len() != view.column_order.len() {
             return Err(invalid("Column order must not repeat a column."));
         }
+        if view.group_order.len() > 1000
+            || view.group_order.iter().collect::<HashSet<_>>().len() != view.group_order.len()
+            || view.group_order.iter().any(|key| !valid_group_key(key))
+        {
+            return Err(invalid("Lane order must contain distinct valid lane keys."));
+        }
         if view.layout == ViewLayout::Board {
             let group = view
                 .group_by
                 .and_then(|id| columns.get(&id))
                 .ok_or_else(|| invalid("A board needs a groupBy column from this table."))?;
             let definition = &group.definition.definition;
-            if definition.is_multi_select
-                || !matches!(
-                    definition.data_type,
-                    DataType::SelectString | DataType::SelectNumber | DataType::Boolean
-                )
-            {
+            if !matches!(
+                definition.data_type,
+                DataType::SelectString | DataType::SelectNumber | DataType::Boolean
+            ) {
                 return Err(invalid(
-                    "A board can group by one single-valued select or checkbox column.",
+                    "A board can group by a select, multi-select, or checkbox column.",
                 ));
             }
         }
@@ -317,7 +338,7 @@ where
         let config = serde_json::json!({
             "kind": "database-view", "version": 1,
             "databaseId": database.database.id, "tableId": command.table_id,
-            "view": { "layout": view.layout, "groupBy": view.group_by,
+            "view": { "layout": view.layout, "groupBy": view.group_by, "groupOrder": view.group_order,
                 "filters": filters, "sorts": view.sorts, "hiddenColumns": view.hidden_columns,
                 "columnOrder": view.column_order, "search": view.search },
         });

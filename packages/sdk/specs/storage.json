@@ -6551,6 +6551,31 @@
         }
       }
     },
+    "/databases/starter": {
+      "post": {
+        "tags": ["databases"],
+        "summary": "Create a small example once for the authenticated user, if they have no databases.",
+        "operationId": "ensure_starter_handler",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StarterDatabase"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "500": {
+            "description": "Provisioning failed; safe to retry"
+          }
+        }
+      }
+    },
     "/databases/{id}": {
       "get": {
         "tags": ["databases"],
@@ -6591,6 +6616,254 @@
           },
           "403": {
             "description": "No access to the database",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/{id}/import": {
+      "post": {
+        "tags": ["databases"],
+        "summary": "Import a new table and every row atomically; retries carry the same request ID.",
+        "operationId": "import_database_table",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportTable"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Table"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/{id}/permissions": {
+      "get": {
+        "tags": ["databases"],
+        "summary": "Read recipients for a database owned by the caller.",
+        "operationId": "get_database_permissions",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseSharePermissions"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["databases"],
+        "summary": "Update recipients after proving database ownership.",
+        "operationId": "update_database_permissions",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDatabasePermissionsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseSharePermissions"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -6966,7 +7239,232 @@
         }
       }
     },
+    "/databases/{id}/tables/{table_id}/columns/order": {
+      "patch": {
+        "tags": ["databases"],
+        "summary": "Persist the order of every column in a table.",
+        "operationId": "reorder_database_columns",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "table_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderColumnsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ColumnSchemaOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/databases/{id}/tables/{table_id}/columns/{column_id}": {
+      "delete": {
+        "tags": ["databases"],
+        "summary": "Delete one placement and its cells, preserving shared definitions.",
+        "operationId": "delete_database_column",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "table_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "column_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteColumnRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ColumnSchemaOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
       "patch": {
         "tags": ["databases"],
         "summary": "Rename a column's label in this table.",
@@ -7287,6 +7785,124 @@
             }
           },
           "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/{id}/tables/{table_id}/columns/{column_id}/type": {
+      "patch": {
+        "tags": ["databases"],
+        "summary": "Change one column's type with all-or-nothing conversion.",
+        "operationId": "change_database_column_type",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "table_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "column_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeColumnTypeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ColumnSchemaOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
             "description": "",
             "content": {
               "application/json": {
@@ -18330,6 +18946,46 @@
           }
         }
       },
+      "ChangeColumnTypeRequest": {
+        "type": "object",
+        "description": "Explicit column type configuration. Existing values must convert without loss.",
+        "required": ["dataType", "baseVersion"],
+        "properties": {
+          "baseVersion": {
+            "$ref": "#/components/schemas/TableVersion",
+            "description": "Table version shown when the type menu opened."
+          },
+          "dataType": {
+            "$ref": "#/components/schemas/DataType",
+            "description": "Requested property type."
+          },
+          "isMultiSelect": {
+            "type": "boolean",
+            "description": "Whether select, link or entity values may hold multiple items."
+          },
+          "linkToDatabaseId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Related database; defaults to the current database."
+          },
+          "linkToTableId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Related table, when choosing a database-row relationship."
+          },
+          "specificEntityType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityType",
+                "description": "Required category for entity references, omitted for row relationships."
+              }
+            ]
+          }
+        }
+      },
       "Channel": {
         "type": "object",
         "description": "Channel metadata in soup payloads.",
@@ -19727,6 +20383,23 @@
           "writable": {
             "type": "boolean",
             "description": "Whether SQL may write this column."
+          }
+        }
+      },
+      "ColumnSchemaOutcome": {
+        "type": "object",
+        "description": "Table versions changed by a placement deletion or reorder.",
+        "required": ["table_versions"],
+        "properties": {
+          "table_versions": {
+            "type": "object",
+            "description": "Includes both endpoint tables when deleting relationship edges.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/TableVersion"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
           }
         }
       },
@@ -21533,6 +22206,29 @@
           }
         }
       },
+      "DatabaseSharePermissions": {
+        "type": "object",
+        "description": "Recipient grants shown in the native sharing interface.",
+        "required": ["id", "owner", "channelSharePermissions"],
+        "properties": {
+          "channelSharePermissions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelSharePermission"
+            },
+            "description": "Directly shared channels, including direct messages."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Database identifier; sharing has no separate policy entity."
+          },
+          "owner": {
+            "type": "string",
+            "description": "Current database owner."
+          }
+        }
+      },
       "DeleteAnchorInfo": {
         "allOf": [
           {
@@ -21548,6 +22244,17 @@
             }
           }
         ]
+      },
+      "DeleteColumnRequest": {
+        "type": "object",
+        "description": "Guard a column deletion against concurrent writes.",
+        "required": ["baseVersion"],
+        "properties": {
+          "baseVersion": {
+            "$ref": "#/components/schemas/TableVersion",
+            "description": "Table version shown in the confirmation."
+          }
+        }
       },
       "DeleteCommentRequest": {
         "type": "object",
@@ -25506,6 +26213,39 @@
         "type": "integer",
         "enum": [1, 2, 3]
       },
+      "ImportTable": {
+        "type": "object",
+        "description": "An import is identified once, before sending, so retries cannot duplicate rows.",
+        "required": ["requestId", "name", "columns", "rows"],
+        "properties": {
+          "columns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Header names, in order. All imported values remain text."
+          },
+          "name": {
+            "type": "string",
+            "description": "New table's display name."
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable key for this import, retained through retries."
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "Rectangular text rows. Empty fields are preserved."
+          }
+        }
+      },
       "ImportedAuthor": {
         "type": "object",
         "description": "Display attribution for a comment imported from an external document.",
@@ -28674,6 +29414,25 @@
           }
         }
       },
+      "ReorderColumnsRequest": {
+        "type": "object",
+        "description": "A complete placement order, identified by stable column IDs.",
+        "required": ["columnIds", "baseVersion"],
+        "properties": {
+          "baseVersion": {
+            "$ref": "#/components/schemas/TableVersion",
+            "description": "Table version used to build the order."
+          },
+          "columnIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Every column, exactly once."
+          }
+        }
+      },
       "ReorderFavoritesRequest": {
         "type": "object",
         "description": "Request body for reordering favorites.",
@@ -31227,6 +31986,29 @@
         "format": "binary",
         "description": "The bytes of a SQLite database file.\n\nIts only job is to make the response body binary in the OpenAPI document;\n`Vec<u8>` would be described as an array of integers and generate clients\nthat parse the file as JSON."
       },
+      "StarterDatabase": {
+        "type": "object",
+        "description": "Starter result. A missing database means the user already started or removed it.",
+        "required": ["created"],
+        "properties": {
+          "created": {
+            "type": "boolean",
+            "description": "Whether this request created the example."
+          },
+          "databaseId": {
+            "type": ["string", "null"],
+            "description": "Accessible starter database, if still present."
+          },
+          "tableId": {
+            "type": ["string", "null"],
+            "description": "Initial table, returned only on first creation."
+          },
+          "viewId": {
+            "type": ["string", "null"],
+            "description": "Initial board view, returned only on first creation."
+          }
+        }
+      },
       "StarterDocumentsResponse": {
         "type": "object",
         "description": "The deterministic starter document ids for the current user.",
@@ -32051,6 +32833,20 @@
           },
           "team_views": {
             "description": "Replacement team-views array (whole-blob, last write wins)."
+          }
+        }
+      },
+      "UpdateDatabasePermissionsRequest": {
+        "type": "object",
+        "description": "Explicit recipient updates; ownership cannot be changed here.",
+        "required": ["channelSharePermissions"],
+        "properties": {
+          "channelSharePermissions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UpdateChannelSharePermission"
+            },
+            "description": "Channel and direct-message grants to change."
           }
         }
       },

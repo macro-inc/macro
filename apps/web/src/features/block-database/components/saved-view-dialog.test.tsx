@@ -46,6 +46,16 @@ describe('new database view', () => {
         mode="save"
         initialName="Table view"
         initialLayout="table"
+        columns={[
+          {
+            id: 'priority',
+            name: 'Priority',
+            dataType: 'SELECT_STRING',
+            isMultiSelect: true,
+            writable: true,
+            options: ['High', 'Low'],
+          },
+        ]}
         onSubmit={submit}
         onClose={close}
       />
@@ -55,7 +65,11 @@ describe('new database view', () => {
     fireEvent.click(screen.getByRole('button', { name: /Board Cards/ }));
     fireEvent.submit(input.closest('form')!);
     await waitFor(() => expect(close).toHaveBeenCalledOnce());
-    expect(submit).toHaveBeenCalledExactlyOnceWith('Delivery board', 'board');
+    expect(submit).toHaveBeenCalledExactlyOnceWith(
+      'Delivery board',
+      'board',
+      'priority'
+    );
   });
 
   it('retains the selected layout and draft when saving fails', async () => {
@@ -69,6 +83,16 @@ describe('new database view', () => {
         mode="save"
         initialName="Table view"
         initialLayout="table"
+        columns={[
+          {
+            id: 'priority',
+            name: 'Priority',
+            dataType: 'SELECT_STRING',
+            isMultiSelect: true,
+            writable: true,
+            options: ['High', 'Low'],
+          },
+        ]}
         onSubmit={submit}
         onClose={close}
       />
@@ -86,6 +110,6 @@ describe('new database view', () => {
     ).toBe('true');
     fireEvent.submit(input.closest('form')!);
     await waitFor(() => expect(close).toHaveBeenCalledOnce());
-    expect(submit).toHaveBeenLastCalledWith('Board view', 'board');
+    expect(submit).toHaveBeenLastCalledWith('Board view', 'board', 'priority');
   });
 });

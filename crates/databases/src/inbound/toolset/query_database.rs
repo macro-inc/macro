@@ -80,6 +80,27 @@ pub struct QueryDatabase {
     /// guarded; omit for a read or intentional blind edit.
     #[serde(default)]
     pub base_versions: Option<Vec<ToolTableVersion>>,
+    /// Preferred native result presentation. For an explicit chart request,
+    /// select bar, line, or pie and return a label column plus numeric values.
+    /// The app falls back to a table if the data cannot support that display.
+    #[serde(default)]
+    pub display: Option<QueryDatabaseDisplay>,
+}
+
+/// Presentation hint for a query result; it does not affect SQL execution.
+#[derive(Debug, Deserialize, JsonSchema, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum QueryDatabaseDisplay {
+    /// Show the returned rows and columns.
+    Table,
+    /// Show one numeric value.
+    Scalar,
+    /// Compare categories with a bar chart.
+    Bar,
+    /// Show an ordered trend with a line chart.
+    Line,
+    /// Show category proportions with a pie chart.
+    Pie,
 }
 
 /// Read-only query capability for document answers and automatic discovery.
@@ -202,10 +223,10 @@ pub struct QueryDatabaseResponse {
     /// How many rows the statement changed.
     pub changes_applied: usize,
     /// Ids the server minted for inserted rows, in insertion order.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub inserted_row_ids: Vec<Uuid>,
     /// New version of every table written, keyed by table id.
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub new_versions: HashMap<Uuid, i64>,
     /// Versions of the tables this query actually read. Supply these as
     /// baseVersions to guard tables a later edit writes. Tables it only reads
@@ -214,7 +235,7 @@ pub struct QueryDatabaseResponse {
     /// Magic tables whose materialization hit its row cap. Any aggregate over
     /// one of these is computed on a partial table — say so rather than
     /// reporting the number as a total.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub truncated_tables: Vec<String>,
     /// A human-readable summary of what the statement did.
     pub summary: String,

@@ -10,8 +10,11 @@ use super::*;
 use crate::domain::models::{ColumnBinding, ColumnConfig};
 
 mod apply_changes;
+mod columns;
 mod infer_column_type;
 mod rename_column;
+mod sharing;
+mod transfer;
 
 const USER: &str = "macro|databases-a@macro.com";
 

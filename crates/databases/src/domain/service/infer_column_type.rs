@@ -62,10 +62,11 @@ where
         } else {
             Some(
                 self.definitions
-                    .create_inferred_definition(
+                    .create_typed_definition(
                         database.id,
                         &definition.display_name,
                         cmd.data_type,
+                        false,
                         cmd.specific_entity_type,
                     )
                     .await

@@ -5,6 +5,8 @@
  * goes through `POST /databases/exec`, which is the whole data surface.
  */
 import { analytics } from '@app/lib/analytics';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { enableDatabases, isFeatureEnabled } from '@core/constant/featureFlags';
 import type { FetchWithTokenErrorCode } from '@core/util/fetchWithToken';
 import { throwOnErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
@@ -24,8 +26,10 @@ import { databaseQueryKeys, databasesKeys } from './keys';
 const DATABASE_STALE_TIME = 30 * 1000;
 
 export function useDatabasesQuery() {
+  const flag = useFeatureFlag(enableDatabases);
   return useQuery(() => ({
     queryKey: databasesKeys.list.queryKey,
+    enabled: flag().enabled,
     queryFn: async (): Promise<ListedDatabase[]> =>
       throwOnErr(async () => await storageServiceClient.databases.list()),
     staleTime: DATABASE_STALE_TIME,
@@ -227,6 +231,7 @@ export async function createDatabase(params: {
   /** UI surface the creation originated from, for analytics. */
   source?: string;
 }): Promise<string | undefined> {
+  if (!isFeatureEnabled(enableDatabases)) return undefined;
   const result = await storageServiceClient.databases.create({
     name: params.name,
   });
@@ -260,4 +265,15 @@ export async function createDatabase(params: {
     queryKey: databasesKeys.list.queryKey,
   });
   return databaseId;
+}
+
+/** Native sharing adapters retain Result so the shared dialog can render failures. */
+export function getDatabaseSharePermissions(id: string) {
+  return storageServiceClient.databases.getPermissions({ id });
+}
+
+export function updateDatabaseSharePermissions(
+  params: Parameters<typeof storageServiceClient.databases.updatePermissions>[0]
+) {
+  return storageServiceClient.databases.updatePermissions(params);
 }

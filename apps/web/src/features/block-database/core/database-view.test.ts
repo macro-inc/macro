@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyDatabaseView,
+  boardMoveValue,
   type DatabaseCellValue,
   type DatabaseFilter,
   type DatabaseViewColumn,
@@ -12,6 +13,7 @@ import {
   matchesDatabaseFilter,
   moveDatabaseViewColumn,
   orderDatabaseColumns,
+  orderDatabaseGroups,
   reconcileDatabaseView,
 } from './database-view';
 
@@ -255,8 +257,8 @@ describe('database views', () => {
     const groups = groupDatabaseRows(rows, status, getValue);
     expect(groups.map((group) => group.value)).toEqual([
       'Backlog',
-      'In progress',
       'Done',
+      'In progress',
       'Legacy',
       null,
     ]);
@@ -279,7 +281,7 @@ describe('database views', () => {
       { ...status, dataType: 'BOOLEAN' },
       getValue
     );
-    expect(checked.map((group) => group.value)).toEqual([0, 1, null]);
+    expect(checked.map((group) => group.value)).toEqual([1, 0, null]);
     expect(checked.map((group) => group.rows.length)).toEqual([1, 1, 1]);
   });
 
@@ -292,10 +294,10 @@ describe('database views', () => {
     expect(new Set(groups.map((group) => group.key)).size).toBe(2);
   });
 
-  it('limits board grouping to scalar categorical fields', () => {
+  it('offers scalar and multi-select categorical fields for grouping', () => {
     expect(isBoardGroupColumn(status)).toBe(true);
     expect(isBoardGroupColumn({ ...status, writable: false })).toBe(true);
-    expect(isBoardGroupColumn({ ...status, isMultiSelect: true })).toBe(false);
+    expect(isBoardGroupColumn({ ...status, isMultiSelect: true })).toBe(true);
     expect(isBoardGroupColumn(name)).toBe(false);
   });
 
@@ -416,5 +418,48 @@ describe('database views', () => {
     expect(
       reconcileDatabaseView(view, [name, amount]).columnOrder
     ).toBeUndefined();
+  });
+});
+
+describe('multi-select boards', () => {
+  it('shows a tagged record once per selected group and empty records only in the empty lane', () => {
+    const tags = { ...status, isMultiSelect: true };
+    const tagged = { status: '["Done","Backlog","Done"]' };
+    const empty = { status: '[]' };
+    const groups = groupDatabaseRows([tagged, empty], tags, getValue);
+    expect(groups.map((group) => [group.label, group.rows])).toEqual([
+      ['Backlog', [tagged]],
+      ['Done', [tagged]],
+      ['In progress', []],
+      ['No status', [empty]],
+    ]);
+  });
+
+  it('moves one tag occurrence while preserving unrelated tags and never duplicates the target', () => {
+    const tags = { ...status, isMultiSelect: true };
+    expect(
+      boardMoveValue(tags, '["Done","Backlog"]', 'In progress', 'Done')
+    ).toBe('["Backlog","In progress"]');
+    expect(boardMoveValue(tags, '["Done","Backlog"]', 'Backlog', 'Done')).toBe(
+      '["Backlog"]'
+    );
+    expect(boardMoveValue(tags, '["Done","Backlog"]', null, 'Done')).toBe('[]');
+    expect(boardMoveValue(status, 'Done', 'Backlog', 'Done')).toBe('Backlog');
+  });
+
+  it('restores custom lane order, appends new groups alphabetically, and ignores deleted or repeated keys', () => {
+    const groups = groupDatabaseRows([], status, getValue);
+    const ordered = orderDatabaseGroups(groups, [
+      'value:"Done"',
+      'deleted',
+      'value:"Done"',
+      'empty',
+    ]);
+    expect(ordered.map((group) => group.label)).toEqual([
+      'Done',
+      'No status',
+      'Backlog',
+      'In progress',
+    ]);
   });
 });

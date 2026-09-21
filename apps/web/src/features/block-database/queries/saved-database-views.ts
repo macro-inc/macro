@@ -51,16 +51,26 @@ export function useSavedDatabaseViews(
     );
   }
   const save = useMutation(() => ({
+    scope: { id: `database-view:${databaseId()}` },
     mutationFn: async (input: {
       id?: string;
       name: string;
       view: DatabaseViewConfig;
+      tableId?: string;
+      preserveName?: boolean;
     }) => {
-      const table = tableId();
+      const table = input.tableId ?? tableId();
       if (!table) throw new Error('Select a table before saving a view');
       const name = input.name.trim();
       if (!name) throw new Error('Give your view a name');
-      if (input.id && !views().some((view) => view.id === input.id))
+      const available = query.isPending
+        ? []
+        : selectSavedDatabaseViews(
+            query.data?.views ?? [],
+            databaseId(),
+            table
+          );
+      if (input.id && !available.some((view) => view.id === input.id))
         throw new Error('This saved view is no longer available');
       const config: SavedDatabaseViewConfig = {
         kind: 'database-view',
@@ -73,13 +83,15 @@ export function useSavedDatabaseViews(
         await throwOnErr(() =>
           storageServiceClient.views.patchView({
             saved_view_id: input.id!,
-            name,
+            name: input.preserveName ? undefined : name,
             config,
           })
         );
         await updateCachedViews((views) =>
           views.map((view) =>
-            view.id === input.id ? { ...view, name, config } : view
+            view.id === input.id
+              ? { ...view, name: input.preserveName ? view.name : name, config }
+              : view
           )
         );
         return input.id;

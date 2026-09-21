@@ -201,11 +201,12 @@ it('supports inactive view double click, F2, and keyboard context menus across r
   expect(
     ((await screen.findByLabelText('View name')) as HTMLInputElement).value
   ).toBe('Next week');
-  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  fireEvent.keyDown(screen.getByLabelText('View name'), { key: 'Escape' });
   await waitFor(() => expect(document.activeElement).toBe(tab));
   fireEvent.keyDown(tab, { key: 'F2' });
-  await screen.findByRole('dialog', { name: 'Rename view' });
-  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  await screen.findByRole('textbox', { name: 'View name' });
+  expect(screen.queryByRole('dialog')).toBeNull();
+  fireEvent.keyDown(screen.getByLabelText('View name'), { key: 'Escape' });
   await waitFor(() => expect(document.activeElement).toBe(tab));
   fireEvent.keyDown(tab, { key: 'ContextMenu' });
   expect(
@@ -339,7 +340,7 @@ it('groups layout, board grouping, and column visibility in one view settings co
   expect(
     screen.getByRole('button', { name: 'My work' }).getAttribute('aria-pressed')
   ).toBe('true');
-  expect(screen.getByRole('combobox', { name: 'Group board by' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: /^Group board by/ })).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Close view settings' }));
   await waitFor(() =>
     expect(screen.queryByRole('button', { name: 'Add column' })).toBeNull()
@@ -451,11 +452,13 @@ it('clears Save changes after the server returns filter keys in a different orde
   ));
   expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Filter 1' }));
-  fireEvent.change(
-    await screen.findByRole('combobox', { name: 'Filter value' }),
-    {
-      target: { value: 'In progress' },
-    }
+  fireEvent.keyDown(
+    await screen.findByRole('button', { name: /^Filter value/ }),
+    { key: 'Enter' }
+  );
+  fireEvent.keyDown(
+    await screen.findByRole('option', { name: 'In progress' }),
+    { key: 'Enter' }
   );
   fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   await waitFor(() => expect(save).toHaveBeenCalledOnce());

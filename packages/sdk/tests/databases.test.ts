@@ -160,4 +160,101 @@ describe('Database', () => {
     ).rejects.toThrow('does not belong');
     expect(requests).toHaveLength(2);
   });
+
+  test('guards type, ordering and deletion writes with explicit table versions', async () => {
+    const writes: { url: string; method: string; body: unknown }[] = [];
+    let reads = 0;
+    intercept(async (request) => {
+      if (request.method === 'GET') {
+        reads++;
+        return Response.json(schema());
+      }
+      writes.push({
+        url: request.url,
+        method: request.method,
+        body: await request.json(),
+      });
+      return Response.json({ version: 8 });
+    });
+    const database = client().databases.byId(databaseId);
+    const table = await database.table('Tickets');
+    const column = (await table?.columns())?.[0];
+    if (!table || !column) throw new Error('Missing fixture column');
+    await column.changeType({
+      dataType: 'STRING',
+      isMultiSelect: false,
+      baseVersion: 7,
+    });
+    await table.reorderColumns([column.id], 8);
+    await column.delete(9);
+    expect(writes).toEqual([
+      {
+        method: 'PATCH',
+        url: `${host}/databases/${databaseId}/tables/${tableId}/columns/${columnId}/type`,
+        body: { dataType: 'STRING', isMultiSelect: false, baseVersion: 7 },
+      },
+      {
+        method: 'PATCH',
+        url: `${host}/databases/${databaseId}/tables/${tableId}/columns/order`,
+        body: { columnIds: [columnId], baseVersion: 8 },
+      },
+      {
+        method: 'DELETE',
+        url: `${host}/databases/${databaseId}/tables/${tableId}/columns/${columnId}`,
+        body: { baseVersion: 9 },
+      },
+    ]);
+    await database.schema();
+    expect(reads).toBe(2);
+    await expect(
+      client().databases.byId('other').deleteColumn(column, 9)
+    ).rejects.toThrow('does not belong');
+    expect(writes).toHaveLength(3);
+  });
+
+  test('keeps the import identity and exposes owner-managed recipient grants', async () => {
+    const writes: { url: string; body: unknown }[] = [];
+    const permissions = {
+      id: databaseId,
+      owner: 'owner',
+      channelSharePermissions: [],
+    };
+    intercept(async (request) => {
+      if (request.method !== 'GET')
+        writes.push({ url: request.url, body: await request.json() });
+      return Response.json(
+        request.url.endsWith('/import') ? { id: tableId } : permissions
+      );
+    });
+    const database = client().databases.byId(databaseId);
+    const request = {
+      requestId: '0198a4cc-e138-7670-a308-a6b766602703',
+      name: 'Contacts',
+      columns: ['Name', 'Postal code'],
+      rows: [['Ada', '00123']],
+    };
+    expect((await database.importTable(request)).id).toBe(tableId);
+    expect((await database.importTable(request)).id).toBe(tableId);
+    expect(writes.slice(0, 2)).toEqual(
+      [0, 1].map(() => ({
+        url: `${host}/databases/${databaseId}/import`,
+        body: request,
+      }))
+    );
+    expect(await database.sharePermissions()).toEqual(permissions);
+    const grants = {
+      channelSharePermissions: [
+        {
+          operation: 'add' as const,
+          channelId: 'channel',
+          accessLevel: 'view' as const,
+        },
+      ],
+    };
+    expect(await database.updateSharePermissions(grants)).toEqual(permissions);
+    expect(writes[2]).toEqual({
+      url: `${host}/databases/${databaseId}/permissions`,
+      body: grants,
+    });
+  });
 });

@@ -14,6 +14,7 @@ import {
   Show,
 } from 'solid-js';
 import { QueryResults } from '../components/query-results';
+import { QuestionExamples } from '../components/question-examples';
 import { SqlEditor } from '../components/sql-editor';
 import type { QueryCapabilities } from '../context/query-context';
 import {
@@ -28,6 +29,7 @@ import {
   prepareQueryChart,
   type QueryDisplayMode,
 } from '../core/query-chart';
+import { questionExamples } from '../core/question-examples';
 import { createQueryComposer } from '../primitives/query-composer';
 
 export function QueryEditor(props: {
@@ -129,25 +131,36 @@ export function QueryEditor(props: {
           What would you like to know?
         </label>
         <div class="rounded-lg border border-edge bg-input p-3 transition-colors focus-within:border-ink/30 focus-within:ring-2 focus-within:ring-ink/10">
-          <textarea
-            ref={promptInput}
-            id={promptId}
-            aria-label="Ask your database"
-            class="min-h-16 w-full resize-none bg-transparent text-sm text-ink outline-none placeholder:text-ink-placeholder"
-            placeholder={
-              props.promptPlaceholder ?? 'Ask anything about your data…'
-            }
-            value={composer.prompt()}
-            readOnly={requestReadOnly()}
-            onInput={(event) => composer.setPrompt(event.currentTarget.value)}
-            onKeyDown={(event) => {
-              if (event.isComposing || event.keyCode === 229) return;
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                ask();
+          <div class="relative">
+            <textarea
+              ref={promptInput}
+              id={promptId}
+              aria-label="Ask your database"
+              class="min-h-16 w-full resize-none bg-transparent text-sm text-ink outline-none"
+              classList={{
+                'placeholder:text-transparent': !props.promptPlaceholder,
+                'placeholder:text-ink-placeholder': !!props.promptPlaceholder,
+              }}
+              placeholder={
+                props.promptPlaceholder ?? 'Ask anything about your data…'
               }
-            }}
-          />
+              value={composer.prompt()}
+              readOnly={requestReadOnly()}
+              onInput={(event) => composer.setPrompt(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.isComposing || event.keyCode === 229) return;
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  ask();
+                }
+              }}
+            />
+            <Show when={!composer.prompt() && !props.promptPlaceholder}>
+              <QuestionExamples
+                examples={questionExamples(composer.schema())}
+              />
+            </Show>
+          </div>
           <div class="flex items-center justify-end gap-2">
             <Button type="submit" size="sm" disabled={!canAsk()}>
               <Show
@@ -370,6 +383,7 @@ export function QueryEditor(props: {
                           : {}),
                         sql: composer.sql().trim(),
                         prompt: composer.prompt().trim(),
+                        title: composer.presentation().title,
                         displayMode:
                           isChartMode(displayMode()) && !savedChart()
                             ? 'table'

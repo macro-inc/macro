@@ -17,6 +17,17 @@
 //! service, map errors. No policy, no persistence.
 
 use std::collections::HashMap;
+/// Structured column type, ordering, and placement deletion endpoints.
+pub mod column_mutations;
+/// Native database recipient sharing.
+pub mod sharing;
+/// Atomic table imports.
+pub mod transfer;
+use crate::domain::sharing::DatabaseSharingService;
+use crate::domain::transfer::DatabaseTransferService;
+use column_mutations::{
+    change_column_type_handler, delete_column_handler, reorder_columns_handler,
+};
 use std::sync::Arc;
 
 use axum::{
@@ -96,18 +107,28 @@ impl<S, Eas, Auth> FromRef<DatabasesRouterState<S, Eas, Auth>> for MacroAuthoriz
 /// Build the databases router.
 pub fn databases_router<S, Eas, Auth, T>(state: DatabasesRouterState<S, Eas, Auth>) -> Router<T>
 where
-    S: DatabasesService,
+    S: DatabasesService + DatabaseSharingService + DatabaseTransferService,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
     T: Send + Sync + 'static,
 {
     Router::new()
         .route("/", get(list_databases_handler::<S, Eas, Auth>))
+        .route(
+            "/{id}/import",
+            post(transfer::import_table_handler::<S, Eas, Auth>)
+                .layer(axum::extract::DefaultBodyLimit::max(16 * 1024 * 1024)),
+        )
         .route("/", post(create_database_handler::<S, Eas, Auth>))
         .route("/exec", post(exec_handler::<S, Eas, Auth>))
         .route("/query", post(query_handler::<S, Eas, Auth>))
         .route("/{id}", get(get_database_handler::<S, Eas, Auth>))
         .route("/{id}/sqlite", get(sqlite_snapshot_handler::<S, Eas, Auth>))
+        .route(
+            "/{id}/permissions",
+            get(sharing::get_permissions_handler::<S, Eas, Auth>)
+                .patch(sharing::update_permissions_handler::<S, Eas, Auth>),
+        )
         .route("/{id}/tables", post(create_table_handler::<S, Eas, Auth>))
         .route(
             "/{id}/tables/{table_id}",
@@ -119,7 +140,16 @@ where
         )
         .route(
             "/{id}/tables/{table_id}/columns/{column_id}",
-            patch(rename_column_handler::<S, Eas, Auth>),
+            patch(rename_column_handler::<S, Eas, Auth>)
+                .delete(delete_column_handler::<S, Eas, Auth>),
+        )
+        .route(
+            "/{id}/tables/{table_id}/columns/{column_id}/type",
+            patch(change_column_type_handler::<S, Eas, Auth>),
+        )
+        .route(
+            "/{id}/tables/{table_id}/columns/order",
+            patch(reorder_columns_handler::<S, Eas, Auth>),
         )
         .route(
             "/{id}/tables/{table_id}/columns/{column_id}/infer-type",

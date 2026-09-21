@@ -1,8 +1,10 @@
 import type {
+  ChangeColumnTypeRequest,
   ColumnConfig,
   ColumnDetail,
   DataType,
   PropertyDefinitionWithOptions,
+  TableVersion,
 } from '../../../generated/storage/types.gen';
 import { MacroNotFoundError } from '../../utils';
 import type { InferColumnTypeOptions } from './database';
@@ -62,6 +64,17 @@ export class DatabaseColumn {
   async inferType(opts: InferColumnTypeOptions): Promise<DatabaseColumn> {
     await this.table.database.inferColumnType(this, opts);
     return this;
+  }
+
+  /** Convert every existing cell safely, preserving this column's identity. */
+  async changeType(request: ChangeColumnTypeRequest): Promise<DatabaseColumn> {
+    await this.table.database.changeColumnType(this, request);
+    return this;
+  }
+
+  /** Delete this placement and its cells at the table version last read. */
+  async delete(baseVersion: TableVersion): Promise<void> {
+    await this.table.database.deleteColumn(this, baseVersion);
   }
 
   /** The name to use for this column in SQL. */

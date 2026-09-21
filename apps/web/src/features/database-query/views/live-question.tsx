@@ -20,11 +20,59 @@ export function LiveQuestion(props: {
   loading: boolean;
   error?: unknown;
   onRefresh: () => void;
+  onRename?: (title: string) => void;
   editor?: (onClose: () => void) => JSX.Element;
 }) {
   const [open, setOpen] = createSignal(!props.source.sql && !!props.editor);
   const [editing, setEditing] = createSignal(!props.source.sql);
   let content: HTMLDivElement | undefined;
+  const title = () =>
+    props.source.title || props.source.chart?.title || 'Database answer';
+  const [renaming, setRenaming] = createSignal(false);
+  const [draftTitle, setDraftTitle] = createSignal('');
+  const startRename = (event: MouseEvent | KeyboardEvent) => {
+    if (!props.onRename || !props.source.sql) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setOpen(false);
+    setDraftTitle(title());
+    setRenaming(true);
+  };
+  const finishRename = () => {
+    if (!renaming()) return;
+    const next = draftTitle().trim();
+    setRenaming(false);
+    if (next && next !== title()) props.onRename?.(next);
+  };
+  const titleInput = () => (
+    <input
+      ref={(input) =>
+        queueMicrotask(() => {
+          input.focus();
+          input.select();
+        })
+      }
+      aria-label="Answer title"
+      class="min-w-0 flex-1 rounded border border-edge bg-input px-1.5 py-0.5 text-sm font-medium text-ink outline-none focus:border-ink/30"
+      value={draftTitle()}
+      maxLength={100}
+      on:input={(event) => setDraftTitle(event.currentTarget.value)}
+      onBlur={finishRename}
+      onKeyDown={(event) => {
+        if (event.isComposing || event.keyCode === 229) return;
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          event.stopPropagation();
+          finishRename();
+        }
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          event.stopPropagation();
+          setRenaming(false);
+        }
+      }}
+    />
+  );
   const value = () => {
     if (!props.source.sql) return 'Database';
     if (props.error) return 'Answer unavailable';
@@ -49,18 +97,30 @@ export function LiveQuestion(props: {
       <Show
         when={props.source.displayMode !== 'scalar'}
         fallback={
-          <Popover.Trigger
-            class="mx-0.5 inline-flex max-w-full items-center gap-1 rounded-md border border-accent/20 bg-accent/7 px-1.5 py-0.5 align-baseline text-sm font-medium text-accent hover:bg-accent/12 focus-visible:outline-2 focus-visible:outline-accent"
-            aria-label={
-              props.source.prompt
-                ? `${props.source.prompt}: ${value()}`
-                : value()
-            }
-            title={props.source.prompt || 'Live database answer'}
-          >
-            <LightningIcon class="size-3 shrink-0" />
-            <span class="truncate tabular-nums">{value()}</span>
-          </Popover.Trigger>
+          <Show when={!renaming()} fallback={titleInput()}>
+            <Popover.Trigger
+              onDblClick={startRename}
+              onKeyDown={(event) => {
+                if (event.key === 'F2') startRename(event);
+              }}
+              class="mx-0.5 inline-flex max-w-full items-center gap-1 rounded-md border border-edge-muted bg-hover px-1.5 py-0.5 align-baseline text-sm font-medium text-ink hover:bg-hover/70 focus-visible:outline-2 focus-visible:outline-ink/30"
+              aria-label={
+                props.source.prompt
+                  ? `${props.source.prompt}: ${value()}`
+                  : value()
+              }
+              title={
+                props.onRename ? `${title()} · Double-click to rename` : title()
+              }
+            >
+              <LightningIcon class="size-3 shrink-0" />
+              <Show when={props.source.sql}>
+                <span class="truncate text-ink-muted">{title()}</span>
+                <span class="text-ink-extra-muted">·</span>
+              </Show>
+              <span class="truncate tabular-nums">{value()}</span>
+            </Popover.Trigger>
+          </Show>
         }
       >
         <div
@@ -69,10 +129,20 @@ export function LiveQuestion(props: {
         >
           <div class="flex items-center justify-between gap-2 border-b border-edge-muted px-3 py-2.5">
             <span class="flex min-w-0 items-center gap-2 text-sm font-medium">
-              <LightningIcon class="size-3.5 shrink-0 text-accent" />
-              <span class="truncate">
-                {props.source.prompt || 'Live answer'}
-              </span>
+              <LightningIcon class="size-3.5 shrink-0 text-ink-muted" />
+              <Show when={!renaming()} fallback={titleInput()}>
+                <span
+                  class="truncate rounded outline-none focus-visible:ring-2 focus-visible:ring-ink/20"
+                  tabIndex={props.onRename ? 0 : undefined}
+                  title={props.onRename ? 'Double-click to rename' : undefined}
+                  onDblClick={startRename}
+                  onKeyDown={(event) => {
+                    if (event.key === 'F2') startRename(event);
+                  }}
+                >
+                  {title()}
+                </span>
+              </Show>
             </span>
             <Popover.Trigger class="shrink-0 rounded px-2 py-1 text-xs text-ink-muted">
               {props.editor ? 'Edit question' : 'Details'}
@@ -100,24 +170,6 @@ export function LiveQuestion(props: {
               )}
             </Show>
           </div>
-          <div class="flex items-center gap-1.5 border-t border-edge-muted px-3 py-2 text-[11px] text-ink-muted">
-            <span
-              class="size-1.5 rounded-full"
-              classList={{
-                'bg-failure': !!props.error,
-                'bg-ink-muted':
-                  !props.error && (props.loading || !props.answer),
-                'bg-success': !props.error && !props.loading && !!props.answer,
-              }}
-            />
-            {props.error
-              ? 'Answer unavailable'
-              : props.loading
-                ? 'Updating…'
-                : props.answer
-                  ? 'Live · visible to you'
-                  : 'Waiting for data…'}
-          </div>
         </div>
       </Show>
       <Popover.Portal>
@@ -134,15 +186,18 @@ export function LiveQuestion(props: {
               prompt.focus();
             }
           }}
+          onCloseAutoFocus={(event) => {
+            if (renaming()) event.preventDefault();
+          }}
         >
           <div class="sticky top-0 z-1 flex items-center justify-between gap-2 border-b border-edge-muted bg-panel px-4 py-3">
             <Popover.Title class="flex items-center gap-2 text-sm font-medium">
-              <LightningIcon class="size-4 text-accent" />
-              Live answer
+              <LightningIcon class="size-4 text-ink-muted" />
+              {title()}
             </Popover.Title>
             <Popover.CloseButton
               class="rounded p-1 text-ink-muted hover:bg-hover"
-              aria-label="Close live answer"
+              aria-label="Close database answer"
             >
               <XIcon class="size-4" />
             </Popover.CloseButton>
@@ -196,10 +251,6 @@ export function LiveQuestion(props: {
                     </Button>
                   </Show>
                 </div>
-                <p class="text-[11px] text-ink-muted">
-                  Refreshes when the source changes. Each reader sees data they
-                  can access.
-                </p>
               </div>
             }
           >

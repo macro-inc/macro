@@ -1,0 +1,157 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO property_definitions (id, database_id, display_name, data_type, is_multi_select, specific_entity_type)\n               VALUES ($1, $2, $3, $4, $5, $6)\n               RETURNING id, team_id, user_id, database_id, display_name,\n               data_type AS \"data_type: DataType\", is_multi_select,\n               specific_entity_type AS \"specific_entity_type: EntityType\", created_at, updated_at, is_system",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "database_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "display_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "data_type: DataType",
+        "type_info": {
+          "Custom": {
+            "name": "property_data_type",
+            "kind": {
+              "Enum": [
+                "BOOLEAN",
+                "DATE",
+                "NUMBER",
+                "STRING",
+                "SELECT_NUMBER",
+                "SELECT_STRING",
+                "ENTITY",
+                "LINK",
+                "TAG"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "is_multi_select",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "specific_entity_type: EntityType",
+        "type_info": {
+          "Custom": {
+            "name": "property_entity_type",
+            "kind": {
+              "Enum": [
+                "CHANNEL",
+                "CHAT",
+                "DOCUMENT",
+                "PROJECT",
+                "THREAD",
+                "USER",
+                "COMPANY",
+                "TASK",
+                "CALL_RECORD",
+                "CALENDAR_EVENT"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "is_system",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        {
+          "Custom": {
+            "name": "property_data_type",
+            "kind": {
+              "Enum": [
+                "BOOLEAN",
+                "DATE",
+                "NUMBER",
+                "STRING",
+                "SELECT_NUMBER",
+                "SELECT_STRING",
+                "ENTITY",
+                "LINK",
+                "TAG"
+              ]
+            }
+          }
+        },
+        "Bool",
+        {
+          "Custom": {
+            "name": "property_entity_type",
+            "kind": {
+              "Enum": [
+                "CHANNEL",
+                "CHAT",
+                "DOCUMENT",
+                "PROJECT",
+                "THREAD",
+                "USER",
+                "COMPANY",
+                "TASK",
+                "CALL_RECORD",
+                "CALENDAR_EVENT"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "ba0e6de9e2e94057c7d4ac40cd87970a653284423ae1638ff7ab4840de28b5d9"
+}

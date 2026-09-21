@@ -1,38 +1,132 @@
-import { UserIcon } from '@core/component/UserIcon';
-import { usePropertyEntityDisplay } from '@property/hooks/usePropertyEntityDisplay';
-import { createSignal, ErrorBoundary, Show, Suspense } from 'solid-js';
-import type { DatabaseMentionPickerProps } from './component/GridCell';
-import type { DatabaseEntityType } from './core/column-inference';
-import { useDatabaseMentions } from './queries/database-mentions';
+import { CellMentionEditor } from '@app/components/cell-text-editor/CellMentionEditor';
+import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { MentionsMenu } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenu';
+import { getBlockNameFromEntity } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu/utils/entityUtils';
 import {
-  DatabaseMentionChoices,
+  createMenuOperations,
+  type MenuOperations,
+} from '@core/component/LexicalMarkdown/shared/inlineMenu';
+import type { MentionItem } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
+import { UserIcon } from '@core/component/UserIcon';
+import { encodeCellMention } from '@macro-inc/spreadsheet/cell-mentions';
+import { usePropertyEntityDisplay } from '@property/hooks/usePropertyEntityDisplay';
+import { ErrorBoundary, Show, Suspense } from 'solid-js';
+import type {
+  DatabaseMentionPickerProps,
+  DatabaseTextEditorProps,
+} from './component/GridCell';
+import {
   DatabaseMentionLabel,
   DatabaseMentionPlaceholder,
-  DatabaseMentionPopover,
-} from './views/database-mention-picker';
+} from './components/database-mention-label';
+import type { DatabaseEntityType } from './core/column-inference';
+import {
+  databaseMentionFromItem,
+  databaseMentionScope,
+} from './core/native-mentions';
 
-function MentionChoicesAdapter(props: DatabaseMentionPickerProps) {
-  const [search, setSearch] = createSignal(props.search);
-  const source = useDatabaseMentions(() => props.specificEntityType, search);
+/** The same menu used by documents, constrained at its native query source. */
+export function DatabaseMentionPicker(props: DatabaseMentionPickerProps) {
+  const menu = createMenuOperations();
+  menu.openMenu();
+  const operations: MenuOperations = {
+    ...menu,
+    searchTerm: () => props.search,
+    setSearchTerm: (value) => props.onSearchChange?.(value),
+    setIsOpen: (value) => {
+      const next = typeof value === 'function' ? value(menu.isOpen()) : value;
+      menu.setIsOpen(() => next);
+      if (!next) props.onClose();
+      return next;
+    },
+  };
   return (
-    <DatabaseMentionChoices
+    <Show when={props.anchor}>
+      {(anchor) => (
+        <MentionsMenu
+          menu={operations}
+          anchor={anchor()}
+          {...databaseMentionScope(props.specificEntityType)}
+          showOpenTabs={false}
+          includeGroups={false}
+          onPick={(item) => {
+            const mention = databaseMentionFromItem(item);
+            if (
+              mention &&
+              (!props.specificEntityType ||
+                mention.entityType === props.specificEntityType)
+            )
+              props.onSelect(mention);
+          }}
+        />
+      )}
+    </Show>
+  );
+}
+
+function encodedMention(item: MentionItem): string | undefined {
+  if (item.kind === 'user')
+    return encodeCellMention({
+      type: 'user',
+      userId: item.data.id,
+      email: item.data.email,
+      displayName: item.data.name,
+    });
+  if (item.kind === 'entity')
+    return encodeCellMention({
+      type: 'document',
+      documentId: item.data.id,
+      documentName: item.data.name ?? '',
+      blockName: getBlockNameFromEntity(item),
+    });
+}
+
+export function DatabaseTextEditor(props: DatabaseTextEditorProps) {
+  return (
+    <CellMentionEditor
       {...props}
-      source={source}
-      search={search()}
-      onSearchChange={(value) => {
-        setSearch(value);
-        props.onSearchChange?.(value);
-      }}
+      convertPaste={(text) => text}
+      renderMenu={(menu, anchor, pick) => (
+        <MentionsMenu
+          menu={menu}
+          anchor={anchor}
+          sources={['users', 'documents', 'channels', 'emails']}
+          includeGroups={false}
+          showOpenTabs={false}
+          onPick={(item) => {
+            const mention = databaseMentionFromItem(item);
+            if (
+              props.inferType &&
+              props.value.startsWith('@') &&
+              mention &&
+              props.onInferMention
+            ) {
+              props.onInferMention(mention);
+              return;
+            }
+            const value = encodedMention(item);
+            if (value) pick(value);
+          }}
+        />
+      )}
     />
   );
 }
 
-/** Production source mounts inside the popover's local loading/error boundary. */
-export function DatabaseMentionPicker(props: DatabaseMentionPickerProps) {
+export function DatabaseTextValue(props: { value: string }) {
   return (
-    <DatabaseMentionPopover {...props}>
-      <MentionChoicesAdapter {...props} />
-    </DatabaseMentionPopover>
+    <span
+      class="[&_.markdown]:inline [&_p]:inline [&_p]:m-0 [&_p]:leading-normal"
+      onPointerDown={(event) => {
+        if (
+          event.target instanceof Element &&
+          event.target.closest('a,[data-mention]')
+        )
+          event.stopPropagation();
+      }}
+    >
+      <StaticMarkdown markdown={props.value} singleLine target="internal" />
+    </span>
   );
 }
 

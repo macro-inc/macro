@@ -18,7 +18,7 @@ use crate::domain::views::{DatabaseViewDefinition, SaveDatabaseViewCommand, Save
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "SaveDatabaseView",
-    description = "Save a personal table or kanban board view in Macro. DescribeDatabase first and use stable column ids for filters, sorts, grouping, visibility, and order. A board requires groupBy pointing to a single-valued select or checkbox column. Filters are ANDed. This changes presentation only, never source records. A same-named view on this table is updated, so inspect the returned created flag. Requires view access to the source database. The result contains the saved viewId and exact persisted configuration. Supports table and board only: it cannot save charts or SQL views."
+    description = "Save a personal table or kanban board view in Macro. DescribeDatabase first and use stable column ids for filters, sorts, grouping, visibility, and order. A board requires groupBy pointing to a select, multi-select, or checkbox column. Filters are ANDed. This changes presentation only, never source records. A same-named view on this table is updated, so inspect the returned created flag. Requires view access to the source database. The result contains the saved viewId and exact persisted configuration. Supports table and board only: it cannot save charts or SQL views."
 )]
 pub struct SaveDatabaseView {
     /// Database id from ListDatabases.

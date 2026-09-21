@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT \"modificationData\" FROM \"DocumentInstanceModificationData\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "modificationData",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a70a8709099d9af9731d726afbb90c83b717fecb1ff6a2b5abde83c748595b76"
+}

@@ -1,5 +1,6 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import type { ComposeTaskSuccess } from '@block-md/component/ComposeTask';
+import { enableDatabases, isFeatureEnabled } from '@core/constant/featureFlags';
 import { trackMention } from '@core/signal/mention';
 import { LinkNode } from '@lexical/link';
 import { ListNode } from '@lexical/list';
@@ -83,6 +84,7 @@ export const ACTIONS: Action[] = [
     icon: LightningIcon,
     dependencies: [DatabaseQueryNode],
     action: (editor) => {
+      if (!isFeatureEnabled(enableDatabases)) return;
       queueMicrotask(() =>
         editor.update(() => {
           $insertNodes([

@@ -43,6 +43,24 @@ function setup(overrides: Partial<QueryComposerOptions> = {}) {
   return { controller, generate, read };
 }
 describe('question composer', () => {
+  it('keeps a generated title separate from the prompt through presentation changes and refresh', async () => {
+    const { controller } = setup({
+      generate: async () => ({
+        sql: 'SELECT 7',
+        explanation: 'Counts tickets',
+        title: 'Open tickets',
+      }),
+    });
+    controller.setPrompt('Can you tell me how many open tickets there are?');
+    await controller.generate();
+    expect(controller.presentation().title).toBe('Open tickets');
+    controller.setDisplayMode('table');
+    await controller.run();
+    expect(controller.presentation().title).toBe('Open tickets');
+    expect(controller.prompt()).toBe(
+      'Can you tell me how many open tickets there are?'
+    );
+  });
   it('restores the verified automatic source with its answer on Undo and refresh', async () => {
     const support = { databaseId: 'support', name: 'Support', tables: [] };
     const sales = { databaseId: 'sales', name: 'Sales', tables: [] };

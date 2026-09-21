@@ -25,6 +25,7 @@ export type DatabaseQueryData = {
   tableId?: string;
   sql: string;
   prompt: string;
+  title?: string;
   displayMode: DatabaseQueryDisplayMode;
   chart?: DatabaseQueryChart;
 };
@@ -49,6 +50,7 @@ export function parseDatabaseQueryData(
     (record.databaseId !== undefined &&
       typeof record.databaseId !== 'string') ||
     (record.tableId !== undefined && typeof record.tableId !== 'string') ||
+    (record.title !== undefined && typeof record.title !== 'string') ||
     !['scalar', 'table', 'bar', 'line', 'pie'].includes(
       String(record.displayMode)
     )
@@ -81,6 +83,7 @@ export function parseDatabaseQueryData(
     ...(record.tableId ? { tableId: record.tableId as string } : {}),
     sql: record.sql,
     prompt: record.prompt,
+    ...(record.title ? { title: record.title as string } : {}),
     displayMode: record.displayMode as DatabaseQueryDisplayMode,
     ...(chart ? { chart } : {}),
   };
@@ -101,6 +104,7 @@ export class DatabaseQueryNode extends DecoratorNode<
   __tableId?: string;
   __sql: string;
   __prompt: string;
+  __title?: string;
   __displayMode: DatabaseQueryDisplayMode;
   __chart?: DatabaseQueryChart;
 
@@ -116,6 +120,7 @@ export class DatabaseQueryNode extends DecoratorNode<
     this.__tableId = data.tableId;
     this.__sql = data.sql;
     this.__prompt = data.prompt;
+    this.__title = data.title;
     this.__displayMode = data.displayMode;
     this.__chart = data.chart;
   }
@@ -146,6 +151,7 @@ export class DatabaseQueryNode extends DecoratorNode<
       ...(this.__tableId ? { tableId: this.__tableId } : {}),
       sql: this.__sql,
       prompt: this.__prompt,
+      ...(this.__title ? { title: this.__title } : {}),
       displayMode: this.__displayMode,
       ...(this.__chart ? { chart: this.__chart } : {}),
     };
@@ -156,6 +162,7 @@ export class DatabaseQueryNode extends DecoratorNode<
     writable.__tableId = data.tableId;
     writable.__sql = data.sql;
     writable.__prompt = data.prompt;
+    writable.__title = data.title;
     writable.__displayMode = data.displayMode;
     writable.__chart = data.chart;
   }
@@ -168,7 +175,7 @@ export class DatabaseQueryNode extends DecoratorNode<
     return previous.__displayMode !== this.__displayMode;
   }
   getTextContent() {
-    return this.__prompt || 'Live database question';
+    return this.__title || this.__prompt || 'Database answer';
   }
   exportDOM() {
     const element = this.createDOM();

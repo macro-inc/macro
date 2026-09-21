@@ -5,8 +5,11 @@
 //! `database_rows`, `database_row_links`
 //! (`crates/macro_db_client/migrations/20260908204308_add_databases.up.sql`).
 
+mod columns;
+mod sharing;
 #[cfg(test)]
 mod test;
+mod transfer;
 
 use std::collections::{BTreeSet, HashMap};
 
@@ -23,6 +26,7 @@ use crate::domain::models::{
     Database, DatabaseId, PropertyDefinitionId, RenameColumnOutcome, Row, RowChange, RowId, Table,
     TableId, TableVersion, Viewer,
 };
+use crate::domain::models::{ColumnReplacement, ColumnSchemaOutcome};
 use crate::domain::ports::DatabasesRepo;
 
 /// Errors from the Postgres repository.
@@ -175,6 +179,30 @@ impl PgDatabasesRepo {
 
 impl DatabasesRepo for PgDatabasesRepo {
     type Err = PgDatabasesRepoError;
+
+    async fn replace_column(
+        &self,
+        table: &Table,
+        replacement: &ColumnReplacement,
+    ) -> Result<Option<TableVersion>, Self::Err> {
+        self.replace_column_placement(table, replacement).await
+    }
+
+    async fn delete_column(
+        &self,
+        table: &Table,
+        column: &Column,
+    ) -> Result<Option<ColumnSchemaOutcome>, Self::Err> {
+        self.delete_column_placement(table, column).await
+    }
+
+    async fn reorder_columns(
+        &self,
+        table: &Table,
+        column_ids: &[ColumnId],
+    ) -> Result<Option<TableVersion>, Self::Err> {
+        self.reorder_column_placements(table, column_ids).await
+    }
 
     #[tracing::instrument(err, skip(self, cmd))]
     async fn create_database(

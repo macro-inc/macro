@@ -10,6 +10,13 @@ import PencilIcon from '@phosphor/pencil-simple.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import { Key } from '@solid-primitives/keyed';
 import {
+  createDraggable,
+  createDroppable,
+  DragDropProvider,
+  DragDropSensors,
+  DragOverlay,
+} from '@thisbeyond/solid-dnd';
+import {
   type Accessor,
   createEffect,
   createSignal,
@@ -23,11 +30,13 @@ import type {
   GridCellControl,
   GridCellEditorOptions,
 } from '../component/GridCell';
+import type { DatabaseColumnTypeChange } from '../core/column-schema';
 import type {
   DatabaseViewColumn,
   DatabaseViewConfig,
 } from '../core/database-view';
 import { canEditCell, type DatabaseRow } from '../core/table';
+import type { DatabaseColumnHeaderProps } from './database-column-header';
 import { DatabaseColumnHeader } from './database-column-header';
 
 export function DatabaseTable(props: {
@@ -54,6 +63,14 @@ export function DatabaseTable(props: {
   onCreate: () => void;
   onDuplicate?: (rowId: string) => Promise<boolean>;
   onRequestDelete?: (rowId: string) => void;
+  editColumn?: string;
+  relationTables?: { id: string; name: string }[];
+  onChangeColumnType?: (
+    columnId: string,
+    change: DatabaseColumnTypeChange
+  ) => Promise<void>;
+  onDeleteColumn?: (columnId: string) => Promise<void>;
+  onReorderColumn?: (columnId: string, targetId: string) => Promise<void>;
   onRenameColumn?: (
     columnId: string,
     name: string,
@@ -63,6 +80,27 @@ export function DatabaseTable(props: {
   onHide?: (columnId: string) => void;
   onMove?: (columnId: string, direction: 'left' | 'right') => void;
 }) {
+  const [columnPreview, setColumnPreview] = createSignal<HTMLElement>();
+  const headerRenames = new Map<string, () => void>();
+  let requestedHeader: string | undefined;
+  const focusHeader = () => {
+    const rename = requestedHeader
+      ? headerRenames.get(requestedHeader)
+      : undefined;
+    if (rename) {
+      requestedHeader = undefined;
+      queueMicrotask(rename);
+    }
+  };
+  createEffect(
+    on(
+      () => props.editColumn,
+      (id) => {
+        requestedHeader = id;
+        focusHeader();
+      }
+    )
+  );
   const controls = new Map<string, Map<string, GridCellControl>>();
   let pendingEdit: { rowId: string; columnId: string } | undefined;
   const control = (rowId: string, columnId: string) =>
@@ -184,309 +222,366 @@ export function DatabaseTable(props: {
       ).focus();
   }
   return (
-    <div class="@container/database-grid min-h-0 flex-1 overflow-auto">
-      <div
-        ref={(grid) => {
-          // Closed select triggers also use arrows. The grid owns those keys
-          // until an editor or its menu has opened.
-          const navigateArrows = (event: KeyboardEvent) => {
-            if (event.key.startsWith('Arrow')) moveFocus(event);
-          };
-          grid.addEventListener('keydown', navigateArrows, true);
-          onCleanup(() =>
-            grid.removeEventListener('keydown', navigateArrows, true)
+    <DragDropProvider
+      onDragStart={({ draggable }) => {
+        const bounds = draggable.node.getBoundingClientRect();
+        const copy = draggable.node.cloneNode(true) as HTMLElement;
+        copy.removeAttribute('id');
+        copy
+          .querySelectorAll('[id]')
+          .forEach((node) => node.removeAttribute('id'));
+        copy.style.width = `${bounds.width}px`;
+        copy.style.height = `${bounds.height}px`;
+        copy.style.opacity = '1';
+        copy.inert = true;
+        setColumnPreview(copy);
+      }}
+      onDragEnd={({ draggable, droppable }) => {
+        setColumnPreview(undefined);
+        if (props.canEdit && droppable && draggable.id !== droppable.id)
+          void props.onReorderColumn?.(
+            String(draggable.id),
+            String(droppable.id)
           );
-        }}
-        role="grid"
-        aria-label={props.name}
-        aria-rowcount={props.rows.length + 1}
-        aria-colcount={props.columns.length + 1 + Number(props.canEdit)}
-        data-grid
-        class="flex min-h-full min-w-fit flex-col"
-        onKeyDown={moveFocus}
-        onFocusIn={(event) => {
-          const rowId =
-            event.target instanceof HTMLElement
-              ? event.target.closest<HTMLElement>('[data-grid-row-id]')?.dataset
-                  .gridRowId
-              : undefined;
-          if (rowId) props.onRowFocus?.(rowId);
-        }}
-        onFocusOut={(event) => {
-          const grid = event.currentTarget;
-          queueMicrotask(() => {
-            const active = document.activeElement;
-            if (
-              active instanceof HTMLElement &&
-              active !== document.body &&
-              !grid.contains(active) &&
-              !active.closest('[role="menu"]')
-            )
-              props.onRowFocus?.(undefined);
-          });
-        }}
-      >
+      }}
+    >
+      <DragDropSensors />
+      <div class="@container/database-grid min-h-0 flex-1 overflow-auto">
         <div
-          role="row"
-          aria-rowindex={1}
-          class="sticky top-0 z-1 grid min-h-10 border-b border-edge-muted bg-panel"
-          style={{ 'grid-template-columns': template() }}
+          ref={(grid) => {
+            // Closed select triggers also use arrows. The grid owns those keys
+            // until an editor or its menu has opened.
+            const navigateArrows = (event: KeyboardEvent) => {
+              if (event.key.startsWith('Arrow')) moveFocus(event);
+            };
+            grid.addEventListener('keydown', navigateArrows, true);
+            onCleanup(() =>
+              grid.removeEventListener('keydown', navigateArrows, true)
+            );
+          }}
+          role="grid"
+          aria-label={props.name}
+          aria-rowcount={props.rows.length + 1}
+          aria-colcount={props.columns.length + 1 + Number(props.canEdit)}
+          data-grid
+          class="flex min-h-full min-w-fit flex-col"
+          onKeyDown={moveFocus}
+          onFocusIn={(event) => {
+            const rowId =
+              event.target instanceof HTMLElement
+                ? event.target.closest<HTMLElement>('[data-grid-row-id]')
+                    ?.dataset.gridRowId
+                : undefined;
+            if (rowId) props.onRowFocus?.(rowId);
+          }}
+          onFocusOut={(event) => {
+            const grid = event.currentTarget;
+            queueMicrotask(() => {
+              const active = document.activeElement;
+              if (
+                active instanceof HTMLElement &&
+                active !== document.body &&
+                !grid.contains(active) &&
+                !active.closest('[role="menu"]')
+              )
+                props.onRowFocus?.(undefined);
+            });
+          }}
         >
           <div
-            role="columnheader"
-            aria-label="Open record"
-            class="flex items-center justify-center border-r border-edge-muted/50 text-[10px] text-ink-placeholder"
+            role="row"
+            aria-rowindex={1}
+            class="sticky top-0 z-1 grid min-h-10 border-b border-edge-muted bg-panel"
+            style={{ 'grid-template-columns': template() }}
           >
-            #
-          </div>
-          <Key each={props.columns} by="id">
-            {(column, index) => (
-              <DatabaseColumnHeader
-                column={column()}
-                sortDirection={
-                  props.view.sorts.find((sort) => sort.columnId === column().id)
-                    ?.direction
-                }
-                canRename={props.canEdit}
-                onRename={props.onRenameColumn}
-                onSort={props.onSort}
-                onHide={props.onHide}
-                onMove={props.onMove}
-                canMoveLeft={index() > 0}
-                canMoveRight={index() < props.columns.length - 1}
-              />
-            )}
-          </Key>
-          <Show when={props.canEdit}>
             <div
               role="columnheader"
-              class="flex items-center justify-start px-2"
+              aria-label="Open record"
+              class="flex items-center justify-center border-r border-edge-muted/50 text-[10px] text-ink-placeholder"
             >
-              {props.addColumn}
+              #
             </div>
-          </Show>
-        </div>
-        <Key each={props.rows} by="rowId">
-          {(row, index) => {
-            const [contextColumn, setContextColumn] = createSignal<string>();
-            let afterClose: (() => void) | undefined;
-            let rowButton: HTMLButtonElement | undefined;
-            const deferAction = (action: () => void) => {
-              afterClose = action;
-            };
-            const contextField = () =>
-              props.columns.find((column) => column.id === contextColumn());
-            const renameField = () =>
-              props.columns.find(
-                (column) =>
-                  column.id === props.titleColumnId && canEditCell(column)
-              );
-            const captureContext = (event: MouseEvent, columnId?: string) => {
-              if (
-                event.target instanceof HTMLElement &&
-                event.target.closest(
-                  'input:not([type="checkbox"]), textarea, [contenteditable="true"]'
-                )
-              ) {
-                event.stopPropagation();
-                return;
-              }
-              setContextColumn(columnId);
-            };
-            return (
-              <ContextMenu>
-                <ContextMenu.Trigger
-                  as="div"
-                  role="row"
-                  data-grid-row-id={row().rowId}
-                  aria-rowindex={index() + 2}
-                  class="group grid min-h-10 border-b border-edge-muted/60 hover:bg-hover/50"
-                  style={{ 'grid-template-columns': template() }}
-                >
-                  <div
-                    role="gridcell"
-                    aria-colindex={1}
-                    tabindex={-1}
-                    class="flex items-center justify-center border-r border-edge-muted/40 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ink/50"
-                    data-grid-cell
-                    data-grid-row={index()}
-                    data-grid-column={0}
-                    onContextMenu={(event) => captureContext(event)}
+            <Key each={props.columns} by="id">
+              {(column, index) => (
+                <DraggableColumnHeader
+                  registerRename={(rename) => {
+                    if (rename) headerRenames.set(column().id, rename);
+                    else headerRenames.delete(column().id);
+                    focusHeader();
+                  }}
+                  canDrag={props.canEdit && !!props.onReorderColumn}
+                  relationTables={props.relationTables}
+                  onChangeType={props.onChangeColumnType}
+                  onDelete={props.onDeleteColumn}
+                  column={column()}
+                  sortDirection={
+                    props.view.sorts.find(
+                      (sort) => sort.columnId === column().id
+                    )?.direction
+                  }
+                  canRename={props.canEdit}
+                  onRename={props.onRenameColumn}
+                  onSort={props.onSort}
+                  onHide={props.onHide}
+                  onMove={props.onMove}
+                  canMoveLeft={index() > 0}
+                  canMoveRight={index() < props.columns.length - 1}
+                />
+              )}
+            </Key>
+            <Show when={props.canEdit}>
+              <div
+                role="columnheader"
+                class="flex items-center justify-start px-2"
+              >
+                {props.addColumn}
+              </div>
+            </Show>
+          </div>
+          <Key each={props.rows} by="rowId">
+            {(row, index) => {
+              const [contextColumn, setContextColumn] = createSignal<string>();
+              let afterClose: (() => void) | undefined;
+              let rowButton: HTMLButtonElement | undefined;
+              const deferAction = (action: () => void) => {
+                afterClose = action;
+              };
+              const contextField = () =>
+                props.columns.find((column) => column.id === contextColumn());
+              const renameField = () =>
+                props.columns.find(
+                  (column) =>
+                    column.id === props.titleColumnId && canEditCell(column)
+                );
+              const captureContext = (event: MouseEvent, columnId?: string) => {
+                if (
+                  event.target instanceof HTMLElement &&
+                  event.target.closest(
+                    'input:not([type="checkbox"]), textarea, [contenteditable="true"]'
+                  )
+                ) {
+                  event.stopPropagation();
+                  return;
+                }
+                setContextColumn(columnId);
+              };
+              return (
+                <ContextMenu>
+                  <ContextMenu.Trigger
+                    as="div"
+                    role="row"
+                    data-grid-row-id={row().rowId}
+                    aria-rowindex={index() + 2}
+                    class="group grid min-h-10 border-b border-edge-muted/60 hover:bg-hover/50"
+                    style={{ 'grid-template-columns': template() }}
                   >
-                    <Show
-                      when={!props.isUnsavedRow?.(row().rowId)}
-                      fallback={
-                        <span class="text-[10px] tabular-nums text-ink-placeholder">
-                          {index() + 1}
-                        </span>
-                      }
-                    >
-                      <button
-                        ref={rowButton}
-                        type="button"
-                        class="relative grid size-7 place-items-center rounded text-[10px] tabular-nums text-ink-placeholder outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ink/50"
-                        aria-label={`Open ${props.getRowTitle(row())}`}
-                        title="Open record"
-                        onClick={() => props.onOpen(row().rowId)}
-                      >
-                        <span class="group-hover:opacity-0 group-focus-within:opacity-0">
-                          {index() + 1}
-                        </span>
-                        <ArrowSquareOutIcon class="absolute size-3.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100" />
-                      </button>
-                    </Show>
-                  </div>
-                  <Key each={props.columns} by="id">
-                    {(column, columnIndex) => (
-                      <div
-                        role="gridcell"
-                        aria-colindex={columnIndex() + 2}
-                        tabindex={-1}
-                        class="min-w-0 border-r border-edge-muted/40 px-0.5 py-0.5 outline-none focus-within:ring-1 focus-within:ring-inset focus-within:ring-ink/40 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ink/50"
-                        data-grid-cell
-                        data-grid-row={index()}
-                        data-grid-column={columnIndex() + 1}
-                        onContextMenu={(event) =>
-                          captureContext(event, column().id)
-                        }
-                      >
-                        {props.renderCell(row, column, {
-                          onReady: (editor) =>
-                            register(row().rowId, column().id, editor),
-                          onNavigate: (direction) =>
-                            navigate(row().rowId, column().id, direction),
-                        })}
-                      </div>
-                    )}
-                  </Key>
-                  <Show when={props.canEdit}>
                     <div
                       role="gridcell"
+                      aria-colindex={1}
+                      tabindex={-1}
+                      class="flex items-center justify-center border-r border-edge-muted/40 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ink/50"
+                      data-grid-cell
+                      data-grid-row={index()}
+                      data-grid-column={0}
                       onContextMenu={(event) => captureContext(event)}
-                    />
-                  </Show>
-                </ContextMenu.Trigger>
-                <ContextMenu.Portal>
-                  <ContextMenuContent
-                    class="min-w-44"
-                    onCloseAutoFocus={(event) => {
-                      event.preventDefault();
-                      const action = afterClose;
-                      afterClose = undefined;
-                      queueMicrotask(() => {
-                        if (action) {
-                          action();
-                          return;
-                        }
-                        const columnId = contextColumn();
-                        const cell = columnId
-                          ? control(row().rowId, columnId)
-                          : undefined;
-                        if (cell) cell.focus();
-                        else rowButton?.focus();
-                      });
-                    }}
-                  >
-                    <Show
-                      when={
-                        props.canEdit &&
-                        contextField() &&
-                        canEditCell(contextField()!)
-                      }
                     >
-                      <MenuItem
-                        closeOnSelect
-                        icon={PencilIcon}
-                        text="Edit cell"
-                        onClick={() =>
-                          deferAction(() =>
-                            control(row().rowId, contextColumn()!)?.edit()
-                          )
+                      <Show
+                        when={!props.isUnsavedRow?.(row().rowId)}
+                        fallback={
+                          <span class="text-[10px] tabular-nums text-ink-placeholder">
+                            {index() + 1}
+                          </span>
                         }
+                      >
+                        <button
+                          ref={rowButton}
+                          type="button"
+                          class="relative grid size-7 place-items-center rounded text-[10px] tabular-nums text-ink-placeholder outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ink/50"
+                          aria-label={`Open ${props.getRowTitle(row())}`}
+                          title="Open record"
+                          onClick={() => props.onOpen(row().rowId)}
+                        >
+                          <span class="group-hover:opacity-0 group-focus-within:opacity-0">
+                            {index() + 1}
+                          </span>
+                          <ArrowSquareOutIcon class="absolute size-3.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100" />
+                        </button>
+                      </Show>
+                    </div>
+                    <Key each={props.columns} by="id">
+                      {(column, columnIndex) => (
+                        <div
+                          role="gridcell"
+                          aria-colindex={columnIndex() + 2}
+                          tabindex={-1}
+                          class="min-w-0 border-r border-edge-muted/40 px-0.5 py-0.5 outline-none focus-within:ring-1 focus-within:ring-inset focus-within:ring-ink/40 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ink/50"
+                          data-grid-cell
+                          data-grid-row={index()}
+                          data-grid-column={columnIndex() + 1}
+                          onContextMenu={(event) =>
+                            captureContext(event, column().id)
+                          }
+                        >
+                          {props.renderCell(row, column, {
+                            onReady: (editor) =>
+                              register(row().rowId, column().id, editor),
+                            onNavigate: (direction) =>
+                              navigate(row().rowId, column().id, direction),
+                          })}
+                        </div>
+                      )}
+                    </Key>
+                    <Show when={props.canEdit}>
+                      <div
+                        role="gridcell"
+                        onContextMenu={(event) => captureContext(event)}
                       />
                     </Show>
-                    <Show when={!props.isUnsavedRow?.(row().rowId)}>
-                      <MenuItem
-                        closeOnSelect
-                        icon={ArrowSquareOutIcon}
-                        text="Open record"
-                        onClick={() =>
-                          deferAction(() => props.onOpen(row().rowId))
-                        }
-                      />
+                  </ContextMenu.Trigger>
+                  <ContextMenu.Portal>
+                    <ContextMenuContent
+                      class="min-w-44"
+                      onCloseAutoFocus={(event) => {
+                        event.preventDefault();
+                        const action = afterClose;
+                        afterClose = undefined;
+                        queueMicrotask(() => {
+                          if (action) {
+                            action();
+                            return;
+                          }
+                          const columnId = contextColumn();
+                          const cell = columnId
+                            ? control(row().rowId, columnId)
+                            : undefined;
+                          if (cell) cell.focus();
+                          else rowButton?.focus();
+                        });
+                      }}
+                    >
                       <Show
                         when={
                           props.canEdit &&
-                          renameField() &&
-                          contextColumn() !== renameField()?.id
+                          contextField() &&
+                          canEditCell(contextField()!)
                         }
                       >
                         <MenuItem
                           closeOnSelect
                           icon={PencilIcon}
-                          text="Rename"
+                          text="Edit cell"
                           onClick={() =>
                             deferAction(() =>
-                              control(row().rowId, renameField()!.id)?.edit()
+                              control(row().rowId, contextColumn()!)?.edit()
                             )
                           }
                         />
                       </Show>
-                      <Show when={props.canEdit && props.onDuplicate}>
+                      <Show when={!props.isUnsavedRow?.(row().rowId)}>
                         <MenuItem
                           closeOnSelect
-                          icon={CopyIcon}
-                          text="Duplicate"
-                          disabled={props.pending}
+                          icon={ArrowSquareOutIcon}
+                          text="Open record"
                           onClick={() =>
-                            deferAction(() => {
-                              void props.onDuplicate?.(row().rowId);
-                            })
+                            deferAction(() => props.onOpen(row().rowId))
                           }
                         />
-                      </Show>
-                      <Show when={props.canEdit && props.onRequestDelete}>
-                        <MenuSeparator />
-                        <MenuItem
-                          closeOnSelect
-                          icon={TrashIcon}
-                          text="Delete record"
-                          class="text-failure"
-                          disabled={props.pending}
-                          onClick={() =>
-                            deferAction(() =>
-                              props.onRequestDelete?.(row().rowId)
-                            )
+                        <Show
+                          when={
+                            props.canEdit &&
+                            renameField() &&
+                            contextColumn() !== renameField()?.id
                           }
-                        />
+                        >
+                          <MenuItem
+                            closeOnSelect
+                            icon={PencilIcon}
+                            text="Rename"
+                            onClick={() =>
+                              deferAction(() =>
+                                control(row().rowId, renameField()!.id)?.edit()
+                              )
+                            }
+                          />
+                        </Show>
+                        <Show when={props.canEdit && props.onDuplicate}>
+                          <MenuItem
+                            closeOnSelect
+                            icon={CopyIcon}
+                            text="Duplicate"
+                            disabled={props.pending}
+                            onClick={() =>
+                              deferAction(() => {
+                                void props.onDuplicate?.(row().rowId);
+                              })
+                            }
+                          />
+                        </Show>
+                        <Show when={props.canEdit && props.onRequestDelete}>
+                          <MenuSeparator />
+                          <MenuItem
+                            closeOnSelect
+                            icon={TrashIcon}
+                            text="Delete record"
+                            class="text-failure"
+                            disabled={props.pending}
+                            onClick={() =>
+                              deferAction(() =>
+                                props.onRequestDelete?.(row().rowId)
+                              )
+                            }
+                          />
+                        </Show>
                       </Show>
-                    </Show>
-                  </ContextMenuContent>
-                </ContextMenu.Portal>
-              </ContextMenu>
-            );
-          }}
-        </Key>
-        <Show when={props.rows.length === 0}>{props.emptyState}</Show>
-        <div
-          aria-hidden="true"
-          class="grid min-h-40 flex-1"
-          data-empty-grid
-          style={{
-            'grid-template-columns': template(),
-            'background-image':
-              'repeating-linear-gradient(to bottom, transparent 0px, transparent 39px, color-mix(in srgb, var(--color-edge-muted) 60%, transparent) 39px, color-mix(in srgb, var(--color-edge-muted) 60%, transparent) 40px)',
-          }}
-        >
-          <div class="border-r border-edge-muted/40" />
-          <For each={props.columns}>
-            {() => <div class="border-r border-edge-muted/40" />}
-          </For>
-          <Show when={props.canEdit}>
-            <div />
-          </Show>
+                    </ContextMenuContent>
+                  </ContextMenu.Portal>
+                </ContextMenu>
+              );
+            }}
+          </Key>
+          <Show when={props.rows.length === 0}>{props.emptyState}</Show>
+          <div
+            aria-hidden="true"
+            class="grid min-h-40 flex-1"
+            data-empty-grid
+            style={{
+              'grid-template-columns': template(),
+              'background-image':
+                'repeating-linear-gradient(to bottom, transparent 0px, transparent 39px, color-mix(in srgb, var(--color-edge-muted) 60%, transparent) 39px, color-mix(in srgb, var(--color-edge-muted) 60%, transparent) 40px)',
+            }}
+          >
+            <div class="border-r border-edge-muted/40" />
+            <For each={props.columns}>
+              {() => <div class="border-r border-edge-muted/40" />}
+            </For>
+            <Show when={props.canEdit}>
+              <div />
+            </Show>
+          </div>
         </div>
       </div>
-    </div>
+      <DragOverlay class="pointer-events-none select-none bg-panel shadow-md">
+        {columnPreview()}
+      </DragOverlay>
+    </DragDropProvider>
+  );
+}
+
+function DraggableColumnHeader(
+  props: DatabaseColumnHeaderProps & { canDrag: boolean }
+) {
+  const draggable = createDraggable(props.column.id);
+  const droppable = createDroppable(props.column.id);
+  return (
+    <DatabaseColumnHeader
+      {...props}
+      headerRef={(element) => {
+        draggable.ref(element);
+        droppable.ref(element);
+      }}
+      dragHandle={props.canDrag ? draggable.dragActivators : undefined}
+      dragging={draggable.isActiveDraggable}
+      dropTarget={droppable.isActiveDroppable && !draggable.isActiveDraggable}
+    />
   );
 }

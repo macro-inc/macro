@@ -152,6 +152,11 @@ export function DatabaseLiveQuestion(props: {
         loading={query.isFetching}
         error={query.isError ? query.error : undefined}
         onRefresh={() => void query.refetch()}
+        onRename={
+          props.onSave
+            ? (title) => props.onSave?.({ ...props.source, title })
+            : undefined
+        }
         editor={
           props.onSave
             ? (onClose) => (

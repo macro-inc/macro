@@ -38,7 +38,9 @@ import {
 } from './unknownFallback';
 
 export function wrapXml(tag: string, attrs: Record<string, any>) {
-  return `<${tag}>${JSON.stringify(attrs)}</${tag}>`;
+  // JSON strings may contain a closing mention/context tag. Escaping the
+  // opening bracket preserves the value without ending its markdown envelope.
+  return `<${tag}>${JSON.stringify(attrs).replaceAll('<', '\\u003c')}</${tag}>`;
 }
 
 export function xmlMatcher(tag: string, flags?: string) {

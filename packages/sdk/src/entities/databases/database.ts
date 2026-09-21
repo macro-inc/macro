@@ -1,13 +1,18 @@
 import type {
+  ChangeColumnTypeRequest,
   ColumnDetail,
+  ColumnSchemaOutcome,
   CreateColumnRequest,
   DatabaseDetail,
+  DatabaseSharePermissions,
   DataType,
   ExecOutcome,
+  ImportTable,
   InferColumnTypeOutcome,
   InferColumnTypeRequest,
   QueryResult,
   TableVersion,
+  UpdateDatabasePermissionsRequest,
 } from '../../../generated/storage/types.gen';
 import { MacroError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
@@ -183,6 +188,90 @@ export class Database extends MacroEntity<DatabaseDetail> {
       })
     );
     return DatabaseTable.byId(this, table.id);
+  }
+
+  /** Import text rows atomically. Keep requestId unchanged when retrying. */
+  async importTable(request: ImportTable): Promise<DatabaseTable> {
+    const table = await this.mutate((client) =>
+      client.storage.importDatabaseTable({
+        path: { id: this.id },
+        body: request,
+      })
+    );
+    return DatabaseTable.byId(this, table.id);
+  }
+
+  /** Read direct recipients. Only the database owner can manage sharing. */
+  async sharePermissions(): Promise<DatabaseSharePermissions> {
+    return unwrap(
+      await this.client.storage.getDatabasePermissions({
+        path: { id: this.id },
+      })
+    );
+  }
+
+  /** Add, replace, or remove recipient grants without transferring ownership. */
+  updateSharePermissions(
+    request: UpdateDatabasePermissionsRequest
+  ): Promise<DatabaseSharePermissions> {
+    return this.mutate((client) =>
+      client.storage.updateDatabasePermissions({
+        path: { id: this.id },
+        body: request,
+      })
+    );
+  }
+
+  /** Change one placement's type only when all existing values convert safely. */
+  async changeColumnType(
+    column: DatabaseColumn,
+    request: ChangeColumnTypeRequest
+  ): Promise<ColumnSchemaOutcome> {
+    if (column.table.database.id !== this.id)
+      throw new MacroError(
+        `column ${column.id} does not belong to database ${this.id}`
+      );
+    return this.mutate((client) =>
+      client.storage.changeDatabaseColumnType({
+        path: { id: this.id, table_id: column.table.id, column_id: column.id },
+        body: request,
+      })
+    );
+  }
+
+  /** Remove a column and its cells, guarded by the table version last read. */
+  async deleteColumn(
+    column: DatabaseColumn,
+    baseVersion: TableVersion
+  ): Promise<ColumnSchemaOutcome> {
+    if (column.table.database.id !== this.id)
+      throw new MacroError(
+        `column ${column.id} does not belong to database ${this.id}`
+      );
+    return this.mutate((client) =>
+      client.storage.deleteDatabaseColumn({
+        path: { id: this.id, table_id: column.table.id, column_id: column.id },
+        body: { baseVersion },
+      })
+    );
+  }
+
+  /** Persist a complete column order, including currently hidden columns. */
+  async reorderColumns(
+    table: DatabaseTable,
+    columnIds: string[],
+    baseVersion: TableVersion
+  ): Promise<ColumnSchemaOutcome> {
+    if (table.database.id !== this.id)
+      throw new MacroError(
+        `table ${table.id} does not belong to database ${this.id}`
+      );
+    return this.mutate((client) =>
+      client.storage.reorderDatabaseColumns({
+        path: { id: this.id, table_id: table.id },
+        body: { columnIds, baseVersion },
+      })
+    );
   }
 
   /** Rename a table only if its last-read name is still current. */

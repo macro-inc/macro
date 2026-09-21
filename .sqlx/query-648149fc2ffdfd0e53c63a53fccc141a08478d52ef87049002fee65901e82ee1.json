@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO user_notification (user_id, notification_id, state, seen_at)\n        VALUES ($1, $2, CASE WHEN $3::bool THEN 'done'::notification_state\n            WHEN $4::timestamp IS NOT NULL THEN 'seen'::notification_state\n            ELSE 'unseen'::notification_state END, $4)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Bool",
+        "Timestamp"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "648149fc2ffdfd0e53c63a53fccc141a08478d52ef87049002fee65901e82ee1"
+}

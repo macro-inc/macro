@@ -1,7 +1,9 @@
+import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import {
   addDatabaseColumnOptions,
   applyDatabaseTableVersions,
   execSql,
+  useDatabaseDetailQuery,
 } from '@queries/storage/databases';
 import type { DatabaseTableDetail } from '@service-storage/databases';
 import { createMemo, For, type JSX, Show, Suspense } from 'solid-js';
@@ -14,7 +16,10 @@ import {
 import {
   DatabaseMentionPicker,
   DatabaseMentionValue,
+  DatabaseTextEditor,
+  DatabaseTextValue,
 } from '../database-mentions';
+import { updateDatabaseColumns } from '../queries/column-schema';
 import { createDatabaseRelations } from '../queries/database-relations';
 import { useRelatedDatabaseSync } from '../queries/database-relations-sync';
 import { renameDatabaseColumn } from '../queries/rename-column';
@@ -57,6 +62,7 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
     return ownedTable;
   };
   const databaseId = props.databaseId;
+  const detail = useDatabaseDetailQuery(() => databaseId);
   const relatedTargets = () =>
     table().columns.flatMap((column) =>
       column.column.config?.kind === 'link' &&
@@ -119,47 +125,85 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
           return null;
         }}
       </For>
-      <DatabaseTableView
-        name={table().table.name}
-        source={source}
-        canEdit={props.canEdit}
-        view={props.view ?? defaultDatabaseView()}
-        onViewChange={props.onViewChange}
-        renderMentionPicker={(picker) => <DatabaseMentionPicker {...picker} />}
-        renderMentionValue={(id, entityType) => (
-          <DatabaseMentionValue id={id} entityType={entityType} />
-        )}
-        renderRelationCell={(cell) => (
-          <DatabaseRelationCell
-            {...cell}
-            source={relations(cell.column.relation!.tableId)}
-            onOpen={(rowId) =>
-              props.onOpenRelated?.({ ...cell.column.relation!, rowId })
-            }
-          />
-        )}
-        onRenameColumn={(columnId, name, previousName) =>
-          renameDatabaseColumn({
-            databaseId,
-            tableId: props.tableId,
-            columnId,
-            name,
-            previousName,
-          })
-        }
-        renderToolbar={props.renderToolbar}
-        addColumn={(label, initialType, variant, onCreated) => (
-          <AddColumnMenu
-            databaseId={databaseId}
-            tableId={props.tableId}
-            columns={table().columns}
-            label={label}
-            variant={variant}
-            initialType={initialType}
-            onCreated={onCreated}
-          />
-        )}
-      />
+      <StaticMarkdownContext>
+        <DatabaseTableView
+          name={table().table.name}
+          source={source}
+          canEdit={props.canEdit}
+          view={props.view ?? defaultDatabaseView()}
+          onViewChange={props.onViewChange}
+          renderTextEditor={(editor) => <DatabaseTextEditor {...editor} />}
+          renderTextValue={(value) => <DatabaseTextValue value={value} />}
+          renderMentionPicker={(picker) => (
+            <DatabaseMentionPicker {...picker} />
+          )}
+          renderMentionValue={(id, entityType) => (
+            <DatabaseMentionValue id={id} entityType={entityType} />
+          )}
+          renderRelationCell={(cell) => (
+            <DatabaseRelationCell
+              {...cell}
+              source={relations(cell.column.relation!.tableId)}
+              onOpen={(rowId) =>
+                props.onOpenRelated?.({ ...cell.column.relation!, rowId })
+              }
+            />
+          )}
+          relationTables={
+            detail.isSuccess
+              ? detail.data.tables.map(({ table }) => ({
+                  id: table.id,
+                  name: table.name,
+                }))
+              : []
+          }
+          onChangeColumnType={(columnId, change) =>
+            updateDatabaseColumns({
+              databaseId,
+              tableId: props.tableId,
+              baseVersion: table().table.version,
+              mutation: { kind: 'type', columnId, change },
+            })
+          }
+          onDeleteColumn={(columnId) =>
+            updateDatabaseColumns({
+              databaseId,
+              tableId: props.tableId,
+              baseVersion: table().table.version,
+              mutation: { kind: 'delete', columnId },
+            })
+          }
+          onReorderColumns={(columnIds) =>
+            updateDatabaseColumns({
+              databaseId,
+              tableId: props.tableId,
+              baseVersion: table().table.version,
+              mutation: { kind: 'order', columnIds },
+            })
+          }
+          onRenameColumn={(columnId, name, previousName) =>
+            renameDatabaseColumn({
+              databaseId,
+              tableId: props.tableId,
+              columnId,
+              name,
+              previousName,
+            })
+          }
+          renderToolbar={props.renderToolbar}
+          addColumn={(label, initialType, variant, onCreated) => (
+            <AddColumnMenu
+              databaseId={databaseId}
+              tableId={props.tableId}
+              columns={table().columns}
+              label={label}
+              variant={variant}
+              initialType={initialType}
+              onCreated={onCreated}
+            />
+          )}
+        />
+      </StaticMarkdownContext>
     </>
   );
 }

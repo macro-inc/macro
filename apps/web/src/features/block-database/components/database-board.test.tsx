@@ -150,7 +150,7 @@ describe('database board', () => {
     await waitFor(() => expect(onAddGroup).toHaveBeenCalledWith('1'));
   });
 
-  it('moves a card to the lane under a mouse drag', async () => {
+  it('drags the entire card at its original size without opening the record on drop', async () => {
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
       function (this: HTMLElement) {
         const label = this.getAttribute('aria-label');
@@ -166,6 +166,7 @@ describe('database board', () => {
       }
     );
     const onMove = vi.fn(async () => true);
+    const onOpen = vi.fn();
     render(() => (
       <DatabaseBoard
         rows={initialRows}
@@ -173,17 +174,27 @@ describe('database board', () => {
         groupColumn={columns[1]}
         canEdit
         rowPending={() => false}
-        onOpen={vi.fn()}
+        onOpen={onOpen}
         onMove={onMove}
         onCreate={vi.fn(async () => true)}
       />
     ));
     fireEvent.mouseDown(
-      screen.getByRole('button', { name: 'Drag Launch project' }),
+      screen.getByRole('button', { name: 'Open Launch project' }),
       { button: 0, clientX: 200, clientY: 80 }
     );
     fireEvent.mouseMove(document, { clientX: 510, clientY: 100 });
+    const preview = document.querySelector<HTMLElement>(
+      '[data-kanban-preview]'
+    )!;
+    expect(preview.style.width).toBe('250px');
+    expect(preview.style.height).toBe('100px');
+    expect(preview.style.transform).toBe('none');
     fireEvent.mouseUp(document, { button: 0, clientX: 510, clientY: 100 });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Open Launch project' })
+    );
+    expect(onOpen).not.toHaveBeenCalled();
     await waitFor(() => expect(onMove).toHaveBeenCalledWith('launch', 'Done'));
   });
 
@@ -272,9 +283,9 @@ describe('database board', () => {
     );
     expect(
       (
-        screen.getByRole('textbox', {
+        (await screen.findByRole('textbox', {
           name: 'New record title',
-        }) as HTMLInputElement
+        })) as HTMLInputElement
       ).value
     ).toBe('Remember this draft');
   });
@@ -307,4 +318,86 @@ describe('database board', () => {
       )
     ).toBeTruthy();
   });
+});
+
+it('shows submitted cards immediately and allows the next draft while the first save is pending', async () => {
+  const [pending, setPending] = createSignal(new Set<string>());
+  let complete: (saved: boolean) => void = () => {};
+  const onCreate = vi.fn((_value: unknown, _title: string, intent: string) => {
+    setPending((ids) => new Set(ids).add(intent));
+    return new Promise<boolean>((resolve) => {
+      complete = (saved) => {
+        setPending((ids) => new Set([...ids].filter((id) => id !== intent)));
+        resolve(saved);
+      };
+    });
+  });
+  render(() => (
+    <DatabaseBoard
+      rows={[]}
+      columns={columns}
+      groupColumn={columns[1]}
+      canEdit
+      rowPending={() => false}
+      createPending={(id) => pending().has(id)}
+      onOpen={vi.fn()}
+      onMove={vi.fn(async () => true)}
+      onCreate={onCreate}
+    />
+  ));
+  const lane = screen.getByRole('region', { name: 'Done lane' });
+  fireEvent.click(within(lane).getByRole('button', { name: 'New record' }));
+  const input = screen.getByRole('textbox', { name: 'New record title' });
+  fireEvent.input(input, { target: { value: 'First idea' } });
+  fireEvent.submit(input.closest('form')!);
+  expect(
+    within(lane).getByRole('status', { name: 'Saving new record' }).textContent
+  ).toContain('First idea');
+  fireEvent.click(within(lane).getByRole('button', { name: 'New record' }));
+  expect(
+    screen.getByRole('textbox', { name: 'New record title' })
+  ).toBeTruthy();
+  expect(onCreate).toHaveBeenCalledOnce();
+  complete(false);
+  await waitFor(() =>
+    expect(
+      screen.getAllByRole('textbox', { name: 'New record title' })
+    ).toHaveLength(2)
+  );
+  expect(
+    (
+      screen.getAllByRole('textbox', {
+        name: 'New record title',
+      })[0] as HTMLInputElement
+    ).value
+  ).toBe('First idea');
+});
+
+it('reorders lanes with the keyboard while leaving every card value unchanged', () => {
+  const [order, setOrder] = createSignal<string[]>();
+  const move = vi.fn(async () => true);
+  render(() => (
+    <DatabaseBoard
+      rows={initialRows}
+      columns={columns}
+      groupColumn={columns[1]}
+      groupOrder={order()}
+      onGroupOrderChange={setOrder}
+      canEdit
+      rowPending={() => false}
+      onOpen={vi.fn()}
+      onMove={move}
+      onCreate={vi.fn(async () => true)}
+    />
+  ));
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Reorder Done lane' }), {
+    key: 'ArrowRight',
+    altKey: true,
+  });
+  expect(
+    [...document.querySelectorAll('[data-kanban-lane]')].map((lane) =>
+      lane.getAttribute('aria-label')
+    )
+  ).toEqual(['To do lane', 'Done lane', 'No status lane']);
+  expect(move).not.toHaveBeenCalled();
 });

@@ -19,6 +19,9 @@ pub mod ports;
 pub mod service;
 
 #[cfg(feature = "ports")]
+pub mod sharing;
+
+#[cfg(feature = "ports")]
 pub mod views;
 
 #[cfg(test)]
@@ -26,3 +29,10 @@ pub mod test_support;
 
 #[cfg(all(test, feature = "sqlite"))]
 mod roundtrip_test;
+
+#[cfg(feature = "ports")]
+pub mod transfer;
+
+/// Retry-safe first database provisioning.
+#[cfg(feature = "ports")]
+pub mod starter;

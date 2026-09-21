@@ -15,6 +15,7 @@ import type {
 } from '../core/database-view';
 import {
   type DatabaseMentionPickerProps,
+  type DatabaseTextEditorProps,
   GridCell,
   type GridCellControl,
 } from './GridCell';
@@ -196,6 +197,87 @@ describe('grid cell', () => {
     expect(onWrite).not.toHaveBeenCalled();
   });
 
+  it('never blur-saves the raw @ draft after a native first-mention selection', async () => {
+    const onWrite = vi.fn(async () => true);
+    const onMention = vi.fn(async () => true);
+    let editor: DatabaseTextEditorProps | undefined;
+    render(() => (
+      <GridCell
+        column={{ ...column, inferType: true }}
+        value={null}
+        canEdit
+        onWrite={onWrite}
+        onAddOption={vi.fn(async () => true)}
+        onMention={onMention}
+        renderMentionPicker={() => null}
+        renderTextEditor={(props) => {
+          editor = props;
+          return (
+            <input
+              aria-label={props.label}
+              value={props.value}
+              onInput={(event) => props.onInput(event.currentTarget.value)}
+            />
+          );
+        }}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: /Name: Empty/ }));
+    fireEvent.input(screen.getByRole('textbox', { name: 'Edit Name' }), {
+      target: { value: '@Maya' },
+    });
+    editor?.onInferMention?.(mention);
+    editor?.onBlur();
+    await waitFor(() =>
+      expect(onMention).toHaveBeenCalledExactlyOnceWith(mention)
+    );
+    expect(onWrite).not.toHaveBeenCalled();
+  });
+
+  it('adds and removes multi-select members while preserving the other selections', async () => {
+    const write = vi.fn(
+      async (value: DatabaseCellValue) => value !== undefined
+    );
+    render(() => {
+      const [value, setValue] = createSignal<DatabaseCellValue>('["Alpha"]');
+      return (
+        <GridCell
+          column={{
+            ...column,
+            name: 'Labels',
+            dataType: 'SELECT_STRING',
+            isMultiSelect: true,
+            options: ['Alpha', 'Beta'],
+          }}
+          value={value()}
+          canEdit
+          onAddOption={vi.fn(async () => true)}
+          onWrite={async (next) => {
+            setValue(next);
+            return write(next);
+          }}
+        />
+      );
+    });
+    await userEvent.click(
+      screen.getByRole('button', { name: /Labels: Alpha/ })
+    );
+    await userEvent.click(
+      await screen.findByRole('menuitemcheckbox', { name: 'Beta' })
+    );
+    await waitFor(() =>
+      expect(write).toHaveBeenLastCalledWith('["Alpha","Beta"]')
+    );
+    await userEvent.click(
+      screen.getByRole('menuitemcheckbox', { name: 'Alpha' })
+    );
+    await waitFor(() => expect(write).toHaveBeenLastCalledWith('["Beta"]'));
+    await userEvent.click(
+      screen.getByRole('menuitemcheckbox', { name: 'Beta' })
+    );
+    await waitFor(() => expect(write).toHaveBeenLastCalledWith(null));
+  });
+
   it('keeps explicit text columns as literal text when @ is typed', async () => {
     const onWrite = vi.fn(async () => true);
     const picker = vi.fn((props: DatabaseMentionPickerProps) => (
@@ -334,7 +416,11 @@ describe('grid cell', () => {
     const search = await screen.findByRole('textbox', { name: 'Find an item' });
     search.focus();
     await userEvent.keyboard('{Escape}');
-    await waitFor(() => expect(document.activeElement).toBe(button));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('button', { name: 'Name: Maya' })
+      )
+    );
     expect(onWrite).not.toHaveBeenCalled();
     expect(onMention).not.toHaveBeenCalled();
     await userEvent.keyboard('{Delete}');

@@ -314,6 +314,8 @@ fn channel_and_thread_entities(
 fn soup_entity_type_from_channel_reference(entity_type: &str) -> Option<EntityType> {
     match ReferencedShareItemType::from_raw(entity_type)? {
         ReferencedShareItemType::AgentSession => Some(EntityType::AgentSession),
+        // Databases use their own list and table-change gateway events.
+        ReferencedShareItemType::Database => None,
         ReferencedShareItemType::Document => Some(EntityType::Document),
         ReferencedShareItemType::Chat => Some(EntityType::Chat),
         ReferencedShareItemType::Project => Some(EntityType::Project),

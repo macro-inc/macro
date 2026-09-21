@@ -1,9 +1,11 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { enableDatabases } from '@core/constant/featureFlags';
 import {
   deserializeToolCall,
   deserializeToolResponse,
   type ToolName,
 } from '@service-cognition/generated/tools/tool';
-import { createMemo } from 'solid-js';
+import { createMemo, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { bashCodeExecutionHandler } from './BashCodeExecution';
 import {
@@ -222,6 +224,7 @@ type TriggerToolArgs = Omit<
 };
 
 export function RenderTool(props: ToolProps) {
+  const databasesEnabled = useFeatureFlag(enableDatabases);
   const maybeTool = deserializeToolCall({
     id: props.tool_id,
     json: props.json,
@@ -230,6 +233,16 @@ export function RenderTool(props: ToolProps) {
   if (maybeTool.isErr()) return null;
 
   const tool = maybeTool.value;
+  const databaseTool = [
+    'ListDatabases',
+    'DescribeDatabase',
+    'QueryDatabase',
+    'CreateDatabase',
+    'CreateTable',
+    'AddColumn',
+    'AddColumnOptions',
+    'SaveDatabaseView',
+  ].includes(tool.name);
   const handler = toolHandlers[tool.name] as ToolHandler<
     ToolName,
     RenderContext
@@ -288,15 +301,20 @@ export function RenderTool(props: ToolProps) {
     <ToolErrorContext.Provider
       value={() => (props.isComplete && !response() ? 'failed' : undefined)}
     >
-      <Dynamic
-        component={handler.render}
-        {...context}
-        response={response()}
-        renderContext={{
-          isStreaming: props.renderContext.renderContext.isStreaming,
-          grouped: props.renderContext.renderContext.grouped,
-        }}
-      />
+      <Show
+        when={!databaseTool || databasesEnabled().enabled}
+        fallback={<span class="text-xs text-ink-muted">Database tool</span>}
+      >
+        <Dynamic
+          component={handler.render}
+          {...context}
+          response={response()}
+          renderContext={{
+            isStreaming: props.renderContext.renderContext.isStreaming,
+            grouped: props.renderContext.renderContext.grouped,
+          }}
+        />
+      </Show>
     </ToolErrorContext.Provider>
   );
 }

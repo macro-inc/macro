@@ -15,7 +15,11 @@ import {
   type QueryDisplayMode,
 } from '../core/query-chart';
 
-type Presentation = { displayMode: QueryDisplayMode; chart?: QueryChartConfig };
+type Presentation = {
+  title?: string;
+  displayMode: QueryDisplayMode;
+  chart?: QueryChartConfig;
+};
 
 type AnswerPreview = {
   sql: string;
@@ -37,6 +41,7 @@ export function createQueryComposer(options: QueryComposerOptions) {
   const [prompt, setPromptSignal] = createSignal(options.initial.prompt);
   const [sql, setSqlSignal] = createSignal(options.initial.sql);
   const [presentation, setPresentation] = createSignal<Presentation>({
+    title: options.initial.title,
     displayMode: options.initial.displayMode,
     chart: options.initial.chart,
   });
@@ -222,7 +227,11 @@ export function createQueryComposer(options: QueryComposerOptions) {
         generation,
         source,
         next.explanation,
-        { displayMode: next.displayMode ?? 'scalar', chart: next.chart },
+        {
+          title: next.title,
+          displayMode: next.displayMode ?? 'scalar',
+          chart: next.chart,
+        },
         next.actionSummary
       );
     } catch (caught) {
@@ -300,7 +309,7 @@ export function createQueryComposer(options: QueryComposerOptions) {
           const chart =
             prepareQueryChart(answer, displayMode, current.chart).data
               ?.config ?? prepareQueryChart(answer, displayMode).data?.config;
-          return { displayMode, chart: chart ?? current.chart };
+          return { ...current, displayMode, chart: chart ?? current.chart };
         }
         return { ...current, displayMode };
       }),

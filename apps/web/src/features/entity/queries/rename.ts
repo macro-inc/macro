@@ -227,6 +227,7 @@ const renameDssSetData = (
       itemType !== 'automation' &&
       itemType !== 'calendar_event' &&
       itemType !== 'foreign' &&
+      itemType !== 'database' &&
       // CRM companies/contacts aren't renamed via the FileList path (their
       // names derive from the directory/email, and their soup tags are
       // camelCase 'crmCompany'/'crmContact', not these snake-case itemTypes).

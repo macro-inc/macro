@@ -136,11 +136,12 @@ impl<P: PropertiesRepo<Err = anyhow::Error>> ColumnDefinitionStore for PgDefinit
         }
     }
 
-    async fn create_inferred_definition(
+    async fn create_typed_definition(
         &self,
         database_id: DatabaseId,
         name: &str,
         data_type: DataType,
+        is_multi_select: bool,
         specific_entity_type: Option<EntityType>,
     ) -> Result<PropertyDefinitionWithOptions, Self::Err> {
         let definition = self
@@ -149,7 +150,7 @@ impl<P: PropertiesRepo<Err = anyhow::Error>> ColumnDefinitionStore for PgDefinit
                 database_id,
                 name,
                 data_type,
-                false,
+                is_multi_select,
                 specific_entity_type,
             )
             .await

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO contacts_backfill_outbox (comms_channel_id, user_ids) VALUES ($1, '[\"macro|user-a@test.com\"]'::jsonb)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "88d320a63738408a52d1226d4de9db544df03de9a112f78a02f17f154c76d41a"
+}

@@ -805,6 +805,10 @@ export type ParticipantAction = 'add' | 'remove';
  */
 export type MoveableEntityType = 'document' | 'chat' | 'email' | 'project';
 /**
+ * Presentation hint for a query result; it does not affect SQL execution.
+ */
+export type QueryDatabaseDisplay = 'table' | 'scalar' | 'bar' | 'line' | 'pie';
+/**
  * One activity action returned to the AI.
  */
 export type ToolActivityAction =
@@ -1317,7 +1321,7 @@ export interface ToolColumn {
    * For a select or tag column, the labels SQL accepts. Writing anything
    * else is rejected by the statement.
    */
-  options: string[];
+  options?: string[];
   /**
    * Whether SQL may write to this column.
    */
@@ -5067,6 +5071,12 @@ export interface QueryDatabase {
    * guarded; omit for a read or intentional blind edit.
    */
   baseVersions?: ToolTableVersion[] | null;
+  /**
+   * Preferred native result presentation. For an explicit chart request,
+   * select bar, line, or pie and return a label column plus numeric values.
+   * The app falls back to a table if the data cannot support that display.
+   */
+  display?: QueryDatabaseDisplay | null;
 }
 /**
  * Version of one table actually read by a query.
@@ -5096,11 +5106,11 @@ export interface QueryDatabaseResponse {
   /**
    * Ids the server minted for inserted rows, in insertion order.
    */
-  insertedRowIds: string[];
+  insertedRowIds?: string[];
   /**
    * New version of every table written, keyed by table id.
    */
-  newVersions: {
+  newVersions?: {
     [k: string]: number;
   };
   /**
@@ -5114,7 +5124,7 @@ export interface QueryDatabaseResponse {
    * one of these is computed on a partial table — say so rather than
    * reporting the number as a total.
    */
-  truncatedTables: string[];
+  truncatedTables?: string[];
   /**
    * A human-readable summary of what the statement did.
    */
@@ -6157,7 +6167,7 @@ export interface RenameDocumentResponse {
   message: string;
 }
 /**
- * Save a personal table or kanban board view in Macro. DescribeDatabase first and use stable column ids for filters, sorts, grouping, visibility, and order. A board requires groupBy pointing to a single-valued select or checkbox column. Filters are ANDed. This changes presentation only, never source records. A same-named view on this table is updated, so inspect the returned created flag. Requires view access to the source database. The result contains the saved viewId and exact persisted configuration. Supports table and board only: it cannot save charts or SQL views.
+ * Save a personal table or kanban board view in Macro. DescribeDatabase first and use stable column ids for filters, sorts, grouping, visibility, and order. A board requires groupBy pointing to a select, multi-select, or checkbox column. Filters are ANDed. This changes presentation only, never source records. A same-named view on this table is updated, so inspect the returned created flag. Requires view access to the source database. The result contains the saved viewId and exact persisted configuration. Supports table and board only: it cannot save charts or SQL views.
  */
 export interface SaveDatabaseView {
   /**
@@ -6180,9 +6190,14 @@ export interface SaveDatabaseView {
 export interface DatabaseViewDefinition {
   layout: ViewLayout;
   /**
-   * A single-valued select or checkbox column id for a board; null for a table.
+   * A select, multi-select, or checkbox column id for a board; null for a table.
    */
   groupBy?: string | null;
+  /**
+   * Lane keys in display order: `empty` or `value:` followed by a JSON label.
+   * Omit for alphabetical order; additional lanes follow alphabetically.
+   */
+  groupOrder?: string[];
   /**
    * Filters are combined with AND.
    */

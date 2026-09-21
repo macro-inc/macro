@@ -45,3 +45,25 @@ fn date_filters_use_valid_calendar_days_without_truncating_invalid_text() {
     assert!(filter_value(DataType::Date, &filter("2026-02-30")).is_err());
     assert!(filter_value(DataType::Date, &filter("tomorrow")).is_err());
 }
+
+#[test]
+fn lane_keys_accept_labels_with_quotes_and_checkbox_values_but_reject_objects() {
+    for key in [
+        "empty",
+        r#"value:"Design, \"review\"""#,
+        "value:0",
+        "value:1",
+    ] {
+        assert!(valid_group_key(key), "{key}");
+    }
+    for key in [
+        "",
+        "Status",
+        "value:null",
+        "value:{}",
+        "value:[]",
+        "value:true",
+    ] {
+        assert!(!valid_group_key(key), "{key}");
+    }
+}

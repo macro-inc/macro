@@ -4,15 +4,8 @@ import DotsIcon from '@phosphor/dots-three.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import XIcon from '@phosphor/x.svg';
 import { Key } from '@solid-primitives/keyed';
-import {
-  createDraggable,
-  createDroppable,
-  DragDropProvider,
-  DragDropSensors,
-  type DragEventHandler,
-  DragOverlay,
-} from '@thisbeyond/solid-dnd';
 import { Dropdown } from '@ui/components/Dropdown';
+import type { JSX } from 'solid-js';
 import {
   createMemo,
   createSignal,
@@ -22,10 +15,18 @@ import {
   Show,
 } from 'solid-js';
 import {
+  Kanban,
+  KanbanCard,
+  KanbanHandle,
+  KanbanLane,
+} from '../../../components/kanban/kanban';
+import {
+  boardMoveValue,
   type DatabaseCellValue,
   type DatabaseViewColumn,
   groupDatabaseRows,
   orderDatabaseColumns,
+  orderDatabaseGroups,
 } from '../core/database-view';
 import {
   type DatabaseRow,
@@ -51,7 +52,10 @@ type DatabaseBoardProps = {
   rows: DatabaseRow[];
   columns: DatabaseViewColumn[];
   visibleColumnIds?: string[];
+  renderTextValue?: (value: string) => JSX.Element;
   groupColumn: DatabaseViewColumn;
+  groupOrder?: string[];
+  onGroupOrderChange?: (order: string[]) => void;
   canEdit: boolean;
   rowPending: (rowId: string) => boolean;
   createPending?: (intentId: string) => boolean;
@@ -68,12 +72,17 @@ type DatabaseBoardProps = {
 
 export function DatabaseBoard(props: DatabaseBoardProps) {
   const groups = createMemo(() =>
-    groupDatabaseRows(props.rows, props.groupColumn, rowValue)
+    orderDatabaseGroups(
+      groupDatabaseRows(props.rows, props.groupColumn, rowValue),
+      props.groupOrder
+    )
   );
-  const [dragged, setDragged] = createSignal<string>();
   const [announcement, setAnnouncement] = createSignal('');
-  const draggedRow = () => props.rows.find((row) => row.rowId === dragged());
-  async function move(rowId: string, value: DatabaseCellValue) {
+  async function move(
+    rowId: string,
+    value: DatabaseCellValue,
+    from?: DatabaseCellValue
+  ) {
     const row = props.rows.find((row) => row.rowId === rowId);
     if (
       !row ||
@@ -83,26 +92,48 @@ export function DatabaseBoard(props: DatabaseBoardProps) {
       rowValue(row, props.groupColumn.id) === value
     )
       return;
-    if (await props.onMove(rowId, value))
+    if (
+      await props.onMove(
+        rowId,
+        boardMoveValue(
+          props.groupColumn,
+          rowValue(row, props.groupColumn.id),
+          value,
+          from
+        )
+      )
+    )
       setAnnouncement(
         `${rowTitle(row, props.columns)} moved to ${value === null ? 'No ' + props.groupColumn.name : String(value)}.`
       );
   }
-  const endDrag: DragEventHandler = (event) => {
-    setDragged(undefined);
-    const group = groups().find((group) => group.key === event.droppable?.id);
-    if (group) void move(String(event.draggable.id), group.value);
-  };
+  function reorder(from: string, to: string) {
+    if (from === to || !props.onGroupOrderChange) return;
+    const order = groups().map((group) => group.key);
+    const source = order.indexOf(from);
+    const target = order.indexOf(to);
+    if (source < 0 || target < 0) return;
+    order.splice(source, 1);
+    order.splice(target, 0, from);
+    props.onGroupOrderChange(order);
+  }
   return (
     <div class="min-h-0 flex-1 overflow-auto px-5 py-5 [&_button:focus-visible]:ring-2 [&_button:focus-visible]:ring-ink/50">
       <p class="sr-only" role="status" aria-live="polite">
         {announcement()}
       </p>
-      <DragDropProvider
-        onDragStart={(event) => setDragged(String(event.draggable.id))}
-        onDragEnd={endDrag}
+      <Kanban
+        onDrop={(drop) => {
+          if (drop.kind === 'lane') reorder(drop.fromLane, drop.toLane);
+          else if (drop.fromLane !== drop.toLane) {
+            const target = groups().find((group) => group.key === drop.toLane);
+            const source = groups().find(
+              (group) => group.key === drop.fromLane
+            );
+            if (target) void move(drop.id, target.value, source?.value);
+          }
+        }}
       >
-        <DragDropSensors />
         <div
           class="flex min-h-full min-w-fit items-start gap-4 pb-4"
           aria-label={`Board grouped by ${props.groupColumn.name}`}
@@ -113,7 +144,17 @@ export function DatabaseBoard(props: DatabaseBoardProps) {
                 group={group()}
                 {...props}
                 groups={groups()}
-                onMove={(rowId, value) => void move(rowId, value)}
+                onMove={(rowId, value) =>
+                  void move(rowId, value, group().value)
+                }
+                onReorder={(direction) => {
+                  const index = groups().findIndex(
+                    (item) => item.key === group().key
+                  );
+                  const target =
+                    groups()[index + (direction === 'left' ? -1 : 1)];
+                  if (target) reorder(group().key, target.key);
+                }}
               />
             )}
           </Key>
@@ -133,16 +174,7 @@ export function DatabaseBoard(props: DatabaseBoardProps) {
             />
           </Show>
         </div>
-        <DragOverlay>
-          <Show when={draggedRow()}>
-            {(row) => (
-              <div class="w-68 rotate-2 rounded-xl border border-ink/30 bg-panel p-4 text-sm font-medium text-ink shadow-lg">
-                {rowTitle(row(), props.columns)}
-              </div>
-            )}
-          </Show>
-        </DragOverlay>
-      </DragDropProvider>
+      </Kanban>
     </div>
   );
 }
@@ -151,40 +183,61 @@ function BoardLane(
   props: Omit<DatabaseBoardProps, 'onMove'> & {
     group: BoardGroup;
     groups: BoardGroup[];
+    onReorder: (direction: 'left' | 'right') => void;
     onMove: (rowId: string, value: DatabaseCellValue) => void;
   }
 ) {
-  const droppable = createDroppable(props.group.key);
-  const [draftId, setDraftId] = createSignal<string>();
+  const [draftIds, setDraftIds] = createSignal<string[]>([]);
   const laneId = createUniqueId();
   let draftSequence = 0;
-  const activeDraft = () => {
-    const id = draftId();
-    return id && !props.createComplete?.(id) ? id : undefined;
-  };
+  const visibleDrafts = () =>
+    draftIds().filter((id) => !props.createComplete?.(id));
+  const hasEditableDraft = () =>
+    visibleDrafts().some((id) => !props.createPending?.(id));
+  const removeDraft = (id: string) =>
+    setDraftIds((ids) => ids.filter((item) => item !== id));
   const beginCreate = () => {
-    if (!activeDraft()) setDraftId(`${laneId}:${++draftSequence}`);
+    if (!hasEditableDraft())
+      setDraftIds((ids) => [
+        ...ids.filter((id) => !props.createComplete?.(id)),
+        `${laneId}:${++draftSequence}`,
+      ]);
   };
   const title = () => titleColumn(props.columns);
   const acceptsRecords = () =>
     props.canEdit && canMoveTo(props.groupColumn, props.group.value);
   return (
-    <section
-      ref={droppable.ref}
-      class="flex w-72 shrink-0 flex-col rounded-xl border border-transparent bg-hover/50 p-2 transition-colors"
-      classList={{
-        'border-ink/40 bg-hover': droppable.isActiveDroppable,
-      }}
-      aria-label={`${props.group.label} lane`}
+    <KanbanLane
+      id={props.group.key}
+      label={`${props.group.label} lane`}
+      canReorder={!!props.onGroupOrderChange}
     >
-      <div class="mb-2 flex min-h-9 items-center gap-2 px-1.5">
+      <KanbanHandle
+        label={`Reorder ${props.group.label} lane`}
+        class="mb-2 flex min-h-9 items-center gap-2 rounded px-1.5 outline-none focus-visible:ring-2 focus-visible:ring-ink/50"
+        onKeyDown={
+          props.onGroupOrderChange
+            ? (event) => {
+                if (
+                  event.altKey &&
+                  (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
+                ) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  props.onReorder(event.key === 'ArrowLeft' ? 'left' : 'right');
+                }
+              }
+            : undefined
+        }
+      >
         <SelectPill
           label={props.group.label}
           empty={props.group.value === null}
           dot
         />
         <span class="text-xs tabular-nums text-ink-placeholder">
-          {props.group.rows.length}
+          {props.group.rows.length +
+            visibleDrafts().filter((id) => props.createPending?.(id)).length}
         </span>
         <Show when={acceptsRecords()}>
           <button
@@ -192,19 +245,22 @@ function BoardLane(
             class="ml-auto rounded p-1.5 text-ink-muted hover:bg-hover"
             title={`Add record to ${props.group.label}`}
             aria-label={`Add record to ${props.group.label}`}
+            data-kanban-no-drag
             onClick={beginCreate}
           >
             <PlusIcon class="size-3.5" />
           </button>
         </Show>
-      </div>
+      </KanbanHandle>
       <div class="flex min-h-10 flex-col gap-2">
         <Key each={props.group.rows} by="rowId">
           {(row) => (
             <BoardCard
               row={row()}
+              laneId={props.group.key}
               columns={props.columns}
               visibleColumnIds={props.visibleColumnIds}
+              renderTextValue={props.renderTextValue}
               groupColumn={props.groupColumn}
               groups={props.groups}
               canEdit={props.canEdit && props.groupColumn.writable}
@@ -214,28 +270,26 @@ function BoardLane(
             />
           )}
         </Key>
-        <Show when={props.group.rows.length === 0 && !activeDraft()}>
+        <Show when={props.group.rows.length === 0 && !visibleDrafts().length}>
           <div class="flex min-h-20 items-center justify-center rounded-lg border border-dashed border-edge-muted/70 px-4 text-xs text-ink-placeholder">
             {acceptsRecords() ? 'Drop a record here' : 'No records'}
           </div>
         </Show>
-        <Show when={activeDraft()} keyed>
+        <For each={visibleDrafts()}>
           {(intentId) => (
             <NewBoardCard
               titlePlaceholder={title()?.name ?? 'Record title'}
               canSetTitle={Boolean(title()?.writable)}
               pending={props.createPending?.(intentId) ?? false}
-              onCancel={() => setDraftId(undefined)}
+              onCancel={() => removeDraft(intentId)}
               onSave={async (value) => {
                 if (await props.onCreate(props.group.value, value, intentId))
-                  setDraftId((current) =>
-                    current === intentId ? undefined : current
-                  );
+                  removeDraft(intentId);
               }}
             />
           )}
-        </Show>
-        <Show when={acceptsRecords() && !activeDraft()}>
+        </For>
+        <Show when={acceptsRecords() && !hasEditableDraft()}>
           <button
             type="button"
             class="mt-1 flex min-h-9 items-center gap-2 rounded-lg px-3 text-xs text-ink-muted hover:bg-hover hover:text-ink"
@@ -246,7 +300,7 @@ function BoardLane(
           </button>
         </Show>
       </div>
-    </section>
+    </KanbanLane>
   );
 }
 
@@ -383,8 +437,10 @@ function NewBoardGroup(props: {
 
 function BoardCard(props: {
   row: DatabaseRow;
+  laneId: string;
   columns: DatabaseViewColumn[];
   visibleColumnIds?: string[];
+  renderTextValue?: (value: string) => JSX.Element;
   groupColumn: DatabaseViewColumn;
   groups: BoardGroup[];
   canEdit: boolean;
@@ -392,7 +448,6 @@ function BoardCard(props: {
   onOpen: (rowId: string) => void;
   onMove: (rowId: string, value: DatabaseCellValue) => void;
 }) {
-  const draggable = createDraggable(props.row.rowId);
   const title = () => rowTitle(props.row, props.columns);
   const metadata = () =>
     orderDatabaseColumns(props.columns, props.visibleColumnIds)
@@ -406,26 +461,31 @@ function BoardCard(props: {
       )
       .slice(0, 3);
   return (
-    <article
-      ref={draggable.ref}
-      class="group relative rounded-lg border border-edge-muted bg-panel shadow-sm transition-shadow hover:border-edge hover:shadow-md"
-      classList={{
-        'opacity-35': draggable.isActiveDraggable,
-        'ring-1 ring-ink/20': props.pending,
-      }}
-      data-row-id={props.row.rowId}
+    <KanbanCard
+      id={props.row.rowId}
+      laneId={props.laneId}
+      canDrag={props.canEdit}
+      pending={props.pending}
     >
       <button
         type="button"
         class="block min-w-0 w-full rounded-lg p-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-ink/50"
         onClick={() => props.onOpen(props.row.rowId)}
         aria-label={`Open ${title()}`}
+        disabled={props.pending}
       >
         <span
           class="block break-words text-[13px] font-medium leading-5 text-ink"
           classList={{ 'pr-10': props.canEdit }}
         >
-          {title()}
+          {props.renderTextValue && titleColumn(props.columns)
+            ? props.renderTextValue(
+                String(
+                  rowValue(props.row, titleColumn(props.columns)!.id) ||
+                    'Unnamed'
+                )
+              )
+            : title()}
         </span>
         <Show when={metadata().length}>
           <span class="mt-3 flex flex-col gap-2 border-t border-edge-muted/50 pt-2.5">
@@ -464,24 +524,26 @@ function BoardCard(props: {
           </span>
         </Show>
       </button>
-      <Show when={props.canEdit}>
+      <Show when={props.canEdit && !props.pending}>
         <div class="absolute top-3 right-2 flex items-start gap-0.5">
-          <button
-            type="button"
-            class="touch-none rounded p-0.5 text-ink-placeholder opacity-60 hover:bg-hover group-hover:opacity-100 focus-visible:opacity-100"
-            title="Drag to another group, or use the Move menu"
-            aria-label={`Drag ${title()}`}
-            tabindex={-1}
-            {...draggable.dragActivators}
-          >
-            <GripIcon class="size-4" />
-          </button>
+          <KanbanHandle label={`Drag ${title()}`}>
+            <button
+              type="button"
+              class="touch-none rounded p-0.5 text-ink-placeholder opacity-60 hover:bg-hover group-hover:opacity-100 focus-visible:opacity-100"
+              title="Drag to another group, or use the Move menu"
+              aria-label={`Drag ${title()}`}
+              tabindex={-1}
+            >
+              <GripIcon class="size-4" />
+            </button>
+          </KanbanHandle>
           <Dropdown>
             <Dropdown.Trigger
               variant="ghost"
               size="icon-xs"
               class="size-5 rounded text-ink-muted"
               aria-label={`Move ${title()}`}
+              data-kanban-no-drag
               title="Move to another group"
             >
               <DotsIcon class="size-4" />
@@ -503,12 +565,7 @@ function BoardCard(props: {
                           empty={group.value === null}
                         />
                       </span>
-                      <Show
-                        when={
-                          rowValue(props.row, props.groupColumn.id) ===
-                          group.value
-                        }
-                      >
+                      <Show when={group.key === props.laneId}>
                         <CheckIcon class="size-3.5" />
                       </Show>
                     </Dropdown.Item>
@@ -519,7 +576,7 @@ function BoardCard(props: {
           </Dropdown>
         </div>
       </Show>
-    </article>
+    </KanbanCard>
   );
 }
 
@@ -554,47 +611,59 @@ function NewBoardCard(props: {
       }}
     >
       <Show
-        when={props.canSetTitle}
+        when={!pending()}
         fallback={
-          <p class="mb-3 text-xs text-ink-muted">
-            Add an empty record to this group.
-          </p>
+          <div role="status" aria-label="Saving new record">
+            <p class="break-words text-[13px] font-medium leading-5 text-ink">
+              {title().trim() || 'Unnamed'}
+            </p>
+            <p class="mt-2 text-[11px] text-ink-placeholder">Saving…</p>
+          </div>
         }
       >
-        <input
-          ref={input}
-          aria-label="New record title"
-          placeholder={`${props.titlePlaceholder}…`}
-          value={title()}
-          readOnly={pending()}
-          onInput={(event) => setTitle(event.currentTarget.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape') {
-              event.preventDefault();
-              if (!pending()) props.onCancel();
-            }
-          }}
-          class="mb-3 w-full bg-input text-[13px] outline-none placeholder:text-ink-placeholder"
-        />
+        <Show
+          when={props.canSetTitle}
+          fallback={
+            <p class="mb-3 text-xs text-ink-muted">
+              Add an empty record to this group.
+            </p>
+          }
+        >
+          <input
+            ref={input}
+            aria-label="New record title"
+            placeholder={`${props.titlePlaceholder}…`}
+            value={title()}
+            readOnly={pending()}
+            onInput={(event) => setTitle(event.currentTarget.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                if (!pending()) props.onCancel();
+              }
+            }}
+            class="mb-3 w-full bg-input text-[13px] outline-none placeholder:text-ink-placeholder"
+          />
+        </Show>
+        <div class="flex items-center gap-2">
+          <button
+            type="submit"
+            disabled={pending()}
+            class="rounded-md border border-edge bg-hover px-2.5 py-1.5 text-xs font-medium text-ink outline-none focus-visible:ring-2 focus-visible:ring-ink/50 disabled:opacity-50"
+          >
+            {pending() ? 'Adding…' : 'Add record'}
+          </button>
+          <button
+            type="button"
+            aria-label="Cancel new record"
+            disabled={pending()}
+            class="rounded p-1.5 text-ink-muted hover:bg-hover"
+            onClick={props.onCancel}
+          >
+            <XIcon class="size-3.5" />
+          </button>
+        </div>
       </Show>
-      <div class="flex items-center gap-2">
-        <button
-          type="submit"
-          disabled={pending()}
-          class="rounded-md border border-edge bg-hover px-2.5 py-1.5 text-xs font-medium text-ink outline-none focus-visible:ring-2 focus-visible:ring-ink/50 disabled:opacity-50"
-        >
-          {pending() ? 'Adding…' : 'Add record'}
-        </button>
-        <button
-          type="button"
-          aria-label="Cancel new record"
-          disabled={pending()}
-          class="rounded p-1.5 text-ink-muted hover:bg-hover"
-          onClick={props.onCancel}
-        >
-          <XIcon class="size-3.5" />
-        </button>
-      </div>
     </form>
   );
 }

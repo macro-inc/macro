@@ -106,6 +106,46 @@ pub struct RenameColumnOutcome {
     pub table_version: TableVersion,
 }
 
+/// Explicit type selection for one column placement, guarded by its table version.
+#[derive(Debug, Clone)]
+pub struct ChangeColumnType {
+    /// Owning table.
+    pub table_id: TableId,
+    /// Placement to change; its identity and label remain stable.
+    pub column_id: ColumnId,
+    /// Requested property type.
+    pub data_type: DataType,
+    /// Whether select/entity/link values may contain multiple items.
+    pub is_multi_select: bool,
+    /// Entity category for a Macro entity reference.
+    pub specific_entity_type: Option<models_properties::EntityType>,
+    /// Optional database-row relationship target.
+    pub relation: Option<(DatabaseId, TableId)>,
+    /// Snapshot against which values are converted.
+    pub base_version: TableVersion,
+}
+
+/// Fully validated replacement values for an atomic column rebind.
+#[derive(Debug)]
+pub struct ColumnReplacement {
+    /// Existing placement and binding, used as a compare-and-swap guard.
+    pub column: Column,
+    /// Fresh definition owned by this database.
+    pub definition_id: PropertyDefinitionId,
+    /// Requested relationship configuration, if any.
+    pub config: Option<ColumnConfig>,
+    /// Converted values for every nonempty source cell, keyed by row identity.
+    pub values: Vec<(RowId, PropertyValue)>,
+}
+
+/// Table versions changed by a placement deletion or reorder.
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct ColumnSchemaOutcome {
+    /// Includes both endpoint tables when deleting relationship edges.
+    #[schema(value_type = HashMap<String, TableVersion>)]
+    pub table_versions: HashMap<TableId, TableVersion>,
+}
+
 /// Column-kind specific configuration stored on the placement.
 #[derive(utoipa::ToSchema, Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "kind")]

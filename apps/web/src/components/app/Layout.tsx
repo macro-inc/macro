@@ -6,6 +6,7 @@ import { GithubReauthenticationPrompt } from '@app/features/auth/GithubReauthent
 import { GmailReauthenticationPrompt } from '@app/features/auth/GmailReauthenticationPrompt';
 import { SidebarActiveCallWidget } from '@app/features/block-call/sidebar/active-call-widget';
 import { useIncomingCallWidgetVisible } from '@app/features/block-call/sidebar/incoming-calls';
+import { StarterDatabase } from '@app/features/block-database/views/starter-database';
 import { CommandMenu } from '@app/features/command';
 import { FavoritesCommands } from '@app/features/command/FavoritesCommands';
 import {
@@ -133,6 +134,9 @@ export function Layout(props: RouteSectionProps) {
         }}
       >
         <MobileSettingsProvider>
+          <Show when={isAuthenticated() === true}>
+            <StarterDatabase />
+          </Show>
           <LayoutInner {...props} />
         </MobileSettingsProvider>
       </SidebarCollapseContext.Provider>

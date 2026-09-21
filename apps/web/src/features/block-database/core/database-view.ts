@@ -51,6 +51,8 @@ export type DatabaseSort = {
 export type DatabaseViewConfig = {
   layout: 'table' | 'board';
   groupBy: string | null;
+  /** Lane keys in the user’s preferred order; new lanes follow alphabetically. */
+  groupOrder?: string[];
   filters: DatabaseFilter[];
   sorts: DatabaseSort[];
   hiddenColumns: string[];
@@ -172,12 +174,12 @@ export function filterOperatorsFor(column: DatabaseViewColumn) {
 
 export function isBoardGroupColumn(column: DatabaseViewColumn): boolean {
   return (
-    !column.isMultiSelect &&
+    !column.relation &&
     ['SELECT_STRING', 'SELECT_NUMBER', 'BOOLEAN'].includes(column.dataType)
   );
 }
 
-function cellValues(
+export function databaseCellValues(
   value: DatabaseCellValue,
   column: DatabaseViewColumn
 ): DatabaseCellValue[] {
@@ -206,7 +208,7 @@ function isEmpty(
   value: DatabaseCellValue,
   column: DatabaseViewColumn
 ): boolean {
-  return cellValues(value, column).every(
+  return databaseCellValues(value, column).every(
     (item) => item === null || item === ''
   );
 }
@@ -232,7 +234,7 @@ export function matchesDatabaseFilter(
   if (!filter.value.trim()) return true;
   const right = comparable(filter.value, column);
   if (typeof right === 'number' && !Number.isFinite(right)) return true;
-  const values = cellValues(value, column)
+  const values = databaseCellValues(value, column)
     .filter((item) => item !== null && item !== '')
     .map((item) => comparable(item, column));
   if (!values.length && !column.isMultiSelect) return false;
@@ -268,7 +270,7 @@ export function applyDatabaseView<Row>(
     if (
       search &&
       !columns.some((column) =>
-        cellValues(getValue(row, column.id), column).some((value) =>
+        databaseCellValues(getValue(row, column.id), column).some((value) =>
           String(value ?? '')
             .toLocaleLowerCase()
             .includes(search)
@@ -296,11 +298,15 @@ export function applyDatabaseView<Row>(
       if (isEmpty(aValue, column)) return 1;
       if (isEmpty(bValue, column)) return -1;
       const left = comparable(
-        column.relation ? cellValues(aValue, column).join(', ') : aValue,
+        column.relation
+          ? databaseCellValues(aValue, column).join(', ')
+          : aValue,
         column
       );
       const right = comparable(
-        column.relation ? cellValues(bValue, column).join(', ') : bValue,
+        column.relation
+          ? databaseCellValues(bValue, column).join(', ')
+          : bValue,
         column
       );
       const order =
@@ -356,9 +362,22 @@ export function groupDatabaseRows<Row>(
   };
   for (const value of column.dataType === 'BOOLEAN' ? [0, 1] : column.options)
     addGroup(value);
-  for (const row of rows) addGroup(getValue(row, column.id)).rows.push(row);
+  for (const row of rows) {
+    const values = databaseCellValues(getValue(row, column.id), column);
+    for (const value of new Set(values.length ? values : [null]))
+      addGroup(value).rows.push(row);
+  }
   addGroup(null);
-  return [...groups.values()];
+  return [...groups.values()].sort((a, b) =>
+    a.value === null
+      ? 1
+      : b.value === null
+        ? -1
+        : a.label.localeCompare(b.label, undefined, {
+            numeric: true,
+            sensitivity: 'base',
+          })
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -397,6 +416,9 @@ export function isDatabaseViewConfig(
     value.sorts.every(isSort) &&
     Array.isArray(value.hiddenColumns) &&
     value.hiddenColumns.every((id) => typeof id === 'string') &&
+    (value.groupOrder === undefined ||
+      (Array.isArray(value.groupOrder) &&
+        value.groupOrder.every((id) => typeof id === 'string'))) &&
     (value.columnOrder === undefined ||
       (Array.isArray(value.columnOrder) &&
         value.columnOrder.every((id) => typeof id === 'string')))
@@ -442,4 +464,35 @@ export function reconcileDatabaseView(
     sorts: view.sorts.filter((sort) => ids.has(sort.columnId)),
     hiddenColumns: view.hiddenColumns.filter((id) => ids.has(id)),
   };
+}
+
+/** Preserve unrelated tags when moving one occurrence of a multi-select card. */
+export function boardMoveValue(
+  column: DatabaseViewColumn,
+  current: DatabaseCellValue,
+  target: DatabaseCellValue,
+  from?: DatabaseCellValue
+): DatabaseCellValue {
+  if (!column.isMultiSelect) return target;
+  if (target === null) return '[]';
+  const values = databaseCellValues(current, column).filter(
+    (value) => value !== null && value !== '' && value !== from
+  );
+  return JSON.stringify([...new Set([...values, target])]);
+}
+
+export function orderDatabaseGroups<Row>(
+  groups: readonly DatabaseRowGroup<Row>[],
+  order: readonly string[] = []
+): DatabaseRowGroup<Row>[] {
+  const remaining = new Map(groups.map((group) => [group.key, group]));
+  const ordered: DatabaseRowGroup<Row>[] = [];
+  for (const key of order) {
+    const group = remaining.get(key);
+    if (group) {
+      ordered.push(group);
+      remaining.delete(key);
+    }
+  }
+  return [...ordered, ...remaining.values()];
 }

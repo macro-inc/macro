@@ -1,3 +1,5 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { enableDatabases } from '@core/constant/featureFlags';
 import {
   $createDatabaseQueryNode,
   $isDatabaseQueryNode,
@@ -22,6 +24,7 @@ const LiveQuestion = lazy(async () => {
 });
 
 export function DatabaseQuery(props: DatabaseQueryDecoratorProps) {
+  const enabled = useFeatureFlag(enableDatabases);
   const wrapper = useContext(LexicalWrapperContext);
   const [editable, setEditable] = createSignal(
     wrapper?.editor.isEditable() ?? false
@@ -33,6 +36,7 @@ export function DatabaseQuery(props: DatabaseQueryDecoratorProps) {
     tableId: props.tableId,
     sql: props.sql,
     prompt: props.prompt,
+    title: props.title,
     displayMode: props.displayMode,
     chart: props.chart,
   });
@@ -59,12 +63,15 @@ export function DatabaseQuery(props: DatabaseQueryDecoratorProps) {
     });
   };
   const placeholder = () => (
-    <span class="mx-0.5 rounded border border-accent/20 bg-accent/7 px-1.5 py-0.5 text-sm text-accent">
-      {props.prompt || 'Live database answer'}
+    <span class="mx-0.5 rounded border border-edge-muted bg-hover px-1.5 py-0.5 text-sm text-ink">
+      {props.title || props.chart?.title || 'Database answer'}
     </span>
   );
   return (
-    <Show when={!wrapper?.skipPreviewFetch} fallback={placeholder()}>
+    <Show
+      when={enabled().enabled && !wrapper?.skipPreviewFetch}
+      fallback={placeholder()}
+    >
       <LazyDecorator
         placeholder={placeholder()}
         render={() => (

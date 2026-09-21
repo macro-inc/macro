@@ -106,9 +106,11 @@ export function parseDatabaseQueries(text: string): string {
   return text.replace(/<m-db-query>(.*?)<\/m-db-query>/g, (_, json) => {
     try {
       const data = JSON.parse(json);
-      return typeof data.prompt === 'string' && data.prompt
-        ? data.prompt
-        : 'Live database answer';
+      return typeof data.title === 'string' && data.title
+        ? data.title
+        : typeof data.prompt === 'string' && data.prompt
+          ? data.prompt
+          : 'Live database answer';
     } catch {
       return 'Live database answer';
     }
@@ -258,6 +260,7 @@ export function markdownToPlainText(markdown: string): string {
  */
 type MentionTagPayload = {
   prompt?: string;
+  title?: string;
   documentId?: string;
   documentName?: string;
   blockName?: string;
@@ -442,7 +445,7 @@ export function markdownToEmbeddingText(markdown: string): string {
   text = replaceJsonTag(
     text,
     'm-db-query',
-    (data) => data.prompt || 'Live database answer'
+    (data) => data.title || data.prompt || 'Live database answer'
   );
   text = replaceJsonTag(text, 'm-await', (data) => data.text || '');
   text = replaceJsonTag(

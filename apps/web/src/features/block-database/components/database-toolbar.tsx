@@ -35,6 +35,7 @@ import {
 import { FilterPanel } from './database-view-filters';
 import { SaveViewDialog } from './saved-view-dialog';
 import { ToolbarPopover } from './view-control-popover';
+import { ViewSelect } from './view-select';
 
 export type DatabaseToolbarProps = {
   columns: DatabaseViewColumn[];
@@ -47,7 +48,8 @@ export type DatabaseToolbarProps = {
   onSelectView: (id?: string) => void;
   onSaveView: (
     name: string,
-    layout: DatabaseViewConfig['layout']
+    layout: DatabaseViewConfig['layout'],
+    groupBy?: string | null
   ) => Promise<void>;
   onUpdateView?: () => Promise<void>;
   onRenameView: (id: string, name: string) => Promise<void>;
@@ -62,11 +64,64 @@ type ViewDialog = {
   returnFocus?: HTMLElement;
 } & (
   | { mode: 'save'; name: string; layout: DatabaseViewConfig['layout'] }
-  | { mode: 'rename' | 'delete'; target: SavedDatabaseView }
+  | { mode: 'delete'; target: SavedDatabaseView }
 );
 
 /** View controls contain no data fetching or mutation implementation. */
 export function DatabaseToolbar(props: DatabaseToolbarProps) {
+  const [renaming, setRenaming] = createSignal<{
+    id: string;
+    name: string;
+    origin?: HTMLElement;
+  }>();
+  const [renameDraft, setRenameDraft] = createSignal('');
+  const [renamePending, setRenamePending] = createSignal(false);
+  const [renameError, setRenameError] = createSignal('');
+  let renameInput: HTMLInputElement | undefined;
+  function beginRename(
+    target: SavedDatabaseView,
+    origin?: HTMLElement,
+    focus = true
+  ) {
+    if (renamePending()) return;
+    setRenaming({ id: target.id, name: target.name, origin });
+    setRenameDraft(target.name);
+    setRenameError('');
+    if (focus)
+      queueMicrotask(() => {
+        renameInput?.focus();
+        renameInput?.select();
+      });
+  }
+  function finishRename(restoreFocus: boolean) {
+    const target = renaming()?.origin;
+    setRenaming(undefined);
+    setRenameError('');
+    if (restoreFocus) queueMicrotask(() => target?.focus());
+  }
+  async function saveRename(restoreFocus: boolean) {
+    const target = renaming();
+    if (!target || renamePending()) return;
+    const name = renameDraft().trim();
+    if (!name) {
+      setRenameError('Enter a view name.');
+      return;
+    }
+    if (name === target.name) {
+      finishRename(restoreFocus);
+      return;
+    }
+    setRenamePending(true);
+    setRenameError('');
+    try {
+      await props.onRenameView(target.id, name);
+      finishRename(restoreFocus);
+    } catch {
+      setRenameError('Could not rename this view. Press Enter to retry.');
+    } finally {
+      setRenamePending(false);
+    }
+  }
   const [dialog, setDialog] = createSignal<ViewDialog>();
   const [updateError, setUpdateError] = createSignal(false);
   const [searchOpen, setSearchOpen] = createSignal(false);
@@ -110,10 +165,12 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
   const openViewDialog = (
     mode: 'rename' | 'delete',
     target: SavedDatabaseView | undefined,
-    returnFocus?: HTMLElement
+    returnFocus?: HTMLElement,
+    focus = true
   ) => {
     if (!target) return;
-    setDialog({ mode, target: { ...target }, returnFocus });
+    if (mode === 'rename') beginRename(target, returnFocus, focus);
+    else setDialog({ mode, target: { ...target }, returnFocus });
   };
   const changed = () =>
     props.isDirty ??
@@ -141,6 +198,9 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
     >
       <div class="flex items-center gap-2 px-3 py-1.5 @max-[520px]/view-toolbar:flex-wrap @min-[640px]/view-toolbar:px-4">
         <div class="flex min-w-0 flex-1 items-center gap-0.5 @max-[520px]/view-toolbar:basis-full">
+          <span class="mr-1.5 shrink-0 text-[10px] text-ink-placeholder @max-[640px]/view-toolbar:sr-only">
+            Views
+          </span>
           <div
             ref={setViewRail}
             class="flex min-w-0 items-center gap-0.5 overflow-x-auto"
@@ -172,11 +232,45 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
                 let tab: HTMLButtonElement | undefined;
                 return (
                   <ContextMenu>
+                    <Show when={renaming()?.id === savedView().id}>
+                      <form
+                        class="shrink-0"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          void saveRename(true);
+                        }}
+                      >
+                        <input
+                          ref={renameInput}
+                          aria-label="View name"
+                          maxlength={100}
+                          value={renameDraft()}
+                          readOnly={renamePending()}
+                          aria-invalid={!!renameError()}
+                          class="h-8 w-36 rounded-md border border-ink/40 bg-input px-2 text-xs text-ink outline-none focus:ring-2 focus:ring-ink/10"
+                          onInput={(event) => {
+                            setRenameDraft(event.currentTarget.value);
+                            setRenameError('');
+                          }}
+                          onBlur={() => {
+                            if (!renameError()) void saveRename(false);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Escape') {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              if (!renamePending()) finishRename(true);
+                            }
+                          }}
+                        />
+                      </form>
+                    </Show>
                     <Tooltip label={savedView().name} class="shrink-0">
                       <ContextMenu.Trigger
                         as="button"
                         ref={tab}
                         type="button"
+                        hidden={renaming()?.id === savedView().id}
                         aria-pressed={props.selectedViewId === savedView().id}
                         aria-keyshortcuts="F2 Shift+F10"
                         onClick={() => props.onSelectView(savedView().id)}
@@ -227,6 +321,10 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
                         style={{
                           'max-width':
                             'min(10rem, var(--view-rail-width, 10rem))',
+                          display:
+                            renaming()?.id === savedView().id
+                              ? 'none'
+                              : undefined,
                         }}
                         class="flex h-8 max-w-40 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs text-ink-muted outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ink/50"
                         classList={{
@@ -251,7 +349,12 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
                       <ContextMenuContent
                         class="min-w-48"
                         onCloseAutoFocus={(event) => {
-                          if (dialog()) event.preventDefault();
+                          if (dialog() || renaming()) event.preventDefault();
+                          if (renaming())
+                            queueMicrotask(() => {
+                              renameInput?.focus();
+                              renameInput?.select();
+                            });
                         }}
                       >
                         <MenuItem
@@ -259,7 +362,7 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
                           closeOnSelect
                           shortcut="F2"
                           onClick={() =>
-                            openViewDialog('rename', savedView(), tab)
+                            openViewDialog('rename', savedView(), tab, false)
                           }
                         />
                         <Show when={props.selectedViewId === savedView().id}>
@@ -332,7 +435,12 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
               </Dropdown.Trigger>
               <Dropdown.Content
                 onCloseAutoFocus={(event) => {
-                  if (dialog()) event.preventDefault();
+                  if (dialog() || renaming()) event.preventDefault();
+                  if (renaming())
+                    queueMicrotask(() => {
+                      renameInput?.focus();
+                      renameInput?.select();
+                    });
                 }}
               >
                 <Dropdown.Item
@@ -342,7 +450,12 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
                 </Dropdown.Item>
                 <Dropdown.Item
                   onSelect={() =>
-                    openViewDialog('rename', selected(), viewOptionsButton)
+                    openViewDialog(
+                      'rename',
+                      selected(),
+                      viewOptionsButton,
+                      false
+                    )
                   }
                 >
                   Rename view
@@ -388,75 +501,51 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
                   <Index each={view().sorts}>
                     {(sort, index) => (
                       <div class="flex gap-1.5">
-                        <select
-                          aria-label="Sort property"
+                        <ViewSelect
+                          label="Sort property"
                           value={sort().columnId}
-                          onChange={(event) =>
-                            change({
-                              sorts: view().sorts.map((item, i) =>
-                                i === index
-                                  ? {
-                                      ...item,
-                                      columnId: event.currentTarget.value,
-                                    }
-                                  : item
-                              ),
-                            })
-                          }
-                          class="h-8 min-w-0 flex-1 rounded-md border border-edge-muted bg-input px-2 text-xs outline-none focus:border-ink/50"
-                        >
-                          <For
-                            each={props.columns.filter(
+                          options={props.columns
+                            .filter(
                               (column) =>
                                 column.id === sort().columnId ||
                                 !view().sorts.some(
                                   (item) => item.columnId === column.id
                                 )
-                            )}
-                          >
-                            {(column) => (
-                              <option
-                                value={column.id}
-                                selected={column.id === sort().columnId}
-                              >
-                                {column.name}
-                              </option>
-                            )}
-                          </For>
-                        </select>
-                        <select
-                          aria-label="Sort direction"
+                            )
+                            .map((column) => ({
+                              value: column.id,
+                              label: column.name,
+                            }))}
+                          onChange={(columnId) =>
+                            change({
+                              sorts: view().sorts.map((item, i) =>
+                                i === index ? { ...item, columnId } : item
+                              ),
+                            })
+                          }
+                        />
+                        <ViewSelect
+                          label="Sort direction"
                           value={sort().direction}
-                          onChange={(event) =>
+                          class="w-28"
+                          options={[
+                            { value: 'asc', label: 'Ascending' },
+                            { value: 'desc', label: 'Descending' },
+                          ]}
+                          onChange={(direction) =>
                             change({
                               sorts: view().sorts.map((item, i) =>
                                 i === index
                                   ? {
                                       ...item,
                                       direction:
-                                        event.currentTarget.value === 'desc'
-                                          ? 'desc'
-                                          : 'asc',
+                                        direction === 'desc' ? 'desc' : 'asc',
                                     }
                                   : item
                               ),
                             })
                           }
-                          class="h-8 rounded-md border border-edge-muted bg-input px-2 text-xs outline-none focus:border-ink/50"
-                        >
-                          <option
-                            value="asc"
-                            selected={sort().direction === 'asc'}
-                          >
-                            Ascending
-                          </option>
-                          <option
-                            value="desc"
-                            selected={sort().direction === 'desc'}
-                          >
-                            Descending
-                          </option>
-                        </select>
+                        />
                         <button
                           type="button"
                           aria-label="Remove sort"
@@ -611,25 +700,17 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
                 <Show when={view().layout === 'board' && groups().length}>
                   <label class="mt-3 flex items-center justify-between gap-3 text-xs text-ink-muted">
                     Group by
-                    <select
-                      aria-label="Group board by"
+                    <ViewSelect
+                      label="Group board by"
                       value={view().groupBy ?? ''}
-                      onChange={(event) =>
-                        change({ groupBy: event.currentTarget.value })
+                      options={groups().map((column) => ({
+                        value: column.id,
+                        label: column.name,
+                      }))}
+                      onChange={(groupBy) =>
+                        change({ groupBy, groupOrder: undefined })
                       }
-                      class="h-8 min-w-0 flex-1 rounded-md border border-edge-muted bg-input px-2 text-xs text-ink outline-none focus-visible:ring-2 focus-visible:ring-ink/50"
-                    >
-                      <For each={groups()}>
-                        {(column) => (
-                          <option
-                            value={column.id}
-                            selected={column.id === view().groupBy}
-                          >
-                            {column.name}
-                          </option>
-                        )}
-                      </For>
-                    </select>
+                    />
                   </label>
                 </Show>
               </div>
@@ -684,7 +765,7 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
             </ToolbarPopover>
           </div>
           <div class="ml-1 flex shrink-0 items-center">
-            <Show when={props.onCreateRecord}>
+            <Show when={props.onCreateRecord && view().layout === 'board'}>
               <Button
                 size="sm"
                 variant="outline"
@@ -702,6 +783,11 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
           </div>
         </div>
       </div>
+      <Show when={renameError()}>
+        <p role="alert" class="px-4 pb-2 text-xs text-failure">
+          {renameError()}
+        </p>
+      </Show>
       <Show when={updateError()}>
         <p role="alert" class="px-4 pb-2 text-xs text-failure">
           Could not update the view. Try saving again.
@@ -714,16 +800,17 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
             initialName={
               action.mode === 'save' ? action.name : action.target.name
             }
+            columns={props.columns}
+            initialGroupBy={view().groupBy}
             initialLayout={
               action.mode === 'save' ? action.layout : action.target.view.layout
             }
             returnFocus={action.returnFocus}
             returnFocusFallback={allRecordsButton}
             onClose={() => setDialog(undefined)}
-            onSubmit={async (name, layout) => {
-              if (action.mode === 'save') await props.onSaveView(name, layout);
-              else if (action.mode === 'rename')
-                await props.onRenameView(action.target.id, name);
+            onSubmit={async (name, layout, groupBy) => {
+              if (action.mode === 'save')
+                await props.onSaveView(name, layout, groupBy);
               else await props.onDeleteView(action.target.id);
             }}
           />

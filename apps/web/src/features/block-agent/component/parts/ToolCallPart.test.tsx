@@ -299,6 +299,30 @@ describe('ToolCallPart routing', () => {
 });
 
 describe('ToolCallPart Macro tools', () => {
+  it('routes a Macro MCP database answer to the native interactive renderer', () => {
+    const part = toolUse({
+      kind: 'macro',
+      input: { sql: 'SELECT COUNT(*) AS Tickets FROM tickets' },
+      output: {
+        results: [{ columns: [{ name: 'Tickets' }], rows: [[12]] }],
+        changesApplied: 0,
+        readVersions: [],
+        summary: '1 result',
+      },
+      error: null,
+    });
+    part.name = { kind: 'mcp', server: 'macro', tool: 'QueryDatabase' };
+    const rendered = render(() => (
+      <ToolCallPart part={part} context={context(false)} />
+    ));
+    expect(rendered.getByTestId('macro-tool').textContent).toBe(
+      'QueryDatabase'
+    );
+    expect(rendered.getByTestId('macro-tool').dataset.hasResponse).toBe('true');
+    expect(rendered.queryByTestId('tool-card')).toBeNull();
+    rendered.unmount();
+  });
+
   // A ReadContent call the fold already named and unwrapped.
   const readContent = (overrides?: Partial<Omit<ToolUsePart, 'name'>>) =>
     toolUse(

@@ -46,6 +46,26 @@ describe('automatic question source verification', () => {
     truncated_tables: [],
   };
 
+  it('does not fetch the selected schema again before verifying the actual answer', async () => {
+    const describe = vi.fn(async () => detail);
+    const read = vi.fn(async () => answer);
+    const capabilities = createQuestionCapabilities({
+      generate: async () => proposal,
+      describe,
+      read,
+    });
+    const schema = toQuerySchema(detail);
+    const generated = await capabilities.generate({ ...request, schema });
+    expect(generated.source).toBe(schema);
+    const verified = await capabilities.read(generated.sql, {
+      databaseId: schema.databaseId,
+      source: generated.source,
+    });
+    expect(verified.read_versions).toEqual({ Tickets: 1 });
+    expect(read).toHaveBeenCalledExactlyOnceWith(generated.sql);
+    expect(describe).not.toHaveBeenCalled();
+  });
+
   it('rejects SQL that reads another database even when the model claims the chosen source', async () => {
     const capabilities = createQuestionCapabilities({
       generate: async () => proposal,

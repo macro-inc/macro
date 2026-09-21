@@ -125,3 +125,19 @@ export function insertRelatedRowsStatement(args: {
     )
     .join('; ');
 }
+
+/** Stable pagination for exports, independent of the visible filter or row order. */
+export function exportPageStatement(
+  tableSqlName: string,
+  offset: number,
+  limit: number
+): string {
+  if (
+    !Number.isSafeInteger(offset) ||
+    offset < 0 ||
+    !Number.isSafeInteger(limit) ||
+    limit < 1
+  )
+    throw new Error('Invalid export page');
+  return `${selectAllStatement(tableSqlName)} ORDER BY ${quoteIdentifier(ROW_ID_COLUMN)} LIMIT ${limit} OFFSET ${offset}`;
+}

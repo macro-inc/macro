@@ -5,6 +5,7 @@ import {
   loadResult,
 } from '@core/block';
 import { lazy } from 'solid-js';
+import { waitForDatabaseRollout } from './queries/database-rollout';
 
 export const definition = defineBlock({
   name: 'database',
@@ -18,6 +19,7 @@ export const definition = defineBlock({
   openTrackingEnabled: false,
   editPermissionEnabled: true,
   async load(source, _intent) {
+    if (!(await waitForDatabaseRollout())) return LoadErrors.UNAUTHORIZED;
     if (source.type !== 'dss') return LoadErrors.MISSING;
     const { loadDatabase } = await import('./queries/load-database');
     return await loadResult(loadDatabase(source.id));

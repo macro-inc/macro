@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            sp.team_share_access_level::text AS \"level?\",\n            sp.team_share_team_id AS \"team_id?\",\n            sp.team_share_revision AS revision\n        FROM \"SharePermission\" sp\n        WHERE sp.id = (\n            SELECT share_permission_id FROM calls WHERE id = $1\n            UNION ALL\n            SELECT share_permission_id FROM call_records WHERE id = $1\n            LIMIT 1\n        )\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "level?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "revision",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      true,
+      false
+    ]
+  },
+  "hash": "d2e383389c8b6f9cb4bcf4453e3cacbd74d9cdce5fb30b32e143ce1748780154"
+}

@@ -359,7 +359,7 @@ describe('database table view', () => {
     await userEvent.keyboard('{Enter}');
     expect(fixture.source.write).toHaveBeenCalledTimes(1);
     complete();
-    await waitFor(() => expect(screen.getByText('Saved')).toBeTruthy());
+    await waitFor(() => expect(fixture.source.refresh).toHaveBeenCalled());
     expect(fixture.source.write).toHaveBeenCalledExactlyOnceWith(
       {
         kind: 'cell',
@@ -431,7 +431,7 @@ describe('database table view', () => {
     expect(fixture.source.write).not.toHaveBeenCalled();
   });
 
-  it('focuses a new column and the first cell in a row created from the blank draft', async () => {
+  it('focuses a new column header and edits its cells in a row created from the blank draft', async () => {
     const fixture = sourceFixture();
     fixture.setColumns([columns[0]]);
     fixture.setSnapshot({ version: 1, rows: [] });
@@ -442,6 +442,7 @@ describe('database table view', () => {
         name="Projects"
         source={fixture.source}
         canEdit
+        onRenameColumn={vi.fn(async () => {})}
         view={defaultDatabaseView()}
         addColumn={() => null}
         renderToolbar={(value) => {
@@ -459,11 +460,23 @@ describe('database table view', () => {
     );
     await screen.findByRole('button', { name: 'Open Created from draft' });
 
+    expect(actions.focusColumn('notes')).toBe(true);
     fixture.setColumns([
       columns[0],
       { ...columns[0], id: 'notes', name: 'Notes' },
     ]);
-    expect(actions.focusColumn('notes')).toBe(true);
+    const header = await screen.findByRole('textbox', { name: 'Column name' });
+    await waitFor(() => expect(document.activeElement).toBe(header));
+    expect((header as HTMLInputElement).value).toBe('Notes');
+    fireEvent.keyDown(header, { key: 'Escape' });
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('columnheader', { name: 'Notes' })
+      )
+    );
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Notes: Empty. Click to edit' })[0]
+    );
     const notes = await screen.findByRole('textbox', { name: 'Edit Notes' });
     await waitFor(() => expect(document.activeElement).toBe(notes));
     fireEvent.input(notes, { target: { value: 'Typed into the new column' } });
@@ -633,16 +646,18 @@ describe('database table view', () => {
       await waitFor(() =>
         expect(fixture.source.write).toHaveBeenCalledTimes(2)
       );
-      const submitted = screen.getByRole('textbox', {
-        name: 'New record title',
-      }) as HTMLInputElement;
-      expect(submitted.readOnly).toBe(true);
-      await userEvent.type(submitted, ' unsaved text');
-      expect(submitted.value).toBe('One new card');
+      const submitted = screen.getByRole('status', {
+        name: 'Saving new record',
+      });
+      expect(submitted.textContent).toContain('One new card');
+      expect(
+        screen.queryByRole('textbox', { name: 'New record title' })
+      ).toBeNull();
       fireEvent.keyDown(submitted, { key: 'Escape' });
-      expect(screen.getByRole('textbox', { name: 'New record title' })).toBe(
+      expect(screen.getByRole('status', { name: 'Saving new record' })).toBe(
         submitted
       );
+      expect(fixture.source.write).toHaveBeenCalledTimes(2);
       complete();
       await screen.findByRole('button', { name: 'Open One new card' });
       await waitFor(() =>
@@ -719,7 +734,7 @@ describe('database table view', () => {
     await waitFor(() => expect(fixture.source.write).toHaveBeenCalledTimes(1));
     complete();
     await waitFor(() =>
-      expect(screen.getByText('1 of 2 records')).toBeTruthy()
+      expect(fixture.source.snapshot()?.rows).toHaveLength(2)
     );
     expect(screen.getByRole('textbox', { name: 'Edit Notes' })).toBe(notes);
     expect(document.activeElement).toBe(notes);
@@ -1513,7 +1528,7 @@ describe('database table view', () => {
     expect(screen.getAllByRole('button', { name: 'New record' })).toHaveLength(
       1
     );
-    expect(screen.getByText('0 records')).toBeTruthy();
+    expect(fixture.source.snapshot()?.rows).toHaveLength(0);
     fireEvent.click(
       within(screen.getByRole('grid', { name: 'Playground' })).getByRole(
         'button',
@@ -1530,7 +1545,9 @@ describe('database table view', () => {
     await waitFor(() =>
       expect(fixture.source.snapshot()?.rows).toHaveLength(1)
     );
-    expect(screen.getByText('1 record')).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: /Name: First record/ })
+    ).toBeTruthy();
     expect(
       screen.getByRole('button', { name: 'Name: Unnamed. Click to edit' })
     ).toBeTruthy();

@@ -26,5 +26,6 @@
  * Version 5.0 - Sep 2026. Added source-only DatabaseQueryNode for live scalar and table answers.
  * Version 5.1 - Sep 2026. DatabaseQueryNode remembers the table selected for questions.
  * Version 5.2 - Sep 2026. DatabaseQueryNode persists live bar, line and pie chart settings.
+ * Version 5.3 - Sep 2026. DatabaseQueryNode persists a concise, editable answer title.
  */
-export const MARKDOWN_VERSION_COUNTER = 5.2;
+export const MARKDOWN_VERSION_COUNTER = 5.3;

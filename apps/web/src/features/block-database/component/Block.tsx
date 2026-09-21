@@ -1,3 +1,6 @@
+import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
+import { toQuerySchema } from '@app/features/database-query/queries/query-source';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { makePersistedState } from '@app/lib/persistence';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -6,19 +9,16 @@ import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { toast } from '@core/component/Toast/Toast';
+import { enableDatabases } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import { deepEqual } from '@core/util/compareUtils';
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
 import DatabaseIcon from '@phosphor/database.svg';
-import DownloadIcon from '@phosphor/download-simple.svg';
 import LockIcon from '@phosphor/lock-simple.svg';
 import SparkleIcon from '@phosphor/sparkle.svg';
-import {
-  downloadDatabaseSnapshot,
-  useDatabaseDetailQuery,
-} from '@queries/storage/databases';
+import { useDatabaseDetailQuery } from '@queries/storage/databases';
 import { useDatabaseTableChangedSync } from '@queries/storage/databases-sync';
 import { getEntityGraphqlClient } from '@service-storage/graphql-soup';
 import { Button } from '@ui';
@@ -26,7 +26,6 @@ import {
   type Component,
   createMemo,
   createSignal,
-  createUniqueId,
   ErrorBoundary,
   For,
   Show,
@@ -34,22 +33,25 @@ import {
 } from 'solid-js';
 import { DatabaseTitle } from '../components/database-title';
 import { DatabaseToolbar } from '../components/database-toolbar';
+import { databaseChatContext } from '../core/chat-context';
 import type { DatabaseRelatedDestination } from '../core/database-relations';
 import {
   type DatabaseViewConfig,
   defaultDatabaseView,
   reconcileDatabaseView,
 } from '../core/database-view';
+import {
+  type DatabaseViewSelection,
+  readViewSelection,
+  type TableViewState,
+} from '../core/view-selection';
 import { renameDatabase } from '../queries/rename-database';
 import { useSavedDatabaseViews } from '../queries/saved-database-views';
 import { toViewColumn } from '../queries/table-rows';
+import { DatabasePageActions } from '../views/database-page-actions';
 import { AddColumnMenu } from './AddColumnMenu';
 import { DatabaseGrid } from './DatabaseGrid';
-import { SqlConsole } from './SqlConsole';
 import { TableTabs } from './TableTabs';
-
-type TableViewState = { view: DatabaseViewConfig; selectedViewId?: string };
-type ViewSelection = { tableId?: string; views: Record<string, string> };
 
 const Block: Component = () => {
   const databaseId = useBlockId();
@@ -58,33 +60,17 @@ const Block: Component = () => {
   let requestedRecord: DatabaseRelatedDestination | undefined;
   const canAutofocus = useCanAutofocusSplitContent();
   const { navigatedFromJK } = useNavigatedFromJK();
-  const questionPanelId = createUniqueId();
   const userId = untrack(useUserId());
   const storage = createUserScopedStorage(
     `database-view-selection:${databaseId}`
   );
   const [selection, setSelection] = makePersistedState(
-    createSignal<ViewSelection>({ views: {} }),
+    createSignal<DatabaseViewSelection>({ views: {}, drafts: {} }),
     {
       storages: {
         restore: () => {
           if (!userId) return;
-          const stored: unknown = JSON.parse(storage.read(userId) ?? 'null');
-          if (!stored || typeof stored !== 'object') return;
-          const value = stored as Record<string, unknown>;
-          return {
-            tableId:
-              typeof value.tableId === 'string' ? value.tableId : undefined,
-            views:
-              value.views && typeof value.views === 'object'
-                ? Object.fromEntries(
-                    Object.entries(value.views).filter(
-                      (entry): entry is [string, string] =>
-                        typeof entry[1] === 'string'
-                    )
-                  )
-                : {},
-          };
+          return readViewSelection(storage.read(userId));
         },
         write: (value) => {
           if (userId) storage.write(userId, JSON.stringify(value));
@@ -133,6 +119,18 @@ const Block: Component = () => {
   }
   createMethodRegistration(blockHandleSignal.get, {
     goToLocationFromParams: (params: Record<string, string>) => {
+      if (params.tableId && params.viewId) {
+        setSelection((current) => {
+          const drafts = { ...current.drafts };
+          delete drafts[params.tableId];
+          return {
+            ...current,
+            tableId: params.tableId,
+            views: { ...current.views, [params.tableId]: params.viewId },
+            drafts,
+          };
+        });
+      }
       if (params.tableId && params.rowId)
         void openRelated({
           databaseId,
@@ -150,18 +148,20 @@ const Block: Component = () => {
     requestedGridEntry = false;
     void gridEntry.focus();
   };
-  const [consoleOpen, setConsoleOpen] = createSignal(false);
-  const [consoleMounted, setConsoleMounted] = createSignal(false);
-  let questionPanel: HTMLElement | undefined;
-  let aiButton: HTMLButtonElement | undefined;
-  const closeConsole = () => {
-    setConsoleOpen(false);
-    queueMicrotask(() => aiButton?.focus());
-  };
-  const [downloading, setDownloading] = createSignal(false);
-  const [tableViews, setTableViews] = createSignal<
-    Record<string, TableViewState>
-  >({});
+  const [openingChat, setOpeningChat] = createSignal(false);
+  async function openDatabaseChat() {
+    const current = detail();
+    if (!current || openingChat()) return;
+    setOpeningChat(true);
+    try {
+      await openChatWithInput(
+        databaseChatContext(toQuerySchema(current, activeTableId()))
+      );
+    } finally {
+      setOpeningChat(false);
+    }
+  }
+  const tableViews = () => selection().drafts;
   const emptyView = defaultDatabaseView();
 
   // Reading data only after status resolves keeps the database shell mounted.
@@ -204,7 +204,16 @@ const Block: Component = () => {
 
   function setViewState(state: TableViewState, tableId = activeTableId()) {
     if (!tableId) return;
-    setTableViews((current) => ({ ...current, [tableId]: state }));
+    const original =
+      saved.views().find((entry) => entry.id === state.selectedViewId)?.view ??
+      emptyView;
+    setSelection((current) => {
+      const drafts = { ...current.drafts };
+      if (deepEqual(state.view, reconcileDatabaseView(original, columns())))
+        delete drafts[tableId];
+      else drafts[tableId] = state;
+      return { ...current, drafts };
+    });
     if (selection().views[tableId] !== state.selectedViewId) {
       setSelection((current) => {
         const views = { ...current.views };
@@ -215,7 +224,48 @@ const Block: Component = () => {
     }
   }
   function changeView(config: DatabaseViewConfig) {
+    const laneOrderChanged =
+      config.groupOrder !== undefined &&
+      !deepEqual(view().groupOrder, config.groupOrder);
+    const selected = selectedView();
+    const tableId = activeTableId();
     setViewState({ view: config, selectedViewId: selectedViewId() });
+    if (laneOrderChanged && selected && tableId)
+      void persistLaneOrder(tableId, selected.id, selected.name, {
+        ...selected.view,
+        layout: config.layout,
+        groupBy: config.groupBy,
+        groupOrder: config.groupOrder,
+      });
+  }
+  function clearSavedDraft(tableId: string, config: DatabaseViewConfig) {
+    setSelection((current) => {
+      if (!deepEqual(current.drafts[tableId]?.view, config)) return current;
+      const drafts = { ...current.drafts };
+      delete drafts[tableId];
+      return { ...current, drafts };
+    });
+  }
+  async function persistLaneOrder(
+    tableId: string,
+    id: string,
+    name: string,
+    config: DatabaseViewConfig
+  ) {
+    try {
+      await saved.save.mutateAsync({
+        tableId,
+        id,
+        name,
+        view: config,
+        preserveName: true,
+      });
+      clearSavedDraft(tableId, config);
+    } catch {
+      toast.failure(
+        'The lane order could not be saved. Use Save changes to retry.'
+      );
+    }
   }
   function selectView(id?: string) {
     const selected = saved.views().find((entry) => entry.id === id);
@@ -224,12 +274,27 @@ const Block: Component = () => {
       selectedViewId: selected?.id,
     });
   }
-  async function saveView(name: string, layout: DatabaseViewConfig['layout']) {
+  async function saveView(
+    name: string,
+    layout: DatabaseViewConfig['layout'],
+    groupBy?: string | null
+  ) {
     const tableId = activeTableId();
     const original = view();
     const originalState = tableId ? tableViews()[tableId] : undefined;
-    const config = reconcileDatabaseView({ ...original, layout }, columns());
-    const id = await saved.save.mutateAsync({ name, view: config });
+    const config = reconcileDatabaseView(
+      {
+        ...original,
+        layout,
+        groupBy: groupBy ?? original.groupBy,
+        groupOrder:
+          groupBy && groupBy !== original.groupBy
+            ? undefined
+            : original.groupOrder,
+      },
+      columns()
+    );
+    const id = await saved.save.mutateAsync({ name, view: config, tableId });
     const current = tableId ? tableViews()[tableId] : undefined;
     if (
       current !== originalState &&
@@ -246,12 +311,17 @@ const Block: Component = () => {
   }
   async function updateView() {
     const selected = selectedView();
-    if (selected)
+    const tableId = activeTableId();
+    const config = view();
+    if (selected && tableId) {
       await saved.save.mutateAsync({
+        tableId,
         id: selected.id,
         name: selected.name,
-        view: view(),
+        view: config,
       });
+      clearSavedDraft(tableId, config);
+    }
   }
   async function removeView(id: string) {
     const tableId = activeTableId();
@@ -259,29 +329,6 @@ const Block: Component = () => {
     await saved.remove.mutateAsync(id);
     if (tableId && selection().views[tableId] === id) {
       setViewState({ view: tableViews()[tableId]?.view ?? config }, tableId);
-    }
-  }
-
-  async function downloadSnapshot() {
-    if (downloading()) return;
-    setDownloading(true);
-    let url: string | undefined;
-    try {
-      const blob = await downloadDatabaseSnapshot(databaseId);
-      url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${detail()?.database.name ?? 'database'}.sqlite`;
-      document.body.append(link);
-      link.click();
-      link.remove();
-    } catch (error) {
-      console.error('database snapshot download failed', error);
-      toast.failure('Could not export this database. Please try again.');
-    } finally {
-      setDownloading(false);
-      const objectUrl = url;
-      if (objectUrl) setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
     }
   }
 
@@ -338,35 +385,25 @@ const Block: Component = () => {
             </div>
           </Show>
           <div class="ml-auto flex shrink-0 items-center gap-1">
+            <Show when={detail()}>
+              {(database) => (
+                <DatabasePageActions
+                  detail={database()}
+                  table={activeTable()}
+                  onImported={(tableId) =>
+                    setSelection((current) => ({ ...current, tableId }))
+                  }
+                />
+              )}
+            </Show>
             <Button
               variant="ghost"
-              size="icon-md"
-              label={
-                downloading() ? 'Exporting database' : 'Export SQLite database'
-              }
-              disabled={!detail() || downloading()}
-              onClick={downloadSnapshot}
-            >
-              <DownloadIcon class="size-4" />
-            </Button>
-            <Button
-              ref={aiButton}
-              variant={consoleOpen() ? 'accent' : 'ghost'}
               size="sm"
               class="h-8 gap-1.5 px-2 text-xs"
-              disabled={!detail()}
+              disabled={!detail() || openingChat()}
               aria-label="Database AI"
-              aria-expanded={consoleOpen()}
-              aria-controls={questionPanelId}
-              onClick={() => {
-                const open = !consoleOpen();
-                if (open) setConsoleMounted(true);
-                setConsoleOpen(open);
-                if (open)
-                  queueMicrotask(() =>
-                    questionPanel?.querySelector('textarea')?.focus()
-                  );
-              }}
+              aria-busy={openingChat()}
+              onClick={() => void openDatabaseChat()}
             >
               <SparkleIcon class="size-4" />
               <span>AI</span>
@@ -441,10 +478,7 @@ const Block: Component = () => {
                   </div>
                 </Show>
                 <div class="flex min-h-0 min-w-0 flex-1 flex-col @min-[1000px]/database:flex-row">
-                  <div
-                    class="min-h-0 min-w-0 flex-1 flex-col @min-[1000px]/database:flex"
-                    classList={{ hidden: consoleOpen(), flex: !consoleOpen() }}
-                  >
+                  <div class="flex min-h-0 min-w-0 flex-1 flex-col">
                     <Show when={activeTable()}>
                       {(table) => (
                         <DatabaseGrid
@@ -509,26 +543,6 @@ const Block: Component = () => {
                       )}
                     </Show>
                   </div>
-                  <Show when={consoleMounted() && detail()}>
-                    {(current) => (
-                      <aside
-                        ref={questionPanel}
-                        id={questionPanelId}
-                        aria-label="Ask your database"
-                        class="min-h-0 min-w-0 flex-1 flex-col overflow-hidden @min-[1000px]/database:w-[380px] @min-[1000px]/database:flex-none @min-[1000px]/database:border-l @min-[1000px]/database:border-edge-muted"
-                        classList={{
-                          flex: consoleOpen(),
-                          hidden: !consoleOpen(),
-                        }}
-                      >
-                        <SqlConsole
-                          detail={current()}
-                          activeTableId={activeTableId()}
-                          onClose={closeConsole}
-                        />
-                      </aside>
-                    )}
-                  </Show>
                 </div>
               </Show>
             </Show>
@@ -558,4 +572,20 @@ function DatabaseSkeleton() {
   );
 }
 
-export default Block;
+const DatabaseBlock: Component = () => {
+  const flag = useFeatureFlag(enableDatabases);
+  return (
+    <Show
+      when={flag().enabled}
+      fallback={
+        <div class="grid size-full place-items-center p-6 text-sm text-ink-muted">
+          Databases are not enabled for this account.
+        </div>
+      }
+    >
+      <Block />
+    </Show>
+  );
+};
+
+export default DatabaseBlock;

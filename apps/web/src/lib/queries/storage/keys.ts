@@ -101,6 +101,7 @@ export const teamTaskKeys = createQueryKeys('teamTask', {
 
 export const databasesKeys = createQueryKeys('databases', {
   list: null,
+  starter: (userId: string) => ({ queryKey: [userId] }),
   detail: (databaseId: string) => ({
     queryKey: [databaseId],
   }),

@@ -5827,6 +5827,31 @@ export const queryDatabaseSqlResponse = zod
   .describe('Outcome of an [`ExecRequest`].');
 
 /**
+ * @summary Create a small example once for the authenticated user, if they have no databases.
+ */
+export const ensureStarterHandlerResponse = zod
+  .object({
+    created: zod
+      .boolean()
+      .describe('Whether this request created the example.'),
+    databaseId: zod
+      .string()
+      .nullish()
+      .describe('Accessible starter database, if still present.'),
+    tableId: zod
+      .string()
+      .nullish()
+      .describe('Initial table, returned only on first creation.'),
+    viewId: zod
+      .string()
+      .nullish()
+      .describe('Initial board view, returned only on first creation.'),
+  })
+  .describe(
+    'Starter result. A missing database means the user already started or removed it.'
+  );
+
+/**
  * @summary Schema detail of one database.
  */
 export const getDatabaseParams = zod.object({
@@ -6135,6 +6160,123 @@ export const getDatabaseResponse = zod
   );
 
 /**
+ * @summary Import a new table and every row atomically; retries carry the same request ID.
+ */
+export const importDatabaseTableParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const importDatabaseTableBody = zod
+  .object({
+    columns: zod
+      .array(zod.string())
+      .describe('Header names, in order. All imported values remain text.'),
+    name: zod.string().describe("New table's display name."),
+    requestId: zod
+      .uuid()
+      .describe('Stable key for this import, retained through retries.'),
+    rows: zod
+      .array(zod.array(zod.string()))
+      .describe('Rectangular text rows. Empty fields are preserved.'),
+  })
+  .describe(
+    'An import is identified once, before sending, so retries cannot duplicate rows.'
+  );
+
+export const importDatabaseTableResponse = zod
+  .object({
+    database_id: zod.uuid().describe('Owning database.'),
+    id: zod.uuid().describe('Identifier.'),
+    name: zod
+      .string()
+      .describe("Display name; also the basis of the table's SQL name."),
+    position: zod.string().describe('Fractional index for tab ordering.'),
+    version: zod
+      .number()
+      .describe(
+        'Monotonic per-table version, bumped on every row\/column\/link mutation.\n\nThe cache key for query materializations and the invalidation signal for\nlive query chips.'
+      ),
+  })
+  .describe('One table (tab) of a database.');
+
+/**
+ * @summary Read recipients for a database owned by the caller.
+ */
+export const getDatabasePermissionsParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const getDatabasePermissionsResponse = zod
+  .object({
+    channelSharePermissions: zod
+      .array(
+        zod
+          .object({
+            access_level: zod
+              .enum(['view', 'comment', 'edit', 'owner'])
+              .describe('Ordered from least to most access top -> bottom'),
+            channel_id: zod.string().describe('The channel id'),
+          })
+          .describe('The channel share permission')
+      )
+      .describe('Directly shared channels, including direct messages.'),
+    id: zod
+      .uuid()
+      .describe('Database identifier; sharing has no separate policy entity.'),
+    owner: zod.string().describe('Current database owner.'),
+  })
+  .describe('Recipient grants shown in the native sharing interface.');
+
+/**
+ * @summary Update recipients after proving database ownership.
+ */
+export const updateDatabasePermissionsParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const updateDatabasePermissionsBody = zod
+  .object({
+    channelSharePermissions: zod
+      .array(
+        zod.object({
+          accessLevel: zod
+            .union([
+              zod.null(),
+              zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+            ])
+            .optional(),
+          channelId: zod.string().describe('The channel id'),
+          operation: zod.enum(['add', 'remove', 'replace']),
+        })
+      )
+      .describe('Channel and direct-message grants to change.'),
+  })
+  .describe('Explicit recipient updates; ownership cannot be changed here.');
+
+export const updateDatabasePermissionsResponse = zod
+  .object({
+    channelSharePermissions: zod
+      .array(
+        zod
+          .object({
+            access_level: zod
+              .enum(['view', 'comment', 'edit', 'owner'])
+              .describe('Ordered from least to most access top -> bottom'),
+            channel_id: zod.string().describe('The channel id'),
+          })
+          .describe('The channel share permission')
+      )
+      .describe('Directly shared channels, including direct messages.'),
+    id: zod
+      .uuid()
+      .describe('Database identifier; sharing has no separate policy entity.'),
+    owner: zod.string().describe('Current database owner.'),
+  })
+  .describe('Recipient grants shown in the native sharing interface.');
+
+/**
  * @summary Download a database as a SQLite file.
  */
 export const downloadDatabaseSqliteParams = zod.object({
@@ -6256,6 +6398,78 @@ export const createDatabaseColumnBody = zod
       .describe('Link this column to another table (many-to-many).'),
   })
   .describe('Request body for creating a column.');
+
+/**
+ * @summary Persist the order of every column in a table.
+ */
+export const reorderDatabaseColumnsParams = zod.object({
+  id: zod.uuid(),
+  table_id: zod.uuid(),
+});
+
+export const reorderDatabaseColumnsBody = zod
+  .object({
+    baseVersion: zod
+      .number()
+      .describe(
+        'Monotonic per-table version, bumped on every row\/column\/link mutation.\n\nThe cache key for query materializations and the invalidation signal for\nlive query chips.'
+      ),
+    columnIds: zod.array(zod.uuid()).describe('Every column, exactly once.'),
+  })
+  .describe('A complete placement order, identified by stable column IDs.');
+
+export const reorderDatabaseColumnsResponse = zod
+  .object({
+    table_versions: zod
+      .record(
+        zod.string(),
+        zod
+          .number()
+          .describe(
+            'Monotonic per-table version, bumped on every row\/column\/link mutation.\n\nThe cache key for query materializations and the invalidation signal for\nlive query chips.'
+          )
+      )
+      .describe(
+        'Includes both endpoint tables when deleting relationship edges.'
+      ),
+  })
+  .describe('Table versions changed by a placement deletion or reorder.');
+
+/**
+ * @summary Delete one placement and its cells, preserving shared definitions.
+ */
+export const deleteDatabaseColumnParams = zod.object({
+  id: zod.uuid(),
+  table_id: zod.uuid(),
+  column_id: zod.uuid(),
+});
+
+export const deleteDatabaseColumnBody = zod
+  .object({
+    baseVersion: zod
+      .number()
+      .describe(
+        'Monotonic per-table version, bumped on every row\/column\/link mutation.\n\nThe cache key for query materializations and the invalidation signal for\nlive query chips.'
+      ),
+  })
+  .describe('Guard a column deletion against concurrent writes.');
+
+export const deleteDatabaseColumnResponse = zod
+  .object({
+    table_versions: zod
+      .record(
+        zod.string(),
+        zod
+          .number()
+          .describe(
+            'Monotonic per-table version, bumped on every row\/column\/link mutation.\n\nThe cache key for query materializations and the invalidation signal for\nlive query chips.'
+          )
+      )
+      .describe(
+        'Includes both endpoint tables when deleting relationship edges.'
+      ),
+  })
+  .describe('Table versions changed by a placement deletion or reorder.');
 
 /**
  * @summary Rename a column's label in this table.
@@ -6872,6 +7086,94 @@ export const addDatabaseColumnOptionsResponse = zod
     writable: zod.boolean().describe('Whether SQL may write this column.'),
   })
   .describe('One column placement with the definition behind it.');
+
+/**
+ * @summary Change one column's type with all-or-nothing conversion.
+ */
+export const changeDatabaseColumnTypeParams = zod.object({
+  id: zod.uuid(),
+  table_id: zod.uuid(),
+  column_id: zod.uuid(),
+});
+
+export const changeDatabaseColumnTypeBody = zod
+  .object({
+    baseVersion: zod
+      .number()
+      .describe(
+        'Monotonic per-table version, bumped on every row\/column\/link mutation.\n\nThe cache key for query materializations and the invalidation signal for\nlive query chips.'
+      ),
+    dataType: zod
+      .enum([
+        'BOOLEAN',
+        'DATE',
+        'NUMBER',
+        'STRING',
+        'SELECT_NUMBER',
+        'SELECT_STRING',
+        'TAG',
+        'ENTITY',
+        'LINK',
+      ])
+      .describe(
+        'Data type for property values, determining storage and validation.'
+      ),
+    isMultiSelect: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether select, link or entity values may hold multiple items.'
+      ),
+    linkToDatabaseId: zod
+      .uuid()
+      .nullish()
+      .describe('Related database; defaults to the current database.'),
+    linkToTableId: zod
+      .uuid()
+      .nullish()
+      .describe('Related table, when choosing a database-row relationship.'),
+    specificEntityType: zod
+      .union([
+        zod.null(),
+        zod
+          .enum([
+            'CALENDAR_EVENT',
+            'CALL_RECORD',
+            'CHANNEL',
+            'CHAT',
+            'COMPANY',
+            'DOCUMENT',
+            'PROJECT',
+            'TASK',
+            'THREAD',
+            'USER',
+          ])
+          .describe(
+            'Type of entity that can be referenced by entity properties.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe(
+    'Explicit column type configuration. Existing values must convert without loss.'
+  );
+
+export const changeDatabaseColumnTypeResponse = zod
+  .object({
+    table_versions: zod
+      .record(
+        zod.string(),
+        zod
+          .number()
+          .describe(
+            'Monotonic per-table version, bumped on every row\/column\/link mutation.\n\nThe cache key for query materializations and the invalidation signal for\nlive query chips.'
+          )
+      )
+      .describe(
+        'Includes both endpoint tables when deleting relationship edges.'
+      ),
+  })
+  .describe('Table versions changed by a placement deletion or reorder.');
 
 /**
  * @summary Gets the users documents to populate their recent document list

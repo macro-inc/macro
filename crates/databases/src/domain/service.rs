@@ -6,9 +6,13 @@
 //! from the viewer's grants, so an unreadable table does not exist and an
 //! unwritable one is compiled read-only.
 
+mod column_types;
+mod columns;
 mod infer_column_type;
 mod query;
 mod rename_column;
+mod sharing;
+mod transfer;
 
 #[cfg(test)]
 mod test;
@@ -41,6 +45,7 @@ use crate::domain::models::{
     MaterializedTable, QueryError, RenameColumnOutcome, Row, RowChange, RowId, SqliteSnapshot,
     Table, TableDeps, TableDetail, TableId, TableSchema, TableVersion, Viewer,
 };
+use crate::domain::models::{ChangeColumnType, ColumnReplacement, ColumnSchemaOutcome};
 use crate::domain::ports::{
     AccessDirectory, ColumnDefinitionStore, DatabasesRepo, DatabasesService, MagicTables,
     SqlExecutor, TableEventPublisher,
@@ -1201,6 +1206,40 @@ where
         cmd: InferColumnType,
     ) -> Result<InferColumnTypeOutcome, DatabaseError> {
         self.settle_column_type(receipt, viewer, cmd).await
+    }
+
+    #[tracing::instrument(skip(self, receipt, viewer), err)]
+    async fn change_column_type(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        viewer: Viewer,
+        cmd: ChangeColumnType,
+    ) -> Result<ColumnSchemaOutcome, DatabaseError> {
+        self.change_placement_type(receipt, viewer, cmd).await
+    }
+
+    #[tracing::instrument(skip(self, receipt), err)]
+    async fn delete_column(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        table_id: TableId,
+        column_id: ColumnId,
+        base_version: TableVersion,
+    ) -> Result<ColumnSchemaOutcome, DatabaseError> {
+        self.remove_placement(receipt, table_id, column_id, base_version)
+            .await
+    }
+
+    #[tracing::instrument(skip(self, receipt), err)]
+    async fn reorder_columns(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        table_id: TableId,
+        column_ids: Vec<ColumnId>,
+        base_version: TableVersion,
+    ) -> Result<ColumnSchemaOutcome, DatabaseError> {
+        self.order_placements(receipt, table_id, column_ids, base_version)
+            .await
     }
 
     #[tracing::instrument(skip(self, receipt), err)]

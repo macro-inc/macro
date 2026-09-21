@@ -387,8 +387,12 @@ use utoipa::OpenApi;
         initiative::inbound::axum_router::unassign_task::unassign_initiative_task_handler,
         // databases
         databases::inbound::axum_router::list_databases_handler,
+        databases::inbound::starter_router::ensure_starter_handler,
         databases::inbound::axum_router::create_database_handler,
         databases::inbound::axum_router::get_database_handler,
+        databases::inbound::axum_router::transfer::import_table_handler,
+        databases::inbound::axum_router::sharing::get_permissions_handler,
+        databases::inbound::axum_router::sharing::update_permissions_handler,
         databases::inbound::axum_router::exec_handler,
         databases::inbound::axum_router::query_handler,
         databases::inbound::axum_router::sqlite_snapshot_handler,
@@ -396,6 +400,9 @@ use utoipa::OpenApi;
         databases::inbound::axum_router::rename_table_handler,
         databases::inbound::axum_router::create_column_handler,
         databases::inbound::axum_router::rename_column_handler,
+        databases::inbound::axum_router::column_mutations::change_column_type_handler,
+        databases::inbound::axum_router::column_mutations::delete_column_handler,
+        databases::inbound::axum_router::column_mutations::reorder_columns_handler,
         databases::inbound::axum_router::infer_column_type_handler,
         databases::inbound::axum_router::add_column_options_handler,
         // collab surfaces

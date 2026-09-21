@@ -59,6 +59,14 @@ export function createQuestionCapabilities(
         throw new Error(
           'This answer needs a different database. Choose Automatic or change the source, then ask again.'
         );
+      // The selected database already came from an authorized schema read. The
+      // answer read below verifies live access/dependencies and refreshes the
+      // schema if it encounters a new table; avoid another sequential fetch.
+      if (
+        request.schema.databaseId === databaseId &&
+        request.schema.tables.some((table) => !table.id.startsWith('platform:'))
+      )
+        return { ...proposal, source: request.schema };
       const detail = await input.describe(databaseId);
       if (detail.database.id !== databaseId)
         throw new Error(

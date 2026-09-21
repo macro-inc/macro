@@ -66,6 +66,7 @@ struct FakeService {
     sql_error: Option<String>,
     /// Fail only the post-write schema enrichment.
     schema_error: bool,
+    multi_select_group: bool,
 }
 
 const DATABASE_ID: Uuid = Uuid::from_u128(0x0dbb_0000_0000_0000_0000_0000_0000_0001);
@@ -184,7 +185,12 @@ impl DatabasesService for FakeService {
                     .into_dynamic(),
             ));
         }
-        Ok(detail(AccessGrant::Owner))
+        let mut database = detail(AccessGrant::Owner);
+        database.tables[0].columns[0]
+            .definition
+            .definition
+            .is_multi_select = self.multi_select_group;
+        Ok(database)
     }
 
     // Renaming and the trash have no tools: the model has no use case for
@@ -215,6 +221,32 @@ impl DatabasesService for FakeService {
         _: crate::domain::models::InferColumnType,
     ) -> Result<crate::domain::models::InferColumnTypeOutcome, DatabaseError> {
         unimplemented!("tool tests do not infer column types")
+    }
+    async fn change_column_type(
+        &self,
+        _: EntityAccessReceipt<EditAccessLevel>,
+        _: Viewer,
+        _: crate::domain::models::ChangeColumnType,
+    ) -> Result<crate::domain::models::ColumnSchemaOutcome, DatabaseError> {
+        unimplemented!("tool tests do not change column types")
+    }
+    async fn delete_column(
+        &self,
+        _: EntityAccessReceipt<EditAccessLevel>,
+        _: Uuid,
+        _: Uuid,
+        _: TableVersion,
+    ) -> Result<crate::domain::models::ColumnSchemaOutcome, DatabaseError> {
+        unimplemented!("tool tests do not delete columns")
+    }
+    async fn reorder_columns(
+        &self,
+        _: EntityAccessReceipt<EditAccessLevel>,
+        _: Uuid,
+        _: Vec<Uuid>,
+        _: TableVersion,
+    ) -> Result<crate::domain::models::ColumnSchemaOutcome, DatabaseError> {
+        unimplemented!("tool tests do not reorder columns")
     }
     async fn rename_column(
         &self,
@@ -763,6 +795,7 @@ async fn querying_does_not_mint_a_receipt() {
     let response = QueryDatabase {
         sql: "SELECT row_id FROM guests".to_string(),
         base_versions: None,
+        display: None,
     }
     .call(ServiceContext(context), request_context())
     .await
@@ -813,6 +846,7 @@ async fn a_sql_error_reaches_the_model_verbatim() {
     let error = QueryDatabase {
         sql: "SELECT statuz FROM guests".to_string(),
         base_versions: None,
+        display: None,
     }
     .call(
         ServiceContext(failing_sql_context("no such column: statuz")),
@@ -998,5 +1032,46 @@ async fn adding_options_returns_the_labels_sql_accepts() {
     assert_eq!(
         calls.lock().unwrap().added_options,
         vec![(COLUMN_ID, vec!["Waitlisted".to_string()])]
+    );
+}
+
+#[test]
+fn query_response_schema_accepts_omitted_empty_metadata() {
+    let schema = serde_json::to_value(schemars::schema_for!(QueryDatabaseResponse)).unwrap();
+    let required = schema["required"].as_array().unwrap();
+    for omitted in ["insertedRowIds", "newVersions", "truncatedTables"] {
+        assert!(
+            !required.contains(&serde_json::json!(omitted)),
+            "{omitted} is omitted by serialization and must be optional in the frontend schema"
+        );
+    }
+    assert!(required.contains(&serde_json::json!("results")));
+}
+
+#[test]
+fn describe_column_schema_accepts_omitted_select_options() {
+    let schema = serde_json::to_value(schemars::schema_for!(ToolColumn)).unwrap();
+    let required = schema["required"].as_array().unwrap();
+    assert!(
+        !required.contains(&serde_json::json!("options")),
+        "non-select columns omit empty options in actual tool responses"
+    );
+    assert!(required.contains(&serde_json::json!("name")));
+}
+
+#[test]
+fn query_display_is_optional_and_only_accepts_supported_views() {
+    use super::query_database::QueryDatabaseDisplay;
+    let query: QueryDatabase =
+        serde_json::from_value(serde_json::json!({"sql": "SELECT 1"})).unwrap();
+    assert!(query.display.is_none());
+    let chart: QueryDatabase =
+        serde_json::from_value(serde_json::json!({"sql": "SELECT 1", "display": "bar"})).unwrap();
+    assert_eq!(chart.display, Some(QueryDatabaseDisplay::Bar));
+    assert!(
+        serde_json::from_value::<QueryDatabase>(
+            serde_json::json!({"sql": "SELECT 1", "display": "unsupported"})
+        )
+        .is_err()
     );
 }

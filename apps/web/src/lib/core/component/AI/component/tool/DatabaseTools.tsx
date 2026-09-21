@@ -2,20 +2,21 @@
  * Tool renderers for the Macro Databases toolset
  * (`crates/databases/src/inbound/toolset`).
  */
+
+import { databaseViewKeys } from '@app/features/block-database/queries/keys';
+import { ToolQueryResults } from '@app/features/database-query/components/tool-query-results';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import DatabaseIcon from '@phosphor/database.svg';
 import TableIcon from '@phosphor/table.svg';
-import TerminalIcon from '@phosphor/terminal-window.svg';
+import { queryClient } from '@queries/client';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
-import { createSignal, For, Show } from 'solid-js';
+import { createEffect, createSignal, For, Show } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';
 import { createToolRenderer } from './ToolRenderer';
 
 type DatabaseSchema = NamedTool<'DescribeDatabase', 'response'>['data'];
-type ResultSet = NamedTool<
-  'QueryDatabase',
-  'response'
->['data']['results'][number];
 
 function SchemaTableList(props: { schema: DatabaseSchema }) {
   return (
@@ -33,44 +34,6 @@ function SchemaTableList(props: { schema: DatabaseSchema }) {
         )}
       </For>
     </Tool.List>
-  );
-}
-
-function ResultTable(props: { result: ResultSet }) {
-  return (
-    <div class="overflow-auto p-2">
-      <table class="w-max border-collapse text-left text-xs">
-        <thead>
-          <tr>
-            <For each={props.result.columns}>
-              {(column) => (
-                <th class="border-edge border-b px-2 py-1 font-medium text-ink-muted">
-                  {column.name}
-                </th>
-              )}
-            </For>
-          </tr>
-        </thead>
-        <tbody>
-          <For each={props.result.rows}>
-            {(row) => (
-              <tr>
-                <For each={row}>
-                  {(cell) => (
-                    <td class="border-edge/60 border-b px-2 py-1 text-ink">
-                      {cell === null || cell === undefined ? '' : String(cell)}
-                    </td>
-                  )}
-                </For>
-              </tr>
-            )}
-          </For>
-        </tbody>
-      </table>
-      <Show when={props.result.rows.length === 0}>
-        <div class="px-2 py-1 text-ink-extra-muted text-xs">No rows.</div>
-      </Show>
-    </div>
   );
 }
 
@@ -163,27 +126,58 @@ export const describeDatabaseHandler = createToolRenderer({
 export const queryDatabaseHandler = createToolRenderer({
   name: 'QueryDatabase',
   render: (ctx) => {
-    const [expanded, setExpanded] = createSignal(false);
-    const firstResult = () => ctx.response?.data.results[0];
-
+    const [expanded, setExpanded] = createSignal(true);
+    const answer = () => {
+      const data = ctx.response?.data;
+      if (!data?.results.length) return undefined;
+      return {
+        results: data.results.map((result) => ({
+          columns: result.columns.map((column) => ({
+            name: column.name,
+            entity_type: column.entityType ?? null,
+          })),
+          rows: result.rows.map((row) =>
+            row.map((value) =>
+              value == null
+                ? null
+                : typeof value === 'number' || typeof value === 'string'
+                  ? value
+                  : typeof value === 'boolean'
+                    ? String(value)
+                    : JSON.stringify(value)
+            )
+          ),
+        })),
+        read_tables: data.readVersions.map((table) => table.tableId),
+        read_versions: Object.fromEntries(
+          data.readVersions.map((table) => [table.tableId, table.version])
+        ),
+        truncated_tables: data.truncatedTables ?? [],
+      };
+    };
     return (
       <BaseTool
-        icon={TerminalIcon}
+        icon={DatabaseIcon}
         renderContext={ctx.renderContext}
         type="call"
         response={
-          expanded() && firstResult() ? (
-            <ResultTable result={firstResult()!} />
+          expanded() && answer() ? (
+            <ToolQueryResults
+              answer={answer()!}
+              sql={ctx.tool.data.sql}
+              preferredDisplay={ctx.tool.data.display ?? undefined}
+            />
           ) : undefined
         }
       >
         <div class="flex min-w-0 flex-1 items-center justify-between gap-3">
-          <span class="min-w-0 truncate font-mono">{ctx.tool.data.sql}</span>
+          <span class="min-w-0 truncate">
+            {ctx.response?.data.summary || 'Query database'}
+          </span>
           <Tool.ResultToggle
             expanded={expanded()}
             onToggle={() => setExpanded((open) => !open)}
-            showToggle={!!firstResult()}
-            status={ctx.response?.data.summary}
+            showToggle={!!answer()}
           />
         </div>
       </BaseTool>
@@ -196,7 +190,7 @@ export const createDatabaseHandler = createToolRenderer({
   render: (ctx) => (
     <BaseTool icon={DatabaseIcon} renderContext={ctx.renderContext} type="call">
       <span class="min-w-0 truncate">
-        Create table <span class="text-ink">{ctx.tool.data.name}</span>
+        Create database <span class="text-ink">{ctx.tool.data.name}</span>
       </span>
     </BaseTool>
   ),
@@ -207,7 +201,7 @@ export const createTableHandler = createToolRenderer({
   render: (ctx) => (
     <BaseTool icon={TableIcon} renderContext={ctx.renderContext} type="call">
       <span class="min-w-0 truncate">
-        Add tab <span class="text-ink">{ctx.tool.data.name}</span>
+        Create table <span class="text-ink">{ctx.tool.data.name}</span>
       </span>
     </BaseTool>
   ),
@@ -256,18 +250,51 @@ export const addColumnOptionsHandler = createToolRenderer({
 
 export const saveDatabaseViewHandler = createToolRenderer({
   name: 'SaveDatabaseView',
-  render: (ctx) => (
-    <BaseTool icon={TableIcon} renderContext={ctx.renderContext} type="call">
-      <span class="min-w-0 truncate">
-        {ctx.response ? 'Saved' : 'Save'}{' '}
-        {ctx.tool.data.view.layout === 'board' ? 'board' : 'view'}{' '}
-        <span class="text-ink">
-          {ctx.response?.data.name ?? ctx.tool.data.name}
-        </span>
-        <Show when={ctx.response}>
-          <span class="pl-1.5 text-ink-extra-muted">· Personal view</span>
-        </Show>
-      </span>
-    </BaseTool>
-  ),
+  render: (ctx) => {
+    const orchestrator = useGlobalBlockOrchestrator();
+    createEffect(() => {
+      if (ctx.response?.data.viewId)
+        void queryClient.invalidateQueries({
+          queryKey: databaseViewKeys.saved.queryKey,
+        });
+    });
+    async function openView() {
+      const result = ctx.response?.data;
+      if (!result) return;
+      globalSplitManager()?.openWithSplit(
+        { type: 'database', id: ctx.tool.data.databaseId },
+        { activate: true }
+      );
+      const handle = await orchestrator.getBlockHandle(
+        ctx.tool.data.databaseId,
+        'database'
+      );
+      await handle?.goToLocationFromParams({
+        tableId: ctx.tool.data.tableId,
+        viewId: result.viewId,
+      });
+    }
+    return (
+      <BaseTool icon={TableIcon} renderContext={ctx.renderContext} type="call">
+        <div class="flex min-w-0 flex-1 items-center justify-between gap-3">
+          <span class="min-w-0 truncate">
+            {ctx.response ? 'Saved' : 'Save'}{' '}
+            {ctx.tool.data.view.layout === 'board' ? 'board' : 'view'}{' '}
+            <span class="text-ink">
+              {ctx.response?.data.name ?? ctx.tool.data.name}
+            </span>
+          </span>
+          <Show when={ctx.response}>
+            <button
+              type="button"
+              class="shrink-0 rounded px-2 py-1 text-xs text-ink hover:bg-hover"
+              onClick={() => void openView()}
+            >
+              Open view
+            </button>
+          </Show>
+        </div>
+      </BaseTool>
+    );
+  },
 });

@@ -1,3 +1,4 @@
+import type { CellTextEditorProps } from '@app/components/cell-text-editor/types';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import PlusIcon from '@phosphor/plus.svg';
@@ -26,9 +27,10 @@ import type {
   DatabaseEntityType,
   DatabaseMention,
 } from '../core/column-inference';
-import type {
-  DatabaseCellValue,
-  DatabaseViewColumn,
+import {
+  type DatabaseCellValue,
+  type DatabaseViewColumn,
+  databaseCellValues,
 } from '../core/database-view';
 import { canEditCell, formatCellValue } from '../core/table';
 
@@ -42,16 +44,23 @@ export type DatabaseMentionPickerProps = {
   onClose: (restoreFocus?: boolean) => void;
 };
 
+export type DatabaseTextEditorProps = CellTextEditorProps & {
+  inferType?: boolean;
+  onInferMention?: (mention: DatabaseMention) => void;
+};
+
 export type GridCellProps = GridCellEditorOptions & {
   column: DatabaseViewColumn;
   value: DatabaseCellValue;
   emptyLabel?: string;
   canEdit: boolean;
+  renderTextEditor?: (props: DatabaseTextEditorProps) => JSX.Element;
+  renderTextValue?: (value: string) => JSX.Element;
   renderMentionPicker?: (props: DatabaseMentionPickerProps) => JSX.Element;
   renderMentionValue?: (id: string, type: DatabaseEntityType) => JSX.Element;
   onMention?: (mention: DatabaseMention) => Promise<boolean>;
   onWrite: (value: DatabaseCellValue) => Promise<boolean>;
-  onAddOption: (label: string) => Promise<boolean>;
+  onAddOption: (label: string, value?: DatabaseCellValue) => Promise<boolean>;
 };
 
 /** A presentational cell. Writes, including new options, belong to its table controller. */
@@ -92,8 +101,7 @@ export function GridCell(props: GridCellProps) {
     isEntity() && props.value !== null && !mentionPreview();
   let cell: HTMLDivElement | undefined;
   const isSelect = () =>
-    !props.column.isMultiSelect &&
-    ['SELECT_STRING', 'SELECT_NUMBER'].includes(props.column.dataType);
+    ['SELECT_STRING', 'SELECT_NUMBER', 'TAG'].includes(props.column.dataType);
   const startsEditing = Boolean(
     props.initialEdit && editable() && props.column.dataType === 'STRING'
   );
@@ -111,6 +119,9 @@ export function GridCell(props: GridCellProps) {
     setSelectedMention(undefined);
     if (isEntity()) {
       setMentionSearch(seed?.replace(/^@/, '') ?? '');
+      setDraft(`@${seed?.replace(/^@/, '') ?? ''}`);
+      setSelectAll(false);
+      setEditing(true);
       setMentionOpen(true);
       return;
     }
@@ -125,20 +136,28 @@ export function GridCell(props: GridCellProps) {
             : String(props.value)
     );
     setEditing(true);
-    if (mentionsEnabled() && draft().startsWith('@')) {
+    if (
+      !props.renderTextEditor &&
+      mentionsEnabled() &&
+      draft().startsWith('@')
+    ) {
       setMentionSearch(draft().slice(1));
       setMentionOpen(true);
     }
   };
   const updateDraft = (value: string) => {
     setDraft(value);
-    if (mentionsEnabled() && value.startsWith('@')) {
-      setMentionSearch(value.slice(1));
+    if (
+      mentionsEnabled() &&
+      (isEntity() || (!props.renderTextEditor && value.startsWith('@')))
+    ) {
+      setMentionSearch(value.replace(/^@/, ''));
       setMentionOpen(true);
     }
   };
   const closeMention = (restoreFocus = true) => {
     setMentionOpen(false);
+    if (isEntity()) setEditing(false);
     if (restoreFocus)
       queueMicrotask(() => (editing() ? focusEditor?.() : trigger?.focus()));
   };
@@ -294,7 +313,14 @@ export function GridCell(props: GridCellProps) {
                               props.renderMentionValue
                             }
                             fallback={
-                              formatCellValue(props.column, props.value) || (
+                              (props.column.dataType === 'STRING' &&
+                              typeof props.value === 'string' &&
+                              props.renderTextValue
+                                ? props.renderTextValue(props.value)
+                                : formatCellValue(
+                                    props.column,
+                                    props.value
+                                  )) || (
                                 <span class="opacity-40">
                                   {props.emptyLabel || '—'}
                                 </span>
@@ -368,6 +394,8 @@ export function GridCell(props: GridCellProps) {
       >
         <InlineEditor
           column={props.column}
+          renderTextEditor={props.renderTextEditor}
+          onInferMention={selectMention}
           originalValue={props.value}
           emptyLabel={props.emptyLabel}
           draft={draft()}
@@ -427,6 +455,8 @@ export function GridCell(props: GridCellProps) {
 }
 
 function InlineEditor(props: {
+  renderTextEditor?: (props: DatabaseTextEditorProps) => JSX.Element;
+  onInferMention?: (mention: DatabaseMention) => void;
   column: DatabaseViewColumn;
   originalValue: DatabaseCellValue;
   emptyLabel?: string;
@@ -441,6 +471,7 @@ function InlineEditor(props: {
   onNavigate?: (direction: 1 | -1) => boolean;
 }) {
   let input: HTMLInputElement | undefined;
+  let textFocus: (() => void) | undefined;
   const [error, setError] = createSignal('');
   let finishing = false;
   const initialDraft =
@@ -450,6 +481,10 @@ function InlineEditor(props: {
         ? String(props.originalValue).slice(0, 10)
         : String(props.originalValue);
   const focus = () => {
+    if (textFocus) {
+      textFocus();
+      return;
+    }
     input?.focus();
     if (props.selectAll) input?.select();
     else if (input?.type === 'text')
@@ -460,7 +495,8 @@ function InlineEditor(props: {
   });
   function commit(restoreFocus = true) {
     if (finishing) return false;
-    if (props.draft === initialDraft) {
+    // References commit only through the native pick callback, never as raw @ text.
+    if (props.column.dataType === 'ENTITY' || props.draft === initialDraft) {
       finishing = true;
       props.onClose(restoreFocus);
       return true;
@@ -494,57 +530,96 @@ function InlineEditor(props: {
     void props.onWrite(value);
     return true;
   }
+  const onKeyDown = (event: KeyboardEvent) => {
+    event.stopPropagation();
+    if (event.isComposing || event.keyCode === 229) return;
+    if (props.mentionOpen) {
+      if (['Enter', 'Tab', 'Escape'].includes(event.key))
+        event.preventDefault();
+      if (event.key === 'Escape') props.onMentionClose?.();
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      void commit();
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      finishing = true;
+      props.onClose();
+    }
+    if (event.key === 'Tab') {
+      if (!commit(false)) event.preventDefault();
+      else if (props.onNavigate?.(event.shiftKey ? -1 : 1))
+        event.preventDefault();
+    }
+  };
   return (
     <div class="relative min-w-0">
-      <input
-        ref={(element) => {
-          input = element;
-          props.onEditorReady?.(focus);
-        }}
-        type={
-          props.column.dataType === 'DATE' && props.selectAll ? 'date' : 'text'
+      <Show
+        when={props.column.dataType === 'STRING' && props.renderTextEditor}
+        fallback={
+          <input
+            ref={(element) => {
+              input = element;
+              props.onEditorReady?.(focus);
+            }}
+            type={
+              props.column.dataType === 'DATE' && props.selectAll
+                ? 'date'
+                : 'text'
+            }
+            placeholder={
+              props.column.dataType === 'DATE' ? 'YYYY-MM-DD' : props.emptyLabel
+            }
+            inputmode={
+              props.column.dataType === 'NUMBER' ? 'decimal' : undefined
+            }
+            aria-label={`Edit ${props.column.name}`}
+            aria-invalid={Boolean(error())}
+            title={error() || undefined}
+            value={props.draft}
+            onInput={(event) => {
+              props.onDraft(event.currentTarget.value);
+              setError('');
+            }}
+            onBlur={() => {
+              if (!props.mentionOpen) void commit(false);
+            }}
+            onKeyDown={onKeyDown}
+            class="min-h-9 w-full min-w-0 rounded border border-ink/40 bg-input-focus px-2.5 py-1.5 text-[13px] text-ink outline-none ring-2 ring-ink/10"
+          />
         }
-        placeholder={
-          props.column.dataType === 'DATE' ? 'YYYY-MM-DD' : props.emptyLabel
+      >
+        {(render) =>
+          render()({
+            label: `Edit ${props.column.name}`,
+            get value() {
+              return props.draft;
+            },
+            class:
+              'min-h-9 w-full min-w-0 rounded border border-ink/40 bg-input-focus px-2.5 py-1.5 text-[13px] text-ink outline-none ring-2 ring-ink/10',
+            autoFocus: true,
+            selectAll: props.selectAll,
+            inferType: props.column.inferType,
+            onInferMention: (mention) => {
+              // Removing a focused editor can synchronously blur it. The typed
+              // reference write owns this commit; do not also save the @ draft.
+              finishing = true;
+              props.onInferMention?.(mention);
+            },
+            onInput: props.onDraft,
+            onKeyDown,
+            onBlur: () => {
+              if (!props.mentionOpen) commit(false);
+            },
+            onReady: (focus) => {
+              textFocus = focus;
+              props.onEditorReady?.(focus);
+            },
+          })
         }
-        inputmode={props.column.dataType === 'NUMBER' ? 'decimal' : undefined}
-        aria-label={`Edit ${props.column.name}`}
-        aria-invalid={Boolean(error())}
-        title={error() || undefined}
-        value={props.draft}
-        onInput={(event) => {
-          props.onDraft(event.currentTarget.value);
-          setError('');
-        }}
-        onBlur={() => {
-          if (!props.mentionOpen) void commit(false);
-        }}
-        onKeyDown={(event) => {
-          event.stopPropagation();
-          if (event.isComposing || event.keyCode === 229) return;
-          if (props.mentionOpen) {
-            if (['Enter', 'Tab', 'Escape'].includes(event.key))
-              event.preventDefault();
-            if (event.key === 'Escape') props.onMentionClose?.();
-            return;
-          }
-          if (event.key === 'Enter') {
-            event.preventDefault();
-            void commit();
-          }
-          if (event.key === 'Escape') {
-            event.preventDefault();
-            finishing = true;
-            props.onClose();
-          }
-          if (event.key === 'Tab') {
-            if (!commit(false)) event.preventDefault();
-            else if (props.onNavigate?.(event.shiftKey ? -1 : 1))
-              event.preventDefault();
-          }
-        }}
-        class="min-h-9 w-full min-w-0 rounded border border-ink/40 bg-input-focus px-2.5 py-1.5 text-[13px] text-ink outline-none ring-2 ring-ink/10"
-      />
+      </Show>
       <Show when={error()}>
         <span
           class="absolute left-0 top-full z-10 rounded bg-menu px-2 py-1 text-xs text-failure-ink shadow-menu"
@@ -570,7 +645,25 @@ function SelectCell(props: GridCellProps) {
   let menu: HTMLElement | undefined;
   let optionEditor: HTMLDivElement | undefined;
   let navigating: 1 | -1 | undefined;
-  const label = () => (props.value === null ? '' : String(props.value));
+  const selected = () =>
+    databaseCellValues(props.value, props.column)
+      .filter((value) => value !== null)
+      .map(String);
+  const label = () => selected().join(', ');
+  const withOption = (option: string, checked = true) => {
+    if (!props.column.isMultiSelect) return option;
+    const values = selected().filter((value) => value !== option);
+    if (checked) values.push(option);
+    return values.length
+      ? JSON.stringify(
+          props.column.dataType === 'SELECT_NUMBER'
+            ? values.map(Number)
+            : values
+        )
+      : null;
+  };
+  const choose = (option: string, checked = true) =>
+    props.onWrite(withOption(option, checked));
   const options = () =>
     props.column.options.filter((option) =>
       String(option).toLocaleLowerCase().includes(search().toLocaleLowerCase())
@@ -619,7 +712,7 @@ function SelectCell(props: GridCellProps) {
         : undefined;
     const value = selected ?? matched;
     if (open() && value !== undefined && String(value) !== label())
-      void props.onWrite(String(value));
+      void choose(String(value));
     const direction = event.shiftKey ? -1 : 1;
     if (open()) {
       navigating = direction;
@@ -675,8 +768,10 @@ function SelectCell(props: GridCellProps) {
     setPending(true);
     const saved =
       existing !== undefined
-        ? await props.onWrite(String(existing))
-        : await props.onAddOption(value);
+        ? await choose(String(existing))
+        : props.column.isMultiSelect
+          ? await props.onAddOption(value, withOption(value))
+          : await props.onAddOption(value);
     setPending(false);
     if (saved) closeOptionEditor();
     else setError('Could not save. Try again.');
@@ -731,7 +826,11 @@ function SelectCell(props: GridCellProps) {
                 <span class="text-xs text-ink-placeholder opacity-40">—</span>
               }
             >
-              <SelectPill label={label()} />
+              <span class="flex min-w-0 flex-wrap gap-1">
+                <For each={selected()}>
+                  {(value) => <SelectPill label={value} />}
+                </For>
+              </span>
             </Show>
             <CaretDownIcon class="ml-1 size-3 shrink-0 text-ink-muted opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100" />
           </Dropdown.Trigger>
@@ -781,8 +880,8 @@ function SelectCell(props: GridCellProps) {
                   navigate(event);
                   if (event.key === 'Enter' && options()[0] !== undefined) {
                     event.preventDefault();
-                    void props.onWrite(String(options()[0]));
-                    setOpen(false);
+                    void choose(String(options()[0]));
+                    if (!props.column.isMultiSelect) setOpen(false);
                   } else if (event.key === 'ArrowDown') {
                     event.preventDefault();
                     menu
@@ -806,17 +905,33 @@ function SelectCell(props: GridCellProps) {
               </Dropdown.Item>
               <For each={options()}>
                 {(option) => (
-                  <Dropdown.Item
-                    data-option-value={String(option)}
-                    onSelect={() => void props.onWrite(String(option))}
+                  <Show
+                    when={props.column.isMultiSelect}
+                    fallback={
+                      <Dropdown.Item
+                        data-option-value={String(option)}
+                        onSelect={() => void props.onWrite(String(option))}
+                      >
+                        <span class="min-w-0 flex-1">
+                          <SelectPill label={String(option)} />
+                        </span>
+                        <Show when={String(option) === label()}>
+                          <CheckIcon class="size-3.5 text-ink-muted" />
+                        </Show>
+                      </Dropdown.Item>
+                    }
                   >
-                    <span class="min-w-0 flex-1">
+                    <Dropdown.CheckboxItem
+                      data-option-value={String(option)}
+                      checked={selected().includes(String(option))}
+                      closeOnSelect={false}
+                      onChange={(checked) =>
+                        void choose(String(option), checked)
+                      }
+                    >
                       <SelectPill label={String(option)} />
-                    </span>
-                    <Show when={String(option) === label()}>
-                      <CheckIcon class="size-3.5 text-ink-muted" />
-                    </Show>
-                  </Dropdown.Item>
+                    </Dropdown.CheckboxItem>
+                  </Show>
                 )}
               </For>
             </Dropdown.Group>

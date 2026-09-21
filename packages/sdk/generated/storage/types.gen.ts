@@ -2174,6 +2174,33 @@ export type CallTokenResponse = {
 };
 
 /**
+ * Explicit column type configuration. Existing values must convert without loss.
+ */
+export type ChangeColumnTypeRequest = {
+    /**
+     * Table version shown when the type menu opened.
+     */
+    baseVersion: TableVersion;
+    /**
+     * Requested property type.
+     */
+    dataType: DataType;
+    /**
+     * Whether select, link or entity values may hold multiple items.
+     */
+    isMultiSelect?: boolean;
+    /**
+     * Related database; defaults to the current database.
+     */
+    linkToDatabaseId?: string | null;
+    /**
+     * Related table, when choosing a database-row relationship.
+     */
+    linkToTableId?: string | null;
+    specificEntityType?: null | EntityType;
+};
+
+/**
  * Channel metadata in soup payloads.
  */
 export type Channel = {
@@ -3135,6 +3162,18 @@ export type ColumnDetail = {
      * Whether SQL may write this column.
      */
     writable: boolean;
+};
+
+/**
+ * Table versions changed by a placement deletion or reorder.
+ */
+export type ColumnSchemaOutcome = {
+    /**
+     * Includes both endpoint tables when deleting relationship edges.
+     */
+    table_versions: {
+        [key: string]: TableVersion;
+    };
 };
 
 export type Comment = {
@@ -4513,8 +4552,36 @@ export type DatabaseDetail = {
     tables: Array<TableDetail>;
 };
 
+/**
+ * Recipient grants shown in the native sharing interface.
+ */
+export type DatabaseSharePermissions = {
+    /**
+     * Directly shared channels, including direct messages.
+     */
+    channelSharePermissions: Array<ChannelSharePermission>;
+    /**
+     * Database identifier; sharing has no separate policy entity.
+     */
+    id: string;
+    /**
+     * Current database owner.
+     */
+    owner: string;
+};
+
 export type DeleteAnchorInfo = AnchorId & {
     deleted: boolean;
+};
+
+/**
+ * Guard a column deletion against concurrent writes.
+ */
+export type DeleteColumnRequest = {
+    /**
+     * Table version shown in the confirmation.
+     */
+    baseVersion: TableVersion;
 };
 
 export type DeleteCommentRequest = {
@@ -6728,6 +6795,28 @@ export type HashMap = {
 export type HighlightType = 1 | 2 | 3;
 
 /**
+ * An import is identified once, before sending, so retries cannot duplicate rows.
+ */
+export type ImportTable = {
+    /**
+     * Header names, in order. All imported values remain text.
+     */
+    columns: Array<string>;
+    /**
+     * New table's display name.
+     */
+    name: string;
+    /**
+     * Stable key for this import, retained through retries.
+     */
+    requestId: string;
+    /**
+     * Rectangular text rows. Empty fields are preserved.
+     */
+    rows: Array<Array<string>>;
+};
+
+/**
  * Display attribution for a comment imported from an external document.
  */
 export type ImportedAuthor = {
@@ -8506,6 +8595,20 @@ export type RenameTableRequest = {
 };
 
 /**
+ * A complete placement order, identified by stable column IDs.
+ */
+export type ReorderColumnsRequest = {
+    /**
+     * Table version used to build the order.
+     */
+    baseVersion: TableVersion;
+    /**
+     * Every column, exactly once.
+     */
+    columnIds: Array<string>;
+};
+
+/**
  * Request body for reordering favorites.
  */
 export type ReorderFavoritesRequest = {
@@ -10182,6 +10285,28 @@ export type SqlValue = null | number | number | string;
 export type SqliteFile = Blob | File;
 
 /**
+ * Starter result. A missing database means the user already started or removed it.
+ */
+export type StarterDatabase = {
+    /**
+     * Whether this request created the example.
+     */
+    created: boolean;
+    /**
+     * Accessible starter database, if still present.
+     */
+    databaseId?: string | null;
+    /**
+     * Initial table, returned only on first creation.
+     */
+    tableId?: string | null;
+    /**
+     * Initial board view, returned only on first creation.
+     */
+    viewId?: string | null;
+};
+
+/**
  * The deterministic starter document ids for the current user.
  */
 export type StarterDocumentsResponse = {
@@ -10754,6 +10879,16 @@ export type UpdateCrmTeamSettingsRequest = {
      * Replacement team-views array (whole-blob, last write wins).
      */
     team_views?: unknown;
+};
+
+/**
+ * Explicit recipient updates; ownership cannot be changed here.
+ */
+export type UpdateDatabasePermissionsRequest = {
+    /**
+     * Channel and direct-message grants to change.
+     */
+    channelSharePermissions: Array<UpdateChannelSharePermission>;
 };
 
 /**
@@ -13789,6 +13924,30 @@ export type QueryDatabaseSqlResponses = {
 
 export type QueryDatabaseSqlResponse = QueryDatabaseSqlResponses[keyof QueryDatabaseSqlResponses];
 
+export type EnsureStarterHandlerData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/databases/starter';
+};
+
+export type EnsureStarterHandlerErrors = {
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Provisioning failed; safe to retry
+     */
+    500: unknown;
+};
+
+export type EnsureStarterHandlerResponses = {
+    200: StarterDatabase;
+};
+
+export type EnsureStarterHandlerResponse = EnsureStarterHandlerResponses[keyof EnsureStarterHandlerResponses];
+
 export type GetDatabaseData = {
     body?: never;
     path: {
@@ -13821,6 +13980,80 @@ export type GetDatabaseResponses = {
 };
 
 export type GetDatabaseResponse = GetDatabaseResponses[keyof GetDatabaseResponses];
+
+export type ImportDatabaseTableData = {
+    body: ImportTable;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/import';
+};
+
+export type ImportDatabaseTableErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ImportDatabaseTableError = ImportDatabaseTableErrors[keyof ImportDatabaseTableErrors];
+
+export type ImportDatabaseTableResponses = {
+    200: Table;
+};
+
+export type ImportDatabaseTableResponse = ImportDatabaseTableResponses[keyof ImportDatabaseTableResponses];
+
+export type GetDatabasePermissionsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/permissions';
+};
+
+export type GetDatabasePermissionsErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetDatabasePermissionsError = GetDatabasePermissionsErrors[keyof GetDatabasePermissionsErrors];
+
+export type GetDatabasePermissionsResponses = {
+    200: DatabaseSharePermissions;
+};
+
+export type GetDatabasePermissionsResponse = GetDatabasePermissionsResponses[keyof GetDatabasePermissionsResponses];
+
+export type UpdateDatabasePermissionsData = {
+    body: UpdateDatabasePermissionsRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/permissions';
+};
+
+export type UpdateDatabasePermissionsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UpdateDatabasePermissionsError = UpdateDatabasePermissionsErrors[keyof UpdateDatabasePermissionsErrors];
+
+export type UpdateDatabasePermissionsResponses = {
+    200: DatabaseSharePermissions;
+};
+
+export type UpdateDatabasePermissionsResponse = UpdateDatabasePermissionsResponses[keyof UpdateDatabasePermissionsResponses];
 
 export type DownloadDatabaseSqliteData = {
     body?: never;
@@ -13960,6 +14193,61 @@ export type CreateDatabaseColumnResponses = {
 
 export type CreateDatabaseColumnResponse = CreateDatabaseColumnResponses[keyof CreateDatabaseColumnResponses];
 
+export type ReorderDatabaseColumnsData = {
+    body: ReorderColumnsRequest;
+    path: {
+        id: string;
+        table_id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/tables/{table_id}/columns/order';
+};
+
+export type ReorderDatabaseColumnsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ReorderDatabaseColumnsError = ReorderDatabaseColumnsErrors[keyof ReorderDatabaseColumnsErrors];
+
+export type ReorderDatabaseColumnsResponses = {
+    200: ColumnSchemaOutcome;
+};
+
+export type ReorderDatabaseColumnsResponse = ReorderDatabaseColumnsResponses[keyof ReorderDatabaseColumnsResponses];
+
+export type DeleteDatabaseColumnData = {
+    body: DeleteColumnRequest;
+    path: {
+        id: string;
+        table_id: string;
+        column_id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/tables/{table_id}/columns/{column_id}';
+};
+
+export type DeleteDatabaseColumnErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteDatabaseColumnError = DeleteDatabaseColumnErrors[keyof DeleteDatabaseColumnErrors];
+
+export type DeleteDatabaseColumnResponses = {
+    200: ColumnSchemaOutcome;
+};
+
+export type DeleteDatabaseColumnResponse = DeleteDatabaseColumnResponses[keyof DeleteDatabaseColumnResponses];
+
 export type RenameDatabaseColumnData = {
     body: RenameColumnRequest;
     path: {
@@ -14077,6 +14365,34 @@ export type AddDatabaseColumnOptionsResponses = {
 };
 
 export type AddDatabaseColumnOptionsResponse = AddDatabaseColumnOptionsResponses[keyof AddDatabaseColumnOptionsResponses];
+
+export type ChangeDatabaseColumnTypeData = {
+    body: ChangeColumnTypeRequest;
+    path: {
+        id: string;
+        table_id: string;
+        column_id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/tables/{table_id}/columns/{column_id}/type';
+};
+
+export type ChangeDatabaseColumnTypeErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ChangeDatabaseColumnTypeError = ChangeDatabaseColumnTypeErrors[keyof ChangeDatabaseColumnTypeErrors];
+
+export type ChangeDatabaseColumnTypeResponses = {
+    200: ColumnSchemaOutcome;
+};
+
+export type ChangeDatabaseColumnTypeResponse = ChangeDatabaseColumnTypeResponses[keyof ChangeDatabaseColumnTypeResponses];
 
 export type GetUserDocumentsHandlerData = {
     body?: never;

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE database_rows SET cells = (cells - $2::text) ||\n             CASE WHEN $4::jsonb ? id::text THEN jsonb_build_object($3::text, $4::jsonb -> id::text)\n             ELSE '{}'::jsonb END, updated_at = now()\n             WHERE table_id = $1 AND cells ? $2::text",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "878047e9898f59da16e33c388d7e285e254f1bb93a07aa1797100ab9eb218d0e"
+}

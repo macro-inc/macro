@@ -1,3 +1,4 @@
+import { markdownToPlainText } from '@macro-inc/lexical-core/utils/parsers';
 import type { DatabaseColumnType } from './column-inference';
 import { relatedRowIds } from './database-relations';
 import type { DatabaseCellValue, DatabaseViewColumn } from './database-view';
@@ -44,14 +45,19 @@ export function rowTitle(
   const value = column ? rowValue(row, column.id) : null;
   if (value === null || value === '') return 'Unnamed';
   if (column?.relation) return formatCellValue(column, value) || 'Unnamed';
-  return column?.dataType === 'ENTITY' ? 'Linked record' : String(value);
+  return column?.dataType === 'ENTITY'
+    ? 'Linked record'
+    : column?.dataType === 'STRING'
+      ? markdownToPlainText(String(value))
+      : String(value);
 }
 
 export function canEditCell(column: DatabaseViewColumn): boolean {
   if (column.relation) return column.writable;
   return (
     column.writable &&
-    !column.isMultiSelect &&
+    (!column.isMultiSelect ||
+      ['SELECT_STRING', 'SELECT_NUMBER', 'TAG'].includes(column.dataType)) &&
     [
       'STRING',
       'NUMBER',
@@ -60,6 +66,7 @@ export function canEditCell(column: DatabaseViewColumn): boolean {
       'LINK',
       'SELECT_STRING',
       'SELECT_NUMBER',
+      'TAG',
       'ENTITY',
     ].includes(column.dataType)
   );
@@ -83,6 +90,7 @@ export function formatCellValue(
       // Older / unknown values remain visible instead of disappearing.
     }
   }
+  if (column.dataType === 'STRING') return markdownToPlainText(String(value));
   if (column.dataType === 'DATE') {
     const date = new Date(String(value));
     if (!Number.isNaN(date.getTime())) {

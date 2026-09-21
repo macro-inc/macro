@@ -53,7 +53,7 @@ describe('database filter controls', () => {
     expect(filters()[0].value).toBe('Priya');
   });
 
-  it('switches to named choices for select properties and resets an incompatible value', () => {
+  it('switches to named choices for select properties and resets an incompatible value', async () => {
     const [filters, setFilters] = createSignal<DatabaseFilter[]>([
       { id: '1', columnId: 'name', operator: 'contains', value: 'draft' },
     ]);
@@ -64,24 +64,33 @@ describe('database filter controls', () => {
         onChange={setFilters}
       />
     ));
-    fireEvent.change(
-      screen.getByRole('combobox', { name: 'Filter property' }),
-      { target: { value: 'status' } }
+    fireEvent.keyDown(
+      screen.getByRole('button', { name: /^Filter property/ }),
+      { key: 'Enter' }
     );
+    fireEvent.keyDown(await screen.findByRole('option', { name: 'Status' }), {
+      key: 'Enter',
+    });
     expect(filters()[0]).toMatchObject({
       columnId: 'status',
       operator: 'equals',
       value: '',
     });
-    fireEvent.change(screen.getByRole('combobox', { name: 'Filter value' }), {
-      target: { value: 'Done' },
+    fireEvent.keyDown(screen.getByRole('button', { name: /^Filter value/ }), {
+      key: 'Enter',
+    });
+    fireEvent.keyDown(await screen.findByRole('option', { name: 'Done' }), {
+      key: 'Enter',
     });
     expect(filters()[0].value).toBe('Done');
-    fireEvent.change(
-      screen.getByRole('combobox', { name: 'Filter condition' }),
-      { target: { value: 'is_empty' } }
+    fireEvent.keyDown(
+      screen.getByRole('button', { name: /^Filter condition/ }),
+      { key: 'Enter' }
     );
-    expect(screen.queryByRole('combobox', { name: 'Filter value' })).toBeNull();
+    fireEvent.keyDown(await screen.findByRole('option', { name: 'is empty' }), {
+      key: 'Enter',
+    });
+    expect(screen.queryByRole('button', { name: /^Filter value/ })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Remove filter' }));
     expect(filters()).toEqual([]);
   });

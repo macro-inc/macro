@@ -25,6 +25,8 @@ import type { EntityType } from '@service-properties/generated/schemas/entityTyp
 import type { PropertyOption } from '@service-properties/generated/schemas/propertyOption';
 import type { PropertyOwner } from '@service-properties/generated/schemas/propertyOwner';
 import type { Result } from 'neverthrow';
+import type { SharePermissionV2 } from './generated/schemas/sharePermissionV2';
+import type { UpdateChannelSharePermission } from './generated/schemas/updateChannelSharePermission';
 
 /** What a viewer may do with a database (`AccessGrant`). */
 export type DatabaseGrant = 'view' | 'comment' | 'edit' | 'owner';
@@ -42,6 +44,14 @@ export interface DatabaseSummary {
 export interface ListedDatabase {
   database: DatabaseSummary;
   grant: DatabaseGrant;
+}
+
+/** One-time example provisioning; null ids mean no example was needed. */
+export interface StarterDatabase {
+  databaseId: string | null;
+  tableId: string | null;
+  viewId: string | null;
+  created: boolean;
 }
 
 /** One table (tab) of a database. */
@@ -314,7 +324,56 @@ async function execErrorResponseHandler(
   }
 }
 
+/** All CSV values stay text; retries retain requestId. */
+export interface ImportDatabaseTableRequest {
+  requestId: string;
+  name: string;
+  columns: string[];
+  rows: string[][];
+}
+
 export const databasesClient = {
+  async importTable({
+    id,
+    request,
+  }: {
+    id: string;
+    request: ImportDatabaseTableRequest;
+  }) {
+    return await databasesFetch<DatabaseTable, 'INVALID_SCHEMA'>(
+      `/databases/${id}/import`,
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+        errorResponseHandler: async (response) => ({
+          code: response.status === 400 ? 'INVALID_SCHEMA' : 'HTTP_ERROR',
+          message: errorMessageFromBody(await response.text(), response.status),
+        }),
+      }
+    );
+  },
+
+  async getPermissions({ id }: { id: string }) {
+    return await databasesFetch<SharePermissionV2>(
+      `/databases/${id}/permissions`
+    );
+  },
+
+  async updatePermissions(params: {
+    id: string;
+    channelSharePermissions: UpdateChannelSharePermission[];
+  }) {
+    return await databasesFetch<SharePermissionV2>(
+      `/databases/${params.id}/permissions`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          channelSharePermissions: params.channelSharePermissions,
+        }),
+      }
+    );
+  },
+
   /** Read-only execution, enforced by the server. Safe for live document queries. */
   async query(request: { sql: string }) {
     return await databasesFetch<ExecOutcome, ExecErrorCode>(
@@ -329,6 +388,12 @@ export const databasesClient = {
 
   async list() {
     return await databasesFetch<ListedDatabase[]>('/databases');
+  },
+
+  async ensureStarter() {
+    return await databasesFetch<StarterDatabase>('/databases/starter', {
+      method: 'POST',
+    });
   },
 
   async get({ id }: { id: string }) {
@@ -400,6 +465,68 @@ export const databasesClient = {
         errorResponseHandler: async (response) => ({
           code: response.status === 400 ? 'INVALID_SCHEMA' : 'HTTP_ERROR',
           message: errorMessageFromBody(await response.text(), response.status),
+        }),
+      }
+    );
+  },
+
+  async changeColumnType(params: {
+    id: string;
+    tableId: string;
+    columnId: string;
+    request: {
+      dataType: DataType;
+      isMultiSelect?: boolean;
+      specificEntityType?: EntityType;
+      linkToTableId?: string;
+      baseVersion: number;
+    };
+  }) {
+    return await databasesFetch<{ table_versions: Record<string, number> }>(
+      `/databases/${params.id}/tables/${params.tableId}/columns/${params.columnId}/type`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(params.request),
+        errorResponseHandler: async (response) => ({
+          code: 'HTTP_ERROR',
+          message: errorMessageFromBody(await response.text(), response.status),
+        }),
+      }
+    );
+  },
+
+  async deleteColumn(params: {
+    id: string;
+    tableId: string;
+    columnId: string;
+    baseVersion: number;
+  }) {
+    return await databasesFetch<{ table_versions: Record<string, number> }>(
+      `/databases/${params.id}/tables/${params.tableId}/columns/${params.columnId}`,
+      {
+        method: 'DELETE',
+        body: JSON.stringify({ baseVersion: params.baseVersion }),
+        errorResponseHandler: async (response) => ({
+          code: 'HTTP_ERROR',
+          message: errorMessageFromBody(await response.text(), response.status),
+        }),
+      }
+    );
+  },
+
+  async reorderColumns(params: {
+    id: string;
+    tableId: string;
+    columnIds: string[];
+    baseVersion: number;
+  }) {
+    return await databasesFetch<{ table_versions: Record<string, number> }>(
+      `/databases/${params.id}/tables/${params.tableId}/columns/order`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          columnIds: params.columnIds,
+          baseVersion: params.baseVersion,
         }),
       }
     );

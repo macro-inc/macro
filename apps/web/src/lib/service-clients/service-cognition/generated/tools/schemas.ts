@@ -116,7 +116,7 @@ export const AddColumnResponse = z.object({
                 }),
                 specificEntityType: z.union([z.string(), z.null()]).optional(),
                 isMultiSelect: z.boolean(),
-                options: z.array(z.string()),
+                options: z.array(z.string()).optional(),
                 writable: z.boolean(),
                 relation: z
                   .union([
@@ -231,7 +231,7 @@ export const AddColumnOptionsResponse = z.object({
                 }),
                 specificEntityType: z.union([z.string(), z.null()]).optional(),
                 isMultiSelect: z.boolean(),
-                options: z.array(z.string()),
+                options: z.array(z.string()).optional(),
                 writable: z.boolean(),
                 relation: z
                   .union([
@@ -1985,7 +1985,7 @@ export const CreateDatabaseResponse = z.object({
                 }),
                 specificEntityType: z.union([z.string(), z.null()]).optional(),
                 isMultiSelect: z.boolean(),
-                options: z.array(z.string()),
+                options: z.array(z.string()).optional(),
                 writable: z.boolean(),
                 relation: z
                   .union([
@@ -2301,7 +2301,7 @@ export const CreateTableResponse = z.object({
                 }),
                 specificEntityType: z.union([z.string(), z.null()]).optional(),
                 isMultiSelect: z.boolean(),
-                options: z.array(z.string()),
+                options: z.array(z.string()).optional(),
                 writable: z.boolean(),
                 relation: z
                   .union([
@@ -2556,7 +2556,7 @@ export const ToolDatabaseSchema = z.object({
           }),
           specificEntityType: z.union([z.string(), z.null()]).optional(),
           isMultiSelect: z.boolean(),
-          options: z.array(z.string()),
+          options: z.array(z.string()).optional(),
           writable: z.boolean(),
           relation: z
             .union([
@@ -4487,6 +4487,35 @@ export const QueryDatabase = z.object({
       z.null(),
     ])
     .optional(),
+  display: z
+    .union([
+      z.any().superRefine((x, ctx) => {
+        const schemas = [
+          z.literal('table'),
+          z.literal('scalar'),
+          z.literal('bar'),
+          z.literal('line'),
+          z.literal('pie'),
+        ];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      z.null(),
+    ])
+    .optional(),
 });
 
 export const QueryDatabaseResponse = z.object({
@@ -4502,12 +4531,12 @@ export const QueryDatabaseResponse = z.object({
     })
   ),
   changesApplied: z.number().int().gte(0),
-  insertedRowIds: z.array(z.string().uuid()),
-  newVersions: z.record(z.number().int()),
+  insertedRowIds: z.array(z.string().uuid()).optional(),
+  newVersions: z.record(z.number().int()).optional(),
   readVersions: z.array(
     z.object({ tableId: z.string().uuid(), version: z.number().int() })
   ),
-  truncatedTables: z.array(z.string()),
+  truncatedTables: z.array(z.string()).optional(),
   summary: z.string(),
 });
 
@@ -5730,6 +5759,7 @@ export const SaveDatabaseView = z.object({
       }
     }),
     groupBy: z.union([z.string().uuid(), z.null()]).optional(),
+    groupOrder: z.array(z.string()).optional(),
     filters: z
       .array(
         z.object({
