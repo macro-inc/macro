@@ -14,9 +14,17 @@ mod columns;
 mod infer_column_type;
 mod rename_column;
 mod sharing;
+mod tables;
 mod transfer;
 
 const USER: &str = "macro|databases-a@macro.com";
+
+fn applied_table(outcome: TableMutationOutcome) -> Table {
+    let TableMutationOutcome::Applied(table) = outcome else {
+        panic!("expected a committed table mutation, got {outcome:?}");
+    };
+    table
+}
 
 fn user() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str(USER)
@@ -84,14 +92,14 @@ async fn fixture(pool: &PgPool) -> (PgDatabasesRepo, Table, Uuid) {
         .await
         .expect("database should insert");
 
-    let table = repo
-        .create_table(&CreateTable {
+    let table = applied_table(
+        repo.create_table(&CreateTable {
             database_id: database.id,
             name: "Guests".to_string(),
         })
         .await
-        .expect("table insert should succeed")
-        .expect("table name should be available");
+        .expect("table insert should succeed"),
+    );
 
     let definition_id = insert_definition(pool, "Name").await;
     repo.create_column(
@@ -189,26 +197,24 @@ async fn rename_trash_and_restore_round_trip(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn table_rename_checks_previous_name_and_collision_atomically(pool: PgPool) {
     let (repo, table, _) = fixture(&pool).await;
-    assert!(
+    assert!(matches!(
         repo.rename_table(&table, "table 1", "Guests")
             .await
-            .unwrap()
-            .is_none()
+            .unwrap(),
+        TableMutationOutcome::Conflict
+    ));
+    let renamed = applied_table(
+        repo.rename_table(&table, "Attendees", "Guests")
+            .await
+            .unwrap(),
     );
-    let renamed = repo
-        .rename_table(&table, "Attendees", "Guests")
-        .await
-        .unwrap()
-        .unwrap();
     assert_eq!(renamed.id, table.id);
     assert_eq!(renamed.position, table.position);
     assert_eq!(renamed.version, TableVersion(2));
-    assert!(
-        repo.rename_table(&table, "People", "Guests")
-            .await
-            .unwrap()
-            .is_none()
-    );
+    assert!(matches!(
+        repo.rename_table(&table, "People", "Guests").await.unwrap(),
+        TableMutationOutcome::Conflict
+    ));
     let (_, tables) = repo.get_database(table.database_id).await.unwrap().unwrap();
     assert_eq!(
         tables.iter().find(|t| t.id == table.id).unwrap().name,
@@ -227,7 +233,10 @@ async fn concurrent_table_create_and_rename_cannot_reserve_the_same_name(pool: P
         repo.rename_table(&table, "People", "Guests"),
         repo.create_table(&command),
     );
-    assert_ne!(renamed.unwrap().is_some(), created.unwrap().is_some());
+    assert_ne!(
+        matches!(renamed.unwrap(), TableMutationOutcome::Applied(_)),
+        matches!(created.unwrap(), TableMutationOutcome::Applied(_))
+    );
     let (_, tables) = repo.get_database(table.database_id).await.unwrap().unwrap();
     assert_eq!(
         tables
@@ -236,7 +245,10 @@ async fn concurrent_table_create_and_rename_cannot_reserve_the_same_name(pool: P
             .count(),
         1
     );
-    assert!(repo.create_table(&command).await.unwrap().is_none());
+    assert!(matches!(
+        repo.create_table(&command).await.unwrap(),
+        TableMutationOutcome::Conflict
+    ));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -655,14 +667,14 @@ async fn deleting_a_row_cascades_its_links(pool: PgPool) {
 async fn a_link_bumps_both_ends(pool: PgPool) {
     let (repo, guests, guest_name) = fixture(&pool).await;
 
-    let sessions = repo
-        .create_table(&CreateTable {
+    let sessions = applied_table(
+        repo.create_table(&CreateTable {
             database_id: guests.database_id,
             name: "Sessions".to_string(),
         })
         .await
-        .expect("table insert should succeed")
-        .expect("table name should be available");
+        .expect("table insert should succeed"),
+    );
     let session_name = insert_definition(&pool, "Session name").await;
     repo.create_column(
         sessions.id,

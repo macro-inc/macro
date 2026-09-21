@@ -43,6 +43,7 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
   let input: HTMLInputElement | undefined;
   let list: HTMLDivElement | undefined;
   let pendingWrite: Promise<boolean> | undefined;
+  let editorSession = 0;
   const listId = createUniqueId();
   const editable = () => props.canEdit && props.column.writable;
   const ids = () => relatedRowIds(props.value);
@@ -60,12 +61,14 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
   const active = () =>
     candidates()[Math.min(activeIndex(), Math.max(0, candidates().length - 1))];
   function begin(seed = '') {
+    editorSession += 1;
     if (!saving() && !saveError()) setSelected(ids());
     setSearch(seed.replace(/^@/, ''));
     setActiveIndex(0);
     setOpen(true);
   }
   function close(restore = true, direction?: 1 | -1) {
+    editorSession += 1;
     setOpen(false);
     if (direction && props.onNavigate?.(direction)) return;
     if (direction) {
@@ -111,18 +114,26 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
     );
   }
   async function commitAndNavigate(direction: 1 | -1) {
+    const session = editorSession;
     const row = active();
     if (editable() && search().trim() && row && !selected().includes(row.id)) {
       if (!(await write([...selected(), row.id]))) return;
     }
-    await finish(direction);
+    await finish(direction, session);
   }
-  async function finish(direction?: 1 | -1) {
-    while (pendingWrite) {
-      if (!(await pendingWrite)) return;
+  async function finish(direction?: 1 | -1, session = editorSession) {
+    while (session === editorSession && open()) {
+      while (pendingWrite) {
+        if (!(await pendingWrite)) return;
+      }
+      if (session !== editorSession || !open()) return;
+      if (saveError()) {
+        if (!(await write(selected()))) return;
+        // A selection made during retry may have queued another write.
+        continue;
+      }
+      close(true, direction);
     }
-    if (saveError() && !(await write(selected()))) return;
-    close(true, direction);
   }
   function openRecord(id: string) {
     close(false);
@@ -142,7 +153,10 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
       edit: (seed) => begin(seed),
     })
   );
-  onCleanup(() => props.onReady?.(undefined));
+  onCleanup(() => {
+    editorSession += 1;
+    props.onReady?.(undefined);
+  });
   return (
     <Popover
       open={open()}

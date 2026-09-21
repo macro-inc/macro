@@ -43,7 +43,8 @@ use crate::domain::models::{
     CreateColumn, CreateDatabase, CreateTable, Database, DatabaseDetail, DatabaseError, DatabaseId,
     ExecOutcome, ExecRequest, InferColumnType, InferColumnTypeOutcome, ListedDatabase,
     MaterializedTable, QueryError, RenameColumnOutcome, Row, RowChange, RowId, SqliteSnapshot,
-    Table, TableDeps, TableDetail, TableId, TableSchema, TableVersion, Viewer,
+    Table, TableDeps, TableDetail, TableId, TableMutationOutcome, TableSchema, TableVersion,
+    Viewer,
 };
 use crate::domain::models::{ChangeColumnType, ColumnReplacement, ColumnSchemaOutcome};
 use crate::domain::ports::{
@@ -970,18 +971,30 @@ where
                 "a table named `{name}` already exists in this database"
             )));
         }
-        self.repo
+        let table = match self
+            .repo
             .create_table(&CreateTable {
                 database_id: cmd.database_id,
                 name: name.clone(),
             })
             .await
             .map_err(repo_err)?
-            .ok_or_else(|| {
-                DatabaseError::InvalidSchemaOperation(format!(
+        {
+            TableMutationOutcome::Applied(table) => table,
+            TableMutationOutcome::NotFound => return Err(DatabaseError::NotFound),
+            TableMutationOutcome::Conflict => {
+                return Err(DatabaseError::InvalidSchemaOperation(format!(
                     "a table named `{name}` already exists in this database"
-                ))
-            })
+                )));
+            }
+        };
+        self.publish(
+            receipt_attribution(&receipt),
+            &HashMap::from([(table.id, table.database_id)]),
+            &HashMap::from([(table.id, table.version)]),
+        )
+        .await;
+        Ok(table)
     }
 
     #[tracing::instrument(skip(self, receipt), err)]
@@ -1010,11 +1023,19 @@ where
                 "a table named `{name}` already exists in this database"
             )));
         }
-        let renamed = self.repo.rename_table(table, &name, &previous_name).await
+        let renamed = match self
+            .repo
+            .rename_table(table, &name, &previous_name)
+            .await
             .map_err(repo_err)?
-            .ok_or_else(|| DatabaseError::InvalidSchemaOperation(
-                "the table name changed or is already in use. Reopen Rename table and try again".into()
-            ))?;
+        {
+            TableMutationOutcome::Applied(table) => table,
+            TableMutationOutcome::NotFound => return Err(DatabaseError::NotFound),
+            TableMutationOutcome::Conflict => return Err(DatabaseError::InvalidSchemaOperation(
+                "the table name changed or is already in use. Reopen Rename table and try again"
+                    .into(),
+            )),
+        };
         self.publish(
             receipt_attribution(&receipt),
             &HashMap::from([(table_id, renamed.database_id)]),

@@ -10,14 +10,14 @@ async fn column_replacement_preserves_shared_definition_and_other_table_cells(po
         .await
         .unwrap()
         .remove(0);
-    let other = repo
-        .create_table(&CreateTable {
+    let other = applied_table(
+        repo.create_table(&CreateTable {
             database_id: table.database_id,
             name: "Other".into(),
         })
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap(),
+    );
     repo.create_column(
         other.id,
         old,

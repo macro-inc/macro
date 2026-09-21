@@ -11,14 +11,14 @@ async fn column_label_roundtrip_preserves_other_placements_and_requires_current_
         .unwrap()
         .remove(0);
     table.version = repo.table_versions(&[table.id]).await.unwrap()[&table.id];
-    let other = repo
-        .create_table(&CreateTable {
+    let other = applied_table(
+        repo.create_table(&CreateTable {
             database_id: table.database_id,
             name: "Other".into(),
         })
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap(),
+    );
     repo.create_column(
         other.id,
         definition_id,

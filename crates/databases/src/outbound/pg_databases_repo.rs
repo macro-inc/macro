@@ -24,7 +24,7 @@ use model_entity::EntityType;
 use crate::domain::models::{
     ApplyOutcome, Column, ColumnConfig, ColumnId, CreateColumn, CreateDatabase, CreateTable,
     Database, DatabaseId, PropertyDefinitionId, RenameColumnOutcome, Row, RowChange, RowId, Table,
-    TableId, TableVersion, Viewer,
+    TableId, TableMutationOutcome, TableVersion, Viewer,
 };
 use crate::domain::models::{ColumnReplacement, ColumnSchemaOutcome};
 use crate::domain::ports::DatabasesRepo;
@@ -376,15 +376,19 @@ impl DatabasesRepo for PgDatabasesRepo {
     }
 
     #[tracing::instrument(err, skip(self, cmd))]
-    async fn create_table(&self, cmd: &CreateTable) -> Result<Option<Table>, Self::Err> {
+    async fn create_table(&self, cmd: &CreateTable) -> Result<TableMutationOutcome, Self::Err> {
         let mut transaction = self.pool.begin().await?;
 
-        sqlx::query!(
-            "SELECT id FROM databases WHERE id = $1 FOR UPDATE",
+        if sqlx::query!(
+            "SELECT id FROM databases WHERE id = $1 AND trashed_at IS NULL FOR UPDATE",
             cmd.database_id
         )
-        .fetch_one(&mut *transaction)
-        .await?;
+        .fetch_optional(&mut *transaction)
+        .await?
+        .is_none()
+        {
+            return Ok(TableMutationOutcome::NotFound);
+        }
 
         let max_position = sqlx::query_scalar!(
             r#"SELECT MAX(position) FROM database_tables WHERE database_id = $1"#,
@@ -415,13 +419,17 @@ impl DatabasesRepo for PgDatabasesRepo {
 
         transaction.commit().await?;
 
-        Ok(row.map(|row| Table {
-            id: row.id,
-            database_id: row.database_id,
-            name: row.name,
-            position: row.position,
-            version: TableVersion(row.version),
-        }))
+        Ok(row
+            .map(|row| {
+                TableMutationOutcome::Applied(Table {
+                    id: row.id,
+                    database_id: row.database_id,
+                    name: row.name,
+                    position: row.position,
+                    version: TableVersion(row.version),
+                })
+            })
+            .unwrap_or(TableMutationOutcome::Conflict))
     }
 
     #[tracing::instrument(err, skip(self, table))]
@@ -430,15 +438,19 @@ impl DatabasesRepo for PgDatabasesRepo {
         table: &Table,
         name: &str,
         previous_name: &str,
-    ) -> Result<Option<Table>, Self::Err> {
+    ) -> Result<TableMutationOutcome, Self::Err> {
         let mut transaction = self.pool.begin().await?;
         // Serialize table naming and position allocation within a database.
-        sqlx::query!(
-            "SELECT id FROM databases WHERE id = $1 FOR UPDATE",
+        if sqlx::query!(
+            "SELECT id FROM databases WHERE id = $1 AND trashed_at IS NULL FOR UPDATE",
             table.database_id
         )
-        .fetch_one(&mut *transaction)
-        .await?;
+        .fetch_optional(&mut *transaction)
+        .await?
+        .is_none()
+        {
+            return Ok(TableMutationOutcome::NotFound);
+        }
         let row = sqlx::query!(
             r#"
             UPDATE database_tables
@@ -459,13 +471,17 @@ impl DatabasesRepo for PgDatabasesRepo {
         .fetch_optional(&mut *transaction)
         .await?;
         transaction.commit().await?;
-        Ok(row.map(|row| Table {
-            id: row.id,
-            database_id: row.database_id,
-            name: row.name,
-            position: row.position,
-            version: TableVersion(row.version),
-        }))
+        Ok(row
+            .map(|row| {
+                TableMutationOutcome::Applied(Table {
+                    id: row.id,
+                    database_id: row.database_id,
+                    name: row.name,
+                    position: row.position,
+                    version: TableVersion(row.version),
+                })
+            })
+            .unwrap_or(TableMutationOutcome::Conflict))
     }
 
     #[tracing::instrument(err, skip(self, cmd))]

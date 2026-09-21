@@ -202,6 +202,17 @@ pub struct CreateTable {
     pub name: String,
 }
 
+/// Result of a table mutation checked atomically against its parent database.
+#[derive(Debug, Clone)]
+pub enum TableMutationOutcome {
+    /// The table was created or renamed and the transaction committed.
+    Applied(Table),
+    /// The database was missing or trashed at the write boundary.
+    NotFound,
+    /// The name was taken or the table's previous name no longer matched.
+    Conflict,
+}
+
 /// How a new column obtains its property definition.
 #[derive(Debug, Clone)]
 pub enum ColumnBinding {

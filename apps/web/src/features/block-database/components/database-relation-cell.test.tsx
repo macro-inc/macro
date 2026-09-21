@@ -83,6 +83,68 @@ function setup(
 }
 
 describe('database relationships', () => {
+  it.each([false, true])(
+    'does not advance after a pending Tab selection is dismissed (reopen: %s)',
+    async (reopen) => {
+      let complete!: (saved: boolean) => void;
+      const navigate = vi.fn(() => true);
+      const { value } = setup({
+        value: '[]',
+        navigate,
+        save: () => new Promise((resolve) => (complete = resolve)),
+      });
+      const trigger = screen.getByRole('button', {
+        name: /Choose related records/,
+      });
+      fireEvent.click(trigger);
+      const input = await screen.findByRole('combobox');
+      fireEvent.input(input, { target: { value: 'Acme' } });
+      fireEvent.keyDown(input, { key: 'Tab' });
+      fireEvent.keyDown(input, { key: 'Escape' });
+      await waitFor(() => expect(screen.queryByRole('combobox')).toBeNull());
+      if (reopen) {
+        fireEvent.click(trigger);
+        await screen.findByRole('combobox');
+      }
+      complete(true);
+      await waitFor(() => expect(value()).toBe('["acme-id"]'));
+      // Let the acknowledgement's entire promise chain finish before checking
+      // that a deferred focus change did not happen.
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(navigate).not.toHaveBeenCalled();
+      if (reopen) {
+        expect(screen.getByRole('combobox')).toBe(document.activeElement);
+      } else {
+        expect(document.activeElement).toBe(trigger);
+      }
+    }
+  );
+
+  it('drains selections queued during retry before closing the picker', async () => {
+    const complete: Array<(saved: boolean) => void> = [];
+    const { write, value } = setup({
+      value: '[]',
+      save: () => new Promise((resolve) => complete.push(resolve)),
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: /Choose related records/ })
+    );
+    fireEvent.click(await screen.findByRole('option', { name: 'Acme' }));
+    complete[0](false);
+    await screen.findByRole('alert');
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Northwind' }));
+    expect(write).toHaveBeenCalledTimes(2);
+    complete[1](true);
+    await waitFor(() => expect(write).toHaveBeenCalledTimes(3));
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(write).toHaveBeenLastCalledWith('["acme-id","north-id"]');
+    expect(screen.getByRole('combobox')).toBeTruthy();
+    complete[2](true);
+    await waitFor(() => expect(screen.queryByRole('combobox')).toBeNull());
+    expect(value()).toBe('["acme-id","north-id"]');
+  });
+
   it('queues rapid selections and waits for the final write before Tab advances', async () => {
     const complete: Array<(saved: boolean) => void> = [];
     const navigate = vi.fn(() => true);

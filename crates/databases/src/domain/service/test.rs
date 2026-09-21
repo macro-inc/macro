@@ -32,6 +32,7 @@ mod infer_column_type;
 mod relations;
 mod rename_column;
 mod sharing;
+mod tables;
 
 const OWNER: &str = "macro|owner@macro.com";
 const VIEWER: &str = "macro|viewer@macro.com";
@@ -68,6 +69,8 @@ struct World {
     fetch_row_limits: Vec<usize>,
     /// When set, the fake magic table reports itself truncated.
     magic_truncated: bool,
+    /// Simulate a parent removed between domain validation and the write.
+    table_write_not_found: bool,
 }
 
 type Shared = Arc<Mutex<World>>;
@@ -173,13 +176,16 @@ impl DatabasesRepo for FakeRepo {
         }
         Ok(())
     }
-    async fn create_table(&self, cmd: &CreateTable) -> Result<Option<Table>, FakeError> {
+    async fn create_table(&self, cmd: &CreateTable) -> Result<TableMutationOutcome, FakeError> {
         let mut w = self.0.lock().unwrap();
+        if w.table_write_not_found {
+            return Ok(TableMutationOutcome::NotFound);
+        }
         if w.tables
             .iter()
             .any(|table| table.database_id == cmd.database_id && same_name(&table.name, &cmd.name))
         {
-            return Ok(None);
+            return Ok(TableMutationOutcome::Conflict);
         }
         let table = Table {
             id: Uuid::new_v4(),
@@ -189,25 +195,28 @@ impl DatabasesRepo for FakeRepo {
             version: TableVersion(0),
         };
         w.tables.push(table.clone());
-        Ok(Some(table))
+        Ok(TableMutationOutcome::Applied(table))
     }
     async fn rename_table(
         &self,
         table: &Table,
         name: &str,
         previous_name: &str,
-    ) -> Result<Option<Table>, FakeError> {
+    ) -> Result<TableMutationOutcome, FakeError> {
         let mut world = self.0.lock().unwrap();
+        if world.table_write_not_found {
+            return Ok(TableMutationOutcome::NotFound);
+        }
         let Some(current) = world
             .tables
             .iter_mut()
             .find(|candidate| candidate.id == table.id && candidate.name == previous_name)
         else {
-            return Ok(None);
+            return Ok(TableMutationOutcome::Conflict);
         };
         current.name = name.to_string();
         current.version.0 += 1;
-        Ok(Some(current.clone()))
+        Ok(TableMutationOutcome::Applied(current.clone()))
     }
     async fn create_column(
         &self,

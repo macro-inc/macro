@@ -15,7 +15,7 @@ use crate::domain::models::{
     DatabaseId, ExecOutcome, ExecRequest, InferColumnType, InferColumnTypeOutcome, ListedDatabase,
     MaterializedTable, PropertyDefinitionId, QueryError, QueryResult, RawRowChange,
     RenameColumnOutcome, Row, RowChange, RowId, SqliteSnapshot, Table, TableDeps, TableId,
-    TableVersion, Viewer,
+    TableMutationOutcome, TableVersion, Viewer,
 };
 use crate::domain::models::{ChangeColumnType, ColumnReplacement, ColumnSchemaOutcome};
 
@@ -72,21 +72,22 @@ pub trait DatabasesRepo: Send + Sync + 'static {
     -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Insert a table, atomically reserving its name within the database.
-    /// Returns `None` when that name is already taken (case-insensitively).
+    /// A name collision is distinct from a missing or trashed database; the
+    /// latter must be checked atomically with the write.
     fn create_table(
         &self,
         cmd: &CreateTable,
-    ) -> impl Future<Output = Result<Option<Table>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<TableMutationOutcome, Self::Err>> + Send;
 
     /// Rename only if the previous name still matches and the new name is free.
-    /// Returns `None` on a concurrent rename or name collision. Successful
-    /// renames bump the table version in the same transaction.
+    /// A concurrent rename/name collision is distinct from a missing or
+    /// trashed database. Successful renames bump the version atomically.
     fn rename_table(
         &self,
         table: &Table,
         name: &str,
         previous_name: &str,
-    ) -> impl Future<Output = Result<Option<Table>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<TableMutationOutcome, Self::Err>> + Send;
 
     /// Insert a column placement.
     fn create_column(
