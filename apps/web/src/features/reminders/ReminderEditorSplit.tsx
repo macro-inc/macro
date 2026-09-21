@@ -70,6 +70,17 @@ export type ReminderDetailsProps = {
   onClose: VoidFunction;
 };
 
+function ReminderUnavailable() {
+  return (
+    <div class="flex flex-col items-center justify-center gap-2 py-16 text-ink-muted">
+      <BellIcon class="size-6 text-ink-extra-muted" />
+      <span class="text-center text-sm">
+        This reminder is unavailable or you no longer have access.
+      </span>
+    </div>
+  );
+}
+
 /**
  * Reminder detail content shared by the restorable component split and Home's
  * inline preview.
@@ -80,6 +91,20 @@ export type ReminderDetailsProps = {
  * mutation the create modal uses and asks its host to close.
  */
 export function ReminderDetails(props: ReminderDetailsProps) {
+  return (
+    <Show when={props.reminderId} keyed fallback={<ReminderUnavailable />}>
+      {(reminderId) => (
+        <ReminderDetailsForId reminderId={reminderId} onClose={props.onClose} />
+      )}
+    </Show>
+  );
+}
+
+/** One keyed editor lifecycle, recreated whenever the selected reminder changes. */
+function ReminderDetailsForId(props: {
+  reminderId: string;
+  onClose: VoidFunction;
+}) {
   let active = true;
   onCleanup(() => {
     active = false;
@@ -113,9 +138,7 @@ export function ReminderDetails(props: ReminderDetailsProps) {
     return query.data.entityId;
   });
   const reminderUnavailable = () =>
-    !props.reminderId ||
-    query.isError ||
-    (query.isSuccess && query.data === undefined);
+    query.isError || (query.isSuccess && query.data === undefined);
 
   const save = async (values: ReminderFormValues, reminder: Reminder) => {
     const patch = reminderEditPatch(
@@ -219,18 +242,13 @@ export function ReminderDetails(props: ReminderDetailsProps) {
               />
             )}
           </Match>
-          <Match when={query.isPending && !!props.reminderId}>
+          <Match when={query.isPending}>
             <div class="flex items-center justify-center py-16 text-ink-muted">
               <SpinnerIcon class="size-5 animate-spin" />
             </div>
           </Match>
           <Match when={reminderUnavailable()}>
-            <div class="flex flex-col items-center justify-center gap-2 py-16 text-ink-muted">
-              <BellIcon class="size-6 text-ink-extra-muted" />
-              <span class="text-center text-sm">
-                This reminder is unavailable or you no longer have access.
-              </span>
-            </div>
+            <ReminderUnavailable />
           </Match>
         </Switch>
       </div>
