@@ -1,7 +1,5 @@
 import { match } from 'ts-pattern';
 import { Channel } from '../../entities/channels/channel';
-import { Message } from '../../entities/channels/message';
-import { Thread } from '../../entities/channels/thread';
 import { User } from '../../entities/users/user';
 import type { MacroClient } from '../../utils/client';
 import type { MacroEvent } from '../types';
@@ -50,96 +48,6 @@ export function hydrateChannelEvent(client: MacroClient, event: ChannelEvent) {
       channel: Channel.byId(client, metadata.channel_id),
       actor: userFromPrincipal(client, metadata.actor),
     }))
-    .with({ event_type: 'channel.message_posted' }, ({ metadata }) => ({
-      event_type: 'channel.message_posted' as const,
-      metadata,
-      channel: Channel.byId(client, metadata.channel_id),
-      message: Message.byId(
-        client,
-        metadata.channel_id,
-        metadata.message_id,
-        metadata.mentions,
-      ),
-      sender: userFromPrincipal(client, metadata.sender),
-      thread: metadata.thread_id
-        ? new Thread(client, metadata.channel_id, metadata.thread_id)
-        : undefined,
-    }))
-    .with({ event_type: 'channel.mentioned' }, ({ metadata }) => ({
-      event_type: 'channel.mentioned' as const,
-      metadata,
-      channel: Channel.byId(client, metadata.channel_id),
-      message: Message.byId(
-        client,
-        metadata.channel_id,
-        metadata.message_id,
-        [],
-      ),
-      sender: userFromPrincipal(client, metadata.sender),
-      thread: metadata.thread_id
-        ? new Thread(client, metadata.channel_id, metadata.thread_id)
-        : undefined,
-    }))
-    .with({ event_type: 'channel.message_patched' }, ({ metadata }) => ({
-      event_type: 'channel.message_patched' as const,
-      metadata,
-      channel: Channel.byId(client, metadata.channel_id),
-      message: Message.byId(
-        client,
-        metadata.channel_id,
-        metadata.message_id,
-        [],
-      ),
-      actor: userFromPrincipal(client, metadata.actor),
-      thread: metadata.thread_id
-        ? new Thread(client, metadata.channel_id, metadata.thread_id)
-        : undefined,
-    }))
-    .with({ event_type: 'channel.message_deleted' }, ({ metadata }) => ({
-      event_type: 'channel.message_deleted' as const,
-      metadata,
-      channel: Channel.byId(client, metadata.channel_id),
-      message: Message.byId(
-        client,
-        metadata.channel_id,
-        metadata.message_id,
-        [],
-      ),
-      actor: userFromPrincipal(client, metadata.actor),
-      thread: metadata.thread_id
-        ? new Thread(client, metadata.channel_id, metadata.thread_id)
-        : undefined,
-    }))
-    .with(
-      { event_type: 'channel.message_attachment_created' },
-      ({ metadata }) => ({
-        event_type: 'channel.message_attachment_created' as const,
-        metadata,
-        channel: Channel.byId(client, metadata.channel_id),
-        message: Message.byId(
-          client,
-          metadata.channel_id,
-          metadata.message_id,
-          [],
-        ),
-        actor: userFromPrincipal(client, metadata.actor),
-      }),
-    )
-    .with(
-      { event_type: 'channel.message_attachment_removed' },
-      ({ metadata }) => ({
-        event_type: 'channel.message_attachment_removed' as const,
-        metadata,
-        channel: Channel.byId(client, metadata.channel_id),
-        message: Message.byId(
-          client,
-          metadata.channel_id,
-          metadata.message_id,
-          [],
-        ),
-        actor: userFromPrincipal(client, metadata.actor),
-      }),
-    )
     .with({ event_type: 'channel.participant_added' }, ({ metadata }) => ({
       event_type: 'channel.participant_added' as const,
       metadata,

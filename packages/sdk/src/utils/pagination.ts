@@ -1,14 +1,14 @@
 /** One page of a cursor-paginated list. */
-export interface Page<T> {
+export interface Page<T, Cursor = string> {
   items: T[];
-  nextCursor?: string | null;
+  nextCursor?: Cursor | null;
 }
 
 /** Async generator over a cursor-paginated API. Iterate with `for await`. */
-export async function* paginate<T>(
-  fetchPage: (cursor?: string) => Promise<Page<T>>,
+export async function* paginate<T, Cursor = string>(
+  fetchPage: (cursor?: Cursor) => Promise<Page<T, Cursor>>,
 ): AsyncGenerator<T> {
-  let cursor: string | undefined;
+  let cursor: Cursor | undefined;
   do {
     const page = await fetchPage(cursor);
     yield* page.items;

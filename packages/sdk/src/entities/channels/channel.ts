@@ -3,7 +3,8 @@ import type {
   GetChannelAttachmentsResponses,
   GetChannelParticipantsResponses,
   GetChannelResponses,
-  TypingAction,
+  MessageCursor,
+  MessageTimelineQuery,
 } from '../../../generated/storage/types.gen';
 import { type RichMessage, toBody } from '../../mentions';
 import { paginate, unwrap } from '../../utils';
@@ -118,44 +119,37 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     return Message.byId(this.client, this.id, id);
   }
 
-  /** The messages in this channel, most recent first, auto-paginated. */
+  /** Root messages in this channel, most recent first, auto-paginated. */
   messages(opts?: { pageSize?: number }): AsyncGenerator<Message> {
-    return paginate(async (cursor) => {
-      const page = unwrap(
-        await this.client.storage.getChannelMessages({
-          path: { channel_id: this.id },
-          query: {
-            ...(opts?.pageSize ? { limit: opts.pageSize } : {}),
-            ...(cursor ? { cursor } : {}),
-          },
-        }),
-      );
-      return {
-        items: page.items.map((m) => Message.from(this.client, m)),
-        nextCursor: page.next_cursor,
-      };
-    });
+    return this.timeline({ limit: opts?.pageSize });
   }
 
-  /** Messages created strictly after `after`, most recent first, auto-paginated. */
+  /**
+   * Root messages created or replied to at or after `after`, most recent
+   * first, auto-paginated. Use it to catch up after a disconnect.
+   */
   messagesAfter(
     after: Date | string,
     opts?: { pageSize?: number },
   ): AsyncGenerator<Message> {
-    const afterQuery = after instanceof Date ? after.toISOString() : after;
-    return paginate(async (cursor) => {
+    return this.timeline({
+      activity_after: after instanceof Date ? after.toISOString() : after,
+      limit: opts?.pageSize,
+    });
+  }
+
+  private timeline(
+    selection: Omit<MessageTimelineQuery, 'cursor'>,
+  ): AsyncGenerator<Message> {
+    return paginate<Message, MessageCursor>(async (cursor) => {
       const page = unwrap(
-        await this.client.storage.getChannelMessagesCatchUp({
-          path: { channel_id: this.id },
-          query: {
-            after: afterQuery,
-            ...(opts?.pageSize ? { limit: opts.pageSize } : {}),
-            ...(cursor ? { cursor } : {}),
-          },
+        await this.client.storage.messageTimeline({
+          path: { parent_type: 'channel', parent_id: this.id },
+          query: { selection: JSON.stringify({ ...selection, cursor }) },
         }),
       );
       return {
-        items: page.items.map((m) => Message.from(this.client, m)),
+        items: page.items.map((m) => Message.from(this.client, this.id, m)),
         nextCursor: page.next_cursor,
       };
     });
@@ -238,13 +232,16 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
 
   /** Broadcast a typing indicator, optionally scoped to a thread. */
   async typing(
-    action: TypingAction,
+    action: 'start' | 'stop',
     opts?: { thread?: Thread },
   ): Promise<void> {
     unwrap(
-      await this.client.storage.postTyping({
-        path: { channel_id: this.id },
-        body: { action, thread_id: opts?.thread?.rootId ?? null },
+      await this.client.storage.entityMessageTyping({
+        path: { parent_type: 'channel', parent_id: this.id },
+        body: {
+          active: action === 'start',
+          thread_id: opts?.thread?.rootId ?? null,
+        },
       }),
     );
   }

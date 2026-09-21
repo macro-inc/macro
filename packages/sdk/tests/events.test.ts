@@ -99,7 +99,7 @@ describe('MacroEvents', () => {
       hosts: { storage: 'https://storage.example.test' },
     });
     const stop = await macro.events.listen({
-      filters: [{ events: ['channel.message_posted'], ids: ['chan_1'] }],
+      filters: [{ events: ['message.posted'], ids: ['chan_1'] }],
       scope: 'team',
     });
     const request = await seen.promise;
@@ -108,7 +108,7 @@ describe('MacroEvents', () => {
     const url = new URL(request.url);
     expect(url.searchParams.get('scope')).toBe('team');
     expect(JSON.parse(url.searchParams.get('filters') ?? '[]')).toEqual([
-      { events: ['channel.message_posted'], ids: ['chan_1'] },
+      { events: ['message.posted'], ids: ['chan_1'] },
     ]);
   });
 

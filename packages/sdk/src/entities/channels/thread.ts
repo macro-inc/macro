@@ -29,13 +29,17 @@ export class Thread {
 
   /** List the replies in this thread, oldest first. */
   async replies(): Promise<Message[]> {
-    const replies = unwrap(
-      await this.client.storage.getThreadReplies({
-        path: { channel_id: this.channelId, message_id: this.rootId },
+    const { replies } = unwrap(
+      await this.client.storage.entityMessageGetThread({
+        path: {
+          parent_type: 'channel',
+          parent_id: this.channelId,
+          id: this.rootId,
+        },
       }),
     );
     return replies.map((reply) =>
-      Message.fromReply(this.client, this.channelId, reply),
+      Message.from(this.client, this.channelId, reply),
     );
   }
 
