@@ -102,13 +102,19 @@ export function useChannelCallsSource(
     },
     hasMore,
     isLoadingMore,
-    loadMore: () => {
-      if (usesServiceSearch()) return search.fetchNextPage();
-      return query.fetchNextPage();
+    loadMore: async () => {
+      if (usesServiceSearch()) {
+        await search.fetchNextPage();
+        return;
+      }
+      await query.fetchNextPage();
     },
-    refresh: () => {
-      if (usesServiceSearch()) return search.refetch();
-      return query.refresh();
+    refresh: async () => {
+      if (usesServiceSearch()) {
+        await search.refetch();
+        return;
+      }
+      await query.refresh();
     },
   };
 }
