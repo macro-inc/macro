@@ -4617,6 +4617,7 @@
       "crates/workspace-hack"
     ],
     "frecency": [
+      "crates/bot_id",
       "crates/cowlike",
       "crates/document_sub_type",
       "crates/filter_ast",
@@ -4625,6 +4626,7 @@
       "crates/macro_user_id",
       "crates/model-entity",
       "crates/model_file_type",
+      "crates/model_owner",
       "crates/non_empty",
       "crates/notification_state",
       "crates/workspace-hack"
@@ -4802,6 +4804,7 @@
       "crates/model-entity",
       "crates/model-error-response",
       "crates/model_file_type",
+      "crates/model_owner",
       "crates/model_user",
       "crates/models_pagination",
       "crates/models_properties",
@@ -4898,6 +4901,7 @@
       "crates/model-entity",
       "crates/model-error-response",
       "crates/model_file_type",
+      "crates/model_owner",
       "crates/model_user",
       "crates/models_properties",
       "crates/non_empty",
@@ -5488,6 +5492,7 @@
       "crates/model-entity",
       "crates/model-error-response",
       "crates/model_file_type",
+      "crates/model_owner",
       "crates/model_user",
       "crates/models_properties",
       "crates/non_empty",
@@ -5737,6 +5742,7 @@
       "crates/workspace-hack"
     ],
     "item-filter-index": [
+      "crates/bot_id",
       "crates/cowlike",
       "crates/document_sub_type",
       "crates/filter_ast",
@@ -5744,19 +5750,24 @@
       "crates/item_filters",
       "crates/macro_user_id",
       "crates/model_file_type",
+      "crates/model_owner",
       "crates/non_empty",
       "crates/notification_state",
-      "crates/predicate_index"
+      "crates/predicate_index",
+      "crates/workspace-hack"
     ],
     "item_filters": [
+      "crates/bot_id",
       "crates/cowlike",
       "crates/document_sub_type",
       "crates/filter_ast",
       "crates/item_filters",
       "crates/macro_user_id",
       "crates/model_file_type",
+      "crates/model_owner",
       "crates/non_empty",
-      "crates/notification_state"
+      "crates/notification_state",
+      "crates/workspace-hack"
     ],
     "kafka_util": [
       "crates/kafka_util",

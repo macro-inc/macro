@@ -587,7 +587,8 @@ input GraphqlAgentSessionLiteral @oneOf {
 	"""
 	id: ID
 	"""
-	The owner option.
+	The owner principal option — a user (`macro|<email>`), a bot
+	(`bot|<uuid>`), or a team (a bare hyphenated uuid).
 	"""
 	owner: String
 }
@@ -1365,7 +1366,8 @@ input GraphqlChatLiteral @oneOf {
 	"""
 	chatId: ID
 	"""
-	The owner option.
+	The owner principal option — a user (`macro|<email>`), a bot
+	(`bot|<uuid>`), or a team (a bare hyphenated uuid).
 	"""
 	owner: String
 	"""
@@ -1597,7 +1599,8 @@ input GraphqlDocumentLiteral @oneOf {
 	"""
 	projectId: ID
 	"""
-	The owner option.
+	The owner principal option — a user (`macro|<email>`), a bot
+	(`bot|<uuid>`), or a team (a bare hyphenated uuid).
 	"""
 	owner: String
 	"""
@@ -2085,9 +2088,14 @@ Metadata shared by every canonical Soup entity.
 """
 type GraphqlEntityMetadata {
 	"""
-	Owning user, when applicable.
+	Owning principal, when applicable.
 	"""
 	ownerId: String
+	"""
+	The kind of principal `ownerId` names. Null exactly when `ownerId`
+	is, for the entities that have no owner of their own.
+	"""
+	ownerType: GraphqlOwnerType
 	"""
 	Parent project, channel, or team, when applicable.
 	"""
@@ -3319,6 +3327,26 @@ type GraphqlNumberPropertyValue {
 }
 
 """
+GraphQL representation of [`OwnerType`]: the kind of principal that owns an
+entity. Paired with an `ownerId` principal string, which is a user id, a
+bot id, or a team id depending on this discriminator.
+"""
+enum GraphqlOwnerType {
+	"""
+	A Macro user.
+	"""
+	USER
+	"""
+	A bot.
+	"""
+	BOT
+	"""
+	A team.
+	"""
+	TEAM
+}
+
+"""
 The two operands of a recursive `ProjectFilterExpr` binary expression.
 """
 input GraphqlProjectBinaryExpr {
@@ -3367,7 +3395,8 @@ input GraphqlProjectLiteral @oneOf {
 	"""
 	projectIdSelf: ID
 	"""
-	The owner option.
+	The owner principal option — a user (`macro|<email>`), a bot
+	(`bot|<uuid>`), or a team (a bare hyphenated uuid).
 	"""
 	owner: String
 	"""
@@ -3923,9 +3952,13 @@ type GraphqlSoupAgentSession implements GraphqlSoupEntity {
 	"""
 	name: String!
 	"""
-	The identifier of the owner.
+	The principal identifier of the owner.
 	"""
 	ownerId: String!
+	"""
+	The kind of principal `ownerId` names.
+	"""
+	ownerType: GraphqlOwnerType!
 	"""
 	The bot running this session.
 	"""
@@ -4524,9 +4557,13 @@ type GraphqlSoupChat implements GraphqlSoupEntity {
 	"""
 	model: String
 	"""
-	The identifier of the owner.
+	The principal identifier of the owner.
 	"""
 	ownerId: String!
+	"""
+	The kind of principal `ownerId` names.
+	"""
+	ownerType: GraphqlOwnerType!
 	"""
 	The identifier of the project.
 	"""
@@ -4696,9 +4733,13 @@ type GraphqlSoupDocument implements GraphqlSoupEntity {
 	"""
 	name: String!
 	"""
-	The identifier of the owner.
+	The principal identifier of the owner.
 	"""
 	ownerId: String!
+	"""
+	The kind of principal `ownerId` names.
+	"""
+	ownerType: GraphqlOwnerType!
 	"""
 	The file type.
 	"""
@@ -5506,9 +5547,13 @@ type GraphqlSoupProject implements GraphqlSoupEntity {
 	"""
 	name: String!
 	"""
-	The identifier of the owner.
+	The principal identifier of the owner.
 	"""
 	ownerId: String!
+	"""
+	The kind of principal `ownerId` names.
+	"""
+	ownerType: GraphqlOwnerType!
 	"""
 	The identifier of the parent.
 	"""

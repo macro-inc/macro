@@ -11,8 +11,8 @@ use item_filters::ast::{
     agent_session::AgentSessionLiteral,
     properties::{PropertiesLiteral, properties_filter_matches_propertyless},
 };
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_entity::EntityType;
+use model_owner::Owner;
 use models_pagination::{Query, SimpleSortMethod};
 use models_soup::{agent_session::SoupAgentSession, item::SoupItem};
 use sqlx::{FromRow, PgPool, Postgres, QueryBuilder};
@@ -272,15 +272,13 @@ fn push_filter(builder: &mut QueryBuilder<'_, Postgres>, expression: &Expr<Agent
         }
         Expr::Literal(AgentSessionLiteral::Owner(owner)) => {
             builder.push("s.owner_id = ");
-            builder.push_bind(owner.as_ref().to_string());
+            builder.push_bind(owner.principal_id());
         }
     }
 }
 
 fn row_to_item(row: AgentSessionRow) -> Result<SoupItem<()>, sqlx::Error> {
-    let owner_id = MacroUserIdStr::parse_from_str(&row.owner_id)
-        .map_err(super::type_err)?
-        .into_owned();
+    let owner_id = Owner::from_principal_str(&row.owner_id).map_err(super::type_err)?;
     // Mirror `agent_session::domain::model::SessionStatus`'s wire shape: the
     // event name is the status once one has arrived.
     let status = match row.status.as_str() {

@@ -27,6 +27,7 @@ use macro_user_id::{
     user_id::{MacroUserId, MacroUserIdStr},
 };
 use model_entity::EntityType as ModelEntityType;
+use model_owner::Owner;
 use model_user::UserContext;
 use models_pagination::{Paginated, PaginatedCursor, SimpleSortMethod};
 use models_soup::{
@@ -87,7 +88,7 @@ fn soup_project(id: Uuid) -> SoupItem<()> {
     SoupItem::Project(SoupProject {
         id,
         name: format!("Project {id}"),
-        owner_id: MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
+        owner_id: Owner::from_principal_str(VALID_USER_ID).unwrap(),
         parent_id: None,
         created_at: Default::default(),
         updated_at: Default::default(),
@@ -102,7 +103,7 @@ fn soup_chat(id: Uuid) -> SoupItem<()> {
         id,
         name: format!("Chat {id}"),
         model: Some("openai/gpt-5.6".to_string()),
-        owner_id: MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
+        owner_id: Owner::from_principal_str(VALID_USER_ID).unwrap(),
         project_id: None,
         is_persistent: true,
         created_at: Default::default(),
@@ -117,7 +118,7 @@ fn grouped_document(id: Uuid) -> SoupItem<soup::domain::models::SoupPropertiesFi
     SoupItem::Document(SoupDocument {
         id,
         document_version_id: 1,
-        owner_id: MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
+        owner_id: Owner::from_principal_str(VALID_USER_ID).unwrap(),
         name: format!("Document {id}"),
         file_type: None,
         sha: None,

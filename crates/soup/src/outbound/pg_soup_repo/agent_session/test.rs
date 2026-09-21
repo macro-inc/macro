@@ -173,7 +173,7 @@ async fn include_lists_accessible_sessions_newest_first(pool: PgPool) -> anyhow:
     };
     assert_eq!(private.name, "Private session");
     assert_eq!(private.status, "session/end");
-    assert_eq!(private.owner_id.as_ref(), OWNER);
+    assert_eq!(private.owner_id.principal_id(), OWNER);
     assert_eq!(private.bot_id, BOT_ID);
 
     let member_items = cursor_soup(
@@ -215,7 +215,7 @@ async fn id_and_owner_literals_constrain_the_page(pool: PgPool) -> anyhow::Resul
         request(
             MEMBER,
             Some(Expr::val(AgentSessionLiteral::Owner(
-                MacroUserIdStr::parse_from_str(OWNER)?.into_owned(),
+                Owner::from_principal_str(OWNER)?,
             ))),
         ),
     )
@@ -227,7 +227,7 @@ async fn id_and_owner_literals_constrain_the_page(pool: PgPool) -> anyhow::Resul
         request(
             OWNER,
             Some(Expr::val(AgentSessionLiteral::Owner(
-                MacroUserIdStr::parse_from_str(MEMBER)?.into_owned(),
+                Owner::from_principal_str(MEMBER)?,
             ))),
         ),
     )

@@ -126,7 +126,10 @@ export type GraphqlAgentSessionLiteral =
    * is the default.
    */
   include: boolean; owner?: never; }
-  |  { id?: never; include?: never;   /** The owner option. */
+  |  { id?: never; include?: never;   /**
+   * The owner principal option — a user (`macro|<email>`), a bot
+   * (`bot|<uuid>`), or a team (a bare hyphenated uuid).
+   */
   owner: string; };
 
 /** The two operands of a recursive `CalendarEventFilterExpr` binary expression. */
@@ -324,7 +327,10 @@ export type GraphqlChatLiteral =
   importance: boolean; notificationState?: never; owner?: never; projectId?: never; role?: never; updatedAt?: never; }
   |  { chatId?: never; createdAt?: never; importance?: never;   /** Exact notification state for the requester. */
   notificationState: NotificationState; owner?: never; projectId?: never; role?: never; updatedAt?: never; }
-  |  { chatId?: never; createdAt?: never; importance?: never; notificationState?: never;   /** The owner option. */
+  |  { chatId?: never; createdAt?: never; importance?: never; notificationState?: never;   /**
+   * The owner principal option — a user (`macro|<email>`), a bot
+   * (`bot|<uuid>`), or a team (a bare hyphenated uuid).
+   */
   owner: string; projectId?: never; role?: never; updatedAt?: never; }
   |  { chatId?: never; createdAt?: never; importance?: never; notificationState?: never; owner?: never;   /** The project id option. */
   projectId: string | number; role?: never; updatedAt?: never; }
@@ -423,7 +429,10 @@ export type GraphqlDocumentLiteral =
   isEmailAttachment: boolean; notificationState?: never; owner?: never; projectId?: never; subType?: never; updatedAt?: never; }
   |  { createdAt?: never; fileAssoc?: never; fileType?: never; id?: never; importance?: never; includeCbmAtmNc?: never; isEmailAttachment?: never;   /** Exact notification state for the requester. */
   notificationState: NotificationState; owner?: never; projectId?: never; subType?: never; updatedAt?: never; }
-  |  { createdAt?: never; fileAssoc?: never; fileType?: never; id?: never; importance?: never; includeCbmAtmNc?: never; isEmailAttachment?: never; notificationState?: never;   /** The owner option. */
+  |  { createdAt?: never; fileAssoc?: never; fileType?: never; id?: never; importance?: never; includeCbmAtmNc?: never; isEmailAttachment?: never; notificationState?: never;   /**
+   * The owner principal option — a user (`macro|<email>`), a bot
+   * (`bot|<uuid>`), or a team (a bare hyphenated uuid).
+   */
   owner: string; projectId?: never; subType?: never; updatedAt?: never; }
   |  { createdAt?: never; fileAssoc?: never; fileType?: never; id?: never; importance?: never; includeCbmAtmNc?: never; isEmailAttachment?: never; notificationState?: never; owner?: never;   /** The project id option. */
   projectId: string | number; subType?: never; updatedAt?: never; }
@@ -835,7 +844,10 @@ export type GraphqlProjectLiteral =
   importance: boolean; notificationState?: never; owner?: never; projectId?: never; projectIdSelf?: never; updatedAt?: never; }
   |  { createdAt?: never; importance?: never;   /** Exact notification state for the requester. */
   notificationState: NotificationState; owner?: never; projectId?: never; projectIdSelf?: never; updatedAt?: never; }
-  |  { createdAt?: never; importance?: never; notificationState?: never;   /** The owner option. */
+  |  { createdAt?: never; importance?: never; notificationState?: never;   /**
+   * The owner principal option — a user (`macro|<email>`), a bot
+   * (`bot|<uuid>`), or a team (a bare hyphenated uuid).
+   */
   owner: string; projectId?: never; projectIdSelf?: never; updatedAt?: never; }
   |  { createdAt?: never; importance?: never; notificationState?: never; owner?: never;   /** The project id option. */
   projectId: string | number; projectIdSelf?: never; updatedAt?: never; }

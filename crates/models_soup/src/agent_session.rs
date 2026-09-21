@@ -1,5 +1,5 @@
 use chrono::Utc;
-use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::Owner;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -20,7 +20,7 @@ pub struct SoupAgentSession<T = ()> {
 
     /// Who the session belongs to
     #[cfg_attr(feature = "schema", schema(value_type = String))]
-    pub owner_id: MacroUserIdStr<'static>,
+    pub owner_id: Owner,
 
     /// The bot running this session
     pub bot_id: Uuid,
