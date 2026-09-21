@@ -6,12 +6,14 @@ use email_api_client::domain::models::EmailApiError;
 use macro_user_id::cowlike::ArcCowStr;
 use macro_user_id::user_id::MacroUserId;
 use model::document::response::{CreateDocumentRequest, CreateDocumentResponse};
+use model_file_type::FileType;
 use models_email::service::attachment::{
     AttachmentSfs, AttachmentUploadArgs, AttachmentUploadMetadata,
 };
 use models_email::service::link;
 use sha2::{Digest, Sha256};
 use static_file_service_client::StaticFileServiceClient;
+use std::str::FromStr;
 use std::sync::Arc;
 use system_properties::{
     EmailAttachmentInput, EmailAttachmentProperty, PgSystemPropertiesRepository, SourceEntity,
@@ -213,28 +215,26 @@ fn determine_file_metadata(
         .unwrap_or(original_file_name)
         .to_string();
 
-    let file_type = match original_file_name
+    let filename_ext = original_file_name
         .rsplit_once('.')
         .map(|(_, ext)| ext.trim())
-        .filter(|ext| !ext.is_empty())
-    {
-        // if it's a heic, the mime_type can sometimes be heif. hardcode file_type to match file name
-        Some(ext) if ext.eq_ignore_ascii_case("heic") => "heic".to_string(),
-        _ => mime_guess::get_mime_extensions_str(&p.mime_type)
-            .and_then(|exts| exts.first().map(|s| s.to_string()))
-            .or_else(|| {
-                // if mime_guess fails, use everything after the last '.' in the original filename
-                original_file_name
-                    .rsplit_once('.')
-                    .map(|(_, ext)| ext.trim())
-                    .filter(|ext| !ext.is_empty())
-                    .map(|ext| ext.to_string())
-            })
-            .ok_or_else(|| UploadAttachmentError::FileExtensionDeterminationFailed {
-                mime_type: p.mime_type.clone(),
-                filename: original_file_name.to_string(),
-            })?,
-    };
+        .filter(|ext| !ext.is_empty());
+
+    // Prefer a known Macro file type from the filename. Shared MIME types
+    // (application/postscript → ai/eps/ps, application/octet-stream, heic/heif)
+    // otherwise pick the wrong extension via mime_guess.
+    let file_type = filename_ext
+        .and_then(|ext| FileType::from_str(ext).ok())
+        .map(|ft| ft.as_str().to_string())
+        .or_else(|| {
+            mime_guess::get_mime_extensions_str(&p.mime_type)
+                .and_then(|exts| exts.first().map(|s| s.to_string()))
+        })
+        .or_else(|| filename_ext.map(|ext| ext.to_string()))
+        .ok_or_else(|| UploadAttachmentError::FileExtensionDeterminationFailed {
+            mime_type: p.mime_type.clone(),
+            filename: original_file_name.to_string(),
+        })?;
 
     Ok((file_name, file_type))
 }
@@ -374,4 +374,49 @@ async fn set_email_attachment_properties(
         .map_err(|e| UploadAttachmentError::SystemPropertiesSetFailed(e.to_string()))?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+    use models_email::service::attachment::AttachmentUploadMetadata;
+    use uuid::Uuid;
+
+    fn metadata(filename: &str, mime_type: &str) -> AttachmentUploadMetadata {
+        AttachmentUploadMetadata {
+            attachment_db_id: Uuid::nil(),
+            email_provider_id: "provider".into(),
+            provider_attachment_id: "att".into(),
+            filename: Some(filename.into()),
+            mime_type: mime_type.into(),
+            internal_date_ts: Utc::now(),
+            message_db_id: Uuid::nil(),
+            thread_db_id: Uuid::nil(),
+            sender_email: "sender@example.com".into(),
+            subject: None,
+        }
+    }
+
+    #[test]
+    fn prefers_ai_filename_over_postscript_mime() {
+        let (name, file_type) =
+            determine_file_metadata(&metadata("logo.ai", "application/postscript")).unwrap();
+        assert_eq!(name, "logo");
+        assert_eq!(file_type, "ai");
+    }
+
+    #[test]
+    fn prefers_heic_filename_over_heif_mime() {
+        let (_, file_type) =
+            determine_file_metadata(&metadata("photo.heic", "image/heif")).unwrap();
+        assert_eq!(file_type, "heic");
+    }
+
+    #[test]
+    fn falls_back_to_mime_guess_when_extension_unknown() {
+        let (_, file_type) =
+            determine_file_metadata(&metadata("file.zzz", "application/pdf")).unwrap();
+        assert_eq!(file_type, "pdf");
+    }
 }
