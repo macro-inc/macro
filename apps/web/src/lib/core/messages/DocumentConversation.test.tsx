@@ -1,11 +1,15 @@
 import type { MessageListItem } from '@service-storage/messages';
-import { cleanup, render } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { type Accessor, createSignal, For, type ParentProps } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DocumentConversation } from './DocumentConversation';
 
 const mocks = vi.hoisted(() => ({
   timeline: vi.fn(),
+  references: vi.fn(),
+  source: vi.fn(),
+  navigate: vi.fn(),
+  mentionsEnabled: false,
   linkResolved: true,
   contacts: [{ id: 'user|a@example.com', name: 'Ann', email: 'a@example.com' }],
   capturedParticipants: undefined as (() => Array<{ id: string }>) | undefined,
@@ -24,6 +28,30 @@ vi.mock('@channel/Thread/utils/message-actions', () => ({
 }));
 vi.mock('@channel/use-channel-bot-mention-users', () => ({
   useMessageBotMentionUsers: () => [],
+}));
+vi.mock('@block-channel/utils/link', () => ({
+  navigateToChannelMessage: (
+    _orchestrator: unknown,
+    channelId: string,
+    messageId: string
+  ) => mocks.navigate({ channelId, messageId }),
+}));
+vi.mock('@components/app/GlobalAppState', () => ({
+  useGlobalBlockOrchestrator: () => ({}),
+}));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: mocks.mentionsEnabled }),
+}));
+vi.mock('@phosphor/caret-right.svg', () => ({ default: () => null }));
+vi.mock('@core/component/ItemPreview', () => ({
+  InlineItemPreview: (props: { id: string; type: string }) => (
+    <span>
+      {props.type}:{props.id}
+    </span>
+  ),
+}));
+vi.mock('@queries/messages/references', () => ({
+  useChannelReferenceThreadsQuery: mocks.references,
 }));
 vi.mock('@queries/contacts/contacts', () => ({
   useContacts: () => () => mocks.contacts,
@@ -60,11 +88,24 @@ vi.mock('./MessageThread', () => ({
       </For>
     </article>
   ),
+  MessageThreadFromSource: (props: {
+    parent: { type: string; id: string };
+    rootId: string;
+    canWrite: boolean;
+  }) => {
+    mocks.source({
+      parent: props.parent,
+      rootId: props.rootId,
+      canWrite: props.canWrite,
+    });
+    return <article>source {props.rootId}</article>;
+  },
 }));
 
 afterEach(() => {
   mocks.linkResolved = true;
   mocks.capturedParticipants = undefined;
+  mocks.mentionsEnabled = false;
   cleanup();
 });
 
@@ -96,6 +137,21 @@ function thread(
 
 const anchor = { type: 'markdown', mark_id: 'mark' } as const;
 
+const sources = [
+  {
+    parent: { type: 'channel' as const, id: 'launch' },
+    root_id: 'source-a',
+    channel_name: 'Launch',
+    can_reply: true,
+  },
+  {
+    parent: { type: 'channel' as const, id: 'archive' },
+    root_id: 'source-b',
+    channel_name: null,
+    can_reply: false,
+  },
+];
+
 function discussion(
   initialPages: MessageListItem[][],
   targetId?: string,
@@ -106,6 +162,24 @@ function discussion(
   } = {}
 ) {
   const [pages, setPages] = createSignal(initialPages);
+  const [referencesFailed, setReferencesFailed] = createSignal(false);
+  mocks.references.mockImplementation(
+    (_parent: unknown, enabled: Accessor<boolean>) => ({
+      get isPending() {
+        return !enabled();
+      },
+      get isSuccess() {
+        return enabled() && !referencesFailed();
+      },
+      get isError() {
+        return enabled() && referencesFailed();
+      },
+      get data() {
+        return enabled() ? sources : undefined;
+      },
+      refetch: () => {},
+    })
+  );
   mocks.timeline.mockReturnValue({
     isSuccess: true,
     get data() {
@@ -114,6 +188,7 @@ function discussion(
   });
   return {
     setPages,
+    setReferencesFailed,
     ...render(() => (
       <DocumentConversation
         parent={{ type: 'document', id: 'document' }}
@@ -231,5 +306,78 @@ describe('DocumentConversation placement', () => {
       'optimistic discussion',
       'remote discussion',
     ]);
+  });
+
+  it('keeps channel mentions off the wire until the flag is on', () => {
+    const view = discussion([[thread('discussion', null)]]);
+    const [, enabled] = mocks.references.mock.calls[0] as [
+      unknown,
+      Accessor<boolean>,
+    ];
+    expect(enabled()).toBe(false);
+    expect(view.queryByText(/Channel mentions/)).toBeNull();
+    expect(mocks.source).not.toHaveBeenCalled();
+    expect(view.getAllByRole('article').map((el) => el.textContent)).toEqual([
+      'discussion',
+    ]);
+  });
+
+  it('lists each mention under its source channel once the flag is on', () => {
+    mocks.mentionsEnabled = true;
+    const view = discussion([[thread('discussion', null)]]);
+    const [, enabled] = mocks.references.mock.calls[0] as [
+      unknown,
+      Accessor<boolean>,
+    ];
+    expect(enabled()).toBe(true);
+    expect(view.getByText('Channel mentions')).toBeTruthy();
+    expect(view.getByText('2')).toBeTruthy();
+    expect(view.getAllByRole('article').map((el) => el.textContent)).toEqual([
+      'discussion',
+      'source source-a',
+      'source source-b',
+    ]);
+    // The channel resolves its own name, so an unnamed channel is not a
+    // placeholder string.
+    expect(view.getByText('channel:launch')).toBeTruthy();
+    expect(view.getByText('channel:archive')).toBeTruthy();
+    expect(mocks.source.mock.calls.map(([props]) => props)).toEqual([
+      {
+        parent: { type: 'channel', id: 'launch' },
+        rootId: 'source-a',
+        canWrite: true,
+      },
+      {
+        parent: { type: 'channel', id: 'archive' },
+        rootId: 'source-b',
+        canWrite: false,
+      },
+    ]);
+  });
+
+  it('opens the source message in its channel rather than following a link', () => {
+    mocks.mentionsEnabled = true;
+    const view = discussion([[thread('discussion', null)]]);
+    fireEvent.click(view.getAllByRole('button', { name: /From/ })[0]);
+    expect(mocks.navigate).toHaveBeenCalledWith({
+      channelId: 'launch',
+      messageId: 'source-a',
+    });
+  });
+
+  it('keeps the last authorized source threads on a failed refresh and offers a retry', () => {
+    mocks.mentionsEnabled = true;
+    const view = discussion([[thread('discussion', null)]]);
+    view.setReferencesFailed(true);
+    expect(view.getAllByRole('article').map((el) => el.textContent)).toEqual([
+      'discussion',
+      'source source-a',
+      'source source-b',
+    ]);
+    expect(
+      view.getByRole('button', {
+        name: 'Could not load channel mentions. Retry',
+      })
+    ).toBeTruthy();
   });
 });
