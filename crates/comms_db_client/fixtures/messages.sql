@@ -1,21 +1,21 @@
 -- Message and (if any) thread test fixture
-INSERT INTO comms_messages (id, channel_id, sender_id, content, created_at, thread_id, deleted_at)
+INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, sender_id, content, created_at, thread_id, deleted_at)
 VALUES
     -- Existing messages
-    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', '11111111-1111-1111-1111-111111111111', 'user1', 'message 1 content',
+    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'channel', '11111111-1111-1111-1111-111111111111', 'user1', 'message 1 content',
      '2024-01-01T12:00:00Z', NULL, NULL),
-    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', '11111111-1111-1111-1111-111111111111', 'user2', 'message 2 content',
+    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 'channel', '11111111-1111-1111-1111-111111111111', 'user2', 'message 2 content',
      '2024-01-02T12:00:00Z', NULL, NULL),
-    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '22222222-2222-2222-2222-222222222222', 'user3', 'dm msg content',
+    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'channel', '22222222-2222-2222-2222-222222222222', 'user3', 'dm msg content',
      '2024-01-03T12:00:00Z', NULL, NULL),
     -- New messages
-    ('cccccccc-cccc-cccc-cccc-cccccccccccc', '33333333-3333-3333-3333-333333333333', 'user1',
+    ('cccccccc-cccc-cccc-cccc-cccccccccccc', 'channel', '33333333-3333-3333-3333-333333333333', 'user1',
      'Check out this documentation!', '2024-01-04T10:00:00Z', NULL),
-    ('dddddddd-dddd-dddd-dddd-dddddddddddd', '33333333-3333-3333-3333-333333333333', 'user2',
+    ('dddddddd-dddd-dddd-dddd-dddddddddddd', 'channel', '33333333-3333-3333-3333-333333333333', 'user2',
      'I found another version of that doc', '2024-01-04T11:00:00Z', NULL),
-    ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', '44444444-4444-4444-4444-444444444444', 'user5',
+    ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 'channel', '44444444-4444-4444-4444-444444444444', 'user5',
      'Here are multiple docs to review', '2024-01-05T09:00:00Z', NULL),
-    ('ffffffff-ffff-ffff-ffff-ffffffffffff', '55555555-5555-5555-5555-555555555555', 'user2',
+    ('ffffffff-ffff-ffff-ffff-ffffffffffff', 'channel', '55555555-5555-5555-5555-555555555555', 'user2',
      'Internal documentation draft', '2024-01-06T14:00:00Z', NULL),
     ('gggggggg-gggg-gggg-gggg-gggggggggggg', '66666666-6666-6666-6666-666666666666', 'user5',
      'Your private document for review', '2024-01-07T15:30:00Z', NULL),

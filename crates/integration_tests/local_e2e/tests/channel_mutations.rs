@@ -1763,7 +1763,8 @@ async fn assert_db_message(
             SELECT 1
             FROM comms_messages
             WHERE id = $1
-              AND channel_id = $2
+              AND parent_entity_type = 'channel'
+              AND parent_entity_id = $2::uuid::text
               AND sender_id = $3
               AND content = $4
               AND thread_id IS NOT DISTINCT FROM $5

@@ -839,7 +839,7 @@ async fn standard_internal_headers_propagate_organization_to_entity_access() {
         access_service.clone(),
         authorization_state(),
     ));
-    let request = Request::get(format!("/{channel_id}/messages"))
+    let request = Request::get(format!("/{channel_id}/attachments"))
         .header(INTERNAL_API_KEY_HEADER, VALID_INTERNAL_KEY)
         .header(INTERNAL_MACRO_USER_ID_HEADER, INTERNAL_USER_ID)
         .header(INTERNAL_MACRO_ORGANIZATION_ID_HEADER, "73")
@@ -906,7 +906,7 @@ async fn bearer_organization_is_propagated_to_entity_access() {
         access_service.clone(),
         authorization_state,
     ));
-    let request = Request::get(format!("/{channel_id}/messages"))
+    let request = Request::get(format!("/{channel_id}/attachments"))
         .header(
             header::AUTHORIZATION,
             format!("Bearer {ORGANIZATION_BEARER_TOKEN}"),

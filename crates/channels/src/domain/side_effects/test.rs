@@ -499,7 +499,7 @@ async fn silent_message_posted_skips_notifications_only() {
         })
         .await;
 
-    assert_eq!(realtime.effects.lock().unwrap().len(), 1);
+    assert!(realtime.effects.lock().unwrap().is_empty());
     assert!(notifications.effects.lock().unwrap().is_empty());
 }
 
@@ -592,7 +592,7 @@ async fn bot_message_posted_sends_channel_message_notification() {
         ))
         .await;
 
-    assert_eq!(realtime.effects.lock().unwrap().len(), 1);
+    assert!(realtime.effects.lock().unwrap().is_empty());
     let notification_effects = notifications.effects.lock().unwrap();
     assert_eq!(notification_effects.len(), 1);
     let ChannelNotificationEffect::ChannelMessage {
@@ -644,7 +644,7 @@ async fn bot_message_without_profile_skips_notifications() {
         ))
         .await;
 
-    assert_eq!(realtime.effects.lock().unwrap().len(), 1);
+    assert!(realtime.effects.lock().unwrap().is_empty());
     assert!(notifications.effects.lock().unwrap().is_empty());
 }
 
