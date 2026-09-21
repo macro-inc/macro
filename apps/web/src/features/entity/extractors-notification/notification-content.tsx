@@ -27,8 +27,7 @@ export function DocumentMentionPill(props: {
   notification: UnifiedNotification;
 }) {
   const notificationSource = useGlobalNotificationSource();
-  // The containing split (when any) is the navigation source, so opens from
-  // an engaged preview controller route into its viewer split.
+  // Keep navigation associated with the originating split.
   const panel = useSplitPanel();
   const { markAsDone } = useNotificationActions({
     notification: props.notification,

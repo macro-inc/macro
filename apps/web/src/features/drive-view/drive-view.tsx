@@ -188,7 +188,6 @@ function DriveViewContent(props: DriveViewProps) {
   /** Exit any inline detail so the list reflects the chosen location or tags. */
   const showList = () => {
     navigationStack.clear();
-    panel.handle.resetPreview();
   };
   const { navigate, setScope } = createDriveNavigation({
     state,
