@@ -759,6 +759,17 @@ async fn test_insert_draft_message_upsert_existing(pool: Pool<Postgres>) -> anyh
     let thread_db_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
     // Re-use the existing draft message ID (msg2)
     let message_db_id = Uuid::parse_str("ee000002-0000-0000-0000-000000000002")?;
+    let timestamps_before = repo
+        .message_timestamps(message_db_id, link_id)
+        .await?
+        .unwrap();
+    assert!(
+        repo.message_timestamps(message_db_id, Uuid::nil())
+            .await?
+            .is_none()
+    );
+    repo.insert_message_labels_batch(&[message_db_id], "INBOX", link_id)
+        .await?;
     sqlx::query!(
         "UPDATE email_messages SET has_attachments = true WHERE id = $1",
         message_db_id
@@ -814,6 +825,14 @@ async fn test_insert_draft_message_upsert_existing(pool: Pool<Postgres>) -> anyh
         row.has_attachments,
         "editing a draft must preserve its attachment flag"
     );
+    let timestamps_after = repo
+        .message_timestamps(message_db_id, link_id)
+        .await?
+        .unwrap();
+    assert_eq!(timestamps_after.created_at, timestamps_before.created_at);
+    assert!(timestamps_after.updated_at > timestamps_before.updated_at);
+    let labels = repo.labels_by_message_ids(&[message_db_id]).await?;
+    assert_eq!(labels[&message_db_id][0].provider_label_id, "INBOX");
 
     let thread_after = repo
         .thread_by_id(thread_db_id)

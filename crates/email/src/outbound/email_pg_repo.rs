@@ -3,8 +3,9 @@ use crate::domain::{
         Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, DraftDeletion,
         EmailErr, EmailFilter, EmailInboxDetails, EmailThreadMailProjection, EmailThreadMetadata,
         EmailThreadPreview, Label, Link, LinkLabel, MessageAttachment, MessageLabel, MessageRow,
-        ParsedAddresses, PreviewCursorQuery, ResolvedDraftInput, SettledDraftIds, SimpleMessage,
-        SimpleMessageInfo, ThreadRow, UpsertEmailFilterInput, UpsertedContacts, UserProvider,
+        MessageTimestamps, ParsedAddresses, PreviewCursorQuery, ResolvedDraftInput,
+        SettledDraftIds, SimpleMessage, SimpleMessageInfo, ThreadRow, UpsertEmailFilterInput,
+        UpsertedContacts, UserProvider,
     },
     ports::{EmailRepo, EmailUserRepo, LinkEmailSettings, RecipientsByMessageId},
 };
@@ -219,6 +220,14 @@ impl EmailRepo for EmailPgRepo {
         message_ids: &[Uuid],
     ) -> Result<HashMap<Uuid, Vec<MessageAttachment>>, Self::Err> {
         message::attachments_by_message_ids(&self.pool, message_ids).await
+    }
+
+    async fn message_timestamps(
+        &self,
+        message_id: Uuid,
+        link_id: Uuid,
+    ) -> Result<Option<MessageTimestamps>, Self::Err> {
+        message::message_timestamps(&self.pool, message_id, link_id).await
     }
 
     async fn draft_attachments_by_message_ids(

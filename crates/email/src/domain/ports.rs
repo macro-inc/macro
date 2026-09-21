@@ -3,10 +3,10 @@ use crate::domain::models::{
     CreatedDraft, DeletedUserDraft, DraftDeletion, EmailErr, EmailFilter, EmailInboxDetails,
     EmailThreadMailProjection, EmailThreadMetadata, EmailThreadPreview, EnrichedEmailThreadPreview,
     GetEmailsRequest, Label, Link, LinkLabel, Message, MessageAttachment, MessageLabel, MessageRow,
-    ParsedAddresses, ParsedMessage, ParsedThread, PreviewCursorQuery, RecipientType,
-    ResolvedDraftInput, SavedUserDraft, SenderPolicy, SettledDraftIds, SimpleMessage,
-    SimpleMessageInfo, Thread, ThreadRow, UpdateThreadLabelsResult, UpsertEmailFilterInput,
-    UpsertedContacts, UserEmailLink, UserProvider,
+    MessageTimestamps, ParsedAddresses, ParsedMessage, ParsedThread, PreviewCursorQuery,
+    RecipientType, ResolvedDraftInput, SavedUserDraft, SenderPolicy, SettledDraftIds,
+    SimpleMessage, SimpleMessageInfo, Thread, ThreadRow, UpdateThreadLabelsResult,
+    UpsertEmailFilterInput, UpsertedContacts, UserEmailLink, UserProvider,
 };
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
@@ -199,6 +199,13 @@ pub trait EmailRepo: Send + Sync + 'static {
         &self,
         message_ids: &[Uuid],
     ) -> impl Future<Output = Result<HashMap<Uuid, Vec<MessageLabel>>, Self::Err>> + Send;
+
+    /// Fetch persisted message timestamps, scoped to the sending inbox.
+    fn message_timestamps(
+        &self,
+        message_id: Uuid,
+        link_id: Uuid,
+    ) -> impl Future<Output = Result<Option<MessageTimestamps>, Self::Err>> + Send;
 
     /// Fetch provider attachments for a set of message IDs, keyed by message ID.
     fn attachments_by_message_ids(

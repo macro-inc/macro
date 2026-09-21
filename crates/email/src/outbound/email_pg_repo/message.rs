@@ -1,7 +1,7 @@
 use crate::domain::{
     models::{
         AttachmentDraft, AttachmentForwarded, ContactInfo, DraftDeletion, MessageAttachment,
-        MessageLabel, RecipientType, SimpleMessageInfo, UpsertedContacts,
+        MessageLabel, MessageTimestamps, RecipientType, SimpleMessageInfo, UpsertedContacts,
     },
     ports::RecipientsByMessageId,
 };
@@ -14,6 +14,22 @@ use super::db_types::{
     DbDraftAttachmentRow, DbForwardedAttachmentRow, DbMessageAttachmentRow, DbMessageLabelRow,
     DbRecipientRow, DbRecipientType, DbSenderRow, DbSimpleMessageRow,
 };
+
+#[tracing::instrument(err, skip(pool))]
+pub(super) async fn message_timestamps(
+    pool: &PgPool,
+    message_id: Uuid,
+    link_id: Uuid,
+) -> Result<Option<MessageTimestamps>, sqlx::Error> {
+    sqlx::query_as!(
+        MessageTimestamps,
+        "SELECT created_at, updated_at FROM email_messages WHERE id = $1 AND link_id = $2",
+        message_id,
+        link_id,
+    )
+    .fetch_optional(pool)
+    .await
+}
 
 #[tracing::instrument(err, skip(pool, message_ids))]
 pub(super) async fn senders_by_message_ids(

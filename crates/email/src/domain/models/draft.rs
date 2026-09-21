@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 use super::attachment::{AttachmentDraft, AttachmentForwarded, MessageAttachment};
 use super::contact::{ContactInfo, RecipientType};
+use super::label::MessageLabel;
 use super::link::Link;
 
 /// Input for creating a draft message. Mirrors the fields from `MessageToSend`.
@@ -136,7 +137,7 @@ pub struct SimpleMessageInfo {
 /// A draft saved on behalf of a user, paired with the sending inbox the save
 /// resolved into — transports that build a message representation of the
 /// draft (the GraphQL payload) need the inbox's address for the sender.
-/// All attachment collections have been loaded successfully; a failed load
+/// Metadata and attachment collections have been loaded successfully; a failed load
 /// returns an error instead of an incomplete saved draft.
 #[derive(Clone)]
 pub struct SavedUserDraft {
@@ -144,12 +145,27 @@ pub struct SavedUserDraft {
     pub draft: CreatedDraft,
     /// The inbox the draft was saved into.
     pub link: Link,
+    /// Persisted creation time; updating a draft does not reset it.
+    pub created_at: DateTime<Utc>,
+    /// Persisted modification time after the save.
+    pub updated_at: DateTime<Utc>,
+    /// Persisted labels, loaded after saving.
+    pub labels: Vec<MessageLabel>,
     /// Persisted provider attachments, loaded after saving.
     pub attachments: Vec<MessageAttachment>,
     /// Persisted uploaded draft attachments, loaded after saving.
     pub attachments_draft: Vec<AttachmentDraft>,
     /// Persisted forwarded attachments, loaded after saving.
     pub attachments_forwarded: Vec<AttachmentForwarded>,
+}
+
+/// Persisted message timestamps used when returning an updated draft.
+#[derive(Debug, Clone, Copy)]
+pub struct MessageTimestamps {
+    /// When the message was first stored.
+    pub created_at: DateTime<Utc>,
+    /// When the stored message was last updated.
+    pub updated_at: DateTime<Utc>,
 }
 
 /// What an applied guarded draft delete removed beyond the draft row.

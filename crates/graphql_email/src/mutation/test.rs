@@ -154,6 +154,18 @@ impl EmailMutationService for CapturingEmailMutationService {
                 send_time: input.send_time,
             },
             link: test_sending_link(link_id.unwrap_or_default()),
+            created_at: "2020-01-02T03:04:05Z".parse().unwrap(),
+            updated_at: "2026-02-03T04:05:06Z".parse().unwrap(),
+            labels: vec![email::domain::models::MessageLabel {
+                id: Some(Uuid::from_u128(7)),
+                link_id: link_id.unwrap_or_default(),
+                provider_label_id: "DRAFT".to_string(),
+                name: Some("Drafts".to_string()),
+                created_at: "2020-01-02T03:04:05Z".parse().unwrap(),
+                message_list_visibility: None,
+                label_list_visibility: None,
+                type_: None,
+            }],
             attachments: self.attachments.clone(),
             attachments_draft: self.attachments_draft.clone(),
             attachments_forwarded: self.attachments_forwarded.clone(),
@@ -415,7 +427,7 @@ async fn save_email_draft_calls_the_service_and_returns_the_payload() {
                 subject: "Re: hello",
                 bodyHtml: "PHA-aGk8L3A",
                 sendTime: "2026-08-27T12:00:00+00:00"
-            }}) {{ draftId draft {{ id isDraft isSent subject from {{ email }} hasAttachments attachments {{ id }} attachmentsDraft {{ id }} attachmentsForwarded {{ attachmentId }} }} thread {{ id isRead }} }} }}"#
+            }}) {{ draftId draft {{ id isDraft isSent subject createdAt updatedAt labels {{ providerLabelId name }} from {{ email }} hasAttachments attachments {{ id }} attachmentsDraft {{ id }} attachmentsForwarded {{ attachmentId }} }} thread {{ id isRead }} }} }}"#
         ))
         .await;
 
@@ -429,6 +441,9 @@ async fn save_email_draft_calls_the_service_and_returns_the_payload() {
                 "isDraft": true,
                 "isSent": false,
                 "subject": "Re: hello",
+                "createdAt": "2020-01-02T03:04:05+00:00",
+                "updatedAt": "2026-02-03T04:05:06+00:00",
+                "labels": [{ "providerLabelId": "DRAFT", "name": "Drafts" }],
                 "from": { "email": "viewer@example.com" },
                 "hasAttachments": false,
                 "attachments": [],

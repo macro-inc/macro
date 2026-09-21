@@ -54,23 +54,37 @@ where
             .create_draft_impl(&link, &accessible_inboxes, input)
             .await?;
         let message_ids = [draft.db_id];
-        let (mut attachments, mut attachments_draft, mut attachments_forwarded, mut send_times) =
-            tokio::try_join!(
-                self.email_repo.attachments_by_message_ids(&message_ids),
-                self.email_repo
-                    .draft_attachments_by_message_ids(&message_ids),
-                self.email_repo
-                    .forwarded_attachments_by_message_ids(&message_ids),
-                self.email_repo
-                    .scheduled_send_times_by_message_ids(&message_ids),
-            )
-            .map_err(anyhow::Error::from)?;
+        let (
+            mut attachments,
+            mut attachments_draft,
+            mut attachments_forwarded,
+            mut send_times,
+            timestamps,
+            mut labels,
+        ) = tokio::try_join!(
+            self.email_repo.attachments_by_message_ids(&message_ids),
+            self.email_repo
+                .draft_attachments_by_message_ids(&message_ids),
+            self.email_repo
+                .forwarded_attachments_by_message_ids(&message_ids),
+            self.email_repo
+                .scheduled_send_times_by_message_ids(&message_ids),
+            self.email_repo
+                .message_timestamps(draft.db_id, draft.link_id),
+            self.email_repo.labels_by_message_ids(&message_ids),
+        )
+        .map_err(anyhow::Error::from)?;
+        let timestamps =
+            timestamps.ok_or_else(|| anyhow::anyhow!("saved draft metadata is unavailable"))?;
 
         // Autosaves leave scheduling untouched. Return the stored schedule,
         // not the usually absent input, so normalized cache writes preserve it.
         draft.send_time = send_times.remove(&draft.db_id);
 
         Ok(SavedUserDraft {
+            created_at: timestamps.created_at,
+            updated_at: timestamps.updated_at,
+            labels: labels.remove(&draft.db_id).unwrap_or_default(),
             attachments: attachments.remove(&draft.db_id).unwrap_or_default(),
             attachments_draft: attachments_draft.remove(&draft.db_id).unwrap_or_default(),
             attachments_forwarded: attachments_forwarded

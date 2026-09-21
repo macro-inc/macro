@@ -305,11 +305,13 @@ fn saved_draft_message(saved: SavedUserDraft) -> Message {
     let SavedUserDraft {
         draft,
         link,
+        created_at,
+        updated_at,
+        labels,
         attachments,
         attachments_draft,
         attachments_forwarded,
     } = saved;
-    let now = Utc::now();
     Message {
         db_id: draft.db_id,
         provider_id: draft.provider_id,
@@ -340,7 +342,7 @@ fn saved_draft_message(saved: SavedUserDraft) -> Message {
         to: draft.to,
         cc: draft.cc,
         bcc: draft.bcc,
-        labels: Vec::new(),
+        labels,
         body_text: draft.body_text,
         body_html_sanitized: draft.body_html,
         body_macro: draft.body_macro,
@@ -349,8 +351,8 @@ fn saved_draft_message(saved: SavedUserDraft) -> Message {
         attachments_draft,
         attachments_forwarded,
         headers_json: draft.headers_json,
-        created_at: now,
-        updated_at: now,
+        created_at,
+        updated_at,
     }
 }
 
