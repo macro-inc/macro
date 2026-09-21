@@ -1,4 +1,9 @@
-import type { Reply, Root } from '@core/comments/commentType';
+import type {
+  CommentId,
+  Reply,
+  Root,
+  ThreadId,
+} from '@core/comments/commentType';
 import type { Comment } from '@service-storage/generated/schemas/comment';
 
 export type ThreadPayload = {
@@ -11,6 +16,24 @@ export type ThreadPayload = {
 };
 
 export type ViewerCommentType = 'free' | 'highlight';
+
+const PDF_DRAFT_THREAD_PREFIX = 'pdf-draft:';
+
+export type PdfDraftThreadId =
+  `${typeof PDF_DRAFT_THREAD_PREFIX}${ViewerCommentType}:${string}`;
+
+export function createPdfDraftThreadId(
+  type: ViewerCommentType,
+  anchorId: string
+): PdfDraftThreadId {
+  return `${PDF_DRAFT_THREAD_PREFIX}${type}:${anchorId}`;
+}
+
+export function isPdfDraftThreadId(
+  id: CommentId | ThreadId | null | undefined
+): id is PdfDraftThreadId {
+  return typeof id === 'string' && id.startsWith(PDF_DRAFT_THREAD_PREFIX);
+}
 
 export type Overflow = null | 'top' | 'bottom';
 type Layout = { calculatedYPos: number; overflow: Overflow; height: number };

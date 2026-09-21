@@ -1,6 +1,30 @@
 use super::*;
 use crate::local::{inventory, repo_root};
 
+#[test]
+fn vite_routes_cover_every_backend_prefix_and_no_frontend_routes() {
+    let prefixes = frontend_path_prefixes();
+    for svc in inventory::RUST_SERVICES {
+        if let Some(prefix) = svc.path_prefix {
+            assert!(prefixes.contains(&prefix));
+        }
+    }
+    for prefix in [
+        "/websocket",
+        "/sync",
+        "/i",
+        "/lexical",
+        "/ai-editing",
+        "/static-file",
+    ] {
+        assert!(prefixes.contains(&prefix));
+    }
+    assert!(!prefixes.contains(&"/app"));
+    assert!(!prefixes.contains(&"/"));
+    let unique: std::collections::HashSet<_> = prefixes.iter().collect();
+    assert_eq!(unique.len(), prefixes.len());
+}
+
 /// Every inventoried service that declares a path prefix must get a route in the
 /// generated Caddyfile, targeting its canonical compose service name. This is
 /// the guarantee that replaces the old hand-maintained route list.

@@ -5,11 +5,8 @@ import {
   useDeleteComment,
   useDeleteNewComments,
 } from '@block-pdf/store/comments/commentOperations';
-import type {
-  Annotation,
-  // AnnotationFlag,
-  ShapeType,
-} from '@block-pdf/type/pdfJs';
+import { createPdfDraftThreadId } from '@block-pdf/type/comments';
+import type { Annotation, ShapeType } from '@block-pdf/type/pdfJs';
 import {
   type IPlaceable,
   type IPlaceablePayload,
@@ -20,7 +17,6 @@ import {
   PayloadMode,
   type PayloadType,
 } from '@block-pdf/type/placeables';
-// import { reformatPdfjsDate } from '@block-pdf/util/DateUtils';
 import { normalizeRect } from '@block-pdf/util/pdfjsUtils';
 import { PDF_TO_CSS_UNITS } from '@block-pdf/util/pixelsPerInch';
 import { useUserId } from '@core/context/user';
@@ -28,7 +24,9 @@ import { createCallback } from '@solid-primitives/rootless';
 import type { PageViewport } from 'pdfjs-dist';
 import { batch, createEffect, createMemo } from 'solid-js';
 import { v7 as uuid7 } from 'uuid';
+import { usePdfComments } from '../context/pdf-comments-context';
 import { usePdfDocument } from '../context/pdf-document-context';
+import { usePdfViewer } from '../context/pdf-viewer-context';
 import {
   isThreadPlaceable,
   useCommentPlaceables,
@@ -52,7 +50,7 @@ const DEFAULT_APPEARANCE_PAYLOAD: AppearancePayload = {
 };
 
 export function usePlaceableIdMap() {
-  const [modificationData] = usePdfDocument().state.stores.modificationData;
+  const modificationData = usePdfDocument().model.modificationData;
   const commentPlaceables = useCommentPlaceables();
 
   return createMemo(() => {
@@ -65,60 +63,20 @@ export function usePlaceableIdMap() {
 
 function useCurrentScale() {
   const isPopup = useIsPopup();
-  const { currentScale, popupCurrentScale } = usePdfDocument().state.derived;
+  const viewer = usePdfViewer();
+  const currentScale = isPopup
+    ? viewer.popup.currentScale
+    : viewer.root.currentScale;
 
-  return () => (isPopup ? popupCurrentScale() : currentScale()) ?? 1;
+  return () => currentScale() ?? 1;
 }
 
 function useGetPopupContextViewer() {
   const isPopup = useIsPopup();
-  const { rootViewer, popupViewer } = usePdfDocument().state.signals;
+  const viewer = usePdfViewer();
 
-  return () => (isPopup ? popupViewer[0]() : rootViewer[0]());
+  return (isPopup ? viewer.popup : viewer.root).instance;
 }
-
-function useDoEdit() {
-  const [, setNumOperations] = usePdfDocument().state.signals.numOperations;
-
-  return () => setNumOperations((previous) => previous + 1);
-}
-
-// function convertTextAnnotationToThread(
-//   annotation: Annotation,
-//   pageIndex: number
-// ): IThread {
-//   let editDate: Date = reformatPdfjsDate(
-//     annotation.modificationDate,
-//     annotation.creationDate
-//   );
-//   const comment: IComment = {
-//     content: annotation.contentsObj!.str,
-//     sender: annotation.titleObj?.str ?? '',
-//     editDate: editDate,
-//     id: annotation.id,
-//   };
-//   const newThread: IThread = {
-//     headID: annotation.id,
-//     page: pageIndex,
-//     comments: [comment],
-//     isResolved: annotation.annotationFlags === AnnotationFlag.HIDDEN,
-//   };
-//   return newThread;
-// }
-
-// function convertTextAnnotationToComment(annotation: Annotation) {
-//   let editDate: Date = reformatPdfjsDate(
-//     annotation.modificationDate,
-//     annotation.creationDate
-//   );
-//   const comment: IComment = {
-//     content: annotation.contentsObj!.str,
-//     sender: annotation.titleObj?.str ?? '',
-//     editDate: editDate,
-//     id: annotation.id,
-//   };
-//   return comment;
-// }
 
 function convertRawRGBToColor(
   r: string | number,
@@ -183,7 +141,6 @@ function parseDefaultAppearance(appearance: string): AppearancePayload {
   };
 }
 
-// Helper function to convert internal id (uuid) to array index.
 function internalIdToIndex(placeables: IPlaceable[], id: string) {
   return placeables.findIndex((p) => p.internalId === id);
 }
@@ -274,7 +231,6 @@ function convertShapeAnnotationToPlaceable({
   const borderColor =
     c && borderWidth ? convertRawRGBToColor(c[0], c[1], c[2]) : DEFAULT_COLOR;
   const ic = annotation.rawInteriorColor;
-  // If interior color wasn't set, make sure alpha gets set to 0
   const fillColor = ic
     ? convertRawRGBToColor(ic[0], ic[1], ic[2])
     : DEFAULT_COLOR;
@@ -317,7 +273,6 @@ export function annotationsToPlaceables({
   pageViewport: PageViewport;
 }): IPlaceable[] {
   let placeables: IPlaceable[] = [];
-  // let threads = new Array<IThread>();
 
   // We will increment this when we come across annotation placeables
   // The list that increments it needs to match the pdfserver as they
@@ -338,23 +293,6 @@ export function annotationsToPlaceables({
       validAnnotationPlaceableIndex += 1;
     }
 
-    // TODO: fully deprecate
-    // Handle plain text annotations for comments & threads
-    // if (annotation.subtype === 'Text' && !!annotation.contentsObj?.str) {
-    //   if (annotation.inReplyTo == null) {
-    //     threads.push(convertTextAnnotationToThread(annotation, pageIndex));
-    //   }
-    //   if (annotation.inReplyTo != null) {
-    //     // eslint-disable-next-line no-loop-func
-    //     const replyTo = threads.find((t) => t.headID === annotation.inReplyTo);
-    //     if (replyTo) {
-    //       const comment = convertTextAnnotationToComment(annotation);
-    //       replyTo.comments.push(comment);
-    //     }
-    //   }
-    // }
-
-    // Handle free text annotations that convert to activateable placeables
     if (annotation.subtype === 'FreeText') {
       placeables.push(
         convertFreeTextToPlaceable({
@@ -366,7 +304,6 @@ export function annotationsToPlaceables({
       );
     }
 
-    // Handle shape annotations that convert to activateable placeables
     if (['Circle', 'Square', 'Polygon'].includes(annotation.subtype)) {
       placeables.push(
         convertShapeAnnotationToPlaceable({
@@ -379,34 +316,6 @@ export function annotationsToPlaceables({
     }
   }
 
-  // Zip threads and replies back together
-  // const finalThreads = threads.map((thread) => {
-  //   const payload: IThread = thread;
-  //   let headAnnot = annotations.find((a) => a.id === thread.headID);
-  //   const position = getPlaceablePosition(headAnnot?.rect, pageViewport);
-  //   const threadPlaceable: IPlaceable = {
-  //     allowableEdits: {
-  //       allowResize: false,
-  //       allowTranslate: true,
-  //       allowRotate: false,
-  //       allowDelete: true,
-  //       lockAspectRatio: true,
-  //     },
-  //     pageRange: new Set<number>([pageIndex]),
-  //     position,
-  //     shouldLockOnSave: false,
-  //     originalPage: pageIndex,
-  //     originalIndex: -1,
-  //     payload,
-  //     payloadType: 'thread',
-  //     wasEdited: false,
-  //     wasDeleted: false,
-  //   };
-  //   return threadPlaceable;
-  // });
-
-  // Return all placeables together
-  // return [finalThreads, placeables].flat(1);
   return placeables;
 }
 
@@ -481,15 +390,7 @@ function useMakeThread() {
 function useMakeSignature() {
   const getViewer = useGetPopupContextViewer();
   const currentScale = useCurrentScale();
-  // previously created signatures
-  // const selectedSavedSignature = useSignatureValue();
   const defaultSignature: ISignature | undefined = undefined;
-  // const defaultSignature = useMemo(
-  //   () => selectedSavedSignature.options.at(0),
-  //   [selectedSavedSignature.options]
-  // );
-
-  // const prompt = usePrompt();
 
   return (e: MouseEvent, pageRef: HTMLElement, index: number): IPlaceable => {
     const curViewer = getViewer();
@@ -497,13 +398,6 @@ function useMakeSignature() {
 
     let payload: ISignature | undefined = defaultSignature;
     if (!payload) {
-      // // prompt the user for their initial signature
-      // const res = await prompt<typeof EditSignatureDialog>((args) => (
-      //   <EditSignatureDialog {...args} />
-      // ));
-      // // short circuit if user declined, we wont create a signature
-      // if (res.isErr()) return null;
-      // payload = res.value;
       payload = {
         base64: null,
         dateTime: Date.now(),
@@ -573,7 +467,6 @@ const textAnnotationProperties = {
 
 function useMakeTextAnnotation() {
   const getViewer = useGetPopupContextViewer();
-  const [fontPreference] = usePdfDocument().state.signals.fontPreference;
   const currentScale = useCurrentScale();
 
   return (
@@ -584,13 +477,10 @@ function useMakeTextAnnotation() {
   ): ITextBoxPlaceable => {
     const curViewer = getViewer();
     const curScale = currentScale();
-    const fontFamily = fontPreference();
+    const fontFamily = DEFAULT_APPEARANCE_PAYLOAD.family;
     let position: IPlaceablePosition;
 
     if (e) {
-      // At default zoom and font size, 250px can hold ~15-20 characters horizontally
-      // We want to vertically position so that the center of our textbox is at the center
-      // of the text cursor caret.
       const cursorOffsetY = 14;
       const cursorOffsetX = 14;
 
@@ -615,7 +505,6 @@ function useMakeTextAnnotation() {
         rotation: 0,
       };
     } else {
-      // Create a new text box at the top left of the page (e.g. on copy/paste with no MouseEvent)
       const { width, height } = pageRef.getBoundingClientRect();
       position = {
         xPct: 0.01,
@@ -665,16 +554,16 @@ function useMakeTextAnnotation() {
  */
 export function useSyncActivePlaceableWithCommentThread() {
   const placeableIdMap = usePlaceableIdMap();
-  const {
-    activePlaceableId: [activePlaceableId, setActivePlaceableId],
-    activeCommentThread: [activeCommentThread],
-  } = usePdfDocument().state.signals;
+  const pdf = usePdfDocument();
+  const comments = usePdfComments();
+  const activeId = pdf.markup.activeId;
+  const activeCommentThreadId = comments.activeThreadId;
 
   createEffect(() => {
-    const activeThreadId = activeCommentThread();
-    const activePlaceableIdValue = activePlaceableId();
-    const activePlaceable = activePlaceableIdValue
-      ? placeableIdMap()[activePlaceableIdValue]
+    const activeThreadId = activeCommentThreadId();
+    const activeIdValue = activeId();
+    const activePlaceable = activeIdValue
+      ? placeableIdMap()[activeIdValue]
       : null;
 
     if (
@@ -682,7 +571,7 @@ export function useSyncActivePlaceableWithCommentThread() {
       activePlaceable &&
       isThreadPlaceable(activePlaceable)
     ) {
-      setActivePlaceableId(undefined);
+      pdf.markup.commands.clearActive();
     }
     if (activeThreadId == null) return;
 
@@ -693,7 +582,7 @@ export function useSyncActivePlaceableWithCommentThread() {
     );
 
     if (matchingFreeCommentPlaceable) {
-      setActivePlaceableId(matchingFreeCommentPlaceable.internalId);
+      pdf.markup.commands.activate(matchingFreeCommentPlaceable.internalId);
     }
   });
 }
@@ -703,11 +592,7 @@ export function useCreatePlaceable() {
   const makeTextAnnotation = useMakeTextAnnotation();
   const makeSignature = useMakeSignature();
   const pdf = usePdfDocument();
-  const [mode, setMode] = pdf.state.signals.placeableMode;
-  const [, setPdfModificationData] = pdf.state.stores.modificationData;
-  const [, setActivePlaceableId] = pdf.state.signals.activePlaceableId;
-  const [, setNewPlaceable] = pdf.state.signals.newPlaceable;
-  const [, setActiveCommentThread] = pdf.state.signals.activeCommentThread;
+  const comments = usePdfComments();
 
   return async (e: MouseEvent) => {
     let placeable: IPlaceable | null;
@@ -718,7 +603,7 @@ export function useCreatePlaceable() {
     }
 
     const index = PageModel.getPageIndex(pageRef)!;
-    switch (mode()) {
+    switch (pdf.markup.mode()) {
       case PayloadMode.Thread:
         placeable = makeThread(e, pageRef, index);
         break;
@@ -734,15 +619,17 @@ export function useCreatePlaceable() {
 
     batch(() => {
       if (!isThreadPlaceable(placeable)) {
-        setPdfModificationData('placeables', (prev) => [...prev, placeable]);
+        pdf.model.commands.appendPlaceable(placeable);
       } else {
-        setActiveCommentThread(-1);
+        comments.activateThread(
+          createPdfDraftThreadId('free', placeable.internalId)
+        );
       }
-      setActivePlaceableId(placeable.internalId);
-      setNewPlaceable(placeable);
+      pdf.markup.commands.activate(placeable.internalId);
+      pdf.markup.commands.setDraft(placeable);
     });
 
-    setMode(PayloadMode.NoMode);
+    pdf.markup.commands.cancelPlacement();
 
     e.stopPropagation();
     e.preventDefault();
@@ -750,34 +637,16 @@ export function useCreatePlaceable() {
 }
 
 export function useModifyPlaceable() {
-  const [modificationData, setModificationData] =
-    usePdfDocument().state.stores.modificationData;
-  const doEdit = useDoEdit();
+  const model = usePdfDocument().model;
 
-  return (index: number, newPlaceable: IPlaceable) => {
-    if (index < 0) return false;
-
-    const placeables = modificationData.placeables;
-
-    const currPlaceable = placeables.at(index);
-    if (!currPlaceable) return false;
-
-    if (newPlaceable.payloadType !== currPlaceable.payloadType) return false;
-
-    setModificationData('placeables', index, {
-      ...newPlaceable,
-      wasEdited: true,
-    });
-
-    doEdit();
-
-    return true;
+  return (index: number, updatedPlaceable: IPlaceable) => {
+    return model.commands.updatePlaceable(index, updatedPlaceable);
   };
 }
 
 export function useModifyPayload() {
   const modifyPlaceable = useModifyPlaceable();
-  const [modificationData] = usePdfDocument().state.stores.modificationData;
+  const modificationData = usePdfDocument().model.modificationData;
 
   return <T extends PayloadType>(
     id: string,
@@ -793,7 +662,7 @@ export function useModifyPayload() {
     if (!existingPlaceable) return false;
     if (payloadType !== existingPlaceable.payloadType) return false;
 
-    const newPlaceable = {
+    const updatedPlaceable = {
       ...existingPlaceable,
       payload: {
         ...existingPlaceable.payload,
@@ -801,31 +670,15 @@ export function useModifyPayload() {
       },
     } as IPlaceable;
 
-    return modifyPlaceable(index, newPlaceable);
+    return modifyPlaceable(index, updatedPlaceable);
   };
 }
 
 export function useDeletePlaceable() {
   const pdf = usePdfDocument();
-  const [modificationData, setModificationData] =
-    pdf.state.stores.modificationData;
-  const [, setActivePlaceable] = pdf.state.signals.activePlaceableId;
+  const modificationData = pdf.model.modificationData;
   const placeableIdMap = usePlaceableIdMap();
-  const doEdit = useDoEdit();
   const deleteComment = useDeleteComment();
-
-  const arrayDelete = (index: number) => {
-    if (index < 0 || index >= modificationData.placeables.length) return false;
-
-    setModificationData('placeables', (prev) => [
-      ...prev.slice(0, index),
-      ...prev.slice(index + 1),
-    ]);
-
-    doEdit();
-
-    return true;
-  };
 
   return createCallback((uuid: string) => {
     const placeable = placeableIdMap()[uuid];
@@ -846,9 +699,9 @@ export function useDeletePlaceable() {
 
     const index = internalIdToIndex(modificationData.placeables, uuid);
 
-    let deleted = arrayDelete(index);
+    const deleted = pdf.model.commands.removePlaceable(index);
     if (deleted) {
-      setActivePlaceable((prev) => (prev === uuid ? undefined : prev));
+      pdf.markup.commands.clearActiveIf(uuid);
     }
     return deleted;
   });
@@ -858,8 +711,7 @@ export function useUpdatePlaceablePosition() {
   const modifyPlaceable = useModifyPlaceable();
   const editPdfFreeCommentAnchor = useEditPdfFreeCommentAnchor();
   const pdf = usePdfDocument();
-  const [, setNewPlaceable] = pdf.state.signals.newPlaceable;
-  const [modificationData] = pdf.state.stores.modificationData;
+  const modificationData = pdf.model.modificationData;
   const placeableIdMap = usePlaceableIdMap();
 
   return createCallback(
@@ -911,57 +763,57 @@ export function useUpdatePlaceablePosition() {
         widthPct,
         heightPct,
       };
-      let newPlaceable = {
+      let updatedPlaceable = {
         ...placeable,
         position: newPosition,
       };
 
       if (!samePage) {
-        newPlaceable = {
-          ...newPlaceable,
+        updatedPlaceable = {
+          ...updatedPlaceable,
           pageRange: new Set([pageNum]),
           originalPage: pageNum,
         };
-        if (isThreadPlaceable(newPlaceable)) {
-          if ((newPlaceable as IThreadPlaceable).isNew) {
-            setNewPlaceable(newPlaceable);
+        if (isThreadPlaceable(updatedPlaceable)) {
+          if ((updatedPlaceable as IThreadPlaceable).isNew) {
+            pdf.markup.commands.setDraft(updatedPlaceable);
             return;
           } else {
             return editPdfFreeCommentAnchor(uuid, {
-              xPct: newPlaceable.position.xPct,
-              yPct: newPlaceable.position.yPct,
-              widthPct: newPlaceable.position.widthPct,
-              heightPct: newPlaceable.position.heightPct,
+              xPct: updatedPlaceable.position.xPct,
+              yPct: updatedPlaceable.position.yPct,
+              widthPct: updatedPlaceable.position.widthPct,
+              heightPct: updatedPlaceable.position.heightPct,
               page: pageNum,
             });
           }
         }
-        switch (newPlaceable.payloadType) {
+        switch (updatedPlaceable.payloadType) {
           case PayloadMode.FreeTextAnnotation:
           case PayloadMode.Signature:
             break;
           default:
-            console.error('Unhandled payload type', newPlaceable.payload);
+            console.error('Unhandled payload type', updatedPlaceable.payload);
             return false;
         }
       }
 
-      if (isThreadPlaceable(newPlaceable)) {
-        if (newPlaceable.isNew) {
-          setNewPlaceable(newPlaceable);
+      if (isThreadPlaceable(updatedPlaceable)) {
+        if (updatedPlaceable.isNew) {
+          pdf.markup.commands.setDraft(updatedPlaceable);
           return;
         } else {
           return editPdfFreeCommentAnchor(uuid, {
-            xPct: newPlaceable.position.xPct,
-            yPct: newPlaceable.position.yPct,
-            widthPct: newPlaceable.position.widthPct,
-            heightPct: newPlaceable.position.heightPct,
+            xPct: updatedPlaceable.position.xPct,
+            yPct: updatedPlaceable.position.yPct,
+            widthPct: updatedPlaceable.position.widthPct,
+            heightPct: updatedPlaceable.position.heightPct,
           });
         }
       }
 
       const index = internalIdToIndex(modificationData.placeables, uuid);
-      return modifyPlaceable(index, newPlaceable);
+      return modifyPlaceable(index, updatedPlaceable);
     }
   );
 }

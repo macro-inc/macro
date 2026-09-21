@@ -189,8 +189,14 @@ The cache's validated envelopes, request ids, Web Locks, owner epochs,
 heartbeats, and replay policy remain application-owned. A normal `pagehide`
 uses a fenced navigation-departure message: the page terminates its dedicated
 worker, but the next owner opens the existing OPFS database. Only an
-unannounced liveness, heartbeat, transport, or engine failure **after the database
-open grant** selects `wipe-before-open`.
+unannounced liveness, transport, or engine failure **after the database
+open grant** selects `wipe-before-open`. A missed heartbeat alone is not owner
+loss: background tabs and their dedicated workers may be suspended while the
+SharedWorker still runs. The coordinator probes the physical owner Web Lock
+without waiting or stealing it; a held lock (or a failed probe) retries the
+heartbeat without changing epochs or touching storage. A released lock confirms
+silent worker termination and triggers the usual fenced recovery. Read deadlines
+still bound callers waiting on an unresponsive engine.
 
 Protocol v3 separates startup into asset loading and database opening. The engine
 loads/compiles WASM without touching OPFS, reports `engine-assets-ready`, and waits

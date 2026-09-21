@@ -10,17 +10,13 @@ import { useUserId } from '@core/context/user';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import {
   useDeleteMessageMutation,
-  useDeleteThreadMutation,
   usePatchMessageMutation,
-  usePatchThreadMutation,
 } from '@queries/messages/mutations';
 import {
   useAddReactionMutation,
   useRemoveReactionMutation,
 } from '@queries/messages/reactions';
-import { useMessageSubscription } from '@queries/messages/subscription';
 import { useMessageThreadQuery } from '@queries/messages/thread-replies';
-import { useMessageTimelineByIdsQuery } from '@queries/messages/timeline';
 import type {
   MessageListItem,
   MessageParent,
@@ -44,7 +40,6 @@ export function threadListItem(thread: ThreadData): MessageListItem {
 
 type ThreadOptions = {
   canWrite: boolean;
-  canManage?: boolean;
   buildLink?: (message: MessageData) => string;
   targetId?: string | null;
   expanded?: boolean;
@@ -66,8 +61,6 @@ export function MessageThread(
   const remove = useDeleteMessageMutation();
   const confirm = createDeleteMessageConfirmation(remove.mutate);
   const patch = usePatchMessageMutation();
-  const patchThread = usePatchThreadMutation();
-  const deleteThread = useDeleteThreadMutation();
   const addReaction = useAddReactionMutation();
   const removeReaction = useRemoveReactionMutation();
   const editor = createMessageEditor({
@@ -104,50 +97,6 @@ export function MessageThread(
         class="relative isolate"
       >
         <confirm.ConfirmationDialog />
-        <Show when={props.data.parent.type === 'document'}>
-          <div class="mb-5 flex items-center justify-end gap-3 text-xs text-ink-muted touch:mb-0">
-            <Show when={props.data.state.resolved}>
-              <span>Resolved</span>
-            </Show>
-            <Show when={props.canWrite}>
-              <button
-                type="button"
-                onClick={() =>
-                  patchThread.mutate({
-                    parent: props.data.parent,
-                    rootId: props.data.id,
-                    patch: { resolved: !props.data.state.resolved },
-                  })
-                }
-              >
-                {props.data.state.resolved ? 'Reopen' : 'Resolve'}
-              </button>
-            </Show>
-            <Show
-              when={
-                props.canWrite &&
-                (props.canManage || props.data.state.user_id === userId())
-              }
-            >
-              <button
-                type="button"
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      'Delete this discussion and all its replies?'
-                    )
-                  )
-                    deleteThread.mutate({
-                      parent: props.data.parent,
-                      rootId: props.data.id,
-                    });
-                }}
-              >
-                Delete discussion
-              </button>
-            </Show>
-          </div>
-        </Show>
         <ChannelThread
           data={() => props.data}
           parent={() => props.data.parent}
@@ -219,36 +168,6 @@ export function MessageThreadById(
         data={threadListItem(query.data!)}
         expanded={props.expanded ?? true}
       />
-    </Show>
-  );
-}
-
-/** Reference discovery selects roots; live data and lazy replies remain in the common caches. */
-export function MessageThreadFromSource(
-  props: ThreadOptions & { parent: MessageParent; rootId: string }
-) {
-  useMessageSubscription(() => props.parent);
-  const query = useMessageTimelineByIdsQuery(
-    () => props.parent,
-    () => [props.rootId]
-  );
-  // A failed refetch keeps the cached root so an open reply draft survives.
-  const root = () =>
-    query.isPending
-      ? undefined
-      : query.data?.find((item) => item.id === props.rootId);
-  return (
-    <Show
-      when={root()}
-      fallback={
-        <Show when={query.isError}>
-          <button onClick={() => void query.refetch()}>
-            Could not load thread. Retry
-          </button>
-        </Show>
-      }
-    >
-      {(data) => <MessageThread {...props} data={data()} />}
     </Show>
   );
 }

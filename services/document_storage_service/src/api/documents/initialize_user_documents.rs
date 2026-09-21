@@ -11,6 +11,7 @@ use model::{
     document::BasicDocument,
     response::{ErrorResponse, GenericErrorResponse, GenericSuccessResponse},
 };
+use model_owner::Owner;
 use models_permissions::share_permission::SharePermissionV2;
 use projects_hex::domain::events::{ProjectCreatedMetadata, ProjectMacroEvent};
 use reqwest::StatusCode;
@@ -253,7 +254,7 @@ pub async fn handler(
         project.id.clone(),
         ProjectCreatedMetadata {
             project_id: project.id.clone(),
-            owner: user_context.authorization.user.macro_user_id.clone(),
+            owner: Owner::User(user_context.authorization.user.macro_user_id.clone()),
             name: PROJECT_NAME.to_string(),
             parent_project_id: None,
             created_at: project.created_at,

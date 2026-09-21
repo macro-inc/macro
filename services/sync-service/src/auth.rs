@@ -133,30 +133,32 @@ pub fn decode_jwt(
     Ok(claims)
 }
 
-/// Dedicated access boundary for spreadsheet HTTP requests. Internal service
+/// Dedicated access boundary for document HTTP requests. Internal service
 /// credentials do not substitute for a signed, document-scoped user grant.
-pub fn spreadsheet_access(
+pub fn document_access(
     req: &worker::Request,
     env: &worker::Env,
     document_id: &str,
-) -> Result<(crate::spreadsheet::SpreadsheetAccess, AuthToken), crate::spreadsheet::SpreadsheetError>
-{
-    use crate::spreadsheet::SpreadsheetError;
+) -> Result<
+    (crate::domain::document::DocumentAccess, AuthToken),
+    crate::domain::document::DocumentError,
+> {
+    use crate::domain::document::DocumentError;
 
     let header = req
         .headers()
         .get(header_names::AUTHORIZATION)
-        .map_err(|_| SpreadsheetError::Unauthorized)?
-        .ok_or(SpreadsheetError::Unauthorized)?;
+        .map_err(|_| DocumentError::Unauthorized)?
+        .ok_or(DocumentError::Unauthorized)?;
     let token = header
         .strip_prefix("Bearer ")
-        .ok_or(SpreadsheetError::Unauthorized)?;
+        .ok_or(DocumentError::Unauthorized)?;
     let claims = macro_sync_service_jwt::decode::<AuthToken>(
         token,
         &Secrets::from(env).document_permissions_secret,
     )
-    .map_err(|_| SpreadsheetError::Unauthorized)?;
-    let access = crate::spreadsheet::SpreadsheetAccess::authorize(
+    .map_err(|_| DocumentError::Unauthorized)?;
+    let access = crate::domain::document::DocumentAccess::authorize(
         document_id,
         &claims.document_id,
         claims.access_level >= AccessLevel::Edit,

@@ -11,7 +11,6 @@ import {
   vi,
 } from 'vitest';
 import { createSplitLayout, type SplitId } from '../layoutManager';
-import { restorePreviewPairs } from '../layoutUrlSync';
 import { createSplitFocusTracker } from '../splitFocusTracker';
 
 vi.mock('../componentRegistry', () => ({
@@ -67,18 +66,15 @@ const FOCUS_DEBOUNCE_MS = 50;
 
 /**
  * Reproduce the fresh-load wiring of SplitLayoutContainer: the manager comes
- * up from URL contents (last split active), Preview Pairs restore, and only
- * then does the focus tracker mount and process the trailing Insert event.
+ * up from URL contents (last split active), then the focus tracker mounts
+ * and processes the trailing Insert event.
  */
-function mountFreshLoad(options: { withPreviewPair: boolean }) {
+function mountFreshLoad() {
   return createRoot((dispose) => {
     const manager = createSplitLayout(createMockOrchestrator(), [
       { type: 'component', id: 'inbox' },
       { type: 'md', id: 'doc-1' },
     ]);
-    if (options.withPreviewPair) {
-      restorePreviewPairs(manager, [{ controllerIndex: 0 }]);
-    }
 
     const panelRefs = new Map<SplitId, HTMLDivElement>(
       manager.splits().map((split) => [split.id, createPanel()])
@@ -104,23 +100,8 @@ describe('createSplitFocusTracker', () => {
     document.body.innerHTML = '';
   });
 
-  it('moves fresh-load focus to the Controller when the last URL split is a Preview Pair Viewer', () => {
-    const { dispose, manager, panelRefs } = mountFreshLoad({
-      withPreviewPair: true,
-    });
-    const [controller, viewer] = manager.splits();
-
-    vi.advanceTimersByTime(FOCUS_DEBOUNCE_MS);
-
-    expect(manager.controllerOf(viewer.id)).toBe(controller.id);
-    expect(document.activeElement).toBe(panelRefs.get(controller.id));
-    expect(manager.activeSplitId()).toBe(controller.id);
-
-    dispose();
-  });
-
   it('cancels pending debounced focus when its owner is disposed', () => {
-    const { dispose } = mountFreshLoad({ withPreviewPair: true });
+    const { dispose } = mountFreshLoad();
 
     dispose();
     vi.advanceTimersByTime(FOCUS_DEBOUNCE_MS);
@@ -128,10 +109,8 @@ describe('createSplitFocusTracker', () => {
     expect(document.activeElement).toBe(document.body);
   });
 
-  it('keeps fresh-load focus on the last split when it is not a Viewer', () => {
-    const { dispose, manager, panelRefs } = mountFreshLoad({
-      withPreviewPair: false,
-    });
+  it('keeps fresh-load focus on the last split', () => {
+    const { dispose, manager, panelRefs } = mountFreshLoad();
     const [, last] = manager.splits();
 
     vi.advanceTimersByTime(FOCUS_DEBOUNCE_MS);

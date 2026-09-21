@@ -99,7 +99,10 @@ Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '
 
 ### Misc
 - If you create a Lexical Node or make breaking changes to a Lexical Node, you must increment the lexical version counter (in src/lib/core/component/LexicalMarkdown/version.ts) along with a brief note about changes.
-- Avoid `blockSignals`, `blockEffects`, `blockMemos` etc...
+- Do not add dependencies on the legacy block state system. Read it only at an
+  existing block-adapter boundary, then pass identity, permissions, state, and
+  lifecycle through feature context or explicit props; see FE-34 in
+  `docs/STYLE_GUIDE.md`.
 
 ### Good Reference
 - https://github.com/solidjs-community/solid-primitives

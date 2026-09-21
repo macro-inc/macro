@@ -2225,12 +2225,21 @@ fn predicate_query_plan_uses_fact_indexes_and_never_scans_record_blobs() {
     for index in [
         "optimistic_exact_facts_lookup_idx",
         "optimistic_integer_facts_lookup_idx",
-        "sort_facts_lookup_idx",
-        "optimistic_sort_facts_lookup_idx",
     ] {
         assert!(
             details.iter().any(|detail| detail.contains(index)),
             "missing {index}: {details:#?}"
+        );
+    }
+    for index in [
+        "sqlite_autoindex_sort_facts_1",
+        "sqlite_autoindex_optimistic_sort_facts_1",
+    ] {
+        assert!(
+            details.iter().any(|detail| {
+                detail.contains(index) && detail.contains("(document_id=? AND attribute=?)")
+            }),
+            "missing composite-key sort lookup {index}: {details:#?}"
         );
     }
     assert!(details.iter().all(|detail| !detail.contains("records")));

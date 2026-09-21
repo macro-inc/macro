@@ -79,7 +79,7 @@ fn configured_runtime() -> (
         provider.clone(),
     );
     let mut current = agent_session::testing::test_agent_session(runtime.session);
-    current.owner_id = runtime.owner.clone();
+    current.owner_id = model_owner::Owner::User(runtime.owner.clone());
     runtime.session_repository.insert_session(current);
     (Arc::new(runtime), connections, provider)
 }

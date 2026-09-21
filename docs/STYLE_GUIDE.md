@@ -305,3 +305,14 @@ TypeScript · `[ui]` UI / UX conventions
   `ts-/tsx-feature-layers-use-context`, warning; currently scoped to activity.
   Separate production composition and source-contract inversion still require
   explicit review; the existing rules do not enforce them.)
+- **FE-34** `[arch]` Treat the legacy block state system as adapter-boundary code,
+  not state management for new or refactored surfaces. Do not add new
+  `useBlock*`, `createBlock*`, block-scoped signal/store/memo/resource, or block
+  permission dependencies. An existing block adapter may read legacy state once
+  and translate it into a feature-owned context or explicit props; descendants
+  and reusable components receive identity, permissions, state, and lifecycle
+  owners through those contracts and must remain mountable without `<Block>`.
+  Never add a `<Block>` wrapper merely to satisfy a missing dependency. If shared
+  code needs an owner or other host capability, expose it through the owning
+  surface context instead of borrowing `BlockContext`. (also:
+  apps/web/AGENTS.md)

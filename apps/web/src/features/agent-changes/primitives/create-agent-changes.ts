@@ -21,6 +21,8 @@ export type { DiffStyle } from '../core/layout';
 
 export type AgentChangesController = {
   context: AgentChangesContext;
+  /** False when the host can never have changes; every control renders nothing. */
+  available: Accessor<boolean>;
   layout: PaneLayoutController;
   model: ChangesModel;
   review: ReviewController;
@@ -80,6 +82,7 @@ export function createAgentChanges(options: {
 
   return {
     context: options.context,
+    available: () => host.canHaveChanges?.() ?? true,
     layout,
     model,
     review,
