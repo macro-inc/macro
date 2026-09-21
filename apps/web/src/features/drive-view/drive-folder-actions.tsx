@@ -9,12 +9,13 @@ import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import type { ProjectEntity } from '@entity';
 import { invalidateProjects } from '@queries/storage/projects';
-import type { Project } from '@service-storage/generated/schemas/project';
 import { Show } from 'solid-js';
+import type { DriveFolderMetadata } from './context/drive-source';
 
 /** App wiring for sidebar folder actions using the shared list dialogs and mutations. */
-export function DriveFolderActions(props: { folder: Project }) {
+export function DriveFolderActions(props: { folder: DriveFolderMetadata }) {
   const userId = useUserId();
+
   const entity = (): ProjectEntity => ({
     type: 'project',
     id: props.folder.id,
@@ -22,10 +23,14 @@ export function DriveFolderActions(props: { folder: Project }) {
     ownerId: props.folder.userId,
     projectId: props.folder.parentId ?? undefined,
   });
+
   const favorite = makeFavoriteAction();
+
   const copyLink = makeCopyLinkAction();
+
   const deleteFolder = makeDeleteAction({
     userId,
+
     onDeleted: () => void invalidateProjects(),
   });
 
@@ -33,10 +38,12 @@ export function DriveFolderActions(props: { folder: Project }) {
     openBulkEditModal({
       view,
       entities: [entity()],
+
       onFinish: () => {
         void invalidateProjects();
         toast.success(view === 'rename' ? 'Renamed' : 'Moved to folder');
       },
+
       onError: () => toast.failure('Failed to update folder'),
     });
   };

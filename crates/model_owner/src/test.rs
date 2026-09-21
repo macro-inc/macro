@@ -105,6 +105,34 @@ fn owner_type_lowercase_round_trips() {
 }
 
 #[test]
+fn is_user_matches_only_that_user() {
+    let owner = Owner::from_principal_str("macro|hutch@macro.com").unwrap();
+    let same = MacroUserIdStr::parse_from_str("macro|hutch@macro.com").unwrap();
+    let other = MacroUserIdStr::parse_from_str("macro|other@macro.com").unwrap();
+
+    assert!(owner.is_user(&same));
+    assert!(!owner.is_user(&other));
+    assert!(
+        !Owner::from_principal_str("bot|00000000-0000-0000-0000-00000000a1a1")
+            .unwrap()
+            .is_user(&same)
+    );
+}
+
+#[test]
+fn display_equals_principal_id() {
+    for principal in [
+        "macro|hutch@macro.com",
+        "bot|00000000-0000-0000-0000-00000000a1a1",
+        "01234567-89ab-cdef-0123-456789abcdef",
+    ] {
+        let owner = Owner::from_principal_str(principal).unwrap();
+        assert_eq!(owner.to_string(), principal);
+        assert_eq!(owner.to_string(), owner.principal_id());
+    }
+}
+
+#[test]
 fn from_principal_str_classifies_by_prefix() {
     assert_eq!(
         Owner::from_principal_str("macro|hutch@macro.com")

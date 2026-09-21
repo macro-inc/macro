@@ -8,32 +8,31 @@ import type { PDFDocumentProxy } from 'pdfjs-dist/types/src/display/api';
 import {
   createEffect,
   createResource,
+  createSignal,
   type JSX,
   onCleanup,
   onMount,
   Show,
 } from 'solid-js';
-import { reconcile } from 'solid-js/store';
 import { fromZodError } from 'zod-validation-error';
+import { PdfCommentsProvider } from '../context/pdf-comments-context';
 import {
   type PdfDocumentPermissions,
   PdfDocumentProvider,
   usePdfDocument,
 } from '../context/pdf-document-context';
+import { PdfViewerProvider, usePdfViewer } from '../context/pdf-viewer-context';
 import {
   type LocationBlockParams,
   type LocationSearchParams,
-  usePendingLocationNavigationEffect,
+  useGoToLinkLocation,
+  useGoToLinkLocationFromParams,
 } from '../signal/location';
 import { usePdfSave } from '../signal/save';
 import { useUpdateColorsEffect } from '../signal/setting';
-import { useSyncHighlightStore } from '../store/highlight';
+import { usePdfCommentProjection } from '../store/comments/commentStore';
 import { useSyncActivePlaceableWithCommentThread } from '../store/placeables';
-import { useTableOfContentsUpdate } from '../store/tableOfContents';
-import {
-  IModificationDataOnServerSchema,
-  transformModificationDataToClient,
-} from '../type/coParse';
+import { IModificationDataOnServerSchema } from '../type/coParse';
 import { preprocess } from '../websocket/preprocess';
 import { Document } from './Document';
 
@@ -64,7 +63,6 @@ export type PdfDocumentProps = {
   viewLocation?: GetDocumentResponseDataViewLocation;
   modificationData?: unknown;
   isNested?: boolean;
-  hotkeyScope: string;
   portalScope?: PortalScope;
   permissions: PdfDocumentPermissions;
   locationParams?: LocationSearchParams;
@@ -78,15 +76,17 @@ export function PdfDocument(props: PdfDocumentProps) {
       {(documentId) => (
         <PdfDocumentProvider
           documentId={documentId}
+          documentProxy={props.documentProxy}
           documentVersionId={props.documentVersionId}
           documentName={props.documentName}
           isNested={props.isNested}
-          hotkeyScope={props.hotkeyScope}
           portalScope={props.portalScope}
           permissions={props.permissions}
           locationParams={props.locationParams}
         >
-          <PdfDocumentState {...props} />
+          <PdfViewerProvider>
+            <PdfDocumentBehavior {...props} />
+          </PdfViewerProvider>
         </PdfDocumentProvider>
       )}
     </Show>
@@ -94,40 +94,37 @@ export function PdfDocument(props: PdfDocumentProps) {
 }
 
 export function PdfDocumentContent() {
+  useSyncActivePlaceableWithCommentThread();
+
   return (
-    <div class="flex size-full relative justify-end overflow-visible z-main-view-layout">
+    <div class="flex size-full relative justify-end overflow-visible">
       <Document />
     </div>
   );
 }
 
-function PdfDocumentState(props: PdfDocumentProps) {
+function PdfDocumentBehavior(props: PdfDocumentProps) {
   const pdf = usePdfDocument();
-  usePendingLocationNavigationEffect();
-  useSyncHighlightStore();
-  useSyncActivePlaceableWithCommentThread();
-  const {
-    documentProxy,
-    viewLocation,
-    pendingLocationParams,
-    locationChanged,
-    serverModificationData,
-    isSaving,
-  } = pdf.state.signals;
-  const [, setModificationData] = pdf.state.stores.modificationData;
-  const tableOfContentsDispatch = useTableOfContentsUpdate();
+  const pdfViewer = usePdfViewer();
+  const comments = usePdfCommentProjection();
   const savePdf = usePdfSave();
+  const [pendingLocationParams, setPendingLocationParams] =
+    createSignal<LocationBlockParams>();
+  const goToInitialLocation = useGoToLinkLocation();
+  const goToLocationFromParams = useGoToLinkLocationFromParams();
+  let imperativeNavigationQueued = false;
 
   props.registerMethods?.({
     goToLocationFromParams: async (params) => {
-      locationChanged[1](true);
-      pendingLocationParams[1](JSON.parse(JSON.stringify(params)));
+      imperativeNavigationQueued = true;
+      setPendingLocationParams({ ...params });
     },
   });
 
   createEffect(() => {
-    documentProxy[1](props.documentProxy);
-    viewLocation[1](pdf.isNested() ? undefined : props.viewLocation);
+    pdf.setPersistedViewLocation(
+      pdf.isNested() ? undefined : props.viewLocation
+    );
 
     const modificationData = props.modificationData;
     if (!modificationData) return;
@@ -140,10 +137,26 @@ function PdfDocumentState(props: PdfDocumentProps) {
       return;
     }
 
-    serverModificationData[1](parsed.data);
-    setModificationData(
-      reconcile(transformModificationDataToClient(parsed.data))
-    );
+    pdf.model.commands.hydrateFromServer(parsed.data);
+  });
+
+  createEffect(() => {
+    if (imperativeNavigationQueued || !pdfViewer.root.isReady()) return;
+    void goToInitialLocation(pdf.locationParams());
+  });
+
+  createEffect(() => {
+    const params = pendingLocationParams();
+    if (
+      !params ||
+      !pdfViewer.root.isReady() ||
+      !pdfViewer.root.hasVisiblePages()
+    ) {
+      return;
+    }
+    setPendingLocationParams(undefined);
+    pdfViewer.root.instance()?.clearAllOverlays();
+    void goToLocationFromParams(params);
   });
 
   const [preprocessResource] = createResource(() => {
@@ -160,9 +173,9 @@ function PdfDocumentState(props: PdfDocumentProps) {
     const coparse = preprocessResource.latest;
     if (!coparse) return;
 
-    pdf.state.termDataStore.load(coparse.defs ?? '');
-    tableOfContentsDispatch({ type: 'LOAD_AI_TOC', coparse });
-    pdf.state.signals.overlays[1](coparse.overlays);
+    pdf.definitions.commands.loadTermXml(coparse.defs ?? '');
+    pdf.outline.commands.loadCoparse(coparse);
+    pdfViewer.replaceOverlays(coparse.overlays);
   });
 
   const debouncedSave = leading(
@@ -182,7 +195,7 @@ function PdfDocumentState(props: PdfDocumentProps) {
   onMount(() => {
     if (pdf.isNested()) return;
     const handleBeforeUnload = (event: Event) => {
-      if (isSaving[0]()) event.preventDefault();
+      if (pdf.persistence.isSaving()) event.preventDefault();
     };
     window.addEventListener('keydown', preventNativePdfShortcuts);
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -193,13 +206,15 @@ function PdfDocumentState(props: PdfDocumentProps) {
   });
 
   return (
-    <div
-      ref={pdf.setRootElement}
-      class="size-full select-none overscroll-none overflow-hidden flex flex-col"
-      onContextMenu={(event) => event.preventDefault()}
-      data-tut="App"
-    >
-      {props.children}
-    </div>
+    <PdfCommentsProvider comments={comments}>
+      <div
+        ref={pdfViewer.setRootElement}
+        class="size-full select-none overscroll-none overflow-hidden flex flex-col"
+        onContextMenu={(event) => event.preventDefault()}
+        data-tut="App"
+      >
+        {props.children}
+      </div>
+    </PdfCommentsProvider>
   );
 }

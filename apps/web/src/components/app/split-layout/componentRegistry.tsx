@@ -6,7 +6,10 @@ import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { ChannelsView } from '@app/features/channels-view/channels-view';
-import { DriveView } from '@app/features/drive-view/drive-view';
+import {
+  DriveView,
+  type DriveViewProps,
+} from '@app/features/drive-view/drive-view';
 import { EmailCompose } from '@app/features/email-compose/email-compose';
 import { EmailView } from '@app/features/email-view/email-view';
 import { GettingStarted } from '@app/features/getting-started';
@@ -122,7 +125,7 @@ type ComponentParams = Record<string, unknown>;
 
 type ComponentFactory = (params: ComponentParams) => JSXElement;
 
-type DocumentsComponentParams = {
+type DocumentsComponentParams = DriveViewProps & {
   initialFilters?: Query;
   initialClientFilters?: SetPredicatesInput<string>;
 };
@@ -512,10 +515,7 @@ registerComponent(
             />
           }
         >
-          <DriveView
-            initialFilters={params.initialFilters}
-            initialClientFilters={params.initialClientFilters}
-          />
+          <DriveView initialFacets={params.initialFacets} />
         </Show>
       </Show>
     );

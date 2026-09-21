@@ -15,7 +15,7 @@ import {
   type EditorThemeClasses,
   type LexicalEditor,
 } from 'lexical';
-import { createContext } from 'solid-js';
+import { createContext, getOwner, type Owner } from 'solid-js';
 import type { Store } from 'solid-js/store';
 import {
   createPluginManager,
@@ -36,6 +36,8 @@ type LexicalWrapperProps = {
 
 export type LexicalWrapperBase = {
   type: EditorType;
+  /** Owner of the editor lifecycle, stable across decorator replacement. */
+  owner: Owner | null;
   plugins: PluginManager;
   editor: LexicalEditor;
   cleanup: () => void;
@@ -83,6 +85,7 @@ export function createLexicalWrapper({
   withIds,
   theme,
 }: LexicalWrapperProps): LexicalWrapper {
+  const owner = getOwner();
   _id++;
 
   const nodes = RegisteredNodesByType[type];
@@ -128,6 +131,7 @@ export function createLexicalWrapper({
     plugins,
     editor,
     cleanup,
+    owner,
     type,
     isInteractable,
     mapping,

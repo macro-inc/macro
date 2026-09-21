@@ -113,6 +113,9 @@ jobs:
     - name: Check Lexical Service Types
       run: bun run check
       working-directory: services/lexical-service
+    - name: Test Lexical Service Endpoints
+      run: bun test src
+      working-directory: services/lexical-service
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'

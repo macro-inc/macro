@@ -186,6 +186,12 @@ source shows a retry notice while the other source stays usable. Document typing
 alone is not yet attributed by Activity; Home reflects the actions the existing
 Activity system records.
 
+Calendar reminder rows use the reminder delivery time for Home's date section,
+including on a cold GraphQL load with notification sorting disabled. Verify that
+an older reminder stays in its older section after the event's metadata syncs;
+opening its details should show the expected occurrence. A newer reminder or your
+own later activity can move the row forward, but a calendar sync alone should not.
+
 On mobile, this route always renders the original Notifications soup view,
 regardless of the new-app-views flag. The dock and search scope use the bell icon
 and **Notifications** label; Home is desktop-only. Notifications uses the existing
@@ -332,7 +338,11 @@ Shift-click opens a standalone split at `/app/email/<thread-id>`, which remains
 the destination for direct links and legacy surfaces. Click a message header to
 expand or collapse it; `Show N hidden messages` reveals the collapsed middle of
 a longer conversation. A standalone link with
-`?email_message_id=<message-id>` reveals that message.
+`?email_message_id=<message-id>` loads older pages as needed, expands the target,
+scrolls it into view, and briefly highlights it. For navigation regressions,
+exercise both a recent message and one outside the first page. Open another
+target while loading or highlighting: the previous request must not scroll the
+new thread or clear its highlight. Closing the split cancels pending positioning.
 Collapsed thread cards use a compact text snippet; expanding mounts the message
 body and its attachments. On phones, messages form flat rows with horizontal
 separators and 16px side gutters; collapsed previews show one line. Desktop
@@ -459,14 +469,17 @@ descendants' ancestors and reveals their branches.
 is temporarily hidden, including its Cmd+F shortcut. The sidebar's folder-name
 search remains available. Right-click any Drive view, the Drive folder overview,
 or a folder at any depth for **Open in new split**, **Open in current split**, and
-**Open fullscreen** (when multiple splits are open). Folder menus also offer
-Favorite/Unfavorite, Move to folder, Copy Link, and owner-only Rename and Delete.
+**Open fullscreen** (when multiple splits are open). Opening a location in a new
+split clears search and filters in the destination, leaving the original split
+unchanged. Folder menus also offer Favorite/Unfavorite, Move to folder, Copy Link,
+and owner-only Rename and Delete.
 A folder's Share dialog, when the owner belongs to a team, has Team access
 (None, View, Comment, or Edit) without a Link sharing card or Link tab.
 Favorites use the same open actions and **Remove from favorites** menu as Tasks.
-The **Filter** menu reuses the
-legacy **Type**, searchable **Tags**, and **Created by** submenus alongside **Files**
-for Default, All files, and Email attachments. Created by is hidden while My Files
+The **Filter** menu uses the same controls as Tasks: **Type**, searchable **Tags**,
+and **Created by** submenus alongside **Files** for Default, All files, and Email
+attachments. Options within a group match any selected option; different groups
+combine to narrow the results. Created by is hidden while My Files
 is restricted to your own files. Recent offers only file-scope filtering.
 `Sort files` offers modified, created, and viewed dates.
 Recent uses the viewer's own interaction order and does not offer a sort override.
@@ -476,10 +489,14 @@ while Markdown, code/CSV, image, video, PDF/DOCX, canvas, and unrecognized file
 clicks and Enter replace the list with a breadcrumbed detail. Choose the current location
 breadcrumb to return to the list; choosing an ancestor file drops newer detail
 entries. Opening a list row or sidebar favorite starts a new detail path; only
-navigation originating inside a detail appends to that path. Modified clicks
-retain existing split navigation. On narrow layouts, use `Select Drive view` for tabs, favorites,
-folders, and tags. Navigation state and expanded folders are restored when returning
-from an opened file.
+navigation originating inside a detail appends to that path. Cmd/Ctrl-clicking a
+row toggles selection; Shift-clicking a checkbox selects a range, and Shift+Enter
+opens the focused row in a new split. Cmd/Ctrl-clicking a row's folder link or
+search hit opens a new tab. Short filtered pages load more results automatically;
+a failed page shows a retry action instead of silently stopping. On narrow layouts,
+use `Select Drive view` for tabs, favorites, folders, and tags. Location, search,
+filters, expanded folders, list focus, and scroll position are restored when
+returning from an opened file.
 
 ## Calendar — `/app/calendar/view`
 
@@ -554,6 +571,10 @@ Tabs `All` / `Missed` / `Unattended`; `Call` button to start one. Recordings, tr
 and summaries appear here; empty state notes "Calls are available to agents."
 
 On phones, recorded call headers omit the **Call Again** action.
+
+If a recording fails to play, reload the page to obtain a fresh recording link,
+or use **Open or download recording**. The playback warning does not assume
+that the failure is caused by an unsupported media format.
 
 ### Sharing a call
 
@@ -650,6 +671,19 @@ quoted fields, original date timestamps and spreadsheet formula escaping.
 Requires authentication and the `enable-activity-feed` flag. Direct navigation and
 restored splits wait for flags to load; when disabled, they redirect to Home
 (`/app/component/inbox`) without loading the activity feed.
+
+When checking Activity, enable GraphQL Soup as well as the activity flag. Verify
+that an initial visit resolves entity names in both the feed and Most active,
+then reload and scroll through another page. Preview loading and live name
+updates should keep the page responsive without repeatedly fetching previews.
+
+Activity refreshes live after recorded actions. With two pages loaded, make an
+action in another tab and verify the feed retains its page-boundary rows while
+the action count and heatmap update. An open entity activity panel should also
+refresh for actions by another authorized user. After disconnecting and
+reconnecting the websocket, verify recovery without requiring another action.
+Hidden tabs defer refresh until visible; purges refresh all mounted activity
+queries through the normal access checks.
 
 GitHub-style actions heatmap (one a11y node per day — makes snapshots huge; prefer saving the
 snapshot to a file), then a `Most active` section header (styled like the feed's day headers)

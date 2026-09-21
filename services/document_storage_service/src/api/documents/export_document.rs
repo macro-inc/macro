@@ -85,13 +85,9 @@ pub async fn handler(
         let presigned_url = match file_type {
             FileType::Docx => export_docx_document(&state, &document_context.document_id).await,
             _ => {
-                export_basic_document(
-                    &state,
-                    document_context.owner.as_ref(),
-                    &document_context.document_id,
-                    file_type,
-                )
-                .await
+                let owner = document_context.owner.principal_id();
+                export_basic_document(&state, &owner, &document_context.document_id, file_type)
+                    .await
             }
         }
         .map_err(|e| {

@@ -116,8 +116,9 @@ pub async fn handler(
         }
     };
 
+    let owner = document.owner.principal_id();
     let key = build_cloud_storage_bucket_document_key(
-        document.owner.as_ref(),
+        &owner,
         &document.document_id,
         document.document_version_id,
     );

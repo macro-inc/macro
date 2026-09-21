@@ -138,8 +138,9 @@ impl<B: MacroEventBroker> EntityLifecycleService for DssEntityLifecycleAdapter<B
         .await
         .inspect_err(|error| tracing::error!(error = ?error, "unable to delete entity mentions"))
         .ok();
+        let owner = document.owner.principal_id();
         self.sqs
-            .enqueue_document_delete(document.owner.as_ref(), &entity.entity_id)
+            .enqueue_document_delete(&owner, &entity.entity_id)
             .await
             .map_err(|error| internal!(error))?;
         publish_document_purged_event(&self.event_broker, &entity.entity_id)

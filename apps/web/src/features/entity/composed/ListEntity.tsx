@@ -1,4 +1,5 @@
 import './ListEntity.css';
+import { useMaybeSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   SwipableRow,
@@ -90,6 +91,9 @@ export function MaybeEntityRow(props: {
 }
 
 export function ListEntity(props: ListEntityProps) {
+  // Legacy Soup callers do not pass row behavior explicitly yet.
+  const soupView = useMaybeSoupView();
+
   const unread = () => unreadFilterFn(props.entity);
   const isShared = useIsShared(props.entity);
   const bulkWakeupEnabled = useFeatureFlag(BULK_DOCUMENT_WAKEUP_FEATURE_FLAG);
@@ -155,6 +159,10 @@ export function ListEntity(props: ListEntityProps) {
     setSnippetContainerRef,
     chars: chars(),
     onProjectClick: props.onProjectClick,
+    onFilterByTag: props.onFilterByTag ?? soupView?.filterByTag,
+    showCalendarAttendance:
+      props.showCalendarAttendance ??
+      (soupView?.activeTab() ?? 'all') === 'all',
   });
 
   const draggable = createEntityDraggable({
