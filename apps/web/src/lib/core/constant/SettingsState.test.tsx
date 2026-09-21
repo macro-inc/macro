@@ -192,10 +192,23 @@ describe('settings entry points', () => {
     expect(mocks.replaceAllSplits).toHaveBeenCalledWith({
       type: 'component',
       id: 'settings',
+      entryMetadata: {
+        route: {
+          matches: [{ id: 'settings', params: { tab: 'billing' } }],
+        },
+      },
     });
     state.openSettingsInSplit('Appearance');
     expect(mocks.openWithSplit).toHaveBeenCalledWith(
-      { type: 'component', id: 'settings' },
+      {
+        type: 'component',
+        id: 'settings',
+        entryMetadata: {
+          route: {
+            matches: [{ id: 'settings', params: { tab: 'appearance' } }],
+          },
+        },
+      },
       expect.objectContaining({ allowDuplicate: false, preferNewSplit: true })
     );
   });

@@ -63,8 +63,7 @@ export function createMobileSwipeLayout(
 
   const fgSplitId = () => (fgIsSlotA() ? slotASplitId() : slotBSplitId());
   const bgSplitId = () => (fgIsSlotA() ? slotBSplitId() : slotASplitId());
-  const sameContent = (a: SplitContent, b: SplitContent) =>
-    a.type === b.type && a.id === b.id;
+  const contentKey = (content: SplitContent) => `${content.type}:${content.id}`;
 
   // The BG split is always exactly bgSplitId() — derive exclusion directly from
   // the slot signals rather than maintaining a separate set.
@@ -105,7 +104,7 @@ export function createMobileSwipeLayout(
     fgHandle?.captureEntryState();
 
     // If the target is already mounted in BG, promote it instead of recreating it.
-    if (bgHandle && sameContent(bgHandle.content(), content)) {
+    if (bgHandle && contentKey(bgHandle.content()) === contentKey(content)) {
       // Reopening from a list supplies a new source even for the same entity.
       bgHandle.replace({ next: content, referredFrom, mergeHistory: true });
       if (forwardNavigationTrigger) {

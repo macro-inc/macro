@@ -11,7 +11,11 @@
 | `/app/component/inbox` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
 | `/app/component/mail` | Email client |
 | `/app/component/channels` | Channels list |
-| `/app/component/documents` | Files (documents list) |
+| `/app/drive` | Files (Drive defaults to My Files) |
+| `/app/drive/<recent-or-shared>` | A Drive tab (`/app/drive/tab/<...>` remains a compatibility alias) |
+| `/app/drive/folder/<uuid>` | A Drive folder; breadcrumbs resolve from current accessible folder data |
+| `/app/drive/<document-type>/<uuid>` | An item opened inline in My Files |
+| `/app/drive/folder/<uuid>/<document-type>/<uuid>` | An item opened inline in its Drive folder; document types include `md`, `task`, `skill`, `snippet`, `canvas`, `pdf`, `code`, `csv`, `image`, `video`, `spreadsheet`, and `unknown` |
 | `/app/component/tasks` | Tasks table |
 | `/app/component/agents` | AI chats / agents list |
 | `/app/agents/<uuid>` | Chat agent session with the Agents sidebar |
@@ -22,16 +26,20 @@
 | `/app/component/activity` | Activity heatmap + feed |
 | `/app/component/home` | Assistant (AI-first landing) |
 | `/app/calendar/view` | Calendar |
-| `/app/md/<uuid>` | A document |
-| `/app/spreadsheet/<uuid>` | A native Macro spreadsheet |
+| `/app/<document-type>/<uuid>` | Legacy document URL (including `md`, `pdf`, `canvas`, `spreadsheet`, and the other Drive document types); redirects to `/app/drive/<document-type>/<uuid>` |
+| `/app/documents`, `/app/files` | Legacy Files views; redirect to `/app/drive` |
 | `/app/chat/<uuid>` | A standalone AI chat |
 | `/app/agent/<uuid>` | An agent session (opened from `@macro-new` / `@coder` / `@cursor`) |
 | `/app/md/<doc>/chat/<chat>` | Doc + doc-scoped chat in a split |
 | `/app/md/<doc>/channel/<channel>` | Doc + channel in a split |
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
 
-Splits: the app is a tiling window manager. A second pane appends its own segment to the URL
-(`/app/<left>/<right>`). Desktop panes expose Close when available and omit
+Splits: the app is a tiling window manager. Public variable-length routes use
+`~` as the boundary between panes
+(`/app/drive/folder/<uuid>/~/component/mail`). Legacy fixed `type/id`
+pane routes remain accepted. Split-specific view state uses positionally
+namespaced query parameters such as `s0.drive.sort=created_at`; route identity
+and breadcrumb nesting remain in the path. Desktop panes expose Close when available and omit
 split-history back/forward buttons. Mobile content panes retain their back button.
 
 The app views are referred to as **workspaces**. Expanded workspace sidebars start
@@ -363,6 +371,13 @@ from the owning view before opening it elsewhere. The same rule applies to mouse
 selection, keyboard preview navigation, and detail breadcrumbs. Touch layouts
 never render inline previews or detail views: a tap opens the entity in the
 split, so the toast only appears when the content is genuinely open elsewhere.
+
+Split-router ownership checks use the final redirected destination. Concurrent
+opens of the same claimed resource wait for the first outstanding request rather
+than creating duplicate panes. If pane-history navigation reaches content owned
+by another pane, it focuses that owner without advancing the requesting pane's
+history cursor. Restoring a saved layout preserves existing duplicate panes;
+search-only updates within those panes do not collapse them.
 
 ## Entity action dialogs
 

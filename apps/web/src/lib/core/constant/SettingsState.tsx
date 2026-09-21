@@ -1,6 +1,11 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { toBaseRelative } from '@app/constants/routerBase';
 import { useMobileSettings } from '@app/features/settings/context/mobile-settings';
+import {
+  rootRouteMatch,
+  routeParams,
+  type SplitLocation,
+} from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { isMobile } from '@core/mobile/isMobile';
@@ -10,6 +15,7 @@ import { useLocation, useNavigate } from '@solidjs/router';
 import { createMemo, createSignal } from 'solid-js';
 import {
   appendSettingsSplitToUrl,
+  settingsTabSlugFromUrl,
   stripSettingsSplitFromUrl,
 } from './settingsSplitUrl';
 import { settingsSlugToTab, settingsTabToSlug } from './settingsTabsConfig';
@@ -70,13 +76,8 @@ export const currentSettingsReturnTo = settingsReturnTo;
  */
 export const settingsTabFromSplitPath = (
   pathname: string
-): SettingsTab | undefined => {
-  const segments = toBaseRelative(pathname).split('/').filter(Boolean);
-  for (let i = 0; i + 1 < segments.length; i += 2) {
-    if (segments[i] === 'settings') return settingsSlugToTab(segments[i + 1]);
-  }
-  return undefined;
-};
+): SettingsTab | undefined =>
+  settingsSlugToTab(settingsTabSlugFromUrl(toBaseRelative(pathname)) ?? '');
 
 /**
  * Whether settings is the only visible split — the "clobbered" mode that
@@ -88,14 +89,20 @@ export const settingsTabFromSplitPath = (
  */
 export const isSoloSettings = () => {
   if (isMobile()) return false;
+
   const splitManager = globalSplitManager();
+
   if (!splitManager) return false;
+
   // Derive the sole split from the visible set (not `splits()[0]`) so the
   // count check and the identity check agree even if an exclusion filter ever
   // hides a split ahead of settings.
   const visible = splitManager.getVisibleSplits();
+
   if (visible.length !== 1) return false;
+
   const [sole] = visible;
+
   return sole?.content.type === 'component' && sole.content.id === 'settings';
 };
 
@@ -107,23 +114,67 @@ export const useSettingsState = () => {
 
   const getSettingsSplit = () => {
     const splitManager = globalSplitManager();
+
     if (!splitManager) return undefined;
+
     return splitManager.splits().find((split) => {
       const content = split.content;
+
       return content.type === 'component' && content.id === 'settings';
     });
   };
 
   const splitOpen = createMemo(() => getSettingsSplit() !== undefined);
 
+  const settingsContent = (tab: SettingsTab) => ({
+    type: 'component' as const,
+    id: 'settings' as const,
+    entryMetadata: {
+      route: {
+        matches: [
+          {
+            id: 'settings',
+            params: { tab: settingsTabToSlug(tab) },
+          },
+        ],
+      },
+    },
+  });
+
+  const updateSettingsRoute = (tab: SettingsTab) => {
+    const split = getSettingsSplit();
+
+    if (!split) return;
+
+    const slug = settingsTabToSlug(tab);
+    const location = split.content.entryMetadata as SplitLocation | undefined;
+
+    if (
+      rootRouteMatch(location?.route)?.id === 'settings' &&
+      routeParams(location?.route).tab === slug
+    ) {
+      return;
+    }
+
+    globalSplitManager()
+      ?.getSplit(split.id)
+      ?.updateCurrentEntry((content) => ({
+        ...content,
+        entryMetadata: settingsContent(tab).entryMetadata,
+      }));
+  };
+
   const focusSettingsPanel = () => {
     if (isTouchDevice()) return;
     setTimeout(() => {
       const settingsSplit = getSettingsSplit();
+
       if (!settingsSplit) return;
+
       const settingsPanel = document.querySelector<HTMLElement>(
         `[data-split-id="${settingsSplit.id}"] [data-settings-panel]`
       );
+
       settingsPanel?.focus({ preventScroll: true });
     }, 10);
   };
@@ -131,9 +182,7 @@ export const useSettingsState = () => {
   // Capture the current layout (minus any settings split) as where "Back to
   // app"/"Move to split" should return to, then clobber every other split so
   // settings becomes the sole one. Shared by opening settings fresh and by
-  // collapsing a docked-alongside layout back down to solo. The query and hash
-  // are captured too: the `preview` param is what links Controller/Viewer
-  // Preview Pairs, so returning to the path alone would sever them.
+  // collapsing a docked-alongside layout back down to solo.
   const collapseToSoloSettings = (tab: SettingsTab) => {
     setSettingsReturnTo(
       stripSettingsSplitFromUrl(
@@ -141,7 +190,7 @@ export const useSettingsState = () => {
       )
     );
     setActiveTabId(tab);
-    replaceAllSplits({ type: 'component', id: 'settings' });
+    replaceAllSplits(settingsContent(tab));
   };
 
   // Mobile opens an in-place settings sheet; a fresh open lands on its index.
@@ -154,12 +203,17 @@ export const useSettingsState = () => {
         )
       );
       mobileSettings.openSettings(tab);
+
       return;
     }
+
     if (splitOpen()) {
-      setActiveTabId(tab ?? 'Account');
+      const nextTab = tab ?? 'Account';
+      setActiveTabId(nextTab);
+      updateSettingsRoute(nextTab);
       return;
     }
+
     collapseToSoloSettings(tab ?? 'Account');
   };
 
@@ -168,29 +222,34 @@ export const useSettingsState = () => {
   const selectTab = (tab: SettingsTab) => {
     if (isMobile()) {
       mobileSettings.selectPage(tab);
+
       return;
     }
+
     setActiveTabId(tab);
+    updateSettingsRoute(tab);
   };
 
   // Opt-in: dock settings into the split layout (the pre-route behavior).
   const openSettingsInSplit = (activeTabId?: SettingsTab) => {
     if (isMobile()) {
       openSettings(activeTabId);
+
       return;
     }
+
     if (activeTabId) setActiveTabId(activeTabId);
-    openWithSplit(
-      { type: 'component', id: 'settings' },
-      {
-        activate: true,
-        // Single settings split only: getSettingsSplit/removeSettingsSplit
-        // assume one exists, so reuse an existing one instead of duplicating.
-        allowDuplicate: false,
-        preferNewSplit: true,
-        mergeHistory: false,
-      }
-    );
+
+    const tab = activeTabId ?? 'Account';
+
+    openWithSplit(settingsContent(tab), {
+      activate: true,
+      // Single settings split only: getSettingsSplit/removeSettingsSplit
+      // assume one exists, so reuse an existing one instead of duplicating.
+      allowDuplicate: false,
+      preferNewSplit: true,
+      mergeHistory: false,
+    });
     focusSettingsPanel();
   };
 
@@ -204,12 +263,16 @@ export const useSettingsState = () => {
   const closeSettings = () => {
     if (isMobile()) {
       mobileSettings.close();
+
       return;
     }
+
     if (isSoloSettings()) {
       navigate(settingsReturnTo() ?? DEFAULT_ROUTE, { replace: true });
+
       return;
     }
+
     removeSettingsSplit();
   };
 
@@ -222,12 +285,10 @@ export const useSettingsState = () => {
     // Strip any settings split already in the target layout before re-adding
     // one, so repeatedly toggling fullscreen ⇄ split reuses a single settings
     // split (on the current tab) instead of stacking a new one each cycle.
-    // The return layout's query/hash ride along — appending settings at the
-    // end keeps `preview` indices valid — so its Preview Pairs re-link when
-    // the URL sync rebuilds the layout.
     const returnTo = stripSettingsSplitFromUrl(
       settingsReturnTo() ?? DEFAULT_ROUTE
     );
+
     navigate(
       appendSettingsSplitToUrl(returnTo, settingsTabToSlug(activeTabId()))
     );
@@ -246,11 +307,13 @@ export const useSettingsState = () => {
     if (isMobile()) {
       if (mobileSettings.open()) mobileSettings.close();
       else openSettings();
+
       return;
     }
     // Solo takes priority: if it's the only thing showing, leave it.
     if (isSoloSettings()) {
       closeSettings();
+
       return;
     }
 
@@ -261,10 +324,12 @@ export const useSettingsState = () => {
       if (manager && manager.activeSplitId() !== settingsSplit.id) {
         manager.activateSplit(settingsSplit.id);
         focusSettingsPanel();
+
         return;
       }
       // Docked and already focused → close it.
       manager?.removeSplit(settingsSplit.id);
+
       return;
     }
 

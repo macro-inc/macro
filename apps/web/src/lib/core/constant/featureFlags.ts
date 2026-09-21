@@ -114,7 +114,7 @@ export function isFeatureEnabled(flag: Flag): boolean {
 export const enableNewAppViews = defineFlag({
   key: 'enable-new-app-views',
   env: 'ENABLE_NEW_APP_VIEWS',
-  default: DEV_MODE_ENV || undefined,
+  default: true,
 });
 
 /**

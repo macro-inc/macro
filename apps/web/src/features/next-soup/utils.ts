@@ -1,4 +1,8 @@
 import { isListViewID } from '@app/constants/list-views';
+import {
+  driveDocumentFromContent,
+  driveSplitContent,
+} from '@app/features/drive-view/primitives/drive-route';
 import { URL_PARAMS as EMAIL_PARAMS } from '@app/features/email-thread/core/location';
 import { withListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
 import { scopeChannelNotificationsForEntity } from '@app/features/soup/entity-notifications';
@@ -746,7 +750,13 @@ export const openEntityInSplitFromUnifiedList = async (
       : undefined;
   const referredFrom = options.referredFrom ?? sourceListView;
 
-  let splitContent: SplitContent = { ...content, params };
+  // Documents are hosted by Drive. Construct the canonical routed content
+  // before opening the split so the layout manager does not mount a legacy
+  // block and immediately replace it during router feedback.
+  const driveDocument = driveDocumentFromContent(content);
+  let splitContent: SplitContent = driveDocument
+    ? driveSplitContent({ kind: 'tab', tab: 'owned' }, driveDocument)
+    : { ...content, params };
   if (splitHandle && referredFrom && isListViewID(referredFrom)) {
     splitContent = withListNavigationSource(splitContent, splitHandle);
   }
@@ -763,7 +773,11 @@ export const openEntityInSplitFromUnifiedList = async (
     replacePreview,
     handle: splitHandle,
     mergeHistory,
-    allowDuplicate,
+    // Each routed document has a distinct Drive location even though all
+    // Drive splits share the same component identity.
+    allowDuplicate:
+      allowDuplicate ||
+      (splitContent.type === 'component' && splitContent.id === 'documents'),
     reopen:
       entity.type === 'channel' && !location && openChannelAtLatest
         ? 'latest'

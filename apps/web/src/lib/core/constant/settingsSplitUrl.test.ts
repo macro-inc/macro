@@ -5,19 +5,17 @@ import {
   stripSettingsSplitFromUrl,
 } from './settingsSplitUrl';
 
-// The preview-persistence import chain reaches the block registry, whose
-// eager definition glob drags in every block feature; the URL helpers only
-// need alias resolution to exist.
+// Legacy split decoding only needs alias resolution to exist.
 vi.mock('@core/constant/allBlocks', () => ({
   isBlockAlias: vi.fn(() => false),
   resolveBlockAlias: vi.fn((type: string) => type),
 }));
 
 describe('stripSettingsSplitFromUrl', () => {
-  it('returns a URL without a settings split unchanged', () => {
+  it('canonicalizes an old flat URL without a settings split', () => {
     expect(
       stripSettingsSplitFromUrl('/component/mail/email/e-1?preview=0#sel')
-    ).toBe('/component/mail/email/e-1?preview=0#sel');
+    ).toBe('/component/mail/~/email/e-1#sel');
   });
 
   it('strips a trailing settings split, preserving query and hash', () => {
@@ -25,29 +23,29 @@ describe('stripSettingsSplitFromUrl', () => {
       stripSettingsSplitFromUrl(
         '/component/mail/email/e-1/settings/account?preview=0#sel'
       )
-    ).toBe('/component/mail/email/e-1?preview=0#sel');
+    ).toBe('/component/mail/~/email/e-1#sel');
   });
 
-  it('remaps Preview Pair indices past a stripped settings split', () => {
+  it('drops the retired Preview Pair query state', () => {
     expect(
       stripSettingsSplitFromUrl(
         '/settings/account/component/mail/md/doc-1?preview=1'
       )
-    ).toBe('/component/mail/md/doc-1?preview=0');
+    ).toBe('/component/mail/~/md/doc-1');
   });
 
-  it('drops a Preview Pair that referenced the settings split', () => {
+  it('drops Preview Pair state from a remaining split', () => {
     expect(
       stripSettingsSplitFromUrl('/component/mail/settings/account?preview=0')
     ).toBe('/component/mail');
   });
 
-  it('keeps unrelated query params while remapping the preview param', () => {
+  it('drops unowned query params', () => {
     expect(
       stripSettingsSplitFromUrl(
         '/settings/account/component/mail/md/doc-1?keep=value&preview=1'
       )
-    ).toBe('/component/mail/md/doc-1?keep=value&preview=0');
+    ).toBe('/component/mail/~/md/doc-1');
   });
 
   it('strips the legacy component/settings form', () => {
@@ -63,6 +61,16 @@ describe('stripSettingsSplitFromUrl', () => {
   it('falls back to the default route when settings was the only split', () => {
     expect(stripSettingsSplitFromUrl('/settings/account')).toBe(DEFAULT_ROUTE);
   });
+
+  it('strips settings and remaps namespaced state in a framed layout', () => {
+    expect(
+      stripSettingsSplitFromUrl(
+        '/drive/folder/f-1/~/settings/account/~/component/mail?s0.drive.sort=created_at&s1.settings.tab=account&s2.mail.filter=unread'
+      )
+    ).toBe(
+      '/drive/folder/f-1/~/component/mail?s0.drive.sort=created_at&s1.mail.filter=unread'
+    );
+  });
 });
 
 describe('appendSettingsSplitToUrl', () => {
@@ -72,12 +80,12 @@ describe('appendSettingsSplitToUrl', () => {
         '/component/mail/email/e-1?preview=0#sel',
         'account'
       )
-    ).toBe('/component/mail/email/e-1/settings/account?preview=0#sel');
+    ).toBe('/component/mail/~/email/e-1/~/settings/account#sel');
   });
 
   it('handles a trailing slash on the base path', () => {
     expect(appendSettingsSplitToUrl('/component/inbox/', 'account')).toBe(
-      '/component/inbox/settings/account'
+      '/component/inbox/~/settings/account'
     );
   });
 });

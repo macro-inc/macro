@@ -7,17 +7,15 @@ import type { EventEditorInitialValues } from '@app/features/calendar/components
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { ChannelsView } from '@app/features/channels-view/channels-view';
 import {
-  DriveView,
-  type DriveViewProps,
-} from '@app/features/drive-view/drive-view';
+  type DriveRouteViewProps,
+  RegisteredDriveRouteView,
+} from '@app/features/drive-view/drive-route-view';
 import { EmailCompose } from '@app/features/email-compose/email-compose';
 import { EmailView } from '@app/features/email-view/email-view';
 import { GettingStarted } from '@app/features/getting-started';
 import { Home } from '@app/features/home';
 import { InboxView } from '@app/features/inbox-view/inbox-view';
-import { queryStateFrom } from '@app/features/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/features/next-soup/filters/filter-store/predicates-store';
-import { mergeQuery } from '@app/features/next-soup/filters/filter-store/query-store';
 import type { Query } from '@app/features/next-soup/filters/filter-store/types';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { NonMemberChannelPreview } from '@app/features/next-soup/soup-view/non-member-channel-preview';
@@ -26,7 +24,6 @@ import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag'
 import { ReminderEditorSplit } from '@app/features/reminders/ReminderEditorSplit';
 import { SettingsPanelComponentWrapper } from '@app/features/settings/Settings';
 import { TasksView } from '@app/features/tasks-view/tasks-view';
-import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag, usePosthog } from '@app/lib/analytics/posthog';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { EventComposerSplit } from '@block-calendar/components/EventComposerSplit';
@@ -38,13 +35,11 @@ import {
   type CrmViewConfig,
   decodeCrmViewParam,
 } from '@companies/crm/saved-views';
-import { useIsAuthenticated } from '@core/auth';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import {
   DEV_MODE_ENV,
   enableChatV3Agents,
   enableCrm,
-  enableNewAppViews,
   enableReminders,
   isFeatureEnabled,
   LOCAL_ONLY,
@@ -56,92 +51,24 @@ import EmptyStatePreviewIcon from '@design/empty-state-doc.svg';
 import { useAutomationEntities } from '@queries/agent-schedule/entities';
 import { EmptyStatePanel } from '@ui';
 import {
-  type Component,
   createRenderEffect,
-  createSignal,
   type JSXElement,
   lazy,
-  onCleanup,
   onMount,
   Show,
 } from 'solid-js';
 import type { SplitContent } from './layoutManager';
 import { useSplitPanelOrThrow } from './layoutUtils';
 import { previewEmptyStateForContent } from './previewController';
-
-function usePageViewTracking(pageTitle: string) {
-  const analytics = useAnalytics();
-  onMount(() => {
-    analytics.pageView(pageTitle);
-    analytics.track('open_view', { viewId: pageTitle });
-  });
-}
-
-const NEW_APP_VIEWS_FLAG_WAIT_MS = 5_000;
-
-function useNewAppViews(options?: {
-  enabledLayout?: () => 'legacy' | 'composable';
-}) {
-  const panel = useSplitPanelOrThrow();
-  const flag = useFeatureFlag(enableNewAppViews);
-  const [timedOut, setTimedOut] = createSignal(false);
-  const timer = setTimeout(() => setTimedOut(true), NEW_APP_VIEWS_FLAG_WAIT_MS);
-  onCleanup(() => clearTimeout(timer));
-
-  // PostHog can be blocked or fail before invoking its flag callback. Bound
-  // the loading state so these views fall back to their legacy equivalents
-  // instead of displaying a loading block forever.
-  const ready = () => !flag().loading || timedOut();
-  const enabled = () => ready() && flag().enabled;
-
-  createRenderEffect(() => {
-    if (!ready()) return;
-    panel.handle.updateMeta?.({
-      splitPanelLayout: enabled()
-        ? (options?.enabledLayout?.() ?? 'composable')
-        : 'legacy',
-    });
-  });
-
-  return { ready, enabled };
-}
-
-/**
- * Guard that delays rendering until user is authenticated.
- * Use for components that require user context (userId, email).
- */
-const withAuth = <P extends object>(Comp: Component<P>): Component<P> => {
-  return (props: P) => {
-    const isAuthenticated = useIsAuthenticated();
-    return (
-      <Show when={isAuthenticated()} fallback={<LoadingBlock />}>
-        <Comp {...props} />
-      </Show>
-    );
-  };
-};
+import {
+  useNewAppViews,
+  usePageViewTracking,
+  withAuth,
+} from './registered-view';
 
 type ComponentParams = Record<string, unknown>;
 
 type ComponentFactory = (params: ComponentParams) => JSXElement;
-
-type DocumentsComponentParams = DriveViewProps & {
-  initialFilters?: Query;
-  initialClientFilters?: SetPredicatesInput<string>;
-};
-
-function mergeClientFilters(
-  base?: SetPredicatesInput<string>,
-  refinement?: SetPredicatesInput<string>
-): SetPredicatesInput<string> | undefined {
-  if (!base) return refinement;
-  if (!refinement) return base;
-
-  return {
-    and: [...new Set([...(base.and ?? []), ...(refinement.and ?? [])])],
-    or: [...new Set([...(base.or ?? []), ...(refinement.or ?? [])])],
-  };
-}
 
 export type ComponentMeta = {
   kind?: string;
@@ -482,45 +409,9 @@ function RegisteredMailView() {
 
 registerComponent('mail', withAuth(RegisteredMailView));
 
-registerComponent(
-  'documents',
-  withAuth((params: DocumentsComponentParams = {}) => {
-    usePageViewTracking('documents');
-    const newAppViews = useNewAppViews({
-      enabledLayout: () => (isTouchDevice() ? 'legacy' : 'composable'),
-    });
-    const user = useUserContext();
-    const preset = getViewPreset('documents', undefined, {
-      userId: user.userId(),
-      isTeamAdmin: false,
-    });
-    const initialFilters =
-      preset?.filters && params.initialFilters
-        ? mergeQuery(queryStateFrom(preset.filters), params.initialFilters)
-        : (params.initialFilters ?? preset?.filters);
-    const initialClientFilters = mergeClientFilters(
-      preset?.clientFilters,
-      params.initialClientFilters
-    );
-    return (
-      <Show when={newAppViews.ready()} fallback={<LoadingBlock />}>
-        <Show
-          when={newAppViews.enabled() && !isTouchDevice()}
-          fallback={
-            <SoupView
-              viewName="Files"
-              initialFilters={initialFilters}
-              initialClientFilters={initialClientFilters}
-              initialGroupBy={preset?.groupBy}
-            />
-          }
-        >
-          <DriveView initialFacets={params.initialFacets} />
-        </Show>
-      </Show>
-    );
-  })
-);
+registerComponent('documents', (params = {}) => (
+  <RegisteredDriveRouteView {...(params as DriveRouteViewProps)} />
+));
 
 function LegacyTasksView() {
   const user = useUserContext();

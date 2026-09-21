@@ -1,14 +1,14 @@
-import { useEntityDetailNavigationStack } from '@app/components/entity-detail/EntityDetailNavigationStack';
 import { useViewTabHotkeys, ViewShell } from '@app/components/view-shell';
+import { SplitRouter } from '@app/split-router';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { createMemo, Show, Suspense } from 'solid-js';
-import { DriveDetailView } from '../components/DriveDetailView';
 import { DriveFileDropzone } from '../components/drive-file-dropzone';
 import { useDriveView } from '../context/drive-context';
 import { driveLocationBreadcrumbs } from '../core/breadcrumbs';
 import { DRIVE_TABS } from '../core/types';
+import { useDriveDetailNavigation } from '../drive-detail-navigation';
 import { DriveBreadcrumbs } from './drive-breadcrumbs';
 import { DriveHeader } from './drive-header';
 import { DriveList } from './drive-list';
@@ -29,7 +29,7 @@ export function DriveWorkspace() {
     driveLocationBreadcrumbs(state.value().location, sidebar.folders())
   );
 
-  const navigation = useEntityDetailNavigationStack();
+  const navigation = useDriveDetailNavigation();
 
   const panel = useSplitPanelOrThrow();
 
@@ -77,7 +77,7 @@ export function DriveWorkspace() {
                   </>
                 }
               >
-                <DriveDetailView breadcrumbOrderOffset={breadcrumbs().length} />
+                <SplitRouter.Outlet />
               </Show>
             </ViewShell.Main>
           </ViewShell.Root>

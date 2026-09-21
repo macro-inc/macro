@@ -11,7 +11,6 @@ import {
   vi,
 } from 'vitest';
 import { createSplitLayout, type SplitId } from '../layoutManager';
-import { restorePreviewPairs } from '../layoutUrlSync';
 import { createSplitFocusTracker } from '../splitFocusTracker';
 
 vi.mock('../componentRegistry', () => ({
@@ -66,9 +65,7 @@ function createPanel(): HTMLDivElement {
 const FOCUS_DEBOUNCE_MS = 50;
 
 /**
- * Reproduce the fresh-load wiring of SplitLayoutContainer: the manager comes
- * up from URL contents (last split active), Preview Pairs restore, and only
- * then does the focus tracker mount and process the trailing Insert event.
+ * Reproduce focus tracking after a runtime Preview Pair is linked.
  */
 function mountFreshLoad(options: { withPreviewPair: boolean }) {
   return createRoot((dispose) => {
@@ -77,7 +74,10 @@ function mountFreshLoad(options: { withPreviewPair: boolean }) {
       { type: 'md', id: 'doc-1' },
     ]);
     if (options.withPreviewPair) {
-      restorePreviewPairs(manager, [{ controllerIndex: 0 }]);
+      const [controller, viewer] = manager.splits();
+      if (controller && viewer) {
+        manager.restorePreviewPair(controller.id, viewer.id);
+      }
     }
 
     const panelRefs = new Map<SplitId, HTMLDivElement>(

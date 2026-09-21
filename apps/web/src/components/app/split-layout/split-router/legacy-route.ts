@@ -1,0 +1,271 @@
+import {
+  agentsRouteFromSegments,
+  agentsRouteSegments,
+} from '@app/features/agents-view/core/route';
+import {
+  defineRoute,
+  routeParams,
+  type SplitLocation,
+  type SplitRouterEntry,
+  type UnmatchedSplitPathHandler,
+} from '@app/lib/split-router';
+import {
+  assertRouteState,
+  decodeRoute,
+  encodeRoute,
+  filterRouteSearch,
+  type SplitRoutesManifest,
+} from '@app/lib/split-router/routes';
+import { parseSearchState } from '@app/lib/split-router/search';
+import { isRecord } from '@app/lib/split-router/utils';
+import type { BlockAlias, BlockName } from '@core/block';
+import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
+import { z } from 'zod';
+import type { SplitContent } from '../layoutManager';
+
+export function decodeLegacyPair(
+  type: string,
+  id: string
+): SplitContent | undefined {
+  if (!type || !id) return;
+
+  const agentsRoute = agentsRouteFromSegments(type, id);
+  if (agentsRoute) return { type: 'component', id: agentsRoute };
+
+  if (type === 'settings') {
+    return { type: 'component', id: 'settings' };
+  }
+
+  if (type === 'component') return { type: 'component', id };
+
+  const resolvedType = resolveBlockAlias(type as BlockName | BlockAlias);
+
+  if (isBlockAlias(type)) {
+    return {
+      type,
+      id,
+      aliasContext: {
+        alias: type,
+        baseType: resolvedType,
+      },
+    };
+  }
+
+  return { type: resolvedType, id };
+}
+
+function legacyEntry(type: string, id: string): SplitRouterEntry | undefined {
+  const agentsRoute = agentsRouteFromSegments(type, id);
+  if (agentsRoute) {
+    return {
+      location: {
+        route: { matches: [{ id: type, params: { id } }] },
+      },
+    };
+  }
+
+  if (type === 'settings') {
+    return {
+      location: {
+        route: { matches: [{ id: 'settings', params: { tab: id } }] },
+      },
+    };
+  }
+
+  if (type === 'component' && id === 'settings') {
+    return {
+      location: {
+        route: { matches: [{ id: 'settings', params: { tab: 'account' } }] },
+      },
+    };
+  }
+
+  if (type === 'component' && id === 'documents') {
+    return {
+      location: { route: { matches: [{ id: 'drive', params: {} }] } },
+    };
+  }
+
+  if (!decodeLegacyPair(type, id)) return;
+
+  return {
+    location: {
+      route: {
+        matches: [{ id: 'legacy-content', params: { type, id } }],
+      },
+    },
+  };
+}
+
+export const handleLegacySplitPath: UnmatchedSplitPathHandler = (context) => {
+  const { segments } = context;
+
+  if (segments.length === 1 && ['documents', 'files'].includes(segments[0]!)) {
+    return [
+      {
+        location: {
+          route: { matches: [{ id: 'drive', params: {} }] },
+        },
+      },
+    ];
+  }
+
+  if (
+    context.matchedRouteId &&
+    context.matchedRouteId !== 'settings' &&
+    context.matchedRouteId !== 'legacy-content'
+  ) {
+    return;
+  }
+  if (segments.length < 2 || segments.length % 2 !== 0) return;
+
+  const entries = [];
+
+  for (let index = 0; index < segments.length; index += 2) {
+    const entry = legacyEntry(segments[index]!, segments[index + 1]!);
+
+    if (!entry) return;
+
+    entries.push(entry);
+  }
+
+  return entries;
+};
+
+export function encodeLegacyContent(content: SplitContent): string[] {
+  return [
+    content.type === 'component'
+      ? content.type
+      : content.aliasContext?.alias || content.type,
+    content.id,
+  ];
+}
+
+export function splitLocationFromContent(content: SplitContent): SplitLocation {
+  if (content.type === 'component' && content.id === 'documents') {
+    return { route: { matches: [{ id: 'drive', params: {} }] } };
+  }
+
+  if (content.type === 'component' && content.id === 'settings') {
+    return {
+      route: {
+        matches: [{ id: 'settings', params: { tab: 'account' } }],
+      },
+    };
+  }
+
+  if (content.type === 'component') {
+    const segments = agentsRouteSegments(content.id);
+    const [section, id] = segments ?? [];
+    if (section && id) {
+      return { route: { matches: [{ id: section, params: { id } }] } };
+    }
+  }
+
+  const [type, id] = encodeLegacyContent(content);
+  return {
+    route: {
+      matches: [{ id: 'legacy-content', params: { type, id } }],
+    },
+  };
+}
+
+/** Resolve legacy/persisted metadata before it reaches router state. */
+export function resolveContentLocation(
+  routes: SplitRoutesManifest,
+  content: SplitContent
+): SplitLocation {
+  const metadata = isRecord(content.entryMetadata)
+    ? content.entryMetadata
+    : undefined;
+  const resolve = (route: unknown) => {
+    assertRouteState(routes, route);
+    // Go through the URL representation, not schema validation of schema outputs.
+    const decoded = decodeRoute(
+      routes,
+      encodeRoute(routes, { location: { route } })
+    );
+    if (
+      !decoded ||
+      decoded.location.route.matches.length !== route.matches.length ||
+      decoded.location.route.matches.some(
+        (match, index) => match.id !== route.matches[index]!.id
+      )
+    ) {
+      throw new Error('Split content did not resolve to its route');
+    }
+    return decoded.location.route;
+  };
+  let route: SplitLocation['route'] | undefined;
+  if (metadata?.route !== undefined) {
+    try {
+      route = resolve(metadata.route);
+    } catch {
+      // Old or malformed metadata falls back to the content's compatibility route.
+    }
+  }
+  route ??= resolve(splitLocationFromContent(content).route);
+  const search = filterRouteSearch(
+    routes,
+    route,
+    parseSearchState(metadata?.search)
+  );
+  return search ? { route, search } : { route };
+}
+
+export function splitContentFromLocation(
+  location: SplitLocation
+): SplitContent {
+  const root = location.route.matches[0];
+
+  if (root.id === 'drive') return { type: 'component', id: 'documents' };
+  if (root.id === 'settings') return { type: 'component', id: 'settings' };
+
+  const params = routeParams(location.route);
+  if (
+    root.id === 'agents' ||
+    root.id === 'coders' ||
+    root.id === 'agent-chats'
+  ) {
+    const id = typeof params.id === 'string' ? params.id : undefined;
+    const componentId = id ? agentsRouteFromSegments(root.id, id) : undefined;
+    if (componentId) return { type: 'component', id: componentId };
+    throw new Error(`Invalid ${root.id} split route`);
+  }
+
+  if (root.id === 'legacy-content') {
+    const type = typeof params.type === 'string' ? params.type : undefined;
+    const id = typeof params.id === 'string' ? params.id : undefined;
+    const content = type && id ? decodeLegacyPair(type, id) : undefined;
+    if (content) return content;
+  }
+
+  throw new Error(`No split content matched route "${root.id}"`);
+}
+
+export const legacySplitRoute = defineRoute({
+  id: 'legacy-content',
+  path: ':type/:id',
+  search: '*',
+  params: z.object({ type: z.string().min(1), id: z.string().min(1) }),
+  claim: ({ type, id }) => {
+    const content = decodeLegacyPair(type, id);
+    if (!content) return;
+
+    if (content.type === 'component') {
+      const [section, conversationId] = agentsRouteSegments(content.id) ?? [];
+      if (section && conversationId) {
+        return {
+          namespace: section === 'agent-chats' ? 'chat' : 'agent',
+          id: conversationId,
+        };
+      }
+      return { namespace: 'component', id: content.id };
+    }
+
+    return {
+      namespace: 'block',
+      id: `${content.aliasContext?.baseType ?? content.type}:${id}`,
+    };
+  },
+});

@@ -2,6 +2,7 @@ import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { createSoupState } from '@app/features/next-soup/create-soup-state';
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-view-context';
+import { SplitRouter } from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { MobilePageActionRow } from '@components/app/mobile/MobilePageActionRow';
@@ -204,7 +205,10 @@ export function SplitPanel(props: SplitPanelProps) {
                 : 0
             }
           >
-            <Dynamic component={props.split.mount.element} />
+            <SplitRouter.Outlet
+              splitId={props.handle.id}
+              fallback={() => <Dynamic component={props.split.mount.element} />}
+            />
           </BlockOpenTrackingDelayContext.Provider>
         </SoupViewContextProvider>
       </Suspense>

@@ -1,18 +1,28 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import {
-  PREVIEW_QUERY_PARAM,
-  remapPreviewQueryForRemovedSplit,
-} from '@components/app/split-layout/previewPersistence';
+  createRoutesManifest,
+  decodeSplitRouterLocation,
+  rootRouteMatch,
+  routeParams,
+  serializeSplitRouterLocation,
+} from '@app/lib/split-router';
+import { appSplitRoutes } from '@components/app/split-layout/split-router/app-routes';
 
-/**
- * Parse a base-relative app URL. The base only anchors parsing — inputs come
- * from the router's `location`, which is already URL-canonical — and only the
- * pathname/query/hash are ever read back out.
- */
-const parseUrl = (url: string) => new URL(url, 'http://localhost');
+export const settingsTabSlugFromUrl = (
+  urlString: string
+): string | undefined => {
+  // Standalone URL operations can run before a router exists; keep state local.
+  const routes = createRoutesManifest(appSplitRoutes);
+  const entry = decodeSplitRouterLocation({
+    routes,
+    location: urlString,
+  }).entries.find(
+    ({ location }) => rootRouteMatch(location.route)?.id === 'settings'
+  );
 
-/** Serialize a parsed URL back to its base-relative string form. */
-const toRelativeUrl = (url: URL) => `${url.pathname}${url.search}${url.hash}`;
+  const tab = routeParams(entry?.location.route).tab;
+  return typeof tab === 'string' ? tab : undefined;
+};
 
 /**
  * Drop a settings split from a base-relative split-layout URL, if present.
@@ -21,60 +31,62 @@ const toRelativeUrl = (url: URL) => `${url.pathname}${url.search}${url.hash}`;
  * inspected so a block id that happens to be "settings" isn't mistaken for
  * one.
  *
- * The query string and hash are preserved. Removing a split shifts the URL
- * pair indices after it, so Preview Pairs declared in the `preview` query
- * param are remapped to keep pointing at the same splits (a pair that
- * referenced the settings split itself is dropped). When settings was the
- * only split there is no layout left to return to, so the default route is
- * returned bare.
+ * The owned query string and hash are preserved. When settings was the only
+ * split there is no layout left to return to, so the default route is returned.
  */
 export const stripSettingsSplitFromUrl = (urlString: string): string => {
-  const url = parseUrl(urlString);
-  const segments = url.pathname.split('/').filter(Boolean);
+  const routes = createRoutesManifest(appSplitRoutes);
+  const parsed = decodeSplitRouterLocation({
+    routes,
+    location: urlString,
+  });
+  const entries = [...parsed.entries];
+  const removedSplitIndex = entries.findIndex(
+    ({ location }) => rootRouteMatch(location.route)?.id === 'settings'
+  );
+  if (removedSplitIndex >= 0) entries.splice(removedSplitIndex, 1);
 
-  let removedSplitIndex: number | undefined;
-  for (let i = 0; i + 1 < segments.length; i += 2) {
-    const type = segments[i];
-    if (
-      type === 'settings' ||
-      (type === 'component' && segments[i + 1] === 'settings')
-    ) {
-      removedSplitIndex = i / 2;
-      segments.splice(i, 2);
-      break;
-    }
-  }
+  if (entries.length === 0) return DEFAULT_ROUTE;
 
-  if (segments.length === 0) return DEFAULT_ROUTE;
-
-  if (removedSplitIndex !== undefined) {
-    const remappedPreview = remapPreviewQueryForRemovedSplit(
-      url.searchParams.get(PREVIEW_QUERY_PARAM) ?? undefined,
-      removedSplitIndex
-    );
-    if (remappedPreview === undefined) {
-      url.searchParams.delete(PREVIEW_QUERY_PARAM);
-    } else {
-      url.searchParams.set(PREVIEW_QUERY_PARAM, remappedPreview);
-    }
-  }
-
-  url.pathname = `/${segments.join('/')}`;
-  return toRelativeUrl(url);
+  return serializeSplitRouterLocation({
+    routes,
+    entries,
+    previous: parsed.externalLocation,
+    preserveHash: true,
+  });
 };
 
 /**
  * Append a docked settings split (`settings/<slug>`) to a base-relative
- * split-layout URL, keeping its query string and hash. Appending at the end
- * leaves existing URL pair indices untouched, so Preview Pairs in the
- * `preview` query param stay valid as-is.
+ * split-layout URL, keeping its owned query string and hash.
  */
 export const appendSettingsSplitToUrl = (
   urlString: string,
   settingsTabSlug: string
 ): string => {
-  const url = parseUrl(urlString);
-  const base = url.pathname.replace(/\/$/, '');
-  url.pathname = `${base}/settings/${settingsTabSlug}`;
-  return toRelativeUrl(url);
+  const routes = createRoutesManifest(appSplitRoutes);
+  const parsed = decodeSplitRouterLocation({
+    routes,
+    location: urlString,
+  });
+  return serializeSplitRouterLocation({
+    routes,
+    entries: [
+      ...parsed.entries,
+      {
+        location: {
+          route: {
+            matches: [
+              {
+                id: 'settings',
+                params: { tab: settingsTabSlug },
+              },
+            ],
+          },
+        },
+      },
+    ],
+    previous: parsed.externalLocation,
+    preserveHash: true,
+  });
 };

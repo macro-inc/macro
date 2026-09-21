@@ -15,19 +15,24 @@ import type { MarkdownDocumentKind } from '@block-md/types';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { toEntityLoadError } from '@core/component/EntityLoadGate';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { Button } from '@ui';
 import {
+  createEffect,
+  createMemo,
   createResource,
   ErrorBoundary,
   type JSX,
   Match,
+  on,
   Show,
   Suspense,
   Switch,
 } from 'solid-js';
+import { useMaybeDriveDetailRoute } from '../context/detail-route';
 
 export type MarkdownDetailContext = {
   data: MarkdownDocumentData;
@@ -87,6 +92,7 @@ function MarkdownDetailContent(props: {
 }) {
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
+  const renderChildren = createMemo(() => props.children);
 
   return (
     <MarkdownDocument
@@ -102,7 +108,7 @@ function MarkdownDetailContent(props: {
         onShareOpenChange={props.onShareOpenChange}
       >
         <OldOverlay />
-        {props.children?.({ data: props.data })}
+        {renderChildren()?.({ data: props.data })}
         <SidePanel.Layout headerToggle={false}>
           <Show when={ENABLE_MARKDOWN_SIDE_PANEL}>
             <MarkdownSidePanelSections />
@@ -136,6 +142,23 @@ export function MarkdownDetail(props: MarkdownDetailProps) {
     loadMarkdownDocument
   );
   const entityLabel = () => (props.kind === 'task' ? 'task' : 'document');
+  const detailRoute = useMaybeDriveDetailRoute();
+  const renderChildren = createMemo(() => props.children);
+  createEffect(
+    on(
+      () => toEntityLoadError(document.error),
+      (error) => {
+        if (
+          error === 'UNAUTHORIZED' ||
+          error === 'FORBIDDEN' ||
+          error === 'NOT_FOUND' ||
+          error === 'GONE'
+        ) {
+          detailRoute?.onUnavailable();
+        }
+      }
+    )
+  );
 
   return (
     <Suspense
@@ -171,7 +194,7 @@ export function MarkdownDetail(props: MarkdownDetailProps) {
                 data={data()}
                 shareOpen={props.shareOpen}
                 onShareOpenChange={props.onShareOpenChange}
-                children={props.children}
+                children={renderChildren()}
               />
             </ErrorBoundary>
           )}

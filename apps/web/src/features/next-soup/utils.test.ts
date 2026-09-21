@@ -432,6 +432,55 @@ describe('calendar block navigation', () => {
   });
 });
 
+describe('Drive document routing', () => {
+  it.each(['md', 'pdf', 'canvas'] as const)(
+    'opens %s documents as canonical Drive content',
+    async (fileType) => {
+      const openWithSplit = vi.fn();
+      setGlobalSplitManager({
+        activeSplit: vi.fn(),
+        getOrchestrator: vi.fn(() => ({})),
+        getSplitByContent: vi.fn(),
+        openWithSplit,
+      } as unknown as SplitManager);
+
+      await openEntityInSplitFromUnifiedList(
+        {
+          type: 'document',
+          id: 'doc-1',
+          fileType,
+        } as EntityData,
+        { openInNewSplit: true }
+      );
+
+      expect(openWithSplit).toHaveBeenCalledWith(
+        {
+          type: 'component',
+          id: 'documents',
+          entryMetadata: {
+            route: {
+              matches: [
+                { id: 'drive', params: {} },
+                {
+                  id: 'drive-document',
+                  params: {
+                    documentId: 'doc-1',
+                    documentType: fileType,
+                  },
+                },
+              ],
+            },
+          },
+        },
+        expect.objectContaining({
+          allowDuplicate: true,
+          preferNewSplit: true,
+        })
+      );
+    }
+  );
+});
+
 describe('preview history source', () => {
   it('stamps the originating controller entity on viewer content', async () => {
     const openWithSplit = vi.fn();
