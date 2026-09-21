@@ -5,6 +5,7 @@ import type { MobileNavViewId } from './mobile-nav-views';
 // Tokens identify actions even when labels change or entries share a block type.
 const PAGE_CREATE_TOKENS: Partial<Record<MobileNavViewId, HotkeyToken>> = {
   inbox: TOKENS.create.message,
+  reminders: TOKENS.create.reminder,
   mail: TOKENS.create.email,
   channels: TOKENS.create.message,
   documents: TOKENS.create.note,

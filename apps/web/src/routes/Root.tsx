@@ -13,6 +13,7 @@ import { GlobalShareInboxConflictDialog } from '@app/features/inbox/ShareInboxCo
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
 import { InteractiveOnboardingModal } from '@app/features/onboarding/InteractiveOnboardingModal';
 import MobileWebSignup from '@app/features/onboarding/MobileWebSignup';
+import { reminderDetailComponentId } from '@app/features/reminders/reminder-navigation';
 import { OnboardingFlow } from '@app/features/setup/flow/OnboardingFlow';
 import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
 import { SearchProvider } from '@app/features/soup/search/context';
@@ -96,6 +97,7 @@ import {
   Router,
   type RouterProps,
   useLocation,
+  useParams,
 } from '@solidjs/router';
 import {
   applyTheme,
@@ -226,6 +228,16 @@ function OnboardingRoute() {
   );
 }
 
+/** Compatibility redirect for links copied before reminder URLs were unified. */
+function LegacyReminderRoute() {
+  const params = useParams<{ reminderId: string }>();
+  return (
+    <Navigate
+      href={`/component/${reminderDetailComponentId(params.reminderId)}`}
+    />
+  );
+}
+
 const ROUTES: RouteDefinition[] = [
   {
     path: '/task-slug/:taskSlug',
@@ -247,7 +259,11 @@ const ROUTES: RouteDefinition[] = [
   },
   {
     path: '/reminders',
-    component: LAYOUT_ROUTE.component,
+    component: () => <Navigate href="/component/reminders" />,
+  },
+  {
+    path: '/reminder/:reminderId',
+    component: LegacyReminderRoute,
   },
   {
     path: '/agents',
