@@ -1,6 +1,7 @@
-/** 'claude-code' → 'Claude Code'; the fallback when nothing names a harness. */
-export function harnessTitle(harness: string | undefined): string {
-  if (!harness) return 'Agent session';
+import { MACRO_HARNESS_NAME } from '@core/constant/macroAgent';
+
+/** Title-case a harness slug when nothing names it (`claude-code` → `Claude Code`). */
+function titledHarness(harness: string): string {
   return harness
     .split(/[-_]/)
     .filter(Boolean)
@@ -10,14 +11,14 @@ export function harnessTitle(harness: string | undefined): string {
 
 /**
  * User-facing name for the runtime a persona runs on. Harness ids are
- * plumbing ("in-memory", "sandbox"); the product names are the coders.
+ * plumbing (`in-memory`, `macro-inmem`); the product name is Macro Agent.
  */
 export function harnessDisplayName(harness: string): string {
   switch (harness) {
     case 'in-memory':
     case 'macro-inmem':
     case 'sandbox':
-      return 'Macro';
+      return MACRO_HARNESS_NAME;
     case 'cursor':
       return 'Cursor';
     case 'codex-cloud':
@@ -27,6 +28,22 @@ export function harnessDisplayName(harness: string): string {
     default:
       return harness;
   }
+}
+
+/**
+ * Label for a session's harness. Macro slugs would otherwise title-case to
+ * "Macro Inmem" / "In Memory"; everything else stays a titled slug.
+ */
+export function harnessTitle(harness: string | undefined): string {
+  if (!harness) return 'Agent session';
+  if (
+    harness === 'in-memory' ||
+    harness === 'macro-inmem' ||
+    harness === 'sandbox'
+  ) {
+    return MACRO_HARNESS_NAME;
+  }
+  return titledHarness(harness);
 }
 
 /** A model's display name, or its id when the runtime lists no name for it. */

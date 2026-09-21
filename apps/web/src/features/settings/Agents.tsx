@@ -4,7 +4,10 @@ import { isLargeModelCatalog } from '@core/component/AI/component/input/modelCat
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
 import { toast } from '@core/component/Toast/Toast';
 import { claudeCloud } from '@core/constant/featureFlags';
-import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
+import {
+  MACRO_AGENT_BOT_ID,
+  MACRO_HARNESS_NAME,
+} from '@core/constant/macroAgent';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { usePipedreamMcpFlag } from '@core/pipedream/flag';
@@ -78,7 +81,7 @@ type ChannelOption = ReturnType<typeof botAssignableChannelOptions>[number];
 
 const IN_MEMORY_HARNESS: ConnectedHarness = {
   id: 'in-memory',
-  name: 'In-memory',
+  name: MACRO_HARNESS_NAME,
   kind: 'builtin',
   allowPermissionBypass: true,
   target: { harness: 'in-memory' },
@@ -89,7 +92,7 @@ const MACRO_AGENT: AgentSummary = {
   name: 'Macro',
   tag: 'macro',
   instructions: '',
-  harness: 'In-memory',
+  harness: MACRO_HARNESS_NAME,
   defaultModel: MODEL_PRETTYNAME[Model.sonnet5],
   channelSummary: 'All channels',
   share: 'Team',
@@ -395,7 +398,7 @@ function summarizeAgent(
 }
 
 function harnessName(id: string): string {
-  if (id === 'in-memory') return 'In-memory';
+  if (id === 'in-memory') return MACRO_HARNESS_NAME;
   if (id === 'cursor') return 'Cursor';
   if (id === 'claude-cloud') return 'Claude Cloud';
   // Any other id is a registered macrod harness uuid; if it is not in the

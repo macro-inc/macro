@@ -358,6 +358,30 @@ describe('createMagicChipModel', () => {
     }
   );
 
+  it.each(['in-memory', 'macro-inmem', 'sandbox'])(
+    'names the %s session Macro Agent, not Macro Agent Agent',
+    async (harness) => {
+      serviceClient.get.mockResolvedValue({
+        isOk: () => true,
+        isErr: () => false,
+        value: {
+          status: { kind: 'disconnected' },
+          harness,
+          model: '',
+          canEdit: true,
+        },
+      });
+      let model!: ReturnType<typeof createMagicChipModel>;
+      const dispose = createRoot((dispose) => {
+        model = createModel(props);
+        return dispose;
+      });
+      await settle();
+      expect(model.header()?.agent).toBe('Macro Agent');
+      dispose();
+    }
+  );
+
   it('restarts an initial pending snapshot when registration arrives', async () => {
     const snapshot = (pullRequestUrl: string | null) => ({
       isErr: () => false,

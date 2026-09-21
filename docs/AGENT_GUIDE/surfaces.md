@@ -791,7 +791,7 @@ are managed on that page, rather than in Settings.
 `Back to app` returns to the previous surface. Open via user-email button menu or `Ctrl+;`.
 
 `Agents` → `Create agent` (or edit an existing agent) opens runtime selectors.
-The model list is loaded live and independently for In-memory, connected Cursor, and every
+The model list is loaded live and independently for Macro Agent, connected Cursor, and every
 registered macrod harness. The selected harness stays selected when the list refreshes.
 A paired macrod connects on startup, so models can load before any agents are bound.
 A harness can show `Loading models…`, an unsupported message, or
