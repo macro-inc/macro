@@ -16,6 +16,7 @@ import {
   type SplitContent,
   SplitEvent,
 } from '../layoutManager';
+import { shouldShowSplitCloseButton } from '../layoutUtils';
 import { createMobileSwipeLayout } from '../mobile/createMobileSwipeLayout';
 
 vi.mock('@core/component/Toast/Toast', () => ({
@@ -985,13 +986,16 @@ describe('layoutManager', () => {
         ]);
 
         const [fg, bg] = manager.splits();
+        expect(shouldShowSplitCloseButton(manager)).toBe(true);
         manager.activateSplit(fg.id);
         manager.setExclusionFilter((split) => split.id === bg.id);
+        expect(shouldShowSplitCloseButton(manager)).toBe(false);
 
         manager.activateSplit(bg.id);
         expect(manager.activeSplitId()).toBe(fg.id);
 
         manager.setExclusionFilter(undefined);
+        expect(shouldShowSplitCloseButton(manager)).toBe(true);
         manager.activateSplit(bg.id);
         expect(manager.activeSplitId()).toBe(bg.id);
 

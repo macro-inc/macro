@@ -119,7 +119,7 @@ export function useSplitPanel() {
 
 /** Whether closing this split leaves another split visible. */
 export function shouldShowSplitCloseButton(manager: SplitManager) {
-  return manager.splits().length > 1;
+  return manager.getVisibleSplitCount() > 1;
 }
 
 /** Inline previews stay passive until the user focuses them. */
