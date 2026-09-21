@@ -335,6 +335,8 @@ function ToastContent(props: {
   skipOpenAnimation?: boolean;
   /** Called when this toast is removed from the DOM, so callers can clean up tracking. */
   onDismiss?: () => void;
+  /** Called at a user close gesture, before the exit animation begins. */
+  onUserDismiss?: () => void;
 }) {
   const styles = () => (props.toastType ? TOAST_STYLES[props.toastType] : null);
 
@@ -416,6 +418,10 @@ function ToastContent(props: {
       persistent={true}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      onSwipeEnd={() => props.onUserDismiss?.()}
+      onEscapeKeyDown={(event) => {
+        if (!event.defaultPrevented) props.onUserDismiss?.();
+      }}
     >
       <ToastBodyWrapper mobile={props.mobile} accentColor={accentColor()}>
         <Switch>
@@ -473,10 +479,13 @@ function ToastContent(props: {
                       />
                     </Show>
                     <Show when={!props.mobile || props.persistent}>
-                      <Toast.CloseButton>
-                        <Button variant="ghost" size="icon-sm">
-                          <XIcon />
-                        </Button>
+                      <Toast.CloseButton
+                        as={Button}
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => props.onUserDismiss?.()}
+                      >
+                        <XIcon />
                       </Toast.CloseButton>
                     </Show>
                   </div>
@@ -747,6 +756,7 @@ function custom(
     duration?: number;
     region?: string;
     onDismiss?: () => void;
+    onUserDismiss?: () => void;
   }
 ): number {
   const useMobile = isMobile();
@@ -762,6 +772,7 @@ function custom(
         duration={options?.duration}
         mobile={useMobile}
         skipOpenAnimation={skipOpenAnimation}
+        onUserDismiss={options?.onUserDismiss}
         onDismiss={() => {
           clearTrackedToast(region, props.toastId);
           options?.onDismiss?.();

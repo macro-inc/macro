@@ -520,6 +520,7 @@ fragment SoupNotificationMetadataFields on GraphqlNotifEvent {
 	... on GraphqlReminderMetadata {
 		reminderReminderId: reminderId
 		reminderDescription: description
+		reminderScheduledFor: scheduledFor
 	}
 	... on GraphqlCalendarEventReminderMetadata {
 		calendarEventReminderEventId: eventId

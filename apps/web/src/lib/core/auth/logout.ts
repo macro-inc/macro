@@ -6,6 +6,7 @@ import { clearRegisteredCaches } from '@graphql-cache/lifecycle';
 import { authKeys, type UserInfoData } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
+import { notificationKeys } from '@queries/notification/keys';
 import { propertiesKeys } from '@queries/properties/keys';
 import { clearDocumentQueryCache } from '@queries/storage/document-cache';
 import { authServiceClient } from '@service-auth/client';
@@ -38,6 +39,7 @@ export async function clearLocalAuthSession() {
   clearDocumentQueryCache(queryClient);
   queryClient.setQueryData(authKeys.userInfo.queryKey, unauthenticatedUserInfo);
   queryClient.removeQueries({ queryKey: emailKeys.links.queryKey });
+  queryClient.removeQueries({ queryKey: notificationKeys._def });
   queryClient.removeQueries({ queryKey: propertiesKeys._def });
 
   // Queued mutations are user intent; never allow them to replay under a

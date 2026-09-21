@@ -67,6 +67,27 @@ that entity's last operation in the batch. Emitted `SoupUpdated` items are non-n
 If viewer-scoped hydration finds no item, the backend logs and omits that update;
 it does not imply deletion. Only explicit `GraphqlCacheDeletion` events remove records.
 
+## In-app reminder alerts
+
+With reminders enabled, an unseen reminder notification produces a persistent
+alert while the Macro tab has focus. Browser notification permission is not
+required. Returning to the tab also surfaces unseen reminders from the loaded
+notification feed. Multiple occurrences share one alert, with up to three
+descriptions and a count of the rest; normal save/copy toasts do not replace it.
+
+**Open reminder** opens the reminder details, including standalone reminders.
+For a group, **View reminders** opens the reminders list. Opening or closing this
+alert acknowledges it only in this browser account; it does not complete, delete,
+or snooze a reminder. Acknowledgements survive reloads and synchronize between
+tabs on the same origin. A later occurrence of a recurring reminder alerts again.
+Seeing or completing its notification elsewhere also removes it from the alert.
+
+When verifying, intercept notification responses in an owned browser tab and
+inject unseen reminder fixtures instead of scheduling real hosted reminders.
+Check permission denied, a burst of reminders, blur/focus, reload after dismissal,
+and both desktop and mobile widths. This foreground path does not deliver browser
+push when Macro is closed.
+
 ## Home (desktop) / Notifications (mobile) — `/app/component/inbox`
 
 Touch devices render the legacy Notifications view without waiting for the new app
@@ -826,7 +847,7 @@ session were not exercised by that UI check.
 
 ## Notifications
 
-Toast regions are labeled `Notifications (alt+T)`; five empty live regions always exist in
+Toast regions are labeled `Notifications (alt+T)`; seven empty live regions always exist in
 the a11y tree (ignore them when parsing snapshots).
 
 Staff Noise emails still create in-app notification rows, but do not send a new-notification
