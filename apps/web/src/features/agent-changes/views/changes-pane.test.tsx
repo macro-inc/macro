@@ -234,6 +234,45 @@ describe('session controls', () => {
     expect(toggle.getAttribute('aria-pressed')).toBe('true');
   });
 
+  it('follows live session counts independently of PR captures and hides zero counts', () => {
+    const context = readyContext();
+    const [counts, setCounts] = createSignal({ additions: 8, deletions: 2 });
+    context.host.sessionChangeCounts = counts;
+    const { controller } = mount(context, () => <ChangesToggle />);
+    const toggle = screen.getByRole('button', { name: /Changes/ });
+    expect(toggle.textContent).toBe('Changes+8−2');
+
+    // A missing or stale PR capture must not replace the transcript totals.
+    context.setSummary(undefined);
+    expect(toggle.textContent).toBe('Changes+8−2');
+    context.setSummary({ capturing: true, changeset: mockChangeset() });
+    expect(toggle.textContent).toBe('Changes+8−2');
+    expect(toggle.querySelector('.animate-pulse')).toBeNull();
+
+    setCounts({ additions: 12, deletions: 0 });
+    expect(toggle.textContent).toBe('Changes+12');
+    setCounts({ additions: 0, deletions: 4 });
+    expect(toggle.textContent).toBe('Changes−4');
+    setCounts({ additions: 0, deletions: 0 });
+    expect(toggle.textContent).toBe('Changes');
+    fireEvent.click(toggle);
+    expect(controller().layout.changesVisible()).toBe(true);
+  });
+
+  it('does not display fake zero counts before a snapshot loads or for empty snapshots', () => {
+    const context = createMockAgentChangesContext();
+    mount(context, () => <ChangesToggle />);
+    const toggle = screen.getByRole('button', { name: /Changes/ });
+    expect(toggle.textContent).toBe('Changes');
+    context.setSummary({
+      capturing: false,
+      changeset: mockChangeset({ files: [], additions: 0, deletions: 0 }),
+    });
+    expect(toggle.textContent).toBe('Changes');
+    context.setSummary({ capturing: false, changeset: mockChangeset() });
+    expect(toggle.textContent).toBe('Changes+3−1');
+  });
+
   it('hands off to the pane while it is closed, and can be dismissed', () => {
     const context = readyContext();
     const { controller } = mount(context, () => <ChangesHandoff />);

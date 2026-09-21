@@ -459,6 +459,12 @@ file in the Changes pane. Notes never go to GitHub. Collapsed files and
 unsent notes persist per session in localStorage; a new capture expands all
 files.
 
+The session header's **Changes** pill uses the same live transcript edit totals
+as the sidebar's **Changed files** section, including subagent edits. It updates
+without requiring a linked PR or refreshing a capture. Zero-valued line counts
+are hidden. Opening the pill still reviews the linked PR snapshot, whose net
+changes can differ from cumulative session edits.
+
 While the pane is closed and a capture has files, a **Changes ready to
 review** card sits above the composer with **Review changes**, **Pull request
 #N** (opens GitHub), and **Dismiss**. With no linked PR, the pane explains

@@ -15,14 +15,19 @@ import { useOptionalAgentChanges } from '../context/agent-changes-controller';
 export function ChangesToggle() {
   const controller = useOptionalAgentChanges();
   if (!controller) return null;
-  const { available, layout, model } = controller;
+  const { available, layout, model, context } = controller;
+  const counts = () =>
+    context.host.sessionChangeCounts?.() ?? model.changeset();
   return (
     <Show when={available()}>
       <ChangesToggleButton
         open={layout.changesVisible()}
-        additions={model.changeset()?.additions ?? 0}
-        deletions={model.changeset()?.deletions ?? 0}
-        capturing={model.state().kind === 'capturing'}
+        additions={counts()?.additions ?? 0}
+        deletions={counts()?.deletions ?? 0}
+        capturing={
+          !context.host.sessionChangeCounts &&
+          model.state().kind === 'capturing'
+        }
         onToggle={layout.toggle}
       />
     </Show>

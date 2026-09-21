@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   activityCounts,
   changedFiles,
+  changedFileTotals,
   countDiffChanges,
   latestPlan,
 } from './session-summary';
@@ -85,6 +86,10 @@ describe('changedFiles', () => {
       ]),
       message(1, [edit([{ path: 'a.ts', oldText: 'y\n', newText: 'z\n' }])]),
     ];
+    expect(changedFileTotals(changedFiles(messages))).toEqual({
+      additions: 4,
+      deletions: 1,
+    });
     expect(changedFiles(messages)).toEqual([
       { path: 'a.ts', additions: 2, deletions: 1 },
       { path: 'b.ts', additions: 2, deletions: 0 },

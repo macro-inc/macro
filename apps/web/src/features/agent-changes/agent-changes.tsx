@@ -11,8 +11,12 @@
 import { isCoderHarness } from '@app/features/agents-view/core/agent-kind';
 import { toast } from '@core/component/Toast/Toast';
 import { openExternalUrl } from '@core/util/url';
-import { createSignal, type ParentProps } from 'solid-js';
+import { createMemo, createSignal, type ParentProps } from 'solid-js';
 import { useAgentSession } from '../block-agent/context/AgentSessionContext';
+import {
+  changedFiles,
+  changedFileTotals,
+} from '../block-agent/state/session-summary';
 import type { ChangesHost } from './context/agent-changes-context';
 import { AgentChangesControllerProvider } from './context/agent-changes-controller';
 import { createAgentChanges } from './primitives/create-agent-changes';
@@ -53,7 +57,11 @@ export function AgentChangesProvider(props: ParentProps) {
       toast.failure('The review notes could not be sent');
     }
   };
+  const sessionChangeCounts = createMemo(() =>
+    changedFileTotals(changedFiles(session.messages()))
+  );
   const host: ChangesHost = {
+    sessionChangeCounts,
     scopeKey: session.sessionId,
     agent: {
       send: (markdown) => void sendPrompt(markdown),

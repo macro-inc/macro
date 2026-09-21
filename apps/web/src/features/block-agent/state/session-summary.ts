@@ -48,6 +48,17 @@ export type ChangedFile = {
   deletions: number;
 };
 
+/** Shared line totals for the session sidebar and header. */
+export function changedFileTotals(files: readonly ChangedFile[]) {
+  return files.reduce(
+    (total, file) => ({
+      additions: total.additions + file.additions,
+      deletions: total.deletions + file.deletions,
+    }),
+    { additions: 0, deletions: 0 }
+  );
+}
+
 /**
  * Every tool call in the transcript, in order, descending into the calls a
  * subagent made: a file the subagent edited is a file the session edited.

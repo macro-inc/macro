@@ -20,6 +20,7 @@ import { sessionStatus } from '../../state/session-status';
 import {
   activityCounts,
   changedFiles,
+  changedFileTotals,
   latestPlan,
 } from '../../state/session-summary';
 import {
@@ -37,10 +38,7 @@ export function AgentSidePanelSections() {
   const plan = createMemo(() => latestPlan(messages()));
   const files = createMemo(() => changedFiles(messages()));
   const activity = createMemo(() => activityCounts(messages()));
-  const totals = createMemo(() => ({
-    additions: files().reduce((sum, file) => sum + file.additions, 0),
-    deletions: files().reduce((sum, file) => sum + file.deletions, 0),
-  }));
+  const totals = createMemo(() => changedFileTotals(files()));
 
   return (
     <>
