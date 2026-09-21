@@ -148,7 +148,9 @@ pub trait DatabasesRepo: Send + Sync + 'static {
     /// ids in changeset order), cell updates, deletes, and link edges, bumping
     /// each written table's version exactly once. When `expected_versions`
     /// names a written table, the write is refused (nothing committed) if the
-    /// table's version differs — checked inside the transaction.
+    /// table's version differs — checked inside the transaction. A trashed
+    /// database, removed table, or missing update/delete target also conflicts.
+    /// Keep written databases live until commit, including link endpoints.
     fn apply_changes(
         &self,
         viewer: &Viewer,

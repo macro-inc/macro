@@ -1141,13 +1141,22 @@ where
             .create_column(cmd.table_id, definition_id, &cmd)
             .await
             .map_err(repo_err)?;
-        if let Ok(versions) = self.repo.table_versions(&[cmd.table_id]).await {
-            self.publish(
-                receipt_attribution(&receipt),
-                &HashMap::from([(cmd.table_id, database.id)]),
-                &versions,
-            )
-            .await;
+        match self.repo.table_versions(&[cmd.table_id]).await {
+            Ok(versions) => {
+                self.publish(
+                    receipt_attribution(&receipt),
+                    &HashMap::from([(cmd.table_id, database.id)]),
+                    &versions,
+                )
+                .await;
+            }
+            Err(error) => {
+                tracing::error!(
+                    error = ?error,
+                    table_id = %cmd.table_id,
+                    "column saved but could not read its table version for publication"
+                );
+            }
         }
         Ok(column_id)
     }

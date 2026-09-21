@@ -9,6 +9,7 @@ use sqlx::PgPool;
 use super::*;
 use crate::domain::models::{ColumnBinding, ColumnConfig};
 
+mod apply_changes;
 mod infer_column_type;
 mod rename_column;
 
@@ -424,7 +425,7 @@ async fn insert_then_update_merges_cells_and_bumps_version_once(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn update_of_a_missing_row_is_an_error(pool: PgPool) {
+async fn update_of_a_missing_row_is_a_version_conflict(pool: PgPool) {
     let (repo, table, definition_id) = fixture(&pool).await;
     let ghost = macro_uuid::generate_uuid_v7();
 
@@ -445,7 +446,7 @@ async fn update_of_a_missing_row_is_an_error(pool: PgPool) {
 
     assert!(matches!(
         result,
-        Err(PgDatabasesRepoError::RowNotFound(id)) if id == ghost
+        Ok(ApplyOutcome::VersionConflict { table_id }) if table_id == table.id
     ));
     // The transaction rolled back, so the version never moved.
     let versions = repo

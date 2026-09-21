@@ -55,12 +55,15 @@ There is no bidirectional sync — one write path, one read path, every surface 
 
 - Every editable cell anywhere (grid, embed, view, query-result pill) resolves to
   `(rowId, columnId, value)` via result provenance and calls the same mutation API.
-  Nothing writes "to a result"; provenance only addresses the write. SQL never mutates.
+  Nothing writes "to a result"; provenance identifies the underlying writable cell.
+  Editing surfaces generate SQL changesets through `/databases/exec`; live document
+  answers remain read-only through `/databases/query`.
 - The mutation does permission check → Postgres UPDATE (or `entity_properties` for
   shared-bound columns) → activity → version bump → publish. Then the normal read half
   refreshes every subscriber.
-- Conflicts: **last-write-wins per cell** (version counters are invalidation signals, not
-  locks); cell granularity means edits to different cells of one row never conflict.
+- Conflicts: grid edits send table versions as `baseVersions`, checked atomically for
+  every table being written. A changed version rejects the complete changeset.
+  Blind writes without versions retain last-write-wins per changed cell.
 - Two-way links: one stored edge (`database_row_links`); the reverse column is computed at
   read time — nothing to keep in sync. The write bumps both tables' versions.
 - Shared-property bindings: one write to `entity_properties`; the Tasks module and the

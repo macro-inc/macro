@@ -31,12 +31,6 @@ pub enum PgDatabasesRepoError {
     /// Underlying database failure.
     #[error("database error")]
     Sqlx(#[from] sqlx::Error),
-    /// A written table no longer exists.
-    #[error("table {0} not found")]
-    TableNotFound(TableId),
-    /// A change targeted a row that does not exist.
-    #[error("row {0} not found")]
-    RowNotFound(RowId),
     /// A link change referenced a column placement that does not exist.
     #[error("column {0} not found")]
     ColumnNotFound(ColumnId),
@@ -670,6 +664,33 @@ impl DatabasesRepo for PgDatabasesRepo {
             .collect();
         let written: Vec<TableId> = written_tables.iter().copied().collect();
 
+        // Acquire database locks before table locks, matching parent deletion's
+        // lock order. A concurrent trash must finish before this check or wait
+        // until the changeset commits; catalog materialization alone is stale.
+        let databases = sqlx::query!(
+            r#"
+            SELECT t.id AS table_id, d.trashed_at
+            FROM database_tables t
+            JOIN databases d ON d.id = t.database_id
+            WHERE t.id = ANY($1)
+            ORDER BY d.id, t.id
+            FOR SHARE OF d
+            "#,
+            &written,
+        )
+        .fetch_all(&mut *transaction)
+        .await?;
+        for table_id in &written {
+            if !databases
+                .iter()
+                .any(|row| row.table_id == *table_id && row.trashed_at.is_none())
+            {
+                return Ok(ApplyOutcome::VersionConflict {
+                    table_id: *table_id,
+                });
+            }
+        }
+
         // Compare-and-swap inside the transaction: lock the version rows,
         // then refuse if any expected version has moved.
         let current = sqlx::query!(
@@ -689,7 +710,9 @@ impl DatabasesRepo for PgDatabasesRepo {
                 .find(|r| r.id == *table_id)
                 .map(|r| r.version);
             let Some(actual) = actual else {
-                return Err(PgDatabasesRepoError::TableNotFound(*table_id));
+                return Ok(ApplyOutcome::VersionConflict {
+                    table_id: *table_id,
+                });
             };
             if let Some(expected) = expected_versions.get(table_id)
                 && expected.0 != actual
@@ -797,7 +820,10 @@ impl DatabasesRepo for PgDatabasesRepo {
                     .execute(&mut *transaction)
                     .await?;
                     if updated.rows_affected() == 0 {
-                        return Err(PgDatabasesRepoError::RowNotFound(*row_id));
+                        transaction.rollback().await?;
+                        return Ok(ApplyOutcome::VersionConflict {
+                            table_id: *table_id,
+                        });
                     }
                 }
                 RowChange::Delete { table_id, row_id } => {
@@ -810,7 +836,10 @@ impl DatabasesRepo for PgDatabasesRepo {
                     .execute(&mut *transaction)
                     .await?;
                     if deleted.rows_affected() == 0 {
-                        return Err(PgDatabasesRepoError::RowNotFound(*row_id));
+                        transaction.rollback().await?;
+                        return Ok(ApplyOutcome::VersionConflict {
+                            table_id: *table_id,
+                        });
                     }
                 }
                 RowChange::Link {

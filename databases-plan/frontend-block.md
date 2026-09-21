@@ -74,12 +74,14 @@ Primitive types (Text/Number/Select/Person/Checkbox/Date), then:
 
 ## Naming
 
-Users only ever see **"table"**; "database" appears nowhere in UI copy. Launcher letter
-TBD (`b` for base vs `t` — `t` may collide with task).
+The UI calls the container a **database** and its tabs **tables**. The launcher
+shortcut is `C` → `B`; naming the database and pressing Enter focuses its first cell.
 
 ## Data flow
 
-Grid mutations go through the databases API (never SQL). Local edits echo optimistically;
+Grid mutations generate controlled SQL through `POST /databases/exec`, with table
+versions for compare-and-set writes. Live document answers use the server-enforced
+read-only `POST /databases/query` endpoint. Local edits echo optimistically;
 remote edits arrive via the liveness channel ([liveness.md](liveness.md)) keyed on table
 version counters. Server-state via `@tanstack/solid-query` in `service-clients` per house
 rules; queries in `src/lib/queries` if shared.
