@@ -29,10 +29,9 @@ export type ReminderCreatedHandler = () => void | Promise<void>;
 let createdHandler: ReminderCreatedHandler | undefined;
 
 /**
- * Hand the pending handler to the caller and forget it.
- *
- * Taken rather than read because the composer closes — and so clears its
- * target — before the create request is awaited.
+ * Hand the pending handler to the caller and forget it after create succeeds.
+ * A rejected create leaves it here so the preserved draft can be retried and
+ * still perform the invoking surface's follow-up exactly once.
  */
 export function takeReminderCreatedHandler():
   | ReminderCreatedHandler

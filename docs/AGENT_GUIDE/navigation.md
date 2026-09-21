@@ -404,10 +404,10 @@ Cancel and Escape dismiss the dialog. Use Cancel when
 reviewing dialogs against hosted data; confirmation performs real mutations.
 
 The New reminder dialog uses the same compact panel and fixed action footer.
-Its referenced item is a capped Badge; repeat options use bubble tabs (Does not
-repeat / Weekly / Monthly). Date, time, weekdays, and timezone retain their
-scheduling behavior. Creating a reminder dismisses the composer before saving,
-with success or failure reported by toast.
+Its referenced item is a capped Badge. It stays open with frozen controls while
+saving, preserves the draft and shows an inline retryable error on failure, and
+only closes after a confirmed create. See [reminders.md](reminders.md) for its
+date-language, preset, custom time, and recurrence controls.
 
 Action dialogs share `ActionDialogShell` presentation slots: the same capped selection badges for single and multiple items, compact heading and copy, prominent fields, and an attached footer. Rename, delete, move, reminder creation, and shared confirmations use this layout. Bulk rename keeps bubble tabs and one first-item preview.
 

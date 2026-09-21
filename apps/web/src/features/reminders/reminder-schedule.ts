@@ -4,6 +4,7 @@ import {
   type CronParts,
   describeCron,
   getDefaultTimezone,
+  isCronRepresentable,
   normalizeCron,
   parseCron,
   type ScheduleFrequency,
@@ -23,6 +24,174 @@ export const REMINDER_DEFAULT_TIME = { hours: 9, minutes: 0 } as const;
 
 /** Longest description the API accepts, mirroring the service's own limit. */
 export const REMINDER_DESCRIPTION_MAX_LENGTH = 2000;
+
+/**
+ * Parse native date/time control values without accepting DST normalization.
+ *
+ * `new Date('2026-03-08T02:30')` in New York silently becomes 03:30 because
+ * 02:30 never occurs on the spring-forward day. A reminder must not save at a
+ * different time than the controls display, so round-trip every component.
+ */
+export function parseLocalReminderDateTime(
+  dateValue: string,
+  timeValue: string
+): Date | undefined {
+  const dateMatch = dateValue.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  // Native time values are minute-only with the form's default step, but the
+  // HTML serialization also permits seconds and fractional seconds. Accept the
+  // full shape so a valid value is never mislabeled as a DST gap.
+  const timeMatch = timeValue.match(
+    /^(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/
+  );
+  if (!dateMatch || !timeMatch) return undefined;
+
+  const [, year, month, day] = dateMatch.map(Number);
+  const hour = Number(timeMatch[1]);
+  const minute = Number(timeMatch[2]);
+  const second = Number(timeMatch[3] ?? 0);
+  const millisecond = Number((timeMatch[4] ?? '').padEnd(3, '0'));
+  const parsed = new Date(
+    year,
+    month - 1,
+    day,
+    hour,
+    minute,
+    second,
+    millisecond
+  );
+  if (
+    parsed.getFullYear() !== year ||
+    parsed.getMonth() !== month - 1 ||
+    parsed.getDate() !== day ||
+    parsed.getHours() !== hour ||
+    parsed.getMinutes() !== minute ||
+    parsed.getSeconds() !== second ||
+    parsed.getMilliseconds() !== millisecond
+  ) {
+    return undefined;
+  }
+  return parsed;
+}
+
+export interface ReminderQuickPreset {
+  id: 'in-30-minutes' | 'later-today' | 'tomorrow-morning' | 'next-week';
+  label: string;
+  date: Date;
+}
+
+/** Common one-shot choices, computed when the form opens so labels are exact. */
+export function reminderQuickPresets(now: Date): ReminderQuickPreset[] {
+  // Elapsed time, not a local wall-clock mutation: adding 30 via setMinutes
+  // becomes 90 elapsed minutes when daylight saving time falls back.
+  const inThirtyMinutes = new Date(now.getTime() + 30 * 60 * 1000);
+
+  const laterToday = new Date(now);
+  laterToday.setHours(17, 0, 0, 0);
+
+  const tomorrowMorning = new Date(now);
+  tomorrowMorning.setDate(tomorrowMorning.getDate() + 1);
+  tomorrowMorning.setHours(
+    REMINDER_DEFAULT_TIME.hours,
+    REMINDER_DEFAULT_TIME.minutes,
+    0,
+    0
+  );
+
+  const nextWeek = new Date(now);
+  const daysUntilNextMonday = (8 - nextWeek.getDay()) % 7 || 7;
+  nextWeek.setDate(nextWeek.getDate() + daysUntilNextMonday);
+  nextWeek.setHours(
+    REMINDER_DEFAULT_TIME.hours,
+    REMINDER_DEFAULT_TIME.minutes,
+    0,
+    0
+  );
+
+  return [
+    { id: 'in-30-minutes', label: 'In 30m', date: inThirtyMinutes },
+    ...(laterToday > now
+      ? ([
+          { id: 'later-today', label: 'Later today', date: laterToday },
+        ] satisfies ReminderQuickPreset[])
+      : []),
+    {
+      id: 'tomorrow-morning',
+      label: 'Tomorrow',
+      date: tomorrowMorning,
+    },
+    { id: 'next-week', label: 'Next week', date: nextWeek },
+  ];
+}
+
+/** An exact, human-readable instant for previews and save confirmation. */
+export function formatReminderInstant(
+  date: Date,
+  timezone: string = getDefaultTimezone(),
+  now: Date = new Date()
+): string {
+  const dateParts = (value: Date) =>
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(value);
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const calendarLabel =
+    dateParts(date) === dateParts(now)
+      ? 'Today'
+      : dateParts(date) === dateParts(tomorrow)
+        ? 'Tomorrow'
+        : new Intl.DateTimeFormat(undefined, {
+            timeZone: timezone,
+            weekday: 'long',
+          }).format(date);
+  const year =
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      year: 'numeric',
+    }).format(date) ===
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      year: 'numeric',
+    }).format(now)
+      ? undefined
+      : 'numeric';
+  const exactDate = new Intl.DateTimeFormat(undefined, {
+    timeZone: timezone,
+    month: 'short',
+    day: 'numeric',
+    year,
+  }).format(date);
+  const exactTime = new Intl.DateTimeFormat(undefined, {
+    timeZone: timezone,
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
+  const zone = new Intl.DateTimeFormat(undefined, {
+    timeZone: timezone,
+    timeZoneName: 'short',
+  })
+    .formatToParts(date)
+    .find((part) => part.type === 'timeZoneName')?.value;
+
+  return `${calendarLabel}, ${exactDate} at ${exactTime} (${zone ?? timezone})`;
+}
+
+/** The schedule wording shown after persistence succeeds. */
+export function describeReminderConfirmation(
+  schedule: ReminderSchedule
+): string {
+  if (isRecurring(schedule)) {
+    if (!isCronRepresentable(schedule.cron)) {
+      return `Custom repeating schedule (${schedule.timezone})`;
+    }
+    return describeReminderSchedule(schedule) ?? 'Repeating reminder';
+  }
+  return formatReminderInstant(new Date(schedule.remindAt));
+}
 
 /** A one-shot schedule firing at `date`. */
 export function onceSchedule(date: Date): ReminderSchedule {

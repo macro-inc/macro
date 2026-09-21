@@ -40,10 +40,12 @@ vi.mock('@queries/soup/cache', () => ({
 vi.mock('./ReminderForm', () => ({
   ReminderForm: (props: {
     reference?: import('solid-js').JSX.Element;
+    error?: string;
     onSubmit: (values: unknown) => void;
   }) => (
     <div data-testid="reminder-form">
       {props.reference}
+      <input aria-label="Reminder description" />
       <button
         type="button"
         onClick={() =>
@@ -55,17 +57,21 @@ vi.mock('./ReminderForm', () => ({
       >
         Save fixture
       </button>
+      <Show when={props.error}>
+        <div role="alert">{props.error}</div>
+      </Show>
     </div>
   ),
 }));
 vi.mock('./reminder-schedule', () => ({
+  describeReminderConfirmation: () => 'Tomorrow, Sep 22 at 9:00 AM (UTC)',
   reminderEditPatch: state.editPatch,
   resolveEditedDescription: (description: string) => description,
 }));
 
 import type { Reminder } from '@service-storage/generated/schemas/reminder';
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ReminderDetails } from './ReminderEditorSplit';
 
@@ -208,6 +214,26 @@ describe('ReminderDetails', () => {
     await Promise.resolve();
 
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the same reminder open with inline error and restored focus on failure', async () => {
+    state.mutateAsync.mockRejectedValueOnce(new Error('offline'));
+    const onClose = vi.fn();
+    const view = render(() => (
+      <ReminderDetails reminderId="reminder-1" onClose={onClose} />
+    ));
+    const title = view.getByRole('textbox', {
+      name: 'Reminder description',
+    });
+    title.focus();
+
+    fireEvent.click(view.getByRole('button', { name: 'Save fixture' }));
+
+    expect((await view.findByRole('alert')).textContent).toContain(
+      'Your edits are still here'
+    );
+    expect(document.activeElement).toBe(title);
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('renders a useful fallback for a missing or inaccessible reminder', () => {
