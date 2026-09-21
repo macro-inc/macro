@@ -29,7 +29,7 @@ import GearIcon from '@phosphor/gear.svg';
 import PencilIcon from '@phosphor/pencil-simple.svg';
 import PlugsIcon from '@phosphor/plugs.svg';
 import PlusIcon from '@phosphor/plus.svg';
-import RobotIcon from '@phosphor/robot.svg';
+import SparkleIcon from '@phosphor/sparkle.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import XIcon from '@phosphor/x.svg';
 import {
@@ -241,7 +241,7 @@ export function RosterPage(props: {
             aria-selected={props.kind === 'agent'}
             onClick={() => props.onKindChange('agent')}
           >
-            <RobotIcon class="ph" />
+            <SparkleIcon class="ph" />
             Agents
             <span class="n">{agentCount()}</span>
           </button>

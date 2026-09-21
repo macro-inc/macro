@@ -11,7 +11,7 @@ import { useChannelType } from '@core/context/channels';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import CopyIcon from '@phosphor/copy.svg';
 import PlusIcon from '@phosphor/plus.svg';
-import RobotIcon from '@phosphor/robot.svg';
+import SparkleIcon from '@phosphor/sparkle.svg';
 import { ChannelTypeEnum } from '@service-storage/client';
 import { createSignal, onCleanup } from 'solid-js';
 
@@ -77,7 +77,7 @@ export function useChannelBotManagement(
   registerHotkey({
     scopeId: options.hotkeyScopeId,
     description: 'Invite bot to channel',
-    icon: RobotIcon,
+    icon: SparkleIcon,
     keywords: ['add bot', 'webhook', 'participant'],
     displayPriority: 9,
     condition: canManageBots,

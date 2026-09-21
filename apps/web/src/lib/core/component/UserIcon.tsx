@@ -15,7 +15,7 @@ import {
   useIsConnectedSecondaryInbox,
 } from '@core/user';
 import MacroLogo from '@icon/macro-logo.svg';
-import RobotIcon from '@phosphor/robot.svg';
+import AgentIcon from '@phosphor/sparkle.svg';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import { Avatar, type AvatarSize, cn } from '@ui';
@@ -203,7 +203,7 @@ export function UserIcon(props: UserIconProps) {
             when={props.photoUrl}
             fallback={
               <Avatar.Fallback>
-                <RobotIcon class="size-[62%]" />
+                <AgentIcon class="size-[62%]" />
               </Avatar.Fallback>
             }
           >

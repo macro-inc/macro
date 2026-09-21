@@ -2,7 +2,7 @@ import { LoadingSpinner } from '@core/component/LoadingSpinner';
 import { toast } from '@core/component/Toast/Toast';
 import { useChannelsContext } from '@core/context/channels';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
-import RobotIcon from '@phosphor/robot.svg';
+import SparkleIcon from '@phosphor/sparkle.svg';
 import {
   useCreateBotMutation,
   useCreateBotTokenMutation,
@@ -191,7 +191,7 @@ export function BotCreate(props: { channelId?: string; onBack: () => void }) {
         <Show when={stage() !== 'ready'}>
           <header class="flex items-center gap-3">
             <div class="flex size-10 shrink-0 items-center justify-center rounded-xl border border-edge-muted bg-ink/[0.025] text-ink-muted">
-              <RobotIcon class="size-5" />
+              <SparkleIcon class="size-5" />
             </div>
             <div class="min-w-0">
               <h1 class="text-lg font-semibold tracking-[-0.01em]">

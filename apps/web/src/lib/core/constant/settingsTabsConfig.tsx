@@ -9,7 +9,6 @@ import HardDrivesIcon from '@phosphor/hard-drives.svg';
 import KeyIcon from '@phosphor/key.svg';
 import KeyboardIcon from '@phosphor/keyboard.svg';
 import PlugIcon from '@phosphor/plug.svg';
-import BotIcon from '@phosphor/robot.svg';
 import AgentIcon from '@phosphor/sparkle.svg';
 import SwatchesIcon from '@phosphor/swatches.svg';
 import TagIcon from '@phosphor/tag-simple.svg';
@@ -74,7 +73,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
         icon: CpuIcon,
       },
       { tab: 'Agent', label: 'MCP server', icon: PlugIcon },
-      { tab: 'Bots', label: 'Bots', icon: BotIcon },
+      { tab: 'Bots', label: 'Bots', icon: AgentIcon },
     ],
   },
   {

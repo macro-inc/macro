@@ -2,7 +2,7 @@ import { channelWebhookUrl } from '@channel/Bots/webhook';
 import { LoadingSpinner } from '@core/component/LoadingSpinner';
 import { toast } from '@core/component/Toast/Toast';
 import PlusIcon from '@phosphor/plus.svg';
-import RobotIcon from '@phosphor/robot.svg';
+import SparkleIcon from '@phosphor/sparkle.svg';
 import {
   useChannelBotsQuery,
   useRemoveBotFromChannelMutation,
@@ -85,7 +85,7 @@ export function ChannelBotsPanel(props: {
               fallback={
                 <div class="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
                   <div class="flex size-9 items-center justify-center rounded-lg bg-accent-bg text-accent">
-                    <RobotIcon class="size-5" />
+                    <SparkleIcon class="size-5" />
                   </div>
                   <div class="mt-2 text-sm font-medium">
                     No bots in this channel

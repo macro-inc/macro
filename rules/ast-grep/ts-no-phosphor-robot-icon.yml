@@ -1,0 +1,28 @@
+id: ts-no-phosphor-robot-icon
+language: typescript
+# Twin of tsx-no-phosphor-robot-icon — ast-grep rules are single-language, and
+# `tsx` only scans .tsx files.
+severity: error
+message: Don't import Phosphor's robot icon — use the sparkle icon for agents and bots.
+note: |-
+  Rule FE-35 in docs/STYLE_GUIDE.md. The robot glyph is retired; agent and bot
+  marks use `@phosphor/sparkle.svg` (or the matching `@phosphor-icons/core`
+  sparkle asset). Collapsed thread avatars, settings, and roster fallbacks
+  share that sparkle.
+rule:
+  kind: string
+  regex: ^['"](@phosphor(-fill)?/robot(-fill)?\.svg|@phosphor-icons/core/(assets/)?(regular|bold|fill)/robot(-bold|-fill)?\.svg)(\?[^'"]*)?['"]$
+  any:
+    - inside:
+        kind: import_statement
+        field: source
+    - inside:
+        kind: export_statement
+        field: source
+    - inside:
+        kind: arguments
+        inside:
+          kind: call_expression
+          has:
+            field: function
+            kind: import

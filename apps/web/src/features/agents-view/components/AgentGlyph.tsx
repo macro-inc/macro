@@ -4,7 +4,7 @@ import { MACRO_CODER_BOT_ID } from '@core/constant/macroCoder';
 import MacroLogo from '@icon/macro-logo.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
 import CodeIcon from '@phosphor/code.svg';
-import RobotIcon from '@phosphor/robot.svg';
+import SparkleIcon from '@phosphor/sparkle.svg';
 import { type JSX, Show } from 'solid-js';
 import { MACRO_PERSONA_ID } from '../core/roster';
 
@@ -22,7 +22,7 @@ const MACRO_IDS: ReadonlySet<string> = new Set([
   MACRO_CODER_BOT_ID,
 ]);
 
-/** The mark for an agent: Macro's own logo, Cursor's, or a robot. */
+/** The mark for an agent: Macro's own logo, Cursor's, or a sparkle. */
 export function AgentIcon(props: {
   agent: Pick<GlyphAgent, 'id' | 'botId'>;
   class?: string;
@@ -34,7 +34,7 @@ export function AgentIcon(props: {
       fallback={
         <Show
           when={id() === CURSOR_BOT_ID}
-          fallback={<RobotIcon class={props.class ?? 'ph'} />}
+          fallback={<SparkleIcon class={props.class ?? 'ph'} />}
         >
           <CursorIcon class={props.class ?? 'ph'} />
         </Show>

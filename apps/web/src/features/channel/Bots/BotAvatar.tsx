@@ -1,4 +1,4 @@
-import RobotIcon from '@phosphor/robot.svg';
+import SparkleIcon from '@phosphor/sparkle.svg';
 import type { Bot } from '@service-storage/generated/schemas/bot';
 import { Avatar } from '@ui';
 import { Show } from 'solid-js';
@@ -13,7 +13,7 @@ export function BotAvatar(props: {
         when={props.bot.avatar_url}
         fallback={
           <Avatar.Fallback>
-            <RobotIcon class="size-4" />
+            <SparkleIcon class="size-4" />
           </Avatar.Fallback>
         }
       >

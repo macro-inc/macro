@@ -1,5 +1,6 @@
 import { UserGroup } from '@core/component/UserGroup';
 import { UserIcon } from '@core/component/UserIcon';
+import { CURSOR_BOT_PRINCIPAL_ID } from '@core/constant/cursorAgent';
 import { seedMockDisplayNames } from '@core/user/displayName';
 import User from '@phosphor-icons/core/regular/user.svg?component-solid';
 import { Avatar } from '@ui';
@@ -50,6 +51,34 @@ export default function UserIconDemo() {
           Demonstrates the Avatar primitives from @ui and UserIcon built on top.
         </p>
       </div>
+
+      {/* Bot / agent fallback — sparkle, not Phosphor robot */}
+      <Section title="Agent / bot fallback (no photo)">
+        <p class="text-xs text-ink-muted mb-3">
+          Bot principals without a profile picture use the shared sparkle mark.
+          Collapsed thread replies render this same avatar.
+        </p>
+        <div class="flex items-center gap-3">
+          <For each={SIZE_LABELS}>
+            {(size) => (
+              <UserIcon
+                id={CURSOR_BOT_PRINCIPAL_ID}
+                size={size}
+                suppressClick
+                showTooltip={false}
+              />
+            )}
+          </For>
+          <div class="size-12">
+            <UserIcon
+              id={CURSOR_BOT_PRINCIPAL_ID}
+              size="fill"
+              suppressClick
+              showTooltip={false}
+            />
+          </div>
+        </div>
+      </Section>
 
       {/* Raw Avatar primitives */}
       <Section title="Avatar Primitives (@ui)">

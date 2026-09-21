@@ -3,8 +3,8 @@ import Key from '@phosphor-icons/core/regular/key.svg';
 import Link from '@phosphor-icons/core/regular/link.svg';
 import List from '@phosphor-icons/core/regular/list.svg';
 import PlugsConnected from '@phosphor-icons/core/regular/plugs-connected.svg';
-import Robot from '@phosphor-icons/core/regular/robot.svg';
 import SlidersHorizontal from '@phosphor-icons/core/regular/sliders-horizontal.svg';
+import Sparkle from '@phosphor-icons/core/regular/sparkle.svg';
 import Trash from '@phosphor-icons/core/regular/trash.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import type {
@@ -74,7 +74,7 @@ function BotList(props: { bots: ListedBot[] }) {
       <div class="max-h-60 overflow-y-auto overscroll-contain">
         <For each={props.bots}>
           {(bot) => (
-            <Tool.ListItem icon={<Robot class="size-4" />}>
+            <Tool.ListItem icon={<Sparkle class="size-4" />}>
               <div class="flex min-w-0 items-center justify-between gap-3">
                 <div class="min-w-0">
                   <div class="truncate text-ink">{bot.name}</div>
@@ -138,7 +138,7 @@ const createBotHandler = createToolRenderer({
 
     return (
       <BaseTool
-        icon={Robot}
+        icon={Sparkle}
         renderContext={ctx.renderContext}
         type="call"
         response={
