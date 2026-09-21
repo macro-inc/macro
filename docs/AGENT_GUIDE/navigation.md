@@ -137,6 +137,9 @@ not clear its dot — reading or completing the represented items does. The butt
 accessible description is `Unread items` while its dot is active.
 
 The Agents sidebar mixes chat and coding sessions in one newest-first list.
+Use **Search conversations** beside the Conversations heading to filter by title.
+Results stay packed at the top with compact spacing, even with only a few matches;
+clearing the search restores the list.
 Its **New conversation** button opens the unified composer with one **Agent**
 selector on the right. Choosing a coding agent reveals the repository drawer;
 there is no Chat/Code switch. New sessions use the selected agent's default model
