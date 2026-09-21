@@ -180,7 +180,12 @@ where
                 {
                     side_effect_error = Some(repo_error(error));
                 }
-                if *added && let Some(message_sender_id) = message.sender_id.as_user() {
+                if *added
+                    && let Some(message_sender_id) = message.sender_id.as_user()
+                    && actor
+                        .as_user()
+                        .is_some_and(|reactor| reactor != message_sender_id)
+                {
                     match self
                         .repo
                         .get_channel_metadata(channel_id, message_sender_id.clone())

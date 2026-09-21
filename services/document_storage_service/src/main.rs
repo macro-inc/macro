@@ -1075,6 +1075,11 @@ async fn run() -> anyhow::Result<()> {
         ),
     )
     .with_sharing(messages::outbound::pg_discussion_context::PgDiscussionContext(db.clone()));
+    let annotation_service = Arc::new(messages::domain::annotations::AnnotationService::new(
+        macro_db_client::annotations::repository::PgAnnotationRepository(db.clone()),
+        (*entity_access_service).clone(),
+        discussion_delivery.clone(),
+    ));
     let channel_delivery = channels::domain::message_delivery::ChannelMessageDelivery::new(
         PgChannelsRepo::new(db.clone()),
         SpawnedChannelEventDispatcher::new(channel_side_effects.clone()),
@@ -1750,6 +1755,7 @@ async fn run() -> anyhow::Result<()> {
             authorization_state.clone(),
         ),
         messages_state,
+        annotation_service,
         bots_state: bots::inbound::axum_router::BotsRouterState::new(
             bots_service.clone(),
             (*entity_access_service).clone(),

@@ -186,12 +186,10 @@ impl messages::domain::api::MessageReader for RecordingMessages {
     ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
         unimplemented!("read path unused by mutation tools")
     }
-    async fn referenced_threads(
+    async fn parent_of(
         &self,
-        _: EntityAccessReceipt<messages::domain::service::MessageView>,
-        _: Option<messages::domain::ports::MessageCursor>,
-        _: u16,
-    ) -> Result<messages::domain::ports::ReferencedThreadPage, messages::domain::ports::MessageError>
+        _: Uuid,
+    ) -> Result<Option<messages::domain::models::MessageParent>, messages::domain::ports::MessageError>
     {
         unimplemented!("read path unused by mutation tools")
     }

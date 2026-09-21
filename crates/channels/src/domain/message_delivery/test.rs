@@ -281,12 +281,7 @@ async fn added_reaction_carries_author_notification_context() {
     delivery.publish(reaction).await.unwrap();
 
     let events = log.events.lock().unwrap();
-    let [
-        ChannelEvent::ReactionChanged {
-            notification: Some(notification),
-            ..
-        },
-    ] = events.as_slice()
+    let [ChannelEvent::ReactionAdded { notification, .. }] = events.as_slice()
     else {
         panic!("expected reaction notification context, got {events:?}");
     };
@@ -296,7 +291,7 @@ async fn added_reaction_carries_author_notification_context() {
 }
 
 #[tokio::test]
-async fn removed_reaction_has_no_author_notification_context() {
+async fn removed_reaction_sends_no_author_notification() {
     let log = Log::default();
     let delivery = ChannelMessageDelivery::new(repo(), log.clone(), log.clone(), log.clone());
     let mut reaction = event(MessageChange::ReactionChanged {
@@ -308,13 +303,7 @@ async fn removed_reaction_has_no_author_notification_context() {
 
     delivery.publish(reaction).await.unwrap();
 
-    assert!(matches!(
-        log.events.lock().unwrap().as_slice(),
-        [ChannelEvent::ReactionChanged {
-            notification: None,
-            ..
-        }]
-    ));
+    assert!(log.events.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

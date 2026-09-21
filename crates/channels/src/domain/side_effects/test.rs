@@ -1,6 +1,7 @@
 use super::*;
 use crate::domain::{
-    models::{BotId, EntityMention, ParticipantRole, Sender},
+    events::ReactionNotificationContext,
+    models::{BotId, ChannelType, EntityMention, ParticipantRole, Sender},
     ports::{
         ChannelEventHandler, ChannelNotificationSender, ChannelRealtimePublisher,
         ChannelSideEffectContext,
@@ -161,6 +162,89 @@ async fn picture_changes_refresh_all_participant_sessions_without_notifications(
     );
     assert!(notifications.effects.lock().unwrap().is_empty());
     assert!(contacts.users.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn added_reaction_notifies_message_author() {
+    let realtime = FakeRealtime::default();
+    let notifications = FakeNotifications::default();
+    let service = ChannelSideEffectService::new(
+        FakeContext::default(),
+        realtime.clone(),
+        notifications.clone(),
+        FakeContacts::default(),
+    );
+    let channel_id = Uuid::new_v4();
+    let message_id = Uuid::new_v4();
+    let reactor = user("reactor@test.com");
+    let author = user("author@test.com");
+
+    service
+        .handle(ChannelEvent::ReactionAdded {
+            channel_id,
+            actor: Sender::new_from_user(reactor.clone()),
+            message_id,
+            notification: ReactionNotificationContext {
+                emoji: "👍".to_string(),
+                message_sender: Sender::new_from_user(author.clone()),
+                thread_id: None,
+                message_content: "Great idea".to_string(),
+                metadata: ChannelMetadata {
+                    channel_type: ChannelType::Public,
+                    channel_name: "general".to_string(),
+                },
+            },
+        })
+        .await;
+
+    assert!(realtime.effects.lock().unwrap().is_empty());
+    assert!(matches!(
+        &notifications.effects.lock().unwrap()[..],
+        [ChannelNotificationEffect::Reaction {
+            sender_id,
+            recipient_id,
+            emoji,
+            message_content,
+            message_id: actual_message_id,
+            ..
+        }] if sender_id == &reactor
+            && recipient_id == &author
+            && emoji == "👍"
+            && message_content == "Great idea"
+            && *actual_message_id == message_id
+    ));
+}
+
+#[tokio::test]
+async fn self_reactions_do_not_notify() {
+    let notifications = FakeNotifications::default();
+    let service = ChannelSideEffectService::new(
+        FakeContext::default(),
+        FakeRealtime::default(),
+        notifications.clone(),
+        FakeContacts::default(),
+    );
+    let user_id = user("author@test.com");
+
+    service
+        .handle(ChannelEvent::ReactionAdded {
+            channel_id: Uuid::new_v4(),
+            actor: Sender::new_from_user(user_id.clone()),
+            message_id: Uuid::new_v4(),
+            notification: ReactionNotificationContext {
+                emoji: "👍".to_string(),
+                message_sender: Sender::new_from_user(user_id),
+                thread_id: None,
+                message_content: "No notification".to_string(),
+                metadata: ChannelMetadata {
+                    channel_type: ChannelType::Public,
+                    channel_name: "general".to_string(),
+                },
+            },
+        })
+        .await;
+
+    assert!(notifications.effects.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
