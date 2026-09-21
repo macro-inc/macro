@@ -26,6 +26,7 @@ export {
   createRoutesManifest,
   decodeRoute,
   defineRoute,
+  defineRoutes,
   encodeRoute,
   filterRouteSearch,
   getExternalSearchKeys,
@@ -64,6 +65,9 @@ export {
 } from './solid';
 export type {
   BrowserHistoryIntent,
+  DefinedSplitRoutes,
+  InferSplitRouteBranchParams,
+  InferSplitRouteNavigationParams,
   InferSplitRouteParams,
   SerializedSearchParams,
   SplitLocation,
@@ -97,6 +101,7 @@ export type {
   SplitRouterSettledChange,
   SplitRouteState,
   SplitRoutes,
+  SplitRouteUnion,
   SplitSearchState,
   SplitSearchUpdate,
   SplitSearchUpdateOptions,

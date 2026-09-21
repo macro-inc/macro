@@ -1,13 +1,13 @@
 import { cleanup, render } from '@solidjs/testing-library';
 import { type Accessor, onCleanup } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { z } from 'zod';
 import {
   createSearchParams,
   type SetSearchParams,
 } from '../create-search-params';
 import { createMemorySplitRouterLocation } from '../integrations/memory';
-import { defineRoute } from '../routes';
+import { defineRoute, defineRoutes } from '../routes';
 import {
   SplitRouter,
   useCanGo,
@@ -104,6 +104,64 @@ afterEach(() => {
 });
 
 describe('Solid split router hooks', () => {
+  it('reads typed branch params only through the referenced node and stays reactive', () => {
+    const tree = defineRoutes({
+      definitions: [
+        defineRoute({
+          id: 'workspace',
+          path: 'workspace/:workspaceId/:id',
+          params: z.object({ workspaceId: z.string(), id: z.string() }),
+          children: [
+            defineRoute({
+              id: 'count',
+              path: 'count/:id',
+              params: z.object({ id: z.coerce.number() }),
+            }),
+          ],
+        }),
+      ],
+    });
+    const parent = tree.definitions[0];
+    const child = parent.children[0];
+    function ParamsView() {
+      const parentParams = useParams(parent);
+      const childParams = useParams(child);
+      const localParams = useRouteParams(child);
+      const missing = useParams(
+        defineRoute({ id: 'absent', path: 'absent/:id' })
+      );
+      expectTypeOf(parentParams).toEqualTypeOf<{
+        workspaceId: string;
+        id: string;
+      }>();
+      expectTypeOf(childParams).toEqualTypeOf<{
+        workspaceId: string;
+        id: number;
+      }>();
+      expectTypeOf(localParams).toEqualTypeOf<{ id: number }>();
+      return (
+        <div>{`${parentParams.workspaceId}:${parentParams.id}:${childParams.id}:${localParams.id}:${JSON.stringify(missing)}`}</div>
+      );
+    }
+    const location = createMemorySplitRouterLocation(
+      '/workspace/a/parent-a/count/2'
+    );
+    const result = render(() => (
+      <SplitRouter.Root
+        layout={createLayout()}
+        routes={tree}
+        location={location}
+      >
+        <SplitRouter.Scope splitId="split">
+          <ParamsView />
+        </SplitRouter.Scope>
+      </SplitRouter.Root>
+    ));
+    expect(result.getByText('a:parent-a:2:2:{}')).toBeTruthy();
+    location.set('/workspace/b/parent-b/count/3');
+    expect(result.getByText('b:parent-b:3:3:{}')).toBeTruthy();
+  });
+
   it('renders the outlet fallback for a missing split without a route-less entry', () => {
     const layout = createLayout();
     const view = render(() => (

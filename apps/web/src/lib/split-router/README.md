@@ -9,9 +9,12 @@ stay outside this library.
 - Supply one static `SplitRoutes` declaration tree, or an explicit
   `SplitRoutesManifest`. A router compiles its own manifest once and exposes it as
   `router.routes`; there is no global runtime cache.
-- `defineRoute()` preserves literal IDs and synchronous Standard Schema param
-  types. Use route-object destinations and `useRouteParams(route)` for typed
-  navigation and reads.
+- `defineRoute()` infers node-local callback and synchronous Standard Schema
+  output types, including `remountKey`. `defineRoutes()` preserves the static
+  tree and adds ancestor types to references taken from that tree.
+- `useRouteParams(route)` reads only that node's params. `useParams(route)` reads
+  the merged branch through that node; `useParams()` still reads the entire
+  active branch.
 - Matching follows declaration order, trying canonical patterns before aliases.
   Schema and child failures backtrack. Formatting always uses canonical paths.
 - Every accepted location has a nonempty, structurally valid match branch.
@@ -19,6 +22,62 @@ stay outside this library.
   Runtime schema outputs are not blindly revalidated as schema inputs.
 - Nested outlets preserve component identity while their match remains stable.
   Use `remountKey` for intentional resets.
+
+## Typed nested routes
+
+```ts
+const routes = defineRoutes({
+  definitions: [defineRoute({
+    id: 'folder',
+    path: 'drive/folder/:folderId',
+    params: z.object({ folderId: z.string() }),
+    children: [defineRoute({
+      id: 'document',
+      path: 'document/:documentId',
+      params: z.object({ documentId: z.string() }),
+      remountKey: ({ documentId }) => documentId,
+    })],
+  })],
+});
+const folder = routes.definitions[0];
+const document = folder.children[0];
+
+navigate({
+  route: document,
+  params: { folderId: 'folder-1', documentId: 'document-1' },
+});
+const branch = useParams(document);       // folderId + documentId
+const local = useRouteParams(document);  // documentId only
+```
+
+`defineRoutes` returns the same objects: it does not clone, mutate, compile, or
+cache the tree. Its ancestry metadata exists only in TypeScript. Take references
+from its returned tree to get inherited types; previously declared child variables
+retain their original local-only types. Use `defineRoute` at nodes with callbacks
+so their schema outputs provide contextual parameter types.
+
+Tree-bound destinations require the complete branch params, including when opening
+another pane. Standalone `defineRoute` references remain local-only and may inherit
+matching ancestor values from the current pane. Explicit destination params override
+those inherited values before each node's serializer runs. Serializers can therefore
+receive additional branch fields; serialize the fields owned by that node. Transformed
+outputs such as `Date` still require `serializeParams` and are not revalidated as inputs.
+
+`InferSplitRouteParams` is node-local; `InferSplitRouteBranchParams` describes merged
+reads; `InferSplitRouteNavigationParams` describes the flat destination bag.
+`SplitRouteUnion<typeof routes>` collects references throughout a tree for destination
+builders. `SplitRouteNavigationTarget<A | B>` keeps each route paired with its params.
+
+Prefer distinct parameter names across ancestors and descendants, especially when
+using claims, which receive the final merged bag. Reads honor child shadowing and
+retain parent values when optional child fields are absent. Flat destinations must
+satisfy every node's parameter types; incompatible shadows are rejected. Use path
+navigation when repeated names need different values at different levels.
+
+Without a schema, literal paths infer strings, optional strings, and `string[]` for
+catch-all parameters. Reads include differently named alias params; destinations use
+the canonical path's params. Renamed aliases need a schema or serializer that maps
+those fields back to canonical names. Widened `string` paths retain untyped params.
 
 ## Search and history
 

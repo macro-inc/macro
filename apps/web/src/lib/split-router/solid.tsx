@@ -18,6 +18,7 @@ import {
   type SplitRoutesManifest,
 } from './routes';
 import type {
+  InferSplitRouteBranchParams,
   InferSplitRouteParams,
   SplitNavigate,
   SplitNavigateOptions,
@@ -140,12 +141,23 @@ export function useSplitHistory() {
   return () => router.history(splitId());
 }
 
-export function useParams<T extends SplitRouteParams = SplitRouteParams>(): T {
+export function useParams<const TRoute extends { id: string }>(
+  route: TRoute
+): InferSplitRouteBranchParams<TRoute>;
+export function useParams<T extends SplitRouteParams = SplitRouteParams>(): T;
+export function useParams(through?: { id: string }): SplitRouteParams {
   const router = useSplitRouterState<unknown>();
   const splitId = useSplitRouterScope<unknown>();
-  const params = createMemo(() => routeParams(router.route(splitId())));
+  const params = createMemo(() => {
+    const route = router.route(splitId());
+    if (!through || !route) return routeParams(route);
+    const index = route.matches.findIndex((match) => match.id === through.id);
+    if (index < 0) return {};
+    const [first, ...rest] = route.matches;
+    return routeParams({ matches: [first, ...rest.slice(0, index)] });
+  });
 
-  return reactiveRecord(params) as T;
+  return reactiveRecord(params);
 }
 
 export function useRouteParams<const TRoute extends { id: string }>(

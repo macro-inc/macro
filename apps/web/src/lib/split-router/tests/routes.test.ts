@@ -4,6 +4,7 @@ import {
   createRoutesManifest,
   decodeRoute,
   defineRoute,
+  defineRoutes,
   encodeRoute,
   findRouteBranch,
   getExternalSearchKeys,
@@ -12,7 +13,12 @@ import {
   validateRouteParams,
   validateSplitRoutes,
 } from '../routes';
-import type { InferSplitRouteParams } from '../types';
+import type {
+  InferSplitRouteBranchParams,
+  InferSplitRouteNavigationParams,
+  InferSplitRouteParams,
+  SplitRoutes,
+} from '../types';
 
 const documentClaim = ({ documentId }: { documentId: string }) => ({
   namespace: 'document',
@@ -23,6 +29,7 @@ const driveRoute = defineRoute({
   id: 'drive',
   path: 'drive',
   aliases: ['files'],
+  params: z.object({}),
   search: ['drive'],
   externalSearch: ['action'],
   children: [
@@ -67,6 +74,7 @@ describe('split route parameter schemas', () => {
     id: 'issue',
     path: 'issue/:issueId',
     params: z.object({ issueId: z.coerce.number().int().positive() }),
+    remountKey: ({ issueId }) => issueId.toFixed(0),
   });
 
   it('coerces URL strings to typed runtime values', () => {
@@ -96,6 +104,193 @@ describe('split route parameter schemas', () => {
     expect(() => validateRouteParams(schema, { id: 'one' })).toThrow(
       'must be synchronous'
     );
+  });
+});
+
+function assertInvalidRouteDeclarations() {
+  // @ts-expect-error Invalid callbacks are rejected by the declaration boundary.
+  defineRoutes({ definitions: [{ id: 'bad', path: 'bad', claim: 42 }] });
+  defineRoutes({
+    // @ts-expect-error Route parameter schemas must produce objects.
+    definitions: [defineRoute({ id: 'bad', path: 'bad', params: z.string() })],
+  });
+}
+
+describe('typed route trees', () => {
+  it('checks declaration contracts without widening node inference', () => {
+    expectTypeOf(assertInvalidRouteDeclarations).toBeFunction();
+  });
+  it('preserves declaration and schema identity while typing descendant ancestry', () => {
+    const declarations = {
+      definitions: [driveRoute] as const,
+      globalSearch: ['referral_code'] as const,
+    };
+    const tree = defineRoutes(declarations);
+    const detail = tree.definitions[0].children[0].children[0];
+    expect(tree).toBe(declarations);
+    expect(tree.definitions[0]).toBe(driveRoute);
+    expect(detail).toBe(driveRoute.children[0].children[0]);
+    expect(detail.params).toBe(driveRoute.children[0].children[0].params);
+    expect(createRoutesManifest(tree).byId.get(detail.id)?.definition).toBe(
+      detail
+    );
+    expectTypeOf(tree).toExtend<SplitRoutes>();
+    expectTypeOf<InferSplitRouteParams<typeof driveRoute>>().toEqualTypeOf<
+      z.output<typeof driveRoute.params>
+    >();
+    expectTypeOf(detail.id).toEqualTypeOf<'drive-folder-detail'>();
+    expectTypeOf<InferSplitRouteParams<typeof detail>>().toEqualTypeOf<{
+      documentId: string;
+    }>();
+    expectTypeOf<InferSplitRouteBranchParams<typeof detail>>().toEqualTypeOf<{
+      folderId: string;
+      documentId: string;
+    }>();
+  });
+
+  it('rebinds ancestry when an existing reference is composed into another tree', () => {
+    const tree = defineRoutes({ definitions: [driveRoute] });
+    const detail = tree.definitions[0].children[0].children[0];
+    const rebound = defineRoutes({ definitions: [detail] });
+    const root = rebound.definitions[0];
+    expect(root).toBe(detail);
+    expectTypeOf<InferSplitRouteBranchParams<typeof root>>().toEqualTypeOf<{
+      documentId: string;
+    }>();
+    expectTypeOf<InferSplitRouteNavigationParams<typeof root>>().toEqualTypeOf<{
+      documentId: string;
+    }>();
+    const widened: SplitRoutes = tree;
+    const redefined = defineRoutes(widened);
+    expectTypeOf(redefined.definitions[0]?.children).toEqualTypeOf<
+      SplitRoutes['definitions'][number]['children']
+    >();
+  });
+
+  it('infers schema-less path params, including optional and catch-all fields', () => {
+    const raw = defineRoute({
+      id: 'raw',
+      path: 'raw/:id/:tab?/*rest',
+      remountKey: ({ id, tab, rest }) => `${id}:${tab ?? ''}:${rest.join('/')}`,
+    });
+    expectTypeOf<InferSplitRouteParams<typeof raw>>().toEqualTypeOf<{
+      id: string;
+      tab?: string;
+      rest: string[];
+    }>();
+    expect(raw.remountKey({ id: 'one', rest: ['a', 'b'] })).toBe('one::a/b');
+    expectTypeOf<InferSplitRouteParams<{ id: 'bare' }>>().toEqualTypeOf<
+      Record<string, unknown>
+    >();
+  });
+
+  it('types differently named alias reads separately from canonical destinations', () => {
+    const route = defineRoute({
+      id: 'alias',
+      path: 'item/:id',
+      aliases: ['old/:legacyId'],
+      serializeParams: (params) => ({
+        id: 'id' in params ? params.id : params.legacyId,
+      }),
+      remountKey: (params) => ('id' in params ? params.id : params.legacyId),
+    });
+    expectTypeOf<InferSplitRouteParams<typeof route>>().toEqualTypeOf<
+      { id: string } | { legacyId: string }
+    >();
+    expectTypeOf<
+      InferSplitRouteNavigationParams<typeof route>
+    >().toEqualTypeOf<{ id: string }>();
+    const manifest = createRoutesManifest(
+      defineRoutes({ definitions: [route] })
+    );
+    const entry = decodeRoute(manifest, ['old', 'one'])!;
+    expect(routeParams(entry.location.route)).toEqual({ legacyId: 'one' });
+    expect(encodeRoute(manifest, entry)).toEqual(['item', 'one']);
+  });
+
+  it('retains optional ancestor fields and transformed schema outputs', () => {
+    const tree = defineRoutes({
+      definitions: [
+        defineRoute({
+          id: 'parent',
+          path: 'parent/:workspace?',
+          params: z.object({ workspace: z.string().optional() }),
+          children: [
+            defineRoute({
+              id: 'child',
+              path: ':page',
+              params: z.object({ page: z.coerce.number() }),
+            }),
+          ],
+        }),
+      ],
+    });
+    const child = tree.definitions[0].children[0];
+    expectTypeOf<InferSplitRouteBranchParams<typeof child>>().toEqualTypeOf<{
+      workspace?: string;
+      page: number;
+    }>();
+    expectTypeOf<
+      InferSplitRouteNavigationParams<typeof child>
+    >().toEqualTypeOf<{ workspace?: string; page: number }>();
+  });
+
+  it('retains required parent values when optional child fields are absent', () => {
+    const tree = defineRoutes({
+      definitions: [
+        defineRoute({
+          id: 'parent',
+          path: ':id',
+          params: z.object({ id: z.string() }),
+          children: [
+            defineRoute({
+              id: 'child',
+              path: 'child/:id?',
+              params: z.object({ id: z.coerce.number().optional() }),
+            }),
+          ],
+        }),
+      ],
+    });
+    const child = tree.definitions[0].children[0];
+    expectTypeOf<InferSplitRouteBranchParams<typeof child>>().toEqualTypeOf<{
+      id: string | number | undefined;
+    }>();
+    const manifest = createRoutesManifest(tree);
+    expect(
+      routeParams(decodeRoute(manifest, ['parent', 'child'])?.location.route)
+    ).toEqual({ id: 'parent' });
+    expect(
+      routeParams(
+        decodeRoute(manifest, ['parent', 'child', '2'])?.location.route
+      )
+    ).toEqual({ id: 2 });
+  });
+
+  it('models shadowed reads but rejects incompatible flat navigation params', () => {
+    const tree = defineRoutes({
+      definitions: [
+        defineRoute({
+          id: 'parent',
+          path: ':id',
+          params: z.object({ id: z.string() }),
+          children: [
+            defineRoute({
+              id: 'child',
+              path: ':id',
+              params: z.object({ id: z.coerce.number() }),
+            }),
+          ],
+        }),
+      ],
+    });
+    const child = tree.definitions[0].children[0];
+    expectTypeOf<InferSplitRouteBranchParams<typeof child>>().toEqualTypeOf<{
+      id: number;
+    }>();
+    expectTypeOf<
+      InferSplitRouteNavigationParams<typeof child>
+    >().toEqualTypeOf<{ id: never }>();
   });
 });
 

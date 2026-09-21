@@ -45,8 +45,9 @@ function resolveRouteTarget(
 
     return {
       id: definition.id,
-      params:
-        index === branch.length - 1 ? { ...params, ...targetParams } : params,
+      // Explicit branch params override inherited values at every level before
+      // each node serializes its own schema output into path segments.
+      params: { ...params, ...targetParams },
     };
   });
 

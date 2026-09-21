@@ -73,13 +73,15 @@ type SplitRouteReference = {
 };
 
 type SplitRouteTargetParams<TRoute extends SplitRouteReference> =
-  {} extends InferSplitRouteParams<TRoute>
-    ? { params?: InferSplitRouteParams<TRoute> }
-    : { params: InferSplitRouteParams<TRoute> };
+  {} extends InferSplitRouteNavigationParams<TRoute>
+    ? { params?: InferSplitRouteNavigationParams<TRoute> }
+    : { params: InferSplitRouteNavigationParams<TRoute> };
 
 export type SplitRouteNavigationTarget<
   TRoute extends SplitRouteReference = SplitRouteReference,
-> = { route: TRoute } & SplitRouteTargetParams<TRoute>;
+> = TRoute extends unknown
+  ? { route: TRoute } & SplitRouteTargetParams<NoInfer<TRoute>>
+  : never;
 
 export type SplitParentNavigationTarget = {
   parent: true;
@@ -161,14 +163,170 @@ export type SplitRouteDefinition<
   externalSearch?:
     | readonly string[]
     | ((entry: Readonly<SplitRouterEntry>) => readonly string[]);
-  remountKey?: (params: SplitRouteParams) => string | number | undefined;
+  remountKey?: SplitRouteParamCallback<
+    StandardSchemaV1.InferOutput<TParamsSchema>,
+    string | number | undefined
+  >;
 };
 
+type PathSegmentParams<TSegment extends string> =
+  TSegment extends `:${infer TName}?`
+    ? { [K in TName]?: string }
+    : TSegment extends `:${infer TName}`
+      ? { [K in TName]: string }
+      : TSegment extends `*${infer TName}`
+        ? { [K in TName]: string[] }
+        : {};
+
+type PathParams<TPath extends string> = TPath extends unknown
+  ? string extends TPath
+    ? SplitRouteParams
+    : TPath extends `${infer TSegment}/${infer TRest}`
+      ? PathSegmentParams<TSegment> & PathParams<TRest>
+      : PathSegmentParams<TPath>
+  : never;
+
+type Simplify<T> = { [K in keyof T]: T[K] };
+type RequiredParamKeys<T> = {
+  [K in keyof T]-?: {} extends Pick<T, K> ? never : K;
+}[keyof T];
+type MergedParam<
+  TParent,
+  TLocal,
+  K extends PropertyKey,
+> = K extends keyof TLocal
+  ? {} extends Pick<TLocal, K>
+    ? K extends keyof TParent
+      ? TParent[K] | TLocal[K]
+      : TLocal[K]
+    : TLocal[K]
+  : K extends keyof TParent
+    ? TParent[K]
+    : never;
+
+// Object.assign retains the parent value when an optional child field is absent.
+type MergeRouteParams<TParent, TLocal> = TParent extends unknown
+  ? TLocal extends unknown
+    ? Simplify<
+        {
+          [K in
+            | RequiredParamKeys<TParent>
+            | RequiredParamKeys<TLocal>]: MergedParam<TParent, TLocal, K>;
+        } & {
+          [K in Exclude<
+            keyof TParent | keyof TLocal,
+            RequiredParamKeys<TParent> | RequiredParamKeys<TLocal>
+          >]?: MergedParam<TParent, TLocal, K>;
+        }
+      >
+    : never
+  : never;
+
+/** The schema output (or raw path params) owned by this node alone. */
 export type InferSplitRouteParams<TRoute> = TRoute extends {
   params: infer TSchema extends StandardSchemaV1;
 }
   ? StandardSchemaV1.InferOutput<TSchema>
-  : SplitRouteParams;
+  : TRoute extends { path: infer TPath extends string }
+    ? MergeRouteParams<
+        {},
+        PathParams<
+          | TPath
+          | (TRoute extends { aliases: infer TAliases }
+              ? Extract<TAliases, readonly string[]>[number]
+              : never)
+        >
+      >
+    : SplitRouteParams;
+
+type LocalNavigationParams<TRoute> = TRoute extends { params: StandardSchemaV1 }
+  ? InferSplitRouteParams<TRoute>
+  : TRoute extends { path: infer TPath extends string }
+    ? MergeRouteParams<{}, PathParams<TPath>>
+    : SplitRouteParams;
+
+// Type-only ancestry. defineRoutes never adds properties to the supplied objects.
+declare const branchParams: unique symbol;
+
+/** Params accumulated through this node, with child fields overriding ancestors. */
+export type InferSplitRouteBranchParams<TRoute> = TRoute extends {
+  readonly [branchParams]: { read: infer TParams };
+}
+  ? TParams
+  : InferSplitRouteParams<TRoute>;
+
+/** A flat destination bag must satisfy every ancestor's serializer. */
+export type InferSplitRouteNavigationParams<TRoute> = TRoute extends {
+  readonly [branchParams]: { navigate: infer TParams };
+}
+  ? TParams
+  : LocalNavigationParams<TRoute>;
+
+// Empty object schemas can infer an index signature of never. It must not
+// prohibit the fields supplied by other nodes in the same branch.
+type BranchParams<TParams> =
+  TParams extends Record<string, never>
+    ? {
+        [K in keyof TParams as string extends K
+          ? never
+          : number extends K
+            ? never
+            : K]: TParams[K];
+      }
+    : TParams;
+
+type DefinedRoute<TRoute, TParent, TParentNavigation> = TRoute extends unknown
+  ? Omit<TRoute, 'children' | typeof branchParams> & {
+      readonly [branchParams]: {
+        read: MergeRouteParams<
+          TParent,
+          BranchParams<InferSplitRouteParams<TRoute>>
+        >;
+        navigate: MergeRouteParams<
+          {},
+          TParentNavigation & BranchParams<LocalNavigationParams<TRoute>>
+        >;
+      };
+    } & (TRoute extends { children: infer TChildren extends readonly unknown[] }
+        ? {
+            readonly children: DefinedRouteList<
+              TChildren,
+              MergeRouteParams<
+                TParent,
+                BranchParams<InferSplitRouteParams<TRoute>>
+              >,
+              TParentNavigation & BranchParams<LocalNavigationParams<TRoute>>
+            >;
+          }
+        : Pick<TRoute, Extract<keyof TRoute, 'children'>>)
+  : never;
+
+type DefinedRouteList<
+  TDefinitions extends readonly unknown[],
+  TParent,
+  TParentNavigation,
+> = {
+  [K in keyof TDefinitions]: DefinedRoute<
+    TDefinitions[K],
+    TParent,
+    TParentNavigation
+  >;
+};
+
+/** The original static tree, with ancestry available on references from that tree. */
+export type DefinedSplitRoutes<
+  TRoutes extends { definitions: readonly unknown[] },
+> = Omit<TRoutes, 'definitions'> & {
+  readonly definitions: DefinedRouteList<TRoutes['definitions'], {}, {}>;
+};
+
+type RouteUnion<TRoute> = TRoute extends { children: readonly (infer TChild)[] }
+  ? TRoute | RouteUnion<TChild>
+  : TRoute;
+
+export type SplitRouteUnion<TRoutes extends SplitRoutes> = RouteUnion<
+  TRoutes['definitions'][number]
+>;
 
 export type UnmatchedSplitPathContext = {
   segments: string[];
@@ -181,11 +339,11 @@ export type UnmatchedSplitPathHandler = (
 
 /** Static route declarations. Do not mutate them during a router's lifetime. */
 export type SplitRoutes<TComponent = unknown> = {
-  definitions: SplitRouteDefinition<TComponent>[];
-  unmatchedPathHandlers?: UnmatchedSplitPathHandler[];
+  definitions: readonly SplitRouteDefinition<TComponent>[];
+  unmatchedPathHandlers?: readonly UnmatchedSplitPathHandler[];
   defaultEntry?: () => SplitRouterEntry;
-  globalSearch?: string[];
-  basePath?: string | string[];
+  globalSearch?: readonly string[];
+  basePath?: string | readonly string[];
 };
 
 export type SplitRouterLayoutEntry<TSplitId> = SplitRouterEntry & {
@@ -247,8 +405,8 @@ export type SplitRouterOptions<TSplitId> = {
 };
 
 export type SplitNavigate<TSplitId> = {
-  <const TRoute extends SplitRouteReference>(
-    to: SplitRouteNavigationTarget<TRoute>,
+  <const TTarget extends { route: SplitRouteReference }>(
+    to: TTarget & SplitRouteNavigationTarget<NoInfer<TTarget['route']>>,
     options?: SplitNavigateOptions<TSplitId>
   ): void;
   (to: SplitNonRouteNavigateTo, options?: SplitNavigateOptions<TSplitId>): void;
@@ -262,9 +420,9 @@ export interface SplitRouter<TSplitId> {
     splitId: TSplitId,
     namespace: string
   ): SerializedSearchParams | undefined;
-  navigate<const TRoute extends SplitRouteReference>(
+  navigate<const TTarget extends { route: SplitRouteReference }>(
     splitId: TSplitId,
-    to: SplitRouteNavigationTarget<TRoute>,
+    to: TTarget & SplitRouteNavigationTarget<NoInfer<TTarget['route']>>,
     options?: SplitNavigateOptions<TSplitId>
   ): void;
   navigate(

@@ -5,9 +5,15 @@ import {
   createRoutesManifest,
   decodeRoute,
   defineRoute,
+  defineRoutes,
   routeParams,
 } from '../routes';
-import type { SplitNavigate, SplitRouterEntry } from '../types';
+import type {
+  SplitNavigate,
+  SplitRouteNavigationTarget,
+  SplitRouterEntry,
+  SplitRouteUnion,
+} from '../types';
 
 const workspaceDetailRoute = defineRoute({
   id: 'workspace-detail',
@@ -35,9 +41,10 @@ const workspaceRoute = defineRoute({
   children: [workspaceFolderRoute, workspacePageRoute],
 });
 
-const routes = createRoutesManifest({
-  definitions: [workspaceRoute],
-});
+const tree = defineRoutes({ definitions: [workspaceRoute] });
+const routes = createRoutesManifest(tree);
+const boundDetail = tree.definitions[0].children[0].children[0];
+const boundPage = tree.definitions[0].children[1];
 
 function entry(path: string[]): SplitRouterEntry {
   return decodeRoute(routes, path)!;
@@ -50,6 +57,22 @@ function assertTypedRouteTargets(navigate: SplitNavigate<string>) {
   });
   navigate({ route: workspaceRoute });
   navigate({ route: workspacePageRoute, params: { page: 2 } });
+  navigate({
+    route: boundDetail,
+    params: { folderId: 'folder', documentId: 'doc' },
+  });
+  // @ts-expect-error A tree-bound destination requires its ancestor params too.
+  navigate({ route: boundDetail, params: { documentId: 'doc' } });
+  // @ts-expect-error Ancestor fields keep their schema output types.
+  navigate({ route: boundDetail, params: { folderId: 4, documentId: 'doc' } });
+  // @ts-expect-error A route union cannot pair one route with another route's params.
+  const mismatched: SplitRouteNavigationTarget<
+    typeof boundDetail | typeof boundPage
+  > = { route: boundPage, params: { folderId: 'folder', documentId: 'doc' } };
+  void mismatched;
+  const destination: SplitRouteNavigationTarget<SplitRouteUnion<typeof tree>> =
+    { route: boundDetail, params: { folderId: 'folder', documentId: 'doc' } };
+  navigate(destination);
   // @ts-expect-error navigation uses the schema output type
   navigate({ route: workspacePageRoute, params: { page: '2' } });
   // @ts-expect-error documentId is required by the route schema
@@ -76,6 +99,59 @@ describe('split route navigation', () => {
     expect(next?.location?.route?.matches).toEqual([
       { id: 'workspace', params: {} },
       { id: 'workspace-page', params: { page: 2 } },
+    ]);
+  });
+
+  it.each([['workspace'], ['workspace', 'folder', 'old-folder']])(
+    'uses explicit ancestor params from %j',
+    (...path) => {
+      const current = entry(path);
+      const next = resolveNavigation(routes, current, undefined, {
+        route: boundDetail,
+        params: { folderId: 'new-folder', documentId: 'document-1' },
+      });
+      expect(next?.location.route.matches).toEqual([
+        { id: 'workspace', params: {} },
+        { id: 'workspace-folder', params: { folderId: 'new-folder' } },
+        { id: 'workspace-detail', params: { documentId: 'document-1' } },
+      ]);
+    }
+  );
+
+  it('serializes transformed ancestor outputs without validating them as inputs', () => {
+    const dated = defineRoutes({
+      definitions: [
+        defineRoute({
+          id: 'day',
+          path: 'day/:date',
+          params: z.object({
+            date: z.string().transform((date) => new Date(date)),
+          }),
+          serializeParams: ({ date }) => ({
+            date: date.toISOString().slice(0, 10),
+          }),
+          children: [
+            defineRoute({
+              id: 'day-item',
+              path: 'item/:id',
+              params: z.object({ id: z.string() }),
+            }),
+          ],
+        }),
+      ],
+    });
+    const manifest = createRoutesManifest({
+      definitions: [...tree.definitions, ...dated.definitions],
+    });
+    const current = decodeRoute(manifest, ['workspace'])!;
+    const date = new Date('2026-01-02T00:00:00Z');
+    const next = resolveNavigation(manifest, current, undefined, {
+      route: dated.definitions[0].children[0],
+      params: { date, id: 'one' },
+    });
+    expect(next?.location.route.matches).toEqual([
+      { id: 'day', params: { date } },
+      { id: 'day-item', params: { id: 'one' } },
     ]);
   });
 
