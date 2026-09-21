@@ -36,10 +36,9 @@
 - The starting page has a compact composer that starts at one line and grows
   with longer prompts or Shift+Enter. Lists, quotes, headings, and other
   non-paragraph blocks expand immediately, even with short text. This also applies
-  to session composers. The editor row takes the full width and controls move below.
-  The paperclip sits to the left of the editor in both layouts.
-  Returning to a short paragraph restores the compact row. Height changes animate
-  over 150ms, with reduced-motion preferences respected. **Agent** and **Send**
+  to session composers. The editor takes the full width and controls move below;
+  returning to a short paragraph restores the compact row. Height changes animate
+  over 200ms, with reduced-motion preferences respected. **Agent** and **Send**
   sit inside the input on the right.
   Direct model selections show only the model name and provider icon in the input.
   Saved and coding agents show their identity beside the current model. There is
@@ -70,10 +69,15 @@
   when changing agents. **Create agent** stays pinned at the bottom of the dropdown
   while the agent and model lists scroll. It opens the roster on the selected kind's
   tab, where either kind can be created.
-- Selecting a coding agent reveals a repository drawer directly under the input
-  with a short slide and fade; it extends 32px behind the rounded input and stays
-  behind it throughout the transition, keeping its existing edge-muted border.
-  Selecting a chat agent retracts it. Reduced-motion
+- On Home and New conversation, selecting a coding agent expands the input even
+  with an empty or short draft. The heading stays anchored while the composer
+  expands downward. The plus attachment button stays at the far left: before the
+  text in the compact row, and on the bottom control row when expanded. The editor sits above the controls, with attachments
+  on the left and the agent/model and Send on the right. An inset repository bar
+  slides and fades in above the rounded input over 200ms, with rounded top corners
+  and a darker surface in dark mode. Selecting a chat agent retracts the bar and
+  restores the compact input when the draft fits on one line, without remounting
+  the editor or losing the draft. Reduced-motion
   preferences disable the animation. The hidden drawer is inert. **Repository**
   (**Choose repository** until one is picked) opens a searchable list:
   **Choose automatically**, then the repositories the signed-in user reaches
