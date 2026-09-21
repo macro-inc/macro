@@ -1,8 +1,11 @@
+import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
+import { openCalendarEventSplit } from '@block-calendar/open-calendar-event';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { ItemPreview } from '@core/component/ItemPreview';
 import { toast } from '@core/component/Toast/Toast';
 import type { ReminderEntity } from '@entity';
 import BellIcon from '@phosphor/bell-simple.svg';
+import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import {
   reminderSoupPatch,
@@ -14,7 +17,8 @@ import {
   optimisticUpdateSoupEntity,
 } from '@queries/soup/cache';
 import type { Reminder } from '@service-storage/generated/schemas/reminder';
-import { createMemo, Match, onMount, Show, Switch } from 'solid-js';
+import { Button } from '@ui';
+import { createMemo, Match, onCleanup, onMount, Show, Switch } from 'solid-js';
 import { ReminderForm, type ReminderFormValues } from './ReminderForm';
 import {
   reminderEditPatch,
@@ -76,6 +80,12 @@ export type ReminderDetailsProps = {
  * mutation the create modal uses and asks its host to close.
  */
 export function ReminderDetails(props: ReminderDetailsProps) {
+  let active = true;
+  onCleanup(() => {
+    active = false;
+  });
+
+  const calendarUiEnabled = useCalendarUiFlag();
   const query = useReminderQuery(() => props.reminderId);
 
   // Soup rows come from the normalized soup cache, not the reminders queries, so
@@ -95,6 +105,12 @@ export function ReminderDetails(props: ReminderDetailsProps) {
   const reference = createMemo(() => {
     if (!query.isSuccess) return undefined;
     return referenceMention(query.data);
+  });
+  const calendarEventId = createMemo(() => {
+    if (!query.isSuccess || query.data.entityType !== 'calendar_event') {
+      return undefined;
+    }
+    return query.data.entityId;
   });
   const reminderUnavailable = () =>
     !props.reminderId ||
@@ -127,11 +143,14 @@ export function ReminderDetails(props: ReminderDetailsProps) {
       props.onClose();
       return;
     }
+    const submittedReminderId = reminder.id;
     try {
       await updateReminder.mutateAsync({ id: reminder.id, patch });
+      if (!active || props.reminderId !== submittedReminderId) return;
       toast.success('Reminder updated');
       props.onClose();
     } catch {
+      if (!active || props.reminderId !== submittedReminderId) return;
       toast.failure('Failed to update reminder');
     }
   };
@@ -150,18 +169,45 @@ export function ReminderDetails(props: ReminderDetailsProps) {
                 submitLabel="Save"
                 pending={updateReminder.isPending}
                 reference={
-                  <Show when={reference()}>
-                    {(ref) => (
-                      <div class="flex flex-col gap-1">
-                        <span class="text-xs font-medium text-ink-muted">
-                          Original item
-                        </span>
-                        <div class="flex">
-                          <ItemPreview id={ref().id} type={ref().type} />
+                  <>
+                    <Show when={reference()}>
+                      {(ref) => (
+                        <div class="flex flex-col gap-1">
+                          <span class="text-xs font-medium text-ink-muted">
+                            Original item
+                          </span>
+                          <div class="flex">
+                            <ItemPreview id={ref().id} type={ref().type} />
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </Show>
+                      )}
+                    </Show>
+                    <Show
+                      when={calendarUiEnabled() ? calendarEventId() : undefined}
+                    >
+                      {(eventId) => (
+                        <div class="flex flex-col gap-1">
+                          <span class="text-xs font-medium text-ink-muted">
+                            Original item
+                          </span>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            class="self-start"
+                            onClick={() =>
+                              void openCalendarEventSplit({
+                                eventId: eventId(),
+                              })
+                            }
+                          >
+                            <CalendarBlankIcon class="size-4" />
+                            Open calendar event
+                          </Button>
+                        </div>
+                      )}
+                    </Show>
+                  </>
                 }
                 revertOnCancel
                 onCancel={(wasDirty) => {
