@@ -86,9 +86,16 @@ describe('parseLocalReminderDateTime', () => {
   });
 
   it('accepts native time values with seconds and fractional seconds', () => {
-    expect(
-      parseLocalReminderDateTime('2026-09-22', '09:15:30.125')?.toISOString()
-    ).toBe('2026-09-22T09:15:30.125Z');
+    const originalTimezone = process.env.TZ;
+    process.env.TZ = 'UTC';
+    try {
+      expect(
+        parseLocalReminderDateTime('2026-09-22', '09:15:30.125')?.toISOString()
+      ).toBe('2026-09-22T09:15:30.125Z');
+    } finally {
+      if (originalTimezone === undefined) delete process.env.TZ;
+      else process.env.TZ = originalTimezone;
+    }
   });
 });
 
