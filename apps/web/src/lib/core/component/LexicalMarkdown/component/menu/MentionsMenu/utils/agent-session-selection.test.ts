@@ -1,7 +1,8 @@
 import type { LexicalEditor } from 'lexical';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@core/signal/mention', () => ({ trackMention: vi.fn() }));
+const { trackMention } = vi.hoisted(() => ({ trackMention: vi.fn() }));
+vi.mock('@core/signal/mention', () => ({ trackMention }));
 vi.mock('./entityUtils', () => ({ getBlockNameFromEntity: vi.fn(() => 'md') }));
 vi.mock('../../../../plugins', () => ({
   REMOVE_INLINE_SEARCH_COMMAND: 'remove-search',
@@ -41,6 +42,10 @@ const item: AgentSessionMentionItem = {
 };
 
 describe('agent session menu selection', () => {
+  beforeEach(() => {
+    trackMention.mockReset();
+  });
+
   it('inserts its own node without invoking user/document attachment callbacks', async () => {
     const dispatchCommand = vi.fn();
     const onDocumentMention = vi.fn();
@@ -62,6 +67,45 @@ describe('agent session menu selection', () => {
     });
     expect(onDocumentMention).not.toHaveBeenCalled();
     expect(onUserMention).not.toHaveBeenCalled();
+    expect(trackMention).not.toHaveBeenCalled();
+  });
+
+  it('records a document reference so the session lists the doc under References', async () => {
+    trackMention.mockResolvedValue('mention-uuid');
+    const dispatchCommand = vi.fn();
+    const handler = createItemHandler({
+      editor: { dispatchCommand } as unknown as LexicalEditor,
+      blockId: 'doc-1',
+      blockName: 'write',
+    });
+    await handler(item);
+    expect(trackMention).toHaveBeenCalledWith(
+      'doc-1',
+      'agent_session',
+      'session'
+    );
+    expect(dispatchCommand).toHaveBeenNthCalledWith(2, 'insert-session', {
+      id: 'session',
+      label: 'Fix mentions',
+      mentionUuid: 'mention-uuid',
+    });
+  });
+
+  it('does not track when the host is a channel or chat composer', async () => {
+    for (const blockName of ['channel', 'chat'] as const) {
+      const dispatchCommand = vi.fn();
+      const handler = createItemHandler({
+        editor: { dispatchCommand } as unknown as LexicalEditor,
+        blockId: 'host-1',
+        blockName,
+      });
+      await handler(item);
+      expect(trackMention).not.toHaveBeenCalled();
+      expect(dispatchCommand).toHaveBeenNthCalledWith(2, 'insert-session', {
+        id: 'session',
+        label: 'Fix mentions',
+      });
+    }
   });
   it('participates in the mobile search list', () => {
     expect(sortMobileMentions([item], 'Ada')).toEqual([item]);
