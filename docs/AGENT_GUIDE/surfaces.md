@@ -747,7 +747,8 @@ or Scheduled Call menu option. Quick Calls do not create calendar events.
 A failed link attachment keeps the composer open with a retry message; Save reuses
 the saved event and call instead of creating duplicates. The invitation includes
 the call link in its description and, when no location was entered, its location.
-Event details show `Join Macro call`, the URL, and `Copy call link`.
+Event details show a plain icon row with a standard gray `Join Macro call` button
+and `Copy call link`, without an enclosing border or the full URL.
 Editing or rescheduling an owned event retains and updates its call; an owned
 editable event without a call receives one on save. Deleting a calendar event
 does not revoke its reusable call link.

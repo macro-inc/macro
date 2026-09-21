@@ -584,46 +584,33 @@ export function EventDetails(props: {
 
       <Show when={conferenceUrl()}>
         {(url) => (
-          <div class="col-span-2 flex min-w-0 items-start gap-3 rounded-xl border border-edge-muted bg-surface p-3">
-            <VideoCameraIcon class="mt-1 size-5 shrink-0 text-ink-extra-muted sm:size-4" />
-            <div class="flex min-w-0 flex-1 flex-col gap-2">
-              <span class="text-sm font-medium text-ink">
-                {macroMeetingUrl() ? 'Macro call' : 'Video meeting'}
-              </span>
-              <div class="flex items-center gap-1.5">
-                <Button
-                  variant="cta"
-                  size="sm"
-                  class="h-8 min-w-0 flex-1 rounded-lg [&_svg]:size-3.5!"
-                  onClick={() => openExternalUrl(url())}
-                >
-                  {conferenceLabel()}
-                  <ArrowSquareOutIcon />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  class="shrink-0"
-                  label="Copy call link"
-                  onClick={async () => {
-                    if (await writeClipboardData({ 'text/plain': url() })) {
-                      toast.success('Call link copied');
-                    } else {
-                      toast.failure('Could not copy call link');
-                    }
-                  }}
-                >
-                  <CopyIcon class="size-3.5" />
-                </Button>
-              </div>
-              <Show when={macroMeetingUrl()}>
-                <span class="select-text break-all text-xs text-ink-extra-muted">
-                  {url()}
-                </span>
-                <p class="text-xs leading-relaxed text-ink-muted">
-                  Anyone with this link can join, including guests.
-                </p>
-              </Show>
+          <div class="contents">
+            <VideoCameraIcon class="mt-2 size-5 text-ink-extra-muted sm:size-4" />
+            <div class="flex min-w-0 items-center gap-1.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                class="h-8 min-w-0 rounded-lg bg-hover text-ink not-touch:not-disabled:hover:bg-active [&_svg]:size-3.5!"
+                onClick={() => openExternalUrl(url())}
+              >
+                {conferenceLabel()}
+                <ArrowSquareOutIcon />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                class="shrink-0"
+                label="Copy call link"
+                onClick={async () => {
+                  if (await writeClipboardData({ 'text/plain': url() })) {
+                    toast.success('Call link copied');
+                  } else {
+                    toast.failure('Could not copy call link');
+                  }
+                }}
+              >
+                <CopyIcon class="size-3.5" />
+              </Button>
             </div>
           </div>
         )}
