@@ -215,7 +215,7 @@ export function DriveList() {
     )
       return;
 
-    if (isTouchDevice() || panel.handle.isControllerSplit()) return;
+    if (isTouchDevice()) return;
 
     list.focus.first({ reason: 'restore' });
   });
@@ -399,9 +399,6 @@ export function DriveList() {
                                   checked={list.selection.isSelected(row.id)}
                                   onMouseMove={() => {
                                     if (isKeypressActive()) return;
-                                    if (panel.handle.isControllerSplit())
-                                      return;
-
                                     list.focus.set(row.id, { reason: 'hover' });
                                   }}
                                   onFilterByTag={(id) => state.setTags([id])}

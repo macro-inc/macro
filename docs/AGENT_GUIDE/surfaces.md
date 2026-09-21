@@ -600,6 +600,10 @@ and summaries appear here; empty state notes "Calls are available to agents."
 
 On phones, recorded call headers omit the **Call Again** action.
 
+A channel's `Calls` tab lists that channel's recordings with the same rows, filtered
+by the channel id. Its search field matches call names and transcripts in that
+channel.
+
 If a recording fails to play, reload the page to obtain a fresh recording link,
 or use **Open or download recording**. The playback warning does not assume
 that the failure is caused by an unsupported media format.
@@ -777,7 +781,7 @@ Workspace, and enabled agent/admin sections. Tap a row to open that settings
 page inside the sheet; **Back to settings** returns to the grouped list at its
 previous scroll position. **Close settings** at the top right, Escape, an
 outside tap, or a downward swipe dismisses the sheet. Opening Settings again
-starts at the main page; explicit links (for example Connections) open their
+starts at the main page; explicit links (for example Account) open their
 section directly. Existing settings URLs open the requested section in the sheet
 and restore the underlying app route. The header stays visible while forms
 scroll, including with the keyboard open. Desktop settings retain their panel
@@ -791,7 +795,7 @@ Workspace → `Team`, `Tags`, `CRM` (enable/disable; once enabled, a `Deal stage
 with `Customize stages`, inline rename, reorder by drag handle or arrow keys (up/down
 buttons on touch), delete, `Add stage`, `Reset to defaults`, and `Closed stages`
 checkboxes, editable by the role set as `edit_stages_role`),
-`Connections` (email/tool OAuth), `MCP server`
+`Integrations` (personal Gmail/GitHub accounts), `MCP server`
 (setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE), `Agents`, `Bots`, `Harness`;
 `Log out`.
 `Agents` lists team and private agents with `Create agent` / `Edit <name>` dialogs grouped
@@ -803,7 +807,8 @@ with a connected / not-connected dot for the *current viewer* plus an inline `Co
 that opens the Pipedream Connect flow inside the dialog. Unconnected picks never block
 saving; each teammate connects their own account. An agent session that calls a picked
 but unconnected app gets a tool result saying so, and the agent's reply renders a
-`Connect <app>` chip that opens Settings → Connections for that app.
+`Connect <app>` chip that opens Agents → Connections for that app. MCP integrations
+are managed on that page, rather than in Settings.
 `Back to app` returns to the previous surface. Open via user-email button menu or `Ctrl+;`.
 
 `Agents` → `Create agent` (or edit an existing agent) opens runtime selectors.
