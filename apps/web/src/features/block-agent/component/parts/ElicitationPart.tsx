@@ -6,9 +6,7 @@
  * connection, reads as "not answered" rather than offering a form the agent
  * is no longer waiting on. Resolved parts read back what was chosen.
  *
- * Only the session's owner can answer (the service refuses anyone else), so
- * another viewer sees the same live card with its controls disabled and the
- * owner named as the one it waits on.
+ * Editors can answer; viewers see the same live card with inert controls.
  *
  * The form, URL consent, and unrecognized-request controls are the
  * `LiveElicitation` ones the channel's Magic Chip shares; a Macro user tool
@@ -52,21 +50,36 @@ function outcomeLabel(part: ElicitationPartData): string {
     .exhaustive();
 }
 
-export function ElicitationPart(props: { part: ElicitationPartData }) {
-  const { elicitation, bot } = useAgentSession();
+export function ElicitationPart(props: {
+  part: ElicitationPartData;
+  turn: number;
+}) {
+  const { interactions, bot } = useAgentSession();
 
   // Live only while the metadata slot names this exact request.
   const live = () =>
     props.part.outcome.kind === 'pending' &&
-    elicitation.pending()?.requestId === props.part.requestId;
+    interactions
+      .pending()
+      .some(
+        (request) =>
+          request.kind === 'elicitation' &&
+          request.requestId === props.part.requestId &&
+          request.turn === props.turn
+      );
 
   const agentName = () => bot()?.name ?? 'The agent';
-  // Controls are inert for anyone without edit access. An answer in flight
-  // needs no lock of its own: the fold speculates it, so the card has
-  // already left its live state by the time the POST lands.
-  const locked = () => !elicitation.canAnswer();
+  const identity = () => ({
+    kind: 'elicitation' as const,
+    requestId: props.part.requestId,
+    turn: props.turn,
+  });
+  const locked = () =>
+    !interactions.canAnswer() || interactions.answering(identity());
+  const respond: RespondToElicitation = (answer) =>
+    interactions.respond({ ...identity(), answer });
   const waitingFor = () =>
-    elicitation.canAnswer() ? 'Waiting for you' : 'Waiting for an editor';
+    interactions.canAnswer() ? 'Waiting for you' : 'Waiting for an editor';
 
   return (
     <Show when={live()} fallback={<ResolvedElicitation part={props.part} />}>
@@ -78,7 +91,7 @@ export function ElicitationPart(props: { part: ElicitationPartData }) {
       >
         <div class="flex flex-col gap-3 py-1">
           <div class="text-sm text-ink">{props.part.message}</div>
-          <Show when={!elicitation.canAnswer()}>
+          <Show when={!interactions.canAnswer()}>
             <div class="text-xs text-ink-extra-muted">
               Only people who can edit this session can answer.
             </div>
@@ -89,7 +102,7 @@ export function ElicitationPart(props: { part: ElicitationPartData }) {
                 request={request}
                 toolCall={props.part.toolCall ?? String(props.part.requestId)}
                 locked={locked()}
-                onRespond={elicitation.respond}
+                onRespond={respond}
               />
             ))
             .with(
@@ -98,7 +111,7 @@ export function ElicitationPart(props: { part: ElicitationPartData }) {
                 <LiveQuestionCard
                   request={request}
                   locked={locked()}
-                  onRespond={elicitation.respond}
+                  onRespond={respond}
                 />
               )
             )
@@ -122,7 +135,7 @@ function LiveUserTool(props: {
   locked: boolean;
   onRespond: RespondToElicitation;
 }) {
-  const { elicitation } = useAgentSession();
+  const { interactions } = useAgentSession();
   const drafted = createMemo(() =>
     parseDraftedTool(props.request, props.toolCall)
   );
@@ -142,7 +155,7 @@ function LiveUserTool(props: {
           cancel
           fallback={fallback}
           review={{
-            canAnswer: elicitation.canAnswer,
+            canAnswer: () => interactions.canAnswer() && !props.locked,
             respond: props.onRespond,
           }}
         />

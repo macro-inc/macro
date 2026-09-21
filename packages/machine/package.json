@@ -1,0 +1,32 @@
+{
+  "name": "@macro-inc/machine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./solid": "./src/solid.ts"
+  },
+  "scripts": {
+    "lint": "biome check .",
+    "test": "vitest run --config vitest.config.ts",
+    "type-check": "tsc --noEmit --project tsconfig.json"
+  },
+  "peerDependencies": {
+    "solid-js": "^1.9.7"
+  },
+  "peerDependenciesMeta": {
+    "solid-js": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.12",
+    "@types/node": "^24.8.0",
+    "jsdom": "^26.1.0",
+    "solid-js": "^1.9.7",
+    "typescript": "^5.9.3",
+    "vite-plugin-solid": "^2.11.8",
+    "vitest": "5.0.1"
+  }
+}

@@ -16,7 +16,7 @@ use crate::domain::model::{
     AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreviewData,
     ClaimOutcome, CreateAgentSessionParams, ExternalSession, ManagerFence, Message, ReplicaAddress,
     ReplicaId, SandboxSize, SessionBot, SessionClaim, SessionManager, SessionPreviewCandidate,
-    SessionStatus, StoredAgentSessionLog, ThreadSession,
+    SessionStatus, StoredAgentSessionLog, ThreadSession, cursor_run_checkpoint,
 };
 use crate::domain::ports::{
     AgentSessionLogRepo, AgentSessionRepo, ExternalSessionRepo, REPLICA_STALE_AFTER,
@@ -108,31 +108,6 @@ fn parse_message(direction: &str, content: serde_json::Value) -> anyhow::Result<
         >(content)?)),
         other => anyhow::bail!("unknown agent_session_log direction {other:?}"),
     }
-}
-
-fn cursor_run_checkpoint(message: &Message) -> Option<String> {
-    let Message::ToServer(ToServerMessage::Acp(
-        agent_runtime_protocol::domain::schema::v0::AcpMessage(frame),
-    )) = message
-    else {
-        return None;
-    };
-    let value = serde_json::to_value(frame).ok()?;
-    if value.get("method")?.as_str()? != "session/update" {
-        return None;
-    }
-    let params = value.get("params")?;
-    let update = params.get("update")?;
-    if update.get("sessionUpdate")?.as_str()? != "agent_message_chunk"
-        || !update.get("content")?.get("text")?.as_str()?.is_empty()
-    {
-        return None;
-    }
-    params
-        .get("_meta")?
-        .get("macroCursorRunCheckpoint")?
-        .as_str()
-        .map(str::to_owned)
 }
 
 /// Record that `user_id` accessed the session in their history.
@@ -1130,6 +1105,112 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
         claim: &SessionClaim,
     ) -> Result<StoredAgentSessionLog> {
         self.create_fenced_with_boundary(log, claim, None).await
+    }
+
+    async fn create_batch_fenced(
+        &self,
+        entries: Vec<StoredAgentSessionLog>,
+        claim: &SessionClaim,
+    ) -> Result<Vec<StoredAgentSessionLog>> {
+        if entries.is_empty() {
+            return Ok(entries);
+        }
+        if entries
+            .iter()
+            .any(|stored| stored.entry.agent_session_id != claim.session)
+        {
+            return Err(AgentSessionError::FencedOut(claim.session));
+        }
+        let session = claim.session;
+
+        let mut ids = Vec::with_capacity(entries.len());
+        let mut user_ids: Vec<Option<String>> = Vec::with_capacity(entries.len());
+        let mut directions: Vec<String> = Vec::with_capacity(entries.len());
+        let mut contents = Vec::with_capacity(entries.len());
+        for stored in &entries {
+            let (direction, content) = message_columns(&stored.entry.content)?;
+            ids.push(stored.id);
+            user_ids.push(
+                stored
+                    .entry
+                    .user_id
+                    .as_ref()
+                    .map(|user_id| user_id.as_ref().to_owned()),
+            );
+            directions.push(direction.to_owned());
+            contents.push(content);
+        }
+
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .context("begin fenced agent session log batch create")?;
+
+        // Hold the session row through commit, as the single-frame write
+        // does: a takeover updates this same row, so it cannot supersede the
+        // claim between our check and the insert.
+        let locked_session = sqlx::query_scalar!(
+            r#"
+            SELECT id
+            FROM agent_session
+            WHERE id = $1 AND manager_replica_id = $2 AND manager_fence = $3
+            FOR UPDATE
+            "#,
+            session.as_uuid(),
+            claim.replica.as_uuid(),
+            claim.fence.0,
+        )
+        .fetch_optional(&mut *transaction)
+        .await
+        .context("lock fenced agent session for batch")?;
+        if locked_session.is_none() {
+            return Err(AgentSessionError::FencedOut(session));
+        }
+
+        // One transaction means one `now()`, so the batch is spread over
+        // consecutive microseconds in append order: readers order by
+        // `(created_at, id)`, and the ids are v7 without a monotonic
+        // counter, so same-instant rows would otherwise interleave.
+        let stamped = sqlx::query!(
+            r#"
+            INSERT INTO agent_session_log (id, agent_session_id, user_id, direction, content, created_at)
+            SELECT frame.id, $1, frame.user_id, frame.direction, frame.content,
+                   now() + (frame.ordinality - 1) * interval '1 microsecond'
+            FROM UNNEST($2::uuid[], $3::text[], $4::text[], $5::jsonb[])
+                WITH ORDINALITY AS frame(id, user_id, direction, content, ordinality)
+            RETURNING id, created_at
+            "#,
+            session.as_uuid(),
+            &ids,
+            &user_ids as &[Option<String>],
+            &directions,
+            &contents,
+        )
+        .fetch_all(&mut *transaction)
+        .await
+        .context("failed to create fenced agent session log batch")?;
+        transaction
+            .commit()
+            .await
+            .context("commit fenced agent session log batch create")?;
+
+        let stamps: std::collections::HashMap<Uuid, chrono::DateTime<chrono::Utc>> = stamped
+            .into_iter()
+            .map(|row| (row.id, row.created_at))
+            .collect();
+        entries
+            .into_iter()
+            .map(|stored| {
+                let created_at = stamps.get(&stored.id).copied().ok_or_else(|| {
+                    anyhow::anyhow!("batch insert returned no row for log entry {}", stored.id)
+                })?;
+                Ok(StoredAgentSessionLog {
+                    created_at,
+                    ..stored
+                })
+            })
+            .collect()
     }
 
     async fn create_fenced_with_boundary(

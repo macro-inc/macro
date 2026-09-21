@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO webhook (\n            id,\n            workspace_id,\n            namespace,\n            name,\n            endpoint_url,\n            signing_secret,\n            headers,\n            filters,\n            status,\n            is_valid,\n            created_by_user_id,\n            deleted_at\n        )\n        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true, $10, $11)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Jsonb",
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c46e24f291443a9a4ef367198bb899bc5e427aa314c2e8ff7e8472509b07e478"
+}

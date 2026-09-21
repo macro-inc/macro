@@ -26,20 +26,23 @@ import {
   onMount,
   Show,
 } from 'solid-js';
+import { usePdfComments } from '../context/pdf-comments-context';
 import { usePdfDocument } from '../context/pdf-document-context';
+import { usePdfViewer } from '../context/pdf-viewer-context';
 import type { IColor } from '../model/Color';
 import { Highlight, HighlightType } from '../model/Highlight';
 import { PageModel } from '../model/Page';
 import type Term from '../model/Term';
+import {
+  usePopupContextUpdate,
+  usePopupStore,
+} from '../signal/definitionPopup';
 import { LocationType, useCreateShareUrl } from '../signal/location';
 import { useIsPopup } from '../signal/pdfViewer';
-import { usePopupContextUpdate, usePopupStore } from '../store/definitionPopup';
 import { useAddNewHighlights, useRemoveHighlight } from '../store/highlight';
-import { useGetIdToSectionMap } from '../store/tableOfContents';
 import TocUtils from '../util/TocUtils';
 import { AbsoluteDefinitionLookups } from './AbsoluteDefinitionLookups';
 import { Placeable } from './Placeable';
-import { RightMarginLayout } from './RightMarginLayout';
 import { UserHighlight, useResetUserHighlights } from './UserHighlight';
 
 export interface IPageOverlayProps {
@@ -55,18 +58,18 @@ export interface IHighlightObj {
   height: number;
   color: IColor;
   threadId: number | null;
-  highlightId: string; // uuid of the highlight that contains this rect
-  rectId: string; // unique identifier of this rect
+  highlightId: string;
+  rectId: string;
   text?: string;
   isActive: boolean;
 }
 
-// This is where all the page-specifc overlays should reside, like placeables, etc.
 export function PageOverlay(props: IPageOverlayProps) {
   const analytics = useAnalytics();
 
   const pdf = usePdfDocument();
-  const { signals, stores, derived } = pdf.state;
+  const pdfViewer = usePdfViewer();
+  const comments = usePdfComments();
   let pageOverlayRef!: HTMLDivElement;
   const pageViewDivProp = () => props.pageViewDiv;
 
@@ -74,10 +77,9 @@ export function PageOverlay(props: IPageOverlayProps) {
   const commentAccess = pdf.permissions.canComment;
   const isDocumentOwner = pdf.permissions.isOwner;
 
-  const [mode, setMode] = signals.placeableMode;
-  const getPopupViewer = signals.popupViewer[0];
-  const getRootViewer = signals.rootViewer[0];
-  const getIdToSectionMap = useGetIdToSectionMap();
+  const mode = pdf.markup.mode;
+  const getPopupViewer = pdfViewer.popup.instance;
+  const getRootViewer = pdfViewer.root.instance;
   const isPopup = useIsPopup();
   const popupDispatchCtx = usePopupContextUpdate(isPopup);
   const popupTerms = usePopupStore(isPopup).terms;
@@ -85,13 +87,12 @@ export function PageOverlay(props: IPageOverlayProps) {
   const isAuth = useIsAuthenticated();
   const createPlaceable = useCreatePlaceable();
   const commentPlaceables = useCommentPlaceables();
-  const disableOverlayClick = signals.disableOverlayClick[0];
-  const setActiveThreadId = signals.activeCommentThread[1];
-  const disablePageViewClick = signals.disablePageViewClick[0];
-  const termDataStore = pdf.state.termDataStore;
+  const overlayClicksDisabled = () =>
+    mode() !== PayloadMode.NoMode || pdfViewer.textSelectionActive();
+  const pageClicksDisabled = pdfViewer.pageClicksDisabled;
 
   const onClick = (e: MouseEvent) => {
-    if (disablePageViewClick()) return;
+    if (pageClicksDisabled()) return;
 
     if (mode() !== PayloadMode.NoMode) {
       return;
@@ -105,7 +106,6 @@ export function PageOverlay(props: IPageOverlayProps) {
     const defID = parent?.getAttribute('defid');
 
     if (defID) {
-      // display definition for term
       const tokenID = tgt.getAttribute('id');
 
       if (!tokenID) {
@@ -120,7 +120,7 @@ export function PageOverlay(props: IPageOverlayProps) {
         return;
       }
 
-      const term = termDataStore?.get(defID);
+      const term = pdf.definitions.getTerm(defID);
 
       if (!term) {
         console.error('Term not found on click');
@@ -141,11 +141,10 @@ export function PageOverlay(props: IPageOverlayProps) {
       });
       analytics.track('block_pdf_definition_open');
     } else if (secID) {
-      // display section popup
       e.stopPropagation();
 
       const secIDNumber = parseInt(secID);
-      const idToSectionMap = getIdToSectionMap();
+      const idToSectionMap = pdf.outline.sectionReferenceMap();
       const { page, y } = TocUtils.getSection({
         id: secIDNumber,
         idToSectionMap,
@@ -188,7 +187,6 @@ export function PageOverlay(props: IPageOverlayProps) {
   });
 
   const onKeyDown = (e: KeyboardEvent) => {
-    // Ignore custom handling if editing inside a text placeable
     if (
       document.activeElement &&
       (document.activeElement.tagName === 'TEXTAREA' ||
@@ -197,7 +195,6 @@ export function PageOverlay(props: IPageOverlayProps) {
       return;
     }
     const browser = detect();
-    // Handle copy/cut here since clipboard event listeners are blocked with some placeable types
     if (
       e.key === 'c' &&
       ((browser?.os !== 'Mac OS' && e.ctrlKey) ||
@@ -241,7 +238,7 @@ export function PageOverlay(props: IPageOverlayProps) {
     });
   });
 
-  const disableSelect = signals.disableViewerTextSelection[0];
+  const disableSelect = () => comments.selectedThreadId() != null;
   createEffect(() => {
     const pageViewDiv = pageViewDivProp();
     if (!pageViewDiv) return;
@@ -254,10 +251,10 @@ export function PageOverlay(props: IPageOverlayProps) {
 
   onMount(() => {
     const resetMode = (_e: MouseEvent) => {
-      setActiveThreadId(null);
-      setMode(PayloadMode.NoMode);
+      comments.clearActiveThread();
+      pdf.markup.commands.cancelPlacement();
     };
-    const el = pdf.rootElement();
+    const el = pdfViewer.rootElement();
     if (!el) return;
     el.addEventListener('click', resetMode);
     onCleanup(() => el.removeEventListener('click', resetMode));
@@ -276,15 +273,14 @@ export function PageOverlay(props: IPageOverlayProps) {
     return textModes.includes(mode) ? 'pointer' : 'text';
   };
 
-  const [selectionStoreValue, setSelectionStore] = stores.selection;
+  const annotationSelection = pdf.annotationSelection;
 
   const addNewHighlights = useAddNewHighlights();
   const doEdit = useDoEdit();
-  const setActiveHighlightId = signals.activeHighlight[1];
   const currentPageViewport = () => {
-    const pageNumber = isPopup
-      ? derived.popupCurrentPageNumber()
-      : derived.currentPageNumber();
+    const pageNumber = (
+      isPopup ? pdfViewer.popup : pdfViewer.root
+    ).currentPageNumber();
     const viewer = isPopup ? getPopupViewer() : getRootViewer();
     return (
       viewer?.pageViewport(pageNumber - 1) ?? {
@@ -295,10 +291,11 @@ export function PageOverlay(props: IPageOverlayProps) {
   };
 
   const addHighlight = () => {
-    if (!selectionStoreValue.selection) return;
+    const nativeSelection = annotationSelection().nativeSelection;
+    if (!nativeSelection) return;
 
     const highlights = getHighlightsFromSelection(
-      selectionStoreValue.selection,
+      nativeSelection,
       null,
       undefined,
       null,
@@ -316,26 +313,27 @@ export function PageOverlay(props: IPageOverlayProps) {
     batch(() => {
       setTimeout(doEdit);
       addNewHighlights(highlightsUnderSelection);
-      setSelectionStore('highlightsUnderSelection', highlightsUnderSelection);
+      pdf.replaceSelectedHighlights(highlightsUnderSelection);
 
       const selection = highlightsUnderSelection.at(0);
       if (!selection) return;
 
-      setActiveHighlightId(selection.uuid);
+      pdf.activateHighlight(selection.uuid);
     });
   };
 
   const removeHighlight = useRemoveHighlight();
 
   const removeCurrentHighlight = () => {
-    if (selectionStoreValue.highlightsUnderSelection.length < 1) return;
+    const selectedHighlights = annotationSelection().selectedHighlights;
+    if (selectedHighlights.length < 1) return;
 
     batch(() => {
       setTimeout(doEdit);
-      selectionStoreValue.highlightsUnderSelection.forEach((h) =>
-        removeHighlight(h.uuid)
+      selectedHighlights.forEach((highlight) =>
+        removeHighlight(highlight.uuid)
       );
-      setSelectionStore('highlightsUnderSelection', []);
+      pdf.replaceSelectedHighlights([]);
     });
   };
 
@@ -344,7 +342,7 @@ export function PageOverlay(props: IPageOverlayProps) {
     useCreateHighlightCommentAtSelection();
 
   const commentProps = createMemo(() => {
-    const currentHighlight = selectionStoreValue.highlightsUnderSelection.at(0);
+    const currentHighlight = annotationSelection().selectedHighlights.at(0);
     const uuid = currentHighlight?.uuid;
     // Although the user can technically take ownership of a highlight
     // when making a comment, deleting the highlight-comment will remove the highlight
@@ -364,7 +362,7 @@ export function PageOverlay(props: IPageOverlayProps) {
   });
 
   const highlightProps = createMemo(() => {
-    const currentHighlight = selectionStoreValue.highlightsUnderSelection.at(0);
+    const currentHighlight = annotationSelection().selectedHighlights.at(0);
     const uuid = currentHighlight?.uuid;
     const canEdit =
       isDocumentOwner() || (!!uuid && ownedHighlightSelector(uuid));
@@ -392,31 +390,26 @@ export function PageOverlay(props: IPageOverlayProps) {
     },
   });
 
-  const aiProps = {
-    attachmentId: pdf.documentId(),
-  };
-
-  const newPlaceable = signals.newPlaceable[0];
-  const newPlaceableId = () => newPlaceable()?.internalId;
-  const isNewPlaceableSelector = createSelector(newPlaceableId);
-  const activePlaceableId = signals.activePlaceableId[0];
-  const isActivePlaceableSelector = createSelector(activePlaceableId);
+  const draft = pdf.markup.draft;
+  const draftId = () => draft()?.internalId;
+  const isNewPlaceableSelector = createSelector(draftId);
+  const activeId = pdf.markup.activeId;
+  const isActivePlaceableSelector = createSelector(activeId);
   const ownedCommentSelector = useOwnedCommentPlaceableSelector();
 
   const showPopup = createMemo(() => {
     const shouldshow =
-      !isPopup && !derived.popupOpen() && !!signals.generalPopupLocation[0]();
-    if (!shouldshow) {
-      signals.popupSelectedText[1](undefined);
-      signals.popupCompletion[1](undefined);
-    }
+      !isPopup && !pdfViewer.isPopupOpen() && !!pdf.selectionMenuLocation();
     return shouldshow;
   });
 
   return (
     <div
       ref={pageOverlayRef}
-      class={cn('pageOverlayInner', disableOverlayClick() && 'noClickOverlay')}
+      class={cn(
+        'pageOverlayInner',
+        overlayClicksDisabled() && 'noClickOverlay'
+      )}
       on:click={(e) => {
         if (mode() !== PayloadMode.NoMode) {
           createPlaceable(e);
@@ -432,15 +425,14 @@ export function PageOverlay(props: IPageOverlayProps) {
         }}
         class="bg-transparent top-0 left-0 absolute"
       >
-        <Show when={showPopup() && signals.generalPopupLocation[0]()}>
-          {(generalPopupLocation) => (
-            <Show when={generalPopupLocation().pageIndex === props.pageIndex}>
+        <Show when={showPopup() && pdf.selectionMenuLocation()}>
+          {(selectionMenuLocation) => (
+            <Show when={selectionMenuLocation().pageIndex === props.pageIndex}>
               <PDFPopup
                 commentProps={commentProps()}
                 highlightProps={highlightProps()}
                 shareLinkProps={shareLinkProps()}
-                anchorRef={/*@once*/ generalPopupLocation().element}
-                aiProps={aiProps}
+                anchorRef={/*@once*/ selectionMenuLocation().element}
               />
             </Show>
           )}
@@ -455,7 +447,9 @@ export function PageOverlay(props: IPageOverlayProps) {
         }}
         class="bg-transparent top-0 left-0 absolute"
       >
-        {terms().length > 0 && <AbsoluteDefinitionLookups terms={terms()} />}
+        <Show when={terms().length > 0}>
+          <AbsoluteDefinitionLookups terms={terms()} />
+        </Show>
       </div>
       <div
         style={{
@@ -479,7 +473,7 @@ export function PageOverlay(props: IPageOverlayProps) {
           class="top-0 left-0 absolute bg-transparent"
           inert={pdf.isNested()}
         >
-          <For each={stores.modificationData[0].placeables}>
+          <For each={pdf.model.modificationData.placeables}>
             {(placeable) => {
               return (
                 <Show
@@ -523,9 +517,6 @@ export function PageOverlay(props: IPageOverlayProps) {
           </For>
         </div>
       </div>
-      <Show when={!isPopup}>
-        <RightMarginLayout pageNumber={props.pageIndex} />
-      </Show>
     </div>
   );
 }
@@ -534,17 +525,18 @@ function UserHighlightNodes(props: {
   pageIndex: number;
   viewport: PageViewport;
 }) {
-  const { signals, stores } = usePdfDocument().state;
+  const pdf = usePdfDocument();
+  const comments = usePdfComments();
   const thisPageHighlights = createMemo(() =>
-    Object.values(stores.highlights[0][props.pageIndex] ?? {}).filter(
-      (h) => !!h
-    )
+    Object.values(
+      pdf.annotations.highlightsByPage[props.pageIndex] ?? {}
+    ).filter((h) => !!h)
   );
 
   const viewportHeight = createMemo(() => props.viewport.height);
   const viewportWidth = createMemo(() => props.viewport.width);
-  const isActiveHighlightSelector = createSelector(signals.activeHighlight[0]);
-  const isActiveThreadSelector = createSelector(signals.activeCommentThread[0]);
+  const isActiveHighlightSelector = createSelector(pdf.activeHighlightId);
+  const isActiveThreadSelector = createSelector(comments.activeThreadId);
 
   return (
     <For each={thisPageHighlights()}>

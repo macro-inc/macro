@@ -602,6 +602,49 @@ impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
         self.create_fenced_with_boundary(log, claim, None).await
     }
 
+    async fn create_batch_fenced(
+        &self,
+        entries: Vec<StoredAgentSessionLog>,
+        claim: &SessionClaim,
+    ) -> Result<Vec<StoredAgentSessionLog>> {
+        if entries.is_empty() {
+            return Ok(entries);
+        }
+        if entries
+            .iter()
+            .any(|stored| stored.entry.agent_session_id != claim.session)
+        {
+            return Err(AgentSessionError::FencedOut(claim.session));
+        }
+        let _transaction = self.log_transaction.lock().unwrap();
+        let session = claim.session;
+        {
+            let leases = self.leases.lock().unwrap();
+            if !matches!(
+                leases.get(&session), Some((holder, fence))
+                    if *holder == Some(claim.replica) && *fence == claim.fence.0
+            ) || !self.sessions.lock().unwrap().contains_key(&session)
+            {
+                return Err(AgentSessionError::FencedOut(session));
+            }
+        }
+        // Consecutive microseconds from one instant, as the Postgres store
+        // does, so a batch orders by `(created_at, id)` in append order.
+        let now = chrono::Utc::now();
+        let mut stored_entries = Vec::with_capacity(entries.len());
+        for (index, stored) in entries.into_iter().enumerate() {
+            let mut created = self.create_log(stored.entry)?;
+            created.id = stored.id;
+            created.created_at = now + chrono::Duration::microseconds(index as i64);
+            let mut logs = self.logs.lock().unwrap();
+            let rows = logs.get_mut(&session).expect("create_log inserted the row");
+            let row = rows.last_mut().expect("create_log inserted the row");
+            *row = created.clone();
+            stored_entries.push(created);
+        }
+        Ok(stored_entries)
+    }
+
     async fn create_fenced_with_boundary(
         &self,
         log: AgentSessionLog,

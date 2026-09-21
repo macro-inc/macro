@@ -287,6 +287,28 @@ async fn a_reloaded_session_re_announces_the_same_artifacts() {
 }
 
 #[tokio::test]
+async fn a_txt_artifact_arrives_as_a_fenced_code_block() {
+    let harness = harness();
+    harness
+        .cursor
+        .script_artifact_listing(vec![listing("artifacts/notes.txt", "t1", 12)]);
+    harness
+        .cursor
+        .script_artifact_body("artifacts/notes.txt", Some("text/plain"), b"hello\nworld");
+    let session = harness.service.new_session(Path::new(""), Vec::new());
+
+    turn(&harness, &session, "run-fake-1", "done").await;
+
+    assert_eq!(
+        chunks(&harness.notifier),
+        vec![
+            "done".to_owned(),
+            "\n\n```txt\nhello\nworld\n```".to_owned(),
+        ]
+    );
+}
+
+#[tokio::test]
 async fn a_session_without_a_store_never_lists_artifacts() {
     let cursor = FakeCursor::new();
     let notifier = RecordingNotifier::new();

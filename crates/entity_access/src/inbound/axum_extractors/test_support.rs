@@ -174,18 +174,11 @@ impl EntityAccessService for FakeEntityAccessService {
         entity_type: EntityType,
         _user_org_id: Option<i64>,
     ) -> Result<EntityPermission, AccessError> {
-        self.calls
-            .lock()
-            .expect("calls lock poisoned")
-            .push(AccessCall {
-                user_id: user_id.map(|user_id| user_id.as_ref().to_string()),
-                entity_id: entity_id.to_string(),
-                entity_type,
-            });
-
-        self.access_level
-            .map(|access_level| EntityPermission::AccessLevel { access_level })
-            .ok_or(AccessError::Unauthorized)
+        let access_level = self
+            .get_access_level(user_id, entity_id, entity_type)
+            .await?
+            .ok_or(AccessError::Unauthorized)?;
+        Ok(EntityPermission::AccessLevel { access_level })
     }
 
     async fn get_crm_entity_permission_with_team(

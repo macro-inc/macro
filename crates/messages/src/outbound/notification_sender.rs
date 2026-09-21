@@ -9,6 +9,7 @@ use model_notifications::{
     CommentedOnDocumentMetadata, MentionedInDocumentCommentMetadata, NotificationDocumentSubType,
     RepliedToDocumentCommentThreadMetadata,
 };
+use model_owner::Owner;
 use notification::domain::{models::SendNotificationRequestBuilder, service::NotificationIngress};
 
 /// Uses notification ingress with the existing document comment type names.
@@ -54,7 +55,7 @@ impl<N: NotificationIngress> DiscussionNotifier for MessageNotificationSender<N>
                     .await?
             };
         }
-        let owner = MacroUserIdStr::try_from(n.context.owner.clone())?;
+        let owner = Owner::from_principal_str(&n.context.owner)?;
         let sub_type = n
             .context
             .is_task

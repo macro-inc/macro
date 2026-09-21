@@ -9,6 +9,7 @@ fn the_example_config_parses() {
     assert_eq!(config.harness.args, vec!["acp"]);
     assert_eq!(config.identity.name.as_deref(), Some("erics-macbook"));
     assert_eq!(config.identity.scope, IdentityScope::Private);
+    assert!(!config.identity.allow_permission_bypass);
     assert_eq!(config.credentials, None);
 }
 
@@ -25,6 +26,7 @@ fn embedded_credentials_parse_with_their_approved_scope() {
     assert_eq!(credentials.scope, HarnessScope::Team);
     assert!(credentials.is_valid());
     assert_eq!(config.identity.scope, IdentityScope::Private);
+    assert!(!config.identity.allow_permission_bypass);
 }
 
 #[test]
@@ -68,6 +70,7 @@ fn identity_args_and_web_url_default() {
     let trimmed = EXAMPLE
         .replace("args = [\"acp\"]\n", "")
         .replace("[identity]\n", "")
+        .replace("allow_permission_bypass = false\n", "")
         .replace("name = \"erics-macbook\"\n", "")
         .replace("scope = \"private\"\n", "")
         .replace("web_url = \"http://localhost:3000/app\"\n", "");
@@ -75,6 +78,7 @@ fn identity_args_and_web_url_default() {
     assert!(config.harness.args.is_empty());
     assert_eq!(config.identity.name, None);
     assert_eq!(config.identity.scope, IdentityScope::Private);
+    assert!(!config.identity.allow_permission_bypass);
     assert_eq!(config.macro_api.web_url, "https://macro.com/app");
 }
 

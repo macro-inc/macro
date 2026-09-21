@@ -32,6 +32,7 @@ use model::{
         response::GetProjectResponseData,
     },
 };
+use model_owner::Owner;
 use model_user::UserContext;
 use models_bulk_upload::{UploadExtractFolderRequest, UploadExtractFolderResponseData};
 use models_permissions::share_permission::{
@@ -66,7 +67,7 @@ impl FakeProjectService {
         Self {
             basic_project: Arc::new(Mutex::new(Ok(BasicProject {
                 id: PROJECT_ID.to_string(),
-                user_id: user_id(owner),
+                user_id: Owner::from_principal_str(owner).expect("owner id should be valid"),
                 parent_id: None,
                 name: "Project".to_string(),
                 deleted_at: deleted.then(chrono::Utc::now),
@@ -405,10 +406,6 @@ fn router(service: FakeProjectService, access_level: Option<AccessLevel>) -> Rou
     )
 }
 
-fn user_id(value: &str) -> MacroUserIdStr<'static> {
-    MacroUserIdStr::try_from(value.to_string()).expect("test user id should be valid")
-}
-
 fn user_context(value: &str) -> UserContext {
     UserContext {
         user_id: value.to_string(),
@@ -422,7 +419,7 @@ fn project() -> Project {
     Project {
         id: PROJECT_ID.to_string(),
         name: "Project".to_string(),
-        user_id: USER_ID.to_string(),
+        user_id: Owner::from_principal_str(USER_ID).expect("user id should be valid"),
         parent_id: None,
         created_at: None,
         updated_at: None,

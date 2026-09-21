@@ -134,7 +134,8 @@ type CompleteMutationRoot {
 }
 
 """
-Root subscription object combining realtime Soup and notification adapters.
+Root subscription object combining realtime Soup, notification, and
+activity adapters.
 """
 type CompleteSubscriptionRoot {
 	"""
@@ -145,6 +146,10 @@ type CompleteSubscriptionRoot {
 	Subscribe to realtime notifications for the authenticated user.
 	"""
 	notificationUpdates: GraphqlNotificationPatch!
+	"""
+	Subscribe to realtime activity for the authenticated user.
+	"""
+	activityUpdates: GraphqlActivityPatch!
 }
 
 """
@@ -386,6 +391,16 @@ type GraphqlActivityEvent {
 }
 
 """
+A content-free signal to refresh activity through authorized queries.
+"""
+type GraphqlActivityInvalidation {
+	"""
+	True when mounted activity queries need a fresh read.
+	"""
+	refresh: Boolean!
+}
+
+"""
 A message was sent in the entity.
 """
 type GraphqlActivityMessaged {
@@ -471,6 +486,11 @@ type GraphqlActivityParticipantRemoved {
 	"""
 	participant: String!
 }
+
+"""
+Realtime activity patch: a recorded event or a purge invalidation.
+"""
+union GraphqlActivityPatch = GraphqlActivityEvent | GraphqlActivityInvalidation
 
 """
 A property value changed on the entity.

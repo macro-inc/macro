@@ -1,6 +1,6 @@
 //! The machine's vocabulary: phases, inputs, and effects.
 
-use agent_client_protocol::schema::v1::{RequestId, SessionId};
+use agent_client_protocol::schema::v1::{PermissionOptionId, RequestId, SessionId};
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -17,6 +17,28 @@ pub(super) struct PendingAction<Token> {
     pub(super) token: Token,
 }
 
+/// How a connection answers the agent's `session/request_permission`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PermissionPolicy {
+    /// Approve the broadest allow option the moment the request arrives.
+    /// Right for runtimes in sandboxes this deployment owns, where nothing
+    /// the agent can touch is anyone's real machine.
+    AutoAccept,
+    /// Hold the request open until a user answers it through the control
+    /// endpoint. The turn blocks meanwhile, which is the point.
+    #[default]
+    Prompt,
+}
+
+/// A permission request the agent is waiting on, under
+/// [`PermissionPolicy::Prompt`].
+#[derive(Debug)]
+pub(super) struct OutstandingPermission {
+    /// The choices the agent offered; an answer naming anything else is
+    /// refused rather than forwarded.
+    pub(super) options: Vec<PermissionOptionId>,
+}
+
 pub(super) enum SessionPhase {
     /// The runtime has not reported its agent ready. Nothing may go out.
     Booting,
@@ -31,6 +53,12 @@ pub(super) enum SessionPhase {
         request_id: RequestId,
         /// How this connection is establishing its ACP session.
         kind: SessionOpening,
+    },
+    /// The ACP session exists, but its configured model must be acknowledged first.
+    ConfiguringModel {
+        request_id: RequestId,
+        session_id: SessionId,
+        model: String,
     },
     Live {
         session_id: SessionId,
@@ -268,6 +296,23 @@ pub enum StopReason {
     /// The agent answered `session/new` with something unintelligible; the
     /// detail is the parser's.
     SessionUnintelligible(String),
+    /// The runtime refused or did not confirm the configured starting model.
+    ModelNotSelected(String),
+}
+
+impl StopReason {
+    /// Whether the runtime can still be reached when the machine stops for
+    /// this reason - true for every death except the transport's own.
+    pub(super) fn transport_is_up(&self) -> bool {
+        !matches!(
+            self,
+            Self::Closed(
+                CloseReason::TransportClosed
+                    | CloseReason::TransportFailed
+                    | CloseReason::SendFailed
+            )
+        )
+    }
 }
 
 impl std::fmt::Display for StopReason {
@@ -295,6 +340,12 @@ impl std::fmt::Display for StopReason {
                 write!(
                     formatter,
                     "the agent answered session/new unintelligibly: {detail}"
+                )
+            }
+            Self::ModelNotSelected(model) => {
+                write!(
+                    formatter,
+                    "the agent did not select the configured model {model}"
                 )
             }
         }

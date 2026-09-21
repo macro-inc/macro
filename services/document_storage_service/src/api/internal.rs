@@ -141,6 +141,16 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             ),
         )
         .route(
+            "/documents/{document_id}/sync-content-updated",
+            post(
+                documents_hex::inbound::axum_router::sync_content_updated::sync_content_updated_handler::<
+                    DocumentService,
+                    EntityAccessService,
+                    AuthorizationService,
+                >,
+            ),
+        )
+        .route(
             "/documents/{document_id}/interaction",
             put(
                 documents_hex::inbound::axum_router::put_interaction::put_interaction_handler::<

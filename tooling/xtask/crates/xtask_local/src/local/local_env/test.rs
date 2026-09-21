@@ -26,6 +26,7 @@ fn emits_required_keys() {
         "REDIS_URI",
         "OPENSEARCH_URL",
         "LOCAL_AWS_URL",
+        "LOCAL_AWS_PUBLIC_URL",
         "AWS_ACCESS_KEY_ID",
         "STATIC_STORAGE_BUCKET",
         "CONNECTION_GATEWAY_TABLE",
@@ -417,4 +418,15 @@ fn the_public_tunnel_overrides_the_egress_service_url() {
         Some(url)
     );
     assert!(!env.contains_key("EGRESS_BASE_URL"));
+}
+
+#[test]
+fn named_instance_separates_browser_and_container_aws_endpoints() {
+    let instance = Instance::derive(Some("image"), None).expect("named instance derives");
+    let env = LocalEnv::for_instance(Mode::Local, &instance, false, None).to_env();
+    assert_eq!(env["LOCAL_AWS_URL"], "http://localstack:4566");
+    assert_eq!(
+        env["LOCAL_AWS_PUBLIC_URL"],
+        format!("http://localhost:{}", instance.port(Port::LocalStack))
+    );
 }

@@ -119,14 +119,14 @@ just test-no-alarm
 when making a new deploy you need to make a cloudflare KV store
 and D1 database 
 
-### Atomic spreadsheet updates
+### Atomic document updates
 
-`GET /document/:id/spreadsheet-snapshot` returns JSON `{snapshot, revision}`.
+`GET /document/:id/state` returns JSON `{snapshot, revision}`.
 Both fields use standard base64: `snapshot` is a full Loro snapshot and `revision`
 is an encoded Loro version vector from that same state. Requests require a signed
 Bearer document permission token. An internal API key does not replace this token.
 
-`POST /document/:id/spreadsheet-update` accepts JSON
+`POST /document/:id/update` accepts JSON
 `{expectedRevision, update}`, where `update` is a base64 Loro update exported from
 the snapshot revision. Edit or owner access is required; viewers can read only.
 The service validates a disposable fork, compares the current revision, and
@@ -135,9 +135,22 @@ operation log and broadcast pipeline. It returns `{revision, applied}` only afte
 persistence. A stale revision returns 409 without applying changes. Retrying a
 fully applied delta succeeds with `applied: false`, even after intervening edits.
 
-Only native spreadsheets (`spreadsheetMeta.formatVersion = 1`) and their known
-scalar maps are accepted. Unsupported roots, nested data, invalid cells/styles,
-missing dependencies, and snapshot bodies are rejected. Binary updates and read
-snapshots are limited to 4 MiB, revisions to 64 KiB, and HTTP bodies are bounded
-while streaming. Signed actor/user attribution is bounded and stored beside the
-existing operation log; request bodies cannot specify attribution.
+Sync accepts arbitrary Loro document schemas. It validates the update encoding,
+operation/byte limits and causal dependencies, but does not interpret cells,
+styles, sheet names or document content types. Spreadsheet validation and
+operations live in `packages/spreadsheet` and the backend AI editing worker.
+Binary updates and read snapshots are limited to 4 MiB, revisions to 64 KiB,
+and HTTP bodies are bounded while streaming. Signed actor/user attribution is
+bounded and stored beside the existing operation log; request bodies cannot
+specify attribution.
+
+The existing binary `/snapshot` endpoint is unchanged.
+
+Content notifications go to DSS's internal
+`POST /internal/documents/:id/sync-content-updated` endpoint. The documents domain
+loads the stored file type and publishes `document.sync_content_updated`, which
+lets search choose its supported extractor. Sync no longer infers Markdown from
+CRDT roots or labels updates as Markdown. The `search-service` feature continues
+to control these notifications for compatibility with existing build commands.
+
+Deploy DSS first, then roll out Sync and the AI editing worker together.

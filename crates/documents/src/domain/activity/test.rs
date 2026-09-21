@@ -13,6 +13,7 @@ use crate::domain::events::{
     DocumentInteractionMetadata, DocumentPurgedMetadata, DocumentSyncContentUpdatedMetadata,
     DocumentUpdatedMetadata, InteractionReason,
 };
+use model_owner::Owner;
 
 const DOCUMENT_ID: &str = "11111111-1111-1111-1111-111111111111";
 
@@ -39,7 +40,7 @@ fn created_maps_to_a_created_activity_with_the_metadata_timestamp() {
     let created_at = Utc.with_ymd_and_hms(2026, 8, 5, 12, 0, 0).unwrap();
     let event = envelope(DocumentTopicEvent::Created(DocumentCreatedMetadata {
         document_id: DOCUMENT_ID.to_string(),
-        owner: user("macro|creator@example.com"),
+        owner: Owner::from_principal_str("macro|creator@example.com").unwrap(),
         actor: None,
         on_behalf_of: None,
         document_name: "spec".to_string(),
@@ -63,7 +64,7 @@ fn created_maps_to_a_created_activity_with_the_metadata_timestamp() {
 fn created_with_system_actor_is_not_the_owner_subject() {
     let event = envelope(DocumentTopicEvent::Created(DocumentCreatedMetadata {
         document_id: DOCUMENT_ID.to_string(),
-        owner: user("macro|owner@example.com"),
+        owner: Owner::from_principal_str("macro|owner@example.com").unwrap(),
         actor: Some(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID)),
         on_behalf_of: None,
         document_name: "invoice".to_string(),
@@ -89,7 +90,7 @@ fn created_with_system_actor_is_not_the_owner_subject() {
 fn created_on_behalf_of_the_owner_stays_on_their_feed() {
     let event = envelope(DocumentTopicEvent::Created(DocumentCreatedMetadata {
         document_id: DOCUMENT_ID.to_string(),
-        owner: user("macro|owner@example.com"),
+        owner: Owner::from_principal_str("macro|owner@example.com").unwrap(),
         actor: Some(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID)),
         on_behalf_of: Some(user("macro|owner@example.com")),
         document_name: "welcome".to_string(),
@@ -111,7 +112,7 @@ fn created_on_behalf_of_the_owner_stays_on_their_feed() {
 fn attributed_update_and_delete_map_to_activities() {
     let updated = envelope(DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
         document_id: DOCUMENT_ID.to_string(),
-        owner: user("macro|owner@example.com"),
+        owner: Owner::from_principal_str("macro|owner@example.com").unwrap(),
         actor_user_id: Some(user("macro|editor@example.com")),
         actor: None,
         on_behalf_of: None,
@@ -140,7 +141,7 @@ fn attributed_update_and_delete_map_to_activities() {
 fn delegated_update_stays_on_the_user_feed() {
     let updated = envelope(DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
         document_id: DOCUMENT_ID.to_string(),
-        owner: user("macro|owner@example.com"),
+        owner: Owner::from_principal_str("macro|owner@example.com").unwrap(),
         actor_user_id: None,
         actor: Some(Actor::new_from_bot(bot_id::MACRO_AI_BOT_ID)),
         on_behalf_of: Some(user("macro|owner@example.com")),
@@ -163,7 +164,7 @@ fn delegated_update_stays_on_the_user_feed() {
 fn unattributable_mutations_are_dropped() {
     let updated = envelope(DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
         document_id: DOCUMENT_ID.to_string(),
-        owner: user("macro|owner@example.com"),
+        owner: Owner::from_principal_str("macro|owner@example.com").unwrap(),
         actor_user_id: None,
         actor: None,
         on_behalf_of: None,
@@ -191,7 +192,7 @@ fn copied_maps_to_a_created_activity_for_the_new_document() {
         document_id: "22222222-2222-2222-2222-222222222222".to_string(),
         source_document_id: DOCUMENT_ID.to_string(),
         source_version_id: None,
-        owner: user("macro|copier@example.com"),
+        owner: Owner::from_principal_str("macro|copier@example.com").unwrap(),
         document_name: "copy".to_string(),
         file_type: None,
         project_id: None,

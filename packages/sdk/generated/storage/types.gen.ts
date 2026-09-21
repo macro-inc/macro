@@ -106,6 +106,11 @@ export type AddPinRequest = {
  */
 export type Agent = {
     /**
+     * Whether the agent's sessions approve ACP permission requests without
+     * asking. `None` means always prompt. Bypass also requires the harness's opt-in.
+     */
+    auto_accept_permissions?: boolean | null;
+    /**
      * The bot identity used for mentions and channel participation.
      */
     bot: Bot;
@@ -1137,6 +1142,10 @@ export type ApiThreadReply = {
  * Request to approve a pairing and register the harness.
  */
 export type ApprovePairingRequest = {
+    /**
+     * Whether agents may bypass ACP permission requests on this harness.
+     */
+    allow_permission_bypass?: boolean;
     /**
      * Display name override. Defaults to the daemon's requested name.
      */
@@ -3204,6 +3213,11 @@ export type CountedReaction = {
  */
 export type CreateAgentRequest = {
     /**
+     * Whether the agent's sessions approve ACP permission requests without
+     * asking. Omit to always prompt.
+     */
+    auto_accept_permissions?: boolean | null;
+    /**
      * Optional avatar URL or data URL.
      */
     avatar_url?: string | null;
@@ -3710,6 +3724,10 @@ export type CreateMarkdownDocumentResponse = {
  * The daemon serializes this, so both derives are used.
  */
 export type CreatePairingRequest = {
+    /**
+     * Daemon operator consent ceiling. Omitted by older clients; web approval decides.
+     */
+    allow_permission_bypass?: boolean | null;
     /**
      * Display-only description of the machine, e.g. `eric@macbook / darwin`.
      */
@@ -4620,7 +4638,7 @@ export type DocumentContentUploadedMetadata = {
     /**
      * The owner of the document (used by the extractor to resolve S3 keys).
      */
-    owner: MacroUserIdStr;
+    owner: string;
 };
 
 /**
@@ -4639,7 +4657,7 @@ export type DocumentCopiedMetadata = {
     /**
      * The owner of the new copy (the copier).
      */
-    owner: MacroUserIdStr;
+    owner: string;
     /**
      * Project the copy belongs to, when any.
      */
@@ -4681,7 +4699,7 @@ export type DocumentCreatedMetadata = {
     /**
      * The owner (creator) of the document.
      */
-    owner: MacroUserIdStr;
+    owner: string;
     /**
      * Project the document was created in, when any.
      */
@@ -5083,7 +5101,7 @@ export type DocumentSyncContentUpdatedMetadata = {
      */
     document_version_id?: string | null;
     /**
-     * File type of the sync document (markdown today).
+     * File type of the sync document, resolved by the document backend.
      */
     file_type: FileType;
     on_behalf_of?: null | MacroUserIdStr;
@@ -5182,7 +5200,7 @@ export type DocumentUpdatedMetadata = {
     /**
      * The owner of the document.
      */
-    owner: MacroUserIdStr;
+    owner: string;
     /**
      * Project id before the update.
      */
@@ -6559,6 +6577,10 @@ export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewe
  */
 export type Harness = {
     /**
+     * Whether agents may bypass ACP permission requests on this harness.
+     */
+    allow_permission_bypass?: boolean;
+    /**
      * Whether the daemon currently holds a runtime connection.
      */
     connected: boolean;
@@ -7444,6 +7466,10 @@ export type PairingDetails = {
      * Display-only description of the machine.
      */
     host?: string | null;
+    /**
+     * Daemon operator consent ceiling; false forbids bypass at approval.
+     */
+    requested_allow_permission_bypass?: boolean | null;
     /**
      * Harness display name the daemon asked for.
      */
@@ -10628,6 +10654,11 @@ export type UnthreadedPdfUuidRequest = {
  * Request to replace the editable configuration of a persisted AI agent.
  */
 export type UpdateAgentRequest = {
+    /**
+     * Whether the agent's sessions approve ACP permission requests without
+     * asking. Omit to always prompt.
+     */
+    auto_accept_permissions?: boolean | null;
     /**
      * Optional avatar URL or data URL.
      */

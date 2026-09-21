@@ -20,7 +20,10 @@ import {
 import { useUserId } from '@core/context/user';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import type { CommentNode } from '@macro-inc/lexical-core';
-import { useMessageLink } from '@queries/messages/document-messages';
+import {
+  useMessageLink,
+  useMessageRootsQuery,
+} from '@queries/messages/document-messages';
 import { usePatchThreadMutation } from '@queries/messages/mutations';
 import { onThreadStateUpdated } from '@queries/messages/sync';
 import type { MessageThread } from '@service-storage/messages';
@@ -42,7 +45,6 @@ import { createStore, reconcile } from 'solid-js/store';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { useDeleteNewComments } from './commentOperations';
 import type { Mark, ThreadStore } from './commentType';
-import { documentMessagesQuery } from './messageCommentsResource';
 
 function getHighlightThread(
   highlight: Mark
@@ -91,10 +93,8 @@ export const MessageCommentsProvider: VoidComponent<{
   } = useMarkdownDocument();
   const { comments: commentState, setCommentState } = state;
   const documentId = getDocumentId();
-  const target = useMessageLink(
-    () => ({ type: 'document', id: documentId }),
-    () => props.activeComment?.()
-  );
+  const parent = () => ({ type: 'document' as const, id: documentId });
+  const target = useMessageLink(parent, () => props.activeComment?.());
   const wrapper = useContext(LexicalWrapperContext);
   if (!isWrapperWithIds(wrapper)) {
     console.error('Cannot use comment plugin without node ids.');
@@ -147,9 +147,9 @@ export const MessageCommentsProvider: VoidComponent<{
   const [mountedMarks, setMountedMarks] = createStore<
     Record<string, Record<string, HTMLElement | undefined> | undefined>
   >({});
-  const messageQuery = documentMessagesQuery();
+  const messageQuery = useMessageRootsQuery(parent);
   const commentThreadsData = () =>
-    messageQuery?.isSuccess ? (messageQuery.data ?? []) : [];
+    messageQuery.isSuccess ? (messageQuery.data ?? []) : [];
   const setCommentsInitialized = (v: boolean) =>
     setCommentState('commentMarksInitialized', v);
   const highlightedId = () => commentState.highlightedCommentId;
@@ -272,7 +272,7 @@ export const MessageCommentsProvider: VoidComponent<{
       if (Object.values(mountedMarks[anchor.mark_id] ?? {}).some(Boolean))
         continue;
       patchThread.mutate({
-        parent: { type: 'document', id: documentId },
+        parent: parent(),
         rootId: thread.id,
         patch: { detach_anchor: true },
       });
@@ -417,7 +417,7 @@ export const MessageCommentsProvider: VoidComponent<{
   // Map server comment threads to mark metadata once marks are initialized
   createEffect(() => {
     if (!commentState.commentMarksInitialized) return;
-    if (!messageQuery?.isSuccess) return;
+    if (!messageQuery.isSuccess) return;
 
     detachRemovedThreads();
 

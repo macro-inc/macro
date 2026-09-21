@@ -73,7 +73,7 @@ pub async fn upsert_project(
             &UpsertProjectArgs {
                 project_id: project.id,
                 name: project.name,
-                owner_id: project.user_id,
+                owner_id: project.user_id.principal_id(),
                 parent_project_id: project.parent_id,
                 created_at_millis: EpochMillis::new(created_at.timestamp_millis())?,
                 updated_at_millis: EpochMillis::new(updated_at.timestamp_millis())?,

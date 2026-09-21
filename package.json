@@ -68,6 +68,7 @@
 			"packages/observability",
 			"packages/email-renderer",
 			"packages/collaboration",
+			"packages/machine",
 			"packages/loro-mirror",
 			"packages/lexical-core",
 			"services/ai-editing-worker",
