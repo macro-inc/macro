@@ -148,15 +148,12 @@ describe('database table view', () => {
       expect(
         (
           screen.getByRole('button', {
-            name: 'Refresh',
-            exact: true,
+            name: /^Refresh$/,
           }) as HTMLButtonElement
         ).disabled
       ).toBe(false)
     );
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Refresh', exact: true })
-    );
+    fireEvent.click(screen.getByRole('button', { name: /^Refresh$/ }));
     await waitFor(() =>
       expect(fixture.source.refresh).toHaveBeenCalledTimes(2)
     );
