@@ -23,10 +23,11 @@ diff --git a/src/index.ts b/src/index.ts
          if (
            behavior &&
 -          nextCount > prevCount &&
-+          // Server acknowledgements can replace the last key without adding a row.
++          // Follow delayed insertions anywhere in the timeline and last-key acknowledgements.
 +          nextCount >= prevCount &&
            this.isAtEnd(prevOptions.scrollEndThreshold) &&
-           (prevCount === 0 || merged.getItemKey(nextCount - 1) !== prevLastKey)
+-          (prevCount === 0 || merged.getItemKey(nextCount - 1) !== prevLastKey)
++          (nextCount > prevCount || prevCount === 0 || merged.getItemKey(nextCount - 1) !== prevLastKey)
          ) {
 @@ -700,6 +704,7 @@
      }
@@ -60,7 +61,7 @@ diff --git a/dist/esm/index.js b/dist/esm/index.js
            }
            const behavior = merged.followOnAppend === true ? "auto" : merged.followOnAppend || null;
 -          if (behavior && nextCount > prevCount && this.isAtEnd(prevOptions.scrollEndThreshold) && (prevCount === 0 || merged.getItemKey(nextCount - 1) !== prevLastKey)) {
-+          if (behavior && nextCount >= prevCount && this.isAtEnd(prevOptions.scrollEndThreshold) && (prevCount === 0 || merged.getItemKey(nextCount - 1) !== prevLastKey)) {
++          if (behavior && nextCount >= prevCount && this.isAtEnd(prevOptions.scrollEndThreshold) && (nextCount > prevCount || prevCount === 0 || merged.getItemKey(nextCount - 1) !== prevLastKey)) {
              followOnAppend = behavior;
            }
          }
@@ -98,7 +99,7 @@ diff --git a/dist/cjs/index.cjs b/dist/cjs/index.cjs
            }
            const behavior = merged.followOnAppend === true ? "auto" : merged.followOnAppend || null;
 -          if (behavior && nextCount > prevCount && this.isAtEnd(prevOptions.scrollEndThreshold) && (prevCount === 0 || merged.getItemKey(nextCount - 1) !== prevLastKey)) {
-+          if (behavior && nextCount >= prevCount && this.isAtEnd(prevOptions.scrollEndThreshold) && (prevCount === 0 || merged.getItemKey(nextCount - 1) !== prevLastKey)) {
++          if (behavior && nextCount >= prevCount && this.isAtEnd(prevOptions.scrollEndThreshold) && (nextCount > prevCount || prevCount === 0 || merged.getItemKey(nextCount - 1) !== prevLastKey)) {
              followOnAppend = behavior;
            }
          }

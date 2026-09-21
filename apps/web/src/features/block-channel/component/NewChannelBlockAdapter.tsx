@@ -7,7 +7,6 @@ import {
   makeRenameAction,
   useBlockEntityCommands,
 } from '@app/features/next-soup/actions';
-import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS } from '@block-channel/constants';
 import { convertTargetMessage } from '@block-channel/utils/target-message';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
@@ -46,6 +45,7 @@ import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsla
 import { BlockSplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
 import { SplitTitleFileMenu } from '@components/app/split-layout/components/SplitLabel';
+import { SplitLayoutContext } from '@components/app/split-layout/context';
 import {
   useCanAutofocusSplitContent,
   useSplitPanelOrThrow,
@@ -86,6 +86,7 @@ import {
   Show,
   Suspense,
   Switch,
+  useContext,
 } from 'solid-js';
 import { CHANNEL_TAB_ICONS, ChannelTopLeft } from './Top';
 import { useChannelBotManagement } from './useChannelBotManagement';
@@ -338,6 +339,8 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   // BlockContainer. The adapter requires a split panel, so unlike
   // BlockContainer it needs no fallback DOM scope of its own.
   const splitPanel = useSplitPanelOrThrow();
+  // The layout context exists during construction; its global signal is set later.
+  const splitLayout = useContext(SplitLayoutContext);
   blockHotkeyScopeSignal.set(splitPanel.splitHotkeyScope);
   useBlockEntityCommands();
   const canAutofocusSplitContent = useCanAutofocusSplitContent();
@@ -356,7 +359,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
         [URL_PARAMS.thread]: props[URL_PARAMS.thread],
       };
     }
-    const isSingleSplit = globalSplitManager()?.splits().length === 1;
+    const isSingleSplit = splitLayout?.manager.splits().length === 1;
     if (!isSingleSplit) return {};
     return {
       [URL_PARAMS.message]: searchParams[URL_PARAMS.message] as
@@ -389,7 +392,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
       props[URL_PARAMS.thread] !== undefined;
     if (hasPropsTarget) return true;
 
-    const isSingleSplit = globalSplitManager()?.splits().length === 1;
+    const isSingleSplit = splitLayout?.manager.splits().length === 1;
     if (!isSingleSplit) return false;
 
     return (

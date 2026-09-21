@@ -35,6 +35,7 @@ import {
   useChannelType,
 } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { DateValue } from '@core/util/date';
 import {
@@ -89,7 +90,12 @@ import {
 } from '../Input';
 import { ChannelInputContainer } from '../Input/ChannelInputContainer';
 import { hasSendableInputContent } from '../Input/utils/sendable-content';
+import { isDateDividerVisible } from '../Message/DateDivider';
+import { decodeSystemActivity } from '../queries/system-activity';
+import { SystemActivity } from '../SystemActivity';
 import { ChannelThread } from '../Thread';
+import { ThreadRow } from '../Thread/ThreadRow';
+import { ThreadTypingIndicator } from '../Thread/ThreadTypingIndicator';
 import { buildReplyTargetValue } from '../Thread/utils/message-actions';
 import { isUnifiedInputMode } from '../unified-input-mode';
 import { ActiveCallMessage } from './ActiveCallMessage';
@@ -246,6 +252,50 @@ export function Channel(props: ChannelProps) {
 
   const messages = createMemo(() => [...messageIndex.items]);
   const messageById = () => messageIndex.byId;
+  const timeline = createMemo(() =>
+    messageIndex.entries.map((entry) =>
+      entry.type === 'message'
+        ? {
+            kind: 'message' as const,
+            key: entry.message.id,
+            createdAt: entry.message.created_at,
+            value: entry.message,
+          }
+        : {
+            kind: 'activity' as const,
+            key: `activity:${entry.activity.id}`,
+            createdAt: entry.activity.occurred_at,
+            value: decodeSystemActivity(entry.activity),
+          }
+    )
+  );
+  const timelineKeys = createMemo(() => timeline().map((entry) => entry.key));
+  const isNewestTimelineEntry = (key: string) =>
+    !messagesQuery.hasPreviousPage && key === timelineKeys().at(-1);
+  const timelineByKey = createMemo(
+    () =>
+      new Map(
+        timeline().map((entry, index, rows) => [
+          entry.key,
+          {
+            entry,
+            index,
+            previous: rows[index - 1],
+          },
+        ])
+      )
+  );
+  const activityListMeta = (key: string) => {
+    const row = timelineByKey().get(key);
+    return {
+      index: row?.index ?? 0,
+      previousTopLevelCreatedAt: row?.previous?.createdAt,
+      reachedStart: !messagesQuery.hasNextPage,
+      isGroupedWithPrevious: false,
+      isNewMessage: false,
+      isFirstNewMessage: false,
+    };
+  };
   const participants = useChannelParticipants(() => props.channelId);
   const channelBotMentionUsers = useMessageBotMentionUsers(() => ({
     type: 'channel',
@@ -337,7 +387,9 @@ export function Channel(props: ChannelProps) {
       // rail must already reach it. Signal reads keep this memo live.
       (message) =>
         threadManager.getOrCreateThreadState(message.id).isReplying() ||
-        unifiedInput.replyTarget()?.threadId === message.id
+        unifiedInput.replyTarget()?.threadId === message.id,
+      (message) =>
+        timelineByKey().get(message.id)?.previous?.kind === 'activity'
     )
   );
 
@@ -545,12 +597,12 @@ export function Channel(props: ChannelProps) {
       return;
     // Retained data is usable after a pagination error. Wait only if the query
     // has no data yet or the message index still contains the old page.
-    const latestMessageId = messagesQuery.data?.pages.find(
-      (page) => page.items.length > 0
-    )?.items[0]?.id;
+    const latestMessageId = messagesQuery.data?.pages
+      .find((page) => page.entries.some((entry) => entry.type === 'message'))
+      ?.entries.find((entry) => entry.type === 'message')?.message.id;
     if (
-      latestMessageId !== undefined &&
-      messageIndex.keys.at(-1) === latestMessageId &&
+      (latestMessageId === undefined ||
+        messageIndex.keys.at(-1) === latestMessageId) &&
       threadListNavigation()?.scrollToLatest()
     )
       cancelLatestNavigation();
@@ -699,7 +751,7 @@ export function Channel(props: ChannelProps) {
                       direction="desc"
                     />
                   </Show>
-                  <Show when={messages().length > 0}>
+                  <Show when={timelineKeys().length > 0}>
                     <div
                       class="relative flex-1 min-h-0"
                       ref={setThreadListContainerEl}
@@ -709,7 +761,28 @@ export function Channel(props: ChannelProps) {
                         triggerBehavior="spring-back"
                       >
                         <ThreadList
-                          keys={() => messageIndex.keys}
+                          keys={timelineKeys}
+                          estimateSize={(key) => {
+                            const row = timelineByKey().get(key)?.entry;
+                            if (row?.kind !== 'activity') return;
+                            if (
+                              timelineByKey().get(key)?.index === 0 &&
+                              !messagesQuery.hasNextPage
+                            )
+                              return;
+                            return (
+                              36 +
+                              (isNewestTimelineEntry(key) ? 28 : 0) +
+                              (isDateDividerVisible(
+                                row.createdAt,
+                                activityListMeta(key)
+                              )
+                                ? isMobile()
+                                  ? 64
+                                  : 56
+                                : 0)
+                            );
+                          }}
                           targetId={
                             targetMessageController.hasPendingElementScroll()
                               ? targetMessageController.activeTargetMessageId()
@@ -738,12 +811,46 @@ export function Channel(props: ChannelProps) {
                           }
                         >
                           {(item) => {
+                            if (item.id.startsWith('activity:')) {
+                              const event = () => {
+                                const row = timelineByKey().get(item.id)?.entry;
+                                return row?.kind === 'activity'
+                                  ? row.value
+                                  : undefined;
+                              };
+                              return (
+                                <Show when={event()}>
+                                  {(activity) => (
+                                    <ThreadRow
+                                      channelId={props.channelId}
+                                      message={{
+                                        created_at: activity().occurredAt,
+                                      }}
+                                      listMeta={activityListMeta(item.id)}
+                                    >
+                                      <SystemActivity event={activity()} />
+                                      <Show
+                                        when={isNewestTimelineEntry(item.id)}
+                                      >
+                                        <ThreadTypingIndicator
+                                          parent={{
+                                            type: 'channel',
+                                            id: props.channelId,
+                                          }}
+                                          threadId={null}
+                                        />
+                                      </Show>
+                                    </ThreadRow>
+                                  )}
+                                </Show>
+                              );
+                            }
                             const message = () => messageById().get(item.id);
                             const state = threadManager.getOrCreateThreadState(
                               item.id
                             );
                             const isNewestThread = () =>
-                              item.id === messageIndex.keys.at(-1);
+                              isNewestTimelineEntry(item.id);
 
                             return (
                               <Show when={message()}>
@@ -806,7 +913,15 @@ export function Channel(props: ChannelProps) {
                                     replyInputFocusRequest={
                                       state.replyInputFocusRequest
                                     }
-                                    listMeta={listMetaByMessageId()[item.id]}
+                                    listMeta={{
+                                      ...listMetaByMessageId()[item.id],
+                                      index:
+                                        timelineByKey().get(item.id)?.index ??
+                                        0,
+                                      previousTopLevelCreatedAt:
+                                        timelineByKey().get(item.id)?.previous
+                                          ?.createdAt,
+                                    }}
                                     messageEditor={messageEditor}
                                     participants={participants.users}
                                     threadActions={{

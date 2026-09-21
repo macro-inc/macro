@@ -2341,6 +2341,7 @@
       "crates/workspace-hack"
     ],
     "collab_surface": [
+      "crates/activity",
       "crates/agent",
       "crates/agent_fold",
       "crates/agent_runtime_protocol",
@@ -5770,6 +5771,7 @@
       "crates/workspace-hack"
     ],
     "lexical_client": [
+      "crates/activity",
       "crates/agent",
       "crates/agent_fold",
       "crates/agent_runtime_protocol",
@@ -6526,6 +6528,7 @@
       "crates/workspace-hack"
     ],
     "messages": [
+      "crates/activity",
       "crates/agent",
       "crates/ai_toolset",
       "crates/ai_usage",
@@ -9085,6 +9088,7 @@
       "crates/workspace-hack"
     ],
     "task_dedup": [
+      "crates/activity",
       "crates/agent",
       "crates/agent_fold",
       "crates/agent_runtime_protocol",

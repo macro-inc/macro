@@ -241,6 +241,13 @@ fn event_type_strings_follow_dot_convention() {
 
     let cases = vec![
         (
+            ChannelMacroEvent::picture_changed(ChannelPictureChangedMetadata {
+                channel_id,
+                actor: user_id("macro|owner@example.com"),
+            }),
+            "channel.picture_changed",
+        ),
+        (
             ChannelMacroEvent::updated(ChannelUpdatedMetadata {
                 channel_id,
                 actor: user_id("macro|owner@example.com"),

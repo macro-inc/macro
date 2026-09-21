@@ -2,6 +2,7 @@
 
 #[cfg(test)]
 mod test;
+mod timeline;
 
 use std::collections::HashMap;
 use std::num::{NonZeroU32, NonZeroU64};

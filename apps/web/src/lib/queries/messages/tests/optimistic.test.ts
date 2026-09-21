@@ -117,7 +117,7 @@ function createMessageTimelineData(
 ): MessageTimelineData {
   return {
     pages: pages.map((items, index) => ({
-      items,
+      entries: items.map((message) => ({ type: 'message' as const, message })),
       next_cursor:
         index === pages.length - 1
           ? null
@@ -209,9 +209,11 @@ describe('channel optimistic cache regressions', () => {
       mentions: [],
     });
 
-    expect(getMessageTimelineFromCache('channel-1')?.pages[0].items[0].id).toBe(
-      'optimistic-top-level'
-    );
+    expect(
+      getMessageTimelineFromCache('channel-1')?.pages[0].entries.flatMap(
+        (entry) => (entry.type === 'message' ? [entry.message] : [])
+      )[0].id
+    ).toBe('optimistic-top-level');
 
     if (context) {
       rollbackInsertChannelMessage(
@@ -220,9 +222,11 @@ describe('channel optimistic cache regressions', () => {
       );
     }
 
-    expect(getMessageTimelineFromCache('channel-1')?.pages[0].items).toEqual([
-      expect.objectContaining({ id: 'existing-msg' }),
-    ]);
+    expect(
+      getMessageTimelineFromCache('channel-1')?.pages[0].entries.flatMap(
+        (entry) => (entry.type === 'message' ? [entry.message] : [])
+      )
+    ).toEqual([expect.objectContaining({ id: 'existing-msg' })]);
   });
 
   it('keeps local media metadata on optimistic top-level inserts', () => {
@@ -261,7 +265,9 @@ describe('channel optimistic cache regressions', () => {
     });
 
     expect(
-      getMessageTimelineFromCache('channel-1')?.pages[0].items[0].attachments[0]
+      getMessageTimelineFromCache('channel-1')?.pages[0].entries.flatMap(
+        (entry) => (entry.type === 'message' ? [entry.message] : [])
+      )[0].attachments[0]
     ).toEqual(
       expect.objectContaining({
         entity_id: 'static-file-1',
@@ -305,7 +311,9 @@ describe('channel optimistic cache regressions', () => {
 
     expect(getThreadRepliesFromCache('channel-1', 'parent-msg-id')).toEqual([]);
     expect(
-      getMessageTimelineFromCache('channel-1')?.pages[0].items[0].thread.preview
+      getMessageTimelineFromCache('channel-1')?.pages[0].entries.flatMap(
+        (entry) => (entry.type === 'message' ? [entry.message] : [])
+      )[0].thread.preview
     ).toEqual([]);
   });
 
@@ -347,8 +355,9 @@ describe('channel optimistic cache regressions', () => {
       getThreadRepliesFromCache('channel-1', 'parent-1')?.[0].reactions
     ).toEqual([]);
     expect(
-      getMessageTimelineFromCache('channel-1')?.pages[0].items[0].thread
-        .preview[0].reactions
+      getMessageTimelineFromCache('channel-1')?.pages[0].entries.flatMap(
+        (entry) => (entry.type === 'message' ? [entry.message] : [])
+      )[0].thread.preview[0].reactions
     ).toEqual([]);
   });
 
@@ -394,8 +403,9 @@ describe('channel optimistic cache regressions', () => {
       getThreadRepliesFromCache('channel-1', 'parent-1')?.[0].reactions
     ).toEqual([{ emoji: '👍', users: ['user-1'] }]);
     expect(
-      getMessageTimelineFromCache('channel-1')?.pages[0].items[0].thread
-        .preview[0].reactions
+      getMessageTimelineFromCache('channel-1')?.pages[0].entries.flatMap(
+        (entry) => (entry.type === 'message' ? [entry.message] : [])
+      )[0].thread.preview[0].reactions
     ).toEqual([{ emoji: '👍', users: ['user-1'] }]);
   });
 
@@ -426,7 +436,11 @@ describe('channel optimistic cache regressions', () => {
       attachment_ids_to_delete: ['attachment-1'],
     });
 
-    expect(getMessageTimelineFromCache('channel-1')?.pages[0].items[0]).toEqual(
+    expect(
+      getMessageTimelineFromCache('channel-1')?.pages[0].entries.flatMap(
+        (entry) => (entry.type === 'message' ? [entry.message] : [])
+      )[0]
+    ).toEqual(
       expect.objectContaining({
         content: 'Edited body',
         attachments: [],
@@ -437,7 +451,11 @@ describe('channel optimistic cache regressions', () => {
       rollbackUpdateMessage({ type: 'channel', id: 'channel-1' }, context);
     }
 
-    expect(getMessageTimelineFromCache('channel-1')?.pages[0].items[0]).toEqual(
+    expect(
+      getMessageTimelineFromCache('channel-1')?.pages[0].entries.flatMap(
+        (entry) => (entry.type === 'message' ? [entry.message] : [])
+      )[0]
+    ).toEqual(
       expect.objectContaining({
         content: 'Original body',
         attachments: [
@@ -505,8 +523,9 @@ describe('channel optimistic cache regressions', () => {
       })
     );
     expect(
-      getMessageTimelineFromCache('channel-1')?.pages[0].items[0].thread
-        .preview[0]
+      getMessageTimelineFromCache('channel-1')?.pages[0].entries.flatMap(
+        (entry) => (entry.type === 'message' ? [entry.message] : [])
+      )[0].thread.preview[0]
     ).toEqual(
       expect.objectContaining({
         content: 'Edited reply',
@@ -530,8 +549,9 @@ describe('channel optimistic cache regressions', () => {
       })
     );
     expect(
-      getMessageTimelineFromCache('channel-1')?.pages[0].items[0].thread
-        .preview[0]
+      getMessageTimelineFromCache('channel-1')?.pages[0].entries.flatMap(
+        (entry) => (entry.type === 'message' ? [entry.message] : [])
+      )[0].thread.preview[0]
     ).toEqual(
       expect.objectContaining({
         content: 'Original reply',
@@ -573,7 +593,11 @@ describe('channel optimistic cache regressions', () => {
       message_id: 'parent-1',
     });
 
-    const message = getMessageTimelineFromCache('channel-1')?.pages[0].items[0];
+    const message = getMessageTimelineFromCache(
+      'channel-1'
+    )?.pages[0].entries.flatMap((entry) =>
+      entry.type === 'message' ? [entry.message] : []
+    )[0];
     expect(message?.id).toBe('parent-1');
     expect(message?.deleted_at).toBeTruthy();
     expect(message?.thread.preview).toHaveLength(2);
@@ -583,8 +607,11 @@ describe('channel optimistic cache regressions', () => {
       rollbackDeleteMessage({ type: 'channel', id: 'channel-1' }, context);
     }
 
-    const restored =
-      getMessageTimelineFromCache('channel-1')?.pages[0].items[0];
+    const restored = getMessageTimelineFromCache(
+      'channel-1'
+    )?.pages[0].entries.flatMap((entry) =>
+      entry.type === 'message' ? [entry.message] : []
+    )[0];
     expect(restored?.id).toBe('parent-1');
     expect(restored?.deleted_at).toBeFalsy();
     expect(restored?.thread.preview).toHaveLength(2);
@@ -607,7 +634,9 @@ describe('channel optimistic cache regressions', () => {
     });
 
     const itemsAfter =
-      getMessageTimelineFromCache('channel-1')?.pages[0].items ?? [];
+      getMessageTimelineFromCache('channel-1')?.pages[0].entries.flatMap(
+        (entry) => (entry.type === 'message' ? [entry.message] : [])
+      ) ?? [];
     expect(itemsAfter.map((item) => item.id)).toEqual(['parent-2']);
 
     if (context) {
@@ -615,12 +644,16 @@ describe('channel optimistic cache regressions', () => {
     }
 
     const itemsRolledBack =
-      getMessageTimelineFromCache('channel-1')?.pages[0].items ?? [];
+      getMessageTimelineFromCache('channel-1')?.pages[0].entries.flatMap(
+        (entry) => (entry.type === 'message' ? [entry.message] : [])
+      ) ?? [];
     expect(itemsRolledBack.map((item) => item.id)).toEqual([
-      'parent-1',
       'parent-2',
+      'parent-1',
     ]);
-    expect(itemsRolledBack[0].deleted_at).toBeFalsy();
+    expect(
+      itemsRolledBack.find((item) => item.id === 'parent-1')?.deleted_at
+    ).toBeFalsy();
   });
 
   it('removes thread replies from caches on optimistic delete and restores them on rollback', () => {
@@ -652,7 +685,9 @@ describe('channel optimistic cache regressions', () => {
 
     expect(getThreadRepliesFromCache('channel-1', 'parent-1')).toEqual([]);
     expect(
-      getMessageTimelineFromCache('channel-1')?.pages[0].items[0].thread.preview
+      getMessageTimelineFromCache('channel-1')?.pages[0].entries.flatMap(
+        (entry) => (entry.type === 'message' ? [entry.message] : [])
+      )[0].thread.preview
     ).toEqual([]);
 
     if (context) {
@@ -663,7 +698,9 @@ describe('channel optimistic cache regressions', () => {
       expect.objectContaining({ id: 'reply-1' }),
     ]);
     expect(
-      getMessageTimelineFromCache('channel-1')?.pages[0].items[0].thread.preview
+      getMessageTimelineFromCache('channel-1')?.pages[0].entries.flatMap(
+        (entry) => (entry.type === 'message' ? [entry.message] : [])
+      )[0].thread.preview
     ).toEqual([expect.objectContaining({ id: 'reply-1' })]);
   });
 

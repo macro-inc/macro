@@ -74,6 +74,8 @@ type ScrollInsets = {
 
 type ThreadListProps = {
   keys: Accessor<string[]>;
+  /** Exact sizes for fixed-height rows before they mount. */
+  estimateSize?: (key: string) => number | undefined;
   children: (item: { id: string }) => JSX.Element;
   initialPosition?: ThreadListInitialPosition;
   onScrollNearTop?: () => void;
@@ -217,7 +219,8 @@ export function ThreadList(props: ThreadListProps) {
     get getItemKey() {
       return getItemKey();
     },
-    estimateSize: () => BASE_ITEM_SIZE,
+    estimateSize: (index) =>
+      props.estimateSize?.(props.keys()[index]) ?? BASE_ITEM_SIZE,
     overscan: OVERSCAN,
     // A restored snapshot or a newly remounted message can have a different
     // height. The default sync path returns cached sizes, exposing the old
@@ -258,7 +261,10 @@ export function ThreadList(props: ThreadListProps) {
               .keys()
               .reduce(
                 (total, key) =>
-                  total + (initialSizes.get(key) ?? BASE_ITEM_SIZE),
+                  total +
+                  (initialSizes.get(key) ??
+                    props.estimateSize?.(key) ??
+                    BASE_ITEM_SIZE),
                 insets().start + insets().end
               )
           : 0,
@@ -306,7 +312,7 @@ export function ThreadList(props: ThreadListProps) {
         element?.addEventListener('touchstart', onTouchStart, {
           passive: true,
         });
-      const cleanup = observeElementOffset(instance, (offset, isScrolling) => {
+      const reportOffset = (offset: number, isScrolling: boolean) => {
         // An instant navigation/correction must not extend gesture compensation.
         const isOwnScroll =
           programmaticOffset !== undefined &&
@@ -319,8 +325,18 @@ export function ThreadList(props: ThreadListProps) {
             isScrolling && !isOwnScroll
           ) ?? offset;
         callback(logicalOffset, isScrolling && !isOwnScroll);
+      };
+      const cleanup = observeElementOffset(instance, reportOffset);
+      // A short list clamps the initial end scroll to zero without emitting a
+      // scroll event. Read it back after the initial write so the virtual range
+      // includes the first rows, before paint.
+      let disposed = false;
+      queueMicrotask(() => {
+        if (!disposed && element?.isConnected)
+          reportOffset(element.scrollTop, false);
       });
       return () => {
+        disposed = true;
         cleanup?.();
         if (onWheel) element?.removeEventListener('wheel', onWheel);
         if (onTouchStart)

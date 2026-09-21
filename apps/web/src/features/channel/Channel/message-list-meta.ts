@@ -12,7 +12,8 @@ export function buildChannelMessageListMeta<T extends GroupableMessage>(
    * A thread is visually open for this message even without replies (e.g. a
    * reply is being composed), so the rail must reach it.
    */
-  isThreadOpen?: (message: T) => boolean
+  isThreadOpen?: (message: T) => boolean,
+  breakBefore?: (message: T) => boolean
 ): Record<string, ChannelMessageListMeta> {
   const metaByMessageId: Record<string, ChannelMessageListMeta> = {};
   let previousTopLevelCreatedAt: string | undefined;
@@ -20,6 +21,7 @@ export function buildChannelMessageListMeta<T extends GroupableMessage>(
   let foundFirstNewMessage = false;
 
   for (const [index, message] of messages.entries()) {
+    if (breakBefore?.(message)) previousMessage = undefined;
     const isNewMessage = isNewMessageFn(message);
     const isFirstNewMessage = isNewMessage && !foundFirstNewMessage;
 

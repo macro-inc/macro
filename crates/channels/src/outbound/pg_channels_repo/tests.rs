@@ -3366,8 +3366,14 @@ async fn delete_channel_cascades_contacts_backfill_outbox_rows(pool: Pool<Postgr
 )]
 async fn channel_picture_round_trips_through_batched_previews(pool: Pool<Postgres>) {
     let repo = repo(pool);
+    assert!(!repo.set_channel_picture(CH1, None).await.unwrap());
     for picture in [Some(Uuid::new_v4()), Some(Uuid::new_v4()), None] {
-        repo.set_channel_picture(CH1, picture).await.unwrap();
+        let (first, concurrent) = tokio::join!(
+            repo.set_channel_picture(CH1, picture),
+            repo.set_channel_picture(CH1, picture),
+        );
+        assert_ne!(first.unwrap(), concurrent.unwrap());
+        assert!(!repo.set_channel_picture(CH1, picture).await.unwrap());
         let previews = repo
             .batch_get_channel_previews(&[CH1.to_string()], USER_A, None)
             .await

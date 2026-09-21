@@ -37,6 +37,20 @@ function createMessage(
 }
 
 describe('buildChannelMessageListMeta', () => {
+  it('breaks sender grouping and thread rails at system activity', () => {
+    const first = createMessage('m1', '2026-02-20T09:00:00.000Z');
+    const second = createMessage('m2', '2026-02-20T09:01:00.000Z');
+    second.thread.reply_count = 1;
+    const meta = buildChannelMessageListMeta(
+      [first, second],
+      () => false,
+      true,
+      undefined,
+      (m) => m.id === 'm2'
+    );
+    expect(meta.m2.isGroupedWithPrevious).toBe(false);
+    expect(meta.m1.threadRailBelow).toBeUndefined();
+  });
   it('sets list index and previous top-level timestamp in order', () => {
     const messages = [
       createMessage('m1', '2026-02-20T09:00:00.000Z'),

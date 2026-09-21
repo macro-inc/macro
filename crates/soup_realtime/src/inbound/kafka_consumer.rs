@@ -340,6 +340,9 @@ fn push_channel_reference_update(
 
 fn patches_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimePatch> {
     match event {
+        ChannelTopicEvent::PictureChanged(metadata) => {
+            vec![update(EntityType::Channel, metadata.channel_id)]
+        }
         ChannelTopicEvent::Updated(metadata) => {
             vec![update(EntityType::Channel, metadata.channel_id)]
         }

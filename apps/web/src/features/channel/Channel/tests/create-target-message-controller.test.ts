@@ -162,7 +162,7 @@ describe('pagination restore', () => {
     pageParams: [null],
     pages: [
       {
-        items: [],
+        entries: [],
         next_cursor: { id: 'next', created_at: '2024-01-01T00:00:00Z' },
         previous_cursor: { id: 'prev', created_at: '2024-01-01T00:00:00Z' },
       },

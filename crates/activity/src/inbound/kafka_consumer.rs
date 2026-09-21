@@ -37,7 +37,7 @@ impl GroupName for ActivityConsumerGroup {
 /// is the host's dispatch from a decoded event to the owning domain's
 /// mapping.
 pub struct ActivityConsumer<R, C, F> {
-    repo: R,
+    materializer: crate::domain::materializer::ActivityMaterializer<R>,
     ingest: F,
     _events: PhantomData<fn() -> C>,
 }
@@ -51,19 +51,24 @@ where
     /// Builds the consumer over an activity store and an event dispatcher.
     pub fn new(repo: R, ingest: F) -> Self {
         Self {
-            repo,
+            materializer: crate::domain::materializer::ActivityMaterializer::new(repo),
             ingest,
             _events: PhantomData,
         }
     }
 
+    /// Refresh live readers only after their new facts can be queried.
+    pub fn with_observer(
+        mut self,
+        observer: impl crate::domain::ports::ActivityObserver + 'static,
+    ) -> Self {
+        self.materializer = self.materializer.with_observer(observer);
+        self
+    }
+
     /// Applies one decoded event to storage.
     async fn apply(&self, event: &C) -> Result<(), R::Err> {
-        match (self.ingest)(event) {
-            Ingest::Insert(activities) => self.repo.insert_activities(&activities).await,
-            Ingest::Purge(entities) => self.repo.purge_entities(&entities).await,
-            Ingest::Ignore => Ok(()),
-        }
+        self.materializer.apply((self.ingest)(event)).await
     }
 
     /// Runs the consumer until `shutdown` resolves.

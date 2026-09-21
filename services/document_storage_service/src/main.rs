@@ -871,6 +871,17 @@ async fn run() -> anyhow::Result<()> {
         }
     });
 
+    let (timeline_observer, timeline_delivery) =
+        crate::service::activity::TimelineObserver::new(conn_gateway_client.clone());
+    consumer_tracker.spawn({
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            tokio::select! {
+                _ = cancellation_token.cancelled() => {},
+                _ = timeline_delivery => {},
+            }
+        }
+    });
     let activity_consumer_brokers = config.kafka_brokers.as_ref().to_string();
     consumer_tracker.spawn({
         let cancellation_token = consumer_cancellation_token.clone();
@@ -880,7 +891,8 @@ async fn run() -> anyhow::Result<()> {
                 _,
                 crate::service::activity::ActivitySourceEvent,
                 _,
-            >::new(activity_repo, crate::service::activity::ingest);
+            >::new(activity_repo, crate::service::activity::ingest)
+            .with_observer(timeline_observer);
             loop {
                 if cancellation_token.is_cancelled() {
                     break;
@@ -1026,6 +1038,9 @@ async fn run() -> anyhow::Result<()> {
                 ),
             ),
         )
+        .with_activity(activity::outbound::pg_activity_repo::PgActivityRepo::new(
+            db.clone(),
+        ))
         .with_group_recipients(channels::domain::group_mentions::ChannelGroupRecipients(
             PgChannelsRepo::new(db.clone()),
         ))

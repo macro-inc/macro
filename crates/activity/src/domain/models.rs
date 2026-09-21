@@ -183,6 +183,30 @@ pub enum Action {
     ParticipantRemoved(ParticipantChange),
     /// A call was started in the entity (channel).
     CallStarted(CallStart),
+    /// The entity was renamed.
+    Renamed(NameChange),
+    /// The entity's profile picture was set or removed.
+    PictureChanged,
+    /// A call finished in the entity.
+    CallEnded(CallEnd),
+}
+
+/// The names captured when an entity is renamed.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct NameChange {
+    /// Previous display name.
+    pub from: Option<String>,
+    /// New display name.
+    pub to: Option<String>,
+}
+
+/// Completed call facts, independent of recording availability.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CallEnd {
+    /// Call identifier.
+    pub call_id: String,
+    /// Duration in milliseconds.
+    pub duration_ms: i64,
 }
 
 impl From<CommonAction> for Action {
@@ -229,12 +253,15 @@ impl Action {
             | Action::Opened
             | Action::Deleted
             | Action::Messaged
-            | Action::Sent => None,
+            | Action::Sent
+            | Action::PictureChanged => None,
             Action::PropertyChanged(change) => payload(change),
             Action::ParticipantAdded(change) | Action::ParticipantRemoved(change) => {
                 payload(change)
             }
             Action::CallStarted(start) => payload(start),
+            Action::Renamed(change) => payload(change),
+            Action::CallEnded(end) => payload(end),
         };
         (tag, payload)
     }
@@ -272,6 +299,9 @@ impl Action {
             ActionTag::ParticipantAdded => Ok(Action::ParticipantAdded(parsed(payload)?)),
             ActionTag::ParticipantRemoved => Ok(Action::ParticipantRemoved(parsed(payload)?)),
             ActionTag::CallStarted => Ok(Action::CallStarted(parsed(payload)?)),
+            ActionTag::Renamed => Ok(Action::Renamed(parsed(payload)?)),
+            ActionTag::PictureChanged => Ok(Action::PictureChanged),
+            ActionTag::CallEnded => Ok(Action::CallEnded(parsed(payload)?)),
         }
     }
 }

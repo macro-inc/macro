@@ -1,5 +1,8 @@
 import type { ReferencedThread } from '@service-storage/generated/schemas/referencedThread';
-import type { MessageListItem } from '@service-storage/messages';
+import type {
+  MessageListItem,
+  MessageTimelinePage,
+} from '@service-storage/messages';
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { type Accessor, createSignal, For, type ParentProps } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -143,7 +146,15 @@ function discussion(
   mocks.timeline.mockReturnValue({
     isSuccess: true,
     get data() {
-      return { pages: pages().map((items) => ({ items })) };
+      return {
+        pages: pages().map(
+          (messages): MessageTimelinePage => ({
+            entries: messages.map((message) => ({ type: 'message', message })),
+            next_cursor: null,
+            previous_cursor: null,
+          })
+        ),
+      };
     },
   });
   mocks.references.mockImplementation(
