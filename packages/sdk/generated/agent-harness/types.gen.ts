@@ -593,6 +593,12 @@ export type CreateAgentSessionRequest = {
      */
     botId?: string | null;
     /**
+     * The id the caller already minted this session under, so the client can
+     * open the session URL before this POST answers. Adopted as the persisted
+     * id. Omitted, the service mints one.
+     */
+    id?: string | null;
+    /**
      * Instructions the session's runtime works under, for its whole life.
      *
      * Recorded on the session whichever runtime serves it. Only the

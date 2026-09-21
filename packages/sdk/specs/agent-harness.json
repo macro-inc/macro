@@ -2085,6 +2085,11 @@
             "format": "uuid",
             "description": "Bot the session runs for. On a managed request this optionally selects\na persisted persona the user owns, may use through team membership, or\ncan `@` mention in a shared channel; omitting it uses the deployment's\ndefault coding persona. On an external request, bot callers may omit it\n(their own identity is used) and must not name another bot; user callers\nmust supply a bot they own."
           },
+          "id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The id the caller already minted this session under, so the client can\nopen the session URL before this POST answers. Adopted as the persisted\nid. Omitted, the service mints one."
+          },
           "instructions": {
             "type": ["string", "null"],
             "description": "Instructions the session's runtime works under, for its whole life.\n\nRecorded on the session whichever runtime serves it. Only the\nin-process one acts on them today; `agent_harness`'s `AgentKind`\nrecords what each of the others will need to."
