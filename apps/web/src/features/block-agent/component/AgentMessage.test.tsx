@@ -343,6 +343,50 @@ describe('Message thought shimmer', () => {
     text: value,
   });
 
+  it('keeps consecutive thoughts visible without creating an empty tool group', () => {
+    const [reply, setReply] = createSignal(
+      message(
+        [
+          text('Looking.'),
+          thought('First thought'),
+          thought('Second thought'),
+          text('Answer.'),
+        ],
+        null
+      )
+    );
+    const view = render(() => <Message message={reply()} inFlight />);
+    const thoughts = view.getAllByTestId('thought');
+    expect(thoughts.map((row) => row.textContent)).toEqual([
+      'First thought',
+      'Second thought',
+    ]);
+    expect(thoughts.map((row) => row.dataset.active)).toEqual([
+      'false',
+      'false',
+    ]);
+    expect(view.queryByTestId('group')).toBeNull();
+    expect(view.getAllByTestId('text').map((row) => row.textContent)).toEqual([
+      'Looking.',
+      'Answer.',
+    ]);
+
+    setReply(
+      message(
+        [
+          text('Looking.'),
+          thought('First thought'),
+          thought('Updated thought'),
+          text('Answer continued.'),
+        ],
+        null
+      )
+    );
+    expect(view.getAllByTestId('thought')[0]).toBe(thoughts[0]);
+    expect(view.getAllByTestId('thought')[1]).toBe(thoughts[1]);
+    expect(thoughts[1].textContent).toBe('Updated thought');
+  });
+
   it('keeps grouped thoughts at their real indices when the group opens', () => {
     const view = render(() => (
       <Message

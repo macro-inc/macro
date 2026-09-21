@@ -98,10 +98,17 @@ describe('segmentParts', () => {
     ]);
   });
 
-  it('leaves a trailing thought out of a tool run', () => {
+  it('leaves a trailing thought out of a run that closes the message', () => {
     expect(segmentParts([thought(), tool(), thought()])).toEqual([
       { kind: 'tools', start: 0, end: 2 },
       { kind: 'part', start: 2, end: 3 },
+    ]);
+  });
+
+  it('keeps a trailing thought in a run that prose follows', () => {
+    expect(segmentParts([tool(), tool(), thought(), text()])).toEqual([
+      { kind: 'tools', start: 0, end: 3 },
+      { kind: 'part', start: 3, end: 4 },
     ]);
   });
 

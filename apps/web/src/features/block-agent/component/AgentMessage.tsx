@@ -126,20 +126,23 @@ function ToolGroupPart(props: {
   // `settledToolStatus`), so a settled turn's run is never "Calling".
   const active = () =>
     props.inFlight && calls().some((call) => isToolActive(call.status));
+  const renderParts = () => (
+    <Index each={parts()}>
+      {(part, offset) => (
+        <AgentMessagePart
+          part={part()}
+          message={props.message}
+          index={props.start + offset}
+          inFlight={props.inFlight}
+        />
+      )}
+    </Index>
+  );
 
   return (
-    <Show when={calls().length > 0}>
+    <Show when={calls().length > 0} fallback={renderParts()}>
       <ToolGroup count={calls().length} active={active()} live={live()}>
-        <Index each={parts()}>
-          {(part, offset) => (
-            <AgentMessagePart
-              part={part()}
-              message={props.message}
-              index={props.start + offset}
-              inFlight={props.inFlight}
-            />
-          )}
-        </Index>
+        {renderParts()}
       </ToolGroup>
     </Show>
   );
