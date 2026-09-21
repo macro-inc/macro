@@ -1,5 +1,6 @@
 import { hasEveryoneElseDeclined } from '@app/features/calendar/components/EventContent';
 import {
+  type AttendeeRowRenderer,
   EventAttendeesSection,
   EventDetails,
 } from '@app/features/calendar/components/EventDetails';
@@ -38,7 +39,14 @@ import {
 import { type Accessor, createMemo, createSignal, For, Show } from 'solid-js';
 import { copyCalendarEventMention } from '../copy-event-mention';
 import { copyGuestEmails } from '../copy-guest-emails';
+import { EventAttendeeRow } from './EventAttendeeRow';
+import { EventRecordsSection } from './EventRecordsSection';
 import { EventRsvpSection } from './EventRsvpSection';
+import {
+  createEventDetailsOverlay,
+  EventDetailsOverlayProvider,
+} from './event-details-overlay';
+import { TakeMeetingNotesAction } from './TakeMeetingNotesAction';
 import { useOpenEventComposer } from './use-open-event-composer';
 import { useOpenEventEmail } from './use-open-event-email';
 
@@ -219,12 +227,20 @@ function EventGuestActions(props: {
   );
 }
 
+/** Guest rows open the guest's contact record, with a `...` for the person menu. */
+const renderAttendeeRow: AttendeeRowRenderer = (attendee, row, displayName) => (
+  <EventAttendeeRow attendee={attendee} displayName={displayName}>
+    {row}
+  </EventAttendeeRow>
+);
+
 function EventDetailsDrawer(props: EventDetailsOverlayProps) {
   const openEventComposer = useOpenEventComposer();
   const deleteDialog = useDeleteEventDialog({
     event: () => props.event,
     onDeleted: () => props.onOpenChange(false),
   });
+  const overlay = createEventDetailsOverlay(() => props.onOpenChange(false));
   const canModify = () => !props.event.isReadOnly && !props.event.isCancelled;
   const openEditor = () => {
     openEventComposer({ event: props.event });
@@ -236,7 +252,11 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
       side="bottom"
       open
       onOpenChange={(open) => {
-        if (!open && deleteDialog.isOpen()) return;
+        // A guest's menu sheet sits on top of this one; tapping it must not
+        // dismiss the details underneath.
+        if (!open && (deleteDialog.isOpen() || overlay.hasNestedOverlay())) {
+          return;
+        }
         props.onOpenChange(open);
       }}
       preventScroll={false}
@@ -296,29 +316,34 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
             </div>
           </div>
           <MobileDrawer.ScrollBody>
-            <EveryoneElseDeclinedNotice
-              event={props.event}
-              canModify={canModify()}
-              onDelete={deleteDialog.open}
-              onReschedule={openEditor}
-            />
-            <div class="px-3">
-              <EventDetails
+            <EventDetailsOverlayProvider value={overlay.context}>
+              <EveryoneElseDeclinedNotice
                 event={props.event}
-                timeFormat={props.timeFormat}
-                defaultReminders={props.defaultReminders}
+                canModify={canModify()}
+                onDelete={deleteDialog.open}
+                onReschedule={openEditor}
               />
-            </div>
-            <EventAttendeesSection
-              attendees={props.event.attendees}
-              actions={
-                <EventGuestActions
+              <div class="px-3">
+                <EventDetails
                   event={props.event}
-                  closeDetails={() => props.onOpenChange(false)}
+                  timeFormat={props.timeFormat}
+                  defaultReminders={props.defaultReminders}
                 />
-              }
-            />
-            <EventRsvpSection event={props.event} buttonSize="md" />
+              </div>
+              <TakeMeetingNotesAction event={props.event} />
+              <EventAttendeesSection
+                attendees={props.event.attendees}
+                actions={
+                  <EventGuestActions
+                    event={props.event}
+                    closeDetails={() => props.onOpenChange(false)}
+                  />
+                }
+                renderRow={renderAttendeeRow}
+              />
+              <EventRecordsSection event={props.event} />
+              <EventRsvpSection event={props.event} buttonSize="md" />
+            </EventDetailsOverlayProvider>
           </MobileDrawer.ScrollBody>
         </MobileDrawer.Content>
       </MobileDrawer.Portal>
@@ -437,6 +462,7 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
     event: () => props.event,
     onDeleted: () => props.onOpenChange(false),
   });
+  const overlay = createEventDetailsOverlay(() => props.onOpenChange(false));
   const canModify = () => !props.event.isReadOnly && !props.event.isCancelled;
   const openEditor = () => {
     openEventComposer({ event: props.event });
@@ -448,8 +474,11 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
       anchorRef={() => props.anchor}
       open
       onOpenChange={(open) => {
-        // Keep the popover mounted while its delete dialog is open.
-        if (!open && deleteDialog.isOpen()) return;
+        // Keep the popover mounted while its delete dialog or a guest's
+        // menu is open.
+        if (!open && (deleteDialog.isOpen() || overlay.hasNestedOverlay())) {
+          return;
+        }
         props.onOpenChange(open);
       }}
       placement="right-start"
@@ -546,31 +575,36 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
                   <CloseIcon />
                 </Popover.CloseButton>
               </div>
-              <EveryoneElseDeclinedNotice
-                event={props.event}
-                canModify={canModify()}
-                onDelete={deleteDialog.open}
-                onReschedule={openEditor}
-              />
-              <div>
-                <div class="px-3 pb-3">
-                  <EventDetails
-                    event={props.event}
-                    timeFormat={props.timeFormat}
-                    defaultReminders={props.defaultReminders}
-                  />
-                </div>
-                <EventAttendeesSection
-                  attendees={props.event.attendees}
-                  actions={
-                    <EventGuestActions
-                      event={props.event}
-                      closeDetails={() => props.onOpenChange(false)}
-                    />
-                  }
+              <EventDetailsOverlayProvider value={overlay.context}>
+                <EveryoneElseDeclinedNotice
+                  event={props.event}
+                  canModify={canModify()}
+                  onDelete={deleteDialog.open}
+                  onReschedule={openEditor}
                 />
-                <EventRsvpSection event={props.event} />
-              </div>
+                <div>
+                  <div class="px-3 pb-3">
+                    <EventDetails
+                      event={props.event}
+                      timeFormat={props.timeFormat}
+                      defaultReminders={props.defaultReminders}
+                    />
+                  </div>
+                  <TakeMeetingNotesAction event={props.event} />
+                  <EventAttendeesSection
+                    attendees={props.event.attendees}
+                    actions={
+                      <EventGuestActions
+                        event={props.event}
+                        closeDetails={() => props.onOpenChange(false)}
+                      />
+                    }
+                    renderRow={renderAttendeeRow}
+                  />
+                  <EventRecordsSection event={props.event} />
+                  <EventRsvpSection event={props.event} />
+                </div>
+              </EventDetailsOverlayProvider>
             </div>
           </Popover.Content>
         </Layer>

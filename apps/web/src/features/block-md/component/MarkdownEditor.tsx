@@ -159,6 +159,7 @@ import {
 } from '@macro-inc/lexical-core';
 import { useDocTags } from '@property/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
+import { blockNameToItemType } from '@service-storage/itemType';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { isIOS } from '@solid-primitives/platform';
 import { createCallback } from '@solid-primitives/rootless';
@@ -407,7 +408,11 @@ export function MarkdownEditor(props: {
     const mentionId =
       res.item.type === 'agent_session'
         ? undefined
-        : await trackMention(blockId, 'document', res.id);
+        : await trackMention(
+            blockId,
+            blockNameToItemType(res.blockName),
+            res.id
+          );
 
     let blockParams: Record<string, string> | undefined;
     if (res.blockName === 'channel') {

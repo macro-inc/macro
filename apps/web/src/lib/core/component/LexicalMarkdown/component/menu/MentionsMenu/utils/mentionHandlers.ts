@@ -2,6 +2,7 @@ import type { EntityItem } from '@core/context/quickAccess';
 import { trackMention } from '@core/signal/mention';
 import type { DateOption } from '@core/util/dateSearch/useDateSearch';
 import type { ChannelEntity, CrmCompanyEntity, EmailEntity } from '@entity';
+import { blockNameToItemType } from '@service-storage/itemType';
 import { REMOVE_INLINE_SEARCH_COMMAND } from '../../../../plugins';
 import {
   INSERT_AGENT_SESSION_MENTION_COMMAND,
@@ -67,11 +68,13 @@ async function handleEntityMention(
     blockName !== 'chat' &&
     !disableMentionTracking
   ) {
-    const trackType =
-      item.bucket === 'channel' || item.bucket === 'dm'
-        ? 'channel'
-        : 'document';
-    mentionId = await trackMention(blockId, trackType, entity.id);
+    // Record the mention under the mentioned entity's own type so its
+    // References list (a calendar event's, an email thread's) finds it.
+    mentionId = await trackMention(
+      blockId,
+      blockNameToItemType(blockNameForMention),
+      entity.id
+    );
   }
 
   if (item.bucket === 'email') {

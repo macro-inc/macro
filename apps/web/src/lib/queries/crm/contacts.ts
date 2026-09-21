@@ -9,7 +9,11 @@ import { crmKeys } from './keys';
 
 const CONTACT_STALE_TIME = 60 * 1000;
 
-function crmContactByEmailQueryOptions(teamId: string, email: string) {
+/**
+ * Query options for resolving one team CRM contact by email; `useQueries`
+ * callers spread these to look several guests up at once.
+ */
+export function crmContactByEmailQueryOptions(teamId: string, email: string) {
   const normalizedEmail = email.trim().toLowerCase();
   return queryOptions({
     queryKey: crmKeys.contactByEmail(teamId, normalizedEmail).queryKey,

@@ -239,11 +239,22 @@ function CalendarAttendeeItem(props: {
   );
 }
 
+/**
+ * Wraps a rendered attendee row, e.g. to make it open the guest's record and
+ * hang a menu off it. Receives the row so the wrapper stays presentation-free.
+ */
+export type AttendeeRowRenderer = (
+  attendee: CalendarAttendee,
+  row: JSX.Element,
+  displayName: Accessor<string>
+) => JSX.Element;
+
 interface CalendarAttendeeListProps {
   attendees: CalendarAttendee[];
   organizerFirst?: boolean;
   itemClass?: (attendee: CalendarAttendee) => string | undefined;
   nameClass?: string;
+  renderRow?: AttendeeRowRenderer;
 }
 
 /** Resolved attendee rows shared by event details and read-only guest views. */
@@ -272,16 +283,26 @@ function CalendarAttendeeList(props: CalendarAttendeeListProps) {
 
   return (
     <For each={sortedAttendees()}>
-      {(item) => (
-        <div class={cn(props.itemClass?.(item.attendee))}>
+      {(item) => {
+        const row = (
           <CalendarAttendeeItem item={item} nameClass={props.nameClass} />
-        </div>
-      )}
+        );
+        return (
+          <div class={cn(props.itemClass?.(item.attendee))}>
+            {props.renderRow
+              ? props.renderRow(item.attendee, row, item.displayName)
+              : row}
+          </div>
+        );
+      }}
     </For>
   );
 }
 
-function ScrollableAttendeeList(props: { attendees: CalendarAttendee[] }) {
+function ScrollableAttendeeList(props: {
+  attendees: CalendarAttendee[];
+  renderRow?: AttendeeRowRenderer;
+}) {
   const [scrollContainer, setScrollContainer] = createSignal<HTMLDivElement>();
 
   return (
@@ -291,7 +312,10 @@ function ScrollableAttendeeList(props: { attendees: CalendarAttendee[] }) {
         class="max-h-40 overflow-y-auto pr-4 mobile:max-h-none mobile:overflow-visible mobile:pr-0"
       >
         <div class="flex flex-col gap-3">
-          <CalendarAttendeeList attendees={props.attendees} />
+          <CalendarAttendeeList
+            attendees={props.attendees}
+            renderRow={props.renderRow}
+          />
         </div>
       </div>
       <Show when={!isMobile()}>
@@ -369,6 +393,34 @@ function EventLocationItem(props: { location: string }) {
           }
         </For>
       </span>
+    </div>
+  );
+}
+
+/**
+ * The description row. Long descriptions (booking-tool boilerplate, agendas)
+ * would otherwise stretch the popover past the viewport, so the body is
+ * capped at 200px and scrolls, with fades marking the clipped edges.
+ */
+function EventDescriptionItem(props: {
+  html: string;
+  onClick: (event: MouseEvent) => void;
+}) {
+  const [scrollContainer, setScrollContainer] = createSignal<HTMLDivElement>();
+
+  return (
+    <div class="contents">
+      <TextAlignLeftIcon class="mt-0.5 size-5 text-ink-extra-muted sm:size-4" />
+      <div class="relative min-w-0">
+        <div ref={setScrollContainer} class="max-h-50 overflow-y-auto pr-1">
+          <div
+            class="select-text leading-relaxed text-ink-muted [&_a]:text-accent [&_a]:underline [&_ol]:list-decimal [&_ol]:pl-4 [&_p+p]:mt-1 [&_ul]:list-disc [&_ul]:pl-4"
+            innerHTML={props.html}
+            onClick={props.onClick}
+          />
+        </div>
+        <ScrollIndicators scrollRef={scrollContainer} appearance="gradient" />
+      </div>
     </div>
   );
 }
@@ -613,14 +665,7 @@ export function EventDetails(props: {
 
       <Show when={descriptionHtml()}>
         {(html) => (
-          <div class="contents">
-            <TextAlignLeftIcon class="mt-0.5 size-5 text-ink-extra-muted sm:size-4" />
-            <div
-              class="select-text leading-relaxed text-ink-muted [&_a]:text-accent [&_a]:underline [&_ol]:list-decimal [&_ol]:pl-4 [&_p+p]:mt-1 [&_ul]:list-disc [&_ul]:pl-4"
-              innerHTML={html()}
-              onClick={openDescriptionLink}
-            />
-          </div>
+          <EventDescriptionItem html={html()} onClick={openDescriptionLink} />
         )}
       </Show>
 
@@ -647,10 +692,12 @@ export function EventDetails(props: {
  * are icon buttons for the header row's trailing edge — the copy-emails and
  * email-guests pair Google Calendar puts there — rendered beside the
  * disclosure trigger rather than inside it, since a button cannot nest one.
+ * `renderRow` wraps each guest row, e.g. with record navigation and a menu.
  */
 export function EventAttendeesSection(props: {
   attendees: CalendarAttendee[];
   actions?: JSX.Element;
+  renderRow?: AttendeeRowRenderer;
 }) {
   return (
     <Show when={props.attendees.length > 0}>
@@ -675,7 +722,10 @@ export function EventAttendeesSection(props: {
         <Collapsible.Content class="data-closed:hidden">
           <div class="flex gap-4 pb-3 pl-4 pt-1.5 sm:gap-3">
             <span aria-hidden="true" class="size-5 shrink-0 sm:size-4" />
-            <ScrollableAttendeeList attendees={props.attendees} />
+            <ScrollableAttendeeList
+              attendees={props.attendees}
+              renderRow={props.renderRow}
+            />
           </div>
         </Collapsible.Content>
       </Collapsible>
