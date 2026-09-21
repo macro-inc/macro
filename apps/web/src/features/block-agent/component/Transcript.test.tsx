@@ -372,13 +372,13 @@ describe('Transcript with the shared TanStack ThreadList', () => {
     expect(view.scroller.scrollTop).toBe(view.scroller.scrollHeight - viewport);
   });
 
-  it('bottom-aligns a short transcript inside mobile insets and preserves selection wiring', async () => {
+  it('top-aligns a short transcript inside mobile insets and preserves selection wiring', async () => {
     session.touch = true;
     const view = mount([message(0)]);
     await settle();
     const row = view.container.querySelector<HTMLElement>('[data-index="0"]')!;
     expect(row.style.transform).toBe(
-      'translateY(calc(224px - var(--channel-scroll-adjustment, 0px)))'
+      'translateY(calc(40px - var(--channel-scroll-adjustment, 0px)))'
     );
     expect(view.scroller.scrollTop).toBe(0);
     const reply = view.getByText('Reply to selection');
