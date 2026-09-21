@@ -38,6 +38,15 @@ states that differ from stored state. An updated normalized record does not forc
 unchanged index facts to be deleted and reinserted. Pending optimistic projections
 are still rebased for every affected key, even when authority is unchanged.
 
+## Local filter execution
+
+Local SQL materializes Boolean result sets once, but enumerates a universe only
+within the requested profile and partition. Empty predicates do not enumerate
+cached documents. Negated conjunctions use set difference instead of first building
+a full complement. Optimistic facts use document-leading primary-key probes rather
+than repeatedly scanning the materialized shadow set. These execution choices keep
+the same predicate, ordering, and shadow-suppression semantics.
+
 ## Tests
 
 Run from the repository root:

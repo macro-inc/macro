@@ -2581,7 +2581,9 @@ fn compile_predicate_selection(
 // Keep every set-algebra CTE materialized. The pinned Turso planner otherwise
 // re-enters compound-query coroutines for joined rows, repeatedly evaluating
 // the same child sets (millions of VM steps even on a small local corpus).
-// This is generic query execution policy; application predicates remain in IR.
+// Probe optimistic facts by their document-leading primary keys: joining a
+// popular fact to the materialized optimistic set otherwise rescans that set
+// for every matching fact. Application predicates remain unchanged in the IR.
 struct SqlPredicateCompiler {
     ctes: Vec<String>,
     parameters: Vec<Value>,
@@ -2599,11 +2601,9 @@ impl SqlPredicateCompiler {
             )
         };
         Self {
-            ctes: vec![
-                "authoritative_documents(document_id, record_key, profile, partition) AS MATERIALIZED (SELECT d.id, d.record_key, d.profile, d.partition FROM index_documents AS d WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key))".to_owned(),
-                format!("optimistic_documents(document_id, record_key, profile, partition) AS MATERIALIZED (SELECT o.id, o.record_key, o.profile, o.partition FROM optimistic_index_documents AS o WHERE o.state = 0{exclusion})"),
-                "effective_documents(source, document_id, record_key, profile, partition) AS MATERIALIZED (SELECT 0, document_id, record_key, profile, partition FROM authoritative_documents UNION ALL SELECT 1, document_id, record_key, profile, partition FROM optimistic_documents)".to_owned(),
-            ],
+            ctes: vec![format!(
+                "optimistic_documents(document_id, record_key, profile, partition) AS MATERIALIZED (SELECT o.id, o.record_key, o.profile, o.partition FROM optimistic_index_documents AS o WHERE o.state = 0{exclusion})"
+            )],
             parameters: excluded_optimistic
                 .iter()
                 .copied()
@@ -2630,7 +2630,7 @@ impl SqlPredicateCompiler {
             PredicateExpr::None => {
                 let name = self.next_name();
                 self.ctes.push(format!(
-                    "{name}(source, document_id) AS MATERIALIZED (SELECT source, document_id FROM effective_documents WHERE 0)"
+                    "{name}(source, document_id) AS MATERIALIZED (SELECT 0, 0 WHERE 0)"
                 ));
                 name
             }
@@ -2645,7 +2645,7 @@ impl SqlPredicateCompiler {
                     self.parameters.push(text(attribute.as_str()));
                 }
                 self.ctes.push(format!(
-                    "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM exact_facts AS f JOIN index_documents AS d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ? UNION SELECT 1, f.document_id FROM optimistic_exact_facts AS f JOIN optimistic_documents AS d ON d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?)"
+                    "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM exact_facts AS f JOIN index_documents AS d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ? UNION SELECT 1, f.document_id FROM optimistic_documents AS d CROSS JOIN optimistic_exact_facts AS f INDEXED BY sqlite_autoindex_optimistic_exact_facts_1 ON f.document_id = d.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?)"
                 ));
                 name
             }
@@ -2678,7 +2678,7 @@ impl SqlPredicateCompiler {
                     }
                 }
                 self.ctes.push(format!(
-                    "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM integer_facts AS f JOIN index_documents AS d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ?{range} UNION SELECT 1, f.document_id FROM optimistic_integer_facts AS f JOIN optimistic_documents AS d ON d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?{range})"
+                    "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM integer_facts AS f JOIN index_documents AS d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ?{range} UNION SELECT 1, f.document_id FROM optimistic_documents AS d CROSS JOIN optimistic_integer_facts AS f INDEXED BY sqlite_autoindex_optimistic_integer_facts_1 ON f.document_id = d.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?{range})"
                 ));
                 name
             }
@@ -2710,17 +2710,24 @@ impl SqlPredicateCompiler {
                         text(key.as_str()),
                     ]);
                 }
-                self.ctes.push(format!("{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM sort_facts f JOIN index_documents d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ? AND (f.value {cmp} ? OR (f.value = ? AND d.record_key {tie} ?)) UNION SELECT 1, f.document_id FROM optimistic_sort_facts f JOIN optimistic_documents d ON d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND (f.value {cmp} ? OR (f.value = ? AND d.record_key {tie} ?)))"));
+                self.ctes.push(format!("{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM sort_facts f JOIN index_documents d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ? AND (f.value {cmp} ? OR (f.value = ? AND d.record_key {tie} ?)) UNION SELECT 1, f.document_id FROM optimistic_documents d CROSS JOIN optimistic_sort_facts f INDEXED BY sqlite_autoindex_optimistic_sort_facts_1 ON f.document_id = d.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND (f.value {cmp} ? OR (f.value = ? AND d.record_key {tie} ?)))"));
                 name
             }
             PredicateExpr::And(left, right) | PredicateExpr::Or(left, right) => {
+                // Every child set is already confined to this scope. Therefore
+                // A ∩ (U − B) = A − B: do not enumerate U for negated conjuncts.
+                let (left, right, operator) = match (expr, left.as_ref(), right.as_ref()) {
+                    (PredicateExpr::And(_, _), left, PredicateExpr::Not(right)) => {
+                        (left, right.as_ref(), "EXCEPT")
+                    }
+                    (PredicateExpr::And(_, _), PredicateExpr::Not(left), right) => {
+                        (right, left.as_ref(), "EXCEPT")
+                    }
+                    (PredicateExpr::And(_, _), left, right) => (left, right, "INTERSECT"),
+                    (_, left, right) => (left, right, "UNION"),
+                };
                 let left = self.compile(left, profile, partition);
                 let right = self.compile(right, profile, partition);
-                let operator = if matches!(expr, PredicateExpr::And(_, _)) {
-                    "INTERSECT"
-                } else {
-                    "UNION"
-                };
                 let name = self.next_name();
                 self.ctes.push(format!(
                     "{name}(source, document_id) AS MATERIALIZED (SELECT source, document_id FROM {left} {operator} SELECT source, document_id FROM {right})"
@@ -2763,17 +2770,22 @@ impl SqlPredicateCompiler {
             );
         }
         self.ctes.push(format!(
-            "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM exact_facts AS f JOIN index_documents AS d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value {condition} UNION SELECT 1, f.document_id FROM optimistic_exact_facts AS f JOIN optimistic_documents AS d ON d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value {condition})"
+            "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM exact_facts AS f JOIN index_documents AS d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value {condition} UNION SELECT 1, f.document_id FROM optimistic_documents AS d CROSS JOIN optimistic_exact_facts AS f INDEXED BY sqlite_autoindex_optimistic_exact_facts_1 ON f.document_id = d.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value {condition})"
         ));
         name
     }
 
     fn universe(&mut self, profile: &Profile, partition: &Token) -> String {
         let name = self.next_name();
-        self.parameters.push(text(profile.token().as_str()));
-        self.parameters.push(text(partition.as_str()));
+        for _ in 0..2 {
+            self.parameters.push(text(profile.token().as_str()));
+            self.parameters.push(text(partition.as_str()));
+        }
+        // Apply scope before materialization, using the validated scope index.
+        // Any shadow still suppresses authority, including a shadow that moved
+        // outside this scope or whose facts are excluded as uncertain.
         self.ctes.push(format!(
-            "{name}(source, document_id) AS MATERIALIZED (SELECT source, document_id FROM effective_documents WHERE profile = ? AND partition = ?)"
+            "{name}(source, document_id) AS MATERIALIZED (SELECT 0, d.id FROM index_documents AS d INDEXED BY index_documents_scope_idx WHERE d.profile = ? AND d.partition = ? AND d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) UNION ALL SELECT 1, d.document_id FROM optimistic_documents AS d WHERE d.profile = ? AND d.partition = ?)"
         ));
         name
     }
