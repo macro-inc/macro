@@ -302,8 +302,10 @@ With the local GraphQL cache enabled, Cmd+K and document/channel `@` mentions
 search cached entities without waiting for a server search. Background hydration
 updates an already-open menu. For an empty search, scroll toward the end (or use
 Down); mentions offer **View all** for a category and then load more local pages.
-Counts describe loaded results, not the full server corpus. A missing item may
-still be uncached, but should appear after hydration without retyping. Cmd+K's
+Counts describe loaded results, not the full server corpus. Scans through
+incomplete or already-visible cache hits are bounded per action; continue
+navigating/scrolling, or narrow the query, to resume from the saved cursor.
+A missing item may still be uncached, but should appear after hydration without retyping. Cmd+K's
 local search excludes unsupported email hits before limiting entity results;
 email mentions keep their separate search-service path.
 

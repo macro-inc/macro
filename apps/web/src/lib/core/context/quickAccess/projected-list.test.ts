@@ -5,7 +5,10 @@ import type {
 } from '@graphql-cache/index';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createProjectedList } from './projected-list';
+import {
+  createProjectedList,
+  MAX_BROWSE_PAGES_PER_LOAD,
+} from './projected-list';
 import { exclude } from './types';
 
 const cleanups: (() => void)[] = [];
@@ -176,6 +179,45 @@ describe('Quick Access local projection', () => {
     await list.loadMore();
     expect(list.items()).toHaveLength(2);
     expect(search).toHaveBeenCalledTimes(4);
+  });
+
+  it('bounds incomplete scans, preserves the cursor, and resumes on the next action', async () => {
+    const [revision, setRevision] = createSignal(0);
+    const search = vi.fn(
+      async (args: SearchCacheArgs): Promise<SearchCachePage> => {
+        const next = args.cursor
+          ? Number(args.cursor.recordKey.split(':')[1]) + 1
+          : 1;
+        return page([String(next)], true);
+      }
+    );
+    const project = vi.fn(materialize).mockResolvedValue([]);
+    const list = root(() =>
+      createProjectedList({
+        host: { search },
+        buckets: ['note'],
+        revision,
+        materialize: project,
+      })
+    );
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(search).toHaveBeenCalledTimes(MAX_BROWSE_PAGES_PER_LOAD);
+    expect(list.items()).toEqual([]);
+    expect(list.hasMore()).toBe(true);
+    setRevision(1);
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(search).toHaveBeenCalledTimes(MAX_BROWSE_PAGES_PER_LOAD * 2);
+    await list.loadMore();
+    expect(search).toHaveBeenCalledTimes(MAX_BROWSE_PAGES_PER_LOAD * 3);
+    expect(list.hasMore()).toBe(true);
+    project.mockImplementation(materialize);
+    await list.loadMore();
+    expect(search.mock.calls.at(-1)?.[0].cursor?.recordKey).toBe(
+      `GraphqlSoupDocument:${MAX_BROWSE_PAGES_PER_LOAD * 2}`
+    );
+    expect(list.items()).toEqual([
+      { id: `GraphqlSoupDocument:${MAX_BROWSE_PAGES_PER_LOAD * 2 + 1}` },
+    ]);
   });
 
   it('drops an obsolete in-flight page when the query changes', async () => {

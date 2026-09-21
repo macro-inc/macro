@@ -35,13 +35,7 @@ import { formatDocumentName } from '@service-storage/util/filename';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { leadingAndTrailing, throttle } from '@solid-primitives/scheduled';
 import { toDate } from 'date-fns';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  onCleanup,
-  untrack,
-} from 'solid-js';
+import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import { searchQuickAccessItems } from './entity-search';
 import { createProjectedList } from './projected-list';
 import type {
@@ -900,6 +894,11 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       return resolveEntries(indices);
     });
 
+    const localItems = createLazyMemo(() =>
+      options
+        ? searchQuickAccessItems(baseList(), options.searchTerm?.() ?? '')
+        : baseList()
+    );
     const projected =
       options && cacheHost
         ? createProjectedList<QuickAccessItem>({
@@ -908,6 +907,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
             revision: cacheRevision,
             searchTerm: options.searchTerm,
             enabled: options.enabled,
+            existingItems: localItems,
             materialize: async (documents) => {
               const idOf = (recordKey: string) =>
                 recordKey.slice(recordKey.indexOf(':') + 1);
@@ -956,10 +956,8 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         : undefined;
 
     const list = createLazyMemo(() => {
-      const base = baseList();
-      if (!options) return base;
-      const local = searchQuickAccessItems(base, options.searchTerm?.() ?? '');
-      if (!projected || options.enabled?.() === false) return local;
+      const local = localItems();
+      if (!projected || options?.enabled?.() === false) return local;
 
       // Search describes cached contents, not corpus completeness. Preserve
       // projection rank, then append candidates from the existing local sources.
@@ -976,19 +974,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       isLoading: () => projected?.isLoading() ?? false,
       isLoadingMore: () => projected?.isLoadingMore() ?? false,
       loadMore: async () => {
-        if (!projected || projected.isLoading() || projected.isLoadingMore())
-          return;
-        const count = untrack(list).length;
-        // Earlier cache pages can duplicate the bounded history/channel lists.
-        // Traverse them in one load so an unchanged list height cannot strand
-        // scroll-triggered pagination before the first genuinely new result.
-        do {
-          await projected.loadMore();
-        } while (
-          projected.hasMore() &&
-          !projected.isLoading() &&
-          untrack(list).length === count
-        );
+        await projected?.loadMore();
       },
     };
   }) as QuickAccessContextValue['useList'];

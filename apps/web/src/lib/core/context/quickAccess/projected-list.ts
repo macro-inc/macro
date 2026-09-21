@@ -27,6 +27,8 @@ const PROJECTED_BUCKETS: ReadonlySet<Bucket> = new Set([
 ]);
 const BROWSE_PAGE_SIZE = 50;
 const SEARCH_LIMIT = 500;
+/** Maximum cache pages inspected by one initial browse or load-more action. */
+export const MAX_BROWSE_PAGES_PER_LOAD = 4;
 
 type Request = {
   query: string;
@@ -43,6 +45,8 @@ export function createProjectedList<T extends { id: string }>(options: {
   revision: Accessor<number>;
   searchTerm?: Accessor<string>;
   enabled?: Accessor<boolean>;
+  /** Visible fallback rows; duplicates do not grow the combined menu. */
+  existingItems?: Accessor<readonly T[]>;
   materialize: (documents: SearchDocumentWire[]) => Promise<T[]>;
 }) {
   const buckets =
@@ -68,6 +72,17 @@ export function createProjectedList<T extends { id: string }>(options: {
     setLoading(append ? 'more' : 'initial');
     const previous = append ? untrack(items) : [];
     const merged = new Map(previous.map((item) => [item.id, item]));
+    const visibleIds = new Set([
+      ...merged.keys(),
+      ...(append
+        ? untrack(() => options.existingItems?.() ?? []).map((item) => item.id)
+        : []),
+    ]);
+    // Refreshes may replay a window the user already loaded, but never scan
+    // beyond that window without the same bounded budget as a new browse.
+    const pageBudget = Math.max(pageCount, MAX_BROWSE_PAGES_PER_LOAD);
+    let fetchedPages = 0;
+    let foundNewRow = false;
     let cursor = append ? request.cursor : undefined;
     let pages = append ? request.pages : 0;
     try {
@@ -82,13 +97,21 @@ export function createProjectedList<T extends { id: string }>(options: {
         if (current !== request) return;
         const materialized = await options.materialize(page.documents);
         if (current !== request) return;
-        for (const item of materialized) merged.set(item.id, item);
+        for (const item of materialized) {
+          merged.set(item.id, item);
+          if (!visibleIds.has(item.id)) foundNewRow = true;
+        }
         cursor = page.nextCursor ?? undefined;
         pages += 1;
+        fetchedPages += 1;
         pageCount -= 1;
-        // Incomplete records and duplicates must not strand an empty page with
-        // no rows to scroll. Continue until there is a new row or no next page.
-      } while (cursor && (pageCount > 0 || merged.size === previous.length));
+        // Skip incomplete/duplicate pages only within this action's budget.
+        // Retain the continuation even if no visible row was found.
+      } while (
+        cursor &&
+        fetchedPages < pageBudget &&
+        (pageCount > 0 || !foundNewRow)
+      );
       request.cursor = cursor;
       request.pages = pages;
       setItems([...merged.values()]);

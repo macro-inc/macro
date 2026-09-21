@@ -8,6 +8,7 @@ import type { HistoryItem } from '@queries/history/types';
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createQuickAccessValue } from './QuickAccessSource';
+import { MAX_BROWSE_PAGES_PER_LOAD } from './projected-list';
 import type { QuickAccessContextValue } from './types';
 
 const mocks = vi.hoisted(() => ({
@@ -144,6 +145,38 @@ describe('Quick Access source integration', () => {
     expect(mocks.channelRefetch).toHaveBeenCalledOnce();
     dispose?.();
     expect(mocks.unsubscribe).toHaveBeenCalledOnce();
+  });
+
+  it('uses one shared scan budget when hundreds of projected rows duplicate history', async () => {
+    mocks.history = Array.from({ length: 500 }, (_, i) => ({
+      id: String(i),
+      type: 'document',
+      name: `Document ${i}`,
+      fileType: 'md',
+      ownerId: 'owner',
+    }));
+    mocks.search.mockImplementation(async (args) => {
+      const start = args.cursor
+        ? Number(args.cursor.recordKey.split(':')[1]) + 1
+        : 0;
+      const count = Math.min(50, 501 - start);
+      return page(start, count, start + count < 501);
+    });
+    const list = setup((source) => source.useList({ buckets: ['note'] }));
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(list.items()).toHaveLength(500);
+    expect(mocks.search).toHaveBeenCalledTimes(1);
+    await list.loadMore();
+    expect(mocks.search).toHaveBeenCalledTimes(1 + MAX_BROWSE_PAGES_PER_LOAD);
+    expect(list.items()).toHaveLength(500);
+    expect(list.hasMore()).toBe(true);
+    await list.loadMore();
+    expect(mocks.search).toHaveBeenCalledTimes(
+      1 + MAX_BROWSE_PAGES_PER_LOAD * 2
+    );
+    await list.loadMore();
+    expect(list.items()).toHaveLength(501);
+    expect(list.hasMore()).toBe(false);
   });
 
   it('loads through pages duplicated in local history until list height can grow', async () => {
