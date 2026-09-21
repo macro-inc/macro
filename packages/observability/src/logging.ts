@@ -36,7 +36,7 @@ export class Logging {
       processors: [
         {
           onEmit: (record, context) => {
-            if (userIdSuppressed(context)) return;
+            if (context && userIdSuppressed(context)) return;
             const userId = getUserId();
             if (userId !== undefined) record.setAttribute(ATTR_USER_ID, userId);
           },
