@@ -1591,7 +1591,7 @@ Also verify logout and notification opt-out while registration is pending: late
 backend or native completions must leave the receiver disabled. If a new account
 signs in before cleanup finishes, its registration must remain active afterward.
 
-Toast regions are labeled `Notifications (alt+T)`; five empty live regions always exist in
+Toast regions are labeled `Notifications (alt+T)`; seven empty live regions always exist in
 the a11y tree (ignore them when parsing snapshots).
 
 Staff Noise emails still create in-app notification rows, but do not send a new-notification
