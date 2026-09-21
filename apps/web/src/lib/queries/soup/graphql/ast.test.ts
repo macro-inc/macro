@@ -386,7 +386,14 @@ describe('makeGraphqlSoupInput', () => {
   it('expands file associations into native-evaluatable GraphQL file types', () => {
     expect(makeInput({ include: { fileAssoc: ['assoc:pdf'] } })).toMatchObject({
       initial: {
-        filters: { documentFilter: { literal: { fileType: 'pdf' } } },
+        filters: {
+          documentFilter: {
+            or: {
+              left: { literal: { fileType: 'pdf' } },
+              right: { literal: { fileType: 'ai' } },
+            },
+          },
+        },
       },
     });
     const code = makeInput({ include: { fileAssoc: ['assoc:code'] } });
