@@ -60,6 +60,8 @@ async fn server_instructions_describe_available_workflows() {
         "ReadThread",
         "CreateDocument",
         "ListEntities",
+        "CreateEmailDraft",
+        "SendEmail",
     ] {
         assert!(
             instructions.contains(expected_text),

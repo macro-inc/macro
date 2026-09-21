@@ -469,6 +469,14 @@ where
     }
 
     #[tracing::instrument(skip(self, link), fields(link_id = %link.id), err)]
+    async fn get_email_settings(
+        &self,
+        link: &Link,
+    ) -> Result<crate::domain::ports::LinkEmailSettings, EmailErr> {
+        self.email_repo.fetch_email_settings(link.id).await
+    }
+
+    #[tracing::instrument(skip(self, link), fields(link_id = %link.id), err)]
     async fn set_sender_policy(
         &self,
         link: &Link,

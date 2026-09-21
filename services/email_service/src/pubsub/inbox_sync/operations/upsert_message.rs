@@ -33,7 +33,9 @@ use models_email::gmail::inbox_sync::{InboxSyncOperation, UpsertMessagePayload};
 use models_email::service::attachment::{
     Attachment, AttachmentUploadArgs, AttachmentUploadDestination, AttachmentUploadMetadata,
 };
-use models_email::service::message::{Message, is_inbound, is_outbound, is_spam_or_trash};
+use models_email::service::message::{
+    Message, is_inbound, is_outbound, is_spam_or_trash, lands_in_inbox,
+};
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use models_email::service::thread::Thread;
 use notification::domain::models::{SendNotificationRequest, SendNotificationRequestBuilder};
@@ -114,6 +116,10 @@ pub async fn upsert_message(
 
     let is_sent = message.is_sent;
     let is_spam_or_trash = is_spam_or_trash(&message);
+    let is_trash = message
+        .labels
+        .iter()
+        .any(|label| label.provider_label_id == models_email::service::label::system_labels::TRASH);
 
     let sender_email = message
         .from
@@ -261,6 +267,7 @@ pub async fn upsert_message(
                     thread_id: thread_db_id,
                     provider_thread_id: provider_thread_id.clone(),
                     is_spam_or_trash,
+                    is_trash: Some(is_trash),
                 })
             }
             MessageSyncEventKind::Received => {
@@ -278,6 +285,7 @@ pub async fn upsert_message(
                     to_emails: event_to_emails,
                     attachment_count: message_attachment_count as u32,
                     is_spam_or_trash,
+                    is_trash: Some(is_trash),
                     received_at: event_received_at,
                 })
             }
@@ -584,11 +592,7 @@ fn thread_from_normalized_messages(
     mut messages: Vec<Message>,
 ) -> Thread {
     messages.sort_by_key(|message| message.internal_date_ts);
-    let inbox_visible = messages.iter().any(|message| {
-        message.labels.iter().any(|label| {
-            label.provider_label_id == models_email::service::label::system_labels::INBOX
-        })
-    });
+    let inbox_visible = messages.iter().any(lands_in_inbox);
     let is_read = messages.iter().all(|message| message.is_read);
     let latest_inbound_message_ts = messages
         .iter()

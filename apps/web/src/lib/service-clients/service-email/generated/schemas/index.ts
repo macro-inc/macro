@@ -305,6 +305,7 @@ export * from './rsvpCalendarEventRequestScope';
 export * from './sendMessageRequest';
 export * from './sendMessageResponse';
 export * from './settings';
+export * from './settingsMcpSendEnabled';
 export * from './settingsSignature';
 export * from './settingsSignatureOnRepliesForwards';
 export * from './sharedInboxConflictResponse';

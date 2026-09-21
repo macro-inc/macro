@@ -98,6 +98,49 @@
           }
         }
       }
+    },
+    "/contacts/hidden": {
+      "put": {
+        "tags": ["contacts"],
+        "summary": "PUT /contacts/hidden handler.",
+        "description": "Hides a contact from the caller's recipient suggestions (or restores it).\nMeant for addresses that should never be suggested again, like a mistyped\nemail learned from a bounced message.",
+        "operationId": "set_contact_hidden",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetContactHiddenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -124,6 +167,21 @@
               "type": "string"
             },
             "description": "The list of contact user IDs."
+          }
+        }
+      },
+      "SetContactHiddenRequest": {
+        "type": "object",
+        "description": "Request body for PUT /contacts/hidden.",
+        "required": ["user_id", "hidden"],
+        "properties": {
+          "hidden": {
+            "type": "boolean",
+            "description": "`true` removes the contact from the caller's suggestions; `false`\nrestores it. Only the caller's own list is affected."
+          },
+          "user_id": {
+            "type": "string",
+            "description": "The contact's user ID (e.g. `macro|name@example.com`)."
           }
         }
       }

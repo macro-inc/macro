@@ -1,6 +1,8 @@
 use chrono::Utc;
 use models_email::email::service;
-use models_email::email::service::message::{is_inbound, is_outbound, is_spam_or_trash};
+use models_email::email::service::message::{
+    is_inbound, is_outbound, is_spam_or_trash, lands_in_inbox,
+};
 use models_email::gmail::ThreadResource;
 use uuid::Uuid;
 
@@ -23,12 +25,7 @@ pub(crate) fn map_thread_resource_to_service(
         .collect::<Result<Vec<_>, _>>()?;
     messages.sort_by_key(|message| message.internal_date_ts);
 
-    let inbox_visible = messages.iter().any(|message| {
-        message
-            .labels
-            .iter()
-            .any(|label| label.provider_label_id == service::label::system_labels::INBOX)
-    });
+    let inbox_visible = messages.iter().any(lands_in_inbox);
     let is_read = messages.iter().all(|message| message.is_read);
     let latest_inbound_message_ts = messages
         .iter()

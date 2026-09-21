@@ -175,6 +175,8 @@ export const connectionBacklog =
 export const contactsExcluded = [
   'addContact',
   'getContacts',
+  // Per-user recipient-suggestion hygiene for the composer, not SDK surface.
+  'setContactHidden',
 ] as const satisfies readonly (keyof ContactsSdk)[];
 
 export const contactsBacklog =

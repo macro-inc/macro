@@ -54,14 +54,17 @@ pub trait EmailMessageEnqueuer: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
-/// The sending inbox's signature preferences, used by the send pipeline to
-/// decide whether to inject the signature into the outgoing body.
+/// One inbox's `email_settings` row: the signature preferences the send
+/// pipeline applies, and the opt-in that lets external agents send mail.
 #[derive(Debug, Clone, Default)]
 pub struct LinkEmailSettings {
     /// The saved signature HTML (already sanitized server-side), if any.
     pub signature: Option<String>,
     /// Whether the signature should be added on replies and forwards.
     pub signature_on_replies_forwards: bool,
+    /// Whether MCP clients may send email from this inbox. Off by default;
+    /// agents can always save drafts.
+    pub mcp_send_enabled: bool,
 }
 
 /// Outbound repository capabilities for authenticated user email catalogs.
@@ -652,6 +655,16 @@ pub trait EmailService: Send + Sync + 'static {
         policy: SenderPolicy,
     ) -> impl Future<Output = Result<(), EmailErr>> + Send;
 
+    /// Fetch one inbox's settings (signature policy, agent send opt-in).
+    /// Defaults to failing so a service that does not surface settings can
+    /// never be read as having opted in.
+    fn get_email_settings(
+        &self,
+        _link: &Link,
+    ) -> impl Future<Output = Result<LinkEmailSettings, EmailErr>> + Send {
+        async { Err(no_op_email_err()) }
+    }
+
     /// Delete an email filter by its ID for the given link.
     fn delete_email_filter(
         &self,
@@ -891,6 +904,10 @@ impl EmailService for NoOpEmailService {
         _sender_email: &str,
         _policy: SenderPolicy,
     ) -> Result<(), EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn get_email_settings(&self, _link: &Link) -> Result<LinkEmailSettings, EmailErr> {
         Err(no_op_email_err())
     }
 

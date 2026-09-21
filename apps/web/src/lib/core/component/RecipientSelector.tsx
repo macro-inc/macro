@@ -161,7 +161,10 @@ function getRecipientOptionTextValue(option: CombinedRecipientItem) {
   }
 }
 
-type RecipientComboboxItemProps = CollectionNode<CombinedRecipientItem>;
+type RecipientComboboxItemProps = CollectionNode<CombinedRecipientItem> & {
+  /** See `RecipientSelectorProps.onRemoveSuggestion`. */
+  onRemoveSuggestion?: (option: CombinedRecipientItem<'user'>) => void;
+};
 
 const RECIPIENT_OPTION_HEIGHT_PX = 36;
 const RECIPIENT_OPTION_MAX_VISIBLE_COUNT = 6;
@@ -183,11 +186,26 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
     });
   };
 
+  // Only address-book suggestions can be removed: thread participants and
+  // free-typed addresses are not stored contacts.
+  const removable = () =>
+    props.onRemoveSuggestion !== undefined &&
+    props.rawValue.kind === 'user' &&
+    !props.disabled;
+
+  const removeSuggestion = (event: Event) => {
+    // Keep the press from selecting the row underneath.
+    event.preventDefault();
+    event.stopPropagation();
+    const option = props.rawValue;
+    if (option.kind === 'user') props.onRemoveSuggestion?.(option);
+  };
+
   return (
     <Combobox.Item
       item={props}
       class={cn(
-        'flex flex-row h-9 px-2 rounded-lg justify-between items-center outline-none data-highlighted:bg-ink/5',
+        'group flex flex-row h-9 px-2 rounded-lg justify-between items-center outline-none data-highlighted:bg-ink/5',
         props.disabled && 'hover:bg-ink/5'
       )}
       onMouseEnter={props.disabled ? handleMouseEnter : undefined}
@@ -249,6 +267,22 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
         </Match>
       </Switch>
 
+      <Show when={removable()}>
+        <button
+          type="button"
+          class="shrink-0 rounded-md p-1 text-ink-muted opacity-0 transition-opacity hover:bg-hover hover:text-failure focus-visible:opacity-100 group-hover:opacity-100 group-data-highlighted:opacity-100 touch:opacity-100"
+          title="Remove from suggestions"
+          aria-label={`Remove ${getRecipientOptionEmail(props.rawValue) ?? ''} from suggestions`}
+          // The row selects on pointer/click; swallow both so removing a
+          // suggestion never also adds it as a recipient.
+          onPointerDown={removeSuggestion}
+          onPointerUp={(e) => e.stopPropagation()}
+          onClick={removeSuggestion}
+        >
+          <XIcon class="size-3.5" />
+        </button>
+      </Show>
+
       <Combobox.ItemIndicator>
         <CheckIcon class="size-4" />
       </Combobox.ItemIndicator>
@@ -281,6 +315,12 @@ type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   class?: string;
   depth?: 0 | 1 | 2 | 3 | 4;
   portalScope?: 'local';
+  /**
+   * When set, each address-book suggestion (`kind: 'user'`) shows a remove
+   * control on hover. Lets a user drop a stale or mistyped address from
+   * their suggestions without it also being added as a recipient.
+   */
+  onRemoveSuggestion?: (option: CombinedRecipientItem<'user'>) => void;
 };
 
 export function RecipientSelector<K extends CombinedRecipientKind>(
@@ -931,7 +971,12 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                       ref={setHandle}
                     >
                       {(item) => {
-                        return <RecipientComboboxItem {...item} />;
+                        return (
+                          <RecipientComboboxItem
+                            {...item}
+                            onRemoveSuggestion={props.onRemoveSuggestion}
+                          />
+                        );
                       }}
                     </VList>
                   );

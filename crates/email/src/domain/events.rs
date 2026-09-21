@@ -165,8 +165,23 @@ pub struct MessageReceivedMetadata {
     pub attachment_count: u32,
     /// Whether the message arrived as spam or trash.
     pub is_spam_or_trash: bool,
+    /// Whether the message arrived in the trash. Spam alone stays visible
+    /// (as noise), so realtime consumers need the two told apart. `None` on
+    /// events published before the field existed; read through
+    /// [`Self::is_trash`], which falls back to `is_spam_or_trash` for those.
+    #[serde(default)]
+    pub is_trash: Option<bool>,
     /// Provider-reported receive time.
     pub received_at: Option<DateTime<Utc>>,
+}
+
+impl MessageReceivedMetadata {
+    /// Whether the message is in the trash. A legacy event without the flag
+    /// is treated as trash whenever it was spam-or-trash, the conservative
+    /// reading that keeps trash out of realtime feeds.
+    pub fn is_trash(&self) -> bool {
+        self.is_trash.unwrap_or(self.is_spam_or_trash)
+    }
 }
 
 /// Metadata for [`EmailTopicEvent::MessageDraftSynced`].
@@ -186,6 +201,18 @@ pub struct MessageDraftSyncedMetadata {
     pub provider_thread_id: String,
     /// Whether the draft is currently spam or trash.
     pub is_spam_or_trash: bool,
+    /// Whether the draft is currently in the trash; see
+    /// [`MessageReceivedMetadata::is_trash`].
+    #[serde(default)]
+    pub is_trash: Option<bool>,
+}
+
+impl MessageDraftSyncedMetadata {
+    /// Whether the draft is in the trash; see
+    /// [`MessageReceivedMetadata::is_trash()`].
+    pub fn is_trash(&self) -> bool {
+        self.is_trash.unwrap_or(self.is_spam_or_trash)
+    }
 }
 
 /// Metadata for [`EmailTopicEvent::MessageSent`].

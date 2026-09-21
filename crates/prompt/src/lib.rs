@@ -39,7 +39,9 @@ pub static BASE_PROMPT: ComposedPrompt = tone::PROMPT
 /// the tool use instructions, skill-following rules, document-content linking
 /// rules, and email inbox behavior appended. Says nothing about
 /// composer-confirmed user tools — those hosts' toolsets execute
-/// `CreateCalendarEvent` directly and have no `SendEmail` at all.
+/// `CreateCalendarEvent` directly, save emails with `CreateEmailDraft`, and
+/// either have no `SendEmail` (channel bot) or a direct one gated on the
+/// inbox owner's opt-in (MCP server).
 pub static DIRECT_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
     .compose(&tool_usage::PROMPT)
     .compose(&skills::PROMPT)
@@ -168,8 +170,8 @@ mod tests {
     #[test]
     fn direct_tool_use_prompt_omits_composer_confirmed_user_tool_rules() {
         // Hosts on the direct prompt (channel bot, MCP) have no composer and
-        // no SendEmail tool; describing deferred user tools there would tell
-        // the model the opposite of what its tools actually do.
+        // no deferred SendEmail; describing deferred user tools there would
+        // tell the model the opposite of what its tools actually do.
         let direct = DIRECT_TOOL_USE_PROMPT.to_string();
         assert!(!direct.contains("PendingUserExecution"));
         assert!(!direct.contains("MUST use the `SendEmail` tool"));

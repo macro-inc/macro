@@ -184,15 +184,32 @@ fn extract_reply_to(headers_json: Option<&JsonValue>) -> Option<String> {
     None
 }
 
+/// determine if a message carries Gmail's SPAM label
+pub fn is_spam(msg: &Message) -> bool {
+    msg.labels
+        .iter()
+        .any(|label| label.provider_label_id == system_labels::SPAM)
+}
+
+/// determine if a message places its thread in the inbox views: Gmail's INBOX
+/// label, or SPAM — Macro surfaces spam in the Noise view rather than hiding
+/// it, so a user can fish out a misclassified message. The signal heuristic
+/// never counts a spam message, which is what keeps spam out of Signal.
+pub fn lands_in_inbox(msg: &Message) -> bool {
+    msg.labels.iter().any(|label| {
+        matches!(
+            label.provider_label_id.as_str(),
+            system_labels::INBOX | system_labels::SPAM
+        )
+    })
+}
+
 /// determine if a message is an inbound message for use in latest_inbound_message_ts
 /// - for thread ordering purposes in the FE. (inbox view)
 pub fn is_inbound(msg: &Message) -> bool {
-    // if it's not in the inbox, don't count it as inbound
-    if !msg
-        .labels
-        .iter()
-        .any(|label| label.provider_label_id == system_labels::INBOX)
-    {
+    // if it's not in the inbox (or spam, which the inbox views show as noise),
+    // don't count it as inbound
+    if !lands_in_inbox(msg) {
         return false;
     }
 

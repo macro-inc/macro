@@ -128,6 +128,33 @@ async fn signal_set_when_any_message_matches(pool: Pool<Postgres>) -> anyhow::Re
     Ok(())
 }
 
+// SPAM messages are excluded too: a spam thread is inbox-visible (so the user
+// can fish it out) but always noise.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("sync_thread_signal_flag"))
+)]
+async fn spam_thread_is_inbox_visible_noise(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    const THREAD: &str = "00000000-0000-0000-0000-00000000d209";
+    // Fixture marks it signal even though its only message is SPAM from a
+    // sender with no depriority label.
+    assert!(fetch_signal(&pool, THREAD).await?);
+
+    let mut conn = pool.acquire().await?;
+    update_thread_metadata(
+        &mut conn,
+        Uuid::parse_str(THREAD)?,
+        Uuid::parse_str("00000000-0000-0000-0000-000000000d01")?,
+    )
+    .await?;
+
+    assert!(!fetch_signal(&pool, THREAD).await?);
+    let state = fetch_inbox_state(&pool, THREAD).await?;
+    assert!(state.inbox_visible);
+    assert!(state.latest_inbound_message_ts.is_some());
+    Ok(())
+}
+
 // TRASH messages are excluded: they can't make a thread signal.
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",

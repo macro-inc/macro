@@ -28,7 +28,10 @@ use chat::inbound::toolset::chat_toolset;
 use crm::inbound::toolset::crm_toolset;
 use display_results::DisplayResults;
 use documents::inbound::toolset::document_toolset;
-use email::inbound::toolset::{email_toolset, mcp_toolset as email_mcp_toolset};
+use email::inbound::toolset::{
+    channel_bot_toolset as email_channel_bot_toolset, email_toolset,
+    mcp_toolset as email_mcp_toolset,
+};
 use import::inbound::toolset::import_toolset;
 use notification::inbound::ai_tool::notification_toolset;
 use projects::inbound::toolset::project_toolset;
@@ -131,11 +134,14 @@ pub enum AiHost {
     /// waits on, never a pending composer.
     AgentSession,
     /// The channel-mention bot: no composer, so `CreateCalendarEvent`
-    /// executes directly in the agent loop and `SendEmail` is omitted.
+    /// executes directly in the agent loop, `SendEmail` is omitted, and
+    /// `CreateEmailDraft` saves what the user then sends from Macro.
     ChannelBot,
     /// The MCP server: like [`AiHost::ChannelBot`] for user tools — MCP
     /// clients apply their own confirmation policy from tool annotations —
-    /// and without the chat frontend's discovery/display tools.
+    /// and without the chat frontend's discovery/display tools. Its
+    /// `SendEmail` delivers directly and is gated on the inbox owner's
+    /// opt-in (`email_settings.mcp_send_enabled`).
     Mcp,
 }
 
@@ -149,7 +155,10 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
         AiHost::Chat | AiHost::AgentSession => toolset
             .add_subtoolset::<ToolEmailToolContext>(email_toolset())
             .add_subtoolset::<ToolCalendarToolContext>(calendar_toolset()),
-        AiHost::ChannelBot | AiHost::Mcp => toolset
+        AiHost::ChannelBot => toolset
+            .add_subtoolset::<ToolEmailToolContext>(email_channel_bot_toolset())
+            .add_subtoolset::<ToolCalendarToolContext>(calendar_mcp_toolset()),
+        AiHost::Mcp => toolset
             .add_subtoolset::<ToolEmailToolContext>(email_mcp_toolset())
             .add_subtoolset::<ToolCalendarToolContext>(calendar_mcp_toolset()),
     };

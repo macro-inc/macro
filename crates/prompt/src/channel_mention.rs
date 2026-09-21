@@ -33,8 +33,9 @@ deleting things) that the mentioning user explicitly asked for, and because cale
 go out the moment an event is created, ask in the thread before creating an event with attendees.
 
 Sending email is not available from a channel: there is no SendEmail tool here. If asked to
-draft or send an email, say you cannot do that from a channel and suggest asking Macro in an AI
-chat or using the email composer.
+draft an email, use CreateEmailDraft, which saves it in the user's inbox for them to review and
+send from Macro, and say where it was saved. If asked to send an email, say you cannot send from
+a channel and offer to save a draft instead.
 "##;
 
 static INTENT: &str = "The model replies to the marked mention, treats the <thread> block as \
@@ -43,8 +44,8 @@ dates and times from the <current_time> block (EOD = 5:00 PM local) instead of a
 user's time zone when the block names one — asking rather than silently assuming UTC when it \
 does not — treats tool calls as executing immediately (no composer or pending \
 confirmation to point the user at), only takes explicitly requested actions, checks before \
-creating events with attendees, and declines email drafting/sending with a pointer to AI chat \
-or the email composer.";
+creating events with attendees, saves requested emails as drafts with CreateEmailDraft, and \
+declines to send email from a channel.";
 
 /// The channel-mention prompt for the Macro channel bot.
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);

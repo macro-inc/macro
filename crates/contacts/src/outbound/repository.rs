@@ -28,11 +28,20 @@ impl ContactsRepository for DbContactsRepository {
         &self,
         user_id: MacroUserIdStr<'_>,
     ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        // Suppressed contacts are filtered on read rather than deleted, since
+        // inbox sync keeps re-upserting the underlying edge.
         let rows = sqlx::query!(
             "
-            SELECT user1 AS contact FROM contacts_connections WHERE user2 = $1
-            UNION
-            SELECT user2 AS contact FROM contacts_connections WHERE user1 = $1
+            SELECT edge.contact
+            FROM (
+                SELECT user1 AS contact FROM contacts_connections WHERE user2 = $1
+                UNION
+                SELECT user2 AS contact FROM contacts_connections WHERE user1 = $1
+            ) edge
+            WHERE NOT EXISTS (
+                SELECT 1 FROM contacts_hidden h
+                WHERE h.owner = $1 AND h.contact = edge.contact
+            )
             ",
             user_id.as_ref()
         )
@@ -87,6 +96,45 @@ impl ContactsRepository for DbContactsRepository {
         .inspect_err(|e| {
             tracing::error!(error=?e, "couldn't create connections");
         })?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn set_contact_hidden(
+        &self,
+        owner: MacroUserIdStr<'_>,
+        contact: MacroUserIdStr<'_>,
+        hidden: bool,
+    ) -> Result<(), Report> {
+        if hidden {
+            // Only a current connection can be hidden: that is the only thing
+            // that gets suggested, and it bounds the table by the owner's own
+            // contact count rather than by whatever ids a client sends.
+            sqlx::query!(
+                "
+                INSERT INTO contacts_hidden(owner, contact)
+                SELECT $1, $2
+                WHERE EXISTS (
+                    SELECT 1 FROM contacts_connections
+                    WHERE (user1 = $1 AND user2 = $2) OR (user1 = $2 AND user2 = $1)
+                )
+                ON CONFLICT (owner, contact) DO NOTHING
+                ",
+                owner.as_ref(),
+                contact.as_ref()
+            )
+            .execute(&self.db)
+            .await?;
+        } else {
+            sqlx::query!(
+                "DELETE FROM contacts_hidden WHERE owner = $1 AND contact = $2",
+                owner.as_ref(),
+                contact.as_ref()
+            )
+            .execute(&self.db)
+            .await?;
+        }
 
         Ok(())
     }

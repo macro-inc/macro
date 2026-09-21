@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT link_id, signature_on_replies_forwards, signature\n        FROM email_settings\n        WHERE link_id = $1\n        ",
+  "query": "\n        SELECT link_id, signature_on_replies_forwards, signature, mcp_send_enabled\n        FROM email_settings\n        WHERE link_id = $1\n        ",
   "describe": {
     "columns": [
       {
@@ -17,6 +17,11 @@
         "ordinal": 2,
         "name": "signature",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "mcp_send_enabled",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
@@ -27,8 +32,9 @@
     "nullable": [
       false,
       false,
-      true
+      true,
+      false
     ]
   },
-  "hash": "f69d2ac9d0be422ed1b42f04ce1d903d3f19a8bb85f19c40563ef812746cea51"
+  "hash": "2433fdadeccc53bf6df68da8a6e6af6857f123d33990215207a0b6e1051bfc44"
 }

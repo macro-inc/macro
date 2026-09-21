@@ -3,7 +3,7 @@ use crate::domain::ports::ContactsService;
 use axum::extract::{FromRef, FromRequestParts, Json, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::routing::get;
+use axum::routing::{get, put};
 use axum::{RequestPartsExt, Router};
 use axum_extra::extract::Cached;
 use macro_authorization::{
@@ -35,6 +35,17 @@ pub struct AddContactRequest {
     /// The user ID to add as a contact.
     #[schema(value_type = String)]
     pub user_id: MacroUserIdStr<'static>,
+}
+
+/// Request body for PUT /contacts/hidden.
+#[derive(Deserialize, Serialize, Debug, ToSchema)]
+pub struct SetContactHiddenRequest {
+    /// The contact's user ID (e.g. `macro|name@example.com`).
+    #[schema(value_type = String)]
+    pub user_id: MacroUserIdStr<'static>,
+    /// `true` removes the contact from the caller's suggestions; `false`
+    /// restores it. Only the caller's own list is affected.
+    pub hidden: bool,
 }
 
 /// GET /contacts handler.
@@ -97,6 +108,43 @@ pub async fn add_contact_handler<S: ContactsService, Auth: MacroAuthorizationSer
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "failed to create contact connection");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// PUT /contacts/hidden handler.
+///
+/// Hides a contact from the caller's recipient suggestions (or restores it).
+/// Meant for addresses that should never be suggested again, like a mistyped
+/// email learned from a bounced message.
+#[utoipa::path(put,
+    tag = "contacts",
+    operation_id = "set_contact_hidden",
+    path = "/contacts/hidden",
+    request_body = SetContactHiddenRequest,
+    responses(
+    (status = 204),
+    (status = 401, body=String),
+    (status = 500, body=String)))
+]
+#[instrument(
+    skip(service, authorization, body),
+    fields(actor = %authorization.acting_entity(), hidden = body.hidden),
+    err
+)]
+pub async fn set_contact_hidden_handler<S: ContactsService, Auth: MacroAuthorizationService>(
+    State(service): State<Arc<S>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Json(body): Json<SetContactHiddenRequest>,
+) -> Result<StatusCode, StatusCode> {
+    let user = authorization.authorization.user;
+
+    service
+        .set_contact_hidden(user.macro_user_id.clone(), body.user_id, body.hidden)
+        .await
+        .map_err(|e| {
+            tracing::error!(error=?e, "failed to update contact visibility");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
     Ok(StatusCode::NO_CONTENT)
@@ -241,6 +289,10 @@ where
 
     Router::new()
         .route("/contacts", get(handler::<S, Auth>))
+        .route(
+            "/contacts/hidden",
+            put(set_contact_hidden_handler::<S, Auth>),
+        )
         .merge(post_route)
         .with_state(state)
 }
@@ -254,11 +306,13 @@ where
         paths(
             handler,
             add_contact_handler,
+            set_contact_hidden_handler,
         ),
         components(
             schemas(
                 GetContactsResponse,
                 AddContactRequest,
+                SetContactHiddenRequest,
             ),
         ),
         tags(

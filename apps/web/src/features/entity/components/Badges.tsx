@@ -84,6 +84,11 @@ export function DraftBadge() {
   return <Badge class="text-warning border-edge-muted px-2">draft</Badge>;
 }
 
+/** Marks a thread the provider filed as spam (shown in Noise, not hidden). */
+export function SpamBadge() {
+  return <Badge class="text-failure border-edge-muted px-2">spam</Badge>;
+}
+
 function _ImportantBadge() {
   return (
     <Badge class="text-accent bg-accent/10 px-2 border-accent/10">

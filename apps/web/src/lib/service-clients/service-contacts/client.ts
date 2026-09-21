@@ -43,4 +43,16 @@ export const contactsClient = {
       body: JSON.stringify({ user_id: userId }),
     });
   },
+  /**
+   * Hides (or restores) one of the caller's contacts in recipient
+   * suggestions. Only the caller's own list changes; the contact keeps
+   * seeing the caller.
+   */
+  async setContactHidden(userId: string, hidden: boolean) {
+    return contactsFetch(`/contacts/hidden`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, hidden }),
+    });
+  },
 };

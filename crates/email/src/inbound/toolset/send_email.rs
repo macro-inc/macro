@@ -92,6 +92,66 @@ impl ToolAnnotated for SendEmail {
         ToolAnnotations::destructive("Send email").with_open_world();
 }
 
+/// The recipients and content of an outgoing email, shared by the chat
+/// `SendEmail` tool and the MCP variant.
+pub(super) struct OutgoingEmail<'a> {
+    pub subject: &'a str,
+    /// Markdown, or the base64url HTML a composer exported.
+    pub body: &'a str,
+    pub to: &'a [EmailRecipient],
+    pub cc: &'a [EmailRecipient],
+    pub bcc: &'a [EmailRecipient],
+    pub replying_to_id: Option<Uuid>,
+    /// Per-message signature override; `None` applies the inbox default.
+    pub include_signature: Option<bool>,
+}
+
+/// Renders the body and sends `email` from `link` on behalf of
+/// `acting_user`. `accessible_inboxes` is every inbox the caller can reach,
+/// so a reply can target a thread in a delegated inbox.
+pub(super) async fn send_email<T, G, E>(
+    service_context: &EmailToolContext<T, G, E>,
+    acting_user: MacroUserIdStr<'static>,
+    link: &crate::domain::models::Link,
+    accessible_inboxes: &[crate::domain::models::Link],
+    email: OutgoingEmail<'_>,
+) -> Result<crate::domain::models::CreatedDraft, ToolCallError>
+where
+    T: EmailService,
+    G: GmailTokenProvider,
+    E: EntityAccessService,
+{
+    let body = service_context.render_body(email.body).await?;
+
+    let input = CreateDraftInput {
+        db_id: None,
+        provider_id: None,
+        replying_to_id: email.replying_to_id,
+        provider_thread_id: None,
+        thread_db_id: None,
+        subject: email.subject.to_owned(),
+        to: email.to.iter().cloned().map(ContactInfo::from).collect(),
+        cc: email.cc.iter().cloned().map(ContactInfo::from).collect(),
+        bcc: email.bcc.iter().cloned().map(ContactInfo::from).collect(),
+        body_text: body.text,
+        body_html: Some(body.html),
+        body_macro: None,
+        headers_json: None,
+        send_time: None,
+        include_signature: email.include_signature,
+        actor: Some(acting_user),
+    };
+
+    service_context
+        .service
+        .send_message(link, accessible_inboxes, input)
+        .await
+        .map_err(|e| ToolCallError {
+            description: format!("Failed to send email: {e}"),
+            internal_error: e.into(),
+        })
+}
+
 #[async_trait]
 impl<T, G, E> AsyncTool<EmailToolContext<T, G, E>> for SendEmail
 where
@@ -111,42 +171,27 @@ where
         service_context: ServiceContext<EmailToolContext<T, G, E>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
-        println!("CALL SEND EMAIL {:?}", request_context);
-
         let acting_user = MacroUserIdStr((*request_context.user_id).clone());
         let link = service_context.resolve_link(acting_user.clone()).await?;
 
-        let body = service_context.render_body(&self.body).await?;
-
-        let input = CreateDraftInput {
-            db_id: None,
-            provider_id: None,
-            replying_to_id: self.replying_to_id,
-            provider_thread_id: None,
-            thread_db_id: None,
-            subject: self.subject.clone(),
-            to: self.to.iter().cloned().map(ContactInfo::from).collect(),
-            cc: self.cc.iter().cloned().map(ContactInfo::from).collect(),
-            bcc: self.bcc.iter().cloned().map(ContactInfo::from).collect(),
-            body_text: body.text,
-            body_html: Some(body.html),
-            body_macro: None,
-            headers_json: None,
-            send_time: None,
-            // Composer override when present; otherwise None lets the backend
-            // apply the default signature policy.
-            include_signature: self.include_signature,
-            actor: Some(acting_user),
-        };
-
-        let sent = service_context
-            .service
-            .send_message(&link, std::slice::from_ref(&link), input)
-            .await
-            .map_err(|e| ToolCallError {
-                description: format!("Failed to send email: {e}"),
-                internal_error: e.into(),
-            })?;
+        let sent = send_email(
+            &service_context,
+            acting_user,
+            &link,
+            std::slice::from_ref(&link),
+            OutgoingEmail {
+                subject: &self.subject,
+                body: &self.body,
+                to: &self.to,
+                cc: &self.cc,
+                bcc: &self.bcc,
+                replying_to_id: self.replying_to_id,
+                // Composer override when present; otherwise None lets the
+                // backend apply the default signature policy.
+                include_signature: self.include_signature,
+            },
+        )
+        .await?;
 
         Ok(SendEmailResponse::Sent {
             message_id: sent.db_id,

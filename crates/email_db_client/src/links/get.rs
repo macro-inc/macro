@@ -201,6 +201,7 @@ struct DbInboxDetailsRow {
     updated_at: DateTime<Utc>,
     signature_on_replies_forwards: Option<bool>,
     signature: Option<String>,
+    mcp_send_enabled: Option<bool>,
     latest_backfill_status: Option<db::backfill::BackfillJobStatus>,
     google_granted_scopes: Vec<String>,
     calendar_disabled: bool,
@@ -234,6 +235,7 @@ pub async fn fetch_inbox_details_for_macro_id(
                l.updated_at as "updated_at!",
                s.signature_on_replies_forwards as "signature_on_replies_forwards?",
                s.signature,
+               s.mcp_send_enabled as "mcp_send_enabled?",
                bj.status as "latest_backfill_status?: _",
                c.sfs_photo_url as "photo_url?",
                COALESCE(g.granted_scopes, '{}') AS "google_granted_scopes!",
@@ -279,6 +281,7 @@ pub async fn fetch_inbox_details_for_macro_id(
                 // Missing settings row → schema default (FALSE).
                 signature_on_replies_forwards: row.signature_on_replies_forwards.unwrap_or(false),
                 signature: row.signature,
+                mcp_send_enabled: row.mcp_send_enabled.unwrap_or(false),
             };
             let link = link::Link::try_from(DbLink {
                 id: row.id,
