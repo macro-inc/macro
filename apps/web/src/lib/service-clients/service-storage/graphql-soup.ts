@@ -68,6 +68,7 @@ import {
   type SoupPropertyFieldsFragment,
   type SoupQuery,
 } from './graphql/generated/graphql';
+import { shouldRetryGraphqlMutation } from './graphql-mutation-retry';
 import {
   createGraphqlSoupSubscriptionsLifecycle,
   createGraphqlSoupWebSocketUrlResolver,
@@ -456,9 +457,9 @@ export function getGraphqlSoupClient(): Client {
             extractIdentity: (data) =>
               (data as Partial<SoupQuery | GroupSoupQuery> | undefined)?.user
                 ?.id,
-            // Transport failures remain queued with their optimistic layer;
-            // GraphQL application errors are permanent and roll back.
-            shouldRetryMutation: (error) => error.networkError != null,
+            // Preserve the optimistic layer on transport failures and on
+            // application failures the server explicitly allows us to retry.
+            shouldRetryMutation: shouldRetryGraphqlMutation,
           }),
           graphqlSoupSubscriptionExchange(graphqlWsClient),
           fetchExchange,

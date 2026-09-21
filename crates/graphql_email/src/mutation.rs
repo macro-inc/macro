@@ -356,8 +356,8 @@ fn saved_draft_message(saved: SavedUserDraft) -> Message {
 
 /// Error taxonomy for the draft mutations (save and delete), mirroring the
 /// REST `CreateDraftError` mapping with machine-readable `extensions.code`
-/// values the client's offline queue can branch on after a replayed
-/// mutation permanently fails.
+/// values the client's offline queue can branch on. Repository failures are
+/// retryable: a write may have committed before loading its response failed.
 fn draft_mutation_error(error: &EmailErr) -> async_graphql::Error {
     let (message, code) = match error {
         EmailErr::MessageAlreadySent(_) => {
@@ -371,9 +371,20 @@ fn draft_mutation_error(error: &EmailErr) -> async_graphql::Error {
             ("email draft body is invalid", "INVALID")
         }
         EmailErr::Unauthorized => ("not authorized to modify email draft", "UNAUTHORIZED"),
+        EmailErr::RepoErr(_) => {
+            return retryable_draft_error(async_graphql::Error::new("email draft mutation failed"));
+        }
         _ => ("email draft mutation failed", "INTERNAL"),
     };
     async_graphql::Error::new(message).extend_with(|_, extensions| extensions.set("code", code))
+}
+
+/// Draft writes use stable identities, so retrying an uncertain outcome is safe.
+fn retryable_draft_error(error: async_graphql::Error) -> async_graphql::Error {
+    error.extend_with(|_, extensions| {
+        extensions.set("code", "INTERNAL");
+        extensions.set("retryable", true);
+    })
 }
 
 fn mutation_error(error: &EmailErr) -> async_graphql::Error {
@@ -520,7 +531,9 @@ where
             })?;
 
         let draft_id = saved.draft.db_id;
-        let thread = reload_thread::<O>(ctx, user_id, saved.draft.thread_db_id).await?;
+        let thread = reload_thread::<O>(ctx, user_id, saved.draft.thread_db_id)
+            .await
+            .map_err(retryable_draft_error)?;
         Ok(SaveEmailDraftPayload {
             draft_id,
             draft: GraphqlSoupEmailMessage::from_content(EmailContentMessage::from(
