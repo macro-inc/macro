@@ -118,9 +118,10 @@ export function createProjectedList<T extends { id: string }>(options: {
       setHasMore(cursor !== undefined);
     } catch (error) {
       if (current !== request) return;
-      // Keep visible rows. Suppress automatic end-of-list retry loops; an
-      // explicit loadMore or the next revision/query change can retry locally.
-      setHasMore(false);
+      // Rows and their continuation are a committed window. A failed replay
+      // (or append) must leave both intact so normal pagination can retry.
+      // The mentions page loader guards automatic retries at the same frontier.
+      setHasMore(request.cursor !== undefined);
       console.warn('Quick Access cache search failed', error);
     } finally {
       if (current === request) {
@@ -147,6 +148,7 @@ export function createProjectedList<T extends { id: string }>(options: {
     const request: Request = {
       query,
       pages: sameQuery ? (previous?.pages ?? 1) : 1,
+      cursor: sameQuery ? previous?.cursor : undefined,
       busy: false,
     };
     current = request;

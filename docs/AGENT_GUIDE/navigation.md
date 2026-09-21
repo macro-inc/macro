@@ -305,7 +305,8 @@ Down); mentions offer **View all** for a category and then load more local pages
 Counts describe loaded results, not the full server corpus. Scans through
 incomplete or already-visible cache hits are bounded per action; continue
 navigating/scrolling, or narrow the query, to resume from the saved cursor.
-A missing item may still be uncached, but should appear after hydration without retyping. Cmd+K's
+A failed local refresh keeps displayed rows and their continuation available for
+another pagination attempt. A missing item may still be uncached, but should appear after hydration without retyping. Cmd+K's
 local search excludes unsupported email hits before limiting entity results;
 email mentions keep their separate search-service path.
 
