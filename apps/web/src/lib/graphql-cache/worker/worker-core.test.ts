@@ -923,14 +923,14 @@ describe('CacheWorkerCore', () => {
     });
   });
 
-  it('keeps revision-advancing background hydration silent', async () => {
+  it.each([true, false])('notifies only hydration listeners when its revision advances (%s)', async (revisionAdvanced) => {
     const hydrateQuery = vi.fn().mockResolvedValue({
       revision: INITIAL_CACHE_REVISION,
-      revisionAdvanced: true,
       changed: ['GraphqlSoupDocument:doc-1'],
       affectedOps: ['client:7'],
       reset: false,
       data: { cursor: 'next' },
+      revisionAdvanced,
     });
     loadCacheWasmMock.mockResolvedValue({
       openCache: vi.fn().mockResolvedValue({ hydrateQuery }),
@@ -958,6 +958,9 @@ describe('CacheWorkerCore', () => {
     expect(messages).not.toContainEqual(
       expect.objectContaining({ kind: 'cache-changed' })
     );
+    expect(messages.filter((message) =>
+      typeof message === 'object' && message !== null && 'kind' in message && message.kind === 'cache-hydrated'
+    )).toEqual(revisionAdvanced ? [{ kind: 'cache-hydrated', revision: INITIAL_CACHE_REVISION }] : []);
     expect(messages.at(-1)).toEqual({
       id: 2,
       ok: true,

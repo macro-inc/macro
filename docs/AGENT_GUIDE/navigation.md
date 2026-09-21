@@ -298,6 +298,15 @@ Opens a dialog with a focused `Search...` textbox and bubble-style category radi
 the top hit. Also exposes commands: `Create`, `Change theme`, `MCP setup`. Keys: Tab cycles
 category, Esc closes. The category strip and footer have transparent backgrounds.
 
+With the local GraphQL cache enabled, Cmd+K and document/channel `@` mentions
+search cached entities without waiting for a server search. Background hydration
+updates an already-open menu. For an empty search, scroll toward the end (or use
+Down); mentions offer **View all** for a category and then load more local pages.
+Counts describe loaded results, not the full server corpus. A missing item may
+still be uncached, but should appear after hydration without retyping. Cmd+K's
+local search excludes unsupported email hits before limiting entity results;
+email mentions keep their separate search-service path.
+
 ## Keyboard model (from the in-app guide; verified partially)
 
 - `Ctrl/Cmd+K` — jump to anything by name.

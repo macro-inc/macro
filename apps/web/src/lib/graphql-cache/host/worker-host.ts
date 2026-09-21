@@ -58,6 +58,7 @@ import {
 } from '../worker/startup';
 import { createNoopCacheHost } from './noop-host';
 import type {
+  CacheChangeOptions,
   CacheHost,
   CacheReadArgs,
   CacheWriteArgs,
@@ -202,6 +203,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   const replacementReadOpKeys = new Set<number>();
   const affectedSubscribers = new Set<(opKeys: number[]) => void>();
   const cacheChangeSubscribers = new Set<(revision: CacheRevision) => void>();
+  const hydrationSubscribers = new Set<(revision: CacheRevision) => void>();
   const generationChangeSubscribers = new Set<() => void>();
   const settlementSubscribers = new Set<
     (settlement: MutationSettlement) => void
@@ -262,6 +264,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   const onMessage = (event: MessageEvent<WorkerMessage>) => {
     const msg = event.data;
     if (isCachePush(msg)) {
+      if (msg.kind === 'cache-hydrated') {
+        for (const cb of hydrationSubscribers) cb(msg.revision);
+        return;
+      }
       if (msg.kind === 'cache-changed') {
         for (const cb of cacheChangeSubscribers) cb(msg.revision);
         return;
@@ -537,6 +543,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   function clearSubscribers(): void {
     affectedSubscribers.clear();
     cacheChangeSubscribers.clear();
+    hydrationSubscribers.clear();
     generationChangeSubscribers.clear();
     settlementSubscribers.clear();
   }
@@ -1179,9 +1186,16 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       return () => affectedSubscribers.delete(cb);
     },
 
-    onCacheChanged(cb: (revision: CacheRevision) => void): () => void {
+    onCacheChanged(
+      cb: (revision: CacheRevision) => void,
+      options?: CacheChangeOptions
+    ): () => void {
       cacheChangeSubscribers.add(cb);
-      return () => cacheChangeSubscribers.delete(cb);
+      if (options?.includeHydration) hydrationSubscribers.add(cb);
+      return () => {
+        cacheChangeSubscribers.delete(cb);
+        hydrationSubscribers.delete(cb);
+      };
     },
 
     onCacheGenerationChanged(cb: () => void): () => void {
