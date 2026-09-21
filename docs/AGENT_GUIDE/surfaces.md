@@ -423,7 +423,7 @@ Sidebar `Search` button → `/app/.../component/search` with a focused query box
 (including a `Featured Results` group) filter live as you type; no Enter needed. `Ctrl+K` is
 usually faster for jump-to-entity; `/` opens workspace search when no editor is focused.
 
-Agent-session results use the robot icon and show a highlighted transcript snippet.
+Agent-session results use the sparkle icon and show a highlighted transcript snippet.
 `Show more [N]` expands additional matches, labeled **User / Agent · Turn N**.
 Click a snippet to open `/app/agent/<uuid>` at that folded message; a plain row click
 opens the first content match, or opens the session normally for a title-only hit. These are

@@ -89,7 +89,9 @@ files` and the `Send message` button. Replies also include a close-reply control
 
 Hover a message for its action menu. `Reply` on a top-level message opens that thread. On
 an existing thread reply, it inserts a one-line reply-target reference into the composer;
-clicking the reference navigates back to that reply. References to the current
+clicking the reference navigates back to that reply. Threads with more than three
+replies collapse the middle behind an `N more replies` control; participant
+avatars there use the shared sparkle mark for agents and other bots. References to the current
 channel navigate in place, including inside the preview panel, without opening
 another split. If text in the message is
 browser-selected before `Reply` is clicked, the reference previews only the selected text.
