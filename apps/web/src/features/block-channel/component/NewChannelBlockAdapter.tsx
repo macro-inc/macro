@@ -19,6 +19,7 @@ import { ChannelCallTab } from '@channel/Call/ChannelCallTab';
 import { getCallJoinTab } from '@channel/Call/call-tabs';
 import { useCall } from '@channel/Call/use-call';
 import { isNativeIosCallKitEnabled } from '@channel/Call/use-callkit';
+import { ChannelCallsTab } from '@channel/Calls/ChannelCallsTab';
 import {
   type ChannelHandle,
   type ChannelProps,
@@ -178,6 +179,8 @@ function NewTop(props: { channelId: string }) {
     let filtered = [...CHANNEL_TABS];
     if (channelType() === ChannelType.direct_message)
       filtered = filtered.filter((tab) => tab.value !== 'participants');
+    if (!ENABLE_CALLS)
+      filtered = filtered.filter((tab) => tab.value !== 'calls');
     if (!showCallTab())
       filtered = filtered.filter((tab) => tab.value !== 'call');
     return filtered;
@@ -612,6 +615,9 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
             </Match>
             <Match when={activeTab() === 'attachments'}>
               <ChannelAttachmentsTab channelId={channelId} />
+            </Match>
+            <Match when={activeTab() === 'calls' && ENABLE_CALLS}>
+              <ChannelCallsTab channelId={channelId} />
             </Match>
             <Match when={activeTab() === 'participants'}>
               <ChannelParticipantsTab

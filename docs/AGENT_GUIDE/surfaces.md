@@ -572,6 +572,10 @@ and summaries appear here; empty state notes "Calls are available to agents."
 
 On phones, recorded call headers omit the **Call Again** action.
 
+A channel's `Calls` tab lists that channel's recordings with the same rows, filtered
+by the channel id. Its search field matches call names and transcripts in that
+channel.
+
 If a recording fails to play, reload the page to obtain a fresh recording link,
 or use **Open or download recording**. The playback warning does not assume
 that the failure is caused by an unsupported media format.
