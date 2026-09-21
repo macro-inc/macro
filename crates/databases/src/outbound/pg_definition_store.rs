@@ -4,7 +4,7 @@
 //! column are owned by the database (`database_id` set, `user_id`/`team_id`
 //! NULL, `is_system` false), which keeps them out of the shared user/team
 //! property namespace — see
-//! `crates/macro_db_client/migrations/20260918183705_add_database_property_owner.up.sql`.
+//! `crates/macro_db_client/migrations/20260918214929_add_database_property_owner.up.sql`.
 //!
 //! Mechanics only: policy (who may bind what) lives in the domain service.
 
@@ -89,7 +89,7 @@ impl<P: PropertiesRepo<Err = anyhow::Error>> PgDefinitionStore<P> {
 impl<P: PropertiesRepo<Err = anyhow::Error>> ColumnDefinitionStore for PgDefinitionStore<P> {
     type Err = PgDefinitionStoreError;
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, viewer, binding), err)]
     async fn resolve_binding(
         &self,
         database_id: DatabaseId,

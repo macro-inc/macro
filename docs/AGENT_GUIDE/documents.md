@@ -32,6 +32,7 @@ flag in every environment. Team targeting is configured in PostHog; ordinary
 document permissions continue to control access to each workbook.
 
 Choose **Create → Spreadsheet**, or **New → Spreadsheet** in Files or a folder.
+The keyboard shortcut is **C → W** (workbook); **C → B** creates a database.
 Native workbooks open at `/app/spreadsheet/<uuid>` and use the normal document
 title bar with **Ask Macro** and **Share** at the top right. The **File actions**
 ellipsis beside the title uses the same menu as documents, including rename,

@@ -224,6 +224,42 @@ fn insert_translates_display_values_to_typed_cells() {
 }
 
 #[test]
+fn select_labels_round_trip_with_duplicates_and_literal_suffixes() {
+    let f = fixture(AccessGrant::Edit);
+    let mut column = f.entries[0].columns[0].clone();
+    let mut options: Vec<_> = ["Done", "Done", "Done (2)"]
+        .into_iter()
+        .enumerate()
+        .map(|(order, label)| {
+            let mut option = f.status.property_options[0].clone();
+            option.id = macro_uuid::generate_uuid_v7();
+            option.display_order = order as i32;
+            option.value = PropertyOptionValue::String(label.into());
+            option
+        })
+        .collect();
+    let ids: Vec<_> = options.iter().map(|option| option.id).collect();
+    // Storage order is not display order, and literal suffixes can collide
+    // with labels generated for duplicate options.
+    options.reverse();
+    column.definition.property_options = options;
+    for (label, id) in ["Done", "Done (2)", "Done (2) (2)"].into_iter().zip(&ids) {
+        assert_eq!(
+            cell_write(&column, &t(label)).unwrap(),
+            Some(SetPropertyValue::SelectOption { option_id: *id })
+        );
+    }
+
+    column.definition.definition.is_multi_select = true;
+    assert_eq!(
+        cell_write(&column, &t(r#"["Done (2)", "Done (2) (2)", "Done"]"#)).unwrap(),
+        Some(SetPropertyValue::MultiSelectOption {
+            option_ids: vec![ids[1], ids[2], ids[0]]
+        })
+    );
+}
+
+#[test]
 fn update_clears_with_null_and_rejects_unknown_options() {
     let f = fixture(AccessGrant::Edit);
     let row = Uuid::new_v4();

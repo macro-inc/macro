@@ -35,6 +35,7 @@ const source = {
 let presenceStyles: HTMLStyleElement;
 beforeEach(() => {
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+  Element.prototype.scrollIntoView = vi.fn();
   presenceStyles = document.createElement('style');
   presenceStyles.textContent = '[role=dialog] { animation-name: none; }';
   document.head.append(presenceStyles);
@@ -50,6 +51,7 @@ function setup(
     canEdit?: boolean;
     value?: DatabaseCellValue;
     fail?: boolean;
+    save?: (next: DatabaseCellValue) => Promise<boolean>;
     navigate?: (direction: 1 | -1) => boolean;
   } = {}
 ) {
@@ -58,6 +60,7 @@ function setup(
   );
   const write = vi.fn(async (next: DatabaseCellValue) => {
     if (options.fail) return false;
+    if (options.save && !(await options.save(next))) return false;
     setValue(next);
     return true;
   });
@@ -80,6 +83,66 @@ function setup(
 }
 
 describe('database relationships', () => {
+  it('queues rapid selections and waits for the final write before Tab advances', async () => {
+    const complete: Array<(saved: boolean) => void> = [];
+    const navigate = vi.fn(() => true);
+    const { write, value } = setup({
+      value: '[]',
+      navigate,
+      save: () => new Promise((resolve) => complete.push(resolve)),
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: /Choose related records/ })
+    );
+    const input = await screen.findByRole('combobox');
+    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.keyDown(input, { key: 'Tab' });
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole('button', { name: 'Remove Northwind' })
+    ).toBeTruthy();
+    expect(navigate).not.toHaveBeenCalled();
+    complete[0](true);
+    await waitFor(() => expect(write).toHaveBeenCalledTimes(2));
+    expect(write).toHaveBeenLastCalledWith('["acme-id","north-id"]');
+    expect(navigate).not.toHaveBeenCalled();
+    complete[1](true);
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith(1));
+    expect(value()).toBe('["acme-id","north-id"]');
+  });
+
+  it('keeps the complete queued selection after failure and retries it without advancing', async () => {
+    const complete: Array<(saved: boolean) => void> = [];
+    const navigate = vi.fn(() => true);
+    const { write, value } = setup({
+      value: '[]',
+      navigate,
+      save: () => new Promise((resolve) => complete.push(resolve)),
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: /Choose related records/ })
+    );
+    const input = await screen.findByRole('combobox');
+    fireEvent.click(screen.getByRole('option', { name: 'Acme' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Northwind' }));
+    fireEvent.keyDown(input, { key: 'Tab' });
+    complete[0](false);
+    await screen.findByRole('alert');
+    expect(navigate).not.toHaveBeenCalled();
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Remove Acme' })).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Remove Northwind' })
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(write).toHaveBeenLastCalledWith('["acme-id","north-id"]');
+    complete[1](true);
+    await waitFor(() => expect(screen.queryByRole('combobox')).toBeNull());
+    expect(value()).toBe('["acme-id","north-id"]');
+  });
+
   it('saves a searched customer on Tab before advancing, and keeps a rejected selection in the picker', async () => {
     const navigate = vi.fn(() => true);
     const { write } = setup({ navigate });

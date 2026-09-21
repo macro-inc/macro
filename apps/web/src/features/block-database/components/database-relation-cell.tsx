@@ -42,6 +42,7 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
   let trigger: HTMLButtonElement | undefined;
   let input: HTMLInputElement | undefined;
   let list: HTMLDivElement | undefined;
+  let pendingWrite: Promise<boolean> | undefined;
   const listId = createUniqueId();
   const editable = () => props.canEdit && props.column.writable;
   const ids = () => relatedRowIds(props.value);
@@ -59,10 +60,9 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
   const active = () =>
     candidates()[Math.min(activeIndex(), Math.max(0, candidates().length - 1))];
   function begin(seed = '') {
-    setSelected(ids());
+    if (!saving() && !saveError()) setSelected(ids());
     setSearch(seed.replace(/^@/, ''));
     setActiveIndex(0);
-    setSaveError(false);
     setOpen(true);
   }
   function close(restore = true, direction?: 1 | -1) {
@@ -75,21 +75,32 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
     if (restore) queueMicrotask(() => trigger?.focus());
   }
   async function write(next: string[]) {
-    if (!editable() || saving()) return false;
+    if (!editable()) return false;
     setSelected(next);
     setSaving(true);
     setSaveError(false);
+    const previous = pendingWrite;
+    const save = (async () => {
+      // Preserve rapid selections in order, including the latest complete set.
+      // Stop on failure so a later selection cannot mask a rejected write.
+      if (previous && !(await previous)) return false;
+      if (!editable()) return false;
+      try {
+        return await props.onWrite(next.length ? JSON.stringify(next) : null);
+      } catch {
+        return false;
+      }
+    })();
+    pendingWrite = save;
     try {
-      const saved = await props.onWrite(
-        next.length ? JSON.stringify(next) : null
-      );
-      setSaveError(!saved);
+      const saved = await save;
+      if (pendingWrite === save) setSaveError(!saved);
       return saved;
-    } catch {
-      setSaveError(true);
-      return false;
     } finally {
-      setSaving(false);
+      if (pendingWrite === save) {
+        pendingWrite = undefined;
+        setSaving(false);
+      }
     }
   }
   function toggle(id: string) {
@@ -100,11 +111,17 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
     );
   }
   async function commitAndNavigate(direction: 1 | -1) {
-    if (saving()) return;
     const row = active();
     if (editable() && search().trim() && row && !selected().includes(row.id)) {
       if (!(await write([...selected(), row.id]))) return;
     }
+    await finish(direction);
+  }
+  async function finish(direction?: 1 | -1) {
+    while (pendingWrite) {
+      if (!(await pendingWrite)) return;
+    }
+    if (saveError() && !(await write(selected()))) return;
     close(true, direction);
   }
   function openRecord(id: string) {
@@ -300,8 +317,7 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
                         <button
                           type="button"
                           aria-label={`Remove ${name(id)}`}
-                          disabled={saving()}
-                          class="rounded-r p-1 text-ink-muted hover:bg-hover disabled:opacity-40"
+                          class="rounded-r p-1 text-ink-muted hover:bg-hover"
                           onClick={() => toggle(id)}
                         >
                           <XIcon class="size-3" />
@@ -329,8 +345,7 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
                     id={`${listId}-${row.id}`}
                     data-relation-index={index()}
                     aria-selected={selected().includes(row.id)}
-                    disabled={saving()}
-                    class="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm outline-none disabled:opacity-50"
+                    class="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm outline-none"
                     classList={{ 'bg-hover': active()?.id === row.id }}
                     onMouseDown={(event) => event.preventDefault()}
                     onPointerDown={(event) => event.preventDefault()}
@@ -388,9 +403,9 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
             <button
               type="button"
               class="rounded px-2 py-1 text-ink hover:bg-hover"
-              onClick={() => close()}
+              onClick={() => void finish()}
             >
-              Done
+              {saveError() ? 'Retry' : 'Done'}
             </button>
           </div>
         </Popover.Content>

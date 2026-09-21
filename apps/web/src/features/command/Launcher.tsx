@@ -695,7 +695,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     blockName: 'spreadsheet',
     hotkeyToken: TOKENS.create.spreadsheet,
     altHotkeyToken: TOKENS.create.spreadsheetNewSplit,
-    hotkey: 'b',
+    hotkey: 'w',
     keyDownHandler: () => {
       runCreateAction('spreadsheet', {
         shouldInsert: pressedKeys().has('shift'),

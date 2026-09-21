@@ -17,7 +17,7 @@ use models_properties::shared::{DataType, EntityReference};
 use uuid::Uuid;
 
 use crate::domain::catalog::{
-    ColumnEntry, JunctionKind, LINKED_ID, ROW_ID, TableEntry, option_display,
+    ColumnEntry, JunctionKind, LINKED_ID, ROW_ID, TableEntry, option_labels,
 };
 use crate::domain::models::{ColumnConfig, QueryError, RawOp, RawRowChange, RowChange, SqlValue};
 
@@ -93,11 +93,10 @@ fn option_id(
     definition: &PropertyDefinitionWithOptions,
     display: &str,
 ) -> Result<Uuid, QueryError> {
-    definition
-        .property_options
-        .iter()
-        .find(|o| option_display(&o.value) == display)
-        .map(|o| o.id)
+    option_labels(definition)
+        .into_iter()
+        .find(|(_, label)| label == display)
+        .map(|(id, _)| id)
         .ok_or_else(|| {
             untranslatable(format!(
                 "`{display}` is not an option of {}",
