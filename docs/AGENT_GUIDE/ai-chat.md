@@ -425,10 +425,13 @@ Existing announcement chips remain locked to the turn they announced.
 ### Reviewing a linked GitHub pull request
 
 Sessions with a linked GitHub pull request capture that PR's diff when each
-turn ends, regardless of the agent runtime. Unpushed workspace changes and
+turn ends, regardless of the coding runtime. Unpushed workspace changes and
 branches without a PR are not included. The session header gains a **Changes**
 toggle (`aria-pressed`) with green additions and red deletions (`+N −M`); it opens a resizable
 **Changes** pane beside the transcript (drag the 1px divider between them).
+Chat sessions on Macro's in-memory harness have no repository, so they show
+none of this: no **Changes** toggle, pane, hand-off card, or review-notes chip,
+and the title menu offers **Open repository** only when the session has one.
 The URL's `diff` query parameter stores each session's pane state and diff
 layout (`session-id:split:unified`, or `changes-only` / `agent-only` and
 `split` for side-by-side diffs). Copying the URL preserves that view; reload

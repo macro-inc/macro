@@ -1,7 +1,11 @@
 import { isListViewID } from '@app/constants/list-views';
 import { URL_PARAMS as EMAIL_PARAMS } from '@app/features/email-thread/core/location';
 import { withListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
-import { scopeChannelNotificationsForEntity } from '@app/features/soup/entity-notifications';
+import {
+  type EntityWithRawNotifications,
+  getEntityNotifications,
+  scopeChannelNotificationsForEntity,
+} from '@app/features/soup/entity-notifications';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { createCalendarBlockRange } from '@block-calendar/calendar-range';
 import {
@@ -706,29 +710,27 @@ export const openEntityInSplitFromUnifiedList = async (
 /**
  * Mark every unread notification represented by an opened channel Soup row.
  *
- * The row's attached Soup edge is authoritative. The channel block's message
- * marker discovers notifications through the separately paginated global
- * source, so it cannot reliably clear older notifications. Passing the row's
- * attached notifications through the source keeps its REST cache and durable
- * seen overrides in sync while the configured mutation updates GraphQL edges.
+ * The row's attached Soup edge is authoritative, whether it is a raw GraphQL
+ * array (mobile Channels) or a list accessor. Only rows without an edge fall
+ * back to the separately paginated global source. Passing these notifications
+ * through the source keeps its REST cache and durable seen overrides in sync
+ * while the configured mutation updates GraphQL edges.
  */
 export function markChannelNotificationsSeenOnOpen(
-  entity: EntityData,
+  entity: EntityWithRawNotifications<EntityData>,
   notificationSource: NotificationSource
 ) {
   if (
-    (entity.type !== 'channel' &&
-      entity.type !== 'channel_message' &&
-      entity.type !== 'channel_thread') ||
-    !isWithNotification(entity)
+    entity.type !== 'channel' &&
+    entity.type !== 'channel_message' &&
+    entity.type !== 'channel_thread'
   ) {
     return;
   }
 
-  const notifications = scopeChannelNotificationsForEntity(
-    entity,
-    entity.notifications?.() ?? []
-  ).filter((notification) => !notificationIsRead(notification));
+  const notifications = getEntityNotifications(entity, notificationSource, {
+    scopeChannelThreads: true,
+  }).filter((notification) => !notificationIsRead(notification));
   if (notifications.length === 0) return;
 
   void notificationSource.bulkMarkAsRead(notifications).catch((error) => {

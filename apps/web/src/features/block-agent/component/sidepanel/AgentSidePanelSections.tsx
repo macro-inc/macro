@@ -29,7 +29,10 @@ import {
   TodoList,
 } from '../../ui';
 import { AgentPullRequestChip } from '../AgentPullRequestChip';
-import { sessionHarnessTitle } from '../compose-agent-session-options';
+import {
+  sessionHarnessTitle,
+  sessionRepositoryUrl,
+} from '../compose-agent-session-options';
 
 export function AgentSidePanelSections() {
   const { session, bot, metadata, messages } = useAgentSession();
@@ -74,7 +77,7 @@ export function AgentSidePanelSections() {
               </SidePanel.Row>
             )}
           </Show>
-          <Show when={session()?.repoUrl}>
+          <Show when={sessionRepositoryUrl(session())}>
             {(url) => (
               <SidePanel.Row label="Repository">
                 <button

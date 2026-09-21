@@ -461,6 +461,78 @@ describe('getChannelEntityTarget', () => {
     expect(bulkMarkAsRead).toHaveBeenCalledWith([notification]);
   });
 
+  it('marks raw GraphQL notifications when opening a mobile channel', async () => {
+    const unread = sendNotification('mobile-unread', 'message');
+    const read = asRead(sendNotification('mobile-read', 'read-message'));
+    const reply = replyNotification('mobile-reply', 'reply', 'thread-root');
+    const openWithSplit = vi.fn();
+    setGlobalSplitManager({
+      activeSplit: vi.fn(),
+      getOrchestrator: vi.fn(() => ({
+        getBlockHandle: vi.fn(async () => undefined),
+      })),
+      getSplitByContent: vi.fn(),
+      openWithSplit,
+    } as unknown as SplitManager);
+
+    const bulkMarkAsRead = vi.fn(async () => {});
+    const channel = { ...channelRow(), notifications: [unread, read, reply] };
+    await openEntityInSplitFromUnifiedList(channel, {
+      referredFrom: 'channels',
+      notificationSource: notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
+    });
+
+    expect(openWithSplit).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'channel', id: 'channel-1' }),
+      expect.objectContaining({ referredFrom: 'channels' })
+    );
+    expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([unread]);
+  });
+
+  it('uses the global source for channels without an attached notification edge', () => {
+    const unread = sendNotification('rest-unread', 'message');
+    const bulkMarkAsRead = vi.fn(async () => {});
+    const source = {
+      ...notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
+      notificationsByEntity: () => ({ 'channel@channel-1': [unread] }),
+    };
+
+    markChannelNotificationsSeenOnOpen(channelRow(), source);
+
+    expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([unread]);
+  });
+
+  it('does not fall back to stale global notifications for an empty GraphQL edge', () => {
+    const unread = sendNotification('stale-unread', 'message');
+    const bulkMarkAsRead = vi.fn(async () => {});
+    const source = {
+      ...notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
+      notificationsByEntity: () => ({ 'channel@channel-1': [unread] }),
+    };
+
+    markChannelNotificationsSeenOnOpen(
+      { ...channelRow(), notifications: [] },
+      source
+    );
+
+    expect(bulkMarkAsRead).not.toHaveBeenCalled();
+  });
+
+  it('honors local seen overrides on raw GraphQL notifications', () => {
+    const unread = sendNotification('already-marked', 'message');
+    const bulkMarkAsRead = vi.fn(async () => {});
+
+    markChannelNotificationsSeenOnOpen(
+      { ...channelRow(), notifications: [unread] },
+      {
+        ...notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
+        withLocalOverrides: asRead,
+      }
+    );
+
+    expect(bulkMarkAsRead).not.toHaveBeenCalled();
+  });
+
   it('does not mark a thread-stack notification when opening its parent channel row', async () => {
     const parentNotification = sendNotification('parent-send', 'message');
     const threadNotification = replyNotification(
