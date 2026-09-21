@@ -26,7 +26,7 @@ describe('openAgentsPage', () => {
 
   it('allows navigation to be intercepted', () => {
     expect(() =>
-      openAgentsPage({ openWithSplit: () => undefined }, 'routines')
+      openAgentsPage({ openWithSplit: () => undefined }, 'connections')
     ).not.toThrow();
   });
 });

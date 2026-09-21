@@ -39,7 +39,6 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
-import { RoutinesPage } from './RoutinesPage';
 import '../agents-view.css';
 import { AgentSessionPane } from '../components/AgentSessionPane';
 import { AgentsSidebar } from '../components/AgentsSidebar';
@@ -321,7 +320,6 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
 
   const pageTitle = () => {
     if (page() === 'agents') return 'Agents';
-    if (page() === 'routines') return 'Routines';
     if (page() === 'connections') return 'Connections';
     return 'New conversation';
   };
@@ -388,9 +386,6 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                         <div class="body">
                           <Suspense fallback={<LoadingComposer />}>
                             <Switch>
-                              <Match when={page() === 'routines'}>
-                                <RoutinesPage />
-                              </Match>
                               <Match when={page() === 'connections'}>
                                 <McpConnections />
                               </Match>
