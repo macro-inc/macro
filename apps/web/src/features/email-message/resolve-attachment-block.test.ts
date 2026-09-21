@@ -1,8 +1,25 @@
-import { describe, expect, it } from 'vitest';
-import { resolveEmailAttachmentBlockName } from './resolve-attachment-block';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const mockFileTypeToBlockName = vi.fn((fileType?: string | null): string => {
+  if (!fileType) return 'unknown';
+  if (['ai', 'ps', 'eps', 'pdf'].includes(fileType)) return 'pdf';
+  return 'unknown';
+});
+
+vi.mock('@core/constant/allBlocks', () => ({
+  fileTypeToBlockName: (fileType?: string | null) =>
+    mockFileTypeToBlockName(fileType),
+}));
 
 describe('resolveEmailAttachmentBlockName', () => {
-  it('opens .ai attachments in the pdf viewer from the filename', () => {
+  beforeEach(() => {
+    mockFileTypeToBlockName.mockClear();
+  });
+
+  it('opens .ai attachments in the pdf viewer from the filename', async () => {
+    const { resolveEmailAttachmentBlockName } = await import(
+      './resolve-attachment-block'
+    );
     expect(
       resolveEmailAttachmentBlockName({
         filename: 'logo.ai',
@@ -10,9 +27,13 @@ describe('resolveEmailAttachmentBlockName', () => {
         documentFileType: 'ps',
       })
     ).toBe('pdf');
+    expect(mockFileTypeToBlockName).toHaveBeenCalledWith('ai');
   });
 
-  it('opens documents stored as ps (legacy postscript mime mapping) in pdf', () => {
+  it('opens documents stored as ps (legacy postscript mime mapping) in pdf', async () => {
+    const { resolveEmailAttachmentBlockName } = await import(
+      './resolve-attachment-block'
+    );
     expect(
       resolveEmailAttachmentBlockName({
         documentFileType: 'ps',
@@ -20,7 +41,10 @@ describe('resolveEmailAttachmentBlockName', () => {
     ).toBe('pdf');
   });
 
-  it('prefers filename over ambiguous MIME mappings', () => {
+  it('prefers filename over ambiguous MIME mappings', async () => {
+    const { resolveEmailAttachmentBlockName } = await import(
+      './resolve-attachment-block'
+    );
     expect(
       resolveEmailAttachmentBlockName({
         filename: 'drawing.ai',
@@ -29,7 +53,10 @@ describe('resolveEmailAttachmentBlockName', () => {
     ).toBe('pdf');
   });
 
-  it('falls back to document file type when filename has no extension', () => {
+  it('falls back to document file type when filename has no extension', async () => {
+    const { resolveEmailAttachmentBlockName } = await import(
+      './resolve-attachment-block'
+    );
     expect(
       resolveEmailAttachmentBlockName({
         filename: 'logo',
@@ -39,7 +66,10 @@ describe('resolveEmailAttachmentBlockName', () => {
     ).toBe('pdf');
   });
 
-  it('falls back to MIME when filename and document type are missing', () => {
+  it('falls back to MIME when filename and document type are missing', async () => {
+    const { resolveEmailAttachmentBlockName } = await import(
+      './resolve-attachment-block'
+    );
     expect(
       resolveEmailAttachmentBlockName({
         mimeType: 'application/pdf',
@@ -47,7 +77,10 @@ describe('resolveEmailAttachmentBlockName', () => {
     ).toBe('pdf');
   });
 
-  it('returns unknown for unrecognized types', () => {
+  it('returns unknown for unrecognized types', async () => {
+    const { resolveEmailAttachmentBlockName } = await import(
+      './resolve-attachment-block'
+    );
     expect(
       resolveEmailAttachmentBlockName({
         filename: 'thing.zzz',
