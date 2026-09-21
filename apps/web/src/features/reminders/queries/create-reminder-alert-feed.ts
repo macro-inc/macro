@@ -1,7 +1,10 @@
 import type { NotificationSource } from '@notifications/notification-source';
 import type { UnifiedNotification } from '@notifications/types';
 import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
-import { reminderAlertsFromNotifications } from './reminder-alerts';
+import {
+  reminderAlertIdentity,
+  reminderAlertsFromNotifications,
+} from './reminder-alerts';
 
 export type AlertNotificationSource = Pick<
   NotificationSource,
@@ -40,9 +43,19 @@ export function createReminderAlertFeed(
     if (event && event !== previous?.latest && event.account === owner) {
       pending.set(event.notification.id, event.notification);
     }
-    // Once confirmed by the query, its lifecycle belongs to that query. A later
-    // removal must not resurrect an old websocket copy.
-    for (const item of snapshot()) pending.delete(item.id);
+    // Once confirmed by the query, its lifecycle belongs to that query. Replays
+    // may have different delivery ids for the same occurrence; removing the
+    // query item must not resurrect any of those old websocket copies.
+    const confirmed = new Set<string>();
+    for (const item of snapshot()) {
+      pending.delete(item.id);
+      const identity = reminderAlertIdentity(item);
+      if (identity) confirmed.add(identity.key);
+    }
+    for (const [id, item] of pending) {
+      const identity = reminderAlertIdentity(item);
+      if (identity && confirmed.has(identity.key)) pending.delete(id);
+    }
     return { account: owner, latest: event, pending };
   });
 
