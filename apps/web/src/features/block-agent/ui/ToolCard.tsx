@@ -12,10 +12,18 @@ import { Collapsible } from '@kobalte/core/collapsible';
 import CaretRight from '@phosphor/caret-right.svg';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { TextShimmer } from './TextShimmer';
+import { ToolStatusTitle } from './ToolStatusTitle';
 import { isToolActive, type ToolStatus } from './types';
 
 export interface ToolCardProps {
+  /** Glyph for the kind of work the call was, in a fixed slot before the title. */
+  icon?: JSX.Element;
   title: JSX.Element | string;
+  /**
+   * What the title reads while the call is still running, for a title that
+   * is a verb ("Running" / "Ran"). Omit for a title that does not change.
+   */
+  activeTitle?: string;
   /** Mono, truncated detail next to the title (a path, a command, ...). */
   subtitle?: string;
   /** Small `key=value` chips after the subtitle. */
@@ -23,8 +31,12 @@ export interface ToolCardProps {
   /** Right-aligned slot before the chevron (status text, counts, ...). */
   trailing?: JSX.Element;
   status: ToolStatus;
-  /** Fade the whole card, the chat block's failed-tool treatment. */
-  muted?: boolean;
+  /**
+   * The call failed. Tints the glyph rather than fading the row: a failure is
+   * the thing a reader is looking for, so it cannot be the quietest row in
+   * the transcript.
+   */
+  failed?: boolean;
   /** Controlled open state; omit to let the card manage its own. */
   open?: boolean;
   defaultOpen?: boolean;
@@ -52,23 +64,48 @@ export function ToolCard(props: ToolCardProps) {
   // Conditional callers supply presence separately; Kobalte mounts the body.
   const hasChildren = () => props.hasContent ?? 'children' in props;
 
+  const title = () => {
+    if (typeof props.title !== 'string') return props.title;
+    if (props.activeTitle === undefined) {
+      return <TextShimmer text={props.title} active={active()} />;
+    }
+    return (
+      <ToolStatusTitle
+        active={active()}
+        activeText={props.activeTitle}
+        doneText={props.title}
+      />
+    );
+  };
+
   const row = (expandable: boolean) => (
     <>
       <span class="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
-        <span class="shrink-0 text-ink">
-          {typeof props.title === 'string' ? (
-            <TextShimmer text={props.title} active={active()} />
-          ) : (
-            props.title
-          )}
-        </span>
+        <Show when={props.icon}>
+          <span
+            aria-hidden="true"
+            class="flex shrink-0 items-center"
+            classList={{
+              'text-failure': props.failed,
+              'text-ink-extra-muted': !props.failed,
+            }}
+          >
+            {props.icon}
+          </span>
+        </Show>
+        <span class="shrink-0 text-ink">{title()}</span>
         <Show when={props.subtitle}>
           {(subtitle) => (
             <>
               <span aria-hidden="true" class="shrink-0 text-ink-placeholder">
                 ·
               </span>
-              <span class="min-w-0 truncate font-mono">{subtitle()}</span>
+              <span
+                class="min-w-0 truncate font-mono"
+                classList={{ 'text-failure': props.failed }}
+              >
+                {subtitle()}
+              </span>
             </>
           )}
         </Show>
@@ -95,10 +132,7 @@ export function ToolCard(props: ToolCardProps) {
   );
 
   return (
-    <div
-      class="overflow-hidden rounded-lg bg-surface text-ink-extra-muted"
-      classList={{ 'opacity-50': props.muted }}
-    >
+    <div class="overflow-hidden rounded-lg bg-surface text-ink-extra-muted">
       <Show
         when={hasChildren()}
         fallback={<div class={ROW_CLASS}>{row(false)}</div>}

@@ -63,14 +63,17 @@ vi.mock('../../ui', async () => ({
   ...(await import('../../ui/types')),
   ToolCard: (props: {
     title: JSX.Element;
+    activeTitle?: string;
+    icon?: JSX.Element;
     subtitle?: string;
     trailing?: JSX.Element;
     status: string;
-    muted?: boolean;
+    failed?: boolean;
     children?: JSX.Element;
   }) => (
     <div
-      data-muted={String(props.muted ?? false)}
+      data-active-title={props.activeTitle ?? ''}
+      data-failed={String(props.failed ?? false)}
       data-status={props.status}
       data-testid="tool-card"
     >
@@ -164,7 +167,11 @@ describe('ToolCallPart routing', () => {
         )}
       />
     ));
-    expect(rendered.getByTestId('title').textContent).toBe('Bash');
+    // The row says what happened, not which tool the harness reached for.
+    expect(rendered.getByTestId('title').textContent).toBe('Ran');
+    expect(rendered.getByTestId('tool-card').dataset.activeTitle).toBe(
+      'Running'
+    );
     expect(rendered.getByTestId('subtitle').textContent).toBe(
       'cargo test -p agent_fold'
     );
@@ -173,7 +180,7 @@ describe('ToolCallPart routing', () => {
     );
   });
 
-  it('shows an MCP tool by its own name, with the server beside it', () => {
+  it('shows an MCP tool by its own name in words, with the server beside it', () => {
     const rendered = render(() => (
       <ToolCallPart
         part={{
@@ -189,7 +196,7 @@ describe('ToolCallPart routing', () => {
         }}
       />
     ));
-    expect(rendered.getByTestId('title').textContent).toBe('ask');
+    expect(rendered.getByTestId('title').textContent).toBe('Asked');
     expect(rendered.getByTestId('subtitle').textContent).toBe('deepwiki');
   });
 
@@ -209,7 +216,7 @@ describe('ToolCallPart routing', () => {
         }}
       />
     ));
-    expect(rendered.getByTestId('title').textContent).toBe('ReadContent');
+    expect(rendered.getByTestId('title').textContent).toBe('Read content');
     expect(rendered.getByTestId('request').textContent).toContain(
       '"documentId": "4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e46"'
     );
@@ -219,7 +226,7 @@ describe('ToolCallPart routing', () => {
     expect(rendered.getByTestId('error').textContent).toBe('');
   });
 
-  it('shows a failed MCP call faded, with the error as subtitle and in the body', () => {
+  it('marks a failed MCP call failed, with the error as subtitle and in the body', () => {
     const rendered = render(() => (
       <ToolCallPart
         part={{
@@ -238,7 +245,7 @@ describe('ToolCallPart routing', () => {
         }}
       />
     ));
-    expect(rendered.getByTestId('tool-card').dataset.muted).toBe('true');
+    expect(rendered.getByTestId('tool-card').dataset.failed).toBe('true');
     expect(rendered.getByTestId('subtitle').textContent).toBe('user declined');
     expect(rendered.getByTestId('error').textContent).toBe('user declined');
     expect(rendered.getByTestId('trailing').textContent).toBe('Failed');
@@ -363,7 +370,7 @@ describe('ToolCallPart Macro tools', () => {
       />
     ));
     expect(rendered.queryByTestId('macro-tool')).toBeNull();
-    expect(rendered.getByTestId('title').textContent).toBe('BrandNewTool');
+    expect(rendered.getByTestId('title').textContent).toBe('Brand new tool');
     expect(rendered.getByTestId('request').textContent).toContain(
       '"anything": 1'
     );
@@ -388,7 +395,7 @@ describe('ToolCallPart Macro tools', () => {
       />
     ));
     expect(rendered.queryByTestId('macro-tool')).toBeNull();
-    expect(rendered.getByTestId('tool-card').dataset.muted).toBe('false');
+    expect(rendered.getByTestId('tool-card').dataset.failed).toBe('false');
     expect(rendered.getByTestId('trailing').textContent).toBe('');
   });
 
@@ -424,7 +431,7 @@ describe('ToolCallPart Macro tools', () => {
       />
     ));
     expect(rendered.queryByTestId('macro-tool')).toBeNull();
-    expect(rendered.getByTestId('tool-card').dataset.muted).toBe('true');
+    expect(rendered.getByTestId('tool-card').dataset.failed).toBe('true');
     expect(rendered.getByTestId('subtitle').textContent).toBe(
       'permission denied'
     );
@@ -454,7 +461,7 @@ describe('ToolCallPart user tools', () => {
       <ToolCallPart part={email({ kind: 'pending' })} />
     ));
     expect(rendered.queryByTestId('macro-tool')).toBeNull();
-    expect(rendered.getByTestId('title').textContent).toBe('SendEmail');
+    expect(rendered.getByTestId('title').textContent).toBe('Sent email');
     expect(rendered.getByTestId('subtitle').textContent).toBe('Q3 plan');
     expect(rendered.getByTestId('trailing').textContent).toBe('Awaiting you');
     const body = rendered.getByTestId('body');
@@ -564,7 +571,7 @@ describe('ToolCallPart user tools', () => {
       />
     ));
     expect(rendered.getByTestId('title').textContent).toBe(
-      'CreateCalendarEvent'
+      'Created calendar event'
     );
     expect(rendered.getByTestId('subtitle').textContent).toBe('Q3 sync');
     const body = rendered.getByTestId('body').textContent ?? '';
@@ -581,7 +588,7 @@ describe('ToolCallPart user tools', () => {
       <ToolCallPart part={email({ kind: 'failed', message: 'no inbox' })} />
     ));
     expect(rendered.queryByTestId('macro-tool')).toBeNull();
-    expect(rendered.getByTestId('tool-card').dataset.muted).toBe('true');
+    expect(rendered.getByTestId('tool-card').dataset.failed).toBe('true');
     expect(rendered.getByTestId('body').textContent).toBe('no inbox');
     expect(rendered.getByTestId('trailing').textContent).toBe('Failed');
   });
@@ -648,7 +655,7 @@ describe('ToolCallPart subagents', () => {
   it('titles the card with the description and nests the children', () => {
     const rendered = render(() => <ToolCallPart part={subagent()} />);
     const titles = rendered.getAllByTestId('title').map((el) => el.textContent);
-    expect(titles).toEqual(['Add 5+5 with Python', 'Bash']);
+    expect(titles).toEqual(['Add 5+5 with Python', 'Ran']);
     expect(rendered.getAllByTestId('subtitle')[0]?.textContent).toBe(
       'general-purpose'
     );
@@ -747,7 +754,7 @@ describe('ToolCallPart subagents', () => {
         })}
       />
     ));
-    expect(rendered.getByTestId('tool-card').dataset.muted).toBe('true');
+    expect(rendered.getByTestId('tool-card').dataset.failed).toBe('true');
     expect(rendered.getByTestId('trailing').textContent).toBe('Failed');
     expect(rendered.getByTestId('output').textContent).toBe(
       'Subagent failed: boom'
@@ -774,7 +781,7 @@ describe('ToolCallPart settling', () => {
       <ToolCallPart part={running()} context={context(false)} />
     ));
     expect(rendered.getByTestId('tool-card').dataset.status).toBe('completed');
-    expect(rendered.getByTestId('tool-card').dataset.muted).toBe('false');
+    expect(rendered.getByTestId('tool-card').dataset.failed).toBe('false');
     expect(rendered.getByTestId('trailing').textContent).toBe('');
   });
 
@@ -830,7 +837,7 @@ describe('ToolCallPart failed treatment', () => {
         )}
       />
     ));
-    expect(rendered.getByTestId('tool-card').dataset.muted).toBe('true');
+    expect(rendered.getByTestId('tool-card').dataset.failed).toBe('true');
     expect(rendered.getByTestId('trailing').textContent).toBe('Failed');
   });
 

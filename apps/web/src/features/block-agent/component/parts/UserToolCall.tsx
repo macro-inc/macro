@@ -83,10 +83,11 @@ export function UserToolCall(props: {
 
   return (
     <ToolCard
-      title={props.common.label}
+      title={props.common.title}
+      icon={props.common.icon}
       status={props.common.status}
       subtitle={draft() && draftSubtitle(draft()!)}
-      muted={props.common.muted || failure() !== undefined}
+      failed={props.common.failed || failure() !== undefined}
       trailing={
         props.common.trailing ?? <OutcomeTrailing outcome={outcome()} />
       }

@@ -14,11 +14,13 @@ export function EditToolCall(props: {
 
   return (
     <ToolCard
-      title={props.common.label}
+      title={props.common.title}
+      activeTitle={props.common.activeTitle}
+      icon={props.common.icon}
       subtitle={pathsSubtitle(props.detail.diffs.map((diff) => diff.path))}
       trailing={props.common.trailing ?? <DiffChanges {...changes()} />}
       status={props.common.status}
-      muted={props.common.muted}
+      failed={props.common.failed}
       hasContent={props.detail.diffs.length > 0}
     >
       <Show when={props.detail.diffs.length > 0}>

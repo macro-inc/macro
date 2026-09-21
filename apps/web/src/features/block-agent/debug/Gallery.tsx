@@ -17,6 +17,8 @@ import type {
 import { createSignal, type JSX, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { Message } from '../component/AgentMessage';
+import { toolIcon } from '../component/parts/tool-appearance';
+import { toolTitle } from '../component/parts/tool-name';
 import { ReplyToSelection } from '../component/ReplyToSelection';
 import { initialValues, validate } from '../state/elicitation-form';
 import {
@@ -785,18 +787,38 @@ export default function AgentUiGallery() {
 
           <Item label="ToolCard">
             <ToolCard
-              title="Bash"
+              title="Ran"
+              activeTitle="Running"
+              icon={toolIcon('terminal')}
               subtitle="cargo test -p agent_fold"
               status={status()}
             />
             <ToolCard
               title="Read"
+              activeTitle="Reading"
+              icon={toolIcon('read')}
               subtitle="crates/agent_fold/src/domain/fold.rs"
               args={{ limit: '200' }}
               status="completed"
             />
             <ToolCard
-              title="Edit"
+              title={toolTitle('get_mcp_tools').title}
+              activeTitle={toolTitle('get_mcp_tools').activeTitle}
+              icon={toolIcon('other')}
+              subtitle="deepwiki"
+              status={status()}
+            />
+            <ToolCard
+              title={toolTitle('deploy_service').title}
+              icon={toolIcon('other')}
+              subtitle="deploy failed: missing credential"
+              status="failed"
+              failed
+              trailing={<span class="text-failure">Failed</span>}
+            />
+            <ToolCard
+              title="Edited"
+              icon={toolIcon('edit')}
               subtitle={FIXTURE_DIFF.path}
               trailing={<DiffChanges additions={4} deletions={3} />}
               status="completed"
@@ -806,36 +828,37 @@ export default function AgentUiGallery() {
             </ToolCard>
           </Item>
 
-          <Item label="ToolGroup (active / settled)">
-            <ToolGroup
-              count={3}
-              active={pulse()}
-              latest={{ label: 'Bash', detail: 'cargo test -p agent_fold' }}
-            >
-              <ToolCard
-                title="Read"
-                subtitle="crates/agent_fold/src/domain/fold.rs"
-                status="completed"
-              />
-              <ToolCard
-                title="Edit"
-                subtitle={FIXTURE_DIFF.path}
-                status="completed"
-              />
-              <ToolCard
-                title="Bash"
-                subtitle="cargo test -p agent_fold"
-                status={pulse() ? 'running' : 'completed'}
-              />
+          <Item label="ToolGroup (short run / folded middle)">
+            <ToolGroup indices={[0, 1, 2]} active={pulse()}>
+              {(index) => (
+                <ToolCard
+                  title={['Read', 'Edited', 'Ran'][index] ?? 'Read'}
+                  activeTitle={
+                    ['Reading', 'Editing', 'Running'][index] ?? 'Reading'
+                  }
+                  icon={toolIcon(
+                    (['read', 'edit', 'terminal'] as const)[index] ?? 'read'
+                  )}
+                  subtitle={
+                    [
+                      'crates/agent_fold/src/domain/fold.rs',
+                      FIXTURE_DIFF.path,
+                      'cargo test -p agent_fold',
+                    ][index]
+                  }
+                  status={index === 2 && pulse() ? 'running' : 'completed'}
+                />
+              )}
             </ToolGroup>
-            <ToolGroup
-              count={2}
-              active={false}
-              latest={{ label: 'ReadContent' }}
-              defaultOpen
-            >
-              <ToolCard title="NameSearch" subtitle="fold" status="completed" />
-              <ToolCard title="ReadContent" status="completed" />
+            <ToolGroup indices={[0, 1, 2, 3, 4, 5, 6, 7, 8]} active={false}>
+              {(index) => (
+                <ToolCard
+                  title="Read"
+                  icon={toolIcon('read')}
+                  subtitle={`crates/agent_fold/src/domain/file_${index}.rs`}
+                  status="completed"
+                />
+              )}
             </ToolGroup>
           </Item>
 

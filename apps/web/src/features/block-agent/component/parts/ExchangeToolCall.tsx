@@ -28,10 +28,12 @@ export function ExchangeToolCall(props: {
     Boolean(props.detail.error);
   return (
     <ToolCard
-      title={props.common.label}
+      title={props.common.title}
+      activeTitle={props.common.activeTitle}
+      icon={props.common.icon}
       subtitle={props.detail.error ?? props.common.server}
       status={props.common.status}
-      muted={props.common.muted}
+      failed={props.common.failed}
       trailing={props.common.trailing}
       hasContent={hasContent()}
     >

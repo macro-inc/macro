@@ -31,7 +31,6 @@ import { ControlPart } from './parts/ControlPart';
 import { ElicitationPart } from './parts/ElicitationPart';
 import { PermissionPart } from './parts/PermissionPart';
 import { PlanPart } from './parts/PlanPart';
-import { type ToolUsePart, toolCallDetail, toolLabel } from './parts/shared';
 import { TextPart } from './parts/TextPart';
 import { ToolCallPart } from './parts/ToolCallPart';
 
@@ -79,8 +78,8 @@ function AgentMessagePart(props: {
 
 /**
  * A run of consecutive tool calls and their accompanying thoughts (see
- * `segmentParts`), folded to one row that opens to those parts, each at
- * its original index.
+ * `segmentParts`), each part rendered at its original index. A long settled
+ * run folds in the middle (see `ToolGroup`).
  */
 function ToolGroupPart(props: {
   message: FoldedMessage;
@@ -89,38 +88,31 @@ function ToolGroupPart(props: {
   end: number;
   inFlight: boolean;
 }): JSX.Element {
-  const parts = () => props.message.parts.slice(props.start, props.end);
-  const calls = () =>
-    parts().filter((part): part is ToolUsePart => part.kind === 'tool_use');
+  const indices = () =>
+    Array.from({ length: props.end - props.start }, (_, i) => props.start + i);
   // A call the log left running in a finished turn is over (see
-  // `settledToolStatus`), so a settled turn's run is never "Calling".
+  // `settledToolStatus`), so a settled turn's run is never active.
   const active = () =>
-    props.inFlight && calls().some((call) => isToolActive(call.status));
+    props.inFlight &&
+    props.message.parts
+      .slice(props.start, props.end)
+      .some((part) => part.kind === 'tool_use' && isToolActive(part.status));
 
   return (
-    <Show when={calls().at(-1)}>
-      {(latest) => (
-        <ToolGroup
-          count={calls().length}
-          active={active()}
-          latest={{
-            label: toolLabel(latest().name),
-            detail: toolCallDetail(latest()),
-          }}
-        >
-          <For each={parts()}>
-            {(part, offset) => (
-              <AgentMessagePart
-                part={part}
-                message={props.message}
-                index={props.start + offset()}
-                inFlight={props.inFlight}
-              />
-            )}
-          </For>
-        </ToolGroup>
+    <ToolGroup indices={indices()} active={active()}>
+      {(index) => (
+        <Show when={props.message.parts[index]}>
+          {(part) => (
+            <AgentMessagePart
+              part={part()}
+              message={props.message}
+              index={index}
+              inFlight={props.inFlight}
+            />
+          )}
+        </Show>
       )}
-    </Show>
+    </ToolGroup>
   );
 }
 

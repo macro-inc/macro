@@ -4,58 +4,49 @@ import { cleanup, render } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ToolGroup } from './ToolGroup';
 
-vi.mock('@phosphor/caret-right.svg', () => ({
-  default: () => <svg data-testid="caret" />,
+vi.mock('@phosphor/dots-three.svg', () => ({
+  default: () => <svg data-testid="dots" />,
 }));
 
 afterEach(cleanup);
 
-function mount(overrides?: { active?: boolean; defaultOpen?: boolean }) {
+function mount(count: number, active = false) {
+  const indices = Array.from({ length: count }, (_, index) => index);
   return render(() => (
-    <ToolGroup
-      count={3}
-      active={overrides?.active ?? false}
-      defaultOpen={overrides?.defaultOpen}
-      latest={{ label: 'Bash', detail: 'cargo test -p agent_fold' }}
-    >
-      <div data-testid="call">Read</div>
-      <div data-testid="call">Edit</div>
-      <div data-testid="call">Bash</div>
+    <ToolGroup indices={indices} active={active}>
+      {(index) => <div data-testid="call">call {index}</div>}
     </ToolGroup>
   ));
 }
 
 describe('ToolGroup', () => {
-  it('starts closed, counting the calls and naming the latest one', () => {
-    const view = mount();
-    expect(view.getByRole('button').textContent).toContain('Called 3 tools');
-    expect(view.getByRole('button').getAttribute('aria-expanded')).toBe(
-      'false'
-    );
-    expect(view.container.textContent).toContain('Bash');
-    expect(view.container.textContent).toContain('cargo test -p agent_fold');
-    expect(view.queryAllByTestId('call')).toHaveLength(0);
+  it('shows every call of a short run, with nothing to expand', () => {
+    const view = mount(5);
+    expect(view.getAllByTestId('call')).toHaveLength(5);
+    expect(view.queryByRole('button')).toBeNull();
   });
 
-  it('opens on click, swapping the latest line for the calls', () => {
-    const view = mount();
+  it('folds the middle of a long settled run, keeping both ends', () => {
+    const view = mount(9);
+    const shown = view.getAllByTestId('call').map((el) => el.textContent);
+    expect(shown).toEqual(['call 0', 'call 1', 'call 7', 'call 8']);
+    expect(view.getByRole('button').textContent).toContain('5 more tools');
+  });
+
+  it('opens the fold in place, keeping the rows that were already shown', () => {
+    const view = mount(9);
+    const first = view.getAllByTestId('call')[0];
     view.getByRole('button').click();
-    expect(view.getByRole('button').getAttribute('aria-expanded')).toBe('true');
-    expect(view.getAllByTestId('call')).toHaveLength(3);
-    expect(view.container.textContent).not.toContain(
-      'cargo test -p agent_fold'
-    );
-    view.getByRole('button').click();
-    expect(view.queryAllByTestId('call')).toHaveLength(0);
+    expect(view.getAllByTestId('call')).toHaveLength(9);
+    expect(view.queryByRole('button')).toBeNull();
+    // The rows at the ends are the same elements, so a card open inside one
+    // of them stays open when the middle unfolds.
+    expect(view.getAllByTestId('call')[0]).toBe(first);
   });
 
-  it('reads as in progress while a call is still running', () => {
-    const view = mount({ active: true });
-    expect(view.getByRole('button').textContent).toContain('Calling 3 tools');
-  });
-
-  it('can start open', () => {
-    const view = mount({ defaultOpen: true });
-    expect(view.getAllByTestId('call')).toHaveLength(3);
+  it('never folds a run with a call still in flight', () => {
+    const view = mount(9, true);
+    expect(view.getAllByTestId('call')).toHaveLength(9);
+    expect(view.queryByRole('button')).toBeNull();
   });
 });
