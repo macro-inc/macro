@@ -7,6 +7,7 @@
 export const MOBILE_NAV_VIEW_IDS = [
   'search',
   'inbox',
+  'reminders',
   'calendar',
   'mail',
   'channels',

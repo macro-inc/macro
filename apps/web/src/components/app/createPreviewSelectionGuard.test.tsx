@@ -18,7 +18,8 @@ vi.mock('@core/constant/allBlocks', () => ({
   resolveBlockAlias: (type: string) => (type === 'task' ? 'md' : type),
 }));
 vi.mock('./previewTarget', () => ({
-  previewBlockTarget: (entity: PreviewPanelSelection) => ({
+  previewTarget: (entity: PreviewPanelSelection) => ({
+    kind: 'block',
     blockType: entity.type === 'document' ? entity.fileType : entity.type,
     blockId: entity.id,
   }),

@@ -3,9 +3,11 @@ import {
   type ChannelPreviewSelection,
   calendarBlockParamsForEntity,
   getChannelEntityTarget,
-  type ReminderPreviewSelection,
-  reminderSplitTarget,
 } from '@app/features/next-soup/utils';
+import {
+  type ReminderDetailDestination,
+  reminderDetailDestination,
+} from '@app/features/reminders/reminder-navigation';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { getChannelParams } from '@block-channel/utils/link';
 import type {
@@ -15,7 +17,7 @@ import type {
 } from '@core/block';
 import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
-import type { DocumentEntity, ForeignEntity } from '@entity';
+import type { DocumentEntity, ForeignEntity, ReminderEntity } from '@entity';
 import { untrack } from 'solid-js';
 import { match, P } from 'ts-pattern';
 
@@ -42,6 +44,8 @@ type ForeignPreviewSelection = Pick<
   'id' | 'type' | 'foreignSource'
 >;
 
+type ReminderPreviewSelection = Pick<ReminderEntity, 'id' | 'type'>;
+
 export type PreviewPanelSelection =
   | IdOnlyPreviewSelection
   | DocumentPreviewSelection
@@ -51,20 +55,24 @@ export type PreviewPanelSelection =
   | ReminderPreviewSelection;
 
 type PreviewBlockTarget = {
+  kind: 'block';
   blockType: BlockName;
   blockId: string;
   aliasContext: BlockAliasContext | undefined;
   params?: BlockComponentProps[BlockName];
 };
 
-export function previewBlockTarget(
-  entity: PreviewPanelSelection
-): PreviewBlockTarget {
+type PreviewReminderTarget = ReminderDetailDestination;
+
+export type PreviewTarget = PreviewBlockTarget | PreviewReminderTarget;
+
+export function previewTarget(entity: PreviewPanelSelection): PreviewTarget {
   return match(entity)
-    .returnType<PreviewBlockTarget>()
+    .returnType<PreviewTarget>()
     .with(
       { type: 'document', fileType: 'md', subType: { type: 'task' } },
       (task) => ({
+        kind: 'block',
         blockType: fileTypeToResolvedBlockName(task.fileType),
         blockId: task.id,
         aliasContext: {
@@ -76,6 +84,7 @@ export function previewBlockTarget(
     .with(
       { type: 'document', fileType: 'md', subType: { type: 'snippet' } },
       (snippet) => ({
+        kind: 'block',
         blockType: fileTypeToResolvedBlockName(snippet.fileType),
         blockId: snippet.id,
         aliasContext: {
@@ -85,6 +94,7 @@ export function previewBlockTarget(
       })
     )
     .with({ type: 'document' }, (document) => ({
+      kind: 'block',
       blockType: fileTypeToResolvedBlockName(document.fileType),
       blockId: document.id,
       aliasContext: undefined,
@@ -92,6 +102,7 @@ export function previewBlockTarget(
     .with({ type: P.union('channel_message', 'channel_thread') }, (message) => {
       const channelTarget = untrack(() => getChannelEntityTarget(message));
       return {
+        kind: 'block' as const,
         blockType: 'channel',
         blockId: message.channelId,
         aliasContext: undefined,
@@ -102,6 +113,7 @@ export function previewBlockTarget(
       };
     })
     .with({ type: 'foreign' }, (foreignEntity) => ({
+      kind: 'block',
       blockType:
         USE_MACRO_PR_SUMMARY_BLOCK &&
         foreignEntity.foreignSource === 'github_pull_request'
@@ -111,30 +123,29 @@ export function previewBlockTarget(
       aliasContext: undefined,
     }))
     .with({ type: 'crm_company' }, (company) => ({
+      kind: 'block',
       blockType: 'company',
       blockId: company.id,
       aliasContext: undefined,
     }))
     .with({ type: 'crm_contact' }, (contact) => ({
+      kind: 'block',
       blockType: 'contact',
       blockId: contact.id,
       aliasContext: undefined,
     }))
     .with({ type: 'calendar_event' }, (calendarEvent) => ({
+      kind: 'block',
       blockType: 'calendar',
       blockId: CALENDAR_BLOCK_ID,
       aliasContext: undefined,
       params: untrack(() => calendarBlockParamsForEntity(calendarEvent)),
     }))
-    .with({ type: 'reminder' }, (reminder) => {
-      const reminderTarget = reminderSplitTarget(reminder);
-      return {
-        blockType: fileTypeToResolvedBlockName(reminderTarget?.type),
-        blockId: reminderTarget?.id ?? reminder.id,
-        aliasContext: undefined,
-      };
-    })
+    .with({ type: 'reminder' }, (reminder) =>
+      reminderDetailDestination(reminder.id)
+    )
     .otherwise((fallbackEntity) => ({
+      kind: 'block',
       blockType: fileTypeToResolvedBlockName(fallbackEntity.type),
       blockId: fallbackEntity.id,
       aliasContext: undefined,

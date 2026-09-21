@@ -54,6 +54,7 @@ import {
   ENABLE_CALLS,
   enableCrm,
   enableNewPricing,
+  enableReminders,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import {
@@ -138,6 +139,7 @@ type SidebarSectionLinkId =
   | 'calls'
   | 'documents'
   | 'tasks'
+  | 'reminders'
   | 'calendar'
   | 'agents'
   | 'companies';
@@ -154,6 +156,7 @@ const WORKSPACE_LINK_IDS = [
   'calls',
   'documents',
   'tasks',
+  'reminders',
   'calendar',
   'agents',
   'companies',
@@ -165,6 +168,7 @@ const DEFAULT_SECTION_VISIBILITY: SidebarSectionVisibility = {
   calls: true,
   documents: true,
   tasks: true,
+  reminders: true,
   calendar: true,
   agents: true,
   companies: true,
@@ -249,6 +253,14 @@ const SIDEBAR_LINKS = [
     icon: getIconConfig('task').icon,
     hotkey: 't',
     hotkeyToken: TOKENS.sidebar.goTo.tasks,
+  },
+  {
+    id: 'reminders',
+    label: 'Reminders',
+    href: LIST_VIEW_PATHS.reminders,
+    icon: getIconConfig('reminder').icon,
+    hotkey: 'm',
+    hotkeyToken: TOKENS.sidebar.goTo.reminders,
   },
   {
     id: 'calendar',
@@ -419,12 +431,14 @@ export const GoToHotkeys = () => {
   const calendarUiEnabled = useCalendarUiFlag();
   const activityFeedEnabled = useActivityFeedFlag();
   const recentViewEnabled = useRecentViewFlag();
+  const remindersFlag = useFeatureFlag(enableReminders);
   const links = createMemo((): SidebarItem[] =>
     buildSidebarLinks(
       gettingStartedEnabled(),
       calendarUiEnabled(),
       activityFeedEnabled(),
-      recentViewEnabled()
+      recentViewEnabled(),
+      remindersFlag().enabled
     )
   );
 
@@ -1071,12 +1085,15 @@ const buildSidebarLinks = (
   showGettingStarted: boolean,
   showCalendar: boolean,
   showActivity: boolean,
-  showRecent: boolean
+  showRecent: boolean,
+  showReminders: boolean
 ): SidebarItem[] => {
   let links: SidebarItem[] = [
     DASHBOARD_LINK,
     ...(showGettingStarted ? [GETTING_STARTED_LINK] : []),
-    ...SIDEBAR_LINKS.filter((link) => showCalendar || link.id !== 'calendar'),
+    ...SIDEBAR_LINKS.filter(
+      (link) => showCalendar || link.id !== 'calendar'
+    ).filter((link) => showReminders || link.id !== 'reminders'),
   ];
 
   if (showRecent) {
@@ -1171,12 +1188,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const calendarUiEnabled = useCalendarUiFlag();
   const activityFeedEnabled = useActivityFeedFlag();
   const recentViewEnabled = useRecentViewFlag();
+  const remindersFlag = useFeatureFlag(enableReminders);
   const allLinks = createMemo((): SidebarItem[] =>
     buildSidebarLinks(
       gettingStartedEnabled(),
       calendarUiEnabled(),
       activityFeedEnabled(),
-      recentViewEnabled()
+      recentViewEnabled(),
+      remindersFlag().enabled
     )
   );
 
