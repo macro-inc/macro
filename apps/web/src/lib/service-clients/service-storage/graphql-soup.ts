@@ -1041,6 +1041,7 @@ function mapGraphqlNotificationMetadata(
           content: {
             reminderId: metadata.reminderReminderId,
             description: metadata.reminderDescription,
+            scheduledFor: metadata.reminderScheduledFor,
           },
         }) satisfies NotifEventMember<'reminder'>
     )
