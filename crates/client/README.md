@@ -18,6 +18,19 @@ pinned there): `apps/web/tauri/graphql_cache_plugin`, path-depending on
 `cargo test -p graphql_cache_plugin` (on NixOS use the `tauri-linux` dev shell —
 Tauri's Linux desktop stack needs its WebKitGTK/DBus system libraries).
 
+## Startup and integrity checks
+
+Normal opens validate schema, scope/version metadata, and pending mutation/optimistic
+state without running a full-file `PRAGMA quick_check`. Cached records retain their
+checked decoding and runtime corruption handling. This applies to both native
+Tauri and browser OPFS storage.
+
+`TursoStorage::check_integrity()` is an explicit, synchronous diagnostic for callers
+that need a full scan. Keep it off startup and foreground-read paths; it is not
+scheduled automatically in the background. Failures latch the existing storage
+health state without deleting records or pending mutations. Recovery/reset remains
+an explicit caller decision after closing the storage.
+
 ## Tests
 
 Run from the repository root:
