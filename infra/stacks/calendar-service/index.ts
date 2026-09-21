@@ -12,7 +12,7 @@ import { CalendarService } from './service';
 
 const tags = {
   environment: stack,
-  tech_lead: 'evan',
+  tech_lead: 'gab',
   project: 'calendar-service',
 };
 
