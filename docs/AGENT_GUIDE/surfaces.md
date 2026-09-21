@@ -248,6 +248,12 @@ Full email client. Tabs: `Signal` / `Noise` / `Sent` / `Calendar` / `Drafts` / `
 shows `Connect your email` (Gmail/Google Workspace OAuth) — most functionality needs a
 connected account. Search is `Ctrl+F` within the surface.
 
+When switching email tabs or inboxes, the list shows current-query cached results
+or a scoped `Loading email` spinner until they arrive—not the previous tab's rows
+under the new heading. Background refreshes retain the current list. To check this,
+rapidly alternate Signal, Noise, and Sent, then change inboxes; a delayed cache or
+network read must not leave the old rows visible or expose their Load more action.
+
 The new views reuse the legacy filter option rows and searchable submenus.
 Their triggers are icon-only buttons matching the surrounding view controls;
 Clear/Reset filters and the mobile Clear all action use destructive text styling.
