@@ -145,6 +145,9 @@ struct MockRepository {
     delivery_requests: Mutex<HashMap<Uuid, MockDeliveryRequest>>,
     delivery_intents: Mutex<HashMap<(Uuid, i32), MockDeliveryIntent>>,
     prepare_failures_remaining: AtomicUsize,
+    intent_completion_failures_remaining: AtomicUsize,
+    intent_completion_errors_remaining: AtomicUsize,
+    intent_release_failures_remaining: AtomicUsize,
 }
 
 #[derive(Clone)]
@@ -188,6 +191,9 @@ impl MockRepository {
             delivery_requests: Mutex::new(HashMap::new()),
             delivery_intents: Mutex::new(HashMap::new()),
             prepare_failures_remaining: AtomicUsize::new(0),
+            intent_completion_failures_remaining: AtomicUsize::new(0),
+            intent_completion_errors_remaining: AtomicUsize::new(0),
+            intent_release_failures_remaining: AtomicUsize::new(0),
         }
     }
 
@@ -261,6 +267,12 @@ impl MockRepository {
             .store(count, Ordering::Relaxed);
         self
     }
+
+    fn with_intent_completion_failures(self, count: usize) -> Self {
+        self.intent_completion_failures_remaining
+            .store(count, Ordering::Relaxed);
+        self
+    }
 }
 
 struct MockStateMachine;
@@ -291,14 +303,14 @@ impl BulkDigestStateMachine for MockStateMachine {
 
 struct ReplaySafeDigestStateMachine {
     ingest_attempts: AtomicUsize,
-    digest_side_effects: Mutex<HashSet<(String, Uuid)>>,
+    delivery_generations: Mutex<Vec<Uuid>>,
 }
 
 impl ReplaySafeDigestStateMachine {
     fn new() -> Self {
         Self {
             ingest_attempts: AtomicUsize::new(0),
-            digest_side_effects: Mutex::new(HashSet::new()),
+            delivery_generations: Mutex::new(Vec::new()),
         }
     }
 }
@@ -306,15 +318,15 @@ impl ReplaySafeDigestStateMachine {
 impl BulkDigestStateMachine for Arc<ReplaySafeDigestStateMachine> {
     async fn ingest<T: Serialize + Send + Sync + 'static>(
         &self,
-        notification: UserNotificationRow<Arc<T>>,
-        _delivery_generation: Uuid,
+        _notification: UserNotificationRow<Arc<T>>,
+        delivery_generation: Uuid,
     ) -> Result<crate::domain::models::email_notification_digest::StateMachineDecisionA, Report>
     {
         self.ingest_attempts.fetch_add(1, Ordering::Relaxed);
-        self.digest_side_effects.lock().unwrap().insert((
-            notification.owner_id.to_string(),
-            notification.notification_id,
-        ));
+        self.delivery_generations
+            .lock()
+            .unwrap()
+            .push(delivery_generation);
         Ok(
             crate::domain::models::email_notification_digest::StateMachineDecisionA::BatchWasQueued(
                 crate::domain::models::email_notification_digest::BatchSend::from_inner(()),
@@ -324,14 +336,10 @@ impl BulkDigestStateMachine for Arc<ReplaySafeDigestStateMachine> {
 
     async fn cleanup_digest_receipt(
         &self,
-        user_id: MacroUserIdStr<'_>,
-        notification_id: Uuid,
+        _user_id: MacroUserIdStr<'_>,
+        _notification_id: Uuid,
         _delivery_generation: Uuid,
     ) -> Result<(), Report> {
-        self.digest_side_effects
-            .lock()
-            .unwrap()
-            .remove(&(user_id.to_string(), notification_id));
         Ok(())
     }
 }
@@ -943,6 +951,26 @@ impl NotificationDeliveryRepository for MockRepository {
         position: i32,
         claim_token: DeliveryClaimToken,
     ) -> Result<bool, Report> {
+        if self
+            .intent_completion_errors_remaining
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |remaining| {
+                remaining.checked_sub(1)
+            })
+            .is_ok()
+        {
+            return Err(report!("injected delivery intent completion error"));
+        }
+
+        if self
+            .intent_completion_failures_remaining
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |remaining| {
+                remaining.checked_sub(1)
+            })
+            .is_ok()
+        {
+            return Ok(false);
+        }
+
         let mut intents = self.delivery_intents.lock().unwrap();
         let Some(intent) = intents.get_mut(&(notification_id, position)) else {
             return Ok(false);
@@ -975,6 +1003,16 @@ impl NotificationDeliveryRepository for MockRepository {
         position: i32,
         claim_token: DeliveryClaimToken,
     ) -> Result<(), Report> {
+        if self
+            .intent_release_failures_remaining
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |remaining| {
+                remaining.checked_sub(1)
+            })
+            .is_ok()
+        {
+            return Err(report!("injected delivery intent release failure"));
+        }
+
         if let Some(intent) = self
             .delivery_intents
             .lock()
@@ -1849,7 +1887,7 @@ async fn test_legacy_duplicate_restores_original_recipient_before_mute_filter(po
 }
 
 #[tokio::test]
-async fn test_digest_replay_after_ingest_before_intent_persistence_is_idempotent() {
+async fn test_digest_replay_after_ingest_before_intent_persistence_reuses_generation() {
     let notification_id = Uuid::now_v7();
     let recipient = test_user_id("digest-replay@example.com");
     let state_machine = Arc::new(ReplaySafeDigestStateMachine::new());
@@ -1871,11 +1909,127 @@ async fn test_digest_replay_after_ingest_before_intent_persistence_is_idempotent
         .unwrap();
 
     assert_eq!(state_machine.ingest_attempts.load(Ordering::Relaxed), 2);
-    assert_eq!(
-        state_machine.digest_side_effects.lock().unwrap().len(),
-        1,
-        "notification-id receipt collapses replayed digest insertion"
+    let generations = state_machine.delivery_generations.lock().unwrap();
+    assert_eq!(generations.len(), 2);
+    assert_eq!(generations[0], generations[1]);
+}
+
+#[tokio::test]
+async fn test_unconfirmed_intent_completion_stops_inline_republication() {
+    let notification_id = Uuid::now_v7();
+    let recipient = test_user_id("completion-expired@example.com");
+    let repository = Arc::new(MockRepository::new().with_intent_completion_failures(1));
+    let queue = Arc::new(MockQueue::new());
+    let service =
+        NotificationIngressService::new(repository.clone(), queue.clone(), MockStateMachine);
+
+    assert!(
+        service
+            .send_notification(conn_request(notification_id, recipient.clone()))
+            .await
+            .is_err()
     );
+    assert_eq!(queue.get_published().len(), 1);
+    let intent = repository
+        .delivery_intents
+        .lock()
+        .unwrap()
+        .values()
+        .next()
+        .cloned()
+        .unwrap();
+    assert!(!intent.published);
+    assert!(intent.claim_token.is_none());
+
+    service
+        .send_notification(conn_request(notification_id, recipient))
+        .await
+        .unwrap();
+    assert_eq!(queue.get_published().len(), 2);
+}
+
+#[tokio::test]
+async fn test_unconfirmed_intent_completion_stops_recovery_batch() {
+    let notification_id = Uuid::now_v7();
+    let recipient = test_user_id("recovery-completion-expired@example.com");
+    let repository = Arc::new(MockRepository::new());
+    let queue = Arc::new(FaultQueue::failing_on([1]));
+    let service =
+        NotificationIngressService::new(repository.clone(), queue.clone(), MockStateMachine);
+
+    assert!(
+        service
+            .send_notification(conn_request(notification_id, recipient))
+            .await
+            .is_err()
+    );
+    repository
+        .intent_completion_failures_remaining
+        .store(1, Ordering::Relaxed);
+
+    assert!(service.recover_pending_deliveries(10).await.is_err());
+    assert_eq!(queue.attempts.load(Ordering::Relaxed), 2);
+    assert_eq!(queue.published().len(), 1);
+    let intent = repository
+        .delivery_intents
+        .lock()
+        .unwrap()
+        .values()
+        .next()
+        .cloned()
+        .unwrap();
+    assert!(!intent.published);
+    assert!(intent.claim_token.is_none());
+
+    service.recover_pending_deliveries(10).await.unwrap();
+    assert_eq!(queue.published().len(), 2);
+}
+
+#[tokio::test]
+async fn test_unconfirmed_completion_outcomes_stop_recovery_batch() {
+    for (completion_errors, release_errors) in [(0, 0), (0, 1), (1, 0), (1, 1)] {
+        let notification_id = Uuid::now_v7();
+        let recipient = test_user_id(&format!(
+            "recovery-completion-{completion_errors}-release-{release_errors}@example.com"
+        ));
+        let repository = Arc::new(MockRepository::new());
+        let queue = Arc::new(FaultQueue::failing_on([1]));
+        let service =
+            NotificationIngressService::new(repository.clone(), queue.clone(), MockStateMachine);
+
+        assert!(
+            service
+                .send_notification(conn_request(notification_id, recipient))
+                .await
+                .is_err()
+        );
+        if completion_errors == 0 {
+            repository
+                .intent_completion_failures_remaining
+                .store(1, Ordering::Relaxed);
+        } else {
+            repository
+                .intent_completion_errors_remaining
+                .store(1, Ordering::Relaxed);
+        }
+        repository
+            .intent_release_failures_remaining
+            .store(release_errors, Ordering::Relaxed);
+
+        assert!(service.recover_pending_deliveries(10).await.is_err());
+        assert_eq!(queue.attempts.load(Ordering::Relaxed), 2);
+        assert_eq!(queue.published().len(), 1);
+        let intent = repository
+            .delivery_intents
+            .lock()
+            .unwrap()
+            .values()
+            .next()
+            .cloned()
+            .unwrap();
+        assert!(!intent.published);
+        assert_eq!(intent.claim_token.is_some(), release_errors == 1);
+    }
 }
 
 #[tokio::test]

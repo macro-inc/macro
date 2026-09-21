@@ -290,8 +290,15 @@ where
                 return Ok(());
             };
 
-            if let Err(error) = self.publish_delivery_intent(intent).await {
-                return Err(error.context(SendNotificationError::Other));
+            match self.publish_delivery_intent(intent).await {
+                Ok(true) => {}
+                Ok(false) => {
+                    return Err(rootcause::report!(
+                        "delivery intent queue handoff succeeded but durable completion was not confirmed"
+                    )
+                    .context(SendNotificationError::Other));
+                }
+                Err(error) => return Err(error.context(SendNotificationError::Other)),
             }
         }
     }
@@ -321,10 +328,22 @@ where
 
             let published = match self.claim_delivery_intent(None).await {
                 Ok(Some(intent)) => {
-                    if let Err(error) = self.publish_delivery_intent(intent).await {
-                        tracing::warn!(error = ?error, "failed to recover notification delivery intent");
-                        if first_error.is_none() {
-                            first_error = Some(error);
+                    match self.publish_delivery_intent(intent).await {
+                        Ok(true) => {}
+                        Ok(false) => {
+                            // SQS accepted the payload, but this claimant can no
+                            // longer durably acknowledge it. End this batch so
+                            // a later recovery tick observes the backoff instead
+                            // of immediately handing off the same intent again.
+                            return Err(rootcause::report!(
+                                "delivery intent queue handoff succeeded but durable completion was not confirmed"
+                            ));
+                        }
+                        Err(error) => {
+                            tracing::warn!(error = ?error, "failed to recover notification delivery intent");
+                            if first_error.is_none() {
+                                first_error = Some(error);
+                            }
                         }
                     }
                     true
@@ -510,7 +529,7 @@ where
     async fn publish_delivery_intent(
         &self,
         intent: crate::domain::models::delivery_outbox::ClaimedDeliveryIntent,
-    ) -> Result<(), Report> {
+    ) -> Result<bool, Report> {
         let pending_age_seconds = chrono::Utc::now()
             .signed_duration_since(intent.pending_since)
             .num_seconds()
@@ -552,21 +571,58 @@ where
             return Err(error);
         }
 
-        let completed = self
+        let completed = match self
             .repository
             .complete_delivery_intent(intent.notification_id, intent.position, intent.claim_token)
-            .await?;
+            .await
+        {
+            Ok(completed) => completed,
+            Err(error) => {
+                // SQS already accepted the payload. A completion-query error is
+                // therefore the same durability outcome as an expired claim:
+                // confirmation is unknown and this drain must stop.
+                tracing::warn!(
+                    error = ?error,
+                    notification_id = %intent.notification_id,
+                    position = intent.position,
+                    "failed to confirm durable notification delivery completion after queue handoff",
+                );
+                false
+            }
+        };
         if !completed {
-            // Queue handoff is deliberately at-least-once. If the lease expires
-            // after SQS accepted the payload, recovery may publish it again.
+            // Queue handoff is deliberately at-least-once. If completion is
+            // unconfirmed after SQS accepts the payload, recovery may publish
+            // it again.
             tracing::warn!(
                 notification_id = %intent.notification_id,
                 position = intent.position,
-                "delivery intent lease expired after queue publication; duplicate handoff is possible",
+                "delivery intent completion unconfirmed after queue publication; duplicate handoff is possible",
             );
+            // Stop this drain and back the intent off if this claimant still
+            // owns it. Otherwise a just-expired claim can be reclaimed in the
+            // surrounding loop and handed to SQS repeatedly until the worker
+            // timeout. A newer claimant's token is never disturbed.
+            if let Err(release_error) = self
+                .repository
+                .release_delivery_intent(
+                    intent.notification_id,
+                    intent.position,
+                    intent.claim_token,
+                )
+                .await
+            {
+                tracing::warn!(
+                    error = ?release_error,
+                    notification_id = %intent.notification_id,
+                    position = intent.position,
+                    "failed to back off delivery intent after unconfirmed completion",
+                );
+            }
+            return Ok(false);
         }
 
-        Ok(())
+        Ok(true)
     }
 
     async fn cleanup_digest_receipt(&self) -> Result<bool, Report> {
