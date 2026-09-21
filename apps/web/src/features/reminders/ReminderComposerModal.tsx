@@ -6,9 +6,12 @@ import {
   useCreateReminderMutation,
 } from '@queries/reminders/reminders';
 import { refetchSoupEntity } from '@queries/soup/cache';
+import type { CreateReminderRequest } from '@service-storage/generated/schemas/createReminderRequest';
+import type { Reminder } from '@service-storage/generated/schemas/reminder';
 import type { ReminderSchedule } from '@service-storage/generated/schemas/reminderSchedule';
 import { ActionDialogShell, Dialog } from '@ui';
-import { Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
+import { globalSplitManager } from '../../lib/signals/splitLayout';
 import { ReminderForm } from './ReminderForm';
 import {
   closeReminderComposer,
@@ -17,9 +20,13 @@ import {
   takeReminderCreatedHandler,
 } from './reminder-composer';
 import {
+  describeReminderConfirmation,
   resolveReminderDescription,
   resolveStandaloneDescription,
 } from './reminder-schedule';
+
+const CREATE_FAILURE_MESSAGE =
+  'We couldn’t save this reminder. Your draft is still here—try again. If the request timed out, it may already exist; check Reminders before retrying.';
 
 /**
  * Creates a reminder — one about an entity, or one about nothing at all — in a
@@ -38,6 +45,61 @@ export function ReminderComposerModal() {
 
   const entity = () => reminderComposerState.entity;
   const standalone = () => reminderComposerState.standalone === true;
+  const [submitting, setSubmitting] = createSignal(false);
+  const [saveError, setSaveError] = createSignal<string>();
+  let focusBeforeSave: HTMLElement | undefined;
+
+  const save = async (args: CreateReminderRequest) => {
+    if (submitting()) return;
+    focusBeforeSave =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : undefined;
+    setSubmitting(true);
+    setSaveError(undefined);
+
+    let reminder: Reminder;
+    try {
+      reminder = await createReminder.mutateAsync(args);
+    } catch {
+      setSaveError(CREATE_FAILURE_MESSAGE);
+      setSubmitting(false);
+      queueMicrotask(() => {
+        if (focusBeforeSave?.isConnected) focusBeforeSave.focus();
+      });
+      return;
+    }
+
+    const onCreated = takeReminderCreatedHandler();
+    setSubmitting(false);
+    closeReminderComposer();
+    toast.success(
+      `Reminder set · ${describeReminderConfirmation(reminder.schedule)}`,
+      {
+        actions: [
+          {
+            label: 'View',
+            onClick: () =>
+              globalSplitManager()?.openWithSplit(
+                {
+                  type: 'component',
+                  id: `reminder-view~${reminder.id}`,
+                },
+                { activate: true }
+              ),
+          },
+        ],
+      }
+    );
+    // This host-owned follow-up runs only after persistence. It is intentionally
+    // outside the request catch: a downstream row action failing does not mean
+    // the reminder failed to save and must never invite a duplicate retry.
+    try {
+      await onCreated?.();
+    } catch {
+      toast.failure('Reminder saved, but the source could not be updated');
+    }
+  };
 
   const submitCreate = async (
     schedule: ReminderSchedule,
@@ -46,27 +108,12 @@ export function ReminderComposerModal() {
   ) => {
     const resolved = resolveReminderDescription(input, target);
     const attachTo = reminderTarget(target);
-    // Taken before the close, which clears it.
-    const onCreated = takeReminderCreatedHandler();
-    closeReminderComposer();
-
-    try {
-      await createReminder.mutateAsync({
-        description: resolved,
-        schedule,
-        // Both or neither: the API rejects one without the other.
-        ...(attachTo ?? undefined),
-      });
-      toast.success('Reminder set');
-    } catch {
-      toast.failure('Failed to create reminder');
-      return;
-    }
-
-    // Whatever the invoking surface does with its row now that the reminder
-    // will bring it back — marking it done, in every soup list. Runs only once
-    // the reminder exists, so a failed create leaves the row alone.
-    await onCreated?.();
+    await save({
+      description: resolved,
+      schedule,
+      // Both or neither: the API rejects one without the other.
+      ...(attachTo ?? undefined),
+    });
   };
 
   /**
@@ -85,20 +132,7 @@ export function ReminderComposerModal() {
     // on it rather than a `!` on the value above.
     if (!resolved) return;
 
-    // Taken before the close, which clears it. Nothing passes one today, but
-    // taking it is what keeps a handler from leaking into the next open.
-    const onCreated = takeReminderCreatedHandler();
-    closeReminderComposer();
-
-    try {
-      await createReminder.mutateAsync({ description: resolved, schedule });
-      toast.success('Reminder set');
-    } catch {
-      toast.failure('Failed to create reminder');
-      return;
-    }
-
-    await onCreated?.();
+    await save({ description: resolved, schedule });
   };
 
   const handleSubmit = (values: {
@@ -123,10 +157,13 @@ export function ReminderComposerModal() {
     <Dialog
       open={reminderComposerOpen()}
       onOpenChange={(open) => {
-        if (!open) closeReminderComposer();
+        if (!open && !submitting()) {
+          setSaveError(undefined);
+          closeReminderComposer();
+        }
       }}
       position="center"
-      class="w-110"
+      class="w-[calc(100vw-2rem)] max-w-110"
     >
       <ActionDialogShell>
         <Show when={hasTarget()}>
@@ -147,6 +184,9 @@ export function ReminderComposerModal() {
             }
             descriptionRequired={standalone()}
             submitLabel="Set reminder"
+            autofocus
+            pending={submitting()}
+            error={saveError()}
             reference={
               <Show when={entity()}>
                 {(target) => (
@@ -156,7 +196,11 @@ export function ReminderComposerModal() {
                 )}
               </Show>
             }
-            onCancel={closeReminderComposer}
+            onCancel={() => {
+              if (submitting()) return;
+              setSaveError(undefined);
+              closeReminderComposer();
+            }}
             onSubmit={(values) => void handleSubmit(values)}
           />
         </Show>

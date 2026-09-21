@@ -21,9 +21,17 @@ import {
 } from '@queries/soup/cache';
 import type { Reminder } from '@service-storage/generated/schemas/reminder';
 import { Button } from '@ui';
-import { createMemo, Match, onCleanup, Show, Switch } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  Match,
+  onCleanup,
+  Show,
+  Switch,
+} from 'solid-js';
 import { ReminderForm, type ReminderFormValues } from './ReminderForm';
 import {
+  describeReminderConfirmation,
   reminderEditPatch,
   resolveEditedDescription,
 } from './reminder-schedule';
@@ -115,6 +123,8 @@ function ReminderDetailsForId(props: {
 
   const calendarUiEnabled = useCalendarUiFlag();
   const query = useReminderQuery(() => props.reminderId);
+  const [updateError, setUpdateError] = createSignal<string>();
+  let focusBeforeSave: HTMLElement | undefined;
 
   // Soup rows come from the normalized soup cache, not the reminders queries, so
   // the mutation's own invalidation leaves the row reading its old description
@@ -144,6 +154,12 @@ function ReminderDetailsForId(props: {
     query.isError || (query.isSuccess && query.data === undefined);
 
   const save = async (values: ReminderFormValues, reminder: Reminder) => {
+    if (updateReminder.isPending) return;
+    focusBeforeSave =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : undefined;
+    setUpdateError(undefined);
     const patch = reminderEditPatch(
       {
         description: reminder.description,
@@ -171,13 +187,29 @@ function ReminderDetailsForId(props: {
     }
     const submittedReminderId = reminder.id;
     try {
-      await updateReminder.mutateAsync({ id: reminder.id, patch });
+      const updated = await updateReminder.mutateAsync({
+        id: reminder.id,
+        patch,
+      });
       if (!active || props.reminderId !== submittedReminderId) return;
-      toast.success('Reminder updated');
+      toast.success(
+        `Reminder updated · ${describeReminderConfirmation(updated.schedule)}`
+      );
       props.onClose();
     } catch {
       if (!active || props.reminderId !== submittedReminderId) return;
-      toast.failure('Failed to update reminder');
+      setUpdateError(
+        'We couldn’t save these changes. Your edits are still here—try again.'
+      );
+      queueMicrotask(() => {
+        if (
+          active &&
+          props.reminderId === submittedReminderId &&
+          focusBeforeSave?.isConnected
+        ) {
+          focusBeforeSave.focus();
+        }
+      });
     }
   };
 
@@ -194,6 +226,7 @@ function ReminderDetailsForId(props: {
                 placeholder="Reminder description"
                 submitLabel="Save"
                 pending={updateReminder.isPending}
+                error={updateError()}
                 reference={
                   <>
                     <Show when={reference()}>

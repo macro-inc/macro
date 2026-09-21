@@ -52,7 +52,13 @@ const UNIT_ALIASES: Record<string, TimeUnit> = {
  * Returns null if the input doesn't match the expected format
  */
 export function parseDurationString(input: string): ParsedDuration | null {
-  const s = input.trim().toLowerCase();
+  const normalized = input.trim().toLowerCase();
+  // Date-language fields commonly phrase a duration as "in 30 minutes".
+  // Keep the duration grammar itself small while accepting that natural
+  // prefix everywhere the shared parser is used.
+  const s = normalized.startsWith('in ')
+    ? normalized.slice(3).trim()
+    : normalized;
   if (!s) return null;
 
   const firstLetter = s.search(/[a-z]/);

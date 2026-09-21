@@ -57,6 +57,16 @@ describe('parseDurationString', () => {
     expect(parseDurationString('90min')).toEqual({ value: 90, unit: 'min' });
   });
 
+  it('accepts natural "in" duration phrasing', () => {
+    expect(parseDurationString('in 30 minutes')).toEqual({
+      value: 30,
+      unit: 'min',
+    });
+    expect(
+      parseDateFromDuration('in 2 hours', new Date(2026, 8, 21, 10))
+    ).toEqual(new Date(2026, 8, 21, 12));
+  });
+
   it('should parse seconds correctly', () => {
     expect(parseDurationString('1s')).toEqual({ value: 1, unit: 's' });
     expect(parseDurationString('30s')).toEqual({ value: 30, unit: 's' });
