@@ -180,6 +180,9 @@ export class Mirror<S extends SchemaType> {
 
   // Unsubscribe functions for container subscriptions
   private containerSubscriptions: Map<ContainerID, () => void> = new Map();
+  /** Root `doc.subscribe` listener. Must be dropped before `doc.free()`. */
+  private docUnsubscribe?: () => void;
+  private disposed = false;
 
   private containerRegistry: ContainerRegistry = new Map();
 
@@ -215,7 +218,7 @@ export class Mirror<S extends SchemaType> {
     this.initializeContainers();
 
     // Subscribe to the root doc for global updates
-    this.doc.subscribe(this.handleLoroEvent);
+    this.docUnsubscribe = this.doc.subscribe(this.handleLoroEvent);
   }
 
   /**
@@ -370,7 +373,7 @@ export class Mirror<S extends SchemaType> {
    * Handle events from the LoroDoc
    */
   private handleLoroEvent = (event: LoroEventBatch) => {
-    if (this.syncing) return;
+    if (this.disposed || this.syncing) return;
     if (event.origin === 'to-loro') return;
 
     this.syncing = true;
@@ -456,7 +459,7 @@ export class Mirror<S extends SchemaType> {
    * Handle events from individual containers
    */
   private handleContainerEvent = (event: LoroEventBatch) => {
-    if (this.syncing) return;
+    if (this.disposed || this.syncing) return;
     if (event.origin === 'to-loro') return;
 
     this.syncing = true;
@@ -1077,6 +1080,13 @@ export class Mirror<S extends SchemaType> {
    * Clean up resources
    */
   dispose() {
+    // Drop the doc listener before the owner calls `doc.free()`. Freeing a
+    // doc with an open transaction commits it from `Drop`, after the JS
+    // pointer is already zero, and this listener would call back into it.
+    this.disposed = true;
+    this.docUnsubscribe?.();
+    this.docUnsubscribe = undefined;
+
     // Unsubscribe from all container subscriptions
     for (const [_, unsubscribe] of this.containerSubscriptions) {
       unsubscribe();
