@@ -37,18 +37,36 @@ export function parseLocalReminderDateTime(
   timeValue: string
 ): Date | undefined {
   const dateMatch = dateValue.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  const timeMatch = timeValue.match(/^(\d{2}):(\d{2})$/);
+  // Native time values are minute-only with the form's default step, but the
+  // HTML serialization also permits seconds and fractional seconds. Accept the
+  // full shape so a valid value is never mislabeled as a DST gap.
+  const timeMatch = timeValue.match(
+    /^(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/
+  );
   if (!dateMatch || !timeMatch) return undefined;
 
   const [, year, month, day] = dateMatch.map(Number);
-  const [, hour, minute] = timeMatch.map(Number);
-  const parsed = new Date(year, month - 1, day, hour, minute, 0, 0);
+  const hour = Number(timeMatch[1]);
+  const minute = Number(timeMatch[2]);
+  const second = Number(timeMatch[3] ?? 0);
+  const millisecond = Number((timeMatch[4] ?? '').padEnd(3, '0'));
+  const parsed = new Date(
+    year,
+    month - 1,
+    day,
+    hour,
+    minute,
+    second,
+    millisecond
+  );
   if (
     parsed.getFullYear() !== year ||
     parsed.getMonth() !== month - 1 ||
     parsed.getDate() !== day ||
     parsed.getHours() !== hour ||
-    parsed.getMinutes() !== minute
+    parsed.getMinutes() !== minute ||
+    parsed.getSeconds() !== second ||
+    parsed.getMilliseconds() !== millisecond
   ) {
     return undefined;
   }
