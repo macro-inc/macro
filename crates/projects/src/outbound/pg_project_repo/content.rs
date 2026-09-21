@@ -23,8 +23,7 @@ pub(super) async fn get_project_children(
 }
 
 async fn get_sub_projects(pool: &PgPool, project_id: &str) -> Result<Vec<Project>, sqlx::Error> {
-    sqlx::query_as!(
-        Project,
+    sqlx::query!(
         r#"
         SELECT
             p.id,
@@ -40,6 +39,17 @@ async fn get_sub_projects(pool: &PgPool, project_id: &str) -> Result<Vec<Project
         "#,
         project_id,
     )
+    .try_map(|row| {
+        super::map_project(
+            row.id,
+            row.name,
+            row.user_id,
+            row.parent_id,
+            row.created_at,
+            row.updated_at,
+            row.deleted_at,
+        )
+    })
     .fetch_all(pool)
     .await
 }

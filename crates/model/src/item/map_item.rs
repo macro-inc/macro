@@ -83,14 +83,14 @@ pub fn map_project_item(
     updated_at: Option<chrono::DateTime<chrono::Utc>>,
     deleted_at: Option<chrono::DateTime<chrono::Utc>>,
     parent_id: Option<String>,
-) -> Project {
-    Project {
+) -> anyhow::Result<Project> {
+    Ok(Project {
         id,
-        user_id,
+        user_id: Owner::from_principal_str(&user_id)?,
         name,
         created_at,
         updated_at,
         deleted_at,
         parent_id,
-    }
+    })
 }

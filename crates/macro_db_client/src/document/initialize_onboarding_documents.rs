@@ -21,8 +21,7 @@ pub async fn create_project_transaction(
     parent_id: Option<String>,
     share_permission: &SharePermissionV2,
 ) -> anyhow::Result<Project> {
-    let project = sqlx::query_as!(
-        Project,
+    let row = sqlx::query!(
         r#"
         INSERT INTO "Project" ("name", "userId", "parentId", "createdAt", "updatedAt")
         VALUES ($1, $2, $3, NOW(), NOW())
@@ -35,6 +34,15 @@ pub async fn create_project_transaction(
     )
     .fetch_one(transaction.as_mut())
     .await?;
+    let project = Project {
+        id: row.id,
+        name: row.name,
+        user_id: Owner::from_principal_str(&row.user_id)?,
+        parent_id: row.parent_id,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        deleted_at: row.deleted_at,
+    };
 
     create_project_permission(transaction, &project.id, share_permission).await?;
     upsert_user_history(transaction, user_id.copied(), &project.id, "project").await?;

@@ -229,7 +229,7 @@ fn project_deletion_maps_cascade_entities_to_deleted_patches() {
     let chat_id = Uuid::now_v7().to_string();
     let event = ProjectTopicEvent::Deleted(ProjectDeletedMetadata {
         project_id: project_id.clone(),
-        owner: user(),
+        owner: Owner::User(user()),
         actor_user_id: None,
         parent_project_id: None,
         deleted_project_ids: vec![project_id.clone(), child_id.clone()],
