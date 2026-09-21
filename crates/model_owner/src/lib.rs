@@ -129,6 +129,19 @@ impl Owner {
     pub fn is_user(&self, user: &MacroUserIdStr<'_>) -> bool {
         matches!(self, Self::User(owner) if owner == user)
     }
+
+    /// The user this owner is, or `None` for a bot or team.
+    ///
+    /// For paths that act as a person - spending their credentials or
+    /// attributing work to them - so the kinds an owner can be are handled
+    /// where a user is needed rather than assumed.
+    #[must_use]
+    pub fn as_user(&self) -> Option<&MacroUserIdStr<'static>> {
+        match self {
+            Self::User(user) => Some(user),
+            Self::Bot(_) | Self::Team(_) => None,
+        }
+    }
 }
 
 impl Display for Owner {

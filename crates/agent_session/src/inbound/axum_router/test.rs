@@ -421,7 +421,7 @@ async fn the_owner_opens_a_session_for_their_bot() {
     assert_eq!(response.status(), StatusCode::CREATED);
     // The caller owns their own session; no claimed owner needed.
     let opened = opener.opened.lock().unwrap();
-    assert_eq!(opened[0].owner.as_ref(), OWNER);
+    assert!(matches!(&opened[0].owner, Owner::User(user) if user.as_ref() == OWNER));
 }
 
 #[tokio::test]
@@ -496,7 +496,7 @@ async fn a_harness_session_is_owned_by_its_verified_acting_user() {
     assert_eq!(response.status(), StatusCode::CREATED);
     let opened = opener.opened.lock().unwrap();
     assert_eq!(opened[0].bot_id, BotId::TEST_A);
-    assert_eq!(opened[0].owner.as_ref(), STRANGER);
+    assert!(matches!(&opened[0].owner, Owner::User(user) if user.as_ref() == STRANGER));
 }
 
 #[tokio::test]
@@ -516,7 +516,7 @@ async fn a_harness_may_not_own_a_session_by_an_unverified_body_claim() {
     assert_eq!(response.status(), StatusCode::CREATED);
     let opened = opener.opened.lock().unwrap();
     assert_eq!(opened[0].bot_id, BotId::TEST_A);
-    assert_eq!(opened[0].owner.as_ref(), OWNER);
+    assert!(matches!(&opened[0].owner, Owner::User(user) if user.as_ref() == OWNER));
 }
 
 #[tokio::test]

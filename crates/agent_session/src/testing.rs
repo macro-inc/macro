@@ -187,7 +187,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
                     created_at: session.created_at,
                     modified_at: session.modified_at,
                 },
-                has_grant: session.owner_id == *viewer,
+                has_grant: session.owner_id.is_user(viewer),
                 thread_parent: session.thread_parent.clone(),
             })
             .collect())
@@ -268,7 +268,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             .lock()
             .expect("in-memory session store is not poisoned")
             .values()
-            .filter(|session| session.owner_id.as_ref() == owner.as_ref())
+            .filter(|session| session.owner_id.is_user(owner))
             .cloned()
             .collect();
         found.sort_by(|a, b| {
@@ -739,8 +739,10 @@ pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
         pull_request_url: None,
         id,
         name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
-        owner_id: macro_user_id::user_id::MacroUserIdStr::try_from_email("owner@example.com")
-            .expect("valid macro user id"),
+        owner_id: model_owner::Owner::User(
+            macro_user_id::user_id::MacroUserIdStr::try_from_email("owner@example.com")
+                .expect("valid macro user id"),
+        ),
         thread_id: None,
         thread_parent: None,
         originating_message_id: None,
@@ -916,7 +918,7 @@ impl crate::domain::pull_request::SessionPullRequestRepo for InMemoryAgentSessio
         let mut sessions = self.sessions.lock().unwrap();
         let stored = sessions
             .get_mut(&session)
-            .filter(|stored| &stored.owner_id == owner)
+            .filter(|stored| stored.owner_id.is_user(owner))
             .ok_or(AgentSessionError::Forbidden)?;
         if stored.pull_request_url.as_deref() == Some(url) {
             return Ok(false);
