@@ -66,7 +66,9 @@ function ConversationContextMenu(props: {
       selectedEntities={() => []}
       viewContext={AGENTS_ACTION_VIEW_CONTEXT}
       as="div"
-      class="block w-full"
+      // The nav is a fixed-height flex column, so the trigger's default
+      // `h-full` would split that height between the rows; keep rows content-sized.
+      class="block h-auto w-full"
       onOpenChange={(open) => {
         if (!open) return;
         props.list.focus.set(props.conversation.id);

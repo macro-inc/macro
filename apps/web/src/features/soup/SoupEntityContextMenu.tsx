@@ -92,7 +92,7 @@ export const SoupEntityContextMenu: FlowComponent<
     <Switch>
       <Match when={isMobile()}>
         <div
-          class={cn('size-full', props.class)}
+          class={cn('h-full w-full', props.class)}
           data-soup-entity
           ref={(el) => {
             touchHandler(el, () => ({
@@ -114,7 +114,7 @@ export const SoupEntityContextMenu: FlowComponent<
         <ContextMenu onOpenChange={props.onOpenChange}>
           <ContextMenu.Trigger
             as={props.as}
-            class={cn('size-full group/cm-trigger', props.class)}
+            class={cn('h-full w-full group/cm-trigger', props.class)}
             on:contextmenu={(event: MouseEvent) =>
               setMenuPosition({ x: event.clientX, y: event.clientY })
             }
