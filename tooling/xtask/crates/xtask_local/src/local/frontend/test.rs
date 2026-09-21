@@ -2,6 +2,37 @@ use super::*;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 
+#[test]
+fn stack_frontend_uses_same_origin_with_an_instance_specific_server_target() {
+    for instance in [
+        Instance::derive(None, None).unwrap(),
+        Instance::derive(Some("remote-dev"), Some(20100)).unwrap(),
+        Instance::derive(Some("other-dev"), Some(20300)).unwrap(),
+    ] {
+        for mode in [Mode::Local, Mode::Dev] {
+            let env: std::collections::HashMap<_, _> =
+                dev_env(&instance, mode, true, false).into_iter().collect();
+            assert_eq!(env["VITE_LOCAL_BACKEND_ORIGIN"], "same-origin");
+            assert_eq!(env["MACRO_LOCAL_BACKEND_PROXY"], proxy::url(&instance));
+            assert_eq!(
+                env["MACRO_LOCAL_BACKEND_ROUTES"],
+                proxy::frontend_path_prefixes().join(",")
+            );
+            assert_eq!(env["VITE_OTEL_EXPORTER_URL"], "/i/otlp/v1/traces");
+            if mode.spec().runs_local_infra {
+                assert_eq!(env["VITE_AI_EDITING_WORKER_URL"], "/ai-editing");
+            } else {
+                assert!(!env.contains_key("VITE_AI_EDITING_WORKER_URL"));
+            }
+        }
+        let env: std::collections::HashMap<_, _> = dev_env(&instance, Mode::Local, false, false)
+            .into_iter()
+            .collect();
+        assert_eq!(env["VITE_ENABLE_BROWSER_OTEL"], "false");
+        assert!(!env.contains_key("VITE_OTEL_EXPORTER_URL"));
+    }
+}
+
 fn test_frontend(stage: &Stage) -> Frontend {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
