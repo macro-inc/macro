@@ -9,7 +9,7 @@ import {
   type ScheduleFrequency,
   WEEKDAY_OPTIONS,
 } from '@core/util/cron';
-import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
+import { parseTime, useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { TZDateMini } from '@date-fns/tz';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
@@ -27,6 +27,7 @@ import {
   Switch,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { match } from 'ts-pattern';
 import {
   formatReminderInstant,
   isRecurring,
@@ -271,6 +272,26 @@ export function ReminderForm(props: ReminderFormProps) {
     !isCronRepresentable(props.initialSchedule.cron);
   const [customScheduleReplaced, setCustomScheduleReplaced] =
     createSignal(false);
+  // Week and month have different editable day shapes. Remember each shape
+  // once it is intentional so crossing cadences can seed a missing shape from
+  // the selected occurrence without throwing away edits when switching back.
+  const [savedWeeklyDays, setSavedWeeklyDays] = createSignal<
+    string[] | undefined
+  >(
+    !storedCronIsCustom &&
+      seed.repeat === 'week' &&
+      !sameDays(seed.parts.daysOfWeek, ALL_WEEKDAYS) &&
+      !sameDays(seed.parts.daysOfWeek, DEFAULT_WEEKDAYS)
+      ? [...seed.parts.daysOfWeek]
+      : undefined
+  );
+  const [savedMonthlyDay, setSavedMonthlyDay] = createSignal<
+    string | undefined
+  >(
+    !storedCronIsCustom && seed.repeat === 'month'
+      ? seed.parts.dayOfMonth
+      : undefined
+  );
   const quickPresets = reminderQuickPresets(openedAt);
 
   const dateOptions = useDateSearch({
@@ -295,6 +316,7 @@ export function ReminderForm(props: ReminderFormProps) {
 
   const formId = createUniqueId();
   const descriptionId = createUniqueId();
+  const whenLabelId = createUniqueId();
   const whenInputId = createUniqueId();
   const whenOptionsId = createUniqueId();
   let titleRef: HTMLInputElement | undefined;
@@ -304,8 +326,20 @@ export function ReminderForm(props: ReminderFormProps) {
 
   const pickedOnceDateTime = () =>
     selectedOnceInstant() ?? parseLocalReminderDateTime(onceDate(), onceTime());
+  const typedTime = () => parseTime(whenQuery())?.time;
+  const typedWallTimeIsInvalid = () => {
+    const time = typedTime();
+    const option = dateOptions()[0];
+    return (
+      time !== undefined &&
+      option !== undefined &&
+      (option.date.getHours() !== time.hours ||
+        option.date.getMinutes() !== time.minutes)
+    );
+  };
   const typedOnceDateTime = () => {
     if (!whenQuery().trim()) return undefined;
+    if (typedWallTimeIsInvalid()) return undefined;
     const option = dateOptions()[0];
     if (!option) return undefined;
     return new Date(option.date);
@@ -373,15 +407,24 @@ export function ReminderForm(props: ReminderFormProps) {
 
     const frequency: ScheduleFrequency =
       option === 'monthly' ? 'month' : 'week';
-    const currentChoice = repeatChoice();
-    const shouldReseed =
-      repeat() === 'once' ||
-      (storedCronIsCustom && !customScheduleReplaced()) ||
-      repeat() !== frequency ||
-      (option === 'weekly' && currentChoice !== 'weekly');
-    const parts = shouldReseed
-      ? seedRepeatParts(frequency)
-      : { ...repeatParts(), frequency };
+    const seeded = seedRepeatParts(frequency);
+    const canPreserveEditedTime =
+      repeat() !== 'once' && (!storedCronIsCustom || customScheduleReplaced());
+    const parts: CronParts = {
+      ...repeatParts(),
+      frequency,
+      time: canPreserveEditedTime ? repeatParts().time : seeded.time,
+    };
+    if (option === 'weekly') {
+      const days = savedWeeklyDays() ?? seeded.daysOfWeek;
+      parts.daysOfWeek = [...days];
+      setSavedWeeklyDays([...days]);
+    }
+    if (option === 'monthly') {
+      const day = savedMonthlyDay() ?? seeded.dayOfMonth;
+      parts.dayOfMonth = day;
+      setSavedMonthlyDay(day);
+    }
     setRepeat(frequency);
     setRepeatParts({
       ...parts,
@@ -393,6 +436,9 @@ export function ReminderForm(props: ReminderFormProps) {
 
   const updateParts = (patch: Partial<CronParts>) => {
     setCustomScheduleReplaced(true);
+    if (patch.dayOfMonth !== undefined && repeat() === 'month') {
+      setSavedMonthlyDay(patch.dayOfMonth);
+    }
     setRepeatParts((parts) => ({ ...parts, ...patch }));
   };
 
@@ -403,7 +449,10 @@ export function ReminderForm(props: ReminderFormProps) {
     const next = days.includes(value)
       ? days.filter((day) => day !== value)
       : [...days, value];
-    if (next.length > 0) updateParts({ daysOfWeek: next });
+    if (next.length > 0) {
+      setSavedWeeklyDays([...next]);
+      updateParts({ daysOfWeek: next });
+    }
   };
 
   const selectOnceDate = (date: Date) => {
@@ -411,6 +460,27 @@ export function ReminderForm(props: ReminderFormProps) {
     setSelectedOnceInstant(new Date(date));
     setOnceDate(toDateInput(date));
     setOnceTime(toTimeInput(date));
+  };
+
+  const toggleCustomTime = () => {
+    const opening = !showCustomTime();
+    if (opening && whenQuery().trim()) {
+      const option = dateOptions()[0];
+      const intendedTime = typedTime();
+      if (typedWallTimeIsInvalid() && option && intendedTime) {
+        // Carry the requested wall time into Custom so its existing DST-gap
+        // validation can explain the problem instead of silently discarding it.
+        setSelectedOnceInstant(undefined);
+        setOnceDate(toDateInput(option.date));
+        setOnceTime(`${pad(intendedTime.hours)}:${pad(intendedTime.minutes)}`);
+        setWhenQuery('');
+      } else {
+        const typed = typedOnceDateTime();
+        if (typed) selectOnceDate(typed);
+        else setWhenQuery('');
+      }
+    }
+    setShowCustomTime(opening);
   };
 
   const repeatChoice = () => {
@@ -546,9 +616,10 @@ export function ReminderForm(props: ReminderFormProps) {
             <Show when={repeat() === 'once'}>
               <section
                 class="flex flex-col gap-2"
-                aria-labelledby={whenInputId}
+                aria-labelledby={whenLabelId}
               >
                 <label
+                  id={whenLabelId}
                   for={whenInputId}
                   class="text-xs font-medium text-ink-muted"
                 >
@@ -573,11 +644,26 @@ export function ReminderForm(props: ReminderFormProps) {
                     aria-label="Matching reminder times"
                   >
                     <Show
-                      when={dateOptions().length > 0}
+                      when={
+                        dateOptions().length > 0 && !typedWallTimeIsInvalid()
+                      }
                       fallback={
-                        <span class="px-2 py-1.5 text-xs text-failure-ink">
-                          No date found. Try “tomorrow 9am” or use Custom.
-                        </span>
+                        <Show
+                          when={typedWallTimeIsInvalid()}
+                          fallback={
+                            <span class="px-2 py-1.5 text-xs text-failure-ink">
+                              No date found. Try “tomorrow 9am” or use Custom.
+                            </span>
+                          }
+                        >
+                          <span
+                            class="px-2 py-1.5 text-xs text-failure-ink"
+                            role="alert"
+                          >
+                            That local time doesn’t exist because the clocks
+                            change. Choose a time before or after the gap.
+                          </span>
+                        </Show>
                       }
                     >
                       <For each={dateOptions()}>
@@ -635,10 +721,7 @@ export function ReminderForm(props: ReminderFormProps) {
                     variant="outline"
                     class="min-h-11 min-w-0 flex-col items-start gap-0 px-2 py-1.5 text-left"
                     aria-pressed={showCustomTime()}
-                    onClick={() => {
-                      setWhenQuery('');
-                      setShowCustomTime((show) => !show);
-                    }}
+                    onClick={toggleCustomTime}
                   >
                     <span class="text-xs font-medium">Custom</span>
                     <span class="text-[11px] text-ink-muted">Date & time</span>
@@ -701,17 +784,14 @@ export function ReminderForm(props: ReminderFormProps) {
                     Repeat
                   </span>
                   <span class="block truncate text-ink">
-                    {repeatChoice() === 'once'
-                      ? 'Does not repeat'
-                      : repeatChoice() === 'custom'
-                        ? 'Custom schedule'
-                        : repeatChoice() === 'daily'
-                          ? 'Daily'
-                          : repeatChoice() === 'weekdays'
-                            ? 'Weekdays'
-                            : repeatChoice() === 'monthly'
-                              ? 'Monthly'
-                              : 'Weekly'}
+                    {match(repeatChoice())
+                      .with('once', () => 'Does not repeat')
+                      .with('custom', () => 'Custom schedule')
+                      .with('daily', () => 'Daily')
+                      .with('weekdays', () => 'Weekdays')
+                      .with('weekly', () => 'Weekly')
+                      .with('monthly', () => 'Monthly')
+                      .exhaustive()}
                   </span>
                 </span>
                 <CaretDownIcon class="size-4 shrink-0 text-ink-muted transition-transform group-open:rotate-180 motion-reduce:transition-none" />
