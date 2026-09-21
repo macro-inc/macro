@@ -124,6 +124,9 @@ export function useEmailDataSource(
   });
 
   const rawEntities = createMemo<EntityData[]>((previous) => {
+    // Disabled searches can retain placeholder data for the previous facets.
+    if (!facetsReady()) return [];
+
     if (!search.isSearching()) {
       // Previous-tab/inbox rows are not valid results for the new query.
       // REST placeholders need the same treatment as pending GraphQL reads.
@@ -233,6 +236,7 @@ export function useEmailDataSource(
   });
 
   const isLoading = () => {
+    if (!facetsReady()) return true;
     if (!search.isSearching()) {
       // A query held back for the tag sets is loading, not empty.
       return isListPending();

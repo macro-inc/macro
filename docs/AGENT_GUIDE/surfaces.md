@@ -250,7 +250,8 @@ connected account. Search is `Ctrl+F` within the surface.
 
 When switching email tabs or inboxes, the list shows current-query cached results
 or a scoped `Loading email` spinner until they arrive—not the previous tab's rows
-under the new heading. Background refreshes retain the current list. To check this,
+under the new heading. Active searches also hide retained results and show loading
+while selected tag sets are pending. Background refreshes retain the current list. To check this,
 rapidly alternate Signal, Noise, and Sent, then change inboxes; a delayed cache or
 network read must not leave the old rows visible or expose their Load more action.
 

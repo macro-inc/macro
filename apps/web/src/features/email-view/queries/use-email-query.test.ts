@@ -3,20 +3,23 @@ import {
   type SoupAstItemsQuery,
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
+import type { useSearchSoupQuery } from '@queries/soup/search';
 import { batch, createRoot, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EmailTab, EmailViewState } from '../types';
 import { type EmailDataSource, useEmailDataSource } from './use-email-query';
 
+const searchQueryMock = vi.hoisted(() => vi.fn());
+
 vi.mock('@app/features/soup', async () => ({
   ...(await import('@app/features/soup/filters')),
   ...(await import('@app/features/soup/collection/rows')),
-  createSearchState: () => ({
-    isSearching: () => false,
-    usesServiceSearch: () => false,
-    isSettling: () => false,
-  }),
+  ...(await import('@app/features/soup/search/create-search-state')),
+}));
+vi.mock('@queries/soup/search', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@queries/soup/search')>()),
+  useSearchSoupQuery: searchQueryMock,
 }));
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({ notificationsByEntity: () => ({}) }),
@@ -55,12 +58,12 @@ const ids = (source: EmailDataSource) =>
     .flatMap((row) => (row.kind === 'entity' ? [row.entity.id] : []));
 
 let dispose: (() => void) | undefined;
-function mount() {
+function mount(search = '') {
   return createRoot((cleanup) => {
     dispose = cleanup;
     const [state, setState] = createStore<EmailViewState>({
       tab: 'noise',
-      search: '',
+      search,
       inboxIds: ['inbox-a'],
       facets: {},
       collapsedSidebarSectionIds: [],
@@ -70,6 +73,25 @@ function mount() {
     const [placeholder, setPlaceholder] = createSignal(false);
     const [fetching, setFetching] = createSignal(false);
     const [tagSetsReady, setTagSetsReady] = createSignal(true);
+    const [searchEntities, setSearchEntities] = createSignal([email('search')]);
+    searchQueryMock.mockImplementation(
+      (
+        _args: Parameters<typeof useSearchSoupQuery>[0],
+        options: Parameters<typeof useSearchSoupQuery>[1]
+      ) => ({
+        // A disabled search keeps its previous data, just like placeholderData.
+        get data() {
+          return searchEntities();
+        },
+        get isEnabled() {
+          return options?.().enabled ?? true;
+        },
+        isFetching: false,
+        isFetchingNextPage: false,
+        hasNextPage: true,
+        error: null,
+      })
+    );
     const query: SoupAstItemsQuery = {
       get data() {
         if (loading()) throw new Error('Read pending query data');
@@ -107,6 +129,8 @@ function mount() {
       setPlaceholder,
       setFetching,
       setTagSetsReady,
+      searchEntities,
+      setSearchEntities,
     };
   });
 }
@@ -174,6 +198,37 @@ describe('Email list query transitions', () => {
     expect(ids(source)).toEqual(['noise']);
     expect(source.isLoading()).toBe(false);
     expect(source.isFetching()).toBe(true);
+  });
+
+  it('clears retained active-search rows and reports loading while tag sets are pending', () => {
+    const {
+      source,
+      setState,
+      setTagSetsReady,
+      searchEntities,
+      setSearchEntities,
+    } = mount('invoice');
+    expect(ids(source)).toEqual(['search']);
+    expect(source.isLoading()).toBe(false);
+    expect(source.hasMore()).toBe(true);
+
+    batch(() => {
+      setState('facets', { tags: ['pending-tag'] });
+      setTagSetsReady(false);
+    });
+    // The shared search still holds the previous service result.
+    expect(searchEntities().map((entity) => entity.id)).toEqual(['search']);
+    expect(ids(source)).toEqual([]);
+    expect(source.items()).toEqual([]);
+    expect(source.isLoading()).toBe(true);
+    expect(source.hasMore()).toBe(false);
+
+    batch(() => {
+      setSearchEntities([email('refined-search')]);
+      setTagSetsReady(true);
+    });
+    expect(ids(source)).toEqual(['refined-search']);
+    expect(source.isLoading()).toBe(false);
   });
 
   it('does not retain unfiltered rows while a tag selection waits for tag sets', () => {
