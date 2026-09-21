@@ -3773,7 +3773,7 @@ async fn a_cursor_managed_session_is_always_stamped_cursor() {
     let open = service.open_managed_session(OpenManagedSession {
         repo_url: None,
         repo_branch: None,
-        owner: sender(),
+        owner: model_owner::Owner::User(sender()),
         instructions: None,
         prompt: None,
         profile: Some(agent_session::domain::ports::SelectedManagedPersona {
