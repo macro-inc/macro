@@ -180,24 +180,6 @@ export function ChatComposer(props: {
       }}
     >
       <div ref={container} data-keep-keyboard class="min-w-0">
-        <Show when={props.drawer}>
-          <div
-            class="composer-drawer"
-            data-open={props.drawerOpen ? '' : undefined}
-            aria-hidden={!props.drawerOpen}
-            inert={!props.drawerOpen}
-          >
-            <div class="composer-drawer-inner">
-              <div
-                class="composer-drawer-content"
-                role="group"
-                aria-label="Repository settings"
-              >
-                {props.drawer}
-              </div>
-            </div>
-          </div>
-        </Show>
         <ComposerSurface
           as="div"
           data-agent-composer="chat"
@@ -221,11 +203,13 @@ export function ChatComposer(props: {
             <div ref={setContent} data-composer-content>
               <Input.Attachments kind="media" class="pb-0" />
               <Input.Attachments kind="document" class="pb-0" />
+              {/* Expanded text keeps the compact row's vertical inset:
+                  7.5px padding + half the button/line-height difference. */}
               <div
                 ref={setLayout}
                 data-composer-compact={!props.drawerOpen && isCompact()}
                 data-composer-coding={props.drawerOpen || undefined}
-                class="group/composer flex min-w-0 data-[composer-compact=false]:flex-wrap items-end gap-2 p-[7.5px] pl-3 data-[composer-compact=false]:pb-2.5 data-[composer-compact=false]:px-3 data-[composer-coding=true]:pt-4"
+                class="group/composer flex min-w-0 data-[composer-compact=false]:flex-wrap items-end gap-2 p-[7.5px] pl-3 data-[composer-compact=false]:pb-2.5 data-[composer-compact=false]:px-3 data-[composer-compact=false]:pt-[calc(7.5px_+_(33.75px_-_1.5rem)/2)]"
               >
                 <Show when={props.onAttachFiles}>
                   <div
@@ -312,6 +296,24 @@ export function ChatComposer(props: {
             </div>
           </Input.DropZone>
         </ComposerSurface>
+        <Show when={props.drawer}>
+          <div
+            class="composer-drawer"
+            data-open={props.drawerOpen ? '' : undefined}
+            aria-hidden={!props.drawerOpen}
+            inert={!props.drawerOpen}
+          >
+            <div class="composer-drawer-inner">
+              <div
+                class="composer-drawer-content"
+                role="group"
+                aria-label="Repository settings"
+              >
+                {props.drawer}
+              </div>
+            </div>
+          </div>
+        </Show>
       </div>
     </InputProvider>
   );

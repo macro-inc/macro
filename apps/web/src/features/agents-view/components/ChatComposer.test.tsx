@@ -195,7 +195,7 @@ describe('Chat session input', () => {
     expect(screen.getByRole('button', { name: 'Agent' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Model' })).toBeNull();
   });
-  it('expands coding mode above the input without remounting the editor', () => {
+  it('expands coding mode with repository settings after the input without remounting the editor', () => {
     const [mode, setMode] = createSignal('chat');
     const { container } = render(() => (
       <ChatComposer
@@ -213,7 +213,7 @@ describe('Chat session input', () => {
     expect(layout?.getAttribute('data-composer-compact')).toBe('true');
     expect(
       (drawer?.compareDocumentPosition(input) ?? 0) &
-        Node.DOCUMENT_POSITION_FOLLOWING
+        Node.DOCUMENT_POSITION_PRECEDING
     ).toBeTruthy();
     expect((drawer as HTMLElement).inert).toBe(true);
     expect(drawer?.getAttribute('aria-hidden')).toBe('true');

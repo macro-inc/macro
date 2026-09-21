@@ -84,11 +84,12 @@ permission failures should display a failed tool call without a successful resul
   while the agent and model lists scroll. It opens the roster on the selected kind's
   tab, where either kind can be created.
 - On Home and New conversation, selecting a coding agent expands the input even
-  with an empty or short draft. The heading stays anchored while the composer
+  with an empty or short draft. Both pages place the composer above the viewport's
+  vertical center. The heading and first input line stay anchored while the composer
   expands downward. The plus attachment button stays at the far left: before the
   text in the compact row, and on the bottom control row when expanded. The editor sits above the controls, with attachments
   on the left and the agent/model and Send on the right. An inset repository bar
-  slides and fades in above the rounded input over 200ms, with rounded top corners
+  slides and fades in below the rounded input over 200ms, with rounded bottom corners
   and a darker surface in dark mode. Selecting a chat agent retracts the bar and
   restores the compact input when the draft fits on one line, without remounting
   the editor or losing the draft. Reduced-motion
@@ -113,7 +114,7 @@ permission failures should display a failed tool call without a successful resul
   **Retry**. Picking a different repository resets the branch to that
   repository's default. Omitting the branch on the create-session API
   likewise starts on the repository's default branch.
-  Both controls open above the drawer without clipping. The selections survive
+  Both controls open above the footer without clipping. The selections survive
   agent changes and are sent only to coding agents. Cursor honors the explicit
   repository and branch instead of choosing a repository from the prompt;
   the owner must have access through the connected GitHub App.

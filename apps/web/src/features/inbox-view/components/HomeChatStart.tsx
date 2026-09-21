@@ -34,7 +34,7 @@ export function HomeChatStart() {
         >
           {/*
             Agents new conversation sits under ViewShell.TopBar (h-12) and
-            anchors the greeting with .newchat padding 24/64. Home only renders that bar
+            anchors the greeting above center with .newchat padding 24/64. Home only renders that bar
             when the list is collapsed, so reserve the same offset here.
           */}
           <Show when={agents().enabled && !showHomeTopBar()}>
@@ -47,7 +47,7 @@ export function HomeChatStart() {
           <div
             class={
               agents().enabled
-                ? 'mx-auto grid min-h-64 min-w-0 w-full max-w-180 flex-1 grid-cols-1 grid-rows-[max(0px,calc(50%-60px))_auto_1fr] pt-6 pb-16'
+                ? 'mx-auto grid min-h-64 min-w-0 w-full max-w-180 flex-1 grid-cols-1 grid-rows-[max(0px,calc(40%-60px))_auto_1fr] pt-6 pb-16'
                 : 'mx-auto grid h-full min-h-64 min-w-0 w-full max-w-180 grid-cols-1 grid-rows-[1fr_auto_1fr] pb-16'
             }
             data-home-composer-align={agents().enabled ? 'agents' : 'legacy'}
