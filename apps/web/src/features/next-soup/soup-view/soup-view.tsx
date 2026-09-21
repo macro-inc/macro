@@ -230,18 +230,19 @@ type SoupRowEntry = {
   family: SoupRowFamily;
 };
 
-/**
- * Per-view row config. A view absent from the table gets DEFAULT_SOUP_ROW.
- * Adding a row component means adding it here — the entry can't omit its
- * geometry family, so the two can't drift apart.
- */
-const SOUP_ROW_BY_VIEW: Partial<Record<ListView, SoupRowEntry>> = {
-  inbox: { component: InboxListEntity, family: 'card' },
-  tasks: { component: TaskListEntity, family: 'row' },
-  companies: { component: CompanyListEntity, family: 'row' },
-};
-
-const DEFAULT_SOUP_ROW: SoupRowEntry = { component: ListEntity, family: 'row' };
+/** Resolve components at render time, after the entity module initializes. */
+function soupRowForView(view: ListView | undefined): SoupRowEntry {
+  switch (view) {
+    case 'inbox':
+      return { component: InboxListEntity, family: 'card' };
+    case 'tasks':
+      return { component: TaskListEntity, family: 'row' };
+    case 'companies':
+      return { component: CompanyListEntity, family: 'row' };
+    default:
+      return { component: ListEntity, family: 'row' };
+  }
+}
 
 const CONDENSED_NARROW_LIST_VIEWS: ReadonlySet<ListView> = new Set([
   'channels',
@@ -931,10 +932,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
 
   // The row component and its geometry family both come from one per-view
   // lookup, so the list container can't disagree with the rows it renders.
-  const rowEntry = (): SoupRowEntry => {
-    const view = currentView();
-    return (view && SOUP_ROW_BY_VIEW[view]) ?? DEFAULT_SOUP_ROW;
-  };
+  const rowEntry = (): SoupRowEntry => soupRowForView(currentView());
 
   const groupHeaderComponent = () => {
     if (currentView() === 'tasks') return TaskGroupHeader;

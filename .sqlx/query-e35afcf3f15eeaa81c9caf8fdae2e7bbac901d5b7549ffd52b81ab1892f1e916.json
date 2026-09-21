@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT granted_scopes, (calendar_disabled_at IS NOT NULL) AS \"opted_out!\"\n        FROM email_link_google_scopes WHERE link_id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "granted_scopes",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 1,
+        "name": "opted_out!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "e35afcf3f15eeaa81c9caf8fdae2e7bbac901d5b7549ffd52b81ab1892f1e916"
+}

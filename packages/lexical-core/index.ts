@@ -11,6 +11,7 @@ export * from './nodes/CompletionNode';
 export * from './nodes/ConnectAppNode';
 export * from './nodes/ContactMentionNode';
 export * from './nodes/CustomCodeNode';
+export * from './nodes/DatabaseQueryNode';
 export * from './nodes/DateMentionNode';
 export * from './nodes/DecoratorBlockNode';
 export * from './nodes/DiffDeleteNode';

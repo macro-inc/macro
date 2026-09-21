@@ -1184,6 +1184,15 @@ async fn run() -> anyhow::Result<()> {
         ),
     ));
 
+    // Shared by the databases router and the unified entity-mutation router.
+    let databases_service = Arc::new(databases::outbound::build_service(
+        db.clone(),
+        databases::outbound::gateway_event_publisher::GatewayTableEventPublisher::new(
+            conn_gateway_client.as_ref().clone(),
+        ),
+        macro_event_broker.clone(),
+    ));
+
     let collab_surface_service = CollabSurfaceServiceImpl::new(
         Arc::new(PgCollabSurfaceRepo::new(db.clone())),
         Arc::new(LexicalSyncSurfaceInitializer::new(
@@ -1463,6 +1472,7 @@ async fn run() -> anyhow::Result<()> {
             call_service.clone(),
             Arc::new(email_service.clone()),
             project_service.clone(),
+            databases_service.clone(),
             entity_access_service.clone(),
             Arc::new(outbound::entity_mutation::DssEntityLifecycleAdapter::new(
                 db.clone(),
@@ -1502,6 +1512,22 @@ async fn run() -> anyhow::Result<()> {
         initiative_state: InitiativeRouterState::new(
             initiative_service,
             entity_access_service.clone(),
+            authorization_state.clone(),
+        ),
+        databases_state: databases::inbound::axum_router::DatabasesRouterState::new(
+            databases_service,
+            entity_access_service.clone(),
+            authorization_state.clone(),
+        ),
+        database_starter_state: databases::inbound::starter_router::DatabaseStarterRouterState::new(
+            Arc::new(databases::domain::starter::DatabaseStarterServiceImpl::new(
+                databases::outbound::pg_starter::PgDatabaseStarterRepo::new(
+                    db.clone(),
+                    properties::outbound::properties_pg_repo::PropertiesPgRepo::new(db.clone()),
+                    saved_views::PgViewStorage::new(db.clone()),
+                ),
+                macro_event_broker.clone(),
+            )),
             authorization_state.clone(),
         ),
         collab_surface_state: CollabSurfaceRouterState::new(

@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE \"Thread\" SET metadata = '{\"markId\":\"not-a-mark\"}' WHERE id = 5",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "5c31189d0f9abbcc9b873128e28899837ba7256b0c1811aa94761e4bfe28815f"
+}

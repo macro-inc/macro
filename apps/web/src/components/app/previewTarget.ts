@@ -28,6 +28,7 @@ type IdOnlyPreviewSelection = {
     | 'chat'
     | 'crm_company'
     | 'crm_contact'
+    | 'database'
     | 'email'
     | 'project';
 };

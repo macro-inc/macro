@@ -24,6 +24,7 @@
 | `/app/calendar/view` | Calendar |
 | `/app/md/<uuid>` | A document |
 | `/app/spreadsheet/<uuid>` | A native Macro spreadsheet |
+| `/app/database/<uuid>` | A database with table and board views |
 | `/app/chat/<uuid>` | A standalone AI chat |
 | `/app/agent/<uuid>` | An agent session (opened from `@macro-new` / `@coder` / `@cursor`) |
 | `/app/md/<doc>/chat/<chat>` | Doc + doc-scoped chat in a split |

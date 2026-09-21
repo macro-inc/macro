@@ -1,5 +1,30 @@
 # Documents
 
+## Live database answers
+
+Type `/database` and choose **Database** to insert a live database answer.
+The AI prompt receives focus immediately. Type your question and press Enter or
+**Ask**; Shift+Enter adds a line break. The source starts as **Automatic**: the
+assistant finds the relevant accessible database and considers all of its tables.
+Open the source picker beside **SQL** to search for an explicit database instead.
+That choice scopes the question to the entire database; no table selection is
+required. Ambiguous questions ask for clarification. Document questions can only
+discover and read data. Choose **Insert answer** to save the result in the document.
+SQL is optional under **SQL**. A single value becomes an inline answer and multiple records become a
+result table. Ask for a bar, line, or pie chart to visualize a summary. The display
+menu offers formats supported by the result; **View data** reveals a chart's
+underlying table. Chart settings are saved with the query, and charts refresh
+from each reader's permitted data just like other live answers.
+
+Opening an existing answer previews its saved query. **Ask** updates a changed
+question or reruns an unchanged query, and **Save changes** updates the document.
+Previewing never changes the saved answer on its own. **Undo** restores the
+previous draft. Changing the source keeps your question but requires a new answer
+before saving. Saved answers retain their resolved database and SQL when reopened.
+Answers run with
+each reader's database access and update when referenced tables change.
+See [Databases](databases.md#ai-questions-and-live-answers).
+
 ## Spreadsheets
 
 Spreadsheets are an internal pilot controlled by the `enable-spreadsheets` PostHog
@@ -7,6 +32,7 @@ flag in every environment. Team targeting is configured in PostHog; ordinary
 document permissions continue to control access to each workbook.
 
 Choose **Create → Spreadsheet**, or **New → Spreadsheet** in Files or a folder.
+The keyboard shortcut is **C → W** (workbook); **C → B** creates a database.
 Native workbooks open at `/app/spreadsheet/<uuid>` and use the normal document
 title bar with **Ask Macro** and **Share** at the top right. The **File actions**
 ellipsis beside the title uses the same menu as documents, including rename,

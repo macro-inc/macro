@@ -5,8 +5,8 @@
 //! leaves only Docker containers running behind one proxy origin.
 //!
 //! `up` is full-delete/full-create. `update` adopts a new binary directory
-//! without touching volumes. If nothing is recorded yet, `update` bootstraps
-//! through `up`. `status` is machine-readable state. `down` reclaims everything.
+//! without touching volumes. Without recorded state, `update` refuses to run.
+//! `status` is machine-readable state. `down` reclaims everything.
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -304,37 +304,17 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
 }
 
 /// `cargo x stack update` — adopt a new build into the running stack.
-/// Volumes stay. With no recorded stack, this bootstraps through [`up`].
+/// Volumes stay. Missing state is an error: bootstrapping through `up` would
+/// erase an existing interactive stack and its data.
 pub fn update(args: &UpdateArgs) -> Result<()> {
     let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
     if read_state(&instance).is_none() {
-        return bootstrap_from_update(args);
+        bail!(
+            "No saved headless stack state for instance {}. Refusing to recreate an existing stack or remove its data. Use targeted service restarts for an interactive stack; run `stack up` only when a fresh stack is intended.",
+            instance.name()
+        );
     }
     update_running(args)
-}
-
-fn bootstrap_from_update(args: &UpdateArgs) -> Result<()> {
-    let up_args = UpArgs {
-        run: super::cli::RunArgs {
-            instance: args.instance.clone(),
-            env: args.env.clone(),
-            build: super::cli::BuildArgs {
-                no_build: args.binaries_dir.is_some(),
-                build_aux_services: args.build_aux_services,
-                binaries_dir: args.binaries_dir.clone(),
-            },
-            no_frontend: false,
-            enable_onboarding: false,
-            verbose: args.verbose,
-            no_snapshot: false,
-            traces: super::cli::TracesBackend::default(),
-            with_chrome: false,
-            with_cf_tunnel: false,
-        },
-        infra_only: false,
-        json: args.json,
-    };
-    up(Mode::Local, &up_args).map(|_| ())
 }
 
 fn update_running(args: &UpdateArgs) -> Result<()> {

@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_events SET created_at = $1, updated_at = $2, last_reminder_fired_at = CASE WHEN id = $3 THEN $4::timestamptz ELSE NULL END WHERE id = ANY($5)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Uuid",
+        "Timestamptz",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3c24ed41ba475636af7da1ea9033cba24cfff815ba342cd53a2f3db3a4df775a"
+}

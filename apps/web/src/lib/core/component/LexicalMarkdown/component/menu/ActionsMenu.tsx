@@ -1,4 +1,6 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
+import { enableDatabases } from '@core/constant/featureFlags';
 import clickOutside from '@core/directive/clickOutside';
 import { fuzzyFilter } from '@core/util/fuzzy';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
@@ -164,12 +166,16 @@ export function ActionMenu(props: {
     if (idx >= 0) merged[idx] = override;
     else merged.push(override);
   }
-  const validActions = merged.filter((action) => {
-    if (props.ignoreActionIds?.includes(action.id)) return false;
-    const { dependencies } = action;
-    if (dependencies === undefined || dependencies.length === 0) return true;
-    return props.editor.hasNodes(dependencies);
-  });
+  const databasesEnabled = useFeatureFlag(enableDatabases);
+  const validActions = () =>
+    merged.filter((action) => {
+      if (action.id === 'database-query' && !databasesEnabled().enabled)
+        return false;
+      if (props.ignoreActionIds?.includes(action.id)) return false;
+      const { dependencies } = action;
+      if (dependencies === undefined || dependencies.length === 0) return true;
+      return props.editor.hasNodes(dependencies);
+    });
 
   createEffect(() => {
     setSelectedIndex(0);
@@ -177,7 +183,7 @@ export function ActionMenu(props: {
   });
 
   const filteredItems = createMemo(() => {
-    return fuzzyFilter(searchTerm(), validActions, (item) =>
+    return fuzzyFilter(searchTerm(), validActions(), (item) =>
       [item.name, ...item.keywords].join(' ')
     );
   });

@@ -27,6 +27,8 @@ function resolveEntityType(blockName: BlockName) {
       return 'channel';
     case 'project':
       return 'project';
+    case 'database':
+      return 'database';
     default:
       return 'document';
   }

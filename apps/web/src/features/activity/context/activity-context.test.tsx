@@ -3,6 +3,10 @@ import { createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const useBotsQuery = vi.fn();
+const useDatabaseDetailQuery = vi.fn();
+const usePropertyEntityDisplay = vi.fn(
+  (_entityId: () => string, _entityType: () => string) => ({})
+);
 
 vi.mock('@queries/bots/bots', () => ({
   useBotsQuery: () => useBotsQuery(),
@@ -15,7 +19,19 @@ vi.mock('@core/user', () => ({
 vi.mock('@property/editor/hooks/useAllProperties', () => ({
   useAllProperties: () => () => [],
 }));
-vi.mock('@property/hooks', () => ({ usePropertyEntityDisplay: () => ({}) }));
+vi.mock('@property/hooks', () => ({
+  usePropertyEntityDisplay: (
+    entityId: () => string,
+    entityType: () => string
+  ) => usePropertyEntityDisplay(entityId, entityType),
+}));
+vi.mock('@queries/storage/databases', () => ({
+  useDatabaseDetailQuery: (databaseId: () => string | undefined) =>
+    useDatabaseDetailQuery(databaseId),
+}));
+vi.mock('@core/component/EntityIcon', () => ({
+  EntityIcon: () => null,
+}));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => ({}),
 }));
@@ -84,6 +100,83 @@ describe('appActivityContext.botName', () => {
 
       expect(name()).toBe('System');
       expect(useBotsQuery).not.toHaveBeenCalled();
+      dispose();
+    });
+  });
+});
+
+describe('appActivityContext.entityDisplay', () => {
+  beforeEach(() => {
+    useDatabaseDetailQuery.mockReset();
+    usePropertyEntityDisplay.mockClear();
+  });
+
+  it('names a database from its detail query and opens it as a database block', () => {
+    useDatabaseDetailQuery.mockReturnValue({
+      isPending: false,
+      isSuccess: true,
+      data: { database: { name: 'Roadmap' } },
+    });
+    createRoot((dispose) => {
+      const context = useActivityContext();
+      const display = context.entityDisplay(
+        () => 'database-1',
+        () => 'DATABASE'
+      );
+
+      expect(display.name()).toBe('Roadmap');
+      expect(display.isLoading()).toBe(false);
+      expect(display.blockOrFileType()).toBe('database');
+      expect(display.linkParams()).toBeUndefined();
+      expect(usePropertyEntityDisplay).not.toHaveBeenCalled();
+      dispose();
+    });
+  });
+
+  it('reads `Loading...` while the database loads and `Database` once it has failed', () => {
+    useDatabaseDetailQuery.mockReturnValue({
+      isPending: true,
+      isSuccess: false,
+      data: undefined,
+    });
+    createRoot((dispose) => {
+      const context = useActivityContext();
+      const display = context.entityDisplay(
+        () => 'database-1',
+        () => 'DATABASE'
+      );
+      expect(display.name()).toBe('Loading...');
+      expect(display.isLoading()).toBe(true);
+      dispose();
+    });
+
+    useDatabaseDetailQuery.mockReturnValue({
+      isPending: false,
+      isSuccess: false,
+      isError: true,
+      data: undefined,
+    });
+    createRoot((dispose) => {
+      const context = useActivityContext();
+      const display = context.entityDisplay(
+        () => 'database-1',
+        () => 'DATABASE'
+      );
+      expect(display.name()).toBe('Database');
+      expect(display.isLoading()).toBe(false);
+      dispose();
+    });
+  });
+
+  it('resolves every other entity kind through the property display', () => {
+    createRoot((dispose) => {
+      const context = useActivityContext();
+      context.entityDisplay(
+        () => 'doc-1',
+        () => 'DOCUMENT'
+      );
+      expect(usePropertyEntityDisplay).toHaveBeenCalledTimes(1);
+      expect(useDatabaseDetailQuery).not.toHaveBeenCalled();
       dispose();
     });
   });

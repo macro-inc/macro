@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT ON (ea.entity_id)\n                ea.entity_id AS \"entity_id!\",\n                ea.access_level::text AS \"access_level!\"\n            FROM entity_access ea\n            JOIN databases d ON d.id = ea.entity_id AND d.trashed_at IS NULL\n            WHERE ea.entity_type = 'database'\n              AND ea.source_id = ANY($1)\n            ORDER BY ea.entity_id,\n                CASE ea.access_level::text\n                    WHEN 'owner' THEN 4\n                    WHEN 'edit' THEN 3\n                    WHEN 'comment' THEN 2\n                    WHEN 'view' THEN 1\n                    ELSE 0\n                END DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "access_level!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "fb630e96b73b48aa5a0e23a05440c60fcb6b1e0f0548bb8b3091c689979692f2"
+}

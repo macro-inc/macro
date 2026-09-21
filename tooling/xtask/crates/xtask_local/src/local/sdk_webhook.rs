@@ -14,6 +14,8 @@ mod test;
 
 const RELAY_PORT: u16 = 8787;
 const USER: &str = "sdk-webhook";
+const START_ATTEMPTS: u8 = 10;
+const START_INTERVAL: Duration = Duration::from_millis(300);
 
 fn ssh_client_flags(private_key: &Path, ssh_port: u16, host_receiver_port: u16) -> Vec<String> {
     vec![
@@ -96,45 +98,72 @@ pub fn ensure_keys(instance: &Instance) -> Result<()> {
 /// Start the host-side reverse tunnel after the relay container is running.
 pub fn start(instance: &Instance) -> Result<Child> {
     ensure_keys(instance)?;
-    stop(instance);
-    let mut child = Command::new("ssh")
-        .args(ssh_client_flags(
-            &private_key(instance),
-            ssh_port(instance),
-            host_receiver_port(instance),
-        ))
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()
-        .context("starting the SDK webhook SSH reverse tunnel")?;
+    let mut command = Command::new("ssh");
+    command.args(ssh_client_flags(
+        &private_key(instance),
+        ssh_port(instance),
+        host_receiver_port(instance),
+    ));
+    start_tunnel(instance, &mut command)
+}
 
-    std::thread::sleep(Duration::from_millis(300));
-    if let Some(status) = child.try_wait()? {
+fn start_tunnel(instance: &Instance, command: &mut Command) -> Result<Child> {
+    // Keep replacement and PID publication together: concurrent starts must
+    // not both see an absent PID file and compete for the same remote port.
+    let lock = std::fs::File::create(key_dir(instance).join("tunnel.lock"))?;
+    lock.lock().context("locking SDK webhook tunnel startup")?;
+    stop(instance);
+
+    for attempt in 1..=START_ATTEMPTS {
+        let mut child = command
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn()
+            .context("starting the SDK webhook SSH reverse tunnel")?;
+
+        std::thread::sleep(START_INTERVAL);
+        let Some(status) = child.try_wait()? else {
+            if let Err(error) = std::fs::write(pid_path(instance), child.id().to_string()) {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(error).context("recording the SDK webhook tunnel PID");
+            }
+            return Ok(child);
+        };
         let mut err = String::new();
         if let Some(mut stderr) = child.stderr.take() {
             let _ = stderr.read_to_string(&mut err);
         }
         let err = err.trim();
+        // The previous SSH connection can take a moment to release its remote
+        // listener after SIGTERM. The relay itself may also still be starting.
+        if attempt < START_ATTEMPTS
+            && (err.contains("remote port forwarding failed")
+                || err.contains("Connection refused")
+                || err.contains("Connection reset by peer"))
+        {
+            continue;
+        }
         if err.is_empty() {
             bail!("SDK webhook SSH reverse tunnel exited with {status}");
         }
         bail!("SDK webhook SSH reverse tunnel exited with {status}: {err}");
     }
-    std::fs::write(pid_path(instance), child.id().to_string())?;
-    Ok(child)
+    unreachable!("the final attempt returns either the tunnel or its error")
 }
 
 /// Stop a previously started host-side tunnel, if present.
 pub fn stop(instance: &Instance) {
     let path = pid_path(instance);
-    let Some(pid) = std::fs::read_to_string(&path)
+    if let Some(pid) = std::fs::read_to_string(&path)
         .ok()
         .and_then(|p| p.trim().parse::<i32>().ok())
-    else {
-        return;
-    };
-    let _ = Command::new("kill")
-        .args(["-TERM", &pid.to_string()])
-        .status();
+        .filter(|pid| *pid > 0)
+    {
+        let _ = Command::new("kill")
+            .args(["-TERM", &pid.to_string()])
+            .output();
+    }
     let _ = std::fs::remove_file(path);
 }

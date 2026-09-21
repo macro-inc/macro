@@ -35,6 +35,7 @@ contacts = { path = "../contacts", default-features = false, features = [
   "outbound",
 ] }
 crm = { path = "../crm" }
+databases = { path = "../databases", default-features = false, features = ["ai_tools", "gateway", "postgres", "sqlite"] }
 documents = { path = "../documents", features = ["ai_tools"] }
 email = { path = "../email", features = ["ai_schema", "ai_tools", "axum", "outbound"] }
 email_service_client = { path = "../email_service_client" }
@@ -75,6 +76,7 @@ reqwest.workspace = true
 readonly_pool = { path = "../readonly_pool" }
 reminders = { path = "../reminders", default-features = false, features = ["ai_tools", "postgres"] }
 rootcause = { workspace = true }
+saved_views = { path = "../saved_views" }
 schemars.workspace = true
 search_service_client = { path = "../search_service_client" }
 serde.workspace = true

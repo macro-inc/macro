@@ -9,6 +9,7 @@ pub fn choose_tools_prompt<'a>(
 ) -> &'a (dyn std::fmt::Display + Sync) {
     match request.toolset {
         ToolSet::All => all_tools_prompt,
-        ToolSet::None => &prompt::BASE_PROMPT,
+        ToolSet::None | ToolSet::DatabasesReadOnly => &prompt::BASE_PROMPT,
+        ToolSet::Databases => &prompt::DATABASE_TOOL_USE_PROMPT,
     }
 }

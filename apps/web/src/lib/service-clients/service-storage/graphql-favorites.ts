@@ -44,6 +44,7 @@ const FAVORITE_ENTITY_TYPE_TO_GRAPHQL = {
   agent_session: 'AGENT_SESSION',
   scheduled_action: 'SCHEDULED_ACTION',
   initiative: 'INITIATIVE',
+  database: 'DATABASE',
 } satisfies Record<FavoriteEntityType, GraphqlEntityType>;
 
 const GRAPHQL_ENTITY_TYPE_TO_FAVORITE = {
@@ -55,6 +56,7 @@ const GRAPHQL_ENTITY_TYPE_TO_FAVORITE = {
   CHAT: 'chat',
   CRM_COMPANY: 'crm_company',
   CRM_CONTACT: 'crm_contact',
+  DATABASE: 'database',
   DOCUMENT: 'document',
   EMAIL_THREAD: 'email_thread',
   FOREIGN_ENTITY: 'foreign_entity',

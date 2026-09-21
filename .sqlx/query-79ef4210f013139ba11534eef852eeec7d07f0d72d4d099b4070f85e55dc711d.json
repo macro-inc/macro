@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT changed.table_id AS \"table_id!\"\n            FROM UNNEST($1::uuid[], $2::uuid[]) AS changed(table_id, definition_id)\n            WHERE NOT EXISTS (SELECT 1 FROM database_columns\n                WHERE table_id = changed.table_id AND property_definition_id = changed.definition_id)\n            LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "table_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "79ef4210f013139ba11534eef852eeec7d07f0d72d4d099b4070f85e55dc711d"
+}

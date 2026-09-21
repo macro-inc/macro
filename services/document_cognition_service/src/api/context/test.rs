@@ -378,6 +378,12 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             pool.clone(),
             entity_access_service.clone(),
         ),
+        databases_tool_context: ai_tools::build_databases_tool_context(
+            pool.clone(),
+            entity_access_service.clone(),
+            ai_tools::ToolTableEventPublisher::NoOp(Default::default()),
+            ai_tools::ToolDatabasesEventBroker::Real(macro_event_broker.clone()),
+        ),
         import_tool_context: ai_tools::ToolImportToolContext::unwired(),
         chat_tool_context,
         channel_tool_context: ai_tools::build_channel_tool_context_without_side_effects(

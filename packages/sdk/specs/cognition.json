@@ -2974,7 +2974,8 @@
           "skill",
           "agent_session",
           "scheduled_action",
-          "initiative"
+          "initiative",
+          "database"
         ]
       },
       "ErrorBody": {
@@ -4575,9 +4576,33 @@
       },
       "StructuredCompletionResponse": {
         "type": "object",
-        "required": ["result"],
+        "required": ["result", "toolActivity"],
         "properties": {
-          "result": {}
+          "result": {},
+          "toolActivity": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StructuredToolActivity"
+            },
+            "description": "Actual completed tools, independent of the model's claims."
+          }
+        }
+      },
+      "StructuredToolActivity": {
+        "type": "object",
+        "required": ["name", "success"],
+        "properties": {
+          "changesApplied": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
         }
       },
       "TargetType": {
@@ -4604,6 +4629,26 @@
               "type": {
                 "type": "string",
                 "enum": ["none"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["databases"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["databases_read_only"]
               }
             }
           }

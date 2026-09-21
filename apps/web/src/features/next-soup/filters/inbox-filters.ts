@@ -142,6 +142,9 @@ export function signalFilter(entity: EntityData): boolean {
       // Calendar events are gated into the Inbox by their event-alarm
       // notifications, same as reminders.
       return true;
+    case 'database':
+      // Databases are not Soup entities and never reach the Inbox.
+      return false;
   }
 }
 

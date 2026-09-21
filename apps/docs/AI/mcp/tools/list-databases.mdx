@@ -1,0 +1,12 @@
+---
+title: ListDatabases
+description: "List every accessible Macro database AND its table tabs, including owned and shared data. A database is a container; its name can differ from a requested table's name. For example, the Tickets table might be inside a database named Product. Search every entry's `tables`, not just database names.  Start here whenever the user refers to \"my table\", \"the tracker\", or any named list of theirs: this is the only way to turn that name into the `databaseId` every other database tool needs. Each entry includes `id`, `name`, `grant`, and nested `tables` with their ids, display names, and stable read aliases. `view` and `comment` permit reading, not row/schema edits.  Takes no arguments and returns every database, so there is no filter to get wrong. Follow it with DescribeDatabase for the matching database's columns before writing SQL. Do not claim a table is absent until you have checked the returned table names; resolve duplicate names using their database context. An empty result means no accessible databases, not proof that no such data exists elsewhere."
+---
+
+# ListDatabases
+
+List every accessible Macro database AND its table tabs, including owned and shared data. A database is a container; its name can differ from a requested table's name. For example, the Tickets table might be inside a database named Product. Search every entry's `tables`, not just database names.
+
+Start here whenever the user refers to "my table", "the tracker", or any named list of theirs: this is the only way to turn that name into the `databaseId` every other database tool needs. Each entry includes `id`, `name`, `grant`, and nested `tables` with their ids, display names, and stable read aliases. `view` and `comment` permit reading, not row/schema edits.
+
+Takes no arguments and returns every database, so there is no filter to get wrong. Follow it with DescribeDatabase for the matching database's columns before writing SQL. Do not claim a table is absent until you have checked the returned table names; resolve duplicate names using their database context. An empty result means no accessible databases, not proof that no such data exists elsewhere.

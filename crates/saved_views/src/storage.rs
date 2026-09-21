@@ -45,3 +45,18 @@ pub trait ExcludedDefaultViewStorage {
         user_id: &str,
     ) -> impl Future<Output = Result<Vec<ExcludedDefaultView>, Self::Err>> + Send;
 }
+
+/// Writes a view as part of an owning use case's atomic transaction.
+/// Domain callers are independent of the adapter's concrete transaction type.
+pub trait TransactionalViewStorage: Send + Sync + 'static {
+    /// Adapter-owned transaction handle.
+    type Transaction: Send;
+    /// Persistence error.
+    type Err: std::error::Error + Send + Sync + 'static;
+    /// Insert a new view inside the existing transaction.
+    fn create_view_in(
+        &self,
+        transaction: &mut Self::Transaction,
+        view: &View,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+}

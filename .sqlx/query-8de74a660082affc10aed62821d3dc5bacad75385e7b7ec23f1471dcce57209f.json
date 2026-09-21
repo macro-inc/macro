@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT t.id AS table_id, d.id AS database_id, d.trashed_at\n             FROM database_tables t JOIN databases d ON d.id = t.database_id\n             WHERE t.id = ANY($1) ORDER BY d.id, t.id FOR SHARE OF d",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "table_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "database_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "trashed_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "8de74a660082affc10aed62821d3dc5bacad75385e7b7ec23f1471dcce57209f"
+}

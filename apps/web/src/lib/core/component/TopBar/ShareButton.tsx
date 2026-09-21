@@ -54,6 +54,10 @@ import {
   updateCallTeamShare,
   useCallRecordQuery,
 } from '@queries/call/call';
+import {
+  getDatabaseSharePermissions,
+  updateDatabaseSharePermissions,
+} from '@queries/storage/databases';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import {
@@ -122,9 +126,11 @@ false && clickOutside;
 const isLinkSharingDisabledForItem = (itemType: ItemType): boolean =>
   itemType === 'email' ||
   itemType === 'project' ||
-  itemType === 'agent_session';
+  itemType === 'agent_session' ||
+  itemType === 'database';
 
 async function fetchSharePermissions(id: string, itemType: ItemType) {
+  if (itemType === 'database') return getDatabaseSharePermissions(id);
   if (itemType === 'chat') {
     return cognitionApiServiceClient.getChatPermissions({ id });
   }
@@ -705,11 +711,21 @@ export function ShareModal(props: ShareModalProps) {
   const callRecordQuery = useCallRecordQuery(() =>
     props.itemType === 'call' ? props.id : ''
   );
-  const isBlockContext = isInBlock() && props.itemType !== 'agent_session';
+  const isBlockContext =
+    isInBlock() &&
+    props.itemType !== 'agent_session' &&
+    props.itemType !== 'database';
   const [fallbackPermissionsResource, { refetch: refetchFallback }] =
     createResource(
       () => {
-        if (isBlockContext || !props.id) return;
+        if (
+          isBlockContext ||
+          !props.id ||
+          (props.itemType === 'database' &&
+            (!props.isSharePermOpen ||
+              props.userPermissions !== Permissions.OWNER))
+        )
+          return;
         return { id: props.id, itemType: props.itemType };
       },
       async (source) => {
@@ -759,7 +775,9 @@ export function ShareModal(props: ShareModalProps) {
 
   const [channelNamesResource] = createResource(
     () => {
-      const result = permissionsResource.latest;
+      const result = permissionsResource.loading
+        ? undefined
+        : permissionsResource.latest;
       if (!result || result.isErr()) {
         return;
       }
@@ -778,7 +796,9 @@ export function ShareModal(props: ShareModalProps) {
 
   // Create a map of channel IDs to channel names
   const channelNameMap = createMemo(() => {
-    const result = channelNamesResource.latest;
+    const result = channelNamesResource.loading
+      ? undefined
+      : channelNamesResource.latest;
     if (!result || result.isErr()) {
       return new Map();
     }
@@ -799,7 +819,9 @@ export function ShareModal(props: ShareModalProps) {
   });
 
   const recipients = createMemo(() => {
-    const result = permissionsResource.latest;
+    const result = permissionsResource.loading
+      ? undefined
+      : permissionsResource.latest;
     if (!result || result.isErr()) return;
 
     const sharePermission = result.value;
@@ -813,6 +835,20 @@ export function ShareModal(props: ShareModalProps) {
   });
 
   const removeChannelAccess = createCallback(async (channelId: string) => {
+    if (props.itemType === 'database') {
+      const result = await updateDatabaseSharePermissions({
+        id: props.id,
+        channelSharePermissions: [{ operation: 'remove', channelId }],
+      });
+      if (result.isOk()) {
+        await refetch();
+        toast.success('Removed channel access');
+      } else
+        toast.alert('Failed to remove channel access', {
+          subtext: 'Please try again',
+        });
+      return;
+    }
     if (props.itemType === 'chat') {
       const result = await cognitionApiServiceClient.updateChatPermissions({
         chat_id: props.id,
@@ -895,7 +931,14 @@ export function ShareModal(props: ShareModalProps) {
         | Result<any, ResultError<any>[]>
         | Result<void, ResultError<any>[]>
         | null = null;
-      if (props.itemType === 'chat') {
+      if (props.itemType === 'database') {
+        result = await updateDatabaseSharePermissions({
+          id: props.id,
+          channelSharePermissions: [
+            { operation: 'replace', accessLevel, channelId },
+          ],
+        });
+      } else if (props.itemType === 'chat') {
         result = await cognitionApiServiceClient.updateChatPermissions({
           sharePermission: {
             channelSharePermissions: [
@@ -973,7 +1016,9 @@ export function ShareModal(props: ShareModalProps) {
   );
 
   const linkShare = createMemo(() => {
-    const currentPermissions = permissionsResource.latest;
+    const currentPermissions = permissionsResource.loading
+      ? undefined
+      : permissionsResource.latest;
     if (!currentPermissions || currentPermissions.isErr()) {
       return;
     }
@@ -982,7 +1027,9 @@ export function ShareModal(props: ShareModalProps) {
   });
 
   const linkShareAccessLevel = createMemo(() => {
-    const currentPermissions = permissionsResource.latest;
+    const currentPermissions = permissionsResource.loading
+      ? undefined
+      : permissionsResource.latest;
     if (!currentPermissions || currentPermissions.isErr()) {
       return;
     }
@@ -997,7 +1044,9 @@ export function ShareModal(props: ShareModalProps) {
       if (!record) return;
       return sharePermissionFromCallRecord(record).teamShareAccessLevel;
     }
-    const currentPermissions = permissionsResource.latest;
+    const currentPermissions = permissionsResource.loading
+      ? undefined
+      : permissionsResource.latest;
     if (!currentPermissions || currentPermissions.isErr()) return;
 
     return currentPermissions.value.teamShareAccessLevel;

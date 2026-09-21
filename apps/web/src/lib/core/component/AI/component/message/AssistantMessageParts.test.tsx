@@ -180,6 +180,32 @@ function StreamedAssistantParts(props: { data: () => ChatStream[] }) {
 }
 
 describe('AssistantMessageParts streaming identity', () => {
+  it.each(['QueryDatabase', 'SaveDatabaseView'])(
+    'keeps %s interactive results outside collapsed activity',
+    (name) => {
+      const parts: AssistantMessagePart[] = [
+        { type: 'thinking', thinking: 'Checking the database' },
+        { type: 'toolCall', id: 'database-tool', name, json: {} },
+        { type: 'toolCallResponseJson', id: 'database-tool', name, json: {} },
+        { type: 'text', text: 'Here is the result.' },
+      ];
+      const rendered = render(() => (
+        <AssistantMessageParts
+          parts={parts}
+          message={{
+            attachments: [],
+            content: parts,
+            id: 'message-db',
+            role: 'assistant',
+          }}
+          isStreaming={false}
+        />
+      ));
+      expect(rendered.getByTestId('tool').dataset.grouped).toBe('false');
+      expect(rendered.getByTestId('tool').textContent).toBe('database-tool');
+      rendered.unmount();
+    }
+  );
   beforeEach(() => {
     lifecycle.markdownCleanups = 0;
     lifecycle.markdownMounts = 0;

@@ -88,6 +88,13 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         agent_session_id: &str,
     ) -> impl Future<Output = Result<Option<String>, AccessError>> + Send;
 
+    /// Get the highest access level a user has for a database.
+    fn get_database_access(
+        &self,
+        database_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+
     /// Get the access level a user has for a reminder.
     ///
     /// A reminder is never shared, so this is ownership and nothing else:

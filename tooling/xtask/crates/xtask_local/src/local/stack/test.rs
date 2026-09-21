@@ -44,3 +44,16 @@ fn clearing_state_invalidates_a_previous_headless_stack() {
     clear_state(&instance).unwrap();
     let _ = std::fs::remove_dir_all(instance.artifact_dir());
 }
+
+#[test]
+fn update_without_saved_state_refuses_before_touching_the_stack() {
+    let args = UpdateArgs {
+        instance: InstanceArgs {
+            instance: Some(format!("update-missing-{}", std::process::id())),
+            port_base: None,
+        },
+        ..UpdateArgs::default()
+    };
+    let error = update(&args).unwrap_err();
+    assert!(error.to_string().contains("Refusing to recreate"));
+}

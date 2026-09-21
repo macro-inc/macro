@@ -105,6 +105,13 @@ export function isFeatureEnabled(flag: Flag): boolean {
   return flag.enabled;
 }
 
+/** Databases rollout. Local HMR is on; deployed environments defer to PostHog. */
+export const enableDatabases = defineFlag({
+  key: 'enable-databases',
+  env: 'ENABLE_DATABASES',
+  default: LOCAL_ONLY || undefined,
+});
+
 /**
  * Switches Inbox, Tasks, and Channels from the current SoupView implementations
  * to the new composable view implementations. Enabled by default in local

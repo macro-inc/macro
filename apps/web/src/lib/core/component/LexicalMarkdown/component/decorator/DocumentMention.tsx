@@ -1,4 +1,5 @@
 import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { openCalendarEventSplit } from '@block-calendar/open-calendar-event';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import {
@@ -21,7 +22,10 @@ import {
   resolveBlockAlias,
   verifyBlockName,
 } from '@core/constant/allBlocks';
-import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
+import {
+  ENABLE_BLOCK_IN_BLOCK,
+  enableDatabases,
+} from '@core/constant/featureFlags';
 import { canNestBlock } from '@core/orchestrator';
 import { formatDate } from '@core/util/date';
 import { matches } from '@core/util/match';
@@ -42,6 +46,7 @@ import {
   type PreviewCalendarEventAccess,
   type PreviewItemNoAccess,
 } from '@queries/preview';
+import { useDatabaseDetailQuery } from '@queries/storage/databases';
 import { useSystemSkillsQuery } from '@queries/storage/system-skills';
 import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
@@ -382,15 +387,70 @@ export function DocumentMention(props: DocumentMentionDecoratorProps) {
   // Ordinary mentions must not wait for a once-per-session skills request.
   return (
     <Show
-      when={props.blockName === 'skill'}
+      when={props.blockName === 'database'}
       fallback={
-        <Suspense fallback={<DocumentMentionStatic {...props} />}>
-          <DocumentMentionInner {...props} />
-        </Suspense>
+        <Show
+          when={props.blockName === 'skill'}
+          fallback={
+            <Suspense fallback={<DocumentMentionStatic {...props} />}>
+              <DocumentMentionInner {...props} />
+            </Suspense>
+          }
+        >
+          <SkillDocumentMention {...props} />
+        </Show>
       }
     >
-      <SkillDocumentMention {...props} />
+      <DatabaseMention {...props} />
     </Show>
+  );
+}
+
+/** Databases have their own permission-checked metadata, not a document preview. */
+function DatabaseMention(props: DocumentMentionDecoratorProps) {
+  const enabled = useFeatureFlag(enableDatabases);
+  const detail = useDatabaseDetailQuery(() =>
+    enabled().enabled ? props.documentId : undefined
+  );
+  const name = () =>
+    detail.isSuccess ? detail.data.database.name : props.documentName;
+  const open = (event: MouseEvent | KeyboardEvent) => {
+    if (!enabled().enabled || detail.isError) return;
+    event.preventDefault();
+    event.stopPropagation();
+    openDocument(
+      'database',
+      props.documentId,
+      props.blockParams,
+      openInNewSplitForMention(event.shiftKey, true)
+    );
+  };
+  return (
+    <span
+      class="rounded-xs hover:bg-hover focus-visible:outline-2 focus-visible:outline-ink/30"
+      role={enabled().enabled ? 'link' : undefined}
+      tabIndex={enabled().enabled ? 0 : undefined}
+      on:mousedown={(event) => event.preventDefault()}
+      on:click={open}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') open(event);
+      }}
+    >
+      <MentionContainer
+        icon={<EntityIcon targetType="database" size="fill" />}
+        collapsed={props.collapsed}
+        text={
+          <span
+            data-document-mention="true"
+            data-document-id={props.documentId}
+            data-block-name="database"
+            data-document-name={name()}
+          >
+            {detail.isError ? 'Database unavailable' : name() || 'Database'}
+          </span>
+        }
+      />
+    </span>
   );
 }
 

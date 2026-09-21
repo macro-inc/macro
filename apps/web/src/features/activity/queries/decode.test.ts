@@ -3,6 +3,7 @@ import { decodeActivityEvent } from './decode';
 import {
   callStartedEvent,
   createdEvent,
+  databaseCreatedEvent,
   deletedEvent,
   editedEvent,
   messagedEvent,
@@ -55,6 +56,9 @@ describe('decodeActivityEvent', () => {
     expect(decodeActivityEvent(createdEvent).entityType).toBe('document');
     expect(decodeActivityEvent(messagedEvent).entityType).toBe('channel');
     expect(decodeActivityEvent(sentEvent).entityType).toBe('email-thread');
+    expect(decodeActivityEvent(databaseCreatedEvent).entityType).toBe(
+      'database'
+    );
   });
 
   it('keeps the unknown-action tag so describeAction can humanize it', () => {

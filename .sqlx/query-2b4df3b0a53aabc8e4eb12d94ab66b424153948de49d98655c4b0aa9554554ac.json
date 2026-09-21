@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT id\n                    FROM property_definitions\n                    WHERE id = $1\n                      AND (\n                        is_system\n                        OR user_id = $2\n                        OR database_id = $3\n                        OR team_id IN (SELECT team_id FROM team_user WHERE user_id = $2)\n                      )\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2b4df3b0a53aabc8e4eb12d94ab66b424153948de49d98655c4b0aa9554554ac"
+}

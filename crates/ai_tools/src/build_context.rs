@@ -275,7 +275,7 @@ pub async fn build_tool_service_context_from_env(
         ChannelSideEffectClients {
             connection_gateway: Arc::new(ConnectionGatewayClient::new(
                 env.internal_api_key.to_string(),
-                connection_gateway_url,
+                connection_gateway_url.clone(),
             )),
             sqs: aws_sqs_client,
             macro_event_broker: macro_event_broker.clone(),
@@ -415,6 +415,19 @@ pub async fn build_tool_service_context_from_env(
         reminders_tool_context: crate::tool_context::build_reminders_tool_context(
             pool.clone(),
             entity_access_service.clone(),
+        ),
+        databases_tool_context: crate::tool_context::build_databases_tool_context(
+            pool.clone(),
+            entity_access_service.clone(),
+            crate::tool_context::ToolTableEventPublisher::Gateway(
+                databases::outbound::gateway_event_publisher::GatewayTableEventPublisher::new(
+                    ConnectionGatewayClient::new(
+                        env.internal_api_key.to_string(),
+                        connection_gateway_url,
+                    ),
+                ),
+            ),
+            crate::tool_context::ToolDatabasesEventBroker::Real(macro_event_broker.clone()),
         ),
         import_tool_context: ToolImportToolContext::unwired(),
         chat_tool_context,

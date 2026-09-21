@@ -19,6 +19,9 @@ const mocks = vi.hoisted(() => ({
   channelRefetch: vi.fn(),
   onCacheChanged: vi.fn(),
 }));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: false, isLoading: false }),
+}));
 vi.mock('@core/constant/allBlocks', () => ({
   itemToSafeName: (item: { name: string }) => item.name,
 }));
@@ -78,6 +81,9 @@ vi.mock('@queries/soup/recently-viewed', () => ({
 }));
 vi.mock('@queries/storage/instructions-md', () => ({
   useInstructionsMdIdQuery: () => ({ data: undefined }),
+}));
+vi.mock('@queries/storage/databases', () => ({
+  useDatabasesQuery: () => ({ data: [], isSuccess: true }),
 }));
 vi.mock('@service-storage/util/filename', () => ({
   formatDocumentName: (name: string) => name,

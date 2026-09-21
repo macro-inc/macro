@@ -34,6 +34,7 @@ import {
   type ComponentMetaMap,
   resolveComponent,
 } from './componentRegistry';
+import { contentReference } from './content-reference';
 import { createHistory, type History } from './history';
 import { DEFAULT_SPLIT_MIN_WIDTH } from './splitContentSizing';
 
@@ -1367,7 +1368,7 @@ export function createSplitLayout(
   ): SplitHandle | undefined {
     const match = state.splits.find(
       (s) =>
-        (sameEntityContent(s.content, { type, id }) ||
+        (sameEntityContent(s.content, contentReference(type, id)) ||
           (s.content.type === type && s.content.id === id)) &&
         !isExcluded(s)
     );

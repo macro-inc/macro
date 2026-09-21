@@ -68,6 +68,7 @@ where
                 Ok(direct.max(inherited))
             }
             EntityType::Initiative => self.repo.get_initiative_access(entity_id, user_id).await,
+            EntityType::Database => self.repo.get_database_access(entity_id, user_id).await,
             EntityType::CalendarEvent => {
                 self.repo
                     .get_calendar_event_access(entity_id, user_id)
@@ -196,7 +197,8 @@ where
             | EntityType::Project
             | EntityType::EmailThread
             | EntityType::Call
-            | EntityType::Initiative => {
+            | EntityType::Initiative
+            | EntityType::Database => {
                 let access_level = self
                     .repo
                     .get_team_entity_access(bot_id, team_id, entity_id, entity_type)
@@ -440,7 +442,8 @@ where
             | EntityType::Call
             | EntityType::CalendarEvent
             | EntityType::AgentSession
-            | EntityType::Initiative => {
+            | EntityType::Initiative
+            | EntityType::Database => {
                 self.get_optimized_access(entity_id, user_id, entity_type)
                     .await
             }
@@ -517,7 +520,8 @@ where
             | EntityType::Call
             | EntityType::CalendarEvent
             | EntityType::AgentSession
-            | EntityType::Initiative => {
+            | EntityType::Initiative
+            | EntityType::Database => {
                 let access = self
                     .get_optimized_access(entity_id, user_id, entity_type)
                     .await?;
@@ -620,12 +624,15 @@ where
             // Agent sessions grant their owner directly and their originating
             // channel as a channel source, both of which the generic accessor
             // query expands.
+            // A database's audience is exactly its `entity_access` rows, so it
+            // resolves the same way a document's does.
             EntityType::Document
             | EntityType::Chat
             | EntityType::Project
             | EntityType::EmailThread
             | EntityType::AgentSession
-            | EntityType::Initiative => {
+            | EntityType::Initiative
+            | EntityType::Database => {
                 let entity_id = Uuid::parse_str(entity_id).map_err(|_| {
                     AccessError::BadRequest("invalid entity_id for get_users_by_entity")
                 })?;

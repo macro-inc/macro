@@ -100,11 +100,13 @@ const getEntityRenameData = (
   // Reminders aren't either — the entity-mutation router rejects them, and a
   // reminder's name is its description, edited through the reminders API.
   // Calendar event titles are edited through the calendar mutation API.
+  // Databases are not storage items; their name lives in the databases API.
   if (
     entity.type === 'crm_company' ||
     entity.type === 'crm_contact' ||
     entity.type === 'reminder' ||
-    entity.type === 'calendar_event'
+    entity.type === 'calendar_event' ||
+    entity.type === 'database'
   ) {
     return null;
   }
@@ -225,6 +227,7 @@ const renameDssSetData = (
       itemType !== 'automation' &&
       itemType !== 'calendar_event' &&
       itemType !== 'foreign' &&
+      itemType !== 'database' &&
       // CRM companies/contacts aren't renamed via the FileList path (their
       // names derive from the directory/email, and their soup tags are
       // camelCase 'crmCompany'/'crmContact', not these snake-case itemTypes).

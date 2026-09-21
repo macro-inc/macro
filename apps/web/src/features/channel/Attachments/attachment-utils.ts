@@ -71,5 +71,8 @@ export function getEntityClickContent(entity: EntityData): SplitContent {
     .with({ type: 'calendar_event' }, () => {
       throw new Error('calendar events are not openable as attachments');
     })
+    .with({ type: 'database' }, () => {
+      throw new Error('databases are not openable as attachments');
+    })
     .exhaustive();
 }

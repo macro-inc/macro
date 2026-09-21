@@ -7,6 +7,9 @@ use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use sqlx::PgPool;
 use uuid::Uuid;
 
+#[cfg(test)]
+mod test;
+
 /// PostgreSQL-backed implementation of [`ExplainAccessRepository`].
 #[derive(Clone)]
 pub struct PgExplainAccessRepository {
@@ -114,6 +117,19 @@ impl ExplainAccessRepository for PgExplainAccessRepository {
                 Ok(queries::agent_session_access::explain_agent_session_access(
                     &self.pool,
                     &session_id,
+                    &source_ids,
+                )
+                .await?)
+            }
+            EntityType::Database => {
+                let database_id = parse_uuid(entity_id, "Invalid database ID format")?;
+                let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
+                    .await
+                    .map_err(anyhow_access_error)?;
+                Ok(queries::list_entity_access_grants(
+                    &self.pool,
+                    &database_id,
+                    EntityType::Database,
                     &source_ids,
                 )
                 .await?)

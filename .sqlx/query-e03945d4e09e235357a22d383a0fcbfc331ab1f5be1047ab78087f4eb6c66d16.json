@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                        UPDATE database_rows\n                        SET cells = (cells - $3::text[]) || $2::jsonb, updated_at = now()\n                        WHERE id = $1 AND table_id = $4\n                        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb",
+        "TextArray",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e03945d4e09e235357a22d383a0fcbfc331ab1f5be1047ab78087f4eb6c66d16"
+}
