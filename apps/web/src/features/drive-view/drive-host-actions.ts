@@ -85,7 +85,6 @@ export function createDriveHostActions(options: {
         splitHandle: panel.handle,
         referredFrom: 'documents',
         openInNewSplit,
-        replacePreview: event?.altKey && !openInNewSplit,
         location,
         notificationSource,
       });

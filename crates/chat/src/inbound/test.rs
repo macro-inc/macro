@@ -12,6 +12,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model::chat::ChatBasic;
 use model::response::StringIDResponse;
 use model::user::UserContext;
+use model_owner::Owner;
 use rootcause::Report;
 use std::sync::Arc;
 use tower::util::ServiceExt;
@@ -52,7 +53,7 @@ impl ChatService for MockService {
         Ok(GetChatResponse {
             chat: ChatResponse {
                 id: chat_id,
-                user_id: "macro|test@example.com".to_string(),
+                user_id: Owner::from_principal_str("macro|test@example.com").unwrap(),
                 project_id: None,
                 name: "Mock Chat".to_string(),
                 messages: Vec::new(),
@@ -593,10 +594,7 @@ fn chat_basic_extension() -> Extension<ChatBasic> {
     Extension(ChatBasic {
         id: "some-chat-id".to_string(),
         name: "Mock Chat".to_string(),
-        user_id: macro_user_id::user_id::MacroUserIdStr::try_from(
-            "macro|test@example.com".to_string(),
-        )
-        .unwrap(),
+        user_id: Owner::from_principal_str("macro|test@example.com").unwrap(),
         project_id: None,
         deleted_at: None,
     })

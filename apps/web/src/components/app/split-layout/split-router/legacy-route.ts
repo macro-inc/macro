@@ -42,7 +42,13 @@ export function decodeLegacyPair(
     return { type: 'component', id: 'settings' };
   }
 
-  if (type === 'component') return { type: 'component', id };
+  if (type === 'component') {
+    // Retired Preview Pair placeholders must never reach the view registry.
+    return {
+      type: 'component',
+      id: id === 'preview-empty' || id === 'non-member-channel' ? 'inbox' : id,
+    };
+  }
 
   const resolvedType = resolveBlockAlias(type as BlockName | BlockAlias);
 
@@ -129,6 +135,12 @@ export const handleLegacySplitPath: UnmatchedSplitPathHandler = (context) => {
   const entries = [];
 
   for (let index = 0; index < segments.length; index += 2) {
+    if (
+      segments[index] === 'component' &&
+      (segments[index + 1] === 'preview-empty' ||
+        segments[index + 1] === 'non-member-channel')
+    )
+      continue;
     const entry = legacyEntry(segments[index]!, segments[index + 1]!);
 
     if (!entry) return;

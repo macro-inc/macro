@@ -1,6 +1,6 @@
 use macro_event_broker::{Event, MacroEvent as _, TopicEvent};
-use macro_user_id::user_id::MacroUserIdStr;
 use model::document::FileType;
+use model_owner::Owner;
 use serde_json::{Value, json};
 use uuid::Uuid;
 
@@ -12,8 +12,8 @@ use super::{
 
 const DOCUMENT_ID: &str = "11111111-1111-1111-1111-111111111111";
 
-fn owner() -> MacroUserIdStr<'static> {
-    MacroUserIdStr::try_from("macro|owner@example.com".to_string()).expect("valid user id")
+fn owner() -> Owner {
+    Owner::from_principal_str("macro|owner@example.com").expect("valid owner")
 }
 
 fn assert_wire_round_trip(event: Event<DocumentTopicEvent>, expected: Value) {
@@ -212,7 +212,10 @@ fn created_events_without_attribution_still_decode() {
 
     match decoded.event {
         DocumentTopicEvent::Created(metadata) => {
-            assert_eq!(metadata.owner.as_ref(), "macro|owner@example.com");
+            assert_eq!(
+                metadata.owner,
+                Owner::from_principal_str("macro|owner@example.com").unwrap()
+            );
             assert_eq!(metadata.actor, None);
             assert_eq!(metadata.on_behalf_of, None);
         }

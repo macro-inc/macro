@@ -22,9 +22,7 @@ fn make_test_metadata() -> DocumentMetadata {
     DocumentMetadata {
         document_id: "doc-1".to_string(),
         document_version_id: 1,
-        owner: macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user@user.com")
-            .unwrap()
-            .into_owned(),
+        owner: Owner::from_principal_str("macro|user@user.com").unwrap(),
         document_name: "test_doc".to_string(),
         file_type: Some("txt".to_string()),
         sha: Some("sha-1".to_string()),
@@ -60,9 +58,7 @@ fn task_document_context(document_id: &str) -> DocumentBasic {
     DocumentBasic {
         document_id: document_id.to_string(),
         document_name: "Test task".to_string(),
-        owner: macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|owner@user.com")
-            .unwrap()
-            .into_owned(),
+        owner: Owner::from_principal_str("macro|owner@user.com").unwrap(),
         file_type: Some("md".to_string()),
         sub_type: Some(DocumentSubType::Task),
         branched_from_id: None,
@@ -1516,9 +1512,12 @@ fn owner_receipt(document_id: &str) -> EntityAccessReceipt<OwnerAccessLevel> {
 }
 
 fn team_share_facts() -> models_permissions::share_permission::team_share::TeamShareFacts {
+    let Owner::User(owner) = task_document_context("doc-1").owner else {
+        panic!("test document owner is a user");
+    };
     models_permissions::share_permission::team_share::TeamShareFacts {
         entity: EntityType::Document.with_entity_str("doc-1"),
-        owner: task_document_context("doc-1").owner,
+        owner,
         owner_team_id: Some(uuid::Uuid::from_u128(1)),
         current: None,
         revision: 0,
@@ -1615,7 +1614,7 @@ async fn team_policy_rejects_editors_inherited_owners_and_identityless_receipts(
             let (service, broker) = make_test_service_with_event_broker(repo);
             // Even a context claiming the actor owns it cannot replace persisted facts.
             let mut context = task_document_context("doc-1");
-            context.owner = edit_receipt("doc-1").acting_user_id().unwrap().clone();
+            context.owner = Owner::User(edit_receipt("doc-1").acting_user_id().unwrap().clone());
             assert!(matches!(
                 service
                     .edit_document(receipt, context, team_edit_args(level))

@@ -5,6 +5,7 @@ import {
   defineRoute,
   encodeRoute,
 } from '@app/lib/split-router/routes';
+import { decodeRouteLayout } from '@app/lib/split-router/url';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import type { SplitContent } from '../layoutManager';
@@ -49,6 +50,29 @@ const routes = createRoutesManifest({
 const content: SplitContent = { type: 'component', id: 'documents' };
 
 describe('legacy router location boundary', () => {
+  it.each(['preview-empty', 'non-member-channel'])(
+    'recovers retired %s placeholders without mounting removed components',
+    (id) => {
+      const manifest = createRoutesManifest(appSplitRoutes);
+      const placeholder = decodeRoute(manifest, ['component', id]);
+      expect(splitContentFromLocation(placeholder!.location)).toEqual({
+        type: 'component',
+        id: 'inbox',
+      });
+      const layout = decodeRouteLayout(manifest, [
+        'component',
+        'mail',
+        'component',
+        id,
+      ]);
+      expect(layout).toHaveLength(1);
+      expect(splitContentFromLocation(layout[0]!.location)).toEqual({
+        type: 'component',
+        id: 'mail',
+      });
+    }
+  );
+
   it.each([
     {
       type: 'chat',

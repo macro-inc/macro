@@ -26,6 +26,7 @@ use model::{
     sync_service::SyncServiceVersionID,
 };
 use model_entity::Entity;
+use model_owner::Owner;
 use model_user::UserContext;
 use rootcause::Report;
 use serde_json::{Value, json};
@@ -208,8 +209,7 @@ impl DocumentService for FakeDocumentService {
         Ok(DocumentBasic {
             document_id: document_id.to_string(),
             document_name: "test document".to_string(),
-            owner: MacroUserIdStr::try_from(JWT_USER_ID.to_string())
-                .expect("test user id should be valid"),
+            owner: Owner::from_principal_str(JWT_USER_ID).expect("test user id should be valid"),
             file_type: Some("pdf".to_string()),
             sub_type: None,
             branched_from_id: None,
@@ -528,7 +528,7 @@ fn create_document_response(user_id: MacroUserIdStr<'static>) -> CreateDocumentR
                 DocumentResponseMetadata {
                     document_id: "created-document".to_string(),
                     document_version_id: 1,
-                    owner: user_id,
+                    owner: Owner::User(user_id),
                     document_name: "test document".to_string(),
                     file_type: Some("pdf".to_string()),
                     sha: Some("test-sha".to_string()),
@@ -556,7 +556,7 @@ fn get_document_response(document_id: &str) -> GetDocumentResponseData {
             DocumentMetadata {
                 document_id: document_id.to_string(),
                 document_version_id: 1,
-                owner: MacroUserIdStr::try_from(JWT_USER_ID.to_string())
+                owner: Owner::from_principal_str(JWT_USER_ID)
                     .expect("test user id should be valid"),
                 document_name: "resolved document".to_string(),
                 file_type: Some("pdf".to_string()),

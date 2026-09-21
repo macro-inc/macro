@@ -234,6 +234,52 @@ describe('session controls', () => {
     expect(toggle.getAttribute('aria-pressed')).toBe('true');
   });
 
+  it('uses GitHub API totals without falling back to captured estimates', () => {
+    const context = readyContext();
+    const [counts, setCounts] = createSignal<
+      { additions: number; deletions: number } | undefined
+    >({ additions: 8, deletions: 2 });
+    context.host.pullRequestChangeCounts = counts;
+    const { controller } = mount(context, () => <ChangesToggle />);
+    const toggle = screen.getByRole('button', { name: /Changes/ });
+    expect(toggle.textContent).toBe('Changes+8−2');
+
+    // A missing or stale PR capture must not replace GitHub totals.
+    context.setSummary(undefined);
+    expect(toggle.textContent).toBe('Changes+8−2');
+    context.setSummary({ capturing: true, changeset: mockChangeset() });
+    expect(toggle.textContent).toBe('Changes+8−2');
+    expect(toggle.querySelector('.animate-pulse')).toBeNull();
+    expect(controller().changeCounts()).toEqual({ additions: 8, deletions: 2 });
+    // Missing GitHub data must not expose the snapshot's +3 / −1 estimates.
+    setCounts(undefined);
+    expect(toggle.textContent).toBe('Changes');
+    expect(controller().changeCounts()).toBeUndefined();
+
+    setCounts({ additions: 12, deletions: 0 });
+    expect(toggle.textContent).toBe('Changes+12');
+    setCounts({ additions: 0, deletions: 4 });
+    expect(toggle.textContent).toBe('Changes−4');
+    setCounts({ additions: 0, deletions: 0 });
+    expect(toggle.textContent).toBe('Changes');
+    fireEvent.click(toggle);
+    expect(controller().layout.changesVisible()).toBe(true);
+  });
+
+  it('does not display fake zero counts before a snapshot loads or for empty snapshots', () => {
+    const context = createMockAgentChangesContext();
+    mount(context, () => <ChangesToggle />);
+    const toggle = screen.getByRole('button', { name: /Changes/ });
+    expect(toggle.textContent).toBe('Changes');
+    context.setSummary({
+      capturing: false,
+      changeset: mockChangeset({ files: [], additions: 0, deletions: 0 }),
+    });
+    expect(toggle.textContent).toBe('Changes');
+    context.setSummary({ capturing: false, changeset: mockChangeset() });
+    expect(toggle.textContent).toBe('Changes+3−1');
+  });
+
   it('hands off to the pane while it is closed, and can be dismissed', () => {
     const context = readyContext();
     const { controller } = mount(context, () => <ChangesHandoff />);
@@ -275,6 +321,38 @@ describe('session controls', () => {
     expect(context.sent[0]).toContain('`apps/web/src/a.ts`, line 2 (new)');
     expect(context.sent[0]).toContain('Use a named constant');
     expect(screen.queryByText(/review note/)).toBeNull();
+  });
+
+  it('renders nothing for a host that can never have changes', () => {
+    const context = readyContext();
+    const [coding, setCoding] = createSignal(false);
+    const { controller } = mount(
+      { ...context, host: { ...context.host, canHaveChanges: coding } },
+      () => (
+        <>
+          <ChangesToggle />
+          <ChangesHandoff />
+          <ReviewNotesDock />
+        </>
+      )
+    );
+    controller().review.addNote(
+      {
+        path: 'apps/web/src/a.ts',
+        side: 'additions',
+        lineNumber: 2,
+        endLineNumber: 2,
+      },
+      'Use a constant'
+    );
+    expect(screen.queryByRole('button', { name: /Changes/ })).toBeNull();
+    expect(screen.queryByText('Changes ready to review')).toBeNull();
+    expect(screen.queryByText(/review note/)).toBeNull();
+
+    setCoding(true);
+    expect(screen.getByRole('button', { name: /Changes/ })).toBeTruthy();
+    expect(screen.getByText('Changes ready to review')).toBeTruthy();
+    expect(screen.getByText(/review note/)).toBeTruthy();
   });
 
   it("opens the note's file from the expanded dock", () => {

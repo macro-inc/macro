@@ -11,7 +11,6 @@ import { Resize } from '@core/component/Resize';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { tabTitleSignal } from '@core/signal/tabTitle';
-import { useWindowSize } from '@solid-primitives/resize-observer';
 import { useLocation, useNavigate } from '@solidjs/router';
 import {
   createEffect,
@@ -37,7 +36,7 @@ import {
 } from './mobile/createMobileSwipeLayout';
 import { MobileSplitContainer } from './mobile/MobileSplitContainer';
 import { splitContentFromLocation } from './split-router/legacy-route';
-import { splitMinWidthForContent } from './splitContentSizing';
+import { DEFAULT_SPLIT_MIN_WIDTH } from './splitContentSizing';
 import { createSplitFocusTracker } from './splitFocusTracker';
 import { createAppSplitRouterLayout } from './splitRouterLayout';
 
@@ -51,7 +50,6 @@ type SplitLayoutContainerProps = {
 export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const viewportSize = useWindowSize();
   // Bootstrap the legacy layout with the same local state adopted by the router.
   const routes = createRoutesManifest(props.routes);
   const initialContents = decodeRouteLayout(routes, props.pairs).map((entry) =>
@@ -132,29 +130,7 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
                         <Suspense>
                           <Resize.Panel
                             id={id}
-                            minSize={splitMinWidthForContent(
-                              handle().content(),
-                              {
-                                isPreviewController:
-                                  handle().isControllerSplit(),
-                              }
-                            )}
-                            // A Preview Pair is one layout unit: its two splits
-                            // share the space a single split would get. Both
-                            // members key their group by the Controller's id.
-                            shareGroup={
-                              splitManager.viewerOf(id) !== undefined
-                                ? id
-                                : splitManager.controllerOf(id)
-                            }
-                            // Automatic redistribution targets an engaged
-                            // Controller at its configured preferred width.
-                            // This is not a hard max: the gutter can still be
-                            // dragged past it.
-                            redistributionPreferredSize={splitManager.previewControllerWidth(
-                              id,
-                              viewportSize.width
-                            )}
+                            minSize={DEFAULT_SPLIT_MIN_WIDTH}
                             index={index()}
                           >
                             <SplitPanel

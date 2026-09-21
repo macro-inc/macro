@@ -11,6 +11,12 @@
 
 - Open **Go to Agents** → `/app/component/agents`. With AI agents enabled
   (`enable-chat-v3-agents`), the workspace uses one sidebar for Chat and Code.
+  Below **New conversation**, **Agents** opens the same roster as the composer’s
+  **Create agent** action. **Connections** manages MCP integrations (including
+  app authentication and disconnection); this section has moved out of Settings.
+  Home’s **Connect your tools** and agent replies’ **Connect app** chips open this
+  Connections page. Personal Gmail/GitHub account links remain under Settings →
+  Integrations.
   **New conversation** opens the composer. **Conversations** is a mixed list
   of chats and coding sessions, newest first, with one search across both.
   Chat rows use a chat icon; coding rows use `</>` (the PR status icon when a
@@ -30,8 +36,9 @@
 - The starting page has a compact composer that starts at one line and grows
   with longer prompts or Shift+Enter. Lists, quotes, headings, and other
   non-paragraph blocks expand immediately, even with short text. This also applies
-  to session composers. The editor takes the full width and controls move below;
-  returning to a short paragraph restores the compact row. Height changes animate
+  to session composers. The editor row takes the full width and controls move below.
+  The paperclip sits to the left of the editor in both layouts.
+  Returning to a short paragraph restores the compact row. Height changes animate
   over 150ms, with reduced-motion preferences respected. **Agent** and **Send**
   sit inside the input on the right.
   Direct model selections show only the model name and provider icon in the input.
@@ -397,7 +404,9 @@ select people or channels and send the session with an optional message using
 the same Share dialog and mobile drawer as documents. Sessions also support
 **Share** from entity list menus and the entity sharing shortcut. People receive it through a direct or
 group message. Recipients can view and control the session; there is no access
-level selector. Cancel closes the composer without sending.
+level selector. The owner sees the standard recipient-and-message form without
+an extra session notice or Copy Link footer; **Copy Share Link** remains in
+the header. Cancel closes the composer without sending.
 
 Other participants can copy a link for people who already have access, but
 cannot grant access. Copying a link alone never changes permissions. New,
@@ -418,10 +427,13 @@ Existing announcement chips remain locked to the turn they announced.
 ### Reviewing a linked GitHub pull request
 
 Sessions with a linked GitHub pull request capture that PR's diff when each
-turn ends, regardless of the agent runtime. Unpushed workspace changes and
+turn ends, regardless of the coding runtime. Unpushed workspace changes and
 branches without a PR are not included. The session header gains a **Changes**
 toggle (`aria-pressed`) with green additions and red deletions (`+N −M`); it opens a resizable
 **Changes** pane beside the transcript (drag the 1px divider between them).
+Chat sessions on Macro's in-memory harness have no repository, so they show
+none of this: no **Changes** toggle, pane, hand-off card, or review-notes chip,
+and the title menu offers **Open repository** only when the session has one.
 The URL's `diff` query parameter stores each session's pane state and diff
 layout (`session-id:split:unified`, or `changes-only` / `agent-only` and
 `split` for side-by-side diffs). Copying the URL preserves that view; reload
@@ -444,10 +456,19 @@ review note for the agent (`aria-label="Review note"`; `Cmd/Ctrl+Enter` adds,
 The chip's count row expands (`aria-expanded`) to show each queued note's
 file, line, and text so the reviewer can read or edit them before sending;
 **Send to agent** then posts one prompt listing every non-empty note by file
-and line and marks them "sent to agent". Clicking a note's path opens that
-file in the Changes pane. Notes never go to GitHub. Collapsed files and
+and line and marks them "sent to agent". Sending a typed composer message
+while notes are queued includes those notes in the same prompt and marks them
+sent — a second Enter does not post them again. Clicking a note's path opens
+that file in the Changes pane. Notes never go to GitHub. Collapsed files and
 unsent notes persist per session in localStorage; a new capture expands all
 files.
+
+The session header's **Changes** pill and sidebar totals display the linked
+PR's `additions` and `deletions` returned by the GitHub API, without summing
+transcript edits. The sidebar lists files from the captured PR diff. Counts
+refresh when a capture changes and every 30 seconds while the session is open.
+Zero-valued counts and unavailable GitHub statistics are hidden; a missing PR
+or failed GitHub request never falls back to estimated transcript totals.
 
 While the pane is closed and a capture has files, a **Changes ready to
 review** card sits above the composer with **Review changes**, **Pull request
@@ -462,8 +483,10 @@ The pane does not create PRs or generate their descriptions.
 
 Agent sessions reuse the channel's TanStack `ThreadList`. Opening a session lands
 at the latest message, including when history arrives after the empty view. Short
-transcripts sit at the bottom, above the composer. Only the visible rows and an
-overscan buffer are mounted: scroll to older turns before searching their DOM text.
+transcripts start with 16px of top padding, with the user prompt followed by the
+agent response; streaming output grows downward into the available space. Only
+the visible rows and an overscan buffer are mounted: scroll to older turns before
+searching their DOM text.
 
 Search links add `agent_message_turn=<zero-based turn>&agent_message_author=user|agent`.
 They wait for history to load, then scroll to and highlight the matching folded
@@ -523,7 +546,12 @@ must stay hidden; subsequent live messages must still appear.
   walks back and past the bottom row returns to the input. When the composer is empty
   and a prompt is queued, its action becomes `Send next queued message` (an Enter
   symbol); pressing Enter or clicking that button cancels the current turn so the next
-  queued prompt starts immediately. Typed composer text still takes priority and Enter
+  queued prompt starts immediately. The advance is held — the control reads `Stop` and
+  Enter is inert — while a stop is already in flight or while the prompt the last
+  advance sent is still unconfirmed (it shows as a pending bubble); once the server
+  confirms that prompt as the running turn, Enter advances the queue again. Two rapid
+  Enters therefore advance one entry, not two: each advance ends the turn the server is
+  actually running. Typed composer text still takes priority and Enter
   queues that new prompt normally.
 - The stop button cancels only the **current** turn. The queue keeps draining: the next
   queued prompt starts a new turn. To fully quiesce a session, remove the queued

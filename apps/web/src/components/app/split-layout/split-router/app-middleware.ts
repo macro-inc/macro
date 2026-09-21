@@ -13,6 +13,8 @@ export const appSplitRouterMiddleware = [
     const type = typeof params.type === 'string' ? params.type : undefined;
     const id = typeof params.id === 'string' ? params.id : undefined;
     if (type === 'component' && id) {
+      if (id === 'preview-empty' || id === 'non-member-channel')
+        return redirect('/inbox');
       if (id === 'documents') return redirect('/drive');
       if (id === 'settings') return redirect('/settings');
       if (

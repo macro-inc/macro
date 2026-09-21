@@ -54,12 +54,7 @@ async function goToLocationInSplit(
   await handle?.goToLocationFromParams(params);
 }
 
-/**
- * Opens a split if it is not already open. When `sourceHandle` names the
- * split the navigation originates from and that split is an engaged preview
- * controller, the open is redirected into its viewer split (via the
- * openWithSplit redirect) and never steals the keyboard from the controller.
- */
+/** Opens or activates the requested content from the source split. */
 function openSplitIfNotOpen(
   layoutManager: SplitManager,
   type: BlockName | BlockAlias | 'component',
@@ -72,10 +67,7 @@ function openSplitIfNotOpen(
 ) {
   const existing = layoutManager.getSplitByContent(type, id);
   if (existing) {
-    const isSourcesViewer =
-      options.sourceHandle?.isControllerSplit() &&
-      options.sourceHandle.viewerId() === existing.id;
-    if (!isSourcesViewer) existing.activate();
+    existing.activate();
   } else {
     layoutManager.openWithSplit(
       { type, id },
@@ -439,8 +431,7 @@ export function openNotification(
   entity?: NotificationEntityOverride,
   /**
    * The split this navigation originates from (e.g. the list whose row was
-   * clicked). Routes the open through that split's preview viewer when its
-   * preview mode is engaged.
+   * clicked).
    */
   sourceHandle?: SplitHandle
 ): ResultAsync<void, NotSupportedError> {

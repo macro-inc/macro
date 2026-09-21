@@ -258,13 +258,6 @@ impl IntoResponse for InviteUsersToTeamError {
                     message: "only team admins may invite users to this team".into(),
                 }),
             ),
-            InviteUsersToTeamError::NotEnoughOpenSeats => (
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    message: "free team member limit reached; upgrade to invite more members"
-                        .into(),
-                }),
-            ),
             InviteUsersToTeamError::CustomerError(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -289,13 +282,6 @@ impl IntoResponse for JoinTeamError {
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
                     message: "internal server error".into(),
-                }),
-            ),
-            JoinTeamError::FreeTeamLimitReached => (
-                StatusCode::FORBIDDEN,
-                Json(ErrorResponse {
-                    message: "team is at the free member limit - upgrade to add more members"
-                        .into(),
                 }),
             ),
             _ => (

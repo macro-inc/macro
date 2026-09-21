@@ -45,10 +45,7 @@ function DriveComposition(props: { route: DriveRouteState }) {
   const notificationSource = useGlobalNotificationSource();
   const tagSets = useTagSets();
   const tagSetsReady = useTagSetsReady();
-  const view = createDriveViewState(props.route, (locationChanged) => {
-    list.reset();
-    if (locationChanged) panel.handle.resetPreview();
-  });
+  const view = createDriveViewState(props.route, () => list.reset());
   const sidebar = createDriveSidebarSource();
   const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
     createDriveDataSource({
@@ -85,7 +82,6 @@ function DriveComposition(props: { route: DriveRouteState }) {
     list,
     showList: () => {
       navigation.clear();
-      panel.handle.resetPreview();
     },
   });
 
@@ -116,7 +112,6 @@ function DriveComposition(props: { route: DriveRouteState }) {
           },
           { replace: true }
         );
-        panel.handle.resetPreview();
         toast.alert('Folder unavailable', {
           subtext: 'It may have moved, been deleted, or no longer be shared.',
         });

@@ -304,7 +304,9 @@ where
                 let session = self.sessions.get_session(session_id).await?;
                 if AgentKind::for_session(session.bot_id, &session.harness)
                     == AgentKind::ClaudeCloud
-                    && actor.as_ref() != Some(&session.owner_id)
+                    && !actor
+                        .as_ref()
+                        .is_some_and(|actor| session.owner_id.is_user(actor))
                 {
                     return Err(AgentSessionError::Forbidden.into());
                 }

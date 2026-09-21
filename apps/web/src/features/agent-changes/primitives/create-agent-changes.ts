@@ -21,13 +21,23 @@ export type { DiffStyle } from '../core/layout';
 
 export type AgentChangesController = {
   context: AgentChangesContext;
+  /** False when the host can never have changes; every control renders nothing. */
+  available: Accessor<boolean>;
   layout: PaneLayoutController;
   model: ChangesModel;
+  /** Authoritative PR totals shared by the session header and sidebar. */
+  changeCounts: Accessor<{ additions: number; deletions: number } | undefined>;
   review: ReviewController;
   diffStyle: Accessor<DiffStyle>;
   setDiffStyle: (style: DiffStyle) => void;
   /** Post every queued note to the agent as one prompt. */
   sendQueuedNotes: () => void;
+  /**
+   * Take queued notes off the dock as the markdown a composer send should
+   * carry, and mark them sent. Empty when there is nothing to take — so a
+   * second send in the same tick cannot post the same notes again.
+   */
+  consumeSendableNotes: () => string;
   /** The handoff card was dismissed for the changeset on screen. */
   handoffDismissed: Accessor<boolean>;
   dismissHandoff: () => void;
@@ -78,25 +88,38 @@ export function createAgentChanges(options: {
     );
   };
 
+  const consumeSendableNotes = () => {
+    const queued = sendableNotes(review.notes());
+    if (queued.length === 0) return '';
+    const markdown = formatNotesForAgent(queued);
+    review.markQueuedSent();
+    return markdown;
+  };
+
   return {
     context: options.context,
+    available: () => host.canHaveChanges?.() ?? true,
     layout,
     model,
+    changeCounts: () =>
+      host.pullRequestChangeCounts
+        ? host.pullRequestChangeCounts()
+        : model.changeset(),
     review,
     diffStyle,
     setDiffStyle,
     sendQueuedNotes: () => {
       const agent = host.agent;
       if (!agent) return;
-      const queued = sendableNotes(review.notes());
-      if (queued.length === 0) return;
+      if (sendableNotes(review.notes()).length === 0) return;
       if (!agent.canSend()) {
         host.notify('The agent cannot take a prompt right now.', 'failure');
         return;
       }
-      agent.send(formatNotesForAgent(queued));
-      review.markQueuedSent();
+      const markdown = consumeSendableNotes();
+      if (markdown) agent.send(markdown);
     },
+    consumeSendableNotes,
     handoffDismissed: () => {
       const id = model.changeset()?.id;
       return id !== undefined && dismissed() === id;

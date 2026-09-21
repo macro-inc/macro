@@ -153,7 +153,9 @@ async fn seed(
         repo_branch: None,
         id,
         bot_id: bot,
-        owner_id: macro_user_id::user_id::MacroUserIdStr::try_from(owner.to_owned()).unwrap(),
+        owner_id: model_owner::Owner::User(
+            macro_user_id::user_id::MacroUserIdStr::try_from(owner.to_owned()).unwrap(),
+        ),
         thread_id: None,
         originating_message_id: None,
         model: "claude-default".into(),

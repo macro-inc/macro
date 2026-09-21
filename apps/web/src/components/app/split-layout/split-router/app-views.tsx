@@ -17,6 +17,7 @@ import { mergeQuery } from '@app/features/next-soup/filters/filter-store/query-s
 import type { Query } from '@app/features/next-soup/filters/filter-store/types';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
+import { McpConnections } from '@app/features/settings/McpConnections';
 import { SettingsPanelComponentWrapper } from '@app/features/settings/Settings';
 import { TasksView } from '@app/features/tasks-view/tasks-view';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
@@ -258,6 +259,13 @@ export const AgentsRouteView = withAuth((params: Record<string, unknown>) => {
   usePageViewTracking('agents');
   const flag = useFeatureFlag(enableChatV3Agents);
   const enabled = () => flag().enabled && !isTouchDevice();
+  const connectionsRequested = () => {
+    const content = panel.handle.content();
+    return (
+      content.type === 'component' &&
+      content.params?.agentPage === 'connections'
+    );
+  };
   createRenderEffect(() => {
     if (!flag().loading)
       panel.handle.updateMeta?.({
@@ -269,19 +277,26 @@ export const AgentsRouteView = withAuth((params: Record<string, unknown>) => {
       <Show
         when={enabled()}
         fallback={
-          route ? (
-            <RedirectSplit
-              to={{
-                type:
-                  route.conversation.type === 'agent_session'
-                    ? 'agent'
-                    : 'chat',
-                id: route.conversation.id,
-              }}
-            />
-          ) : (
-            <LegacyAgentsView />
-          )
+          <Show
+            when={connectionsRequested()}
+            fallback={
+              route ? (
+                <RedirectSplit
+                  to={{
+                    type:
+                      route.conversation.type === 'agent_session'
+                        ? 'agent'
+                        : 'chat',
+                    id: route.conversation.id,
+                  }}
+                />
+              ) : (
+                <LegacyAgentsView />
+              )
+            }
+          >
+            <McpConnections />
+          </Show>
         }
       >
         <AgentsView initialRoute={route} />

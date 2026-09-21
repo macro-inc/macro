@@ -1039,7 +1039,7 @@ async fn publish_renamed_lifecycle<R>(
         let session = repo.get(id).await?;
         let (bot, participants) =
             tokio::try_join!(repo.session_bot(session.bot_id), repo.participants(id))?;
-        Ok::<_, AgentSessionError>(session_identity(&session, &bot, participants))
+        session_identity(&session, &bot, participants)
     }
     .await;
     match identity {

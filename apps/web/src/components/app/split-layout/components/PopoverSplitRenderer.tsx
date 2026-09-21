@@ -83,8 +83,6 @@ function PopoverSplitModal(props: {
     toggleSpotlight: () => {},
     isSpotLight: () => false,
     isPopover: () => true,
-    isViewerSplit: () => false,
-    isControllerSplit: () => false,
     replace: () => {},
     // A popover has no history to rewrite.
     adoptContentId: () => {},
@@ -107,11 +105,6 @@ function PopoverSplitModal(props: {
     registerEntryStateCaptor: () => () => {},
     captureEntryState: () => {},
     currentEntryState: () => undefined,
-    canEngagePreview: () => false,
-    engagePreview: () => {},
-    disengagePreview: () => {},
-    resetPreview: () => {},
-    viewerId: () => undefined,
   };
 
   const [bindHotKeyDom, scopeId] = useHotkeyDOMScope(

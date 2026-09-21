@@ -145,8 +145,11 @@ describe('mixed Agents sidebar', () => {
     ];
     const open = vi.fn();
     const create = vi.fn();
+    const openPage = vi.fn();
     render(() => (
       <AgentsSidebar
+        activePage="new"
+        onOpenPage={openPage}
         groups={groupConversations(conversations)}
         modeForConversation={(conversation) =>
           conversation.id === 'code' ? 'code' : 'chat'
@@ -164,6 +167,11 @@ describe('mixed Agents sidebar', () => {
         onLoadMore={vi.fn()}
       />
     ));
+    for (const label of ['Agents', 'Connections']) {
+      fireEvent.click(screen.getByRole('button', { name: label }));
+      expect(openPage).toHaveBeenLastCalledWith(label.toLowerCase());
+    }
+    expect(screen.queryByRole('button', { name: 'Routines' })).toBeNull();
     expect(screen.queryByRole('tablist')).toBeNull();
     const code = screen.getByRole('button', { name: /Fix build/ });
     const chat = screen.getByRole('button', { name: /Plan launch/ });
@@ -184,6 +192,8 @@ describe('mixed Agents sidebar', () => {
   it('opens rename and delete on a session or chat right-click', async () => {
     render(() => (
       <AgentsSidebar
+        activePage="new"
+        onOpenPage={vi.fn()}
         groups={groupConversations([
           {
             type: 'agent_session',
@@ -256,6 +266,8 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
         />
       ) : (
         <AgentsSidebar
+          activePage="new"
+          onOpenPage={vi.fn()}
           groups={groupConversations([conversation])}
           modeForConversation={() => 'code'}
           activeConversationId={undefined}

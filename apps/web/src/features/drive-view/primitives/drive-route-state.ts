@@ -95,7 +95,7 @@ const routeSearch = ({
 /** Restored entry state supplies UI state; the current URL always wins selection. */
 export function createDriveViewState(
   route: DriveRouteState,
-  onRouteChange: (locationChanged: boolean) => void
+  onRouteChange: () => void
 ) {
   const [saved, setSaved] = useEntryState<DriveState>('drive.view.v2', {
     default: {
@@ -146,7 +146,7 @@ export function createDriveViewState(
           ...selection,
           search: locationChanged ? '' : current.search,
         });
-        onRouteChange(locationChanged);
+        onRouteChange();
       },
       { defer: true }
     )

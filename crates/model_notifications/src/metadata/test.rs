@@ -577,7 +577,7 @@ fn channel_mention_title_falls_back_to_bot_display_name() {
 fn document_mention(sub_type: Option<NotificationDocumentSubType>) -> DocumentMentionMetadata {
     DocumentMentionMetadata {
         document_name: "Q3 plan".to_string(),
-        owner: uid("macro|owner@macro.com"),
+        owner: Owner::from_principal_str("macro|owner@macro.com").unwrap(),
         file_type: Some("md".to_string()),
         sub_type,
         channel: ChannelMentionMetadata {
