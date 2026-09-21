@@ -20,7 +20,12 @@ import {
   type SaveEmailDraftMutation,
   type SaveEmailDraftMutationVariables,
 } from '@service-storage/graphql/generated/graphql';
-import { type Client, CombinedError } from '@urql/core';
+import {
+  type AnyVariables,
+  type Client,
+  CombinedError,
+  type OperationResult,
+} from '@urql/core';
 
 /**
  * Input for a durable GraphQL draft save. `draftId` is the draft's handle —
@@ -97,6 +102,41 @@ function failureCode(error: CombinedError): SaveEmailDraftFailureCode {
     default:
       return 'INTERNAL';
   }
+}
+
+/**
+ * The queued / failed / no-data disposition shared by the draft mutations;
+ * a resolved payload is the caller's to shape.
+ */
+function settleDraftMutation<TData, TVariables extends AnyVariables, Payload>(
+  result: OperationResult<TData, TVariables>,
+  payload: Payload | null | undefined,
+  missingDataMessage: string
+):
+  | { kind: 'queued'; transactionId: string }
+  | { kind: 'failed'; code: SaveEmailDraftFailureCode; error: CombinedError }
+  | { kind: 'resolved'; payload: Payload } {
+  const disposition = optimisticMutationDispositionOf(result);
+  if (disposition?.kind === 'queued') {
+    return { kind: 'queued', transactionId: disposition.transactionId };
+  }
+  if (result.error) {
+    return {
+      kind: 'failed',
+      code: failureCode(result.error),
+      error: result.error,
+    };
+  }
+  if (!payload) {
+    return {
+      kind: 'failed',
+      code: 'INTERNAL',
+      error: new CombinedError({
+        graphQLErrors: [new Error(missingDataMessage)],
+      }),
+    };
+  }
+  return { kind: 'resolved', payload };
 }
 
 type OptimisticDraftEntity = SaveEmailDraftMutation['saveEmailDraft']['draft'];
@@ -245,31 +285,16 @@ export async function executeGraphqlSaveEmailDraft(
     }
   ).toPromise();
 
-  const disposition = optimisticMutationDispositionOf(result);
-  if (disposition?.kind === 'queued') {
-    return { kind: 'queued', transactionId: disposition.transactionId };
-  }
-  if (result.error) {
-    return {
-      kind: 'failed',
-      code: failureCode(result.error),
-      error: result.error,
-    };
-  }
-  const payload = result.data?.saveEmailDraft;
-  if (!payload) {
-    return {
-      kind: 'failed',
-      code: 'INTERNAL',
-      error: new CombinedError({
-        graphQLErrors: [new Error('draft save returned no data')],
-      }),
-    };
-  }
+  const settled = settleDraftMutation(
+    result,
+    result.data?.saveEmailDraft,
+    'draft save returned no data'
+  );
+  if (settled.kind !== 'resolved') return settled;
   return {
     kind: 'committed',
-    draftId: payload.draftId,
-    threadId: payload.thread.id,
+    draftId: settled.payload.draftId,
+    threadId: settled.payload.thread.id,
   };
 }
 
@@ -358,30 +383,15 @@ export async function executeGraphqlDeleteEmailDraft(
     }
   ).toPromise();
 
-  const disposition = optimisticMutationDispositionOf(result);
-  if (disposition?.kind === 'queued') {
-    return { kind: 'queued', transactionId: disposition.transactionId };
-  }
-  if (result.error) {
-    return {
-      kind: 'failed',
-      code: failureCode(result.error),
-      error: result.error,
-    };
-  }
-  const payload = result.data?.deleteEmailDraft;
-  if (!payload) {
-    return {
-      kind: 'failed',
-      code: 'INTERNAL',
-      error: new CombinedError({
-        graphQLErrors: [new Error('draft delete returned no data')],
-      }),
-    };
-  }
+  const settled = settleDraftMutation(
+    result,
+    result.data?.deleteEmailDraft,
+    'draft delete returned no data'
+  );
+  if (settled.kind !== 'resolved') return settled;
   return {
     kind: 'committed',
-    deleted: payload.deleted,
-    threadDeleted: payload.threadDeleted,
+    deleted: settled.payload.deleted,
+    threadDeleted: settled.payload.threadDeleted,
   };
 }

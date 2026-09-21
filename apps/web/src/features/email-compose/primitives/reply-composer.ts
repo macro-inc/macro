@@ -39,11 +39,14 @@ import {
   convertContactInfoToEmailRecipient,
   convertEmailRecipientToContactInfo,
 } from '../core/recipient-conversion';
-import { createAttachmentPersistence } from './attachment-persistence';
+import {
+  createAttachmentPersistence,
+  refuseAttachmentsOffline,
+} from './attachment-persistence';
 import { createDraftAutosave } from './draft-autosave';
 import {
   createDraftPersistence,
-  isAlreadySentRejection,
+  deleteDraftForDiscard,
 } from './draft-persistence';
 import { createDraftSession } from './draft-session';
 import type { DraftFormAttachment } from './email-form-state';
@@ -853,17 +856,12 @@ export function createReplyComposer(
       await autosave.settled().catch(() => {});
       const draftId = savedDraftId();
       if (draftId) {
-        try {
-          await props.drafts.deleteDraft({
-            draftId,
-            threadId: savedDraftThreadId(),
-            inboxId: activeInboxId(),
-          });
-        } catch (error) {
-          // The reset below is exactly what an already-sent verdict asks for.
-          if (!isAlreadySentRejection(error)) throw error;
-          props.notices.feedback.alert('This reply was already sent');
-        }
+        await deleteDraftForDiscard(
+          props.drafts,
+          { draftId, threadId: savedDraftThreadId(), inboxId: activeInboxId() },
+          props.notices,
+          'This reply was already sent'
+        );
       }
       resetState();
       form.setReplyAppended(false);
@@ -887,15 +885,8 @@ export function createReplyComposer(
   };
 
   const handleAddAttachments = async (files: File[]) => {
-    // A queued save carries only text; file bytes live in this composer's
-    // memory until a save commits, so refuse rather than silently miss them.
-    if (props.connectivity.looksOffline()) {
-      await props.notices.blockingNotice({
-        title: "You're offline",
-        body: "Attachments can't be added while you're offline. Reconnect and try again.",
-      });
+    if (await refuseAttachmentsOffline(props.connectivity, props.notices))
       return;
-    }
     const currentAttachments = form.attachments.list();
 
     const attachmentsToAddByteSize = files.reduce((sum, f) => sum + f.size, 0);

@@ -272,7 +272,6 @@ pub struct SaveEmailDraftPayload<O: EmailThreadMutationOutput> {
     thread: O::Thread,
 }
 
-/// Result of creating or updating an email draft.
 #[Object(name = "SaveEmailDraftPayload")]
 impl<O> SaveEmailDraftPayload<O>
 where
@@ -312,6 +311,13 @@ fn saved_draft_message(saved: SavedUserDraft) -> Message {
         attachments_draft,
         attachments_forwarded,
     } = saved;
+    // Derived the way the thread loader derives it; the page fragment reads
+    // it, so a null here would clobber the cached value on write-through.
+    let body_replyless = email_utils::body_replyless::compute_body_replyless(
+        Some(&draft.subject),
+        draft.body_html.as_deref(),
+        draft.body_text.as_deref(),
+    );
     Message {
         db_id: draft.db_id,
         provider_id: draft.provider_id,
@@ -346,7 +352,7 @@ fn saved_draft_message(saved: SavedUserDraft) -> Message {
         body_text: draft.body_text,
         body_html_sanitized: draft.body_html,
         body_macro: draft.body_macro,
-        body_replyless: None,
+        body_replyless,
         attachments,
         attachments_draft,
         attachments_forwarded,

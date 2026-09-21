@@ -182,6 +182,15 @@ where
 
         // The handle resolves like a save's: through the caller-scoped
         // mapping first, else as a server ID from a fetched draft.
+        //
+        // Known window: this read does not take the save's per-handle
+        // advisory lock, so a delete that lands while a first save of the
+        // same handle is still uncommitted sees no binding and returns the
+        // no-op below; the save then commits a draft the client believes is
+        // gone. The client queue serializes a handle's save and delete, so
+        // reaching it takes a connection drop after the server received the
+        // save. Closing it means a per-handle lock (no inbox in the key) and
+        // resolve-plus-delete in one repo transaction.
         let resolved_id = self
             .email_repo
             .message_id_for_client_draft_id(draft_id, &accessible_link_ids)

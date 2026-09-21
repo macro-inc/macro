@@ -19,7 +19,93 @@ use cache_core::value::EntityKey;
 use pollster::block_on;
 use serde_json::{Value as Json, json};
 
-const PAGE_QUERY: &str = r#"
+/// Shared by the page query and the mutation so a field added to one selection
+/// is added to both; the test exists to cover exactly that pairing.
+macro_rules! message_fields_fragment {
+    () => {
+        r#"fragment EmailThreadMessageFields on GraphqlSoupEmailMessage {
+  __typename
+  id
+  providerId
+  threadId
+  replyingToId
+  linkId
+  subject
+  snippet
+  internalDateTs
+  sentAt
+  isRead
+  isStarred
+  isSent
+  isDraft
+  hasAttachments
+  scheduledSendTime
+  from {
+    email
+    name
+    photoUrl
+  }
+  to {
+    email
+    name
+    photoUrl
+  }
+  cc {
+    email
+    name
+    photoUrl
+  }
+  bcc {
+    email
+    name
+    photoUrl
+  }
+  labels {
+    providerLabelId
+    name
+  }
+  bodyText
+  bodyHtmlSanitized
+  bodyMacro
+  bodyReplyless
+  attachments {
+    __typename
+    id
+    providerId
+    filename
+    mimeType
+    sizeBytes
+    sfsId
+    contentId
+  }
+  attachmentsDraft {
+    __typename
+    id
+    draftId
+    fileName
+    contentType
+    sha
+    size
+    s3Key
+  }
+  attachmentsForwarded {
+    __typename
+    attachmentId
+    draftId
+    providerAttachmentId
+    messageProviderId
+    filename
+    mimeType
+    sizeBytes
+  }
+  createdAt
+  updatedAt
+}"#
+    };
+}
+
+const PAGE_QUERY: &str = concat!(
+    r#"
 query EmailThreadPage($threadId: ID!, $offset: Int!, $limit: Int!) {
   user {
     id
@@ -62,87 +148,12 @@ fragment EmailThreadPageFields on GraphqlSoupEmailThread {
   }
 }
 
-fragment EmailThreadMessageFields on GraphqlSoupEmailMessage {
-  __typename
-  id
-  providerId
-  threadId
-  replyingToId
-  linkId
-  subject
-  snippet
-  internalDateTs
-  sentAt
-  isRead
-  isStarred
-  isSent
-  isDraft
-  hasAttachments
-  scheduledSendTime
-  from {
-    email
-    name
-    photoUrl
-  }
-  to {
-    email
-    name
-    photoUrl
-  }
-  cc {
-    email
-    name
-    photoUrl
-  }
-  bcc {
-    email
-    name
-    photoUrl
-  }
-  labels {
-    providerLabelId
-    name
-  }
-  bodyText
-  bodyHtmlSanitized
-  bodyMacro
-  bodyReplyless
-  attachments {
-    __typename
-    id
-    providerId
-    filename
-    mimeType
-    sizeBytes
-    sfsId
-    contentId
-  }
-  attachmentsDraft {
-    __typename
-    id
-    draftId
-    fileName
-    contentType
-    sha
-    size
-    s3Key
-  }
-  attachmentsForwarded {
-    __typename
-    attachmentId
-    draftId
-    providerAttachmentId
-    messageProviderId
-    filename
-    mimeType
-    sizeBytes
-  }
-  createdAt
-  updatedAt
-}
-"#;
+"#,
+    message_fields_fragment!(),
+);
 
-const MUTATION: &str = r#"
+const MUTATION: &str = concat!(
+    r#"
 mutation SaveEmailDraft($input: SaveEmailDraftInput!) {
   saveEmailDraft(input: $input) {
     draftId
@@ -157,85 +168,9 @@ mutation SaveEmailDraft($input: SaveEmailDraftInput!) {
   }
 }
 
-fragment EmailThreadMessageFields on GraphqlSoupEmailMessage {
-  __typename
-  id
-  providerId
-  threadId
-  replyingToId
-  linkId
-  subject
-  snippet
-  internalDateTs
-  sentAt
-  isRead
-  isStarred
-  isSent
-  isDraft
-  hasAttachments
-  scheduledSendTime
-  from {
-    email
-    name
-    photoUrl
-  }
-  to {
-    email
-    name
-    photoUrl
-  }
-  cc {
-    email
-    name
-    photoUrl
-  }
-  bcc {
-    email
-    name
-    photoUrl
-  }
-  labels {
-    providerLabelId
-    name
-  }
-  bodyText
-  bodyHtmlSanitized
-  bodyMacro
-  bodyReplyless
-  attachments {
-    __typename
-    id
-    providerId
-    filename
-    mimeType
-    sizeBytes
-    sfsId
-    contentId
-  }
-  attachmentsDraft {
-    __typename
-    id
-    draftId
-    fileName
-    contentType
-    sha
-    size
-    s3Key
-  }
-  attachmentsForwarded {
-    __typename
-    attachmentId
-    draftId
-    providerAttachmentId
-    messageProviderId
-    filename
-    mimeType
-    sizeBytes
-  }
-  createdAt
-  updatedAt
-}
-"#;
+"#,
+    message_fields_fragment!(),
+);
 
 fn page_variables() -> serde_json::Map<String, Json> {
     match json!({ "threadId": "thread-1", "offset": 0, "limit": 20 }) {

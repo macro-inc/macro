@@ -41,11 +41,14 @@ import {
   prepareEmailBody,
 } from '../primitives/prepare-email-body';
 import { endUndoSend } from '../primitives/undo-send-claim';
-import { createAttachmentPersistence } from './attachment-persistence';
+import {
+  createAttachmentPersistence,
+  refuseAttachmentsOffline,
+} from './attachment-persistence';
 import { createDraftAutosave } from './draft-autosave';
 import {
   createDraftPersistence,
-  isAlreadySentRejection,
+  deleteDraftForDiscard,
 } from './draft-persistence';
 import { createDraftSession } from './draft-session';
 import { createEmailSendSchedule } from './email-send-schedule';
@@ -287,15 +290,8 @@ export function createEmailComposer(props: EmailComposerOptions) {
   // --- Attachment handling ---
 
   const handleAddAttachments = async (attachments: DraftFormAttachment[]) => {
-    // A queued save carries only text; file bytes live in this composer's
-    // memory until a save commits, so refuse rather than silently miss them.
-    if (props.connectivity.looksOffline()) {
-      await props.notices.blockingNotice({
-        title: "You're offline",
-        body: "Attachments can't be added while you're offline. Reconnect and try again.",
-      });
+    if (await refuseAttachmentsOffline(props.connectivity, props.notices))
       return;
-    }
     for (const attachment of attachments) {
       form.attachments.add(attachment);
     }
@@ -596,17 +592,12 @@ export function createEmailComposer(props: EmailComposerOptions) {
       await autosave.settled().catch(() => {});
       const draftId = currentDraftId();
       if (draftId) {
-        try {
-          await props.drafts.deleteDraft({
-            draftId,
-            threadId: currentThreadId(),
-            inboxId: activeInboxId(),
-          });
-        } catch (error) {
-          // The reset below is exactly what an already-sent verdict asks for.
-          if (!isAlreadySentRejection(error)) throw error;
-          props.notices.feedback.alert('This email was already sent');
-        }
+        await deleteDraftForDiscard(
+          props.drafts,
+          { draftId, threadId: currentThreadId(), inboxId: activeInboxId() },
+          props.notices,
+          'This email was already sent'
+        );
       }
       resetState();
       return true;

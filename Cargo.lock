@@ -7557,6 +7557,7 @@ dependencies = [
  "async-graphql",
  "chrono",
  "email",
+ "email_utils",
  "entity_access",
  "futures",
  "graphql_common",

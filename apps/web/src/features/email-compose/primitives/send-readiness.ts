@@ -55,7 +55,7 @@ export function sendRefusalAfterSave(input: {
     return 'draft-not-confirmed';
   if (
     identity.kind === 'handle' &&
-    (!input.unqueuedHandleMaySend || identity.queued || !input.autosaveAllowed)
+    (!input.unqueuedHandleMaySend || identity.queued)
   ) {
     return 'draft-not-confirmed';
   }

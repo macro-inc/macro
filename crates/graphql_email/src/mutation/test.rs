@@ -468,6 +468,31 @@ async fn save_email_draft_calls_the_service_and_returns_the_payload() {
 }
 
 #[tokio::test]
+async fn save_email_draft_derives_the_replyless_body_the_thread_page_reads() {
+    // The page fragment selects bodyReplyless; a null here would overwrite the
+    // cached value when the mutation response is written through.
+    let service = Arc::new(CapturingEmailMutationService::default());
+    let draft_id = Uuid::new_v4();
+    let response = schema(service)
+        .execute(format!(
+            r#"mutation {{ saveEmailDraft(input: {{
+                draftId: "{draft_id}",
+                subject: "hello",
+                bodyHtml: "PHA-aGk8L3A"
+            }}) {{ draft {{ bodyHtmlSanitized bodyReplyless }} }} }}"#
+        ))
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let draft = response.data.into_json().unwrap()["saveEmailDraft"]["draft"].clone();
+    assert!(draft["bodyHtmlSanitized"].is_string());
+    assert!(
+        draft["bodyReplyless"].is_string(),
+        "bodyReplyless should be derived from the saved body, got {draft}"
+    );
+}
+
+#[tokio::test]
 async fn save_email_draft_returns_each_kind_of_persisted_attachment() {
     let draft_id = Uuid::now_v7();
     let attachment_id = Uuid::now_v7();

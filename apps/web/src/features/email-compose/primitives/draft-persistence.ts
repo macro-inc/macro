@@ -1,7 +1,9 @@
 import { v7 as uuidv7 } from 'uuid';
 import {
+  type DeleteEmailDraft,
   DraftPersistRejected,
   type DraftSaveResult,
+  type EmailComposeFeedback,
   type EmailDraftStorage,
 } from '../context/compose-capabilities';
 import type { EmailDraft } from '../core/email-draft';
@@ -10,6 +12,25 @@ import type { DraftSession } from './draft-session';
 /** Sent from another device: the server outcome supersedes the local draft. */
 export const isAlreadySentRejection = (error: unknown) =>
   error instanceof DraftPersistRejected && error.code === 'DRAFT_ALREADY_SENT';
+
+/**
+ * A discard's delete. An already-sent verdict is not a failure: the reset
+ * the caller performs next is exactly what that verdict asks for, so it is
+ * announced and swallowed. Every other rejection propagates.
+ */
+export async function deleteDraftForDiscard(
+  drafts: Pick<EmailDraftStorage, 'deleteDraft'>,
+  input: DeleteEmailDraft,
+  notices: Pick<EmailComposeFeedback, 'feedback'>,
+  alreadySentMessage: string
+): Promise<void> {
+  try {
+    await drafts.deleteDraft(input);
+  } catch (error) {
+    if (!isAlreadySentRejection(error)) throw error;
+    notices.feedback.alert(alreadySentMessage);
+  }
+}
 
 /**
  * One draft's save/delete workflow against its session, shared by the reply
