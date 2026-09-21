@@ -18,7 +18,6 @@ const mocks = vi.hoisted(() => ({
   edit: vi.fn(),
   editor: vi.fn(),
   remove: vi.fn(),
-  removeThread: vi.fn(),
   clipboard: vi.fn().mockResolvedValue(undefined),
   subscribe: vi.fn(),
   byIds: vi.fn(),
@@ -43,7 +42,6 @@ vi.mock('@channel/Channel/create-message-editor', () => ({
 vi.mock('@channel/Channel/create-delete-message-confirmation', () => ({
   createDeleteMessageConfirmation: () => ({
     requestDelete: mocks.remove,
-    requestDeleteThread: mocks.removeThread,
     ConfirmationDialog: () => null,
   }),
 }));
@@ -186,23 +184,13 @@ describe('document message touch actions', () => {
 });
 
 describe('document discussion controls', () => {
-  it('confirms a discussion delete and offers no resolve action', () => {
-    const view = render(() => <MessageThread data={message} canWrite />);
-    expect(view.queryByRole('button', { name: 'Resolve' })).toBeNull();
-    fireEvent.click(view.getByRole('button', { name: 'Delete discussion' }));
-    expect(mocks.removeThread).toHaveBeenCalledWith({
-      parent: message.parent,
-      rootId: 'root',
-    });
-  });
-
-  it('hides the delete control from a viewer who neither owns nor manages it', () => {
+  // A document thread carries no thread-level controls of its own: resolve was
+  // dead, and deleting a discussion is moving onto the root message's delete.
+  it('renders no resolve or delete-discussion control', () => {
     const view = render(() => (
-      <MessageThread
-        data={{ ...message, state: { ...message.state, user_id: 'other' } }}
-        canWrite
-      />
+      <MessageThread data={message} canWrite canManage />
     ));
+    expect(view.queryByRole('button', { name: 'Resolve' })).toBeNull();
     expect(
       view.queryByRole('button', { name: 'Delete discussion' })
     ).toBeNull();
@@ -292,9 +280,6 @@ describe('source channel threads in a document', () => {
     expect(mocks.clipboard).toHaveBeenCalledWith(
       'https://macro.test/app/channel/launch?channel_message_id=root'
     );
-    expect(
-      view.queryByRole('button', { name: 'Delete discussion' })
-    ).toBeNull();
   });
 
   it('renders a read-only source thread with no reply, edit, or delete controls', () => {
@@ -305,9 +290,6 @@ describe('source channel threads in a document', () => {
     expect(view.queryByRole('button', { name: 'Edit' })).toBeNull();
     expect(view.queryByRole('button', { name: 'Delete' })).toBeNull();
     expect(view.getByRole('button', { name: 'Copy link' })).toBeTruthy();
-    expect(
-      view.queryByRole('button', { name: 'Delete discussion' })
-    ).toBeNull();
   });
 
   it('shows nothing until the source root is readable and hides a root that disappears', () => {

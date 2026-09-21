@@ -8,10 +8,8 @@ import { createFocusRequest } from '@channel/Thread/focus-request';
 import { buildMessageLink } from '@channel/Thread/utils/message-actions';
 import { useUserId } from '@core/context/user';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import TrashIcon from '@phosphor/trash.svg';
 import {
   useDeleteMessageMutation,
-  useDeleteThreadMutation,
   usePatchMessageMutation,
 } from '@queries/messages/mutations';
 import {
@@ -26,7 +24,6 @@ import type {
   MessageParent,
   MessageThread as ThreadData,
 } from '@service-storage/messages';
-import { Button } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import type { MessageData } from './types';
 
@@ -65,11 +62,7 @@ export function MessageThread(
   const [attachScope, scopeId] = useHotkeyDOMScope('message-thread');
   const focus = createFocusRequest();
   const remove = useDeleteMessageMutation();
-  const deleteThread = useDeleteThreadMutation();
-  const confirm = createDeleteMessageConfirmation(
-    remove.mutate,
-    deleteThread.mutate
-  );
+  const confirm = createDeleteMessageConfirmation(remove.mutate);
   const patch = usePatchMessageMutation();
   const addReaction = useAddReactionMutation();
   const removeReaction = useRemoveReactionMutation();
@@ -107,28 +100,6 @@ export function MessageThread(
         class="relative isolate"
       >
         <confirm.ConfirmationDialog />
-        <Show
-          when={
-            props.data.parent.type === 'document' &&
-            props.canWrite &&
-            (props.canManage || props.data.state.user_id === userId())
-          }
-        >
-          <div class="mb-2 flex justify-end touch:mb-0">
-            <Button
-              size="icon-sm"
-              label="Delete discussion"
-              onClick={() =>
-                confirm.requestDeleteThread({
-                  parent: props.data.parent,
-                  rootId: props.data.id,
-                })
-              }
-            >
-              <TrashIcon />
-            </Button>
-          </div>
-        </Show>
         <ChannelThread
           data={() => props.data}
           parent={() => props.data.parent}
