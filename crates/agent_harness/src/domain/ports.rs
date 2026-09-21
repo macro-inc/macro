@@ -43,6 +43,25 @@ pub trait ReachableRepositories: Send + Sync + 'static {
     async fn for_user(&self, user: &MacroUserIdStr<'_>) -> Result<Vec<ReachableRepository>>;
 }
 
+/// The branches on one repository a user can start a coding session from.
+///
+/// Separate from [`ReachableRepositories`] because listing every repository
+/// is a cached installation sweep, and listing one repository's branches is
+/// a scoped call after proving the user reaches that repository.
+#[async_trait::async_trait]
+pub trait RepositoryBranches: Send + Sync + 'static {
+    /// Branch names on `owner`/`name`, in the order GitHub returned them.
+    ///
+    /// [`HarnessError::RepositoryUnavailable`] when the user cannot reach the
+    /// repository. An empty repository is an empty list.
+    async fn for_repository(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        owner: &str,
+        name: &str,
+    ) -> Result<Vec<String>>;
+}
+
 /// Forwards commands to the replica currently responsible for execution.
 pub trait CommandForwarder: Send + Sync + 'static {
     /// Run `command` at `target`.

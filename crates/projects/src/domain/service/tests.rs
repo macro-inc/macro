@@ -19,6 +19,7 @@ use model::project::request::{CreateProjectRequest, PatchProjectRequestV2};
 use model::project::{
     BasicProject, Project, ProjectPreviewData, ProjectPreviewV2, ProjectWithUploadRequest,
 };
+use model_owner::Owner;
 use models_bulk_upload::{
     BulkUploadRequest, BulkUploadRequestDocuments, ProjectDocumentStatus, UploadDocumentStatus,
     UploadExtractFolderRequest, UploadFolderStatus,
@@ -342,6 +343,10 @@ fn user_id(value: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(value.to_string()).unwrap()
 }
 
+fn owner(value: &str) -> Owner {
+    Owner::from_principal_str(value).unwrap()
+}
+
 #[test]
 fn event_actor_user_id_only_maps_authenticated_users() {
     let user_id = user_id("macro|actor@example.com");
@@ -370,7 +375,7 @@ async fn publish_project_event_records_the_serialized_envelope() {
         "project-id",
         ProjectCreatedMetadata {
             project_id: "project-id".to_string(),
-            owner: user_id("macro|owner@example.com"),
+            owner: owner("macro|owner@example.com"),
             name: "Project".to_string(),
             parent_project_id: None,
             created_at: None,
@@ -399,7 +404,7 @@ fn publish_project_event_errors_are_non_fatal() {
         "project-id",
         ProjectCreatedMetadata {
             project_id: "project-id".to_string(),
-            owner: user_id("macro|owner@example.com"),
+            owner: owner("macro|owner@example.com"),
             name: "Project".to_string(),
             parent_project_id: None,
             created_at: None,
@@ -409,11 +414,11 @@ fn publish_project_event_errors_are_non_fatal() {
     service.publish_project_event(&event);
 }
 
-fn project(id: &str, owner: &str, parent_id: Option<&str>) -> Project {
+fn project(id: &str, owner_id: &str, parent_id: Option<&str>) -> Project {
     Project {
         id: id.to_string(),
         name: id.to_string(),
-        user_id: owner.to_string(),
+        user_id: owner(owner_id),
         parent_id: parent_id.map(str::to_string),
         created_at: None,
         updated_at: None,
@@ -439,7 +444,7 @@ fn receipt(
 fn basic_project(id: Uuid, parent_id: Option<Uuid>, deleted: bool) -> BasicProject {
     BasicProject {
         id: id.to_string(),
-        user_id: user_id("macro|owner@example.com"),
+        user_id: owner("macro|owner@example.com"),
         parent_id: parent_id.map(|id| id.to_string()),
         name: "Project".to_string(),
         deleted_at: deleted.then(chrono::Utc::now),
@@ -537,6 +542,39 @@ async fn content_attributes_owner_access_to_owned_items() {
 }
 
 #[tokio::test]
+async fn content_does_not_attribute_bot_or_team_owned_items_to_the_user() {
+    let mut repo = MockProjectRepo::new();
+    repo.expect_get_project_children().return_once(|_| {
+        Box::pin(async {
+            Ok(vec![
+                Item::Project(project(
+                    "bot-owned",
+                    "bot|00000000-0000-0000-0000-00000000a1a1",
+                    Some("root"),
+                )),
+                Item::Project(project(
+                    "team-owned",
+                    "01234567-89ab-cdef-0123-456789abcdef",
+                    Some("root"),
+                )),
+            ])
+        })
+    });
+    let service = service(repo, RecordingBulkUpload::default());
+
+    let content = service
+        .get_project_content(receipt(
+            EntityAccessAuth::Authenticated(user_id("macro|owner@example.com")),
+            AccessLevel::Edit,
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(content[0].user_access_level, AccessLevel::Edit);
+    assert_eq!(content[1].user_access_level, AccessLevel::Edit);
+}
+
+#[tokio::test]
 async fn content_attributes_owner_access_to_every_item_for_internal_receipts() {
     let mut repo = MockProjectRepo::new();
     repo.expect_get_project_children().return_once(|_| {
@@ -565,19 +603,19 @@ async fn pending_projects_isolate_status_failures_and_root_mismatches() {
         Box::pin(async {
             Ok(vec![
                 ProjectWithUploadRequest {
-                    project: project("failed", "owner", None),
+                    project: project("failed", "macro|owner@example.com", None),
                     upload_request_id: Some("failed".to_string()),
                 },
                 ProjectWithUploadRequest {
-                    project: project("mismatch", "owner", None),
+                    project: project("mismatch", "macro|owner@example.com", None),
                     upload_request_id: Some("mismatch".to_string()),
                 },
                 ProjectWithUploadRequest {
-                    project: project("nested", "owner", Some("root")),
+                    project: project("nested", "macro|owner@example.com", Some("root")),
                     upload_request_id: Some("nested".to_string()),
                 },
                 ProjectWithUploadRequest {
-                    project: project("without-request", "owner", None),
+                    project: project("without-request", "macro|owner@example.com", None),
                     upload_request_id: None,
                 },
             ])
@@ -621,7 +659,7 @@ async fn preview_deduplicates_ids_before_calling_repository() {
                 Ok(vec![ProjectPreviewV2::Found(ProjectPreviewData {
                     id: "one".to_string(),
                     name: "One".to_string(),
-                    owner: "owner".to_string(),
+                    owner: owner("macro|owner@example.com"),
                     path: Vec::new(),
                     updated_at: None,
                 })])
@@ -714,7 +752,7 @@ async fn create_project_publishes_repository_metadata_after_success() {
         Box::pin(async move {
             let mut created = project(
                 &project_id.to_string(),
-                "ignored-repository-owner",
+                "macro|ignored-repository-owner@example.com",
                 Some(&parent_id.to_string()),
             );
             created.name = "Repository name".to_string();

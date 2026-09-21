@@ -11,10 +11,11 @@ use macro_authorization::{
 };
 use macro_uuid::Uuid;
 use model::response::EmptyResponse;
+use model_owner::Owner;
 
 use crate::domain::models::{
     ActionExecutionRecord, AlreadyRunningError, CreateScheduledAction, InProgressExecution,
-    ScheduledAction, UpdateScheduledAction,
+    OwnerNotUserError, ScheduledAction, UpdateScheduledAction,
 };
 use crate::domain::ports::ScheduledActionService;
 
@@ -106,7 +107,7 @@ pub async fn create_action<
         .ok_or_else(|| anyhow::anyhow!("schedule has no future firings"))?;
     let action = ScheduledAction {
         id: None,
-        owner: user.authorization.user.macro_user_id.clone(),
+        owner: Owner::User(user.authorization.user.macro_user_id.clone()),
         name: req.name,
         schedule: req.schedule,
         kind: req.kind,
@@ -177,7 +178,7 @@ pub async fn update_action<
         .ok_or_else(|| anyhow::anyhow!("schedule has no future firings"))?;
     let action = ScheduledAction {
         id: Some(id),
-        owner: user.authorization.user.macro_user_id.clone(),
+        owner: Owner::User(user.authorization.user.macro_user_id.clone()),
         name: req.name,
         schedule: req.schedule,
         kind: req.kind,
@@ -294,6 +295,10 @@ impl IntoResponse for ScheduledActionApiError {
         if let Some(already_running) = self.0.downcast_ref::<AlreadyRunningError>() {
             tracing::info!(error=%already_running, "scheduled action already running");
             return (StatusCode::CONFLICT, already_running.to_string()).into_response();
+        }
+        if let Some(owner_not_user) = self.0.downcast_ref::<OwnerNotUserError>() {
+            tracing::warn!(error=%owner_not_user, "scheduled action owner is not a user");
+            return (StatusCode::BAD_REQUEST, owner_not_user.to_string()).into_response();
         }
         tracing::error!(error=?self.0, "scheduled action api error");
         (StatusCode::INTERNAL_SERVER_ERROR, self.0.to_string()).into_response()

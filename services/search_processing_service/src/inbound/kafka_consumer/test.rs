@@ -976,7 +976,7 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
 }
 
 fn project_event_cases() -> Vec<(ProjectTopicEvent, ProjectEventDescription<'static>)> {
-    let owner = user_id();
+    let owner = Owner::User(user_id());
 
     vec![
         (
@@ -1663,7 +1663,7 @@ fn calendar_events_shard_by_event_id_so_one_event_stays_ordered() {
 fn project_envelope_decodes_round_trip_with_string_key() {
     let event = ProjectTopicEvent::Restored(ProjectRestoredMetadata {
         project_id: PROJECT_ID.to_string(),
-        owner: user_id(),
+        owner: Owner::User(user_id()),
         actor_user_id: Some(user_id()),
         parent_project_id: Some(PARENT_PROJECT_ID.to_string()),
         restored_project_ids: vec![PROJECT_ID.to_string(), CHILD_PROJECT_ID.to_string()],
@@ -1887,7 +1887,7 @@ async fn malformed_and_unsupported_chat_messages_are_commit_safe() {
 async fn unsupported_project_schema_message_is_commit_safe() {
     let event = ProjectTopicEvent::Restored(ProjectRestoredMetadata {
         project_id: PROJECT_ID.to_string(),
-        owner: user_id(),
+        owner: Owner::User(user_id()),
         actor_user_id: Some(user_id()),
         parent_project_id: None,
         restored_project_ids: vec![PROJECT_ID.to_string()],

@@ -50,6 +50,7 @@ macro_service_urls = { path = "../../crates/macro_service_urls" }
 models_email = { path = "../../crates/models_email" }
 redis = { workspace = true, features = ["tokio-rustls-comp"] }
 reqwest = { workspace = true }
+rootcause = { workspace = true }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }

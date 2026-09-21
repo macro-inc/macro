@@ -8,6 +8,7 @@
  * hand-off card, and the notes chip where they belong.
  */
 
+import { isCoderHarness } from '@app/features/agents-view/core/agent-kind';
 import { toast } from '@core/component/Toast/Toast';
 import { openExternalUrl } from '@core/util/url';
 import { createSignal, type ParentProps } from 'solid-js';
@@ -15,6 +16,7 @@ import { useAgentSession } from '../block-agent/context/AgentSessionContext';
 import type { ChangesHost } from './context/agent-changes-context';
 import { AgentChangesControllerProvider } from './context/agent-changes-controller';
 import { createAgentChanges } from './primitives/create-agent-changes';
+import { createPullRequestStatsSource } from './queries/pull-request-stats';
 import { createSessionChangesSource } from './queries/session-changes';
 import { createUrlDiffState } from './url-diff-state';
 
@@ -36,7 +38,12 @@ async function copyText(text: string): Promise<boolean> {
 
 export function AgentChangesProvider(props: ParentProps) {
   const session = useAgentSession();
-  const source = createSessionChangesSource(session.sessionId);
+  // Only a coding harness has a repository to diff; a chat-only session
+  // (in-memory) never fetches changes and shows none of the GitHub chrome.
+  const coding = () => isCoderHarness(session.session()?.harness);
+  const source = createSessionChangesSource(() =>
+    coding() ? session.sessionId() : undefined
+  );
   const sendPrompt = async (markdown: string) => {
     try {
       const result = await session.issue({ type: 'prompt', prompt: markdown });
@@ -47,7 +54,13 @@ export function AgentChangesProvider(props: ParentProps) {
       toast.failure('The review notes could not be sent');
     }
   };
+  const pullRequestChangeCounts = createPullRequestStatsSource(
+    () =>
+      coding() ? (session.session()?.pullRequestUrl ?? undefined) : undefined,
+    () => source.summary()?.changeset?.id
+  );
   const host: ChangesHost = {
+    pullRequestChangeCounts,
     scopeKey: session.sessionId,
     agent: {
       send: (markdown) => void sendPrompt(markdown),
@@ -56,6 +69,7 @@ export function AgentChangesProvider(props: ParentProps) {
         !session.loadFailed() &&
         (session.session()?.canEdit ?? true),
     },
+    canHaveChanges: coding,
     pullRequestUrl: () => session.session()?.pullRequestUrl ?? undefined,
     openExternal: openExternalUrl,
     copyText,

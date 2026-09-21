@@ -9,7 +9,6 @@ import {
   getListNavigationSource,
   listNavigationSourceId,
 } from '@app/features/soup/collection/list-navigation-source';
-import { globalSplitManager } from '@app/signal/splitLayout';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
@@ -30,10 +29,7 @@ export function useEmailListNavigation(
   });
   const source = () => {
     if (!panel) return undefined;
-    const manager = globalSplitManager();
-    const controllerId = manager?.controllerOf(panel.handle.id);
-    const handle =
-      (controllerId && manager?.getSplit(controllerId)) || panel.handle;
+    const handle = panel.handle;
     const list = getListNavigationSource(listNavigationSourceId(handle));
     return list?.viewId === panel.handle.referredFrom() ? list : undefined;
   };

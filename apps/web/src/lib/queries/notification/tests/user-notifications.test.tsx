@@ -2,14 +2,21 @@
  * @vitest-environment jsdom
  */
 
+import { createUrqlInfiniteQuery } from '@app/lib/urql-solid';
 import type { UnifiedNotification } from '@notifications/types';
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
 import type { GetAllUserNotificationsResponse } from '@service-notification/generated/schemas/getAllUserNotificationsResponse';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import { createClient, type Operation } from '@urql/core';
 import { ok } from 'neverthrow';
-import type { JSX } from 'solid-js';
+import { type Accessor, createMemo, createSignal, type JSX } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { filter, map, pipe } from 'wonka';
+import type {
+  GraphqlNotificationsQueryArgs,
+  GraphqlNotificationsQueryOptions,
+} from '../graphql/user-notifications';
 import { notificationKeys } from '../keys';
 import {
   applyNotificationStatusUpdate,
@@ -32,6 +39,7 @@ const {
   restMarkSeenMock,
   restUserNotificationsMock,
   restMarkUndoneMock,
+  useFeatureFlagMock,
 } = vi.hoisted(() => ({
   createGraphqlMutationMock: vi.fn(),
   createGraphqlQueryMock: vi.fn(),
@@ -43,6 +51,11 @@ const {
   restMarkSeenMock: vi.fn(),
   restUserNotificationsMock: vi.fn(),
   restMarkUndoneMock: vi.fn(),
+  useFeatureFlagMock: vi.fn(),
+}));
+
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: useFeatureFlagMock,
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
@@ -128,6 +141,9 @@ type GraphqlMutationOptions = {
 beforeEach(() => {
   graphqlCacheEnabledMock.mockReturnValue(true);
   graphqlSoupEnabledMock.mockReturnValue(true);
+  useFeatureFlagMock.mockReturnValue(() => ({
+    enabled: graphqlSoupEnabledMock(),
+  }));
   restUserNotificationsMock.mockResolvedValue(
     ok({ items: [], next_cursor: null })
   );
@@ -369,6 +385,111 @@ describe('useUserNotificationsQuery transport facade', () => {
     expect(queryOptions()).toEqual({ enabled: true });
     dispose();
   });
+
+  it.each([false, true])(
+    'reacts to GraphQL flags arriving during a cold REST fetch (done=%s)',
+    async (done) => {
+      const [enabled, setEnabled] = createSignal(false);
+      useFeatureFlagMock.mockReturnValue(() => ({ enabled: enabled() }));
+      graphqlSoupEnabledMock.mockReturnValue(false);
+      const restNotification = createMockNotification({ id: 'rest-document' });
+      const graphqlNotification = createMockNotification({
+        id: 'graphql-document',
+      });
+      let resolveRest!: (page: GetAllUserNotificationsResponse) => void;
+      restUserNotificationsMock.mockImplementationOnce(async () => {
+        const page = await new Promise<GetAllUserNotificationsResponse>(
+          (resolve) => {
+            resolveRest = resolve;
+          }
+        );
+        return ok(page);
+      });
+
+      const operations: Operation[] = [];
+      const client = createClient({
+        url: 'http://localhost/graphql',
+        exchanges: [
+          () => (operations$) =>
+            pipe(
+              operations$,
+              filter((operation) => operation.kind === 'query'),
+              map((operation) => {
+                operations.push(operation);
+                return {
+                  operation,
+                  data: { items: [graphqlNotification], nextCursor: null },
+                  stale: false,
+                  hasNext: false,
+                };
+              })
+            ),
+        ],
+      });
+      createGraphqlQueryMock.mockImplementationOnce(
+        (
+          _args: Accessor<GraphqlNotificationsQueryArgs>,
+          options: Accessor<GraphqlNotificationsQueryOptions>
+        ) =>
+          createUrqlInfiniteQuery<
+            { items: UnifiedNotification[]; nextCursor: string | null },
+            { cursor: string | null },
+            string | null,
+            UnifiedNotification[]
+          >(() => ({
+            client,
+            query: 'query Notifications { items { id } nextCursor }',
+            variables: (cursor) => ({ cursor }),
+            enabled: options().enabled,
+            initialPageParam: null,
+            getNextPageParam: (page) => page.nextCursor,
+            select: ({ pages }) => pages.flatMap((page) => page.items),
+          }))
+      );
+      let query!: UserNotificationsQuery;
+      let notifications!: Accessor<UnifiedNotification[]>;
+      const dispose = renderWithClient(() => {
+        query = useUserNotificationsQuery(() => ({ limit: 500, done }));
+        notifications = createMemo(() => query.data ?? []);
+        return <div />;
+      });
+      try {
+        await vi.waitFor(() => expect(resolveRest).toBeDefined());
+        expect(query.transport).toBe('rest');
+        expect(operations).toHaveLength(0);
+
+        graphqlSoupEnabledMock.mockReturnValue(true);
+        setEnabled(true);
+        resolveRest(createMockNotificationPage([restNotification]));
+        await vi.waitFor(() =>
+          expect(notifications()).toEqual([
+            done ? restNotification : graphqlNotification,
+          ])
+        );
+        expect(query.transport).toBe(done ? 'rest' : 'graphql');
+        expect(operations).toHaveLength(done ? 0 : 1);
+
+        if (done) return;
+        await query.refetch();
+        expect(operations).toHaveLength(2);
+        expect(operations[1].context.requestPolicy).toBe('network-only');
+
+        // A later rollback must also re-enable REST, not just change getters.
+        restUserNotificationsMock.mockClear();
+        graphqlSoupEnabledMock.mockReturnValue(false);
+        setEnabled(false);
+        expect(query.transport).toBe('rest');
+        await vi.waitFor(() =>
+          expect(notifications()).toEqual([restNotification])
+        );
+        await query.refetch();
+        expect(restUserNotificationsMock).toHaveBeenCalledOnce();
+        expect(operations).toHaveLength(2);
+      } finally {
+        dispose();
+      }
+    }
+  );
 
   it('keeps done-history pagination on REST', () => {
     let query: UserNotificationsQuery | undefined;

@@ -57,4 +57,14 @@ describe('repository listing', () => {
       { method: 'GET' }
     );
   });
+
+  it("asks the harness for one repository's branches", () => {
+    agentHarnessServiceClient.listRepositoryBranches(
+      'https://github.com/macro-inc/macro'
+    );
+    expect(fetchWithToken).toHaveBeenCalledWith(
+      'https://harness.example.com/agent-repositories/branches?repoUrl=https%3A%2F%2Fgithub.com%2Fmacro-inc%2Fmacro',
+      { method: 'GET' }
+    );
+  });
 });

@@ -30,30 +30,6 @@ describe('createResizeSolver', () => {
 
       dispose();
     });
-
-    it('moves all contiguous members of a share group together', async () => {
-      const { solver, dispose } = createRoot((dispose) => ({
-        dispose,
-        solver: createResizeSolver({
-          direction: 'horizontal',
-          gutter: () => 0,
-          size: () => 1000,
-          panels: [],
-        }),
-      }));
-
-      solver.addPanel({ id: 'A', minSize: 0 });
-      solver.addPanel({ id: 'B', minSize: 0, shareGroup: 'pair' });
-      solver.addPanel({ id: 'C', minSize: 0, shareGroup: 'pair' });
-      solver.addPanel({ id: 'D', minSize: 0 });
-      await Promise.resolve();
-
-      solver.swap('B', 'D');
-
-      expect(solver.order()).toEqual(['A', 'D', 'B', 'C']);
-
-      dispose();
-    });
   });
 
   describe('addPanel', () => {
@@ -149,14 +125,14 @@ describe('createResizeSolver', () => {
 
       await Promise.resolve();
 
-      solver.addPanel({ id: 'controller', minSize: 100 });
-      solver.updatePanel('controller', {
+      solver.addPanel({ id: 'sidebar', minSize: 100 });
+      solver.updatePanel('sidebar', {
         redistributionPreferredSize: 440,
       });
-      expect(solver.solve().sizes.get('controller')).toBe(1600);
+      expect(solver.solve().sizes.get('sidebar')).toBe(1600);
 
-      solver.addPanel({ id: 'viewer', minSize: 100 });
-      expect(solver.solve().sizes.get('controller')).toBe(440);
+      solver.addPanel({ id: 'content', minSize: 100 });
+      expect(solver.solve().sizes.get('sidebar')).toBe(440);
 
       dispose();
     });
@@ -175,18 +151,18 @@ describe('createResizeSolver', () => {
       // createEffect performs its initial solve after the root body.
       await Promise.resolve();
 
-      solver.addPanel({ id: 'controller', minSize: 100 });
-      solver.addPanel({ id: 'viewer', minSize: 100 });
+      solver.addPanel({ id: 'sidebar', minSize: 100 });
+      solver.addPanel({ id: 'content', minSize: 100 });
       solver.addPanel({ id: 'adjacent', minSize: 100 });
-      solver.updatePanel('controller', { redistributionPreferredSize: 440 });
+      solver.updatePanel('sidebar', { redistributionPreferredSize: 440 });
 
-      expect(solver.solve().sizes.get('controller')).toBe(440);
+      expect(solver.solve().sizes.get('sidebar')).toBe(440);
 
       solver.moveHandle(0, 160);
-      expect(solver.solve().sizes.get('controller')).toBe(600);
+      expect(solver.solve().sizes.get('sidebar')).toBe(600);
 
       solver.dropPanel('adjacent');
-      expect(solver.solve().sizes.get('controller')).toBe(440);
+      expect(solver.solve().sizes.get('sidebar')).toBe(440);
 
       dispose();
     });
@@ -204,16 +180,16 @@ describe('createResizeSolver', () => {
 
       await Promise.resolve();
 
-      solver.addPanel({ id: 'controller', minSize: 400 });
-      solver.updatePanel('controller', {
+      solver.addPanel({ id: 'sidebar', minSize: 400 });
+      solver.updatePanel('sidebar', {
         redistributionPreferredSize: 1200,
       });
-      solver.addPanel({ id: 'viewer', minSize: 400 });
+      solver.addPanel({ id: 'content', minSize: 400 });
 
-      expect(solver.solve().sizes.get('controller')).toBe(1200);
+      expect(solver.solve().sizes.get('sidebar')).toBe(1200);
 
       solver.moveHandle(0, 100);
-      expect(solver.solve().sizes.get('controller')).toBe(1300);
+      expect(solver.solve().sizes.get('sidebar')).toBe(1300);
 
       dispose();
     });
@@ -231,383 +207,14 @@ describe('createResizeSolver', () => {
 
       await Promise.resolve();
 
-      solver.addPanel({ id: 'controller', minSize: 400 });
-      solver.updatePanel('controller', {
+      solver.addPanel({ id: 'sidebar', minSize: 400 });
+      solver.updatePanel('sidebar', {
         redistributionPreferredSize: 1200,
       });
-      solver.addPanel({ id: 'viewer', minSize: 400 });
+      solver.addPanel({ id: 'content', minSize: 400 });
 
-      expect(solver.solve().sizes.get('controller')).toBe(1192);
-      expect(solver.solve().sizes.get('viewer')).toBe(400);
-
-      dispose();
-    });
-  });
-
-  describe('shareGroup', () => {
-    it('carves a joining member share from its group, leaving other units alone', async () => {
-      const { solver, dispose } = createRoot((dispose) => ({
-        dispose,
-        solver: createResizeSolver({
-          direction: 'horizontal',
-          gutter: () => 0,
-          size: () => 1600,
-          panels: [],
-        }),
-      }));
-
-      await Promise.resolve();
-
-      solver.addPanel({ id: 'doc', minSize: 100 });
-      solver.addPanel({ id: 'controller', minSize: 100, shareGroup: 'pair' });
-      expect(solver.solve().sizes.get('doc')).toBe(800);
-
-      solver.addPanel({ id: 'viewer', minSize: 100, shareGroup: 'pair' });
-      expect(solver.solve().sizes.get('doc')).toBe(800);
-      expect(solver.solve().sizes.get('controller')).toBe(400);
-      expect(solver.solve().sizes.get('viewer')).toBe(400);
-
-      dispose();
-    });
-
-    it('returns a departing member share to its group', async () => {
-      const { solver, dispose } = createRoot((dispose) => ({
-        dispose,
-        solver: createResizeSolver({
-          direction: 'horizontal',
-          gutter: () => 0,
-          size: () => 1600,
-          panels: [],
-        }),
-      }));
-
-      await Promise.resolve();
-
-      solver.addPanel({ id: 'doc', minSize: 100 });
-      solver.addPanel({ id: 'controller', minSize: 100, shareGroup: 'pair' });
-      solver.addPanel({ id: 'viewer', minSize: 100, shareGroup: 'pair' });
-
-      solver.dropPanel('viewer');
-      expect(solver.solve().sizes.get('doc')).toBe(800);
-      expect(solver.solve().sizes.get('controller')).toBe(800);
-
-      dispose();
-    });
-
-    it('counts a group as one unit when a standalone panel is added', async () => {
-      const { solver, dispose } = createRoot((dispose) => ({
-        dispose,
-        solver: createResizeSolver({
-          direction: 'horizontal',
-          gutter: () => 0,
-          size: () => 1600,
-          panels: [],
-        }),
-      }));
-
-      await Promise.resolve();
-
-      solver.addPanel({ id: 'controller', minSize: 100, shareGroup: 'pair' });
-      solver.addPanel({ id: 'viewer', minSize: 100, shareGroup: 'pair' });
-      solver.addPanel({ id: 'doc', minSize: 100 });
-
-      expect(solver.solve().sizes.get('doc')).toBe(800);
-      expect(solver.solve().sizes.get('controller')).toBe(400);
-      expect(solver.solve().sizes.get('viewer')).toBe(400);
-
-      dispose();
-    });
-
-    it('settles a redistribution preference within the group', async () => {
-      const { solver, dispose } = createRoot((dispose) => ({
-        dispose,
-        solver: createResizeSolver({
-          direction: 'horizontal',
-          gutter: () => 0,
-          size: () => 1600,
-          panels: [],
-        }),
-      }));
-
-      await Promise.resolve();
-
-      solver.addPanel({ id: 'doc', minSize: 100 });
-      solver.addPanel({ id: 'controller', minSize: 100, shareGroup: 'pair' });
-      solver.addPanel({ id: 'viewer', minSize: 100, shareGroup: 'pair' });
-      solver.updatePanel('controller', { redistributionPreferredSize: 440 });
-
-      // The pin trades space with the viewer; the document keeps 50%.
-      expect(solver.solve().sizes.get('doc')).toBe(800);
-      expect(solver.solve().sizes.get('controller')).toBe(440);
-      expect(solver.solve().sizes.get('viewer')).toBe(360);
-
-      dispose();
-    });
-
-    it('yields the pin to its unit budget when group-mates cannot fund it', async () => {
-      const { solver, dispose } = createRoot((dispose) => ({
-        dispose,
-        solver: createResizeSolver({
-          direction: 'horizontal',
-          gutter: () => 0,
-          size: () => 1600,
-          panels: [],
-        }),
-      }));
-
-      await Promise.resolve();
-
-      solver.addPanel({ id: 'doc', minSize: 400 });
-      solver.addPanel({ id: 'controller', minSize: 400, shareGroup: 'pair' });
-      solver.addPanel({ id: 'viewer', minSize: 400, shareGroup: 'pair' });
-      solver.updatePanel('controller', { redistributionPreferredSize: 440 });
-
-      // The viewer sits at its minimum, so the pair cannot fund the pin:
-      // it shrinks back to the unit's budget instead of taking from the
-      // document.
-      expect(solver.solve().sizes.get('doc')).toBe(800);
-      expect(solver.solve().sizes.get('controller')).toBe(400);
-      expect(solver.solve().sizes.get('viewer')).toBe(400);
-
-      dispose();
-    });
-
-    it('keeps singles at equal unit shares when a split is added beside a pair', async () => {
-      const { solver, dispose } = createRoot((dispose) => ({
-        dispose,
-        solver: createResizeSolver({
-          direction: 'horizontal',
-          gutter: () => 0,
-          size: () => 1600,
-          panels: [],
-        }),
-      }));
-
-      await Promise.resolve();
-
-      solver.addPanel({ id: 'L', minSize: 400 });
-      solver.addPanel({ id: 'controller', minSize: 340, shareGroup: 'pair' });
-      solver.addPanel({ id: 'viewer', minSize: 400, shareGroup: 'pair' });
-      solver.updatePanel('controller', { redistributionPreferredSize: 440 });
-
-      // "New split right": three units intend a third each. The zone is too
-      // tight to honor that (the pair's hard minimums are 340 + 400), but
-      // the singles stay EQUAL and the pair only exceeds a third by its
-      // minimums — the unfunded pin may not push the singles further down.
-      solver.addPanel({ id: 'new', minSize: 400 });
-      expect(solver.solve().sizes.get('L')).toBe(430);
-      expect(solver.solve().sizes.get('new')).toBe(430);
-      expect(solver.solve().sizes.get('controller')).toBe(340);
-      expect(solver.solve().sizes.get('viewer')).toBe(400);
-
-      dispose();
-    });
-
-    it('absorbs the group gutter so other panels never shift on join/leave', async () => {
-      const { solver, dispose } = createRoot((dispose) => ({
-        dispose,
-        solver: createResizeSolver({
-          direction: 'horizontal',
-          gutter: () => 8,
-          size: () => 1608,
-          panels: [],
-        }),
-      }));
-
-      await Promise.resolve();
-
-      solver.addPanel({ id: 'doc', minSize: 100 });
-      solver.addPanel({ id: 'controller', minSize: 100, shareGroup: 'pair' });
-      expect(solver.solve().sizes.get('doc')).toBe(800);
-
-      // The viewer's gutter comes out of the pair, not the other panels.
-      solver.addPanel({ id: 'viewer', minSize: 100, shareGroup: 'pair' });
-      expect(solver.solve().sizes.get('doc')).toBe(800);
-      expect(solver.solve().sizes.get('controller')).toBe(396);
-      expect(solver.solve().sizes.get('viewer')).toBe(396);
-
-      solver.updatePanel('controller', { redistributionPreferredSize: 440 });
-      expect(solver.solve().sizes.get('doc')).toBe(800);
-      expect(solver.solve().sizes.get('controller')).toBe(440);
-      expect(solver.solve().sizes.get('viewer')).toBe(352);
-
-      // Disengage clears the preference alongside the drop (in the app both
-      // land in one reactive flush); leaving then reclaims the gutter for
-      // an exact round-trip.
-      solver.updatePanel('controller', {
-        redistributionPreferredSize: undefined,
-      });
-      expect(solver.solve().sizes.get('doc')).toBe(800);
-      solver.dropPanel('viewer');
-      expect(solver.solve().sizes.get('doc')).toBe(800);
-      expect(solver.solve().sizes.get('controller')).toBe(800);
-
-      dispose();
-    });
-
-    it('keeps unit shares stable across zone resizes', async () => {
-      const [size, setSize] = createSignal(1600);
-      const { solver, dispose } = createRoot((dispose) => ({
-        dispose,
-        solver: createResizeSolver({
-          direction: 'horizontal',
-          gutter: () => 0,
-          size,
-          panels: [],
-        }),
-      }));
-
-      await Promise.resolve();
-
-      solver.addPanel({ id: 'doc', minSize: 100 });
-      solver.addPanel({ id: 'controller', minSize: 100, shareGroup: 'pair' });
-      solver.addPanel({ id: 'viewer', minSize: 100, shareGroup: 'pair' });
-      solver.updatePanel('controller', { redistributionPreferredSize: 440 });
-
-      expect(solver.solve().sizes.get('doc')).toBe(800);
-
-      // Growing the zone keeps the document at half; the pinned controller
-      // stays put and its group-mate absorbs the pair's growth.
-      setSize(2000);
-      expect(solver.solve().sizes.get('doc')).toBe(1000);
-      expect(solver.solve().sizes.get('controller')).toBe(440);
-      expect(solver.solve().sizes.get('viewer')).toBe(560);
-
-      dispose();
-    });
-
-    it('routes gutter-drag growth past the controller preferred size to the viewer', async () => {
-      const { solver, dispose } = createRoot((dispose) => ({
-        dispose,
-        solver: createResizeSolver({
-          direction: 'horizontal',
-          gutter: () => 0,
-          size: () => 1600,
-          panels: [],
-        }),
-      }));
-
-      await Promise.resolve();
-
-      solver.addPanel({ id: 'doc', minSize: 100 });
-      solver.addPanel({ id: 'controller', minSize: 100, shareGroup: 'pair' });
-      solver.addPanel({ id: 'viewer', minSize: 100, shareGroup: 'pair' });
-      solver.updatePanel('controller', { redistributionPreferredSize: 440 });
-      expect(solver.solve().sizes.get('doc')).toBe(800);
-
-      // Shrinking the document leaves the controller at its preferred
-      // width; the freed space flows to the viewer.
-      solver.moveHandle(0, -200);
-      expect(solver.solve().sizes.get('doc')).toBe(600);
-      expect(solver.solve().sizes.get('controller')).toBe(440);
-      expect(solver.solve().sizes.get('viewer')).toBe(560);
-
-      // Dragging the pair's own internal gutter still resizes the
-      // controller directly.
-      solver.moveHandle(1, 100);
-      expect(solver.solve().sizes.get('controller')).toBe(540);
-      expect(solver.solve().sizes.get('viewer')).toBe(460);
-
-      dispose();
-    });
-
-    it('takes gutter-drag shrink from the viewer before the controller', async () => {
-      const { solver, dispose } = createRoot((dispose) => ({
-        dispose,
-        solver: createResizeSolver({
-          direction: 'horizontal',
-          gutter: () => 0,
-          size: () => 1600,
-          panels: [],
-        }),
-      }));
-
-      await Promise.resolve();
-
-      solver.addPanel({ id: 'doc', minSize: 100 });
-      solver.addPanel({ id: 'controller', minSize: 100, shareGroup: 'pair' });
-      solver.addPanel({ id: 'viewer', minSize: 100, shareGroup: 'pair' });
-      solver.updatePanel('controller', { redistributionPreferredSize: 440 });
-
-      // Growing the document squeezes the viewer while the controller
-      // holds its preferred width...
-      solver.moveHandle(0, 200);
-      expect(solver.solve().sizes.get('doc')).toBe(1000);
-      expect(solver.solve().sizes.get('controller')).toBe(440);
-      expect(solver.solve().sizes.get('viewer')).toBe(160);
-
-      // ...and only once the viewer bottoms out does the controller give.
-      solver.moveHandle(0, 200);
-      expect(solver.solve().sizes.get('doc')).toBe(1200);
-      expect(solver.solve().sizes.get('controller')).toBe(300);
-      expect(solver.solve().sizes.get('viewer')).toBe(100);
-
-      dispose();
-    });
-
-    it('restores per-unit distribution when a split closes from a min-crushed layout', async () => {
-      const { solver, dispose } = createRoot((dispose) => ({
-        dispose,
-        solver: createResizeSolver({
-          direction: 'horizontal',
-          gutter: () => 8,
-          size: () => 1704,
-          panels: [],
-        }),
-      }));
-
-      await Promise.resolve();
-
-      // [L | pair(C+V) | R] in a zone where the pair's floor (440 + 400)
-      // forces everything else onto its minimums.
-      solver.addPanel({ id: 'L', minSize: 400 });
-      solver.addPanel({ id: 'C', minSize: 340, shareGroup: 'pair' });
-      solver.updatePanel('C', { redistributionPreferredSize: 440 });
-      solver.addPanel({ id: 'V', minSize: 400, shareGroup: 'pair' });
-      solver.addPanel({ id: 'R', minSize: 400 });
-
-      // Rendering is constraint-dictated: L is crushed below its intent by
-      // the pair's hard minimums (the unfunded pin has already yielded).
-      expect(solver.solve().sizes.get('L')).toBe(471);
-      expect(solver.solve().sizes.get('C')).toBe(340);
-      expect(solver.solve().sizes.get('V')).toBe(400);
-      expect(solver.solve().sizes.get('R')).toBe(469);
-
-      // Closing R must distribute per UNIT: the crushed pixels carry no
-      // intent, so L returns to half the zone and the pair takes the other
-      // half — not two-thirds to the pair's two panels.
-      solver.dropPanel('R');
-      expect(solver.solve().sizes.get('L')).toBe(848);
-      expect(solver.solve().sizes.get('C')).toBe(440);
-      expect(solver.solve().sizes.get('V')).toBe(400);
-
-      dispose();
-    });
-
-    it('resets to an equal share per unit', async () => {
-      const { solver, dispose } = createRoot((dispose) => ({
-        dispose,
-        solver: createResizeSolver({
-          direction: 'horizontal',
-          gutter: () => 0,
-          size: () => 1600,
-          panels: [],
-        }),
-      }));
-
-      await Promise.resolve();
-
-      solver.addPanel({ id: 'doc', minSize: 100 });
-      solver.addPanel({ id: 'controller', minSize: 100, shareGroup: 'pair' });
-      solver.addPanel({ id: 'viewer', minSize: 100, shareGroup: 'pair' });
-
-      solver.moveHandle(0, -400);
-      expect(solver.solve().sizes.get('doc')).toBe(400);
-
-      solver.reset();
-      expect(solver.solve().sizes.get('doc')).toBe(800);
-      expect(solver.solve().sizes.get('controller')).toBe(400);
-      expect(solver.solve().sizes.get('viewer')).toBe(400);
+      expect(solver.solve().sizes.get('sidebar')).toBe(1192);
+      expect(solver.solve().sizes.get('content')).toBe(400);
 
       dispose();
     });

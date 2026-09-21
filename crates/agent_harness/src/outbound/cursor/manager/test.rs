@@ -80,8 +80,10 @@ impl AgentSessionRepo for StubSessions {
         Ok(AgentSession {
             repo_branch: self.repo_branch.clone(),
             id,
-            owner_id: MacroUserIdStr::try_from("macro|owner@macro.com".to_owned())
-                .expect("valid user id"),
+            owner_id: model_owner::Owner::User(
+                MacroUserIdStr::try_from("macro|owner@macro.com".to_owned())
+                    .expect("valid user id"),
+            ),
             thread_id: None,
             thread_parent: None,
             originating_message_id: None,

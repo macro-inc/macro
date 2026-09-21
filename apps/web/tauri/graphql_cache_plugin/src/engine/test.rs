@@ -139,6 +139,27 @@ fn write_then_read_round_trips() {
 }
 
 #[test]
+fn identical_hydration_does_not_advance_the_native_revision() {
+    let handle = spawn_handle();
+    let hydrate = || {
+        block_on(handle.hydrate_query(
+            HYDRATION_QUERY.to_string(),
+            Some("Soup".to_string()),
+            variables(),
+            soup_data(true),
+            None,
+        ))
+        .unwrap()
+        .write_result
+    };
+    let first = hydrate();
+    let duplicate = hydrate();
+    assert!(first.revision_advanced);
+    assert!(!duplicate.revision_advanced);
+    assert_eq!(first.revision, duplicate.revision);
+}
+
+#[test]
 fn hydration_returns_only_unmarked_fields() {
     let handle = spawn_handle();
     let result = block_on(handle.hydrate_query(

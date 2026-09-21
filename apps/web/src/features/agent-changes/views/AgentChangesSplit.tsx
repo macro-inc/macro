@@ -14,8 +14,12 @@ const SESSION_MIN_PX = 320;
 const CHANGES_MIN_PX = 400;
 
 export function AgentChangesSplit(props: ParentProps) {
-  const { layout } = useAgentChanges();
+  const { available, layout } = useAgentChanges();
   let zone: ResizeZoneCtx | undefined;
+  // A host that can never have changes keeps the session alone on screen,
+  // whatever a stale URL or persisted layout asks for.
+  const sessionVisible = () => !available() || layout.sessionVisible();
+  const changesVisible = () => available() && layout.changesVisible();
 
   return (
     <Resize.Zone
@@ -28,14 +32,14 @@ export function AgentChangesSplit(props: ParentProps) {
     >
       {/* Panels mount and unmount with the layout: an unregistered panel
           would still paint its content at the zone's left edge. */}
-      <Show when={layout.sessionVisible()}>
+      <Show when={sessionVisible()}>
         <Resize.Panel id="agent-session" minSize={SESSION_MIN_PX} index={0}>
           <div class="flex h-full min-w-0 flex-col overflow-hidden">
             {props.children}
           </div>
         </Resize.Panel>
       </Show>
-      <Show when={layout.changesVisible()}>
+      <Show when={changesVisible()}>
         <Resize.Panel
           id="agent-changes"
           minSize={CHANGES_MIN_PX}

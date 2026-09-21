@@ -24,6 +24,14 @@ single `vite.config.ts`.
 You can override the dev server host for devices/emulators by exporting
 `TAURI_DEV_HOST` before running `cargo tauri …`.
 
+Default native logging keeps Turso at `warn`, including Debug builds: its
+per-record/page debug spans are expensive through iOS OS activity logging.
+Application and Tao debug logs remain enabled in Debug builds. An explicit
+`RUST_LOG` still overrides the defaults; opt into Turso debug logs only for a
+focused diagnostic, not startup/performance measurements. Persistent-cache startup
+and explicit integrity checks are described in the
+[cache guide](../../../../crates/client/README.md#startup-and-integrity-checks).
+
 ## iOS 27 scene lifecycle
 
 Apps built with the iOS 27 SDK must use the scene lifecycle. Keep the

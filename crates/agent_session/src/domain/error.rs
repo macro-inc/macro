@@ -1,6 +1,7 @@
 use crate::domain::model::AgentSessionId;
 use agent_runtime_protocol::domain::action::ActionError;
 use agent_runtime_protocol::domain::ports::TransportError;
+use model_owner::OwnerType;
 use thiserror::Error;
 pub type Result<T, E = AgentSessionError> = std::result::Result<T, E>;
 
@@ -23,6 +24,12 @@ pub enum AgentSessionError {
     ThreadSessionExists,
     #[error("the session owner is not a known user")]
     UnknownOwner,
+    /// A path that runs as the session's owner - spending their credentials,
+    /// attributing work to them, granting them access - met an owner that is
+    /// not a user. Every session is user-owned today; this is the boundary
+    /// that says so out loud instead of assuming it.
+    #[error("this path needs a user-owned session, but the owner is a {0}")]
+    OwnerNotUser(OwnerType),
     #[error("expected a GitHub PR URL: https://github.com/owner/repo/pull/number")]
     InvalidPullRequestUrl,
     #[error("invalid agent session name: {0}")]

@@ -59,10 +59,10 @@ pub fn map_chat_item(
     deleted_at: Option<chrono::DateTime<chrono::Utc>>,
     project_id: Option<String>,
     is_persistent: Option<bool>,
-) -> Chat {
-    Chat {
+) -> anyhow::Result<Chat> {
+    Ok(Chat {
         id,
-        user_id,
+        user_id: Owner::from_principal_str(&user_id)?,
         name,
         // Don't care about the model in user history
         model: None,
@@ -72,7 +72,7 @@ pub fn map_chat_item(
         project_id,
         token_count: None,
         is_persistent: is_persistent.unwrap_or(false),
-    }
+    })
 }
 
 pub fn map_project_item(
@@ -83,14 +83,14 @@ pub fn map_project_item(
     updated_at: Option<chrono::DateTime<chrono::Utc>>,
     deleted_at: Option<chrono::DateTime<chrono::Utc>>,
     parent_id: Option<String>,
-) -> Project {
-    Project {
+) -> anyhow::Result<Project> {
+    Ok(Project {
         id,
-        user_id,
+        user_id: Owner::from_principal_str(&user_id)?,
         name,
         created_at,
         updated_at,
         deleted_at,
         parent_id,
-    }
+    })
 }

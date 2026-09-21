@@ -526,6 +526,81 @@ describe('createNotificationSource', () => {
     }
   });
 
+  it('follows the query transport for pagination, realtime delivery and edge overrides', async () => {
+    // An imperative flag snapshot can disagree with the mounted query during
+    // startup. Only the facade's reactive transport owns source behavior.
+    mocks.graphqlEnabled = true;
+    const [transport, setTransport] = createSignal<'rest' | 'graphql'>('rest');
+    const fetchNextPage = vi.fn(async () => undefined);
+    const refetch = vi.fn(async () => undefined);
+    mocks.notificationsQuery = {
+      data: [],
+      get transport() {
+        return transport();
+      },
+      hasNextPage: true,
+      isFetching: false,
+      fetchNextPage,
+      refetch,
+    };
+    const incoming: UnifiedNotification = {
+      ...notification(
+        '00000000-0000-4000-8000-000000000011',
+        'reminder',
+        'reminder-transport'
+      ),
+      notification_event_type: 'reminder',
+      notification_metadata: {
+        tag: 'reminder',
+        content: {
+          description: 'Transport transition',
+          reminderId: '00000000-0000-4000-8000-000000000012',
+        },
+      },
+    };
+    const restEvent = {
+      type: 'notification',
+      data: JSON.stringify({ ...incoming, notification_id: incoming.id }),
+    };
+    const graphqlEvent = {
+      __typename: 'GraphqlNewNotification',
+      notification: incoming,
+    };
+    const receive = vi.fn();
+    const { source, dispose } = createRoot((dispose) => ({
+      source: createNotificationSource(
+        {} as ConnectionGatewayWebsocket,
+        receive
+      ),
+      dispose,
+    }));
+    try {
+      expect(fetchNextPage).toHaveBeenCalledOnce();
+      expect(source.withLocalOverrides).toBeUndefined();
+      mocks.graphqlPatchCallback?.(graphqlEvent);
+      expect(receive).not.toHaveBeenCalled();
+      mocks.socketCallback?.(restEvent);
+      expect(receive).toHaveBeenCalledOnce();
+      expect(mocks.optimisticInsertNotification).toHaveBeenCalledOnce();
+
+      setTransport('graphql');
+      expect(source.withLocalOverrides).toBeTypeOf('function');
+      expect(fetchNextPage).toHaveBeenCalledOnce();
+      mocks.socketCallback?.(restEvent);
+      expect(receive).toHaveBeenCalledOnce();
+      mocks.graphqlPatchCallback?.(graphqlEvent);
+      expect(receive).toHaveBeenCalledTimes(2);
+      await Promise.resolve();
+      expect(refetch).toHaveBeenCalledOnce();
+
+      setTransport('rest');
+      expect(source.withLocalOverrides).toBeUndefined();
+      expect(fetchNextPage).toHaveBeenCalledTimes(2);
+    } finally {
+      dispose();
+    }
+  });
+
   it('coalesces uncached GraphQL patches and ignores connection gateway notifications when enabled', async () => {
     const incoming = notification('new-notification', 'channel', 'channel-1');
     const refetch = vi.fn().mockResolvedValue(undefined);
