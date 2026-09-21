@@ -13,8 +13,9 @@ const serverHostLocal: Servers = {
   'email-service': 'http://localhost:8087',
   // No gateway locally — requests go straight to a service port. email-service
   // still serves /calendar/* on 8087; switch to calendar_service (8088) once it
-  // joins the local stack.
-  'calendar-service': 'http://localhost:8087',
+  // joins the local stack. The client drops the /calendar segment, so it is
+  // carried here.
+  'calendar-service': 'http://localhost:8087/calendar',
   'image-proxy-service': 'http://localhost:8097',
   'scheduled-action': 'http://localhost:8099',
   'agent-harness': 'http://localhost:8101',
@@ -109,7 +110,11 @@ function proxyServers(): Servers | undefined {
     'agent-harness': `${proxyOrigin}/agent-harness`,
     contacts: `${proxyOrigin}/contacts`,
     'email-service': `${proxyOrigin}/email`,
-    'calendar-service': `${proxyOrigin}/calendar`,
+    // The proxy has no /calendar route yet (calendar_service is not in the local
+    // inventory), so reach email-service's /calendar/* through its /email prefix,
+    // which the proxy strips. Point at ${proxyOrigin}/calendar once calendar_service
+    // joins the stack.
+    'calendar-service': `${proxyOrigin}/email/calendar`,
     'image-proxy-service': `${proxyOrigin}/image-proxy`,
     'scheduled-action': `${proxyOrigin}/scheduled-action`,
   };
