@@ -1,6 +1,12 @@
 import type { NotificationSource } from '@notifications/notification-source';
 import type { UnifiedNotification } from '@notifications/types';
-import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+} from 'solid-js';
 import {
   reminderAlertIdentity,
   reminderAlertsFromNotifications,
@@ -20,13 +26,23 @@ export function createReminderAlertFeed(
     account: string;
     notification: UnifiedNotification;
   }>();
-  onCleanup(
-    source.subscribe((notification) => {
-      const owner = account();
-      if (owner && notification.notification_metadata.tag === 'reminder')
+  createEffect(() => {
+    const owner = account();
+    if (!owner) return;
+    let subscribed = true;
+    const unsubscribe = source.subscribe((notification) => {
+      if (
+        subscribed &&
+        owner === account() &&
+        notification.notification_metadata.tag === 'reminder'
+      )
         setLatest({ account: owner, notification });
-    })
-  );
+    });
+    onCleanup(() => {
+      subscribed = false;
+      unsubscribe();
+    });
+  });
 
   const snapshot = () =>
     !account() || source.isLoading() ? [] : source.notifications();
@@ -34,11 +50,17 @@ export function createReminderAlertFeed(
     account: string | undefined;
     latest: ReturnType<typeof latest>;
     pending: Map<string, UnifiedNotification>;
+    acknowledged: Set<string>;
   }>((previous) => {
     const owner = account();
     const event = latest();
     const pending = new Map(
       previous?.account === owner ? previous?.pending : undefined
+    );
+    // Keep observed acknowledgements after pagination removes the query row,
+    // so a later delivery id cannot resurrect the same occurrence.
+    const acknowledged = new Set(
+      previous?.account === owner ? previous?.acknowledged : undefined
     );
     if (event && event !== previous?.latest && event.account === owner) {
       pending.set(event.notification.id, event.notification);
@@ -50,13 +72,21 @@ export function createReminderAlertFeed(
     for (const item of snapshot()) {
       pending.delete(item.id);
       const identity = reminderAlertIdentity(item);
-      if (identity) confirmed.add(identity.key);
+      if (identity) {
+        confirmed.add(identity.key);
+        if (item.state !== 'unseen' || item.deleted_at)
+          acknowledged.add(identity.key);
+      }
     }
     for (const [id, item] of pending) {
       const identity = reminderAlertIdentity(item);
-      if (identity && confirmed.has(identity.key)) pending.delete(id);
+      if (
+        identity &&
+        (confirmed.has(identity.key) || acknowledged.has(identity.key))
+      )
+        pending.delete(id);
     }
-    return { account: owner, latest: event, pending };
+    return { account: owner, latest: event, pending, acknowledged };
   });
 
   return createMemo(() =>
@@ -66,6 +96,6 @@ export function createReminderAlertFeed(
         (notification) =>
           source.withLocalOverrides?.(notification) ?? notification
       ),
-    ])
+    ]).filter((item) => !buffered().acknowledged.has(item.key))
   );
 }

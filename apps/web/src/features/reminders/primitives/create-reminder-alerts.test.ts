@@ -81,9 +81,11 @@ describe('foreground reminder alerts', () => {
 
   it('acknowledges only the occurrences present when a close gesture starts', () => {
     const h = mount([first]);
-    const close = h.show.mock.calls[0][1];
+    const [closingItems, close] = h.show.mock.calls[0];
     close();
+    expect(closingItems()).toEqual([first]);
     h.setItems([first, tomorrow]);
+    expect(closingItems()).toEqual([first]);
     expect(h.acknowledge).toHaveBeenCalledWith([first.key]);
     expect(h.show).toHaveBeenCalledTimes(2);
     expect(h.show.mock.calls[1][0]()).toEqual([tomorrow]);
@@ -94,8 +96,10 @@ describe('foreground reminder alerts', () => {
 
   it('retracts a completed or externally acknowledged occurrence', () => {
     const h = mount([first]);
+    const closingItems = h.show.mock.calls[0][0];
     h.setAcknowledged([first.key]);
     expect(h.hide).toHaveBeenCalledTimes(1);
+    expect(closingItems()).toEqual([first]);
     h.setItems([tomorrow]);
     expect(h.show).toHaveBeenCalledTimes(2);
     h.setItems([]);
