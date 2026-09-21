@@ -88,7 +88,8 @@ export const driveSplitRoute = defineRoute({
   path: 'drive',
   aliases: ['drive/owned', 'drive/tab/owned'],
   params: z.object({}),
-  claim: () => ({ namespace: 'component', id: 'documents' }),
+  // Drive lists are independent workspaces, not singleton content. Only the
+  // document children claim content; returning to a list must stay in its pane.
   search: ['drive'],
   externalSearch: (entry: Readonly<SplitRouterEntry>) => {
     const type = routeParams<DriveRouteParams>(

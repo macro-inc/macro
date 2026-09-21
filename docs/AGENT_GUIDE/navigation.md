@@ -51,6 +51,9 @@ headings. Tags and folders have a separate disclosure button on the **right** of
 the row: clicking the label selects the destination; clicking Expand/Collapse
 only opens or closes its children. Selecting a Drive folder or tab closes an
 inline detail into that destination; it does not navigate back to Drive's root.
+Multiple Drive panes navigate their folders, tabs, and history independently;
+returning to a list does not activate another Drive pane. Opening a document
+already displayed in another pane still activates its owner.
 Unavailable documents retain their error/retry UI rather than navigating away.
 Long destination names are single-line and
 expose the full name on hover. Section chevrons point right and stay visible when

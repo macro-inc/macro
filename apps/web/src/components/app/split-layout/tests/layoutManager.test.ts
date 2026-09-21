@@ -1,10 +1,13 @@
 import { agentsRouteId } from '@app/features/agents-view/core/route';
+import { driveSplitRoute } from '@app/features/drive-view/primitives/drive-route';
 import {
   getListNavigationSource,
   listNavigationSourceId,
   registerListNavigationSource,
   withListNavigationSource,
 } from '@app/features/soup/collection/list-navigation-source';
+import { createMemorySplitRouterLocation } from '@app/lib/split-router/integrations/memory';
+import { createSplitRouter } from '@app/lib/split-router/router';
 import { createRoutesManifest } from '@app/lib/split-router/routes';
 import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import { toast } from '@core/component/Toast/Toast';
@@ -372,6 +375,90 @@ describe('layoutManager', () => {
   });
 
   describe('router layout synchronization', () => {
+    it.each(['drive', 'drive/md/second-document'])(
+      'navigates a second Drive pane independently from %s, including history',
+      (initialPath) => {
+        createRoot((dispose) => {
+          const manager = createSplitLayout(createMockOrchestrator(), [
+            { type: 'component', id: 'documents' },
+            { type: 'component', id: 'documents' },
+          ]);
+          const routes = createRoutesManifest({
+            definitions: [driveSplitRoute],
+          });
+          const router = createSplitRouter({
+            routes,
+            layout: createAppSplitRouterLayout(manager, routes),
+            location: createMemorySplitRouterLocation(
+              `/drive/~/${initialPath}`
+            ),
+          });
+          const [first, second] = manager.splits();
+          const firstRoute = router.route(first.id);
+          manager.activateSplit(second.id);
+
+          router.navigate(second.id, '/drive/folder/second-folder');
+          const folderRoute = router.route(second.id);
+          expect(folderRoute?.matches.at(-1)).toEqual({
+            id: 'drive-folder',
+            params: { view: 'folder', folderId: 'second-folder' },
+          });
+          expect(router.route(first.id)).toEqual(firstRoute);
+          expect(manager.activeSplitId()).toBe(second.id);
+
+          router.navigate(second.id, '/drive/md/another-document');
+          expect(router.route(second.id)?.matches.at(-1)?.params).toEqual({
+            documentType: 'md',
+            documentId: 'another-document',
+          });
+          router.navigate(second.id, -1);
+          expect(router.route(second.id)).toEqual(folderRoute);
+          expect(router.route(first.id)).toEqual(firstRoute);
+          expect(manager.activeSplitId()).toBe(second.id);
+
+          router.navigate(second.id, '/drive/shared');
+          expect(router.route(second.id)?.matches.at(-1)).toEqual({
+            id: 'drive-tab',
+            params: { tab: 'shared' },
+          });
+          expect(router.route(first.id)).toEqual(firstRoute);
+          expect(manager.splits()).toHaveLength(2);
+          router.dispose();
+          dispose();
+        });
+      }
+    );
+
+    it('still activates the owner when another Drive pane opens the same document', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'documents' },
+          { type: 'component', id: 'documents' },
+        ]);
+        const routes = createRoutesManifest({
+          definitions: [driveSplitRoute],
+        });
+        const router = createSplitRouter({
+          routes,
+          layout: createAppSplitRouterLayout(manager, routes),
+          location: createMemorySplitRouterLocation(
+            '/drive/md/first-document/~/drive/md/second-document'
+          ),
+        });
+        const [first, second] = manager.splits();
+        const secondRoute = router.route(second.id);
+        manager.activateSplit(second.id);
+
+        router.navigate(second.id, '/drive/md/first-document');
+
+        expect(manager.activeSplitId()).toBe(first.id);
+        expect(router.route(second.id)).toEqual(secondRoute);
+        expect(manager.splits()).toHaveLength(2);
+        router.dispose();
+        dispose();
+      });
+    });
+
     it('does not publish manager updates that leave router state unchanged', async () => {
       let dispose!: () => void;
       let updateEntry!: (state: Record<string, unknown>) => void;
