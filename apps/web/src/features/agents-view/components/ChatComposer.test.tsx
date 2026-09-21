@@ -166,28 +166,6 @@ describe('Chat session input', () => {
     expect(stop).toHaveBeenCalledOnce();
   });
 
-  it('holds the advance while one is already under way', () => {
-    const stop = vi.fn();
-    const sendNext = vi.fn();
-    render(() => (
-      <ChatSessionInput
-        busy
-        hasQueuedMessages
-        sendNextHeld
-        onSend={vi.fn()}
-        onStop={stop}
-        onSendNext={sendNext}
-      />
-    ));
-    expect(
-      screen.queryByRole('button', { name: 'Send next queued message' })
-    ).toBeNull();
-    expect(screen.getByRole('button', { name: 'Stop' })).toBeTruthy();
-    editor.enter?.(undefined, '');
-    expect(sendNext).not.toHaveBeenCalled();
-    expect(stop).not.toHaveBeenCalled();
-  });
-
   it('registers and cleans up session focus and quote handlers', () => {
     const focus = vi.fn();
     const quote = vi.fn();

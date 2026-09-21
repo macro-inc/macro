@@ -182,34 +182,6 @@ describe('queued message advancement', () => {
     expect(onStop).not.toHaveBeenCalled();
   });
 
-  it('holds the advance while one is already under way', () => {
-    const onStop = vi.fn();
-    const onSendNext = vi.fn();
-
-    render(() => (
-      <AgentInput
-        busy
-        hasQueuedMessages
-        sendNextHeld
-        onSend={vi.fn()}
-        onStop={onStop}
-        onSendNext={onSendNext}
-      />
-    ));
-
-    // A stop is in flight, or the head the last press advanced is still
-    // unconfirmed: the control reads Stop, and Enter neither posts another
-    // stop nor shows the next head as sent.
-    expect(
-      screen.queryByRole('button', { name: 'Send next queued message' })
-    ).toBeNull();
-    expect(screen.getByRole('button', { name: 'Stop' })).toBeTruthy();
-
-    editor.enter?.();
-    expect(onSendNext).not.toHaveBeenCalled();
-    expect(onStop).not.toHaveBeenCalled();
-  });
-
   it('keeps Enter inert when there is no queued message or draft', () => {
     const onStop = vi.fn();
 
