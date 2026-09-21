@@ -725,6 +725,24 @@ and prevent dismissal; canceling leaves the underlying data unchanged.
 
 ## Settings — `/app/settings/<section>`
 
+### Team membership
+
+Team membership has no size cap, including free teams. Invitations and domain
+auto-join must keep working beyond five members and the former stage-plan limits.
+Free-team joins do not create a paid subscription, bill a seat, or grant premium
+roles. Teams with an existing paid subscription retain their per-seat billing;
+enterprise teams retain their billing bypass.
+
+Under **Team**, owners/admins can turn **Auto-join on domain** off and can restrict
+invitations to admins with **Members can invite**. These controls still apply.
+To verify the membership flow, use a local free team with five members: invite
+and accept a sixth member, then sign up another user on its enabled auto-join
+domain. Both should appear in the team's member list and configured auto-join
+channels without an upgrade prompt. Repeat with auto-join disabled to verify a
+same-domain signup is not added automatically.
+
+### Navigation
+
 On phones, **More views → Settings** opens an inset glass sheet over the current
 page. The main page has a profile shortcut and grouped Account, Preferences,
 Workspace, and enabled agent/admin sections. Tap a row to open that settings
