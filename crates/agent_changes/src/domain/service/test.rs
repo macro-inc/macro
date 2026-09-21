@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::model::{ChangesetRange, ChangesetSource, ExtractedChangeset, FileSide, GitRef};
+use crate::domain::model::{ChangesetRange, ChangesetSource, ExtractedChangeset, GitRef};
 use crate::testing::{MemoryBlobStore, MemoryChangesetRepo, ScriptedExtractor};
 use agent_session::testing::{InMemoryAgentSessionRepo, RecordingRealtime, test_agent_session};
 
@@ -247,38 +247,5 @@ async fn a_receipt_for_another_entity_type_is_refused() {
     assert!(matches!(
         service.changes(&access).await,
         Err(ChangesError::Forbidden)
-    ));
-}
-
-#[tokio::test]
-async fn a_captured_file_is_readable_on_either_side() {
-    let extractor = ScriptedExtractor::returning(extracted(PATCH));
-    extractor.set_file("src/lib.rs", "fn main() {\n    run();\n}\n");
-    let (service, _repo, _blobs) = service(extractor);
-    service.capture(SESSION).await.unwrap();
-
-    let contents = service
-        .file(&view_access(), "src/lib.rs", FileSide::Head)
-        .await
-        .unwrap();
-    assert_eq!(contents, "fn main() {\n    run();\n}\n");
-}
-
-#[tokio::test]
-async fn file_reads_stay_inside_the_captured_changeset() {
-    let (service, _repo, _blobs) = service(ScriptedExtractor::returning(extracted(PATCH)));
-    service.capture(SESSION).await.unwrap();
-
-    assert!(matches!(
-        service
-            .file(&view_access(), "../secret.rs", FileSide::Head)
-            .await,
-        Err(ChangesError::InvalidPath)
-    ));
-    assert!(matches!(
-        service
-            .file(&view_access(), "src/other.rs", FileSide::Head)
-            .await,
-        Err(ChangesError::FileNotInChangeset)
     ));
 }

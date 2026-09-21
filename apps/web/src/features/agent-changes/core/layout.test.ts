@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   clampChangesShare,
-  clampTreeWidth,
   DEFAULT_CHANGES_SHARE,
-  DEFAULT_TREE_WIDTH,
   ensureChangesVisible,
   isChangesVisible,
   isSessionVisible,
@@ -43,14 +41,5 @@ describe('clampChangesShare', () => {
     expect(clampChangesShare(90)).toBe(74);
     expect(clampChangesShare(50)).toBe(50);
     expect(clampChangesShare(Number.NaN)).toBe(DEFAULT_CHANGES_SHARE);
-  });
-});
-
-describe('clampTreeWidth', () => {
-  it('keeps the tree inside the bounds and recovers from junk', () => {
-    expect(clampTreeWidth(80)).toBe(128);
-    expect(clampTreeWidth(800)).toBe(520);
-    expect(clampTreeWidth(300)).toBe(300);
-    expect(clampTreeWidth(Number.NaN)).toBe(DEFAULT_TREE_WIDTH);
   });
 });

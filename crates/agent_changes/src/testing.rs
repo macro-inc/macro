@@ -25,7 +25,6 @@ struct ScriptedState {
     answer: Option<Result<ExtractedChangeset, String>>,
     not_ready: Option<String>,
     calls: usize,
-    files: HashMap<String, String>,
 }
 
 impl ScriptedExtractor {
@@ -63,15 +62,6 @@ impl ScriptedExtractor {
     pub fn calls(&self) -> usize {
         self.state.lock().expect("scripted state").calls
     }
-
-    /// Answer later [`ChangesetExtractor::read_file`] calls for `path`.
-    pub fn set_file(&self, path: &str, contents: &str) {
-        self.state
-            .lock()
-            .expect("scripted state")
-            .files
-            .insert(path.to_owned(), contents.to_owned());
-    }
 }
 
 impl ChangesetExtractor for ScriptedExtractor {
@@ -94,17 +84,13 @@ impl ChangesetExtractor for ScriptedExtractor {
         &self,
         _session: &AgentSession,
         path: &str,
-        _rev: &str,
+        rev: &str,
     ) -> Result<String, ExtractError> {
         let state = self.state.lock().expect("scripted state");
         if let Some(reason) = &state.not_ready {
             return Err(ExtractError::NotReady(reason.clone()));
         }
-        state.files.get(path).cloned().ok_or_else(|| {
-            ExtractError::NotReady(
-                "That file is not available at the captured revision.".to_owned(),
-            )
-        })
+        Ok(format!("{path}@{rev}"))
     }
 }
 

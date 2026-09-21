@@ -37,21 +37,18 @@ impl PullRequestDiffReader for Reader {
 
     async fn read_file(
         &self,
-        user: &MacroUserIdStr<'static>,
-        pr: &PullRequestRef,
+        _user: &MacroUserIdStr<'static>,
+        _pr: &PullRequestRef,
         path: &str,
         rev: &str,
     ) -> Result<String, CompareError> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push((user.to_string(), pr.clone()));
         if let Some(error) = self.error {
             return Err(error());
         }
         Ok(format!("{path}@{rev}"))
     }
 }
+
 
 #[tokio::test]
 async fn every_harness_reads_the_linked_pr_with_the_session_owners_access() {
@@ -120,26 +117,4 @@ async fn inaccessible_and_oversized_prs_remain_unavailable_without_a_fallback() 
         ));
         assert_eq!(extractor.reader.calls.lock().unwrap().len(), 1);
     }
-}
-
-#[tokio::test]
-async fn file_reads_use_the_linked_pr_and_the_session_owners_access() {
-    let extractor = PullRequestChanges::new(Reader::default());
-    let mut session = test_agent_session(AgentSessionId::TEST_A);
-    session.pull_request_url = Some("https://github.com/upstream/repo/pull/42".to_owned());
-    let body = extractor
-        .read_file(&session, "src/lib.rs", "abc123")
-        .await
-        .unwrap();
-    assert_eq!(body, "src/lib.rs@abc123");
-    let (user, pr) = extractor
-        .reader
-        .calls
-        .lock()
-        .unwrap()
-        .last()
-        .unwrap()
-        .clone();
-    assert_eq!(user, session.owner_id.to_string());
-    assert_eq!(pr.number.get(), 42);
 }

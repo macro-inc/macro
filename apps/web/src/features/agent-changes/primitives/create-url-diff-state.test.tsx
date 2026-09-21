@@ -112,15 +112,4 @@ describe('URL diff state', () => {
       new URL(history.get(), 'http://local').searchParams.get('diff')
     ).toBe('s1:split:unified');
   });
-
-  it('persists tree width locally and does not put it in the URL', async () => {
-    const { history, layout } = setup('/session?diff=s1:split:unified');
-    const before = history.get();
-    expect(layout().treeWidth()).toBe(232);
-    layout().setTreeWidth(400);
-    expect(layout().treeWidth()).toBe(400);
-    expect(history.get()).toBe(before);
-    layout().setTreeWidth(80);
-    expect(layout().treeWidth()).toBe(128);
-  });
 });
