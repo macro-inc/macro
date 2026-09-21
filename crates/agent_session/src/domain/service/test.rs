@@ -61,7 +61,7 @@ async fn previews_hydrate_bot_identity_only_for_accessible_sessions() {
     let session = fx.repo.get(fx.session).await.unwrap();
     let previews = fx
         .service
-        .preview_sessions(&session.owner_id, vec![fx.session, fx.session])
+        .preview_sessions(session.owner_user().unwrap(), vec![fx.session, fx.session])
         .await
         .unwrap();
     assert_eq!(previews.len(), 1);

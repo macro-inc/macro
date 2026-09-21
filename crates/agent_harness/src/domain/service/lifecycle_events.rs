@@ -59,7 +59,7 @@ where
             self.sessions.session_bot(session.bot_id),
             self.sessions.session_participants(session.id),
         )?;
-        Ok(session_identity(session, &bot, participants))
+        Ok(session_identity(session, &bot, participants)?)
     }
 
     /// Publish one fact about `session_id`, built once its identity is known,

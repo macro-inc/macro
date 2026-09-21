@@ -241,7 +241,7 @@ async fn seed(args: &Args) -> Result<(), SeedError> {
         CreateAgentSessionParams {
             repo_branch: None,
             id: session_id,
-            owner_id: owner,
+            owner_id: model_owner::Owner::User(owner),
             bot_id: BotId::new_from_uuid(args.bot_id),
             thread_id: None,
             originating_message_id: None,

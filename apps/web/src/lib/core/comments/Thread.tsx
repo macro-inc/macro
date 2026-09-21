@@ -1,7 +1,6 @@
 import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';
 import { ChannelInput } from '@channel/Input';
 import { buildPostMessageSendPayload } from '@channel/Input/message-payload';
-import { useBlockAliasedName } from '@core/block';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { createTheme } from '@core/component/LexicalMarkdown/theme';
 import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
@@ -88,6 +87,7 @@ export type CommentsContextType = {
   messageOperations?: MessageCommentOperations;
   getCommentById: (id: CommentId) => Root | Reply | undefined;
   documentId: string;
+  documentType: 'md' | 'task' | 'snippet' | 'skill' | 'pdf';
   ownedComment: (id: CommentId) => boolean;
   inComment: boolean;
   highlightedCommentId: Accessor<CommentId | null>;
@@ -113,6 +113,7 @@ export const CommentsContext = createContext<CommentsContextType>({
   commentOperations: noopCommentOperations,
   getCommentById: (_id) => undefined,
   documentId: '',
+  documentType: 'md',
   ownedComment: () => false,
   inComment: false,
   highlightedCommentId: () => null,
@@ -143,9 +144,9 @@ type ThreadBodyProps = {
 export function ThreadBody(props: ThreadBodyProps) {
   // PDF flag-on discussions are deferred, so PDF stays on the legacy path even
   // when the flag is on; only markdown documents use the message thread.
-  const blockName = useBlockAliasedName();
+  const context = useContext(CommentsContext);
   return isFeatureEnabled(enableUnifiedDocumentDiscussions) &&
-    blockName !== 'pdf' ? (
+    context.documentType !== 'pdf' ? (
     <MessageThreadBody {...props} />
   ) : (
     <LegacyThreadBody {...props} />
@@ -155,7 +156,6 @@ export function ThreadBody(props: ThreadBodyProps) {
 /** Document threads render the shared message thread; a draft composes its root. */
 function MessageThreadBody(props: ThreadBodyProps) {
   const context = useContext(CommentsContext);
-  const blockName = useBlockAliasedName();
   // Workspace users for @-mentions, matching the legacy comment composer.
   const participants = useContacts();
   const parent = () => ({ type: 'document' as const, id: context.documentId });
@@ -197,7 +197,7 @@ function MessageThreadBody(props: ThreadBodyProps) {
           targetId={targetId()}
           buildLink={(message) =>
             buildSimpleEntityUrl(
-              { type: blockName, id: context.documentId },
+              { type: context.documentType, id: context.documentId },
               { [MD_URL_PARAMS.commentId]: message.id }
             )
           }

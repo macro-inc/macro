@@ -1,4 +1,6 @@
 import { LIST_VIEW_DOCS_URL } from '@app/constants/docs-links';
+import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSettingsState } from '@core/constant/SettingsState';
 import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
 import AtIcon from '@phosphor/at.svg';
@@ -15,6 +17,7 @@ import { SetupRow } from './home-rows';
  * sends, tool/agent connections, and the agent docs.
  */
 export function ChatTipsSection() {
+  const layout = useSplitLayout();
   const { openSettings } = useSettingsState();
 
   return (
@@ -45,7 +48,7 @@ export function ChatTipsSection() {
           trailing={
             <ChevronRightIcon class="size-4 shrink-0 text-ink-extra-muted" />
           }
-          onActivate={() => openSettings('Connected')}
+          onActivate={() => openAgentsPage(layout, 'connections')}
         />
         <SetupRow
           icon={<PuzzlePieceIcon class="size-4" />}

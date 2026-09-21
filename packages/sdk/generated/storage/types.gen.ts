@@ -4413,7 +4413,7 @@ export type DocumentContentUploadedMetadata = {
     /**
      * The owner of the document (used by the extractor to resolve S3 keys).
      */
-    owner: MacroUserIdStr;
+    owner: string;
 };
 
 /**
@@ -4432,7 +4432,7 @@ export type DocumentCopiedMetadata = {
     /**
      * The owner of the new copy (the copier).
      */
-    owner: MacroUserIdStr;
+    owner: string;
     /**
      * Project the copy belongs to, when any.
      */
@@ -4474,7 +4474,7 @@ export type DocumentCreatedMetadata = {
     /**
      * The owner (creator) of the document.
      */
-    owner: MacroUserIdStr;
+    owner: string;
     /**
      * Project the document was created in, when any.
      */
@@ -4876,7 +4876,7 @@ export type DocumentSyncContentUpdatedMetadata = {
      */
     document_version_id?: string | null;
     /**
-     * File type of the sync document (markdown today).
+     * File type of the sync document, resolved by the document backend.
      */
     file_type: FileType;
     on_behalf_of?: null | MacroUserIdStr;
@@ -4975,7 +4975,7 @@ export type DocumentUpdatedMetadata = {
     /**
      * The owner of the document.
      */
-    owner: MacroUserIdStr;
+    owner: string;
     /**
      * Project id before the update.
      */

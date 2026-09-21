@@ -63,6 +63,10 @@ where
     Live: ScheduledActionLiveUpdate,
 {
     async fn execute_action(&self, action: ScheduledAction) -> Result<InProgressExecution> {
+        // A run acts as the owner throughout - it opens a chat in their
+        // account and spends their AI budget - so refuse a bot- or team-owned
+        // action here, before the claim, rather than part-way through.
+        let owner_user = action.owner_user()?.clone();
         try_claim(&action)?;
 
         let id = *action.id.as_ref().unwrap();
@@ -76,7 +80,7 @@ where
 
         self.live_updates
             .publish_update(ScheduledActionUpdate::Started {
-                owner: action.owner.clone(),
+                owner: owner_user.clone(),
                 action_id: id,
                 chat_id: chat_id.clone(),
             })
@@ -138,7 +142,7 @@ where
             // now" the UI issues in response will not race the claim.
             live_updates
                 .publish_update(ScheduledActionUpdate::Stopped {
-                    owner: action.owner.clone(),
+                    owner: owner_user,
                     action_id: id,
                     chat_id: record_resource_id.clone(),
                     is_success,

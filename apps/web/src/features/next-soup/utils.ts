@@ -22,7 +22,6 @@ import type {
   SplitContent,
   SplitHandle,
 } from '@components/app/split-layout/layoutManager';
-import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import {
   enableCalendarUi,
@@ -48,7 +47,6 @@ import {
   type EntityData,
   emailQueryKeyExcludesDone,
   getSnippetHit,
-  isChannelEntity,
   isEmailEntity,
   isGithubPrEntity,
   isHitSnippetEntity,
@@ -100,7 +98,6 @@ import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-qu
 import { emailClient } from '@service-email/client';
 import { isAfter } from 'date-fns';
 import { match } from 'ts-pattern';
-import { withPreviewSourceEntityId } from './preview-history';
 
 export { scopeChannelNotificationsForEntity };
 
@@ -382,11 +379,6 @@ export const restoreSoupFocus = async (entityId?: string): Promise<void> => {
 
 interface OpenEntityOptions {
   openInNewSplit?: boolean;
-  /**
-   * Open in place of the whole Preview Pair: the Viewer closes and the content
-   * replaces the Controller. No-op outside a Preview Pair.
-   */
-  replacePreview?: boolean;
   location?: SearchLocation;
   splitHandle?: SplitHandle;
   mergeHistory?: boolean;
@@ -397,37 +389,6 @@ interface OpenEntityOptions {
    * opening a channel row. Callers that can open channels must provide it.
    */
   notificationSource?: NotificationSource;
-}
-
-const DUPLICATE_CONTENT_MESSAGE = 'Content already open.';
-
-/** Whether this entity is open outside the controller's own preview viewer. */
-export function isDuplicatePreviewEntityOpen(
-  entity: EntityData,
-  controller: SplitHandle
-): boolean {
-  const splitManager = globalSplitManager();
-  const viewerId = controller.viewerId();
-  if (!splitManager || !viewerId) return false;
-
-  const content = getEntitySplitContent(entity);
-  const existing = splitManager.getSplitByContent(content.type, content.id);
-  return existing !== undefined && existing.id !== viewerId;
-}
-
-/** Show the standard duplicate-content notification. */
-export function notifyDuplicateContentOpen() {
-  toast.alert(DUPLICATE_CONTENT_MESSAGE);
-}
-
-/** Reject and notify for an entity already owned by another split. */
-export function preventDuplicatePreviewEntityOpen(
-  entity: EntityData,
-  controller: SplitHandle
-): boolean {
-  if (!isDuplicatePreviewEntityOpen(entity, controller)) return false;
-  notifyDuplicateContentOpen();
-  return true;
 }
 
 /**
@@ -601,13 +562,7 @@ export const openEntityInSplitFromUnifiedList = async (
   entity: EntityData,
   options: OpenEntityOptions
 ): Promise<void> => {
-  const {
-    allowDuplicate,
-    openInNewSplit,
-    replacePreview,
-    splitHandle,
-    mergeHistory,
-  } = options;
+  const { allowDuplicate, openInNewSplit, splitHandle, mergeHistory } = options;
   let { location } = options;
 
   if (!location) {
@@ -621,29 +576,8 @@ export const openEntityInSplitFromUnifiedList = async (
     return;
   }
 
-  // Channels the viewer hasn't joined can't be read. In a Preview Pair, offer
-  // the Join prompt in the Viewer; otherwise the row's inline Join button is
-  // the only affordance.
+  // Non-members use the row's inline Join button before opening a channel.
   if (isNonMemberChannelEntity(entity)) {
-    if (isChannelEntity(entity) && splitHandle?.isControllerSplit()) {
-      const joinPromptContent = withPreviewSourceEntityId(
-        {
-          type: 'component',
-          id: 'non-member-channel',
-          params: {
-            channelId: entity.id,
-            channelName: entity.name,
-            memberCount: entity.participantIds?.length ?? 0,
-          },
-        },
-        entity.id
-      );
-      splitManager.openWithSplit(joinPromptContent, {
-        referredFrom: options.referredFrom,
-        activate: true,
-        handle: splitHandle,
-      });
-    }
     return;
   }
 
@@ -655,7 +589,6 @@ export const openEntityInSplitFromUnifiedList = async (
           referredFrom: options.referredFrom,
           activate: true,
           preferNewSplit: openInNewSplit,
-          replacePreview,
           handle: splitHandle,
           mergeHistory,
         }
@@ -678,12 +611,7 @@ export const openEntityInSplitFromUnifiedList = async (
       'calendar',
       CALENDAR_BLOCK_ID
     );
-    const existingIsViewer =
-      existing &&
-      splitHandle?.isControllerSplit() &&
-      splitHandle.viewerId() === existing.id;
-
-    if (existing && !existingIsViewer) {
+    if (existing) {
       existing.activate();
     } else {
       splitManager.openWithSplit(
@@ -692,7 +620,6 @@ export const openEntityInSplitFromUnifiedList = async (
           activate: true,
           referredFrom: null,
           preferNewSplit: openInNewSplit,
-          replacePreview,
           handle: splitHandle,
           mergeHistory,
         }
@@ -703,16 +630,6 @@ export const openEntityInSplitFromUnifiedList = async (
   }
 
   const content = getEntitySplitContent(entity);
-
-  if (
-    !allowDuplicate &&
-    !openInNewSplit &&
-    !replacePreview &&
-    splitHandle &&
-    preventDuplicatePreviewEntityOpen(entity, splitHandle)
-  ) {
-    return;
-  }
 
   const channelTarget = getChannelEntityTarget(entity);
   const channelMessageTarget =
@@ -750,17 +667,11 @@ export const openEntityInSplitFromUnifiedList = async (
   if (splitHandle && referredFrom && isListViewID(referredFrom)) {
     splitContent = withListNavigationSource(splitContent, splitHandle);
   }
-  // Preview source metadata belongs on Viewer entries; a replacement takes the
-  // Preview Pair's place, so its entry is ordinary split history.
-  if (splitHandle?.isControllerSplit() && !replacePreview) {
-    splitContent = withPreviewSourceEntityId(splitContent, entity.id);
-  }
 
   splitManager.openWithSplit(splitContent, {
     referredFrom,
     activate: true,
     preferNewSplit: openInNewSplit,
-    replacePreview,
     handle: splitHandle,
     mergeHistory,
     allowDuplicate,

@@ -82,6 +82,7 @@ fn typescript() -> Job {
         .add_step(check_types())
         .add_step(check_collaboration_types())
         .add_step(check_lexical_service_types())
+        .add_step(test_lexical_service())
         .add_step(steps::teardown_nix())
 }
 
@@ -223,6 +224,12 @@ fn check_collaboration_types() -> Step<Run> {
 fn check_lexical_service_types() -> Step<Run> {
     Step::new("Check Lexical Service Types")
         .run("bun run check")
+        .working_directory(xtask_paths::repo_dir!("services/lexical-service"))
+}
+
+fn test_lexical_service() -> Step<Run> {
+    Step::new("Test Lexical Service Endpoints")
+        .run("bun test src")
         .working_directory(xtask_paths::repo_dir!("services/lexical-service"))
 }
 

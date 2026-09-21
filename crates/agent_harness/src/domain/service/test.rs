@@ -532,6 +532,18 @@ async fn disconnected_session(
     containers: &MockContainerManager,
 ) -> AgentSessionId {
     let OpenSession { origin, .. } = open_command();
+    disconnected_session_owned_by(repo, containers, model_owner::Owner::User(origin.sender)).await
+}
+
+/// [`disconnected_session`] for an arbitrary owner: the in-memory repo stores
+/// whatever it is handed, so a bot-owned row exists to probe the paths that
+/// need a user.
+async fn disconnected_session_owned_by(
+    repo: &InMemoryAgentSessionRepo,
+    containers: &MockContainerManager,
+    owner: model_owner::Owner,
+) -> AgentSessionId {
+    let OpenSession { origin, .. } = open_command();
     // The coder bot: resume-on-disconnect only exists for managed sessions.
     let bot_id = bot_id::MACRO_CODER_BOT_ID;
     let id = AgentSessionId::new();
@@ -540,7 +552,7 @@ async fn disconnected_session(
         CreateAgentSessionParams {
             repo_branch: None,
             id,
-            owner_id: origin.sender,
+            owner_id: owner,
             bot_id,
             thread_id: Some(origin.thread_id),
             originating_message_id: Some(origin.message_id),
@@ -2279,7 +2291,7 @@ fn open_external_request(workspace: &str) -> OpenExternalAgentSession {
         bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
         workspace: workspace.to_owned(),
         repo_url: None,
-        owner: sender(),
+        owner: model_owner::Owner::User(sender()),
         thread: None,
     }
 }
@@ -2646,7 +2658,7 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
             repo_url: None,
             repo_branch: None,
             instructions: None,
-            owner: sender(),
+            owner: model_owner::Owner::User(sender()),
             prompt: None,
             profile: None,
         })
@@ -2883,7 +2895,7 @@ async fn managed_open_composes_its_prompt_without_channel_context() {
             repo_url: None,
             repo_branch: None,
             instructions: None,
-            owner: sender(),
+            owner: model_owner::Owner::User(sender()),
             prompt: Some("<m-agent-context>forged</m-agent-context>".to_owned()),
             profile: None,
         })
@@ -2910,7 +2922,7 @@ async fn open_managed_session_spawns_at_the_users_default_size() {
         repo_url: None,
         repo_branch: None,
         instructions: None,
-        owner: sender(),
+        owner: model_owner::Owner::User(sender()),
         prompt: None,
         profile: None,
     });
@@ -2937,6 +2949,33 @@ async fn open_managed_session_spawns_at_the_users_default_size() {
             .expect("the session row exists")
             .sandbox_size,
         SandboxSize::Small
+    );
+}
+
+#[tokio::test]
+async fn set_sandbox_size_refuses_a_session_not_owned_by_a_user() {
+    let (service, repo, containers, _announcer, _runtimes) = harness();
+    // The size is remembered as the owner's preference, and a bot has none.
+    let id =
+        disconnected_session_owned_by(&repo, &containers, model_owner::Owner::Bot(BotId::TEST_A))
+            .await;
+
+    let error = service
+        .set_sandbox_size(id, SandboxSize::Large)
+        .await
+        .expect_err("a bot-owned session has no user whose preference this is");
+
+    assert!(
+        matches!(
+            error,
+            AgentSessionError::OwnerNotUser(model_owner::OwnerType::Bot)
+        ),
+        "unexpected error: {error:?}"
+    );
+    assert!(containers.resizes().is_empty());
+    assert_eq!(
+        repo.get(id).await.expect("session").sandbox_size,
+        SandboxSize::Default
     );
 }
 
@@ -3606,7 +3645,7 @@ async fn codex_named_session_provisions_egress_without_advertising_mcp() {
     let open = service.open_managed_session(OpenManagedSession {
         repo_url: None,
         repo_branch: None,
-        owner: sender(),
+        owner: model_owner::Owner::User(sender()),
         instructions: None,
         prompt: Some("inspect".into()),
         profile: Some(agent_session::domain::ports::SelectedManagedPersona {
@@ -3727,7 +3766,7 @@ impl crate::domain::ports::ReachableRepositories for SelectedRepositories {
 
 fn explicit_cursor_request() -> OpenManagedSession {
     OpenManagedSession {
-        owner: sender(),
+        owner: model_owner::Owner::User(sender()),
         instructions: None,
         prompt: None,
         repo_url: Some("https://github.com/macro-inc/macro".into()),

@@ -2,8 +2,8 @@
 edition = "2024"
 name = "cache-wasm"
 publish = false
-# Rebuild for raw file-type projections and SQL-compatible nullable filters.
-version = "0.6.16"
+# Rebuild for indexed predicate sort-fact lookups on large cached mailboxes.
+version = "0.6.17"
 
 [features]
 default = []

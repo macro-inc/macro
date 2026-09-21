@@ -39,24 +39,6 @@ pub enum TeamPlan {
     Growth,
 }
 
-impl TeamPlan {
-    /// Get the seat cap associated with a team plan
-    pub fn seat_cap(&self) -> i32 {
-        match self {
-            TeamPlan::Idea => 3,
-            TeamPlan::PreSeed => 6,
-            TeamPlan::Seed => 10,
-            TeamPlan::SeriesA => 25,
-            TeamPlan::Growth => i32::MAX,
-        }
-    }
-}
-
-/// Maximum number of members (including the owner) a team may have without a
-/// Stripe subscription. Teams at or under this size are free; growing past it
-/// requires the owner to subscribe.
-pub const FREE_TEAM_MAX_MEMBERS: i32 = 5;
-
 /// Slug assigned when a team name cannot be converted to a valid team slug.
 pub const DEFAULT_TEAM_SLUG: &str = "MACRO";
 
@@ -535,9 +517,6 @@ pub enum InviteUsersToTeamError {
     /// Too many emails were provided
     #[error("Too many emails were provided")]
     TooManyEmails,
-    /// Not enough open seats
-    #[error("Not enough open seats")]
-    NotEnoughOpenSeats,
     /// The team only allows admins to invite and the caller is not an admin
     #[error("only team admins may invite users to this team")]
     NonAdminInvitesDisabled,
@@ -667,9 +646,6 @@ pub enum JoinTeamError {
     #[error("Underlying user roles and permissions error")]
     /// Underlying user roles and permissions error
     AddRolesToUserError(#[from] UserRolesAndPermissionsError),
-    /// The team has no subscription and is already at the free member limit
-    #[error("Team is at the free member limit of {FREE_TEAM_MAX_MEMBERS}")]
-    FreeTeamLimitReached,
 }
 
 /// Errors for toggling a team's auto-join domain
