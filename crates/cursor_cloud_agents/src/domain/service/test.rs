@@ -2992,8 +2992,12 @@ async fn a_run_that_never_ends_is_reported_in_words_the_prompter_can_act_on() {
         "leaked source location: {message}"
     );
     assert!(
-        message.contains("has not reported a result"),
+        message.contains("stopped waiting"),
         "must say what actually happened: {message}"
+    );
+    assert!(
+        message.contains("Send another message"),
+        "must say what to do about it: {message}"
     );
 }
 
@@ -3461,13 +3465,14 @@ async fn a_rejected_resume_position_reconnects_once_without_one() {
     );
 }
 
-/// Cursor heartbeats an open stream, so a long gap on a run that has not
-/// ended is a connection that stopped delivering. The run record still gets
-/// its check — that is what closes a turn whose stream hangs after the answer
-/// — but a still-running run gets a fresh connection rather than a stream that
-/// has gone silent.
+/// Cursor does not heartbeat an open stream, and a run at work says nothing
+/// for minutes at a time - a tool call waiting on CI, a long build. Seen
+/// live: a run that opened its pull request a minute after its turn had
+/// given up, having spent its whole reconnect budget in the first minute of
+/// a silence that Cursor's own record said was fine. A quiet connection on a
+/// run still going is kept, and the record confirms the run is alive.
 #[tokio::test(start_paused = true)]
-async fn a_quiet_stream_reconnects_when_the_run_is_still_going() {
+async fn a_quiet_stream_is_kept_while_the_run_is_still_going() {
     let (service, cursor, notifier) = service(None);
     let session = service.new_session(Path::new(""), Vec::new());
 
@@ -3480,31 +3485,118 @@ async fn a_quiet_stream_reconnects_when_the_run_is_still_going() {
             "evt-1",
         )
         .expect("stream open");
-    // The sender stays alive: the connection is open and says nothing.
+    // The record is asked once at the first quiet check, and says: working.
     cursor.script_run_result(RunOutcome {
         status: RunStatus::Running,
         text: None,
     });
-    let resumed = cursor.script_stream();
-    resumed
+
+    let turn = {
+        let service = Arc::clone(&service);
+        let session = session.clone();
+        tokio::spawn(async move { service.prompt(&session, "hi").await })
+    };
+    // Past the first quiet check, well short of the silence that replaces a
+    // connection: the same connection then speaks again.
+    tokio::time::sleep(STREAM_QUIET_TIMEOUT + std::time::Duration::from_secs(5)).await;
+    quiet
         .send(CursorEvent::Assistant {
             text: " done".to_owned(),
         })
         .expect("stream open");
-    resumed.send(finished("run-fake-1")).expect("stream open");
-    resumed.send(CursorEvent::Done).expect("stream open");
-    drop(resumed);
+    quiet.send(finished("run-fake-1")).expect("stream open");
+    quiet.send(CursorEvent::Done).expect("stream open");
+    drop(quiet);
+
+    let stop = turn
+        .await
+        .expect("the turn task completes")
+        .expect("the same stream finishes the turn");
+    assert_eq!(stop, StopReason::EndTurn);
+    assert_eq!(
+        cursor.resume_positions(),
+        vec![None],
+        "a connection that is merely quiet is not replaced"
+    );
+    assert_eq!(agent_texts(&notifier.updates()), vec!["thinking", " done"]);
+}
+
+/// Silence long enough does buy a fresh connection - insurance against a
+/// socket that died without saying so - but it never spends the reconnect
+/// budget, which rations a transport that is failing. A run that is quiet
+/// for far longer than the budget would allow of failures still streams.
+#[tokio::test(start_paused = true)]
+async fn a_long_silence_reconnects_without_spending_the_reconnect_budget() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    // Record checks per silent connection before it is replaced: the first
+    // at the quiet timeout, then every recheck until the silence is long.
+    let checks_per_silence = {
+        let mut silence = STREAM_QUIET_TIMEOUT;
+        let mut checks = 1;
+        while silence < STREAM_SILENCE_BEFORE_RECONNECT {
+            silence += STREAM_QUIET_RECHECK;
+            checks += 1;
+        }
+        checks
+    };
+    // More silent connections in a row than the reconnect budget allows of
+    // failing ones. Each is held open (the sender kept) and says nothing.
+    let silent_connections = STREAM_RECONNECT_ATTEMPTS + 2;
+    let mut held = Vec::new();
+    let first = cursor.script_stream();
+    first
+        .send_with_id(
+            CursorEvent::Assistant {
+                text: "thinking".to_owned(),
+            },
+            "evt-1",
+        )
+        .expect("stream open");
+    held.push(first);
+    for _ in 0..checks_per_silence {
+        cursor.script_run_result(RunOutcome {
+            status: RunStatus::Running,
+            text: None,
+        });
+    }
+    for _ in 1..silent_connections {
+        held.push(cursor.script_stream());
+        for _ in 0..checks_per_silence {
+            cursor.script_run_result(RunOutcome {
+                status: RunStatus::Running,
+                text: None,
+            });
+        }
+    }
+    let speaking = cursor.script_stream();
+    speaking
+        .send(CursorEvent::Assistant {
+            text: " done".to_owned(),
+        })
+        .expect("stream open");
+    speaking.send(finished("run-fake-1")).expect("stream open");
+    speaking.send(CursorEvent::Done).expect("stream open");
+    drop(speaking);
 
     let stop = service
         .prompt(&session, "hi")
         .await
-        .expect("the reconnect finishes the turn");
+        .expect("the run is still streamed after a long silence");
     assert_eq!(stop, StopReason::EndTurn);
-    drop(quiet);
+    drop(held);
+    let positions = cursor.resume_positions();
     assert_eq!(
-        cursor.resume_positions(),
-        vec![None, Some("evt-1".to_owned())],
-        "the quiet connection is replaced, not merely polled around"
+        positions.len(),
+        silent_connections + 1,
+        "every silent connection was replaced, past the failure budget: {positions:?}"
+    );
+    assert!(
+        positions[1..]
+            .iter()
+            .all(|position| position.as_deref() == Some("evt-1")),
+        "each replacement resumes from the last record heard: {positions:?}"
     );
     assert_eq!(agent_texts(&notifier.updates()), vec!["thinking", " done"]);
 }

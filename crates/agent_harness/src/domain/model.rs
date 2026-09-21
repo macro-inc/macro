@@ -3,12 +3,17 @@
 use agent_client_protocol::schema::v1::{HttpHeader, McpServer as AcpMcpServer, McpServerHttp};
 use agent_egress::domain::model::{McpServerSlug, RepoSlug};
 use agent_fold::domain::model::TurnSignal;
-use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
+use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
 use agent_session::domain::model::{AgentMcpServers, AgentSessionId, MessageId, SandboxSize};
 use agent_session::domain::ports::ControlEvent;
+use agent_session::domain::session::PermissionPolicy;
+
+#[cfg(test)]
+mod test;
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use messages::domain::events::MessageEventAttachment;
 /// Where a mention happened.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MentionOrigin {
@@ -22,6 +27,68 @@ pub struct MentionOrigin {
     pub sender: MacroUserIdStr<'static>,
     /// The message text, verbatim; becomes the session's first prompt.
     pub content: String,
+    /// Files attached to the message, as the prompt will refer to them.
+    #[serde(default)]
+    pub attachments: Vec<PromptAttachment>,
+}
+
+/// How a channel message's attached files are named to an agent.
+///
+/// Channel attachments are stored by static file id; the agent needs a URL it
+/// can fetch. The base URL is deployment configuration handed in by the
+/// composition root, so this stays a pure translation.
+#[derive(Debug, Clone)]
+pub struct StaticFileLinks {
+    base_url: String,
+}
+
+impl StaticFileLinks {
+    /// Channel attachment entity type for an image stored as a static file.
+    const STATIC_IMAGE: &str = "static/image";
+    /// Channel attachment entity type for a video stored as a static file.
+    const STATIC_VIDEO: &str = "static/video";
+
+    /// Links under the static file service at `base_url`.
+    #[must_use]
+    pub fn new(base_url: impl Into<String>) -> Self {
+        let mut base_url = base_url.into();
+        while base_url.ends_with('/') {
+            base_url.pop();
+        }
+        Self { base_url }
+    }
+
+    /// The prompt attachment for a channel attachment, or `None` for one that
+    /// is not a static file - documents reach the agent through mentions,
+    /// and have no URL an agent could fetch unauthenticated.
+    ///
+    /// Channel rows record only that a file is an image or a video, not its
+    /// exact type, so the media type is the matching wildcard range.
+    #[must_use]
+    pub fn prompt_attachment(
+        &self,
+        attachment: &MessageEventAttachment,
+    ) -> Option<PromptAttachment> {
+        let (kind, mime_type) = match attachment.entity_type.as_str() {
+            Self::STATIC_IMAGE => ("image", "image/*"),
+            Self::STATIC_VIDEO => ("video", "video/*"),
+            _ => return None,
+        };
+        let uri = format!("{}/file/{}", self.base_url, attachment.entity_id);
+        Some(PromptAttachment::new(uri, kind).mime_type(mime_type))
+    }
+
+    /// The prompt attachments for a message's attached files, in order.
+    #[must_use]
+    pub fn prompt_attachments(
+        &self,
+        attachments: &[MessageEventAttachment],
+    ) -> Vec<PromptAttachment> {
+        attachments
+            .iter()
+            .filter_map(|attachment| self.prompt_attachment(attachment))
+            .collect()
+    }
 }
 
 /// Open a new session for a mention.
@@ -127,6 +194,71 @@ impl AgentKind {
     #[must_use]
     pub fn is_managed(self) -> bool {
         !matches!(self, Self::External)
+    }
+
+    /// How this kind's sessions answer permission requests without a registered
+    /// local harness.
+    ///
+    /// Managed runtimes act inside sandboxes this deployment owns (or, for
+    /// Cursor, never ask), so approving on arrival costs nothing. An external
+    /// runtime is somebody's own machine, where a bot approving its own tool
+    /// calls is exactly what a person should be asked about.
+    #[must_use]
+    pub fn default_permission_policy(self) -> PermissionPolicy {
+        match self {
+            Self::SandboxedCoder
+            | Self::Cursor
+            | Self::CodexCloud
+            | Self::ClaudeCloud
+            | Self::InMemory => PermissionPolicy::AutoAccept,
+            Self::External => PermissionPolicy::Prompt,
+        }
+    }
+}
+
+/// Stored facts used by the domain to choose a session permission policy.
+pub enum PermissionPolicyConfig {
+    /// A fixed system bot with no editable persona configuration.
+    Fixed(AgentKind),
+    /// An editable persona and its harness operator's limit.
+    Persona {
+        /// The runtime serving this persona.
+        kind: AgentKind,
+        /// A registered harness's opt-in. `None` denotes a built-in runtime.
+        harness_allows_bypass: Option<bool>,
+        /// The agent owner's choice for a local harness; absent means prompt.
+        auto_accept_permissions: Option<bool>,
+    },
+}
+
+impl PermissionPolicyConfig {
+    /// Apply local harness consent and agent choice, or the built-in policy.
+    #[must_use]
+    pub fn resolve(self) -> PermissionPolicy {
+        match self {
+            Self::Fixed(kind) => kind.default_permission_policy(),
+            Self::Persona {
+                kind,
+                harness_allows_bypass,
+                auto_accept_permissions,
+            } => match harness_allows_bypass {
+                Some(allowed) => resolve_permission_policy(allowed, auto_accept_permissions),
+                None => kind.default_permission_policy(),
+            },
+        }
+    }
+}
+
+/// Resolve a persona's choice within the harness operator's permission limit.
+#[must_use]
+pub fn resolve_permission_policy(
+    allow_bypass: bool,
+    auto_accept: Option<bool>,
+) -> PermissionPolicy {
+    if allow_bypass && auto_accept == Some(true) {
+        PermissionPolicy::AutoAccept
+    } else {
+        PermissionPolicy::Prompt
     }
 }
 
@@ -253,14 +385,17 @@ pub enum CommandOutcome {
 
 impl DeliverAction {
     /// A prompt from a user, arriving from a channel that may need answering.
+    ///
+    /// Takes the action rather than its text so a prompt's attached files
+    /// ride along; `AgentAction::prompt(text)` is the plain-text form.
     pub fn prompt(
-        content: impl Into<String>,
+        action: AgentAction,
         actor: Option<MacroUserIdStr<'static>>,
         announce: Option<AnnounceOrigin>,
     ) -> Self {
         Self {
             id: AgentActionId::mint(),
-            action: AgentAction::prompt(content),
+            action,
             actor,
             announce,
         }
@@ -669,28 +804,5 @@ impl HarnessDefaults {
 impl From<SessionDefaults> for HarnessDefaults {
     fn from(default: SessionDefaults) -> Self {
         Self::new(default)
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::SessionRepository;
-
-    /// The URL survives verbatim - it is what a session's row carries, and
-    /// what the egress proxy re-reads - and one that names no repository is
-    /// refused rather than repaired. The shapes themselves are the parser's
-    /// own tests, in `agent_egress`.
-    #[test]
-    fn a_session_repository_keeps_the_url_it_was_read_from() {
-        let repository =
-            SessionRepository::parse("https://github.com/macro-inc/macro.git").expect("a repo");
-        assert_eq!(
-            repository.as_str(),
-            "https://github.com/macro-inc/macro.git"
-        );
-
-        for url in ["", "https://github.com/macro-inc", "not a url"] {
-            assert_eq!(SessionRepository::parse(url), None, "accepted {url}");
-        }
     }
 }

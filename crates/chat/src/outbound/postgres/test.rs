@@ -6,6 +6,7 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::chat::NewChatMessage;
+use model_owner::Owner;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::{
     LinkShare, SharePermissionV2, UpdateSharePermissionRequestV2,
@@ -21,6 +22,55 @@ use crate::domain::ports::ChatRepo;
 /// domain layer resolved, so tests pass it explicitly.
 fn default_share_permission() -> SharePermissionV2 {
     SharePermissionV2::new_chat_share_permission(None)
+}
+
+const BOT_OWNER: &str = "bot|00000000-0000-0000-0000-00000000a1a1";
+const TEAM_OWNER: &str = "00000000-0000-0000-0000-00000000a2a2";
+
+/// Registers a non-user principal in `"User"` so the `Chat."userId"` foreign
+/// key accepts it as an owner.
+async fn insert_owner_principal(pool: &Pool<Postgres>, principal: &str, macro_user_id: &str) {
+    let macro_user_id = uuid::Uuid::parse_str(macro_user_id).unwrap();
+    sqlx::query(
+        r#"
+        INSERT INTO "macro_user" ("id", "username", "email", "stripe_customer_id")
+        VALUES ($1, $2, $3, $4)
+        "#,
+    )
+    .bind(macro_user_id)
+    .bind(principal)
+    .bind(format!("{macro_user_id}@example.com"))
+    .bind(format!("stripe_{macro_user_id}"))
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query(r#"INSERT INTO "User" ("id", "email", "macro_user_id") VALUES ($1, $2, $3)"#)
+        .bind(principal)
+        .bind(format!("{macro_user_id}@example.com"))
+        .bind(macro_user_id)
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
+async fn set_chat_owner(pool: &Pool<Postgres>, chat_id: &str, owner: &str) {
+    sqlx::query(r#"UPDATE "Chat" SET "userId" = $1 WHERE id = $2"#)
+        .bind(owner)
+        .bind(chat_id)
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
+async fn chat_history_count(pool: &Pool<Postgres>, chat_id: &str) -> i64 {
+    let count: (i64,) = sqlx::query_as(
+        r#"SELECT COUNT(*) FROM "UserHistory" WHERE "itemId" = $1 AND "itemType" = 'chat'"#,
+    )
+    .bind(chat_id)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    count.0
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -706,10 +756,34 @@ async fn get_chat_returns_chat(pool: Pool<Postgres>) {
 
     assert_eq!(chat.id, chat_id);
     assert_eq!(chat.name, "Get Me");
-    assert_eq!(chat.user_id, "macro|test@example.com");
+    assert_eq!(
+        chat.user_id,
+        Owner::from_principal_str("macro|test@example.com").unwrap()
+    );
     assert!(chat.created_at.is_some());
     assert!(chat.updated_at.is_some());
     assert!(chat.deleted_at.is_none());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
+async fn get_chat_decodes_bot_and_team_owners(pool: Pool<Postgres>) {
+    let repo = PgChatRepo::new(pool.clone());
+    let chat_id = create_test_chat(&repo, "Owned Elsewhere").await;
+    insert_owner_principal(&pool, BOT_OWNER, "b1111111-1111-1111-1111-111111111111").await;
+    insert_owner_principal(&pool, TEAM_OWNER, "b2222222-2222-2222-2222-222222222222").await;
+
+    set_chat_owner(&pool, &chat_id, BOT_OWNER).await;
+    let chat = repo.get_metadata(&chat_id).await.unwrap();
+    assert_eq!(chat.user_id, Owner::from_principal_str(BOT_OWNER).unwrap());
+    assert!(matches!(chat.user_id, Owner::Bot(_)));
+
+    set_chat_owner(&pool, &chat_id, TEAM_OWNER).await;
+    let chat = repo.get_metadata(&chat_id).await.unwrap();
+    assert_eq!(chat.user_id, Owner::from_principal_str(TEAM_OWNER).unwrap());
+    assert!(matches!(chat.user_id, Owner::Team(_)));
 }
 
 #[sqlx::test(
@@ -1060,7 +1134,10 @@ async fn get_chat_returns_full_response(pool: Pool<Postgres>) {
 
     assert_eq!(response.id, chat_id);
     assert_eq!(response.name, "Full Chat");
-    assert_eq!(response.user_id, "macro|test@example.com");
+    assert_eq!(
+        response.user_id,
+        Owner::from_principal_str("macro|test@example.com").unwrap()
+    );
     assert!(response.model.is_some());
     assert!(response.messages.is_empty());
 }
@@ -1184,6 +1261,32 @@ async fn revert_delete_restores_chat(pool: Pool<Postgres>) {
     .unwrap();
 
     assert_eq!(count.0, 1);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
+async fn revert_delete_skips_user_history_for_non_user_owner(pool: Pool<Postgres>) {
+    let repo = PgChatRepo::new(pool.clone());
+    let chat_id = create_test_chat(&repo, "Bot Chat").await;
+    insert_owner_principal(&pool, BOT_OWNER, "b1111111-1111-1111-1111-111111111111").await;
+    set_chat_owner(&pool, &chat_id, BOT_OWNER).await;
+    // `create` recorded history for the creating user; clear it so only
+    // `revert_delete` can put rows back.
+    sqlx::query(r#"DELETE FROM "UserHistory" WHERE "itemId" = $1"#)
+        .bind(&chat_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    repo.delete(&chat_id).await.unwrap();
+
+    repo.revert_delete(&chat_id, None).await.unwrap();
+
+    let chat = repo.get_metadata(&chat_id).await.unwrap();
+    assert!(chat.deleted_at.is_none());
+    assert_eq!(chat.user_id, Owner::from_principal_str(BOT_OWNER).unwrap());
+    assert_eq!(chat_history_count(&pool, &chat_id).await, 0);
 }
 
 #[sqlx::test(

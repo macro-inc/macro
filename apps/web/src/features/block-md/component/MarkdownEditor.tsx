@@ -1149,10 +1149,12 @@ export function MarkdownEditor(props: {
         </Show>
 
         <Show when={ENABLE_MARKDOWN_COMMENTS}>
-          <CommentsProvider
-            activeComment={activeCommentIdParam}
-            loroManager={props.loroManager}
-          />
+          <Suspense>
+            <CommentsProvider
+              activeComment={activeCommentIdParam}
+              loroManager={props.loroManager}
+            />
+          </Suspense>
         </Show>
 
         <Show when={canEdit()}>

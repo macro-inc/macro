@@ -141,6 +141,8 @@ Its **New conversation** button opens the unified composer with one **Agent**
 selector on the right. Choosing a coding agent reveals the repository drawer;
 there is no Chat/Code switch. New sessions use the selected agent's default model
 and the URL for its kind. Opening an existing row restores its own kind and URL.
+Right-click a conversation for Rename, Favorite, Copy link, Share, Delete, and
+the other entity actions used on Home.
 
 Home's inner rail starts with a full-width **New chat** plus button that returns
 to Home's starting pane without creating a chat. Email and Tasks use the same
@@ -295,6 +297,17 @@ Opens a dialog with a focused `Search...` textbox and bubble-style category radi
 (All / Command / Agents / Files / Tasks / Channels / People). Type a name, press Enter to open
 the top hit. Also exposes commands: `Create`, `Change theme`, `MCP setup`. Keys: Tab cycles
 category, Esc closes. The category strip and footer have transparent backgrounds.
+
+With the local GraphQL cache enabled, Cmd+K and document/channel `@` mentions
+search cached entities without waiting for a server search. Background hydration
+updates an already-open menu. For an empty search, scroll toward the end (or use
+Down); mentions offer **View all** for a category and then load more local pages.
+Counts describe loaded results, not the full server corpus. Scans through
+incomplete or already-visible cache hits are bounded per action; continue
+navigating/scrolling, or narrow the query, to resume from the saved cursor.
+A missing item may still be uncached, but should appear after hydration without retyping. Cmd+K's
+local search excludes unsupported email hits before limiting entity results;
+email mentions keep their separate search-service path.
 
 ## Keyboard model (from the in-app guide; verified partially)
 

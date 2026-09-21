@@ -164,6 +164,13 @@ PR status in an open Magic Chip updates from connection-gateway events after
 webhook sync. Reconnecting refreshes active PR lookups to recover missed updates.
 A late webhook does not require reloading the page.
 
+When the agent requests permission, the Magic Chip replaces its loading state
+with the action and `Allow once`, `Deny`, and `More options` controls. Permission
+requests and questions share the chip's pending-interaction state and apply only
+to its anchored turn. Session editors and owners can answer directly in the chip;
+viewers and commenters see a waiting notice. Answering clears the request in both
+the chip and the open session, and the chip follows the agent's next activity.
+
 Coding agents use `macro_internal.set_pull_request` to register an existing or
 new GitHub PR with their session. Macro Internal MCP is hosted by the harness
 service at `/mcp/internal` on its egress listener, separately from workspace MCP.
@@ -333,6 +340,40 @@ and DMs section headers.
 On touch layouts, the `Recent`, `Channels`, and `DMs` pill tabs each retain
 their own loaded pages and load more as their active list approaches the end.
 
+## Call lifecycle
+
+The channel's call tab and floating call controls share one session. Repeated
+Join clicks while connecting should produce one connection; leaving from either
+control ends the same call. Navigate away and return while connected to check
+that the call and its controls remain usable.
+
+For recovery checks, keep another participant connected and briefly interrupt
+the first participant's network. Recovery may rejoin that same live call. It
+must not start a replacement call if the original ended, or rejoin after the
+user chose Leave. A failed join must restore the Try again control even if
+background cleanup is slow.
+
+If another call prevents joining, the error should say to leave the current
+call first. Trying to join another channel must keep the current call connected,
+with its participants and controls intact. A restored live session must clear
+any earlier join or recovery error. Failed Join, Call Again, and Leave actions must not produce unhandled
+promise rejections.
+
+On iOS, ending a call during connection must leave Join usable. If CallKit
+restores or answers another call while an earlier join or leave finishes, the
+controls must follow the current native call; finishing the old operation must
+not restore the old call or remove the new call's end handler.
+An empty native snapshot before the first media update must not cancel a new
+join. Once native has reported the session, disconnecting or ending it must
+cancel pending connection/recovery and allow a new join.
+Cancelling after a token is issued must also remove server membership, even if
+media has not connected yet. Repeated end events share that cleanup; a newer
+native call must survive while cleanup for the cancelled attempt finishes.
+Restore the same channel while transport cleanup is pending and check that no
+server leave is sent for the restored session. Join must also accept a retry
+during cancellation cleanup. If a server leave was already sent, the retry
+shows Connecting and waits for that request before registering again.
+
 ## Channel tabs
 
 Radio group at the top of the channel pane: `Messages` / `Attachments` / `Participants`,
@@ -349,6 +390,14 @@ instead.
 - Team access: `Team channel` switch (disabled until you belong to a team).
 - Bots: `New bot`, `Search existing bots…` combobox, `Invite bot` — webhook-powered channel
   participants.
+
+## Incoming call ringing
+
+For cross-tab ringing checks, sign the recipient into two tabs and start a call
+from another account. Both tabs may show the incoming call; only one should play
+the chime. Closing the audible tab lets the other take over while the call is
+still ringing. Answering or dismissing stops ringing across tabs. An unanswered
+call stops ringing after 30 seconds, including after a tab takes over.
 
 ## Onboarding channel
 

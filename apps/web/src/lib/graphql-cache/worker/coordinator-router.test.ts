@@ -799,13 +799,160 @@ describe('CoordinatorRouter', () => {
     ]);
   });
 
-  it('uses activation and heartbeat watchdogs to terminate and wipe', async () => {
+  it('preserves the owner and in-flight work through repeated missed heartbeats', async () => {
+    vi.useFakeTimers();
+    const verifyLockHeld = vi.fn(async () => true);
+    const router = new CoordinatorRouter({
+      heartbeatIntervalMs: 5,
+      heartbeatTimeoutMs: 7,
+      verifyTabLockHeld: async () => true,
+      verifyOwnerLockHeld: verifyLockHeld,
+      watchTabLock: () => () => {},
+    });
+    const tab = new FakePort();
+    await register(router, tab, 'tab-a');
+    const engine = new FakePort();
+    await attach(router, tab, 'tab-a', 1, engine);
+    ready(engine, 'tab-a', 1, 'opened-existing');
+    await router.handleTabMessage(tab, {
+      ...version,
+      kind: 'cache-request',
+      tabId: 'tab-a',
+      request: { id: 42, kind: 'clear' },
+    });
+    const request = messagesOfKind(engine, 'engine-request')[0]!;
+
+    // Background suspension can outlast every recovery attempt. A held
+    // physical lock is still authoritative; silence is not owner loss.
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(router.snapshot()?.state).toMatchObject({
+      kind: 'active',
+      ownerEpoch: 1,
+    });
+    expect(messagesOfKind(tab, 'terminate-engine')).toHaveLength(0);
+    expect(messagesOfKind(tab, 'terminal-error')).toHaveLength(0);
+    expect(messagesOfKind(tab, 'cache-message')).toHaveLength(0);
+    expect(verifyLockHeld).toHaveBeenCalledWith(databaseOwnerLockName('scope'));
+    expect(messagesOfKind(engine, 'heartbeat').length).toBeGreaterThan(5);
+
+    const heartbeat = messagesOfKind(engine, 'heartbeat').at(-1)!;
+    engine.receive({
+      ...version,
+      kind: 'heartbeat-ack',
+      ownerEpoch: 1,
+      heartbeatId: heartbeat.heartbeatId,
+    });
+    engine.receive({
+      ...version,
+      kind: 'engine-response',
+      ownerEpoch: 1,
+      routeId: request.routeId,
+      response: {
+        id: request.routeId,
+        ok: true,
+        result: INITIAL_CACHE_REVISION,
+      },
+    });
+    expect(messagesOfKind(tab, 'cache-message')).toEqual([
+      expect.objectContaining({
+        message: { id: 42, ok: true, result: INITIAL_CACHE_REVISION },
+      }),
+    ]);
+    expect(vi.getTimerCount()).toBe(1);
+  });
+
+  it.each(['ack', 'drain', 'replacement'] as const)(
+    'ignores a late lock probe after %s',
+    async (action) => {
+      vi.useFakeTimers();
+      let resolveProbe!: (held: boolean) => void;
+      const probe = new Promise<boolean>((resolve) => {
+        resolveProbe = resolve;
+      });
+      const verifyOwnerLockHeld = vi.fn(() => probe);
+      const router = new CoordinatorRouter({
+        heartbeatIntervalMs: 5,
+        heartbeatTimeoutMs: 7,
+        verifyTabLockHeld: async () => true,
+        verifyOwnerLockHeld,
+        watchTabLock: () => () => {},
+      });
+      const tab = new FakePort();
+      await register(router, tab, 'tab-a');
+      const engine = new FakePort();
+      await attach(router, tab, 'tab-a', 1, engine);
+      ready(engine, 'tab-a', 1, 'opened-existing');
+      await vi.advanceTimersByTimeAsync(12);
+      expect(verifyOwnerLockHeld).toHaveBeenCalledOnce();
+
+      if (action === 'ack') {
+        engine.receive({
+          ...version,
+          kind: 'heartbeat-ack',
+          ownerEpoch: 1,
+          heartbeatId: messagesOfKind(engine, 'heartbeat')[0]!.heartbeatId,
+        });
+      } else {
+        await router.handleTabMessage(tab, {
+          ...version,
+          kind: action === 'drain' ? 'graceful-departure' : 'engine-lost',
+          tabId: 'tab-a',
+          ownerEpoch: 1,
+          ...(action === 'replacement' ? { reason: 'worker failed' } : {}),
+        });
+        if (action === 'replacement') {
+          await vi.advanceTimersByTimeAsync(0);
+          const replacement = new FakePort();
+          await attach(router, tab, 'tab-a', 2, replacement);
+          ready(replacement, 'tab-a', 2, 'wiped-before-open');
+        }
+      }
+      const before = router.snapshot();
+      const terminations = messagesOfKind(tab, 'terminate-engine').length;
+      resolveProbe(false);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(router.snapshot()).toEqual(before);
+      expect(messagesOfKind(tab, 'terminate-engine')).toHaveLength(
+        terminations
+      );
+    }
+  );
+
+  it('retries failed lock probes without losing the owner', async () => {
+    vi.useFakeTimers();
+    const verifyOwnerLockHeld = vi.fn(async () => {
+      throw new Error('lock service unavailable');
+    });
+    const router = new CoordinatorRouter({
+      heartbeatIntervalMs: 5,
+      heartbeatTimeoutMs: 7,
+      verifyTabLockHeld: async () => true,
+      verifyOwnerLockHeld,
+      watchTabLock: () => () => {},
+    });
+    const tab = new FakePort();
+    await register(router, tab, 'tab-a');
+    const engine = new FakePort();
+    await attach(router, tab, 'tab-a', 1, engine);
+    ready(engine, 'tab-a', 1, 'opened-existing');
+    await vi.advanceTimersByTimeAsync(36);
+    expect(verifyOwnerLockHeld).toHaveBeenCalledTimes(3);
+    expect(router.snapshot()?.state).toMatchObject({
+      kind: 'active',
+      ownerEpoch: 1,
+    });
+    expect(messagesOfKind(tab, 'terminate-engine')).toHaveLength(0);
+    expect(vi.getTimerCount()).toBe(1);
+  });
+
+  it('uses activation deadlines and confirmed engine lock loss to terminate and wipe', async () => {
     vi.useFakeTimers();
     const router = new CoordinatorRouter({
       activationTimeoutMs: 10,
       heartbeatIntervalMs: 5,
       heartbeatTimeoutMs: 7,
       verifyTabLockHeld: async () => true,
+      verifyOwnerLockHeld: async () => false,
       watchTabLock: () => () => {},
     });
     const tabA = new FakePort();
@@ -844,7 +991,7 @@ describe('CoordinatorRouter', () => {
     expect(messagesOfKind(tabB, 'terminate-engine')).toContainEqual(
       expect.objectContaining({
         ownerEpoch: 2,
-        reason: 'engine heartbeat watchdog timed out',
+        reason: 'engine owner lock was released',
       })
     );
     expect(router.snapshot()?.state.kind).toBe('activating');

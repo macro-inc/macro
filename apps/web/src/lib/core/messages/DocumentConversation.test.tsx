@@ -1,5 +1,6 @@
+import type { ReferencedThread } from '@service-storage/generated/schemas/referencedThread';
 import type { MessageListItem } from '@service-storage/messages';
-import { cleanup, render } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { type Accessor, createSignal, For, type ParentProps } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DocumentConversation } from './DocumentConversation';
@@ -9,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   linkResolved: true,
   contacts: [{ id: 'user|a@example.com', name: 'Ann', email: 'a@example.com' }],
   capturedParticipants: undefined as (() => Array<{ id: string }>) | undefined,
+  references: vi.fn(),
+  source: vi.fn(),
 }));
 
 vi.mock('@channel/Input', () => ({
@@ -18,6 +21,10 @@ vi.mock('@channel/Input', () => ({
   },
 }));
 vi.mock('@channel/Input/message-payload', () => ({}));
+vi.mock('@channel/Thread/utils/message-actions', () => ({
+  buildMessageLink: (channelId: string, messageId: string) =>
+    `/channel/${channelId}/${messageId}`,
+}));
 vi.mock('@channel/use-channel-bot-mention-users', () => ({
   useMessageBotMentionUsers: () => [],
 }));
@@ -44,6 +51,9 @@ vi.mock('@queries/messages/document-messages', () => ({
 vi.mock('@queries/messages/mutations', () => ({
   useSendMessageMutation: () => ({}),
 }));
+vi.mock('@queries/messages/references', () => ({
+  useChannelReferenceThreadsQuery: mocks.references,
+}));
 vi.mock('@queries/messages/timeline', () => ({
   useMessageTimelineQuery: mocks.timeline,
 }));
@@ -56,6 +66,18 @@ vi.mock('./MessageThread', () => ({
       </For>
     </article>
   ),
+  MessageThreadFromSource: (props: {
+    parent: ReferencedThread['parent'];
+    rootId: string;
+    canWrite: boolean;
+  }) => {
+    mocks.source({
+      parent: props.parent,
+      rootId: props.rootId,
+      canWrite: props.canWrite,
+    });
+    return <article>source {props.rootId}</article>;
+  },
 }));
 
 afterEach(() => {
@@ -92,6 +114,21 @@ function thread(
 
 const anchor = { type: 'markdown', mark_id: 'mark' } as const;
 
+const sources: ReferencedThread[] = [
+  {
+    parent: { type: 'channel', id: 'launch' },
+    root_id: 'source-a',
+    channel_name: 'Launch',
+    can_reply: true,
+  },
+  {
+    parent: { type: 'channel', id: 'archive' },
+    root_id: 'source-b',
+    channel_name: null,
+    can_reply: false,
+  },
+];
+
 function discussion(
   initialPages: MessageListItem[][],
   targetId?: string,
@@ -102,14 +139,32 @@ function discussion(
   } = {}
 ) {
   const [pages, setPages] = createSignal(initialPages);
+  const [referencesFailed, setReferencesFailed] = createSignal(false);
   mocks.timeline.mockReturnValue({
     isSuccess: true,
     get data() {
       return { pages: pages().map((items) => ({ items })) };
     },
   });
+  mocks.references.mockImplementation(
+    (_parent: unknown, enabled: Accessor<boolean>) => ({
+      get isPending() {
+        return !enabled();
+      },
+      get isSuccess() {
+        return enabled() && !referencesFailed();
+      },
+      get isError() {
+        return enabled() && referencesFailed();
+      },
+      get data() {
+        return enabled() ? sources : undefined;
+      },
+    })
+  );
   return {
     setPages,
+    setReferencesFailed,
     ...render(() => (
       <DocumentConversation
         parent={{ type: 'document', id: 'document' }}
@@ -227,5 +282,97 @@ describe('DocumentConversation placement', () => {
       'optimistic discussion',
       'remote discussion',
     ]);
+  });
+
+  it('adds channel threads that mention the document only while requested, each against its source channel', () => {
+    const view = discussion([[thread('discussion', null)]]);
+    const toggle = view.getByRole<HTMLInputElement>('checkbox', {
+      name: 'Include channel mentions',
+    });
+    expect(toggle.checked).toBe(false);
+    expect(view.queryByText('source source-a')).toBeNull();
+    expect(mocks.source).not.toHaveBeenCalled();
+
+    fireEvent.click(toggle);
+    expect(view.getAllByRole('article').map((el) => el.textContent)).toEqual([
+      'discussion',
+      'source source-a',
+      'source source-b',
+    ]);
+    expect(
+      view.getByRole('link', { name: 'From Launch' }).getAttribute('href')
+    ).toBe('/channel/launch/source-a');
+    expect(
+      view
+        .getByRole('link', { name: 'From Channel conversation' })
+        .getAttribute('href')
+    ).toBe('/channel/archive/source-b');
+    expect(mocks.source.mock.calls.map(([props]) => props)).toEqual([
+      {
+        parent: { type: 'channel', id: 'launch' },
+        rootId: 'source-a',
+        canWrite: true,
+      },
+      {
+        parent: { type: 'channel', id: 'archive' },
+        rootId: 'source-b',
+        canWrite: false,
+      },
+    ]);
+
+    fireEvent.click(toggle);
+    expect(view.getAllByRole('article').map((el) => el.textContent)).toEqual([
+      'discussion',
+    ]);
+  });
+
+  it('keeps the toggle inside a touch conversation and keeps shown source threads visible once the roots are gone', () => {
+    const view = discussion([[]], undefined, {
+      hideComposer: true,
+      hideWhenEmpty: true,
+    });
+    expect(view.queryByRole('checkbox')).toBeNull();
+
+    view.setPages([[thread('discussion', null)]]);
+    fireEvent.click(
+      view.getByRole('checkbox', { name: 'Include channel mentions' })
+    );
+    expect(view.getByText('source source-a')).toBeTruthy();
+
+    view.setPages([[]]);
+    expect(view.getByRole('button', { name: /Discussion/ })).toBeTruthy();
+    expect(view.getAllByRole('article').map((el) => el.textContent)).toEqual([
+      'source source-a',
+      'source source-b',
+    ]);
+
+    // The disabled query still holds its last result; unchecking must not keep
+    // an empty Discussion mounted on touch.
+    fireEvent.click(
+      view.getByRole('checkbox', { name: 'Include channel mentions' })
+    );
+    expect(view.queryByRole('button', { name: /Discussion/ })).toBeNull();
+    expect(view.queryAllByRole('article')).toEqual([]);
+  });
+
+  it('keeps the last authorized source threads on a failed refresh and offers a retry', () => {
+    const view = discussion([[thread('discussion', null)]]);
+    fireEvent.click(
+      view.getByRole('checkbox', { name: 'Include channel mentions' })
+    );
+    view.setReferencesFailed(true);
+    expect(view.getAllByRole('article').map((el) => el.textContent)).toEqual([
+      'discussion',
+      'source source-a',
+      'source source-b',
+    ]);
+    expect(
+      view.getByRole('button', {
+        name: 'Could not load channel mentions. Retry',
+      })
+    ).toBeTruthy();
+    expect(
+      view.queryByText('No channel threads mention this document.')
+    ).toBeNull();
   });
 });

@@ -24,7 +24,10 @@ mod loaders;
 mod objects;
 /// Trailing-year activity overview input, output, and resolver.
 mod overview;
+/// Realtime activity subscription root and patch union.
+mod subscriptions;
 
+pub use activity::{ActivitySubscriptionService, NoOpActivitySubscriptionService};
 pub use feed::{
     ActivityFeedInput, DEFAULT_ACTIVITY_FEED_LIMIT, GraphqlActivityPage, MAX_ACTIVITY_FEED_LIMIT,
     resolve_activity_feed,
@@ -40,3 +43,4 @@ pub use overview::{
     ActivityOverviewInput, GraphqlActivityDay, GraphqlActivityEntityRank, GraphqlActivityOverview,
     resolve_activity_overview,
 };
+pub use subscriptions::{ActivitySubscriptionRoot, GraphqlActivityPatch, subscribe_to_activity};

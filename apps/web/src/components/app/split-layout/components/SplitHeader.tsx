@@ -249,7 +249,7 @@ function SplitDriveReturnButton() {
     const state = sourceList()?.state;
     const label = state?.['drive.returnLabel'];
     if (typeof label === 'string') return label;
-    const driveState = state?.['drive.view'] as DriveState | undefined;
+    const driveState = state?.['drive.view.v2'] as DriveState | undefined;
     return driveState ? driveLocationLabel(driveState.location) : 'My Files';
   };
   const returnToDrive = () => {

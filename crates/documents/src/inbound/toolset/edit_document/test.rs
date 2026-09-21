@@ -23,6 +23,7 @@ use macro_sync_service_jwt::DocumentPermissionToken;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
 use model::{document::DocumentBasic, sync_service::SyncServiceVersionID};
 use model_entity::Entity;
+use model_owner::Owner;
 use sync_service_client::SyncServiceClient;
 use uuid::Uuid;
 
@@ -33,8 +34,7 @@ fn document_with_file_type(file_type: Option<&str>) -> DocumentBasic {
     DocumentBasic {
         document_id: TEST_DOCUMENT_ID.to_string(),
         document_name: "Test document".to_string(),
-        owner: MacroUserIdStr::try_from(TEST_USER_ID.to_string())
-            .expect("test user id should be valid"),
+        owner: Owner::from_principal_str(TEST_USER_ID).expect("test user id should be valid"),
         file_type: file_type.map(str::to_string),
         sub_type: None,
         branched_from_id: None,

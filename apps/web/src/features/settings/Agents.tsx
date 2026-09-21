@@ -69,6 +69,7 @@ type ConnectedHarness = {
   id: string;
   name: string;
   kind: 'builtin' | 'macrod';
+  allowPermissionBypass: boolean;
   target: AgentModelTarget;
   connected?: boolean;
 };
@@ -79,6 +80,7 @@ const IN_MEMORY_HARNESS: ConnectedHarness = {
   id: 'in-memory',
   name: 'In-memory',
   kind: 'builtin',
+  allowPermissionBypass: true,
   target: { harness: 'in-memory' },
 };
 
@@ -132,6 +134,7 @@ export function Agents() {
           id: 'claude-cloud',
           name: 'Claude Cloud',
           kind: 'builtin',
+          allowPermissionBypass: true,
           target,
         };
       }
@@ -140,6 +143,7 @@ export function Agents() {
           id: 'cursor',
           name: 'Cursor',
           kind: 'builtin',
+          allowPermissionBypass: true,
           target,
         };
       }
@@ -154,6 +158,7 @@ export function Agents() {
             ? `${harness.name} · Team`
             : (harness?.name ?? 'macrod'),
         kind: 'macrod',
+        allowPermissionBypass: harness?.allow_permission_bypass ?? false,
         target,
         connected: harness?.connected,
       };
@@ -659,6 +664,14 @@ function AgentDialog(props: {
     rememberedMcpServers = servers;
     setMcp({ scope: 'selected', servers });
   };
+  const [autoAcceptChoice, setAutoAcceptChoice] = createSignal(
+    props.agent?.auto_accept_permissions === true
+  );
+  const allowPermissionBypass = () =>
+    selectedHarness()?.allowPermissionBypass === true;
+  const autoAcceptPermissions = () =>
+    selectedHarness()?.kind === 'builtin' ||
+    (allowPermissionBypass() && autoAcceptChoice());
   let avatarInputRef: HTMLInputElement | undefined;
   let dialogContentRef: HTMLDivElement | undefined;
 
@@ -672,6 +685,7 @@ function AgentDialog(props: {
   const handleHarnessChange = (id: string) => {
     setHarnessId(id);
     setDefaultModelId(preferredModelId(id));
+    setAutoAcceptChoice(false);
   };
 
   const handleAvatarInput = (file: File | undefined) => {
@@ -721,6 +735,7 @@ function AgentDialog(props: {
       // section never wipes a selection somebody else made.
       mcp: mcp(),
       teamId: selectedTeamId(),
+      autoAcceptPermissions: autoAcceptPermissions(),
     });
     if (saved) close();
   };
@@ -992,6 +1007,38 @@ function AgentDialog(props: {
                   </Show>
                 </label>
               </div>
+              <Show when={selectedHarness()?.kind === 'macrod'}>
+                <fieldset class="mt-4 grid gap-2 border-t border-ink/[0.06] pt-4">
+                  <legend class="text-xs font-medium text-ink">
+                    Permission requests
+                  </legend>
+                  <ChoiceRow
+                    name="agent-permission-policy"
+                    value="prompt"
+                    title="Always prompt"
+                    description="Session editors approve or reject each permission request."
+                    checked={!autoAcceptPermissions()}
+                    onChange={() => setAutoAcceptChoice(false)}
+                  />
+                  <Show
+                    when={allowPermissionBypass()}
+                    fallback={
+                      <p class="text-xs text-ink-muted">
+                        This harness requires permission prompts.
+                      </p>
+                    }
+                  >
+                    <ChoiceRow
+                      name="agent-permission-policy"
+                      value="bypass"
+                      title="Always bypass"
+                      description="Approve tool calls without asking."
+                      checked={autoAcceptPermissions()}
+                      onChange={() => setAutoAcceptChoice(true)}
+                    />
+                  </Show>
+                </fieldset>
+              </Show>
             </AgentFormSection>
 
             <Show when={pipedreamMcp()}>

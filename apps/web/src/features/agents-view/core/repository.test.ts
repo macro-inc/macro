@@ -77,7 +77,7 @@ describe('orderRepositories', () => {
     ]);
   });
 
-  it('keeps a recent the listing no longer carries, and dedupes by spelling', () => {
+  it('omits a recent the listing no longer carries, and dedupes by spelling', () => {
     expect(
       orderRepositories(
         [macro],
@@ -86,7 +86,7 @@ describe('orderRepositories', () => {
           'https://github.com/Macro-Inc/MACRO',
         ]
       )
-    ).toEqual([{ url: 'https://github.com/macro-inc/gone' }, macro]);
+    ).toEqual([macro]);
   });
 });
 

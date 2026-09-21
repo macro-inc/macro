@@ -1,11 +1,11 @@
 import { createCallback } from '@solid-primitives/rootless';
 import { cn } from '@ui';
 import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
-import { usePdfDocument } from '../context/pdf-document-context';
+import { usePdfViewer } from '../context/pdf-viewer-context';
 import { useCurrentPageNumber, useGetRootViewer } from '../signal/pdfViewer';
 
 export function PageNumberInput() {
-  const pdf = usePdfDocument();
+  const pdfViewer = usePdfViewer();
   // const context = useContext(BarContext);
   // if (!context) throw new Error('PageNumberInput must be used within a Bar');
   // const truncation = context.truncation;
@@ -16,7 +16,7 @@ export function PageNumberInput() {
   const [intermediateVal, setIntermediate] = createSignal<string>('');
 
   const inputValue = () => intermediateVal() || currentPageNumber();
-  const getPageCount = () => pdf.state.derived.pageCount() ?? 1;
+  const getPageCount = () => pdfViewer.root.pageCount() ?? 1;
 
   const getWidthClass = (value: number | string) => {
     const strLength = value.toString().length;
@@ -44,7 +44,7 @@ export function PageNumberInput() {
   });
 
   createEffect(() => {
-    const element = pdf.rootElement();
+    const element = pdfViewer.rootElement();
     if (!element) return;
 
     element.addEventListener('keydown', handleKeyDown);

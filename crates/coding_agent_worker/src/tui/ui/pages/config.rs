@@ -21,13 +21,13 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) {
             ..inner
         };
         frame.render_widget(
-            Paragraph::new(format!("{}{:<16}", focus_marker(selected), setting.label()))
+            Paragraph::new(format!("{}{:<14}", focus_marker(selected), setting.label()))
                 .style(focus_style(selected)),
             row,
         );
         let value_area = Rect {
-            x: row.x + 18,
-            width: row.width.saturating_sub(18),
+            x: row.x + 16,
+            width: row.width.saturating_sub(16),
             ..row
         };
         match &app.mode {
@@ -50,6 +50,13 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) {
                 );
             }
         }
+    }
+    if app.config.identity.allow_permission_bypass {
+        frame.render_widget(
+            Paragraph::new("Warning: agents can run commands and edit files without approval.\nApplies at next pairing.")
+                .style(Style::new().fg(WARN)),
+            Rect { y: inner.y + SETTINGS.len() as u16 + 2, height: 2, ..inner },
+        );
     }
     if app.config.identity.scope == IdentityScope::Team {
         let warning = Rect {

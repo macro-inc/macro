@@ -39,6 +39,7 @@ pub mod get_location;
 pub mod get_short_id;
 pub mod put_interaction;
 pub mod put_snapshot;
+pub mod sync_content_updated;
 pub mod system_skills;
 pub mod task_duplicates;
 pub mod team_share;

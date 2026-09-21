@@ -14,6 +14,7 @@ export const messageKeys = createQueryKeys('messages', {
   resolveMessage: (parent: MessageParent, messageId: string) => ({
     queryKey: [parent, messageId],
   }),
+  references: (parent: MessageParent) => ({ queryKey: [parent] }),
 });
 export const MessageNonceKeys = {
   MESSAGE: 'message',

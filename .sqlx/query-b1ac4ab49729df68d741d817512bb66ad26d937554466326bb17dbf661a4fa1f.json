@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO agent_session_log (id, agent_session_id, user_id, direction, content, created_at)\n            SELECT frame.id, $1, frame.user_id, frame.direction, frame.content,\n                   now() + (frame.ordinality - 1) * interval '1 microsecond'\n            FROM UNNEST($2::uuid[], $3::text[], $4::text[], $5::jsonb[])\n                WITH ORDINALITY AS frame(id, user_id, direction, content, ordinality)\n            RETURNING id, created_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "TextArray",
+        "TextArray",
+        "JsonbArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "b1ac4ab49729df68d741d817512bb66ad26d937554466326bb17dbf661a4fa1f"
+}

@@ -18,7 +18,10 @@
 
 import { markMessageSent } from '@core/util/message-send-motion';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
-import type { CreateAgentSessionRequest } from '@service-agent-harness/generated/schemas';
+import type {
+  CreateAgentSessionRequest,
+  PromptAttachment,
+} from '@service-agent-harness/generated/schemas';
 import { type Accessor, createSignal } from 'solid-js';
 
 /**
@@ -51,6 +54,8 @@ export type StartPendingSessionOptions = {
   botId?: string;
   /** First prompt, delivered after any model override. */
   prompt?: string;
+  /** Uploaded SFS files delivered with the first prompt. */
+  attachments?: PromptAttachment[];
   /** Optional model switch applied before the first prompt. */
   modelOverride?: string;
   /**
@@ -106,11 +111,14 @@ export function startPendingSession(
           return;
         }
       }
-      const prompt = options.prompt?.trim();
-      if (prompt) {
+      const prompt = options.prompt?.trim() ?? '';
+      if (prompt || options.attachments?.length) {
         const delivered = await agentHarnessServiceClient.control(id, {
           type: 'prompt',
           prompt,
+          ...(options.attachments?.length
+            ? { attachments: options.attachments }
+            : {}),
         });
         if (delivered.isErr()) {
           setError(

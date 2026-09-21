@@ -1,6 +1,5 @@
 import { ChannelInputContainer } from '@channel/Input/ChannelInputContainer';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
-import { useBlockAliasedName, useBlockId } from '@core/block';
 import {
   Discussion,
   DiscussionComposer,
@@ -18,12 +17,12 @@ import {
 } from '@core/messages/DocumentConversation';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
-import { useCanComment, useIsDocumentOwner } from '@core/signal/permissions';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import type { MessageParent } from '@service-storage/messages';
 import { Show } from 'solid-js';
 import { createDocumentDiscussionSource } from '../comments/documentDiscussionSource';
 import { URL_PARAMS } from '../constants';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 
 function MobileDiscussionComposer(props: { hidden: boolean }) {
   // Preserve the editor and draft while its placement is hidden.
@@ -70,11 +69,11 @@ export function MessageDocumentDiscussion(props: {
   floatingComposerOnTouch?: boolean;
   editorHasFocus?: boolean;
 }) {
-  const id = useBlockId();
-  const blockName = useBlockAliasedName();
+  const { documentId, kind, permissions } = useMarkdownDocument();
+  const id = documentId();
+  const documentKind = kind();
+  const blockName = documentKind === 'document' ? 'md' : documentKind;
   const params = useUrlParams(URL_PARAMS);
-  const canWrite = useCanComment();
-  const canManage = useIsDocumentOwner();
   const parent: MessageParent = { type: 'document', id };
   const floating = () =>
     props.floatingComposerOnTouch === true && isTouchDevice();
@@ -82,8 +81,8 @@ export function MessageDocumentDiscussion(props: {
     <>
       <DocumentConversation
         parent={parent}
-        canWrite={canWrite()}
-        canManage={canManage()}
+        canWrite={permissions.canComment()}
+        canManage={permissions.isOwner()}
         targetId={params.commentId()}
         label={props.label}
         buildLink={(message) =>
@@ -95,7 +94,7 @@ export function MessageDocumentDiscussion(props: {
         hideComposer={floating()}
         hideWhenEmpty={floating()}
       />
-      <Show when={floating() && canWrite()}>
+      <Show when={floating() && permissions.canComment()}>
         <StaticMarkdownContext>
           <MobileMessageComposer
             parent={parent}
