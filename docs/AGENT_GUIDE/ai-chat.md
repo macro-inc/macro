@@ -11,6 +11,13 @@
 
 - Open **Go to Agents** → `/app/component/agents`. With AI agents enabled
   (`enable-chat-v3-agents`), the workspace uses one sidebar for Chat and Code.
+  Below **New conversation**, **Agents** opens the same roster as the composer’s
+  **Create agent** action. **Routines** lists saved schedules, opens their editors,
+  and offers **New routine**. **Connections** manages MCP integrations (including
+  app authentication and disconnection); this section has moved out of Settings.
+  Home’s **Connect your tools** and agent replies’ **Connect app** chips open this
+  Connections page. Personal Gmail/GitHub account links remain under Settings →
+  Integrations.
   **New conversation** opens the composer. **Conversations** is a mixed list
   of chats and coding sessions, newest first, with one search across both.
   Chat rows use a chat icon; coding rows use `</>` (the PR status icon when a

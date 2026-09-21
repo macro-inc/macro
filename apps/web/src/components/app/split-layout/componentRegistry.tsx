@@ -24,6 +24,7 @@ import { NonMemberChannelPreview } from '@app/features/next-soup/soup-view/non-m
 import { SoupView } from '@app/features/next-soup/soup-view/soup-view';
 import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
 import { ReminderEditorSplit } from '@app/features/reminders/ReminderEditorSplit';
+import { McpConnections } from '@app/features/settings/McpConnections';
 import { SettingsPanelComponentWrapper } from '@app/features/settings/Settings';
 import { TasksView } from '@app/features/tasks-view/tasks-view';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
@@ -417,6 +418,13 @@ function RegisteredAgentsView(params: ComponentParams) {
   const panel = useSplitPanelOrThrow();
   const agentsFlag = useFeatureFlag(enableChatV3Agents);
   const useAgentsWorkspace = () => agentsFlag().enabled && !isTouchDevice();
+  const connectionsRequested = () => {
+    const content = panel.handle.content();
+    return (
+      content.type === 'component' &&
+      content.params?.agentPage === 'connections'
+    );
+  };
 
   createRenderEffect(() => {
     if (agentsFlag().loading) return;
@@ -430,19 +438,26 @@ function RegisteredAgentsView(params: ComponentParams) {
       <Show
         when={useAgentsWorkspace()}
         fallback={
-          route ? (
-            <RedirectSplit
-              to={{
-                type:
-                  route.conversation.type === 'agent_session'
-                    ? 'agent'
-                    : 'chat',
-                id: route.conversation.id,
-              }}
-            />
-          ) : (
-            <LegacyAgentsView />
-          )
+          <Show
+            when={connectionsRequested()}
+            fallback={
+              route ? (
+                <RedirectSplit
+                  to={{
+                    type:
+                      route.conversation.type === 'agent_session'
+                        ? 'agent'
+                        : 'chat',
+                    id: route.conversation.id,
+                  }}
+                />
+              ) : (
+                <LegacyAgentsView />
+              )
+            }
+          >
+            <McpConnections />
+          </Show>
         }
       >
         <AgentsView initialRoute={route} />

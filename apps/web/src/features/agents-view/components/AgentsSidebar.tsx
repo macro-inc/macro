@@ -17,12 +17,16 @@ import {
 } from '@app/features/soup';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import ChatIcon from '@phosphor/chat-circle.svg';
+import ClockIcon from '@phosphor/clock-clockwise.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
+import PlugIcon from '@phosphor/plugs-connected.svg';
+import AgentIcon from '@phosphor/sparkle.svg';
 import { Key } from '@solid-primitives/keyed';
 import { cn } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
 import { compactAge } from '../core/format-age';
 import type { AgentsMode } from '../core/mode';
+import type { AgentsPage } from '../core/pages';
 import {
   type AgentConversationEntity,
   type ConversationGroup,
@@ -36,6 +40,8 @@ const AGENTS_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
 };
 
 export type AgentsSidebarProps = {
+  activePage: AgentsPage | undefined;
+  onOpenPage: (page: AgentsPage) => void;
   modeForConversation: (conversation: AgentConversationEntity) => AgentsMode;
   activeConversationId: string | undefined;
   search: string;
@@ -175,6 +181,35 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
         </ViewSidebar.Primary>
 
         <ViewSidebar.Content class="overflow-hidden">
+          <ViewSidebar.Nav aria-label="Agent tools">
+            <ViewSidebar.Item
+              active={props.activePage === 'agents'}
+              onClick={() => props.onOpenPage('agents')}
+            >
+              <ViewSidebar.Icon>
+                <AgentIcon />
+              </ViewSidebar.Icon>
+              <span>Agents</span>
+            </ViewSidebar.Item>
+            <ViewSidebar.Item
+              active={props.activePage === 'routines'}
+              onClick={() => props.onOpenPage('routines')}
+            >
+              <ViewSidebar.Icon>
+                <ClockIcon />
+              </ViewSidebar.Icon>
+              <span>Routines</span>
+            </ViewSidebar.Item>
+            <ViewSidebar.Item
+              active={props.activePage === 'connections'}
+              onClick={() => props.onOpenPage('connections')}
+            >
+              <ViewSidebar.Icon>
+                <PlugIcon />
+              </ViewSidebar.Icon>
+              <span>Connections</span>
+            </ViewSidebar.Item>
+          </ViewSidebar.Nav>
           <CollapsibleSection.Root
             open={conversationsOpen()}
             onOpenChange={setConversationsOpen}
