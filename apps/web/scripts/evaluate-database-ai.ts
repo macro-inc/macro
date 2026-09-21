@@ -214,7 +214,20 @@ function querySchema(detail: DatabaseDetail, focus: string): QuerySchema {
         options: column.definition.property_options.map((option) =>
           String(option.value.value)
         ),
-        multiple: column.definition.definition.is_multi_select,
+        multiple:
+          column.definition.definition.is_multi_select ||
+          column.column.config?.kind === 'link',
+        relation:
+          column.column.config?.kind === 'link'
+            ? {
+                databaseId: column.column.config.database_id,
+                tableId: column.column.config.table_id,
+                junctionSqlName: column.junction_sql_name ?? undefined,
+                readJunctionSqlName:
+                  column.read_junction_sql_name ?? undefined,
+                writable: column.junction_writable === true,
+              }
+            : undefined,
       })),
     })),
   };
@@ -534,7 +547,7 @@ async function evaluate(config: ReturnType<typeof configuration>) {
       {
         label: 'enterprise-join',
         prompt:
-          'How many tickets are from customers on the Enterprise plan? Join Tickets.Customer to Customers.Name.',
+          'How many tickets are from customers on the Enterprise plan? Follow the Customer relationship.',
         expected: 8,
       },
       {

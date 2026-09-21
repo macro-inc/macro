@@ -24,6 +24,7 @@ use uuid::Uuid;
 use super::*;
 mod committed_writes;
 mod read_only;
+mod relations;
 mod saved_views;
 use crate::domain::models::{
     Column, ColumnDetail, Database, ExecOutcome, QueryResult, RenameColumnOutcome, ResultColumn,
@@ -122,6 +123,9 @@ fn status_column() -> ColumnDetail {
             property_options: vec![option("Going", 0), option("Declined", 1)],
         },
         writable: true,
+        junction_sql_name: None,
+        read_junction_sql_name: None,
+        junction_writable: false,
     }
 }
 

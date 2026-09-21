@@ -4,7 +4,9 @@ import {
   execSql,
 } from '@queries/storage/databases';
 import type { DatabaseTableDetail } from '@service-storage/databases';
-import { type JSX, Show, Suspense } from 'solid-js';
+import { createMemo, For, type JSX, Show, Suspense } from 'solid-js';
+import { DatabaseRelationCell } from '../components/database-relation-cell';
+import type { DatabaseRelatedDestination } from '../core/database-relations';
 import {
   type DatabaseViewConfig,
   defaultDatabaseView,
@@ -13,6 +15,8 @@ import {
   DatabaseMentionPicker,
   DatabaseMentionValue,
 } from '../database-mentions';
+import { createDatabaseRelations } from '../queries/database-relations';
+import { useRelatedDatabaseSync } from '../queries/database-relations-sync';
 import { renameDatabaseColumn } from '../queries/rename-column';
 import { createDatabaseRowsSource } from '../queries/table-rows';
 import {
@@ -28,6 +32,7 @@ export type DatabaseGridProps = {
   view?: DatabaseViewConfig;
   onViewChange?: (view: DatabaseViewConfig) => void;
   renderToolbar?: (actions: DatabaseTableActions) => JSX.Element;
+  onOpenRelated?: (destination: DatabaseRelatedDestination) => void;
 };
 
 /** Production composition. A table switch owns a new query/controller lifetime. */
@@ -52,6 +57,20 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
     return ownedTable;
   };
   const databaseId = props.databaseId;
+  const relatedTargets = () =>
+    table().columns.flatMap((column) =>
+      column.column.config?.kind === 'link' &&
+      column.column.config.database_id !== databaseId
+        ? [column.column.config]
+        : []
+    );
+  const relatedDatabases = () => [
+    ...new Set(relatedTargets().map((target) => target.database_id)),
+  ];
+  const relations = createDatabaseRelations({
+    columns: () => table().columns,
+    exec: execSql,
+  });
   const source = createDatabaseRowsSource({
     databaseId,
     table,
@@ -68,38 +87,79 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
       if (!updated) throw new Error('That option could not be added.');
     },
   });
+  const rawColumns = source.columns;
+  source.columns = createMemo(() =>
+    rawColumns().map((column) =>
+      column.relation
+        ? {
+            ...column,
+            relation: {
+              ...column.relation,
+              labels: Object.fromEntries(
+                relations(column.relation.tableId)
+                  .rows()
+                  .map((row) => [row.id, row.name])
+              ),
+            },
+          }
+        : column
+    )
+  );
   return (
-    <DatabaseTableView
-      name={table().table.name}
-      source={source}
-      canEdit={props.canEdit}
-      view={props.view ?? defaultDatabaseView()}
-      onViewChange={props.onViewChange}
-      renderMentionPicker={(picker) => <DatabaseMentionPicker {...picker} />}
-      renderMentionValue={(id, entityType) => (
-        <DatabaseMentionValue id={id} entityType={entityType} />
-      )}
-      onRenameColumn={(columnId, name, previousName) =>
-        renameDatabaseColumn({
-          databaseId,
-          tableId: props.tableId,
-          columnId,
-          name,
-          previousName,
-        })
-      }
-      renderToolbar={props.renderToolbar}
-      addColumn={(label, initialType, variant, onCreated) => (
-        <AddColumnMenu
-          databaseId={databaseId}
-          tableId={props.tableId}
-          columns={table().columns}
-          label={label}
-          variant={variant}
-          initialType={initialType}
-          onCreated={onCreated}
-        />
-      )}
-    />
+    <>
+      <For each={relatedDatabases()}>
+        {(id) => {
+          useRelatedDatabaseSync(id, () => [
+            ...new Set(
+              relatedTargets()
+                .filter((target) => target.database_id === id)
+                .map((target) => target.table_id)
+            ),
+          ]);
+          return null;
+        }}
+      </For>
+      <DatabaseTableView
+        name={table().table.name}
+        source={source}
+        canEdit={props.canEdit}
+        view={props.view ?? defaultDatabaseView()}
+        onViewChange={props.onViewChange}
+        renderMentionPicker={(picker) => <DatabaseMentionPicker {...picker} />}
+        renderMentionValue={(id, entityType) => (
+          <DatabaseMentionValue id={id} entityType={entityType} />
+        )}
+        renderRelationCell={(cell) => (
+          <DatabaseRelationCell
+            {...cell}
+            source={relations(cell.column.relation!.tableId)}
+            onOpen={(rowId) =>
+              props.onOpenRelated?.({ ...cell.column.relation!, rowId })
+            }
+          />
+        )}
+        onRenameColumn={(columnId, name, previousName) =>
+          renameDatabaseColumn({
+            databaseId,
+            tableId: props.tableId,
+            columnId,
+            name,
+            previousName,
+          })
+        }
+        renderToolbar={props.renderToolbar}
+        addColumn={(label, initialType, variant, onCreated) => (
+          <AddColumnMenu
+            databaseId={databaseId}
+            tableId={props.tableId}
+            columns={table().columns}
+            label={label}
+            variant={variant}
+            initialType={initialType}
+            onCreated={onCreated}
+          />
+        )}
+      />
+    </>
   );
 }

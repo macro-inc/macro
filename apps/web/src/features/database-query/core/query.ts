@@ -32,6 +32,13 @@ export type QuerySchema = {
       type: string;
       options: string[];
       multiple: boolean;
+      relation?: {
+        databaseId: string;
+        tableId: string;
+        junctionSqlName?: string;
+        readJunctionSqlName?: string;
+        writable: boolean;
+      };
     }[];
   }[];
 };

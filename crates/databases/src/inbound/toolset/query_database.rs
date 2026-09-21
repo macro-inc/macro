@@ -52,11 +52,19 @@ For a request to change records, first read the relevant rows, then use their re
 edit only reads are not checked. A conflict means re-read \
 and reconsider the edit. After changing rows, SELECT the affected records to verify the \
 actual result. On a connection failure, inspect before retrying an INSERT.\n\
+To create a row and link it atomically, INSERT the scalar cells (omit row_id), then INSERT \
+into the relation's exact junctionSqlName (row_id,linked_id) using SELECT row_id from the \
+source table WHERE row_id LIKE 'new:%', all in the same call. A batch with multiple new \
+rows must narrow that SELECT to the intended row. Newly inserted target rows may be \
+selected the same way from their target table. These temporary new: values are scoped to \
+this execution; never save or reuse them in later calls. Only insertedRowIds contains \
+the server's canonical new row IDs. Re-read after commit for final relationship projections.\n\
 \n\
 Results come back as columns and rows. A column whose values are entity ids carries an \
 `entityType`, which is how the app renders it as a clickable chip rather than as raw text — \
 prefer selecting an entity column over stringifying it. Writes report `changesApplied` and, \
-for inserts, the `insertedRowIds` the server minted."
+for inserts, the `insertedRowIds` the server minted. SELECT results inside a write batch \
+may still contain temporary new: IDs; use insertedRowIds or a new SELECT after commit."
     )
 )]
 pub struct QueryDatabase {

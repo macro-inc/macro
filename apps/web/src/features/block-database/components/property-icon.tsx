@@ -12,6 +12,7 @@ import type { DatabaseEntityType } from '../core/column-inference';
 export function PropertyIcon(props: {
   type: string;
   entityType?: DatabaseEntityType | null;
+  relation?: boolean;
   class?: string;
 }) {
   return (
@@ -20,6 +21,9 @@ export function PropertyIcon(props: {
       class={props.class ?? 'size-3.5 shrink-0 text-ink-muted'}
     >
       <Switch fallback={<TextIcon class="size-full" />}>
+        <Match when={props.relation}>
+          <LinkIcon class="size-full" />
+        </Match>
         <Match when={props.type === 'NUMBER'}>
           <HashIcon class="size-full" />
         </Match>

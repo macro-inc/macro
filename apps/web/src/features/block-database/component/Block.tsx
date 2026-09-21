@@ -1,10 +1,14 @@
 import { makePersistedState } from '@app/lib/persistence';
+import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useCanAutofocusSplitContent } from '@components/app/split-layout/layoutUtils';
 import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
+import { createMethodRegistration } from '@core/orchestrator';
+import { blockHandleSignal } from '@core/signal/load';
 import { deepEqual } from '@core/util/compareUtils';
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
 import DatabaseIcon from '@phosphor/database.svg';
@@ -30,6 +34,7 @@ import {
 } from 'solid-js';
 import { DatabaseTitle } from '../components/database-title';
 import { DatabaseToolbar } from '../components/database-toolbar';
+import type { DatabaseRelatedDestination } from '../core/database-relations';
 import {
   type DatabaseViewConfig,
   defaultDatabaseView,
@@ -48,6 +53,9 @@ type ViewSelection = { tableId?: string; views: Record<string, string> };
 
 const Block: Component = () => {
   const databaseId = useBlockId();
+  const { replaceOrInsertSplit } = useSplitLayout();
+  const orchestrator = useGlobalBlockOrchestrator();
+  let requestedRecord: DatabaseRelatedDestination | undefined;
   const canAutofocus = useCanAutofocusSplitContent();
   const { navigatedFromJK } = useNavigatedFromJK();
   const questionPanelId = createUniqueId();
@@ -86,7 +94,53 @@ const Block: Component = () => {
   );
   useDatabaseTableChangedSync(() => databaseId);
   const detailQuery = useDatabaseDetailQuery(() => databaseId);
-  let gridEntry: { tableId: string; focus: () => Promise<void> } | undefined;
+  let gridEntry:
+    | {
+        tableId: string;
+        focus: () => Promise<void>;
+        openRecord: (rowId: string) => void;
+      }
+    | undefined;
+  function openRequestedRecord() {
+    const target = requestedRecord;
+    if (!target || !gridEntry || gridEntry.tableId !== target.tableId) return;
+    requestedRecord = undefined;
+    gridEntry.openRecord(target.rowId);
+  }
+  async function openRelated(target: DatabaseRelatedDestination) {
+    if (target.databaseId !== databaseId) {
+      replaceOrInsertSplit({
+        type: 'database',
+        id: target.databaseId,
+      });
+      try {
+        const handle = await orchestrator.getBlockHandle(
+          target.databaseId,
+          'database'
+        );
+        await handle?.goToLocationFromParams({
+          tableId: target.tableId,
+          rowId: target.rowId,
+        });
+      } catch {
+        toast.failure('This related record could not be opened.');
+      }
+      return;
+    }
+    requestedRecord = target;
+    setSelection((current) => ({ ...current, tableId: target.tableId }));
+    queueMicrotask(openRequestedRecord);
+  }
+  createMethodRegistration(blockHandleSignal.get, {
+    goToLocationFromParams: (params: Record<string, string>) => {
+      if (params.tableId && params.rowId)
+        void openRelated({
+          databaseId,
+          tableId: params.tableId,
+          rowId: params.rowId,
+        });
+    },
+  });
   let requestedGridEntry = false;
   const enterFirstCell = () => {
     if (!gridEntry || gridEntry.tableId !== activeTableId()) {
@@ -399,11 +453,15 @@ const Block: Component = () => {
                           canEdit={canEdit()}
                           view={view()}
                           onViewChange={changeView}
+                          onOpenRelated={openRelated}
                           renderToolbar={(actions) => {
                             gridEntry = {
                               tableId: table().table.id,
                               focus: actions.focusFirstCell,
+                              openRecord: actions.openRecord,
                             };
+                            if (requestedRecord)
+                              queueMicrotask(openRequestedRecord);
                             if (requestedGridEntry)
                               queueMicrotask(enterFirstCell);
                             return (

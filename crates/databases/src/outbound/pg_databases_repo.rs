@@ -151,11 +151,10 @@ impl PgDatabasesRepo {
         transaction: &mut Transaction<'_, Postgres>,
         viewer: &Viewer,
         table_id: TableId,
+        id: RowId,
         position: String,
         cells: serde_json::Value,
     ) -> Result<RowId, PgDatabasesRepoError> {
-        let id = macro_uuid::generate_uuid_v7();
-
         sqlx::query!(
             r#"
             INSERT INTO database_rows (id, table_id, position, cells, created_by)
@@ -731,7 +730,9 @@ impl DatabasesRepo for PgDatabasesRepo {
         let mut binding_definitions = Vec::new();
         for change in changes {
             match change {
-                RowChange::Insert { table_id, cells } => {
+                RowChange::Insert {
+                    table_id, cells, ..
+                } => {
                     for id in cells.keys() {
                         binding_tables.push(*table_id);
                         binding_definitions.push(*id);
@@ -767,7 +768,11 @@ impl DatabasesRepo for PgDatabasesRepo {
 
         for change in changes {
             match change {
-                RowChange::Insert { table_id, cells } => {
+                RowChange::Insert {
+                    table_id,
+                    row_id,
+                    cells,
+                } => {
                     if !next_positions.contains_key(table_id) {
                         let max_position = sqlx::query_scalar!(
                             r#"SELECT MAX(position) FROM database_rows WHERE table_id = $1"#,
@@ -780,9 +785,15 @@ impl DatabasesRepo for PgDatabasesRepo {
                     let position = next_positions[table_id].clone();
                     next_positions.insert(*table_id, next_position(Some(&position)));
                     let cells = cells_to_json(cells)?;
-                    let row_id =
-                        Self::insert_row(&mut transaction, viewer, *table_id, position, cells)
-                            .await?;
+                    let row_id = Self::insert_row(
+                        &mut transaction,
+                        viewer,
+                        *table_id,
+                        *row_id,
+                        position,
+                        cells,
+                    )
+                    .await?;
                     inserted_row_ids.push(row_id);
                 }
                 RowChange::Update {
@@ -847,7 +858,7 @@ impl DatabasesRepo for PgDatabasesRepo {
                     source_row_id,
                     target_row_id,
                 } => {
-                    sqlx::query!(
+                    let inserted = sqlx::query!(
                         r#"
                         INSERT INTO database_row_links (link_column_id, source_row_id, target_row_id)
                         VALUES ($1, $2, $3)
@@ -858,7 +869,31 @@ impl DatabasesRepo for PgDatabasesRepo {
                         target_row_id,
                     )
                     .execute(&mut *transaction)
-                    .await?;
+                    .await;
+                    if let Err(error) = inserted {
+                        let conflict_table = match &error {
+                            sqlx::Error::Database(database)
+                                if database.code().as_deref() == Some("23503") =>
+                            {
+                                match database.constraint() {
+                                    Some(
+                                        "database_row_links_source_row_id_fkey"
+                                        | "database_row_links_link_column_id_fkey",
+                                    ) => link_tables[column_id].first().copied(),
+                                    Some("database_row_links_target_row_id_fkey") => {
+                                        link_tables[column_id].last().copied()
+                                    }
+                                    _ => None,
+                                }
+                            }
+                            _ => None,
+                        };
+                        if let Some(table_id) = conflict_table {
+                            transaction.rollback().await?;
+                            return Ok(ApplyOutcome::VersionConflict { table_id });
+                        }
+                        return Err(error.into());
+                    }
                 }
                 RowChange::Unlink {
                     column_id,
@@ -886,7 +921,9 @@ impl DatabasesRepo for PgDatabasesRepo {
         let mut valued_definitions = Vec::new();
         for change in changes {
             match change {
-                RowChange::Insert { table_id, cells } => {
+                RowChange::Insert {
+                    table_id, cells, ..
+                } => {
                     for id in cells.keys() {
                         valued_tables.push(*table_id);
                         valued_definitions.push(*id);

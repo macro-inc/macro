@@ -1,5 +1,6 @@
 import { match } from 'ts-pattern';
 import type { DatabaseEntityType } from './column-inference';
+import { relatedRowIds } from './database-relations';
 
 export type DatabaseCellValue = string | number | null;
 
@@ -14,6 +15,12 @@ export type DatabaseViewColumn = {
   specificEntityType?: DatabaseEntityType | null;
   /** A new, empty Text column may adopt the type of its first entry. */
   inferType?: boolean;
+  /** A relationship points to rows in a table, independently of the property's scalar type. */
+  relation?: {
+    databaseId: string;
+    tableId: string;
+    labels?: Record<string, string>;
+  };
 };
 
 export type DatabaseFilterOperator =
@@ -174,6 +181,10 @@ function cellValues(
   value: DatabaseCellValue,
   column: DatabaseViewColumn
 ): DatabaseCellValue[] {
+  if (column.relation)
+    return relatedRowIds(value).map(
+      (id) => column.relation?.labels?.[id] ?? 'Unavailable record'
+    );
   if (column.isMultiSelect && typeof value === 'string') {
     try {
       const parsed: unknown = JSON.parse(value);
@@ -284,8 +295,14 @@ export function applyDatabaseView<Row>(
       if (isEmpty(aValue, column) && isEmpty(bValue, column)) continue;
       if (isEmpty(aValue, column)) return 1;
       if (isEmpty(bValue, column)) return -1;
-      const left = comparable(aValue, column);
-      const right = comparable(bValue, column);
+      const left = comparable(
+        column.relation ? cellValues(aValue, column).join(', ') : aValue,
+        column
+      );
+      const right = comparable(
+        column.relation ? cellValues(bValue, column).join(', ') : bValue,
+        column
+      );
       const order =
         typeof left === 'number' && typeof right === 'number'
           ? left - right

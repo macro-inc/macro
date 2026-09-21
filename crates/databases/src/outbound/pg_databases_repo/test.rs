@@ -342,10 +342,12 @@ async fn insert_then_update_merges_cells_and_bumps_version_once(pool: PgPool) {
             &viewer(),
             &[
                 RowChange::Insert {
+                    row_id: Uuid::now_v7(),
                     table_id: table.id,
                     cells: cells(vec![(definition_id, text("Priya"))]),
                 },
                 RowChange::Insert {
+                    row_id: Uuid::now_v7(),
                     table_id: table.id,
                     cells: cells(vec![(definition_id, text("Sam"))]),
                 },
@@ -483,10 +485,12 @@ async fn links_are_inserted_idempotently_and_removed(pool: PgPool) {
             &viewer(),
             &[
                 RowChange::Insert {
+                    row_id: Uuid::now_v7(),
                     table_id: table.id,
                     cells: cells(vec![(definition_id, text("Priya"))]),
                 },
                 RowChange::Insert {
+                    row_id: Uuid::now_v7(),
                     table_id: table.id,
                     cells: cells(vec![(definition_id, text("Sam"))]),
                 },
@@ -587,10 +591,12 @@ async fn deleting_a_row_cascades_its_links(pool: PgPool) {
             &viewer(),
             &[
                 RowChange::Insert {
+                    row_id: Uuid::now_v7(),
                     table_id: table.id,
                     cells: cells(vec![(definition_id, text("Priya"))]),
                 },
                 RowChange::Insert {
+                    row_id: Uuid::now_v7(),
                     table_id: table.id,
                     cells: cells(vec![(definition_id, text("Sam"))]),
                 },
@@ -690,6 +696,7 @@ async fn a_link_bumps_both_ends(pool: PgPool) {
         .apply_changes(
             &viewer(),
             &[RowChange::Insert {
+                row_id: Uuid::now_v7(),
                 table_id: guests.id,
                 cells: cells(vec![(guest_name, text("Priya"))]),
             }],
@@ -703,6 +710,7 @@ async fn a_link_bumps_both_ends(pool: PgPool) {
         .apply_changes(
             &viewer(),
             &[RowChange::Insert {
+                row_id: Uuid::now_v7(),
                 table_id: sessions.id,
                 cells: cells(vec![(session_name, text("Keynote"))]),
             }],

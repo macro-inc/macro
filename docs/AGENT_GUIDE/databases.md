@@ -16,7 +16,10 @@ new table. **View settings** also offers **Add column**; boards keep it beside
 **New**. Its panel opens beside the button with the name field focused. Enter a
 name, or leave it blank to create **Unnamed** (**Unnamed 2**, and so on when those
 names already exist). Text is the default. The compact type menu offers Text,
-Select, Number, Date, Checkbox, or URL. Select **Add column** or press Enter;
+Select, Number, Date, Checkbox, URL, or Relation. Choosing **Relation** reveals
+**Related table**; choose a table in this database to connect its records.
+The table choice is required, and a relation can hold more than one record.
+Select **Add column** or press Enter;
 in table view, its first cell receives focus.
 The first nonempty entry in a new default column sets its type: a plain number
 becomes Number; entering `@` opens a person/item picker and selecting a mention
@@ -72,6 +75,16 @@ Click a row number or choose **Open record** for a compact centered dialog. The
 name is editable once at the top, with the remaining properties below. Tab moves
 directly between editable fields; previous/next controls browse the current view.
 Close or Escape returns to the grid.
+
+Relation cells show the names of records in their related table. Click one or
+start typing to search that table, then select records to link them. The selected
+chips open the referenced record in the compact editor; their **Remove** buttons
+remove only the relationship, never the related record. Enter selects a match.
+Tab selects a searched match before moving to the next cell; with an empty search
+it only moves. Escape closes the picker and returns focus to the cell. Choosing a
+relation in the empty row creates the record and its links together. View-only
+users can open references but cannot select or remove them. Search, filters, and
+sorting use current record names; unavailable records have a readable label.
 
 Edits save automatically. Check the save status and any error before continuing.
 A concurrent edit can cause a version conflict: the latest values load and

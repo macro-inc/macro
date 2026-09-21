@@ -492,6 +492,8 @@ pub enum RowChange {
     Insert {
         /// Table written.
         table_id: TableId,
+        /// Server-minted identity, allocated before resolving same-batch links.
+        row_id: RowId,
         /// Cell values keyed by definition, already converted and validated.
         cells: HashMap<PropertyDefinitionId, SetPropertyValue>,
     },
@@ -683,6 +685,12 @@ pub struct ColumnDetail {
         models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions,
     /// Whether SQL may write this column.
     pub writable: bool,
+    /// Exact junction name for multi-valued or relation columns.
+    pub junction_sql_name: Option<String>,
+    /// Stable read-only junction alias, when it is unambiguous in the catalog.
+    pub read_junction_sql_name: Option<String>,
+    /// Whether this viewer can insert/delete edges in the junction.
+    pub junction_writable: bool,
 }
 
 // ===== Errors =====

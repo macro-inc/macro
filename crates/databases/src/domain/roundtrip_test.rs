@@ -968,7 +968,10 @@ fn inserts_default_row_id_and_ignore_a_supplied_one() {
     )
     .unwrap();
     assert_eq!(changes.len(), 1);
-    let RowChange::Insert { table_id, cells } = &changes[0] else {
+    let RowChange::Insert {
+        table_id, cells, ..
+    } = &changes[0]
+    else {
         panic!("{:?}", changes[0])
     };
     assert_eq!(*table_id, c.entries[0].table.id);
@@ -1146,7 +1149,7 @@ fn executor_refuses_read_only_targets_before_a_changeset_exists() {
 }
 
 #[test]
-fn junction_writes_become_links_and_fresh_rows_cannot_be_linked() {
+fn junction_writes_link_existing_and_same_batch_rows() {
     let c = constrained();
     let table_id = c.entries[0].table.id;
     let a = row(table_id, vec![]);
@@ -1184,9 +1187,7 @@ fn junction_writes_become_links_and_fresh_rows_cannot_be_linked() {
         target_row_id: a.id
     }));
 
-    // The FK is satisfied inside SQLite (the row exists in the scratch DB),
-    // so this must be refused by translate with the documented message.
-    let err = run(
+    let (_, changes) = run(
         &c.entries,
         &rows,
         &links,
@@ -1197,13 +1198,14 @@ fn junction_writes_become_links_and_fresh_rows_cannot_be_linked() {
             b.id
         ),
     )
-    .unwrap_err();
-    match err {
-        QueryError::UntranslatableChange(msg) => {
-            assert!(msg.contains("same statement"), "{msg}")
-        }
-        other => panic!("{other:?}"),
-    }
+    .unwrap();
+    let RowChange::Insert { row_id, .. } = changes[0] else {
+        panic!("new endpoint comes first")
+    };
+    assert!(
+        matches!(changes[1], RowChange::Link { source_row_id, target_row_id, .. }
+        if source_row_id == row_id && target_row_id == b.id)
+    );
 }
 
 // ===== Family 4: HAS against real data =====

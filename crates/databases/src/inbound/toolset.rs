@@ -36,6 +36,12 @@ macro_rules! sql_guide {
          never insert one yourself.\n\
          - **Multi-valued columns are JSON arrays**, and each one also has a companion \
          junction table `table__column(row_id, linked_id)` for flat joins.\n\
+         - **Relation columns point to database rows, not Macro entities.** Their `relation` \
+         metadata identifies the target database/table and exact junction names. Join source.row_id \
+         to junction.row_id and junction.linked_id to target.row_id; never compare display names \
+         or a JSON array to a target name. Use readJunctionSqlName for saved reads, or json_each \
+         of the relation column if no stable junction alias is available. Insert/delete edges \
+         through junctionSqlName only when relation.writable; the projected column is read-only.\n\
          - **`col HAS 'x'`** tests membership in a multi-valued column. It is the one piece of \
          sugar; everything else is plain SQLite.\n\
          - **Select columns take their option labels as text** (`status = 'Going'`), never \
@@ -94,7 +100,7 @@ use uuid::Uuid;
 
 use crate::domain::catalog::{option_labels, read_table_name};
 use crate::domain::models::{
-    AccessGrant, DatabaseDetail, DatabaseError, ListedDatabase, QueryError, Viewer,
+    AccessGrant, ColumnConfig, DatabaseDetail, DatabaseError, ListedDatabase, QueryError, Viewer,
 };
 use crate::domain::ports::DatabasesService;
 use crate::domain::views::{DatabaseViewService, DatabaseViewsServiceImpl};
@@ -504,6 +510,25 @@ pub struct ToolColumn {
     pub options: Vec<String>,
     /// Whether SQL may write to this column.
     pub writable: bool,
+    /// A database-row relationship; distinct from a Macro entity reference.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub relation: Option<ToolRelation>,
+}
+
+/// The target and exact SQL entry points for a database-row relationship.
+#[derive(Debug, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolRelation {
+    /// Database containing the target rows.
+    pub database_id: Uuid,
+    /// Table whose row_id values are stored by this relation.
+    pub table_id: Uuid,
+    /// Exact current junction name for authorized link edits.
+    pub junction_sql_name: Option<String>,
+    /// Stable junction alias for saved reads, if available.
+    pub read_junction_sql_name: Option<String>,
+    /// Whether this viewer may insert/delete relationship edges.
+    pub writable: bool,
 }
 
 /// One table of a database, as the model sees it.
@@ -580,9 +605,30 @@ impl From<DatabaseDetail> for ToolDatabaseSchema {
                                 .display_name
                                 .unwrap_or(column.definition.definition.display_name),
                             data_type: column.definition.definition.data_type.into(),
-                            specific_entity_type: column.definition.definition.specific_entity_type,
-                            is_multi_select: column.definition.definition.is_multi_select,
+                            specific_entity_type: if matches!(
+                                column.column.config,
+                                Some(ColumnConfig::Link { .. })
+                            ) {
+                                None
+                            } else {
+                                column.definition.definition.specific_entity_type
+                            },
+                            is_multi_select: column.definition.definition.is_multi_select
+                                || matches!(column.column.config, Some(ColumnConfig::Link { .. })),
                             writable: column.writable,
+                            relation: match column.column.config {
+                                Some(ColumnConfig::Link {
+                                    database_id,
+                                    table_id,
+                                }) => Some(ToolRelation {
+                                    database_id,
+                                    table_id,
+                                    junction_sql_name: column.junction_sql_name,
+                                    read_junction_sql_name: column.read_junction_sql_name,
+                                    writable: column.junction_writable,
+                                }),
+                                _ => None,
+                            },
                         })
                         .collect(),
                 })

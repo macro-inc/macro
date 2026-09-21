@@ -1,5 +1,186 @@
 use super::*;
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn link_to_a_concurrently_deleted_endpoint_conflicts_and_rolls_back_insert(pool: PgPool) {
+    let (repo, source, definition) = fixture(&pool).await;
+    let target = another_database_table(&repo).await;
+    let link_definition = insert_definition(&pool, "Related").await;
+    let column_id = repo
+        .create_column(
+            source.id,
+            link_definition,
+            &CreateColumn {
+                table_id: source.id,
+                binding: ColumnBinding::ExistingDefinition(link_definition),
+                config: Some(ColumnConfig::Link {
+                    database_id: target.database_id,
+                    table_id: target.id,
+                }),
+                infer_type: false,
+            },
+        )
+        .await
+        .unwrap();
+    let source_row = macro_uuid::generate_uuid_v7();
+    let target_row = macro_uuid::generate_uuid_v7();
+    repo.apply_changes(
+        &viewer(),
+        &[
+            RowChange::Insert {
+                table_id: source.id,
+                row_id: source_row,
+                cells: HashMap::new(),
+            },
+            RowChange::Insert {
+                table_id: target.id,
+                row_id: target_row,
+                cells: HashMap::new(),
+            },
+        ],
+        &HashMap::new(),
+    )
+    .await
+    .unwrap()
+    .applied()
+    .unwrap();
+
+    // Each caller's materialized link endpoint becomes stale before its write.
+    for (deleted_table, deleted_row) in [(target.id, target_row), (source.id, source_row)] {
+        repo.apply_changes(
+            &viewer(),
+            &[RowChange::Delete {
+                table_id: deleted_table,
+                row_id: deleted_row,
+            }],
+            &HashMap::new(),
+        )
+        .await
+        .unwrap()
+        .applied()
+        .unwrap();
+        let before = repo.table_versions(&[source.id, target.id]).await.unwrap();
+        let source_count = repo.fetch_rows(source.id, 100).await.unwrap().len();
+        let result = repo
+            .apply_changes(
+                &viewer(),
+                &[
+                    RowChange::Insert {
+                        table_id: source.id,
+                        row_id: macro_uuid::generate_uuid_v7(),
+                        cells: cells(vec![(definition, text("must roll back"))]),
+                    },
+                    RowChange::Link {
+                        column_id,
+                        source_row_id: source_row,
+                        target_row_id: target_row,
+                    },
+                ],
+                &HashMap::new(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            result,
+            ApplyOutcome::VersionConflict {
+                table_id: deleted_table
+            }
+        );
+        assert_eq!(
+            repo.fetch_rows(source.id, 100).await.unwrap().len(),
+            source_count
+        );
+        assert!(repo.fetch_links(column_id).await.unwrap().is_empty());
+        assert_eq!(
+            repo.table_versions(&[source.id, target.id]).await.unwrap(),
+            before
+        );
+        // Restore this endpoint so the next case isolates the other FK.
+        repo.apply_changes(
+            &viewer(),
+            &[RowChange::Insert {
+                table_id: deleted_table,
+                row_id: deleted_row,
+                cells: HashMap::new(),
+            }],
+            &HashMap::new(),
+        )
+        .await
+        .unwrap()
+        .applied()
+        .unwrap();
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn allocated_rows_and_edges_commit_together_or_roll_back_together(pool: PgPool) {
+    let (repo, table, definition_id) = fixture(&pool).await;
+    let link_definition = insert_definition(&pool, "Related").await;
+    let column_id = repo
+        .create_column(
+            table.id,
+            link_definition,
+            &CreateColumn {
+                table_id: table.id,
+                binding: ColumnBinding::ExistingDefinition(link_definition),
+                config: Some(ColumnConfig::Link {
+                    database_id: table.database_id,
+                    table_id: table.id,
+                }),
+                infer_type: false,
+            },
+        )
+        .await
+        .unwrap();
+    let source = macro_uuid::generate_uuid_v7();
+    let target = macro_uuid::generate_uuid_v7();
+    let batch = [
+        RowChange::Insert {
+            row_id: source,
+            table_id: table.id,
+            cells: cells(vec![(definition_id, text("source"))]),
+        },
+        RowChange::Insert {
+            row_id: target,
+            table_id: table.id,
+            cells: cells(vec![(definition_id, text("target"))]),
+        },
+        RowChange::Link {
+            column_id,
+            source_row_id: source,
+            target_row_id: target,
+        },
+        RowChange::Delete {
+            table_id: table.id,
+            row_id: macro_uuid::generate_uuid_v7(),
+        },
+    ];
+    let snapshot = repo.table_versions(&[table.id]).await.unwrap();
+    let rejected = repo
+        .apply_changes(&viewer(), &batch, &snapshot)
+        .await
+        .unwrap();
+    assert_eq!(
+        rejected,
+        ApplyOutcome::VersionConflict { table_id: table.id }
+    );
+    assert!(repo.fetch_rows(table.id, 100).await.unwrap().is_empty());
+    assert!(repo.fetch_links(column_id).await.unwrap().is_empty());
+    assert_eq!(repo.table_versions(&[table.id]).await.unwrap(), snapshot);
+
+    let (ids, versions) = repo
+        .apply_changes(&viewer(), &batch[..3], &snapshot)
+        .await
+        .unwrap()
+        .applied()
+        .unwrap();
+    assert_eq!(ids, vec![source, target]);
+    assert_eq!(
+        repo.fetch_links(column_id).await.unwrap(),
+        vec![(source, target)]
+    );
+    assert_eq!(versions[&table.id], TableVersion(snapshot[&table.id].0 + 1));
+}
+
 async fn another_database_table(repo: &PgDatabasesRepo) -> Table {
     let database = repo
         .create_database(
@@ -41,6 +222,7 @@ async fn missing_row_update_and_delete_roll_back_earlier_inserts(pool: PgPool) {
                 &viewer(),
                 &[
                     RowChange::Insert {
+                        row_id: Uuid::now_v7(),
                         table_id: table.id,
                         cells: cells(vec![(definition_id, text("must roll back"))]),
                     },
@@ -68,6 +250,7 @@ async fn row_in_another_table_conflicts_without_mutating_either_table(pool: PgPo
         .apply_changes(
             &viewer(),
             &[RowChange::Insert {
+                row_id: Uuid::now_v7(),
                 table_id: table.id,
                 cells: cells(vec![(definition_id, text("keep"))]),
             }],
@@ -121,6 +304,7 @@ async fn trash_after_snapshot_rejects_all_row_writes_and_preserves_the_batch(poo
         .apply_changes(
             &viewer(),
             &[RowChange::Insert {
+                row_id: Uuid::now_v7(),
                 table_id: table.id,
                 cells: cells(vec![(definition_id, text("keep"))]),
             }],
@@ -137,6 +321,7 @@ async fn trash_after_snapshot_rejects_all_row_writes_and_preserves_the_batch(poo
 
     for change in [
         RowChange::Insert {
+            row_id: Uuid::now_v7(),
             table_id: table.id,
             cells: cells(vec![(definition_id, text("new"))]),
         },
@@ -155,6 +340,7 @@ async fn trash_after_snapshot_rejects_all_row_writes_and_preserves_the_batch(poo
                 &viewer(),
                 &[
                     RowChange::Insert {
+                        row_id: Uuid::now_v7(),
                         table_id: live.id,
                         cells: HashMap::new(),
                     },
@@ -208,6 +394,7 @@ async fn trash_at_either_link_endpoint_rejects_link_and_unlink(pool: PgPool) {
         .apply_changes(
             &viewer(),
             &[source.id, source.id, target.id].map(|table_id| RowChange::Insert {
+                row_id: Uuid::now_v7(),
                 table_id,
                 cells: HashMap::new(),
             }),
@@ -295,6 +482,7 @@ async fn write_waits_for_inflight_trash_then_rejects_the_changed_database(pool: 
             .apply_changes(
                 &viewer(),
                 &[RowChange::Insert {
+                    row_id: Uuid::now_v7(),
                     table_id: table.id,
                     cells: cells(vec![(definition_id, text("must not appear"))]),
                 }],

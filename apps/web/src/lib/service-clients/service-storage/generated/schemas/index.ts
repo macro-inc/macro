@@ -360,6 +360,8 @@ export * from './columnConfigOneOfThree';
 export * from './columnConfigOneOfThreeKind';
 export * from './columnConfigProperty';
 export * from './columnDetail';
+export * from './columnDetailJunctionSqlName';
+export * from './columnDetailReadJunctionSqlName';
 export * from './columnDisplayName';
 export * from './comment';
 export * from './commentCreatedAt';

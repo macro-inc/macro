@@ -301,6 +301,7 @@ function RecordFields(
               >
                 <PropertyIcon
                   type={column().dataType}
+                  relation={!!column().relation}
                   entityType={column().specificEntityType}
                 />
                 <span class="truncate">{column().name}</span>

@@ -1,4 +1,5 @@
 import type { DatabaseColumnType } from './column-inference';
+import { relatedRowIds } from './database-relations';
 import type { DatabaseCellValue, DatabaseViewColumn } from './database-view';
 
 export type DatabaseRow = {
@@ -30,7 +31,8 @@ export function rowValue(
 
 export function titleColumn(columns: readonly DatabaseViewColumn[]) {
   return columns.find(
-    (column) => column.dataType === 'STRING' && !column.isMultiSelect
+    (column) =>
+      column.dataType === 'STRING' && !column.isMultiSelect && !column.relation
   );
 }
 
@@ -41,10 +43,12 @@ export function rowTitle(
   const column = titleColumn(columns) ?? columns[0];
   const value = column ? rowValue(row, column.id) : null;
   if (value === null || value === '') return 'Unnamed';
+  if (column?.relation) return formatCellValue(column, value) || 'Unnamed';
   return column?.dataType === 'ENTITY' ? 'Linked record' : String(value);
 }
 
 export function canEditCell(column: DatabaseViewColumn): boolean {
+  if (column.relation) return column.writable;
   return (
     column.writable &&
     !column.isMultiSelect &&
@@ -66,6 +70,10 @@ export function formatCellValue(
   value: DatabaseCellValue
 ): string {
   if (value === null || value === '') return '';
+  if (column.relation)
+    return relatedRowIds(value)
+      .map((id) => column.relation?.labels?.[id] ?? 'Unavailable record')
+      .join(', ');
   if (column.dataType === 'BOOLEAN') return value ? 'Yes' : 'No';
   if (column.isMultiSelect) {
     try {

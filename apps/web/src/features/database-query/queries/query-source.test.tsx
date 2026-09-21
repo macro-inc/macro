@@ -1,4 +1,5 @@
 import { databaseQueryKeys } from '@queries/storage/keys';
+import { databaseCompletionRequest } from '@service-cognition/database-query-prompt';
 import type { DatabaseDetail, ExecOutcome } from '@service-storage/databases';
 import { render, waitFor } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
@@ -53,6 +54,35 @@ describe('query schema', () => {
         },
       ],
     };
+    detail.tables[1].columns.push({
+      column: {
+        id: 'relation-column',
+        table_id: 'contacts',
+        property_definition_id: 'relation-definition',
+        position: 'a',
+        config: { kind: 'link', database_id: 'db', table_id: 'legacy' },
+      },
+      sql_name: 'projects',
+      writable: false,
+      junction_sql_name: '_macro_storage_junction_collision',
+      read_junction_sql_name: 'stable_contacts_uuid__projects',
+      junction_writable: true,
+      definition: {
+        definition: {
+          id: 'relation-definition',
+          owner: { scope: 'database', database_id: 'db' },
+          display_name: 'Projects',
+          data_type: 'STRING',
+          is_multi_select: false,
+          specific_entity_type: null,
+          created_at: '',
+          updated_at: '',
+          is_system: false,
+          is_metadata: false,
+        },
+        property_options: [],
+      },
+    });
     const schema = toQuerySchema(detail, 'contacts');
     expect(queryFocusTable(schema)?.name).toBe('Contacts');
     expect(queryFocusTable(schema)?.sqlName).toBe('stable_contacts_uuid');
@@ -62,6 +92,29 @@ describe('query schema', () => {
     });
     expect(schema.tables[0].sqlName).toBe('projects');
     expect(detail.tables[1].sql_name).toBe('contacts');
+    expect(schema.tables[1].columns[0]).toMatchObject({
+      multiple: true,
+      relation: {
+        databaseId: 'db',
+        tableId: 'legacy',
+        junctionSqlName: '_macro_storage_junction_collision',
+        readJunctionSqlName: 'stable_contacts_uuid__projects',
+        writable: true,
+      },
+    });
+    const request = databaseCompletionRequest(
+      { prompt: 'Show contacts and their projects', sql: '', schema },
+      'question'
+    );
+    expect(
+      JSON.parse(request.prompt).schema.tables[1].columns[0].relation
+    ).toEqual(schema.tables[1].columns[0].relation);
+    expect(request.additional_instructions).toContain(
+      'junction.linked_id = target.row_id'
+    );
+    expect(request.additional_instructions).toContain(
+      'Never join by matching display names'
+    );
   });
 });
 

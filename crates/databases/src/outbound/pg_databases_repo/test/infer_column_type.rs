@@ -54,6 +54,7 @@ async fn concurrent_inference_has_one_winner_and_preserves_column_identity(pool:
 async fn inference_and_first_write_serialize_on_the_same_version(pool: PgPool) {
     let (repo, table, column, replacement) = inference_fixture(&pool).await;
     let changes = [RowChange::Insert {
+        row_id: Uuid::now_v7(),
         table_id: table.id,
         cells: HashMap::from([(
             column.property_definition_id,
@@ -98,6 +99,7 @@ async fn nonempty_column_is_never_rebound_even_with_current_version_and_inferenc
     repo.apply_changes(
         &viewer(),
         &[RowChange::Insert {
+            row_id: Uuid::now_v7(),
             table_id: table.id,
             cells: HashMap::from([(
                 column.property_definition_id,
@@ -146,6 +148,7 @@ async fn empty_row_and_null_cell_do_not_settle_but_first_update_does(pool: PgPoo
         .apply_changes(
             &viewer(),
             &[RowChange::Insert {
+                row_id: Uuid::now_v7(),
                 table_id: table.id,
                 cells: HashMap::new(),
             }],
@@ -199,6 +202,7 @@ async fn blind_write_preserves_last_write_wins_but_rejects_a_rebound_definition(
         .apply_changes(
             &viewer(),
             &[RowChange::Insert {
+                row_id: Uuid::now_v7(),
                 table_id: table.id,
                 cells: HashMap::from([(
                     column.property_definition_id,
@@ -217,6 +221,7 @@ async fn blind_write_preserves_last_write_wins_but_rejects_a_rebound_definition(
         .apply_changes(
             &viewer(),
             &[RowChange::Insert {
+                row_id: Uuid::now_v7(),
                 table_id: table.id,
                 cells: HashMap::from([(
                     replacement,

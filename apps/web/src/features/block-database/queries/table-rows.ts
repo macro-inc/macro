@@ -19,27 +19,40 @@ import {
   type DatabaseColumnType,
   inferDatabaseNumber,
 } from '../core/column-inference';
+import { relatedRowIds } from '../core/database-relations';
 import type { DatabaseViewColumn } from '../core/database-view';
 import type { DatabaseRowMutation } from '../core/table';
 import {
   deleteRowStatement,
+  insertRelatedRowsStatement,
   insertRowStatement,
   ROW_ID_COLUMN,
+  replaceRelatedRowsStatement,
   selectAllStatement,
   updateCellStatement,
 } from '../sql';
 
 export function toViewColumn(column: DatabaseColumnDetail): DatabaseViewColumn {
+  const relation =
+    column.column.config?.kind === 'link' ? column.column.config : undefined;
   return {
     id: column.column.id,
     name:
       column.column.display_name ?? column.definition.definition.display_name,
     dataType: column.definition.definition.data_type,
-    isMultiSelect: column.definition.definition.is_multi_select,
+    isMultiSelect: !!relation || column.definition.definition.is_multi_select,
     options: column.definition.property_options.map((option) =>
       String(option.value.value)
     ),
-    writable: column.writable,
+    writable: relation ? !!column.junction_writable : column.writable,
+    ...(relation
+      ? {
+          relation: {
+            databaseId: relation.database_id,
+            tableId: relation.table_id,
+          },
+        }
+      : {}),
     specificEntityType: column.definition.definition.specific_entity_type,
     inferType: column.column.infer_type ?? false,
   };
@@ -152,7 +165,13 @@ export function createDatabaseRowsSource(props: {
     const column = table.columns.find(
       (column) => column.column.id === columnId
     );
-    if (!column?.writable) throw new Error('This property is read-only.');
+    if (
+      !column ||
+      !(column.column.config?.kind === 'link'
+        ? column.junction_writable && column.junction_sql_name
+        : column.writable)
+    )
+      throw new Error('This property is read-only.');
     return column;
   }
 
@@ -161,24 +180,48 @@ export function createDatabaseRowsSource(props: {
     const table = currentTable();
     const tableSqlName = table.sql_name;
     if (mutation.kind === 'cell') {
+      const column = columnForWrite(table, mutation.columnId);
+      if (column.column.config?.kind === 'link')
+        return replaceRelatedRowsStatement({
+          junctionSqlName: column.junction_sql_name!,
+          rowId: mutation.rowId,
+          relatedIds: relatedRowIds(mutation.value),
+        });
       return updateCellStatement({
         tableSqlName,
         rowId: mutation.rowId,
-        columnSqlName: columnForWrite(table, mutation.columnId).sql_name,
+        columnSqlName: column.sql_name,
         value: mutation.value,
       });
     }
     if (mutation.kind === 'delete')
       return deleteRowStatement({ tableSqlName, rowId: mutation.rowId });
-    return insertRowStatement({
+    const entries = Object.entries(mutation.values).map(([id, value]) => ({
+      column: columnForWrite(table, id),
+      value,
+    }));
+    const insert = insertRowStatement({
       tableSqlName,
       values: Object.fromEntries(
-        Object.entries(mutation.values).map(([id, value]) => [
-          columnForWrite(table, id).sql_name,
-          value,
-        ])
+        entries
+          .filter(({ column }) => column.column.config?.kind !== 'link')
+          .map(({ column, value }) => [column.sql_name, value])
       ),
     });
+    return [
+      insert,
+      ...entries
+        .filter(({ column }) => column.column.config?.kind === 'link')
+        .map(({ column, value }) =>
+          insertRelatedRowsStatement({
+            tableSqlName,
+            junctionSqlName: column.junction_sql_name!,
+            relatedIds: relatedRowIds(value),
+          })
+        ),
+    ]
+      .filter(Boolean)
+      .join('; ');
   }
 
   async function prepareFirstValues(
@@ -196,6 +239,7 @@ export function createDatabaseRowsSource(props: {
     for (const [columnId, value] of Object.entries(values)) {
       if (value === null || value === '') continue;
       let column = columnForWrite(currentTable(), columnId);
+      if (column.column.config?.kind === 'link') continue;
       const requested = mutation.columnTypes?.[columnId];
       if (column.column.infer_type) {
         if (version === undefined)

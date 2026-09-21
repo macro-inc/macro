@@ -93,3 +93,35 @@ export function deleteRowStatement(args: {
     `WHERE ${quoteIdentifier(ROW_ID_COLUMN)} = ${quoteLiteral(args.rowId)}`
   );
 }
+
+/** Replace only this row's edges; the caller submits the statements atomically. */
+export function replaceRelatedRowsStatement(args: {
+  junctionSqlName: string;
+  rowId: string;
+  relatedIds: readonly string[];
+}): string {
+  const junction = quoteIdentifier(args.junctionSqlName);
+  const rowId = quoteLiteral(args.rowId);
+  const remove = `DELETE FROM ${junction} WHERE "row_id" = ${rowId}`;
+  const values = [...new Set(args.relatedIds)].map(
+    (id) => `(${rowId}, ${quoteLiteral(id)})`
+  );
+  return values.length
+    ? `${remove}; INSERT INTO ${junction} ("row_id", "linked_id") VALUES ${values.join(', ')}`
+    : remove;
+}
+
+/** Link the row inserted by this same exec; the server resolves its temporary id. */
+export function insertRelatedRowsStatement(args: {
+  tableSqlName: string;
+  junctionSqlName: string;
+  relatedIds: readonly string[];
+}): string {
+  return [...new Set(args.relatedIds)]
+    .map(
+      (id) =>
+        `INSERT INTO ${quoteIdentifier(args.junctionSqlName)} ("row_id", "linked_id") ` +
+        `SELECT "row_id", ${quoteLiteral(id)} FROM ${quoteIdentifier(args.tableSqlName)} WHERE "row_id" LIKE 'new:%'`
+    )
+    .join('; ');
+}

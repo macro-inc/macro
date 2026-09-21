@@ -52,6 +52,7 @@ export type DatabaseTableActions = {
   createRecord: () => Promise<boolean>;
   focusFirstCell: () => Promise<void>;
   focusColumn: (columnId: string) => boolean;
+  openRecord: (rowId: string) => void;
   pending: Accessor<boolean>;
 };
 
@@ -63,6 +64,7 @@ export function DatabaseTableView(props: {
   onViewChange?: (view: DatabaseViewConfig) => void;
   renderMentionPicker?: GridCellProps['renderMentionPicker'];
   renderMentionValue?: GridCellProps['renderMentionValue'];
+  renderRelationCell?: (props: GridCellProps) => JSX.Element;
   onRenameColumn?: (
     columnId: string,
     name: string,
@@ -325,43 +327,65 @@ export function DatabaseTableView(props: {
     column: Accessor<DatabaseViewColumn>,
     options?: GridCellEditorOptions
   ) {
+    const write = (value: DatabaseCellValue) =>
+      draftRows.has(row().rowId)
+        ? draftRows.write(row().rowId, column().id, value)
+        : writeCell(row(), column(), value);
     return (
-      <GridCell
-        {...options}
-        column={column()}
-        emptyLabel={
-          column().id === titleColumn(columns())?.id ? 'Unnamed' : undefined
+      <Show
+        when={column().relation && props.renderRelationCell}
+        fallback={
+          <GridCell
+            {...options}
+            column={column()}
+            emptyLabel={
+              column().id === titleColumn(columns())?.id ? 'Unnamed' : undefined
+            }
+            value={rowValue(row(), column().id)}
+            canEdit={props.canEdit}
+            renderMentionPicker={props.renderMentionPicker}
+            renderMentionValue={props.renderMentionValue}
+            onMention={(mention) => {
+              const type = {
+                dataType: 'ENTITY',
+                entityType: mention.entityType,
+              } as const;
+              return draftRows.has(row().rowId)
+                ? draftRows.write(
+                    row().rowId,
+                    column().id,
+                    mention.id,
+                    undefined,
+                    type
+                  )
+                : writeCell(row(), column(), mention.id, undefined, type);
+            }}
+            onWrite={write}
+            onAddOption={(label) =>
+              draftRows.has(row().rowId)
+                ? draftRows.write(row().rowId, column().id, label, label)
+                : writeCell(row(), column(), label, label)
+            }
+          />
         }
-        value={rowValue(row(), column().id)}
-        canEdit={props.canEdit}
-        renderMentionPicker={props.renderMentionPicker}
-        renderMentionValue={props.renderMentionValue}
-        onMention={(mention) => {
-          const type = {
-            dataType: 'ENTITY',
-            entityType: mention.entityType,
-          } as const;
-          return draftRows.has(row().rowId)
-            ? draftRows.write(
-                row().rowId,
-                column().id,
-                mention.id,
-                undefined,
-                type
-              )
-            : writeCell(row(), column(), mention.id, undefined, type);
-        }}
-        onWrite={(value) =>
-          draftRows.has(row().rowId)
-            ? draftRows.write(row().rowId, column().id, value)
-            : writeCell(row(), column(), value)
+      >
+        {(render) =>
+          render()({
+            ...options,
+            get column() {
+              return column();
+            },
+            get value() {
+              return rowValue(row(), column().id);
+            },
+            get canEdit() {
+              return props.canEdit;
+            },
+            onWrite: write,
+            onAddOption: async () => false,
+          })
         }
-        onAddOption={(label) =>
-          draftRows.has(row().rowId)
-            ? draftRows.write(row().rowId, column().id, label, label)
-            : writeCell(row(), column(), label, label)
-        }
-      />
+      </Show>
     );
   }
   async function createRow(
@@ -454,6 +478,7 @@ export function DatabaseTableView(props: {
           props.view.layout === 'table' ? focusBlankRow() : createRow(),
         focusFirstCell,
         focusColumn,
+        openRecord: open,
         pending: controller.pending,
       })}
       <div class="relative flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -653,7 +678,7 @@ export function DatabaseTableView(props: {
                   addColumn={props.addColumn(
                     columns().length ? undefined : 'Add first column',
                     undefined,
-                    columns().length ? undefined : 'accent',
+                    undefined,
                     focusColumn
                   )}
                   renderCell={renderCell}

@@ -5,7 +5,9 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { DatabaseRelationTables } from '../core/property-creation';
 import { PropertyCreator } from './property-creator';
 import { ToolbarPopover } from './view-control-popover';
 
@@ -37,6 +39,125 @@ async function chooseType(label: string) {
 }
 
 describe('property creation', () => {
+  it('only reveals the related table picker for Relation and requires a target before saving', async () => {
+    const create = vi.fn(async () => {});
+    render(() => (
+      <PropertyCreator
+        existingNames={[]}
+        relationTables={{
+          status: 'ready',
+          tables: [
+            { id: 'customers', name: 'Customers' },
+            { id: 'tickets', name: 'Tickets' },
+          ],
+        }}
+        onCreate={create}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Add column' }));
+    const name = await screen.findByLabelText('Column name');
+    expect(
+      screen.queryByRole('button', { name: /^Related table:/ })
+    ).toBeNull();
+    fireEvent.input(name, { target: { value: 'Customer' } });
+    await chooseType('Relation');
+    fireEvent.submit(name.closest('form')!);
+    expect(create).not.toHaveBeenCalled();
+    const relatedTable = screen.getByRole('button', {
+      name: 'Related table: Choose a table',
+    });
+    relatedTable.focus();
+    fireEvent.keyDown(relatedTable, { key: 'ArrowDown' });
+    const customers = await screen.findByRole('menuitemradio', {
+      name: 'Customers',
+    });
+    customers.focus();
+    fireEvent.keyDown(customers, { key: 'Enter' });
+    await waitFor(() =>
+      expect(screen.queryByRole('menu', { hidden: true })).toBeNull()
+    );
+    await waitFor(() => expect(document.activeElement).toBe(relatedTable));
+    fireEvent.submit(name.closest('form')!);
+    await waitFor(() =>
+      expect(create).toHaveBeenCalledExactlyOnceWith({
+        name: 'Customer',
+        dataType: 'ENTITY',
+        inferType: false,
+        options: [],
+        relationTableId: 'customers',
+      })
+    );
+  });
+
+  it('requires a currently available table and clears relation metadata when switching to Text', async () => {
+    const create = vi.fn(async () => {});
+    const [tables, setTables] = createSignal<DatabaseRelationTables>({
+      status: 'ready',
+      tables: [{ id: 'customers', name: 'Customers' }],
+    });
+    render(() => (
+      <PropertyCreator
+        existingNames={[]}
+        relationTables={tables()}
+        onCreate={create}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Add column' }));
+    await chooseType('Relation');
+    const relatedTable = screen.getByRole('button', {
+      name: 'Related table: Choose a table',
+    });
+    relatedTable.focus();
+    fireEvent.keyDown(relatedTable, { key: 'ArrowDown' });
+    const customers = await screen.findByRole('menuitemradio', {
+      name: 'Customers',
+    });
+    customers.focus();
+    fireEvent.keyDown(customers, { key: 'Enter' });
+    await waitFor(() =>
+      expect(screen.queryByRole('menu', { hidden: true })).toBeNull()
+    );
+    setTables({ status: 'ready', tables: [] });
+    const form = screen.getByLabelText('Column name').closest('form')!;
+    fireEvent.submit(form);
+    expect(create).not.toHaveBeenCalled();
+    await chooseType('Text');
+    expect(
+      screen.queryByRole('button', { name: /^Related table:/ })
+    ).toBeNull();
+    fireEvent.submit(form);
+    await waitFor(() =>
+      expect(create).toHaveBeenCalledExactlyOnceWith({
+        name: 'Unnamed',
+        dataType: 'STRING',
+        inferType: false,
+        options: [],
+      })
+    );
+  });
+
+  it('keeps a failed table lookup local to Relation and offers retry', async () => {
+    const retry = vi.fn();
+    const create = vi.fn(async () => {});
+    render(() => (
+      <PropertyCreator
+        existingNames={[]}
+        relationTables={{ status: 'error', retry }}
+        onCreate={create}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Add column' }));
+    expect(screen.queryByRole('alert')).toBeNull();
+    await chooseType('Relation');
+    expect(screen.getByRole('alert').textContent).toContain(
+      'Tables could not be loaded'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(retry).toHaveBeenCalledOnce();
+    fireEvent.submit(screen.getByLabelText('Column name').closest('form')!);
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it('preserves nested popup focus ownership and hands a successful create to the grid', async () => {
     let cell!: HTMLInputElement;
     const created = vi.fn(() => {
@@ -95,7 +216,7 @@ describe('property creation', () => {
       name: 'URL',
       checked: true,
     });
-    expect(screen.getAllByRole('menuitemradio')).toHaveLength(6);
+    expect(screen.getAllByRole('menuitemradio')).toHaveLength(7);
     fireEvent.keyDown(selected, { key: 'Escape' });
     await waitFor(() =>
       expect(screen.queryByRole('menu', { hidden: true })).toBeNull()

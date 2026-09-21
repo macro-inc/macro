@@ -19,7 +19,7 @@ use uuid::Uuid;
 use crate::domain::catalog::{
     ColumnEntry, JunctionKind, LINKED_ID, ROW_ID, TableEntry, option_display,
 };
-use crate::domain::models::{QueryError, RawOp, RawRowChange, RowChange, SqlValue};
+use crate::domain::models::{ColumnConfig, QueryError, RawOp, RawRowChange, RowChange, SqlValue};
 
 /// Which catalog object a SQL table name resolves to.
 enum Target<'a> {
@@ -27,6 +27,8 @@ enum Target<'a> {
     Junction {
         column_id: crate::domain::models::ColumnId,
         kind: JunctionKind,
+        source_table_id: Uuid,
+        target_table_id: Option<Uuid>,
     },
 }
 
@@ -40,6 +42,16 @@ fn resolve<'a>(entries: &'a [TableEntry], sql_name: &str) -> Option<Target<'a>> 
                 return Some(Target::Junction {
                     column_id: junction.column_id,
                     kind: junction.kind,
+                    source_table_id: entry.table.id,
+                    target_table_id: entry.columns.iter().find_map(|column| {
+                        if column.column.id != junction.column_id {
+                            return None;
+                        }
+                        match column.column.config {
+                            Some(ColumnConfig::Link { table_id, .. }) => Some(table_id),
+                            _ => None,
+                        }
+                    }),
                 });
             }
         }
@@ -52,14 +64,22 @@ fn untranslatable(msg: impl Into<String>) -> QueryError {
 }
 
 /// Prefix of the placeholder ids SQLite assigns to inserted rows; the server
-/// mints the real id when applying the insert.
+/// mints the real id during translation, before resolving related inserts.
 pub const NEW_ROW_PREFIX: &str = "new:";
 
-fn parse_row_id(value: &SqlValue, what: &str) -> Result<Uuid, QueryError> {
+fn parse_row_id(
+    value: &SqlValue,
+    what: &str,
+    table_id: Uuid,
+    inserted: &HashMap<(Uuid, String), Uuid>,
+) -> Result<Uuid, QueryError> {
     match value {
-        SqlValue::Text(t) if t.starts_with(NEW_ROW_PREFIX) => Err(untranslatable(format!(
-            "{what} refers to a row inserted in the same statement; insert first, then reference its id in a second statement"
-        ))),
+        SqlValue::Text(t) if t.starts_with(NEW_ROW_PREFIX) => inserted
+            .get(&(table_id, t.clone()))
+            .copied()
+            .ok_or_else(|| untranslatable(format!(
+                "{what} does not refer to a row inserted into its expected table in this statement"
+            ))),
         SqlValue::Text(t) => {
             Uuid::parse_str(t).map_err(|_| untranslatable(format!("{what} `{t}` is not a row id")))
         }
@@ -266,7 +286,32 @@ pub fn translate(
     changes: Vec<RawRowChange>,
     entries: &[TableEntry],
 ) -> Result<Vec<RowChange>, QueryError> {
-    changes
+    let mut inserted = HashMap::new();
+    for change in &changes {
+        if change.op != RawOp::Insert {
+            continue;
+        }
+        if let Some(Target::Table(table)) = resolve(entries, &change.table) {
+            let SqlValue::Text(placeholder) = pk_value(change, ROW_ID)? else {
+                return Err(untranslatable("inserted row lacks its temporary row id"));
+            };
+            if !placeholder.starts_with(NEW_ROW_PREFIX) {
+                return Err(untranslatable(
+                    "row_id is assigned by the server; omit it from INSERT",
+                ));
+            }
+            if inserted
+                .insert(
+                    (table.table.id, placeholder.clone()),
+                    macro_uuid::generate_uuid_v7(),
+                )
+                .is_some()
+            {
+                return Err(untranslatable("duplicate inserted row identity"));
+            }
+        }
+    }
+    let mut translated = changes
         .into_iter()
         .map(|change| {
             let target = resolve(entries, &change.table).ok_or_else(|| {
@@ -287,6 +332,12 @@ pub fn translate(
                             }
                             Ok(RowChange::Insert {
                                 table_id,
+                                row_id: parse_row_id(
+                                    pk_value(&change, ROW_ID)?,
+                                    ROW_ID,
+                                    table_id,
+                                    &inserted,
+                                )?,
                                 cells: cells_for(table, change.new_values.iter(), false)?
                                     .into_iter()
                                     .filter_map(|(k, v)| v.map(|v| (k, v)))
@@ -295,24 +346,51 @@ pub fn translate(
                         }
                         RawOp::Update => Ok(RowChange::Update {
                             table_id,
-                            row_id: parse_row_id(pk_value(&change, ROW_ID)?, "row_id")?,
+                            row_id: parse_row_id(
+                                pk_value(&change, ROW_ID)?,
+                                ROW_ID,
+                                table_id,
+                                &inserted,
+                            )?,
                             cells: cells_for(table, change.new_values.iter(), true)?,
                         }),
                         RawOp::Delete => Ok(RowChange::Delete {
                             table_id,
-                            row_id: parse_row_id(pk_value(&change, ROW_ID)?, "row_id")?,
+                            row_id: parse_row_id(
+                                pk_value(&change, ROW_ID)?,
+                                ROW_ID,
+                                table_id,
+                                &inserted,
+                            )?,
                         }),
                     }
                 }
-                Target::Junction { column_id, kind } => {
+                Target::Junction {
+                    column_id,
+                    kind,
+                    source_table_id,
+                    target_table_id,
+                } => {
                     if kind != JunctionKind::Link {
                         return Err(QueryError::ReadOnly(format!(
                             "{} mirrors a multi-valued column; write the JSON array column instead",
                             change.table
                         )));
                     }
-                    let source_row_id = parse_row_id(pk_value(&change, ROW_ID)?, ROW_ID)?;
-                    let target_row_id = parse_row_id(pk_value(&change, LINKED_ID)?, LINKED_ID)?;
+                    let target_table_id =
+                        target_table_id.ok_or_else(|| untranslatable("link target is missing"))?;
+                    let source_row_id = parse_row_id(
+                        pk_value(&change, ROW_ID)?,
+                        ROW_ID,
+                        source_table_id,
+                        &inserted,
+                    )?;
+                    let target_row_id = parse_row_id(
+                        pk_value(&change, LINKED_ID)?,
+                        LINKED_ID,
+                        target_table_id,
+                        &inserted,
+                    )?;
                     match change.op {
                         RawOp::Insert => Ok(RowChange::Link {
                             column_id,
@@ -331,5 +409,9 @@ pub fn translate(
                 }
             }
         })
-        .collect()
+        .collect::<Result<Vec<_>, QueryError>>()?;
+    // SQLite changesets group changes by table, not SQL statement order. All
+    // new endpoints must exist before PostgreSQL applies their foreign keys.
+    translated.sort_by_key(|change| !matches!(change, RowChange::Insert { .. }));
+    Ok(translated)
 }

@@ -19692,7 +19692,13 @@
       "ColumnDetail": {
         "type": "object",
         "description": "One column placement with the definition behind it.",
-        "required": ["column", "sql_name", "definition", "writable"],
+        "required": [
+          "column",
+          "sql_name",
+          "definition",
+          "writable",
+          "junction_writable"
+        ],
         "properties": {
           "column": {
             "$ref": "#/components/schemas/Column",
@@ -19701,6 +19707,18 @@
           "definition": {
             "$ref": "#/components/schemas/PropertyDefinitionWithOptions",
             "description": "The bound definition (name, type, options)."
+          },
+          "junction_sql_name": {
+            "type": ["string", "null"],
+            "description": "Exact junction name for multi-valued or relation columns."
+          },
+          "junction_writable": {
+            "type": "boolean",
+            "description": "Whether this viewer can insert/delete edges in the junction."
+          },
+          "read_junction_sql_name": {
+            "type": ["string", "null"],
+            "description": "Stable read-only junction alias, when it is unambiguous in the catalog."
           },
           "sql_name": {
             "type": "string",

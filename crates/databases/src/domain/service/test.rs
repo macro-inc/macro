@@ -28,6 +28,7 @@ use crate::outbound::rusqlite_executor::{ExecutorLimits, RusqliteExecutor};
 
 mod discovery;
 mod infer_column_type;
+mod relations;
 mod rename_column;
 
 const OWNER: &str = "macro|owner@macro.com";
@@ -336,7 +337,9 @@ impl DatabasesRepo for FakeRepo {
         for change in changes {
             for column in &mut w.columns {
                 let has_value = match change {
-                    RowChange::Insert { table_id, cells } => {
+                    RowChange::Insert {
+                        table_id, cells, ..
+                    } => {
                         *table_id == column.table_id
                             && cells.contains_key(&column.property_definition_id)
                     }
@@ -356,8 +359,12 @@ impl DatabasesRepo for FakeRepo {
             }
             w.applied.push(change.clone());
             match change {
-                RowChange::Insert { table_id, cells } => {
-                    let id = Uuid::new_v4();
+                RowChange::Insert {
+                    table_id,
+                    row_id,
+                    cells,
+                } => {
+                    let id = *row_id;
                     minted.push(id);
                     w.rows.entry(*table_id).or_default().push(Row {
                         id,

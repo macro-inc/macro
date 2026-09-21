@@ -191,7 +191,10 @@ fn insert_translates_display_values_to_typed_cells() {
         &f.entries,
     )
     .unwrap();
-    let RowChange::Insert { table_id, cells } = &changes[0] else {
+    let RowChange::Insert {
+        table_id, cells, ..
+    } = &changes[0]
+    else {
         panic!("insert")
     };
     assert_eq!(*table_id, f.entries[0].table.id);
@@ -314,7 +317,7 @@ fn junction_rows_become_links_and_mirrors_are_read_only() {
 }
 
 #[test]
-fn links_to_freshly_inserted_rows_are_refused_clearly() {
+fn unbound_new_row_placeholders_are_refused_clearly() {
     let f = fixture(AccessGrant::Edit);
     let err = translate(
         vec![change(
@@ -329,7 +332,46 @@ fn links_to_freshly_inserted_rows_are_refused_clearly() {
         &f.entries,
     )
     .unwrap_err();
-    assert!(matches!(err, QueryError::UntranslatableChange(msg) if msg.contains("same statement")));
+    assert!(matches!(err, QueryError::UntranslatableChange(msg) if msg.contains("expected table")));
+}
+
+#[test]
+fn inserted_placeholders_are_table_scoped_and_inserts_precede_edges() {
+    let f = fixture(AccessGrant::Edit);
+    let new_row = change(
+        "guests",
+        RawOp::Insert,
+        &[("row_id", t("new:source"))],
+        &[("row_id", t("new:source")), ("notes", t("New guest"))],
+    );
+    let target = Uuid::new_v4();
+    let edge = change(
+        "guests__sessions",
+        RawOp::Insert,
+        &[
+            ("row_id", t("new:source")),
+            ("linked_id", t(&target.to_string())),
+        ],
+        &[],
+    );
+    let translated = translate(vec![edge, new_row.clone()], &f.entries).unwrap();
+    let RowChange::Insert { row_id, .. } = translated[0] else {
+        panic!("insert must precede edge")
+    };
+    assert_eq!(row_id.get_version_num(), 7);
+    assert!(
+        matches!(translated[1], RowChange::Link { source_row_id, target_row_id, .. }
+        if source_row_id == row_id && target_row_id == target)
+    );
+
+    let wrong_endpoint = change(
+        "guests__sessions",
+        RawOp::Insert,
+        &[("row_id", t("new:source")), ("linked_id", t("new:source"))],
+        &[],
+    );
+    let error = translate(vec![new_row, wrong_endpoint], &f.entries).unwrap_err();
+    assert!(matches!(error, QueryError::UntranslatableChange(_)));
 }
 
 #[test]

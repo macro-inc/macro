@@ -437,6 +437,7 @@ function BoardCard(props: {
                 >
                   <PropertyIcon
                     type={column.dataType}
+                    relation={!!column.relation}
                     class="size-3 shrink-0 text-ink-placeholder"
                   />
                   <Show

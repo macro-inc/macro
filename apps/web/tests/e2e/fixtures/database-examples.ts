@@ -1,9 +1,14 @@
 import type { Page } from '@playwright/test';
+import type {
+  DatabaseDetail,
+  ExecOutcome,
+} from '../../../src/lib/service-clients/service-storage/databases';
 
 type ExampleColumn = {
   name: string;
-  type: 'STRING' | 'NUMBER' | 'DATE' | 'SELECT_STRING';
+  type: 'STRING' | 'NUMBER' | 'DATE' | 'SELECT_STRING' | 'ENTITY';
   options?: string[];
+  relationTo?: string;
 };
 type ExampleTable = {
   name: string;
@@ -20,7 +25,7 @@ export const databaseExamples: { name: string; tables: ExampleTable[] }[] = [
         name: 'Tickets',
         columns: [
           { name: 'Name', type: 'STRING' },
-          { name: 'Customer', type: 'STRING' },
+          { name: 'Customer', type: 'ENTITY', relationTo: 'Customers' },
           {
             name: 'Status',
             type: 'SELECT_STRING',
@@ -160,21 +165,6 @@ export async function seedDatabaseExamples(page: Page, backendOrigin: string) {
   // Reuse the browser's authenticated API context so HMR/navigation cannot
   // interrupt an accepted fixture mutation. Cookies are never exported.
   const api = page.context().request;
-  type Detail = {
-    database: { id: string; name: string };
-    tables: {
-      table: { id: string; name: string };
-      sql_name: string;
-      read_sql_name?: string;
-      columns: {
-        column: { id: string };
-        sql_name: string;
-        definition: {
-          definition: { display_name: string; data_type: string };
-        };
-      }[];
-    }[];
-  };
   async function request<T>(
     path: string,
     body?: unknown,
@@ -200,7 +190,7 @@ export async function seedDatabaseExamples(page: Page, backendOrigin: string) {
         : `'${value.replaceAll("'", "''")}'`;
   const existing =
     await request<{ database: { id: string; name: string } }[]>('/databases');
-  const seeded: Detail[] = [];
+  const seeded: DatabaseDetail[] = [];
   for (const example of databaseExamples) {
     const matches = existing.filter(
       (item) => item.database.name === example.name
@@ -214,7 +204,7 @@ export async function seedDatabaseExamples(page: Page, backendOrigin: string) {
       (await request<{ id: string; name: string }>('/databases', {
         name: example.name,
       }));
-    let detail = await request<Detail>(`/databases/${database.id}`);
+    let detail = await request<DatabaseDetail>(`/databases/${database.id}`);
     // New databases already have a starter table. Reuse it so an example
     // opens directly onto its data instead of an unrelated empty tab.
     if (
@@ -231,22 +221,56 @@ export async function seedDatabaseExamples(page: Page, backendOrigin: string) {
         },
         'PATCH'
       );
-      detail = await request<Detail>(`/databases/${database.id}`);
+      detail = await request<DatabaseDetail>(`/databases/${database.id}`);
     }
+    // Create every table before its columns so relationships can reference a
+    // later tab without depending on the order of the example's UI.
     for (const table of example.tables) {
-      const target =
-        detail.tables.find((item) => item.table.name === table.name)?.table ??
-        (await request<{ id: string }>(`/databases/${database.id}/tables`, {
+      if (!detail.tables.some((item) => item.table.name === table.name)) {
+        await request(`/databases/${database.id}/tables`, {
           name: table.name,
-        }));
+        });
+      }
+    }
+    detail = await request<DatabaseDetail>(`/databases/${database.id}`);
+    for (const table of example.tables) {
+      const target = detail.tables.find(
+        (item) => item.table.name === table.name
+      )!.table;
       for (const column of table.columns) {
+        const relationTarget = column.relationTo
+          ? detail.tables.find((item) => item.table.name === column.relationTo)
+          : undefined;
+        if (column.relationTo && !relationTarget)
+          throw new Error(`Missing relationship target ${column.relationTo}.`);
+        const renamed = detail.tables
+          .find((item) => item.table.id === target.id)
+          ?.columns.some(
+            (item) =>
+              item.definition.definition.display_name === column.name &&
+              item.column.display_name != null &&
+              item.column.display_name !== column.name
+          );
+        if (renamed)
+          throw new Error(
+            `Example column ${table.name}.${column.name} has been renamed; keeping it.`
+          );
         const current = detail.tables
           .find((item) => item.table.id === target.id)
           ?.columns.find(
-            (item) => item.definition.definition.display_name === column.name
+            (item) =>
+              (item.column.display_name ??
+                item.definition.definition.display_name) === column.name
           );
         if (current) {
-          if (current.definition.definition.data_type !== column.type)
+          const config = current.column.config;
+          const matches = relationTarget
+            ? config?.kind === 'link' &&
+              config.database_id === database.id &&
+              config.table_id === relationTarget.table.id
+            : !config &&
+              current.definition.definition.data_type === column.type;
+          if (!matches)
             throw new Error(
               `Example column ${table.name}.${column.name} has been changed; keeping it.`
             );
@@ -257,26 +281,103 @@ export async function seedDatabaseExamples(page: Page, backendOrigin: string) {
             kind: 'new',
             name: column.name,
             data_type: column.type,
-            is_multi_select: false,
+            is_multi_select: !!relationTarget,
             options: column.options,
           },
+          ...(relationTarget
+            ? {
+                linkToTableId: relationTarget.table.id,
+                linkToDatabaseId: database.id,
+              }
+            : {}),
         });
       }
-      detail = await request<Detail>(`/databases/${database.id}`);
-      const schema = detail.tables.find((item) => item.table.id === target.id)!;
+    }
+    detail = await request<DatabaseDetail>(`/databases/${database.id}`);
+    const pending = [...example.tables];
+    const ready = new Set<string>();
+    while (pending.length) {
+      const index = pending.findIndex((table) =>
+        table.columns.every(
+          (column) => !column.relationTo || ready.has(column.relationTo)
+        )
+      );
+      if (index < 0) throw new Error('Example relationships contain a cycle.');
+      const table = pending.splice(index, 1)[0];
+      const schema = detail.tables.find(
+        (item) => item.table.name === table.name
+      )!;
       const columns = table.columns.map(
         (column) =>
           schema.columns.find(
-            (item) => item.definition.definition.display_name === column.name
-          )!.sql_name
+            (item) =>
+              (item.column.display_name ??
+                item.definition.definition.display_name) === column.name
+          )!
       );
-      const statements = table.rows.map(
-        (row) =>
-          `INSERT INTO ${quote(schema.sql_name)} (${columns.map(quote).join(', ')}) SELECT ${row.map(literal).join(', ')} WHERE NOT EXISTS (SELECT 1 FROM ${quote(schema.sql_name)} WHERE ${quote(columns[0])} = ${literal(row[0])})`
+      const scalarIndexes = table.columns.flatMap((column, index) =>
+        column.relationTo ? [] : [index]
       );
-      await request('/databases/exec', { sql: statements.join(';\n') });
+      for (const [index, column] of table.columns.entries()) {
+        if (!column.relationTo) continue;
+        const target = detail.tables.find(
+          (item) => item.table.name === column.relationTo
+        )!;
+        const nameColumn = target.columns.find(
+          (item) =>
+            (item.column.display_name ??
+              item.definition.definition.display_name) === 'Name'
+        )!;
+        const names = [...new Set(table.rows.map((row) => row[index]))].filter(
+          (value) => value !== null
+        );
+        if (!names.length) continue;
+        const matches = await request<ExecOutcome>('/databases/query', {
+          sql: `SELECT ${quote(nameColumn.sql_name)}, COUNT(*) FROM ${quote(target.read_sql_name ?? target.sql_name)} WHERE ${quote(nameColumn.sql_name)} IN (${names.map(literal).join(', ')}) GROUP BY ${quote(nameColumn.sql_name)}`,
+        });
+        if (
+          names.some(
+            (name) =>
+              !matches.results[0]?.rows.some(
+                (row) => row[0] === name && row[1] === 1
+              )
+          )
+        )
+          throw new Error(
+            `Example ${column.relationTo} names have changed or are ambiguous; keeping existing records.`
+          );
+      }
+      const statements = table.rows.flatMap((row) => {
+        const insert = `INSERT INTO ${quote(schema.sql_name)} (${scalarIndexes.map((index) => quote(columns[index].sql_name)).join(', ')}) SELECT ${scalarIndexes.map((index) => literal(row[index])).join(', ')} WHERE NOT EXISTS (SELECT 1 FROM ${quote(schema.sql_name)} WHERE ${quote(columns[0].sql_name)} = ${literal(row[0])})`;
+        const links = table.columns.flatMap((column, index) => {
+          if (!column.relationTo || row[index] === null) return [];
+          const target = detail.tables.find(
+            (item) => item.table.name === column.relationTo
+          )!;
+          const targetName = target.columns.find(
+            (column) =>
+              (column.column.display_name ??
+                column.definition.definition.display_name) === 'Name'
+          )!;
+          const junction = columns[index].junction_sql_name;
+          if (!junction)
+            throw new Error(
+              `Missing relationship SQL metadata for ${table.name}.${column.name}.`
+            );
+          // Only link rows inserted by this exec. Existing edits, including an
+          // intentionally cleared relationship, survive subsequent seeding.
+          return [
+            `INSERT INTO ${quote(junction)} (row_id, linked_id) SELECT t.row_id, c.row_id FROM ${quote(schema.sql_name)} t JOIN ${quote(target.sql_name)} c ON c.${quote(targetName.sql_name)} = ${literal(row[index])} WHERE t.${quote(columns[0].sql_name)} = ${literal(row[0])} AND t.row_id LIKE 'new:%'`,
+          ];
+        });
+        return [insert, ...links];
+      });
+      await request<ExecOutcome>('/databases/exec', {
+        sql: statements.join(';\n'),
+      });
+      ready.add(table.name);
     }
-    seeded.push(await request<Detail>(`/databases/${database.id}`));
+    seeded.push(await request<DatabaseDetail>(`/databases/${database.id}`));
   }
   return seeded;
 }

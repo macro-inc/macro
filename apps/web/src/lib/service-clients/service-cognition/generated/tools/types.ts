@@ -1167,7 +1167,7 @@ export type ReadThreadReadContent =
  * Pick the type from what the values actually are, not from how they were typed at you: "Going / Maybe / Declined" is a `select`, not `text`; "$1,200" is a `number`; "Aug 13" is a `date`. Use `text` only when the values really are free-form.
  *
  * - `isMultiSelect: true` makes the column hold several values at once. In SQL it reads as a JSON array and also gets a companion `table__column(row_id, linked_id)` junction table; `col HAS 'x'` tests membership.
- * - `linkToTableId` makes it a **link column** pointing at another table, so rows on one side reference rows on the other. Link columns are many-to-many and junction-backed; join through the junction rather than comparing the JSON array.
+ * - `linkToTableId` makes it a **link column** pointing at another table, so rows on one side reference rows on the other. Link columns are many-to-many and junction-backed; join through the junction rather than comparing the JSON array. The response's relation metadata gives the target and exact junction names. Write edges through that junction, never the projected column. QueryDatabase can insert a row and its relationship edges atomically in one call.
  * - `entity` columns hold references to Macro things (people, documents). Their values are typed ids, and joining them against the `people` or `documents` magic table is how you get names.
  *
  * Select and tag columns take their options as **explicit schema**: pass every label the column should accept in `options`. SQL only accepts those labels — a select column created with no options accepts nothing — and more can be added later with AddColumnOptions.
@@ -1320,6 +1320,35 @@ export interface ToolColumn {
   options: string[];
   /**
    * Whether SQL may write to this column.
+   */
+  writable: boolean;
+  /**
+   * A database-row relationship; distinct from a Macro entity reference.
+   */
+  relation?: ToolRelation | null;
+}
+/**
+ * The target and exact SQL entry points for a database-row relationship.
+ */
+export interface ToolRelation {
+  /**
+   * Database containing the target rows.
+   */
+  databaseId: string;
+  /**
+   * Table whose row_id values are stored by this relation.
+   */
+  tableId: string;
+  /**
+   * Exact current junction name for authorized link edits.
+   */
+  junctionSqlName?: string | null;
+  /**
+   * Stable junction alias for saved reads, if available.
+   */
+  readJunctionSqlName?: string | null;
+  /**
+   * Whether this viewer may insert/delete relationship edges.
    */
   writable: boolean;
 }
@@ -3416,6 +3445,7 @@ export interface DeleteTagResponse {
  *
  * - **`row_id` is the primary key** of every user table. It is minted by the server; never insert one yourself.
  * - **Multi-valued columns are JSON arrays**, and each one also has a companion junction table `table__column(row_id, linked_id)` for flat joins.
+ * - **Relation columns point to database rows, not Macro entities.** Their `relation` metadata identifies the target database/table and exact junction names. Join source.row_id to junction.row_id and junction.linked_id to target.row_id; never compare display names or a JSON array to a target name. Use readJunctionSqlName for saved reads, or json_each of the relation column if no stable junction alias is available. Insert/delete edges through junctionSqlName only when relation.writable; the projected column is read-only.
  * - **`col HAS 'x'`** tests membership in a multi-valued column. It is the one piece of sugar; everything else is plain SQLite.
  * - **Select columns take their option labels as text** (`status = 'Going'`), never option ids. The options are explicit schema: only the labels the column carries are accepted, and new ones are added with AddColumnOptions.
  * - **Entity columns hold actual Macro ids.** Resolve people through `people.id` (often `macro|email`) and documents through `documents.id`; never invent ids or replace them with names. Respect each column's `specificEntityType`.
@@ -5011,6 +5041,7 @@ export interface NameSearch {
  *
  * - **`row_id` is the primary key** of every user table. It is minted by the server; never insert one yourself.
  * - **Multi-valued columns are JSON arrays**, and each one also has a companion junction table `table__column(row_id, linked_id)` for flat joins.
+ * - **Relation columns point to database rows, not Macro entities.** Their `relation` metadata identifies the target database/table and exact junction names. Join source.row_id to junction.row_id and junction.linked_id to target.row_id; never compare display names or a JSON array to a target name. Use readJunctionSqlName for saved reads, or json_each of the relation column if no stable junction alias is available. Insert/delete edges through junctionSqlName only when relation.writable; the projected column is read-only.
  * - **`col HAS 'x'`** tests membership in a multi-valued column. It is the one piece of sugar; everything else is plain SQLite.
  * - **Select columns take their option labels as text** (`status = 'Going'`), never option ids. The options are explicit schema: only the labels the column carries are accepted, and new ones are added with AddColumnOptions.
  * - **Entity columns hold actual Macro ids.** Resolve people through `people.id` (often `macro|email`) and documents through `documents.id`; never invent ids or replace them with names. Respect each column's `specificEntityType`.
@@ -5021,8 +5052,9 @@ export interface NameSearch {
  * - Tables you only hold view access on are read-only, and magic tables always are.
  *
  * For a request to change records, first read the relevant rows, then use their returned `readVersions` as `baseVersions` to guard the tables being written. Versions for tables the edit only reads are not checked. A conflict means re-read and reconsider the edit. After changing rows, SELECT the affected records to verify the actual result. On a connection failure, inspect before retrying an INSERT.
+ * To create a row and link it atomically, INSERT the scalar cells (omit row_id), then INSERT into the relation's exact junctionSqlName (row_id,linked_id) using SELECT row_id from the source table WHERE row_id LIKE 'new:%', all in the same call. A batch with multiple new rows must narrow that SELECT to the intended row. Newly inserted target rows may be selected the same way from their target table. These temporary new: values are scoped to this execution; never save or reuse them in later calls. Only insertedRowIds contains the server's canonical new row IDs. Re-read after commit for final relationship projections.
  *
- * Results come back as columns and rows. A column whose values are entity ids carries an `entityType`, which is how the app renders it as a clickable chip rather than as raw text — prefer selecting an entity column over stringifying it. Writes report `changesApplied` and, for inserts, the `insertedRowIds` the server minted.
+ * Results come back as columns and rows. A column whose values are entity ids carries an `entityType`, which is how the app renders it as a clickable chip rather than as raw text — prefer selecting an entity column over stringifying it. Writes report `changesApplied` and, for inserts, the `insertedRowIds` the server minted. SELECT results inside a write batch may still contain temporary new: IDs; use insertedRowIds or a new SELECT after commit.
  */
 export interface QueryDatabase {
   /**

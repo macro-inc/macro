@@ -32,7 +32,9 @@ JSON array and also gets a companion `table__column(row_id, linked_id)` junction
 `col HAS 'x'` tests membership.\n\
 - `linkToTableId` makes it a **link column** pointing at another table, so rows on one side \
 reference rows on the other. Link columns are many-to-many and junction-backed; join through \
-the junction rather than comparing the JSON array.\n\
+the junction rather than comparing the JSON array. The response's relation metadata gives \
+the target and exact junction names. Write edges through that junction, never the projected \
+column. QueryDatabase can insert a row and its relationship edges atomically in one call.\n\
 - `entity` columns hold references to Macro things (people, documents). Their values are typed \
 ids, and joining them against the `people` or `documents` magic table is how you get names.\n\
 \n\

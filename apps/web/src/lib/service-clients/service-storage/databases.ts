@@ -109,6 +109,11 @@ export interface DatabaseColumnDetail {
   definition: DatabasePropertyDefinitionWithOptions;
   /** Whether SQL may write this column. */
   writable: boolean;
+  /** Exact catalog names: relation junctions may be disambiguated. */
+  junction_sql_name?: string | null;
+  read_junction_sql_name?: string | null;
+  /** Relation cells are projections; edit through the writable junction. */
+  junction_writable?: boolean;
 }
 
 /** One table with its columns and SQL name (`TableDetail`). */

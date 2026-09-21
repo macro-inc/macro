@@ -5,6 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Column } from './column';
+import type { ColumnDetailJunctionSqlName } from './columnDetailJunctionSqlName';
+import type { ColumnDetailReadJunctionSqlName } from './columnDetailReadJunctionSqlName';
 import type { PropertyDefinitionWithOptions } from './propertyDefinitionWithOptions';
 
 /**
@@ -15,6 +17,12 @@ export interface ColumnDetail {
   column: Column;
   /** The bound definition (name, type, options). */
   definition: PropertyDefinitionWithOptions;
+  /** Exact junction name for multi-valued or relation columns. */
+  junction_sql_name?: ColumnDetailJunctionSqlName;
+  /** Whether this viewer can insert/delete edges in the junction. */
+  junction_writable: boolean;
+  /** Stable read-only junction alias, when it is unambiguous in the catalog. */
+  read_junction_sql_name?: ColumnDetailReadJunctionSqlName;
   /** Name to use in SQL. */
   sql_name: string;
   /** Whether SQL may write this column. */

@@ -6071,6 +6071,23 @@ export const getDatabaseResponse = zod
                       .describe(
                         'Property definition with its associated options (service representation).'
                       ),
+                    junction_sql_name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Exact junction name for multi-valued or relation columns.'
+                      ),
+                    junction_writable: zod
+                      .boolean()
+                      .describe(
+                        'Whether this viewer can insert\/delete edges in the junction.'
+                      ),
+                    read_junction_sql_name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Stable read-only junction alias, when it is unambiguous in the catalog.'
+                      ),
                     sql_name: zod.string().describe('Name to use in SQL.'),
                     writable: zod
                       .boolean()
@@ -6591,6 +6608,23 @@ export const inferDatabaseColumnTypeResponse = zod
           .describe(
             'Property definition with its associated options (service representation).'
           ),
+        junction_sql_name: zod
+          .string()
+          .nullish()
+          .describe(
+            'Exact junction name for multi-valued or relation columns.'
+          ),
+        junction_writable: zod
+          .boolean()
+          .describe(
+            'Whether this viewer can insert\/delete edges in the junction.'
+          ),
+        read_junction_sql_name: zod
+          .string()
+          .nullish()
+          .describe(
+            'Stable read-only junction alias, when it is unambiguous in the catalog.'
+          ),
         sql_name: zod.string().describe('Name to use in SQL.'),
         writable: zod.boolean().describe('Whether SQL may write this column.'),
       })
@@ -6818,6 +6852,21 @@ export const addDatabaseColumnOptionsResponse = zod
       })
       .describe(
         'Property definition with its associated options (service representation).'
+      ),
+    junction_sql_name: zod
+      .string()
+      .nullish()
+      .describe('Exact junction name for multi-valued or relation columns.'),
+    junction_writable: zod
+      .boolean()
+      .describe(
+        'Whether this viewer can insert\/delete edges in the junction.'
+      ),
+    read_junction_sql_name: zod
+      .string()
+      .nullish()
+      .describe(
+        'Stable read-only junction alias, when it is unambiguous in the catalog.'
       ),
     sql_name: zod.string().describe('Name to use in SQL.'),
     writable: zod.boolean().describe('Whether SQL may write this column.'),

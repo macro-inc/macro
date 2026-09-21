@@ -562,10 +562,28 @@ where
             self.load_table(entry, loaded).await?;
             self.load_table(target_entry, loaded).await?;
             let has_row = |table: TableId, row: RowId| {
-                loaded
-                    .rows
-                    .get(&table)
-                    .is_some_and(|rows| rows.iter().any(|r| r.id == row))
+                let removed = changes.iter().any(|change| {
+                    matches!(
+                        change,
+                        RowChange::Delete { table_id, row_id }
+                            if *table_id == table && *row_id == row
+                    )
+                });
+                if matches!(change, RowChange::Link { .. }) && removed {
+                    return false;
+                }
+                let inserted = changes.iter().any(|change| {
+                    matches!(
+                        change,
+                        RowChange::Insert { table_id, row_id, .. }
+                            if *table_id == table && *row_id == row
+                    )
+                });
+                inserted
+                    || loaded
+                        .rows
+                        .get(&table)
+                        .is_some_and(|rows| rows.iter().any(|r| r.id == row))
             };
             if !has_row(entry.table.id, *source_row_id) {
                 return Err(QueryError::UntranslatableChange(format!(
@@ -587,24 +605,43 @@ where
         DatabaseDetail {
             database,
             grant,
-            tables: entries
-                .into_iter()
-                .map(|entry| TableDetail {
-                    sql_name: entry.schema.sql_name,
-                    read_sql_name: catalog::read_table_name(entry.table.id),
-                    table: entry.table,
-                    columns: entry
-                        .columns
-                        .into_iter()
-                        .map(|c| ColumnDetail {
-                            column: c.column,
-                            sql_name: c.sql_name,
-                            definition: c.definition,
-                            writable: c.writable,
-                        })
-                        .collect(),
-                })
-                .collect(),
+            tables: entries.into_iter().map(Self::table_detail).collect(),
+        }
+    }
+
+    fn table_detail(entry: TableEntry) -> TableDetail {
+        let read_sql_name = catalog::read_table_name(entry.table.id);
+        let columns = entry
+            .columns
+            .into_iter()
+            .map(|column| {
+                let junction = entry
+                    .junctions
+                    .iter()
+                    .find(|j| j.column_id == column.column.id);
+                let read_junction = format!("{read_sql_name}__{}", column.sql_name);
+                ColumnDetail {
+                    junction_sql_name: junction.map(|j| j.schema.sql_name.clone()),
+                    read_junction_sql_name: junction.and_then(|j| {
+                        j.schema
+                            .aliases
+                            .iter()
+                            .find(|name| **name == read_junction)
+                            .cloned()
+                    }),
+                    junction_writable: junction.is_some_and(|j| j.schema.writable),
+                    column: column.column,
+                    sql_name: column.sql_name,
+                    definition: column.definition,
+                    writable: column.writable,
+                }
+            })
+            .collect();
+        TableDetail {
+            sql_name: entry.schema.sql_name,
+            read_sql_name,
+            table: entry.table,
+            columns,
         }
     }
 
@@ -698,18 +735,13 @@ where
             .map_err(|e| DatabaseError::Repo(rootcause::Report::new(e).into_dynamic()))?;
         Self::entries_of(entries, database_id)
             .into_iter()
+            .map(Self::table_detail)
             .find(|entry| entry.table.id == table_id)
             .and_then(|entry| {
                 entry
                     .columns
                     .into_iter()
                     .find(|column| column.column.id == column_id)
-            })
-            .map(|column| ColumnDetail {
-                column: column.column,
-                sql_name: column.sql_name,
-                definition: column.definition,
-                writable: column.writable,
             })
             .ok_or(DatabaseError::NotFound)
     }

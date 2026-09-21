@@ -4,7 +4,13 @@ export type DatabasePropertyType =
   | 'BOOLEAN'
   | 'DATE'
   | 'SELECT_STRING'
+  | 'ENTITY'
   | 'LINK';
+
+export type DatabaseRelationTables =
+  | { status: 'loading' }
+  | { status: 'error'; retry: () => void }
+  | { status: 'ready'; tables: readonly { id: string; name: string }[] };
 
 export const DATABASE_PROPERTY_TYPES: {
   type: DatabasePropertyType;
@@ -47,6 +53,12 @@ export const DATABASE_PROPERTY_TYPES: {
     label: 'URL',
     description: 'A link to a website',
     example: 'e.g. Website',
+  },
+  {
+    type: 'ENTITY',
+    label: 'Relation',
+    description: 'Connect records from a table in this database',
+    example: 'e.g. Customer',
   },
 ];
 

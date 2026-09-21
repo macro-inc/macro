@@ -153,6 +153,96 @@ afterEach(() => {
 });
 
 describe('database rows SQL names', () => {
+  it('edits projected relationships through the resolved writable junction with CAS', async () => {
+    const schema = detail();
+    const column = schema.tables[0].columns[0];
+    column.column.config = {
+      kind: 'link',
+      database_id: 'db',
+      table_id: 'customers',
+    };
+    column.writable = false;
+    column.junction_writable = true;
+    column.junction_sql_name = '_macro_storage_junction_customer';
+    const exec = vi
+      .fn<(request: ExecRequest) => Promise<ExecOutcome>>()
+      .mockResolvedValue(read);
+    const { source } = setup(schema, exec);
+    await waitFor(() => expect(source.loading()).toBe(false));
+    expect(source.columns()[0]).toMatchObject({
+      writable: true,
+      isMultiSelect: true,
+      relation: { tableId: 'customers' },
+    });
+    exec.mockResolvedValueOnce(written);
+    await source.write(
+      {
+        kind: 'cell',
+        rowId: 'record',
+        columnId: 'name',
+        value: '["customer-1","customer-2"]',
+      },
+      5
+    );
+    expect(exec).toHaveBeenLastCalledWith({
+      sql: 'DELETE FROM "_macro_storage_junction_customer" WHERE "row_id" = \'record\'; INSERT INTO "_macro_storage_junction_customer" ("row_id", "linked_id") VALUES (\'record\', \'customer-1\'), (\'record\', \'customer-2\')',
+      baseVersions: { 'guests-table': 5 },
+    });
+  });
+
+  it('creates a Customer-first row and its links in one atomic exec without assigning its identity', async () => {
+    const schema = detail();
+    const column = schema.tables[0].columns[0];
+    column.column.config = {
+      kind: 'link',
+      database_id: 'db',
+      table_id: 'customers',
+    };
+    column.writable = false;
+    column.junction_writable = true;
+    column.junction_sql_name = 'guests__customer';
+    const exec = vi
+      .fn<(request: ExecRequest) => Promise<ExecOutcome>>()
+      .mockResolvedValue(read);
+    const { source } = setup(schema, exec);
+    await waitFor(() => expect(source.loading()).toBe(false));
+    exec.mockClear();
+    exec.mockResolvedValueOnce({
+      ...written,
+      inserted_row_ids: ['new-record'],
+    });
+    const result = await source.write(
+      { kind: 'create', values: { name: '["customer-1"]' } },
+      5
+    );
+    expect(exec).toHaveBeenCalledTimes(1);
+    expect(exec).toHaveBeenCalledWith({
+      sql: 'INSERT INTO "guests" DEFAULT VALUES; INSERT INTO "guests__customer" ("row_id", "linked_id") SELECT "row_id", \'customer-1\' FROM "guests" WHERE "row_id" LIKE \'new:%\'',
+      baseVersions: { 'guests-table': 5 },
+    });
+    expect(result.insertedRowIds).toEqual(['new-record']);
+  });
+
+  it('refuses relation writes when the junction is read-only, even though a scalar definition exists', async () => {
+    const schema = detail();
+    const column = schema.tables[0].columns[0];
+    column.column.config = {
+      kind: 'link',
+      database_id: 'db',
+      table_id: 'customers',
+    };
+    column.junction_writable = false;
+    const exec = vi
+      .fn<(request: ExecRequest) => Promise<ExecOutcome>>()
+      .mockResolvedValue(read);
+    const { source } = setup(schema, exec);
+    await waitFor(() => expect(source.loading()).toBe(false));
+    exec.mockClear();
+    expect(source.columns()[0].writable).toBe(false);
+    await expect(source.write(edit, 5)).rejects.toThrow('read-only');
+    expect(exec).not.toHaveBeenCalled();
+  });
+
   it('distinguishes an uncertain INSERT response from a definitive SQL refusal', async () => {
     const exec = vi
       .fn<(request: ExecRequest) => Promise<ExecOutcome>>()

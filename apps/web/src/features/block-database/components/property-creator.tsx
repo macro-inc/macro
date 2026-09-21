@@ -1,6 +1,7 @@
 import { Popover } from '@kobalte/core/popover';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
+import LinkIcon from '@phosphor/link-simple.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import XIcon from '@phosphor/x.svg';
 import { Button } from '@ui/components/Button';
@@ -9,6 +10,7 @@ import { createSignal, createUniqueId, For, Show } from 'solid-js';
 import {
   DATABASE_PROPERTY_TYPES,
   type DatabasePropertyType,
+  type DatabaseRelationTables,
   defaultDatabaseColumnName,
   isDatabaseNameTaken,
   parseDatabaseOptionLabels,
@@ -20,6 +22,7 @@ type CreateProperty = {
   dataType: DatabasePropertyType;
   inferType: boolean;
   options: string[];
+  relationTableId?: string;
 };
 
 export type PropertyCreatorVariant = 'outline' | 'ghost' | 'accent';
@@ -29,6 +32,7 @@ const STATUS_OPTIONS = ['Not started', 'In progress', 'Done'];
 function PropertyForm(props: {
   existingNames: string[];
   initialType?: DatabasePropertyType;
+  relationTables?: DatabaseRelationTables;
   pending: boolean;
   onPendingChange: (pending: boolean) => void;
   onCreate: (property: CreateProperty) => Promise<void>;
@@ -50,6 +54,13 @@ function PropertyForm(props: {
     startsWithStatus ? STATUS_OPTIONS : []
   );
   const [optionDraft, setOptionDraft] = createSignal('');
+  const [relationTableId, setRelationTableId] = createSignal('');
+  const tables = () => {
+    const source = props.relationTables;
+    return source?.status === 'ready' ? source.tables : [];
+  };
+  const relationTable = () =>
+    tables().find((table) => table.id === relationTableId());
   const pending = () => props.pending;
   const setPending = props.onPendingChange;
   const [error, setError] = createSignal('');
@@ -63,7 +74,10 @@ function PropertyForm(props: {
     dataType() === 'SELECT_STRING' &&
     allOptions().some((label) => label.length > 200);
   const valid = () =>
-    !duplicate() && name().trim().length <= 200 && !invalidOptions();
+    !duplicate() &&
+    name().trim().length <= 200 &&
+    !invalidOptions() &&
+    (dataType() !== 'ENTITY' || !!relationTable());
 
   function chooseType(next: DatabasePropertyType) {
     setInferType(false);
@@ -92,6 +106,9 @@ function PropertyForm(props: {
         dataType: dataType(),
         inferType: inferType(),
         options: dataType() === 'SELECT_STRING' ? allOptions() : [],
+        ...(dataType() === 'ENTITY'
+          ? { relationTableId: relationTableId() }
+          : {}),
       });
       props.onClose(true);
     } catch {
@@ -154,6 +171,9 @@ function PropertyForm(props: {
                 aria-label={`Column type: ${DATABASE_PROPERTY_TYPES.find((item) => item.type === dataType())?.label}`}
                 class="h-8 min-w-28 justify-between gap-3 px-2 text-xs"
               >
+                <Show when={dataType() === 'ENTITY'}>
+                  <LinkIcon class="size-3.5 shrink-0" aria-hidden="true" />
+                </Show>
                 {
                   DATABASE_PROPERTY_TYPES.find(
                     (item) => item.type === dataType()
@@ -174,6 +194,9 @@ function PropertyForm(props: {
                           closeOnSelect
                           onSelect={() => chooseType(item.type)}
                         >
+                          <Show when={item.type === 'ENTITY'}>
+                            <LinkIcon class="size-3.5" aria-hidden="true" />
+                          </Show>
                           <span class="flex-1">{item.label}</span>
                           <Dropdown.ItemIndicator>
                             <CheckIcon class="size-3.5" aria-hidden="true" />
@@ -186,6 +209,89 @@ function PropertyForm(props: {
               </Dropdown.Content>
             </Dropdown>
           </div>
+          <Show when={dataType() === 'ENTITY'}>
+            <div class="flex flex-col gap-1.5">
+              <span class="text-xs font-medium text-ink-muted">
+                Related table
+              </span>
+              <Dropdown
+                placement="bottom-start"
+                fitViewport
+                overlap
+                overflowPadding={8}
+              >
+                <Dropdown.Trigger
+                  variant="outline"
+                  size="sm"
+                  disabled={!tables().length}
+                  aria-label={`Related table: ${relationTable()?.name ?? 'Choose a table'}`}
+                  class="h-9 w-full justify-between gap-2 px-2.5 text-sm"
+                >
+                  <span class="truncate">
+                    {relationTable()?.name ?? 'Choose a table'}
+                  </span>
+                  <CaretDownIcon class="size-3 shrink-0" />
+                </Dropdown.Trigger>
+                <Dropdown.Content
+                  portalScope="local"
+                  class="max-h-[var(--kb-popper-content-available-height)] min-w-56 overflow-y-auto text-xs"
+                >
+                  <Dropdown.Group>
+                    <Dropdown.RadioGroup value={relationTableId()}>
+                      <For each={tables()}>
+                        {(table) => (
+                          <Dropdown.RadioItem
+                            value={table.id}
+                            closeOnSelect
+                            onSelect={() => setRelationTableId(table.id)}
+                          >
+                            <span class="flex-1 truncate">{table.name}</span>
+                            <Dropdown.ItemIndicator>
+                              <CheckIcon class="size-3.5" aria-hidden="true" />
+                            </Dropdown.ItemIndicator>
+                          </Dropdown.RadioItem>
+                        )}
+                      </For>
+                    </Dropdown.RadioGroup>
+                  </Dropdown.Group>
+                </Dropdown.Content>
+              </Dropdown>
+              <Show when={props.relationTables?.status === 'loading'}>
+                <p class="text-xs text-ink-muted" role="status">
+                  Loading tables…
+                </p>
+              </Show>
+              <Show
+                when={
+                  props.relationTables?.status === 'error'
+                    ? props.relationTables
+                    : undefined
+                }
+              >
+                {(source) => (
+                  <p class="text-xs text-failure-ink" role="alert">
+                    Tables could not be loaded.{' '}
+                    <button
+                      type="button"
+                      class="underline"
+                      onClick={() => source().retry()}
+                    >
+                      Try again
+                    </button>
+                  </p>
+                )}
+              </Show>
+              <Show
+                when={
+                  props.relationTables?.status === 'ready' && !tables().length
+                }
+              >
+                <p class="text-xs text-ink-muted">
+                  Create a table in this database first.
+                </p>
+              </Show>
+            </div>
+          </Show>
           <Show when={dataType() === 'SELECT_STRING'}>
             <div>
               <p class="mb-2 text-xs font-medium text-ink-muted">Options</p>
@@ -273,6 +379,7 @@ export function PropertyCreator(props: {
   label?: string;
   variant?: PropertyCreatorVariant;
   initialType?: DatabasePropertyType;
+  relationTables?: DatabaseRelationTables;
   onCreate: (property: CreateProperty) => Promise<void>;
   onCreated?: () => boolean;
 }) {
@@ -314,6 +421,7 @@ export function PropertyCreator(props: {
           <PropertyForm
             existingNames={props.existingNames}
             initialType={props.initialType}
+            relationTables={props.relationTables}
             pending={pending()}
             onPendingChange={setPending}
             onCreate={props.onCreate}

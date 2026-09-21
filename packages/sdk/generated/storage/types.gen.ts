@@ -3116,6 +3116,18 @@ export type ColumnDetail = {
      */
     definition: PropertyDefinitionWithOptions;
     /**
+     * Exact junction name for multi-valued or relation columns.
+     */
+    junction_sql_name?: string | null;
+    /**
+     * Whether this viewer can insert/delete edges in the junction.
+     */
+    junction_writable: boolean;
+    /**
+     * Stable read-only junction alias, when it is unambiguous in the catalog.
+     */
+    read_junction_sql_name?: string | null;
+    /**
      * Name to use in SQL.
      */
     sql_name: string;

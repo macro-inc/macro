@@ -118,6 +118,22 @@ export const AddColumnResponse = z.object({
                 isMultiSelect: z.boolean(),
                 options: z.array(z.string()),
                 writable: z.boolean(),
+                relation: z
+                  .union([
+                    z.object({
+                      databaseId: z.string().uuid(),
+                      tableId: z.string().uuid(),
+                      junctionSqlName: z
+                        .union([z.string(), z.null()])
+                        .optional(),
+                      readJunctionSqlName: z
+                        .union([z.string(), z.null()])
+                        .optional(),
+                      writable: z.boolean(),
+                    }),
+                    z.null(),
+                  ])
+                  .optional(),
               })
             ),
           })
@@ -217,6 +233,22 @@ export const AddColumnOptionsResponse = z.object({
                 isMultiSelect: z.boolean(),
                 options: z.array(z.string()),
                 writable: z.boolean(),
+                relation: z
+                  .union([
+                    z.object({
+                      databaseId: z.string().uuid(),
+                      tableId: z.string().uuid(),
+                      junctionSqlName: z
+                        .union([z.string(), z.null()])
+                        .optional(),
+                      readJunctionSqlName: z
+                        .union([z.string(), z.null()])
+                        .optional(),
+                      writable: z.boolean(),
+                    }),
+                    z.null(),
+                  ])
+                  .optional(),
               })
             ),
           })
@@ -1955,6 +1987,22 @@ export const CreateDatabaseResponse = z.object({
                 isMultiSelect: z.boolean(),
                 options: z.array(z.string()),
                 writable: z.boolean(),
+                relation: z
+                  .union([
+                    z.object({
+                      databaseId: z.string().uuid(),
+                      tableId: z.string().uuid(),
+                      junctionSqlName: z
+                        .union([z.string(), z.null()])
+                        .optional(),
+                      readJunctionSqlName: z
+                        .union([z.string(), z.null()])
+                        .optional(),
+                      writable: z.boolean(),
+                    }),
+                    z.null(),
+                  ])
+                  .optional(),
               })
             ),
           })
@@ -2255,6 +2303,22 @@ export const CreateTableResponse = z.object({
                 isMultiSelect: z.boolean(),
                 options: z.array(z.string()),
                 writable: z.boolean(),
+                relation: z
+                  .union([
+                    z.object({
+                      databaseId: z.string().uuid(),
+                      tableId: z.string().uuid(),
+                      junctionSqlName: z
+                        .union([z.string(), z.null()])
+                        .optional(),
+                      readJunctionSqlName: z
+                        .union([z.string(), z.null()])
+                        .optional(),
+                      writable: z.boolean(),
+                    }),
+                    z.null(),
+                  ])
+                  .optional(),
               })
             ),
           })
@@ -2494,6 +2558,18 @@ export const ToolDatabaseSchema = z.object({
           isMultiSelect: z.boolean(),
           options: z.array(z.string()),
           writable: z.boolean(),
+          relation: z
+            .union([
+              z.object({
+                databaseId: z.string().uuid(),
+                tableId: z.string().uuid(),
+                junctionSqlName: z.union([z.string(), z.null()]).optional(),
+                readJunctionSqlName: z.union([z.string(), z.null()]).optional(),
+                writable: z.boolean(),
+              }),
+              z.null(),
+            ])
+            .optional(),
         })
       ),
     })

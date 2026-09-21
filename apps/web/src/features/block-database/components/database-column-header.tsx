@@ -197,6 +197,7 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
               title={canRename() ? 'Double-click to rename' : undefined}
             >
               <PropertyIcon
+                relation={!!props.column.relation}
                 type={props.column.dataType}
                 entityType={props.column.specificEntityType}
               />

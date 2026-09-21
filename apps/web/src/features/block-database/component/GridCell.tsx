@@ -1,4 +1,3 @@
-import { createFocusManager } from '@kobalte/utils';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import PlusIcon from '@phosphor/plus.svg';
@@ -11,7 +10,18 @@ import {
   onMount,
   Show,
 } from 'solid-js';
+import { focusAdjacent } from '../components/cell-focus';
 import { SelectPill } from '../components/select-pill';
+import type {
+  GridCellControl,
+  GridCellEditorOptions,
+} from '../core/grid-cell-editor';
+
+export type {
+  GridCellControl,
+  GridCellEditorOptions,
+} from '../core/grid-cell-editor';
+
 import type {
   DatabaseEntityType,
   DatabaseMention,
@@ -21,18 +31,6 @@ import type {
   DatabaseViewColumn,
 } from '../core/database-view';
 import { canEditCell, formatCellValue } from '../core/table';
-
-export type GridCellControl = {
-  focus: () => void;
-  edit: (seed?: string) => void;
-};
-
-export type GridCellEditorOptions = {
-  initialEdit?: boolean;
-  onEditorReady?: (focus: () => void) => void;
-  onReady?: (control: GridCellControl | undefined) => void;
-  onNavigate?: (direction: 1 | -1) => boolean;
-};
 
 export type DatabaseMentionPickerProps = {
   anchor?: HTMLElement;
@@ -900,20 +898,5 @@ function NewOptionInput(props: {
         <CheckIcon class="size-3.5" />
       </button>
     </div>
-  );
-}
-
-/** Editors replace or portal their focused node, so finish Tab from the cell's position. */
-function focusAdjacent(trigger: HTMLElement | undefined, direction: 1 | -1) {
-  if (!trigger?.isConnected) return false;
-  const dialog = trigger.closest<HTMLElement>('[role="dialog"]');
-  const manager = createFocusManager(
-    () => dialog ?? trigger.ownerDocument.body
-  );
-  const options = { from: trigger, tabbable: true, wrap: Boolean(dialog) };
-  return Boolean(
-    direction === 1
-      ? manager.focusNext(options)
-      : manager.focusPrevious(options)
   );
 }

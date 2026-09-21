@@ -55,7 +55,20 @@ export function toQuerySchema(
             column.definition.definition.display_name,
           sqlName: column.sql_name,
           type: column.definition.definition.data_type,
-          multiple: column.definition.definition.is_multi_select,
+          multiple:
+            column.definition.definition.is_multi_select ||
+            column.column.config?.kind === 'link',
+          relation:
+            column.column.config?.kind === 'link'
+              ? {
+                  databaseId: column.column.config.database_id,
+                  tableId: column.column.config.table_id,
+                  junctionSqlName: column.junction_sql_name ?? undefined,
+                  readJunctionSqlName:
+                    column.read_junction_sql_name ?? undefined,
+                  writable: column.junction_writable === true,
+                }
+              : undefined,
           options: column.definition.property_options.map((option) =>
             String(option.value.value)
           ),
