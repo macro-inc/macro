@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ColumnConfigProperty } from './columnConfigProperty';
+import type { ColumnDisplayName } from './columnDisplayName';
 
 /**
  * A column: the placement of a property definition on a table.
@@ -14,8 +15,13 @@ this carries only where it appears and column-kind configuration.
  */
 export interface Column {
   config?: ColumnConfigProperty;
+  /** Optional label for this placement. The property's name still defines
+its SQL identifier, so renaming a column does not break saved queries. */
+  display_name?: ColumnDisplayName;
   /** Identifier of the placement. */
   id: string;
+  /** Whether the first nonempty value may settle this new text column's type. */
+  infer_type?: boolean;
   /** Fractional index for column ordering. */
   position: string;
   /** The bound property definition. */

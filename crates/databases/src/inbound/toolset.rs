@@ -16,6 +16,7 @@ mod create_table;
 mod describe_database;
 mod list_databases;
 mod query_database;
+mod save_database_view;
 
 #[cfg(test)]
 mod test;
@@ -40,14 +41,22 @@ macro_rules! sql_guide {
          - **Select columns take their option labels as text** (`status = 'Going'`), never \
          option ids. The options are explicit schema: only the labels the column carries are \
          accepted, and new ones are added with AddColumnOptions.\n\
-         - **Entity columns hold typed ids** (`usr_…`, `doc_…`) — join them against a magic \
-         table to get names.\n\
+         - **Entity columns hold actual Macro ids.** Resolve people through `people.id` \
+         (often `macro|email`) and documents through `documents.id`; never invent ids or \
+         replace them with names. Respect each column's `specificEntityType`.\n\
          - **Writes are plain `INSERT` / `UPDATE` / `DELETE`** against the user table and are \
          validated against the column schema; an unknown select option or a wrong type is \
          rejected by the statement, not silently coerced.\n\
-         - **Write to a table's own name**, the one `DescribeDatabase` reports as its \
-         `sql_name`. A table may also answer to a second, database-qualified name; that alias \
-         is a view and reads only, so writing through it is rejected.\n\
+         - **Use the exact identifiers returned by DescribeDatabase.** Quote SQL table and \
+         column identifiers with double quotes (escape an embedded quote by doubling it). \
+         A name containing a dot is one quoted identifier, not a schema qualifier. Display \
+         labels can differ from SQL names after a rename.\n\
+         - **Write to `sqlName`; read through `readSqlName`.** The stable read-only alias \
+         survives table renames and name collisions and is the right identifier for saved \
+         queries/charts. INSERT/UPDATE/DELETE must use the table's current `sqlName`.\n\
+         - **Schema uses tools, not SQL DDL.** CreateDatabase, CreateTable, AddColumn, \
+         AddColumnOptions, and SaveDatabaseView change structure/presentation. CREATE TABLE, \
+         ALTER TABLE, and CREATE VIEW are not supported in QueryDatabase.\n\
          - Tables you only hold view access on are read-only, and magic tables always are."
     };
 }
@@ -83,19 +92,21 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::domain::catalog::option_labels;
+use crate::domain::catalog::{option_labels, read_table_name};
 use crate::domain::models::{
     AccessGrant, DatabaseDetail, DatabaseError, ListedDatabase, QueryError, Viewer,
 };
 use crate::domain::ports::DatabasesService;
+use crate::domain::views::{DatabaseViewService, DatabaseViewsServiceImpl};
 
 pub use add_column::{AddColumn, AddColumnResponse};
 pub use add_column_options::{AddColumnOptions, AddColumnOptionsResponse};
-pub use create_database::CreateDatabase;
+pub use create_database::{CreateDatabase, CreateDatabaseResponse};
 pub use create_table::{CreateTable, CreateTableResponse};
 pub use describe_database::DescribeDatabase;
 pub use list_databases::{ListDatabases, ListDatabasesResponse};
-pub use query_database::{QueryDatabase, QueryDatabaseResponse};
+pub use query_database::{QueryDatabase, QueryDatabaseResponse, ReadOnlyQueryDatabase};
+pub use save_database_view::SaveDatabaseView;
 
 /// Service context for the databases AI tools.
 pub struct DatabasesToolContext<S: DatabasesService, E: EntityAccessService> {
@@ -103,6 +114,8 @@ pub struct DatabasesToolContext<S: DatabasesService, E: EntityAccessService> {
     pub service: Arc<S>,
     /// Mints the access receipts the schema operations are gated on.
     pub entity_access_service: Arc<E>,
+    /// Personal saved-view use case, backed by the owning saved_views port.
+    pub views: Arc<dyn DatabaseViewService>,
 }
 
 impl<S: DatabasesService, E: EntityAccessService> Clone for DatabasesToolContext<S, E> {
@@ -110,15 +123,22 @@ impl<S: DatabasesService, E: EntityAccessService> Clone for DatabasesToolContext
         Self {
             service: self.service.clone(),
             entity_access_service: self.entity_access_service.clone(),
+            views: self.views.clone(),
         }
     }
 }
 
 impl<S: DatabasesService, E: EntityAccessService> DatabasesToolContext<S, E> {
     /// Create a new databases tool context.
-    pub fn new(service: S, entity_access_service: Arc<E>) -> Self {
+    pub fn new<V>(service: S, entity_access_service: Arc<E>, views: V) -> Self
+    where
+        V: saved_views::ViewStorage + Send + Sync + 'static,
+        V::Err: std::error::Error + Send + Sync + 'static,
+    {
+        let service = Arc::new(service);
         Self {
-            service: Arc::new(service),
+            views: Arc::new(DatabaseViewsServiceImpl::new(service.clone(), views)),
+            service,
             entity_access_service,
         }
     }
@@ -141,6 +161,34 @@ impl<S: DatabasesService, E: EntityAccessService> DatabasesToolContext<S, E> {
     ) -> Result<EntityAccessReceipt<EditAccessLevel>, ToolCallError> {
         self.receipt::<EditAccessLevel>(user_id, database_id, "edit")
             .await
+    }
+
+    /// Schema enrichment follows an already committed mutation. Its failure
+    /// must not make an acknowledged create appear safe to repeat.
+    pub(crate) async fn schema_after_write(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        database_id: Uuid,
+    ) -> (Option<ToolDatabaseSchema>, Option<String>) {
+        let refreshed = async {
+            let receipt = self.view_receipt(user_id, database_id).await?;
+            self.service
+                .get_database(receipt, viewer_of(user_id))
+                .await
+                .map(ToolDatabaseSchema::from)
+                .map_err(database_error)
+        }
+        .await;
+        match refreshed {
+            Ok(schema) => (Some(schema), None),
+            Err(error) => (
+                None,
+                Some(format!(
+                    "The change was saved, but its schema could not be refreshed: {} Call DescribeDatabase with databaseId {database_id} before continuing; do not repeat this successful mutation.",
+                    error.description
+                )),
+            ),
+        }
     }
 
     /// Mint a receipt, saying what actually went wrong.
@@ -194,6 +242,19 @@ where
         .add_tool::<CreateTable, DatabasesToolContext<S, E>>()
         .add_tool::<AddColumn, DatabasesToolContext<S, E>>()
         .add_tool::<AddColumnOptions, DatabasesToolContext<S, E>>()
+        .add_tool::<SaveDatabaseView, DatabasesToolContext<S, E>>()
+}
+
+/// Discovery and read-only SQL for live document answers. No mutation tools.
+pub fn databases_read_only_toolset<S, E>() -> AsyncToolCollection<DatabasesToolContext<S, E>>
+where
+    S: DatabasesService,
+    E: EntityAccessService,
+{
+    AsyncToolCollection::new()
+        .add_tool::<ListDatabases, DatabasesToolContext<S, E>>()
+        .add_tool::<DescribeDatabase, DatabasesToolContext<S, E>>()
+        .add_tool::<ReadOnlyQueryDatabase, DatabasesToolContext<S, E>>()
 }
 
 /// The acting user, as the service's query surface understands them.
@@ -219,6 +280,7 @@ pub(crate) fn database_error(error: DatabaseError) -> ToolCallError {
             "The user does not have permission to do that to this database.".to_string()
         }
         DatabaseError::InvalidSchemaOperation(message) => message.clone(),
+        DatabaseError::VersionConflict => error.to_string(),
         DatabaseError::Repo(_) => "The databases service failed.".to_string(),
     };
 
@@ -244,12 +306,15 @@ pub(crate) fn database_error(error: DatabaseError) -> ToolCallError {
 pub(crate) fn query_error(error: QueryError) -> ToolCallError {
     let description = match &error {
         QueryError::Sql(message) => format!(
-            "SQL error: {message}\n\nCall DescribeDatabase for the exact table and column names \
-             before retrying."
+            "SQL error: {message}\n\nCall ListDatabases to find the table inside its database, \
+             then DescribeDatabase for exact sqlName/readSqlName and column sqlName identifiers. \
+             Quote identifiers and retry the corrected SQL. A guessed name failing does not \
+             establish that the user's table is missing."
         ),
         QueryError::ReadOnly(message) => format!(
-            "{message}. The user has view-only access to it, or it is a magic table — those \
-             are never writable."
+            "{message}. A magic table or readSqlName alias is always read-only. To edit a \
+             user table, use its current sqlName from DescribeDatabase; the user must also \
+             have edit access to that database."
         ),
         QueryError::VersionConflict { table_id } => {
             format!("Table {table_id} changed underneath this statement. Re-read it and retry.")
@@ -377,6 +442,21 @@ pub struct ToolDatabase {
     pub name: String,
     /// What the user may do with it.
     pub grant: ToolGrant,
+    /// Tables inside this database. Match a requested table against these
+    /// names, even when the database has a different name.
+    pub tables: Vec<ToolTableSummary>,
+}
+
+/// A discoverable table without loading its columns or records.
+#[derive(Debug, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolTableSummary {
+    /// Table id, used with the containing database id for schema operations.
+    pub id: Uuid,
+    /// Display name shown on the table tab.
+    pub name: String,
+    /// Stable read-only SQL identifier. DescribeDatabase returns the writable name.
+    pub read_sql_name: String,
 }
 
 impl From<ListedDatabase> for ToolDatabase {
@@ -385,6 +465,15 @@ impl From<ListedDatabase> for ToolDatabase {
             id: listed.database.id,
             name: listed.database.name,
             grant: listed.grant.into(),
+            tables: listed
+                .tables
+                .into_iter()
+                .map(|table| ToolTableSummary {
+                    id: table.id,
+                    name: table.name,
+                    read_sql_name: read_table_name(table.id),
+                })
+                .collect(),
         }
     }
 }
@@ -401,6 +490,11 @@ pub struct ToolColumn {
     pub name: String,
     /// The value type.
     pub data_type: ColumnType,
+    /// Required entity kind for an entity column, such as `USER` or `DOCUMENT`.
+    /// Resolve ids from the matching magic table; never invent an id.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "Option<String>")]
+    pub specific_entity_type: Option<models_properties::shared::EntityType>,
     /// Whether the column holds several values. Multi-valued columns are JSON
     /// arrays in SQL, with a companion `table__column` junction table.
     pub is_multi_select: bool,
@@ -420,6 +514,11 @@ pub struct ToolTable {
     pub id: Uuid,
     /// The name to use in SQL (`FROM guests`).
     pub sql_name: String,
+    /// Immutable read-only SQL name; use this for stored queries and charts.
+    pub read_sql_name: String,
+    /// Version at which this schema was described. A new SELECT supplies the
+    /// read version for conditional row edits.
+    pub version: i64,
     /// The name the user sees.
     pub name: String,
     /// Whether SQL may write to this table at all.
@@ -459,6 +558,8 @@ impl From<DatabaseDetail> for ToolDatabaseSchema {
                 .map(|table| ToolTable {
                     id: table.table.id,
                     sql_name: table.sql_name,
+                    read_sql_name: table.read_sql_name,
+                    version: table.table.version.0,
                     name: table.table.name,
                     writable,
                     columns: table
@@ -474,8 +575,12 @@ impl From<DatabaseDetail> for ToolDatabaseSchema {
                                 .into_iter()
                                 .map(|(_, label)| label)
                                 .collect(),
-                            name: column.definition.definition.display_name,
+                            name: column
+                                .column
+                                .display_name
+                                .unwrap_or(column.definition.definition.display_name),
                             data_type: column.definition.definition.data_type.into(),
+                            specific_entity_type: column.definition.definition.specific_entity_type,
                             is_multi_select: column.definition.definition.is_multi_select,
                             writable: column.writable,
                         })

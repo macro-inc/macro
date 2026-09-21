@@ -44,7 +44,7 @@ type ToolParserMap = {
   };
   CreateDatabase: {
     call: types.CreateDatabase;
-    response: types.ToolDatabaseSchema;
+    response: types.CreateDatabaseResponse;
   };
   CreateDocument: {
     call: types.CreateDocument;
@@ -217,6 +217,10 @@ type ToolParserMap = {
     call: types.RenameDocument;
     response: types.RenameDocumentResponse;
   };
+  SaveDatabaseView: {
+    call: types.SaveDatabaseView;
+    response: types.SavedDatabaseView;
+  };
   SearchSkills: {
     call: types.SearchSkills;
     response: types.SearchSkillsResponse;
@@ -297,7 +301,7 @@ const toolParserMap = {
   },
   CreateDatabase: {
     call: schemas.CreateDatabase,
-    response: schemas.ToolDatabaseSchema,
+    response: schemas.CreateDatabaseResponse,
   },
   CreateDocument: {
     call: schemas.CreateDocument,
@@ -497,6 +501,10 @@ const toolParserMap = {
     call: schemas.RenameDocument,
     response: schemas.RenameDocumentResponse,
   },
+  SaveDatabaseView: {
+    call: schemas.SaveDatabaseView,
+    response: schemas.SavedDatabaseView,
+  },
   SearchSkills: {
     call: schemas.SearchSkills,
     response: schemas.SearchSkillsResponse,
@@ -591,7 +599,7 @@ type ToolDataMap = {
   };
   CreateDatabase: {
     call: types.CreateDatabase;
-    response: types.ToolDatabaseSchema;
+    response: types.CreateDatabaseResponse;
   };
   CreateDocument: {
     call: types.CreateDocument;
@@ -763,6 +771,10 @@ type ToolDataMap = {
   RenameDocument: {
     call: types.RenameDocument;
     response: types.RenameDocumentResponse;
+  };
+  SaveDatabaseView: {
+    call: types.SaveDatabaseView;
+    response: types.SavedDatabaseView;
   };
   SearchSkills: {
     call: types.SearchSkills;

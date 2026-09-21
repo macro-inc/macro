@@ -508,7 +508,7 @@ export type Entity = {
 /**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database';
 
 /**
  * Error response body.
@@ -1416,6 +1416,16 @@ export type StructuredCompletionRequest = {
 
 export type StructuredCompletionResponse = {
     result: unknown;
+    /**
+     * Actual completed tools, independent of the model's claims.
+     */
+    toolActivity: Array<StructuredToolActivity>;
+};
+
+export type StructuredToolActivity = {
+    changesApplied?: number | null;
+    name: string;
+    success: boolean;
 };
 
 /**
@@ -1427,6 +1437,10 @@ export type ToolSet = {
     type: 'all';
 } | {
     type: 'none';
+} | {
+    type: 'databases';
+} | {
+    type: 'databases_read_only';
 };
 
 export type UpdateChannelSharePermission = {

@@ -39,7 +39,7 @@ macro_env_var::maybe_env_vars! {
 /// The service as every host builds it.
 pub type PgDatabasesService<Events, Broker> = DatabasesServiceImpl<
     PgDatabasesRepo,
-    PgDefinitionStore,
+    PgDefinitionStore<properties::outbound::properties_pg_repo::PropertiesPgRepo>,
     MagicTableRegistry,
     RusqliteExecutor,
     Events,
@@ -136,7 +136,10 @@ pub fn build_service_with_limits<Events: TableEventPublisher, Broker: MacroEvent
 ) -> PgDatabasesService<Events, Broker> {
     DatabasesServiceImpl::new(
         PgDatabasesRepo::new(pool.clone()),
-        PgDefinitionStore::new(pool.clone()),
+        PgDefinitionStore::new(
+            pool.clone(),
+            properties::outbound::properties_pg_repo::PropertiesPgRepo::new(pool.clone()),
+        ),
         MagicTableRegistry::new(pool.clone()),
         RusqliteExecutor::new(limits),
         events,

@@ -102,6 +102,19 @@ export function parseConnectApps(text: string): string {
   });
 }
 
+export function parseDatabaseQueries(text: string): string {
+  return text.replace(/<m-db-query>(.*?)<\/m-db-query>/g, (_, json) => {
+    try {
+      const data = JSON.parse(json);
+      return typeof data.prompt === 'string' && data.prompt
+        ? data.prompt
+        : 'Live database answer';
+    } catch {
+      return 'Live database answer';
+    }
+  });
+}
+
 export function parseTagMentions(text: string): string {
   return text.replace(/<m-tag>(.*?)<\/m-tag>/g, (_, json) => {
     try {
@@ -228,6 +241,7 @@ export function markdownToPlainText(markdown: string): string {
     parseAgentSessionMentions,
     parseTagMentions,
     parseConnectApps,
+    parseDatabaseQueries,
     parseSnapshots,
     parseDocumentCards,
     parseLinks,
@@ -243,6 +257,7 @@ export function markdownToPlainText(markdown: string): string {
  * format's `<m-*>` JSON tags. Each tag uses a small subset of these.
  */
 type MentionTagPayload = {
+  prompt?: string;
   documentId?: string;
   documentName?: string;
   blockName?: string;
@@ -423,6 +438,11 @@ export function markdownToEmbeddingText(markdown: string): string {
   text = replaceJsonTag(text, 'm-theme-mention', (data) => data.name || '');
   text = replaceJsonTag(text, 'm-connect-app', (data) =>
     data.name ? `Connect ${data.name}` : ''
+  );
+  text = replaceJsonTag(
+    text,
+    'm-db-query',
+    (data) => data.prompt || 'Live database answer'
   );
   text = replaceJsonTag(text, 'm-await', (data) => data.text || '');
   text = replaceJsonTag(

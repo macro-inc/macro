@@ -2,6 +2,7 @@
 //! receipts gate the schema operations, that SQL runs without one, and that
 //! errors reach the model in a form it can act on.
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use ai_toolset::schema::generate_validated_input_schema;
@@ -21,10 +22,14 @@ use models_properties::shared::{DataType, PropertyOwner};
 use uuid::Uuid;
 
 use super::*;
+mod committed_writes;
+mod read_only;
+mod saved_views;
 use crate::domain::models::{
-    Column, ColumnDetail, Database, ExecOutcome, QueryResult, ResultColumn, SqlValue,
-    SqliteSnapshot, Table, TableDetail, TableVersion,
+    Column, ColumnDetail, Database, ExecOutcome, QueryResult, RenameColumnOutcome, ResultColumn,
+    SqlValue, SqliteSnapshot, Table, TableDetail, TableVersion,
 };
+use saved_views::FakeViews;
 
 const USER: &str = "macro|wolf@macro.com";
 
@@ -45,6 +50,8 @@ struct Calls {
     listed: usize,
     described: usize,
     executed: Vec<String>,
+    queried: Vec<String>,
+    base_versions: Vec<Option<HashMap<Uuid, TableVersion>>>,
     created_databases: Vec<String>,
     created_tables: Vec<String>,
     created_columns: Vec<(Uuid, DataType, bool, Vec<String>)>,
@@ -56,6 +63,8 @@ struct FakeService {
     calls: Arc<Mutex<Calls>>,
     /// When set, `exec_sql` fails with this SQLite message instead of running.
     sql_error: Option<String>,
+    /// Fail only the post-write schema enrichment.
+    schema_error: bool,
 }
 
 const DATABASE_ID: Uuid = Uuid::from_u128(0x0dbb_0000_0000_0000_0000_0000_0000_0001);
@@ -86,6 +95,8 @@ fn table() -> Table {
 fn status_column() -> ColumnDetail {
     ColumnDetail {
         column: Column {
+            infer_type: false,
+            display_name: None,
             id: COLUMN_ID,
             table_id: TABLE_ID,
             property_definition_id: Uuid::nil(),
@@ -133,6 +144,7 @@ fn detail(grant: AccessGrant) -> DatabaseDetail {
         tables: vec![TableDetail {
             table: table(),
             sql_name: "guests".to_string(),
+            read_sql_name: crate::domain::catalog::read_table_name(table().id),
             columns: vec![status_column()],
         }],
     }
@@ -152,6 +164,7 @@ impl DatabasesService for FakeService {
         Ok(vec![ListedDatabase {
             database: database(),
             grant: AccessGrant::Owner,
+            tables: vec![table()],
         }])
     }
 
@@ -161,6 +174,12 @@ impl DatabasesService for FakeService {
         _viewer: Viewer,
     ) -> Result<DatabaseDetail, DatabaseError> {
         self.calls.lock().unwrap().described += 1;
+        if self.schema_error {
+            return Err(DatabaseError::Repo(
+                rootcause::Report::new(std::io::Error::other("schema connection lost"))
+                    .into_dynamic(),
+            ));
+        }
         Ok(detail(AccessGrant::Owner))
     }
 
@@ -173,6 +192,35 @@ impl DatabasesService for FakeService {
         _name: String,
     ) -> Result<Database, DatabaseError> {
         unimplemented!("the toolset does not rename databases")
+    }
+
+    async fn rename_table(
+        &self,
+        _receipt: EntityAccessReceipt<EditAccessLevel>,
+        _table_id: crate::domain::models::TableId,
+        _name: String,
+        _previous_name: String,
+    ) -> Result<Table, DatabaseError> {
+        unimplemented!("the toolset does not rename tables")
+    }
+
+    async fn infer_column_type(
+        &self,
+        _: EntityAccessReceipt<EditAccessLevel>,
+        _: Viewer,
+        _: crate::domain::models::InferColumnType,
+    ) -> Result<crate::domain::models::InferColumnTypeOutcome, DatabaseError> {
+        unimplemented!("tool tests do not infer column types")
+    }
+    async fn rename_column(
+        &self,
+        _receipt: EntityAccessReceipt<EditAccessLevel>,
+        _table_id: crate::domain::models::TableId,
+        _column_id: crate::domain::models::ColumnId,
+        _name: String,
+        _previous_name: String,
+    ) -> Result<RenameColumnOutcome, DatabaseError> {
+        unimplemented!("the toolset does not rename columns")
     }
 
     async fn trash_database(
@@ -256,6 +304,11 @@ impl DatabasesService for FakeService {
         req: crate::domain::models::ExecRequest,
     ) -> Result<ExecOutcome, QueryError> {
         self.calls.lock().unwrap().executed.push(req.sql);
+        self.calls
+            .lock()
+            .unwrap()
+            .base_versions
+            .push(req.base_versions);
         if let Some(message) = &self.sql_error {
             return Err(QueryError::Sql(message.clone()));
         }
@@ -272,8 +325,33 @@ impl DatabasesService for FakeService {
             inserted_row_ids: vec![Uuid::nil()],
             new_versions: std::collections::HashMap::from([(TABLE_ID, TableVersion(4))]),
             read_tables: vec![TABLE_ID],
+            read_database_ids: vec![DATABASE_ID],
             read_versions: std::collections::HashMap::from([(TABLE_ID, TableVersion(3))]),
             truncated_tables: Vec::new(),
+        })
+    }
+
+    async fn query_sql(&self, _viewer: Viewer, sql: String) -> Result<ExecOutcome, QueryError> {
+        self.calls.lock().unwrap().queried.push(sql);
+        if let Some(message) = &self.sql_error {
+            return Err(QueryError::ReadOnly(message.clone()));
+        }
+        Ok(ExecOutcome {
+            results: vec![QueryResult {
+                columns: vec![ResultColumn {
+                    name: "count".into(),
+                    entity_type: None,
+                    origin: None,
+                }],
+                rows: vec![vec![SqlValue::Integer(12)]],
+            }],
+            changes_applied: 0,
+            inserted_row_ids: vec![],
+            new_versions: HashMap::new(),
+            read_tables: vec![TABLE_ID],
+            read_database_ids: vec![DATABASE_ID],
+            read_versions: HashMap::from([(TABLE_ID, TableVersion(3))]),
+            truncated_tables: vec![],
         })
     }
 
@@ -417,7 +495,10 @@ type Context = DatabasesToolContext<FakeService, FakeAccess>;
 fn context(access: Arc<FakeAccess>) -> (Context, Arc<Mutex<Calls>>) {
     let service = FakeService::default();
     let calls = service.calls.clone();
-    (DatabasesToolContext::new(service, access), calls)
+    (
+        DatabasesToolContext::new(service, access, FakeViews::default()),
+        calls,
+    )
 }
 
 fn failing_sql_context(message: &str) -> Context {
@@ -427,6 +508,7 @@ fn failing_sql_context(message: &str) -> Context {
             ..FakeService::default()
         },
         FakeAccess::granting(AccessLevel::Owner),
+        FakeViews::default(),
     )
 }
 
@@ -434,6 +516,12 @@ fn failing_sql_context(message: &str) -> Context {
 
 #[test]
 fn every_tool_schema_is_valid() {
+    assert_eq!(
+        generate_validated_input_schema::<SaveDatabaseView>()
+            .expect("view schema validates")
+            .name,
+        "SaveDatabaseView"
+    );
     assert_eq!(
         generate_validated_input_schema::<ListDatabases>()
             .expect("schema should validate")
@@ -502,10 +590,11 @@ fn toolset_builds_with_every_tool() {
         "CreateTable",
         "AddColumn",
         "AddColumnOptions",
+        "SaveDatabaseView",
     ] {
         assert!(toolset.tools.contains_key(name), "missing {name}");
     }
-    assert_eq!(toolset.tools.len(), 7);
+    assert_eq!(toolset.tools.len(), 8);
     assert!(
         toolset.user_tools.is_empty(),
         "database tools run in the loop, none are user-executed"
@@ -575,7 +664,8 @@ async fn creating_a_table_with_edit_access_succeeds() {
     assert_eq!(response.table_id, TABLE_ID);
     assert_eq!(calls.lock().unwrap().created_tables, vec!["Sessions"]);
     assert_eq!(
-        response.database.tables[0].sql_name, "guests",
+        response.database.expect("schema refresh succeeds").tables[0].sql_name,
+        "guests",
         "the SQL name comes from the catalog, not from the display name"
     );
 }
@@ -668,6 +758,7 @@ async fn querying_does_not_mint_a_receipt() {
     let (context, calls) = context(FakeAccess::denying());
     let response = QueryDatabase {
         sql: "SELECT row_id FROM guests".to_string(),
+        base_versions: None,
     }
     .call(ServiceContext(context), request_context())
     .await
@@ -679,6 +770,9 @@ async fn querying_does_not_mint_a_receipt() {
     );
     assert_eq!(response.changes_applied, 2);
     assert_eq!(response.new_versions.get(&TABLE_ID), Some(&4));
+    assert_eq!(response.read_versions[0].table_id, TABLE_ID);
+    assert_eq!(response.read_versions[0].version, 3);
+    assert_eq!(calls.lock().unwrap().base_versions, vec![None]);
     assert_eq!(
         response.results[0].columns[0].entity_type.as_deref(),
         Some("user"),
@@ -687,12 +781,34 @@ async fn querying_does_not_mint_a_receipt() {
     assert!(response.summary.contains("Applied 2 row changes"));
 }
 
+#[tokio::test]
+async fn conditional_tool_edits_forward_only_explicit_read_versions() {
+    let (context, calls) = context(FakeAccess::denying());
+    let request: QueryDatabase = serde_json::from_value(serde_json::json!({
+        "sql": "UPDATE guests SET status = 'Going' WHERE row_id = 'record'",
+        "baseVersions": [{"tableId": TABLE_ID, "version": 3}],
+    }))
+    .unwrap();
+    request
+        .call(ServiceContext(context), request_context())
+        .await
+        .unwrap();
+    assert_eq!(
+        calls.lock().unwrap().base_versions,
+        vec![Some(HashMap::from([(TABLE_ID, TableVersion(3))]))]
+    );
+    let legacy: QueryDatabase =
+        serde_json::from_value(serde_json::json!({"sql":"SELECT 1"})).unwrap();
+    assert!(legacy.base_versions.is_none());
+}
+
 /// SQLite's message is the product's broken-query state: it is what lets a
 /// model fix the name and retry, so it has to arrive verbatim.
 #[tokio::test]
 async fn a_sql_error_reaches_the_model_verbatim() {
     let error = QueryDatabase {
         sql: "SELECT statuz FROM guests".to_string(),
+        base_versions: None,
     }
     .call(
         ServiceContext(failing_sql_context("no such column: statuz")),
@@ -735,12 +851,19 @@ async fn listing_renders_the_grant() {
 
     assert_eq!(response.databases.len(), 1);
     assert_eq!(response.databases[0].grant, ToolGrant::Owner);
+    assert_eq!(response.databases[0].name, "Offsite");
+    assert_eq!(response.databases[0].tables[0].name, "Guests");
+    assert_eq!(response.databases[0].tables[0].id, TABLE_ID);
+    assert_eq!(
+        response.databases[0].tables[0].read_sql_name,
+        crate::domain::catalog::read_table_name(TABLE_ID)
+    );
     assert_eq!(response.summary, "Found 1 database.");
 }
 
 #[test]
 fn an_empty_list_says_so_rather_than_looking_like_a_failure() {
-    assert!(list_databases::summarize(&[]).contains("no databases yet"));
+    assert!(list_databases::summarize(&[]).contains("No accessible databases"));
 }
 
 /// Select options reach the model as the labels SQL accepts, not as the option
@@ -750,6 +873,11 @@ fn describing_a_database_renders_option_labels() {
     let schema = ToolDatabaseSchema::from(detail(AccessGrant::Owner));
 
     assert_eq!(schema.tables[0].sql_name, "guests");
+    assert_eq!(
+        schema.tables[0].read_sql_name,
+        crate::domain::catalog::read_table_name(TABLE_ID)
+    );
+    assert_eq!(schema.tables[0].version, 3);
     assert!(schema.tables[0].writable);
     let column = &schema.tables[0].columns[0];
     assert_eq!(column.sql_name, "status");
@@ -757,6 +885,31 @@ fn describing_a_database_renders_option_labels() {
     assert_eq!(column.options, vec!["Going", "Declined"]);
     assert!(schema.sql_guide.contains("row_id"));
     assert!(schema.magic_tables.contains("people"));
+}
+
+#[test]
+fn describing_a_renamed_column_supplies_its_current_label_and_original_sql_identifier() {
+    let mut database = detail(AccessGrant::Owner);
+    database.tables[0].columns[0].column.display_name = Some("RSVP".into());
+    let schema = ToolDatabaseSchema::from(database);
+    let column = &schema.tables[0].columns[0];
+    assert_eq!(column.name, "RSVP");
+    assert_eq!(column.sql_name, "status");
+    assert_eq!(column.options, vec!["Going", "Declined"]);
+}
+
+#[test]
+fn describing_an_entity_column_preserves_the_actual_entity_kind() {
+    let mut database = detail(AccessGrant::Owner);
+    let definition = &mut database.tables[0].columns[0].definition.definition;
+    definition.data_type = DataType::Entity;
+    definition.specific_entity_type = Some(models_properties::shared::EntityType::User);
+    let json = serde_json::to_value(ToolDatabaseSchema::from(database)).unwrap();
+    assert_eq!(
+        json["tables"][0]["columns"][0]["specificEntityType"],
+        "USER"
+    );
+    assert_eq!(json["tables"][0]["columns"][0]["dataType"], "entity");
 }
 
 /// A view-only grant has to read as unwritable, or the model writes an UPDATE

@@ -337,6 +337,7 @@ async fn send_chat_message_inner(
         ctx.clone(),
         ai_request,
         system_prompt,
+        request.toolset.clone(),
         (*user_id).clone(),
         jwt_token,
         actual_chat_id.clone(),
@@ -489,6 +490,7 @@ fn stream_and_save_message(
     ctx: Arc<ApiContext>,
     request: Vec<ChatMessage>,
     system_prompt: String,
+    tool_selection: ToolSet,
     user_id: MacroUserIdStr<'static>,
     jwt_token: String,
     chat_id: String,
@@ -532,12 +534,21 @@ fn stream_and_save_message(
             yield json;
         }
 
-        let mcp_tools = {
+        let toolset = crate::api::tool_selection::select_tools(&tool_selection, async {
+            let tools: Arc<dyn ai_toolset::ToolSet<_> + Send + Sync> =
+                Arc::new(ai_tools::database_tools());
+            tools
+        }, async {
+            let tools: Arc<dyn ai_toolset::ToolSet<_> + Send + Sync> =
+                Arc::new(ai_tools::database_read_only_tools());
+            tools
+        }, async {
             use mcp_select::ConnectorSelect;
-            mcp_selector.user_toolset(&user_id).await
-        };
-        let toolset: Arc<dyn ai_toolset::ToolSet<_> + Send + Sync> =
-            Arc::new(mcp_select::CombinedToolSet::new(static_tools, mcp_tools));
+            let mcp_tools = mcp_selector.user_toolset(&user_id).await;
+            let tools: Arc<dyn ai_toolset::ToolSet<_> + Send + Sync> =
+                Arc::new(mcp_select::CombinedToolSet::new(static_tools, mcp_tools));
+            tools
+        }).await;
         // The chat is the conversation every span of this turn belongs to
         // (`gen_ai.conversation.id`), so the turns of one chat form one session
         // in the observability backend.

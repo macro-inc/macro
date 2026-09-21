@@ -110,6 +110,11 @@ export const databasesKeys = createQueryKeys('databases', {
   }),
 });
 
+/** Viewer-specific read-only answers, shared by editors and document queries. */
+export const databaseQueryKeys = createQueryKeys('database-query', {
+  answer: (sql: string) => ({ queryKey: [sql] }),
+});
+
 export const instructionsMdKeys = createQueryKeys('instructionsMd', {
   id: null,
   text: (id: string) => ({

@@ -22,9 +22,13 @@ use uuid::Uuid;
 use super::*;
 use crate::domain::models::{
     ApplyOutcome, Column, ColumnBinding, ColumnConfig, PropertyDefinitionId, RowChange, SqlValue,
-    TableVersion,
+    TableSource, TableVersion,
 };
 use crate::outbound::rusqlite_executor::{ExecutorLimits, RusqliteExecutor};
+
+mod discovery;
+mod infer_column_type;
+mod rename_column;
 
 const OWNER: &str = "macro|owner@macro.com";
 const VIEWER: &str = "macro|viewer@macro.com";
@@ -165,8 +169,14 @@ impl DatabasesRepo for FakeRepo {
         }
         Ok(())
     }
-    async fn create_table(&self, cmd: &CreateTable) -> Result<Table, FakeError> {
+    async fn create_table(&self, cmd: &CreateTable) -> Result<Option<Table>, FakeError> {
         let mut w = self.0.lock().unwrap();
+        if w.tables
+            .iter()
+            .any(|table| table.database_id == cmd.database_id && same_name(&table.name, &cmd.name))
+        {
+            return Ok(None);
+        }
         let table = Table {
             id: Uuid::new_v4(),
             database_id: cmd.database_id,
@@ -175,7 +185,25 @@ impl DatabasesRepo for FakeRepo {
             version: TableVersion(0),
         };
         w.tables.push(table.clone());
-        Ok(table)
+        Ok(Some(table))
+    }
+    async fn rename_table(
+        &self,
+        table: &Table,
+        name: &str,
+        previous_name: &str,
+    ) -> Result<Option<Table>, FakeError> {
+        let mut world = self.0.lock().unwrap();
+        let Some(current) = world
+            .tables
+            .iter_mut()
+            .find(|candidate| candidate.id == table.id && candidate.name == previous_name)
+        else {
+            return Ok(None);
+        };
+        current.name = name.to_string();
+        current.version.0 += 1;
+        Ok(Some(current.clone()))
     }
     async fn create_column(
         &self,
@@ -185,6 +213,8 @@ impl DatabasesRepo for FakeRepo {
     ) -> Result<ColumnId, FakeError> {
         let mut w = self.0.lock().unwrap();
         let column = Column {
+            infer_type: cmd.infer_type,
+            display_name: None,
             id: Uuid::new_v4(),
             table_id,
             property_definition_id,
@@ -203,6 +233,67 @@ impl DatabasesRepo for FakeRepo {
             .ok_or(FakeError)?;
         table.version = TableVersion(table.version.0 + 1);
         Ok(table.version)
+    }
+    async fn rename_column(
+        &self,
+        table: &Table,
+        column: &Column,
+        name: &str,
+    ) -> Result<Option<RenameColumnOutcome>, FakeError> {
+        let mut world = self.0.lock().unwrap();
+        let Some(table_index) = world
+            .tables
+            .iter()
+            .position(|current| current.id == table.id && current.version == table.version)
+        else {
+            return Ok(None);
+        };
+        let Some(column_index) = world.columns.iter().position(|current| {
+            current.id == column.id
+                && current.table_id == table.id
+                && current.display_name == column.display_name
+        }) else {
+            return Ok(None);
+        };
+        world.tables[table_index].version.0 += 1;
+        world.columns[column_index].display_name = Some(name.to_string());
+        Ok(Some(RenameColumnOutcome {
+            column: world.columns[column_index].clone(),
+            table_version: world.tables[table_index].version,
+        }))
+    }
+    async fn infer_column_type(
+        &self,
+        table: &Table,
+        column: &Column,
+        definition_id: PropertyDefinitionId,
+    ) -> Result<Option<TableVersion>, FakeError> {
+        let mut w = self.0.lock().unwrap();
+        if w.rows.get(&table.id).is_some_and(|rows| {
+            rows.iter()
+                .any(|row| row.cells.contains_key(&column.property_definition_id))
+        }) {
+            return Ok(None);
+        }
+        let Some(t) = w
+            .tables
+            .iter()
+            .position(|t| t.id == table.id && t.version == table.version)
+        else {
+            return Ok(None);
+        };
+        let Some(c) = w.columns.iter().position(|c| {
+            c.id == column.id
+                && c.table_id == table.id
+                && c.property_definition_id == column.property_definition_id
+                && c.infer_type
+        }) else {
+            return Ok(None);
+        };
+        w.columns[c].property_definition_id = definition_id;
+        w.columns[c].infer_type = false;
+        w.tables[t].version.0 += 1;
+        Ok(Some(w.tables[t].version))
     }
     async fn fetch_rows(&self, table_id: TableId, limit: usize) -> Result<Vec<Row>, FakeError> {
         // Honours `limit` like the real `LIMIT $2`, so the domain's over-cap
@@ -243,6 +334,26 @@ impl DatabasesRepo for FakeRepo {
         let mut minted = Vec::new();
         let mut versions = HashMap::new();
         for change in changes {
+            for column in &mut w.columns {
+                let has_value = match change {
+                    RowChange::Insert { table_id, cells } => {
+                        *table_id == column.table_id
+                            && cells.contains_key(&column.property_definition_id)
+                    }
+                    RowChange::Update {
+                        table_id, cells, ..
+                    } => {
+                        *table_id == column.table_id
+                            && cells
+                                .get(&column.property_definition_id)
+                                .is_some_and(Option::is_some)
+                    }
+                    _ => false,
+                };
+                if has_value {
+                    column.infer_type = false;
+                }
+            }
             w.applied.push(change.clone());
             match change {
                 RowChange::Insert { table_id, cells } => {
@@ -437,6 +548,31 @@ impl ColumnDefinitionStore for FakeDefs {
                 Ok(id)
             }
         }
+    }
+    async fn create_inferred_definition(
+        &self,
+        database_id: DatabaseId,
+        name: &str,
+        data_type: DataType,
+        specific_entity_type: Option<PropertyEntityType>,
+    ) -> Result<PropertyDefinitionWithOptions, FakeError> {
+        let mut def = definition(
+            name,
+            data_type,
+            false,
+            PropertyOwner::Database { database_id },
+        );
+        def.definition.specific_entity_type = specific_entity_type;
+        self.0
+            .lock()
+            .unwrap()
+            .definitions
+            .insert(def.definition.id, def.clone());
+        Ok(def)
+    }
+    async fn delete_unused_definition(&self, id: PropertyDefinitionId) -> Result<(), FakeError> {
+        self.0.lock().unwrap().definitions.remove(&id);
+        Ok(())
     }
     async fn add_options(
         &self,
@@ -674,6 +810,7 @@ async fn seeded() -> (Shared, Service, DatabaseId, TableId) {
             rec.clone_for_test(),
             viewer(OWNER),
             CreateColumn {
+                infer_type: false,
                 table_id,
                 binding: ColumnBinding::NewDefinition {
                     name: "Name".into(),
@@ -692,6 +829,7 @@ async fn seeded() -> (Shared, Service, DatabaseId, TableId) {
             rec.clone_for_test(),
             viewer(OWNER),
             CreateColumn {
+                infer_type: false,
                 table_id,
                 binding: ColumnBinding::NewDefinition {
                     name: "Status".into(),
@@ -708,6 +846,7 @@ async fn seeded() -> (Shared, Service, DatabaseId, TableId) {
         rec,
         viewer(OWNER),
         CreateColumn {
+            infer_type: false,
             table_id,
             binding: ColumnBinding::NewDefinition {
                 name: "Plus ones".into(),
@@ -790,6 +929,132 @@ async fn create_database_grants_owner_and_starter_table() {
         .await
         .unwrap_err();
     assert!(matches!(err, DatabaseError::InvalidSchemaOperation(_)));
+}
+
+#[tokio::test]
+async fn queries_read_current_viewer_data_and_dependencies() {
+    let (world, svc, database_id, table_id) = seeded().await;
+    for caller in [OWNER, VIEWER] {
+        let outcome = svc.query_sql(
+            viewer(caller),
+            "WITH guests_going AS (SELECT * FROM guests WHERE status = 'Going') SELECT name, plus_ones FROM guests_going".into(),
+        ).await.unwrap();
+        assert_eq!(outcome.results[0].rows[0][0], SqlValue::Text("Sam".into()));
+        assert_eq!(outcome.changes_applied, 0);
+        assert!(outcome.new_versions.is_empty());
+        assert!(outcome.inserted_row_ids.is_empty());
+        assert_eq!(outcome.read_tables, vec![table_id]);
+        assert_eq!(outcome.read_database_ids, vec![database_id]);
+        assert_eq!(
+            outcome.read_versions[&table_id],
+            world.lock().unwrap().tables[0].version
+        );
+    }
+    let error = svc
+        .query_sql(viewer(STRANGER), "SELECT * FROM guests".into())
+        .await
+        .unwrap_err();
+    assert!(matches!(error, QueryError::Sql(_)));
+}
+
+#[tokio::test]
+async fn saved_read_alias_survives_renames_and_duplicate_table_names() {
+    let (_world, svc, database_id, table_id) = seeded().await;
+    let detail = svc
+        .get_database(
+            receipt::<ViewAccessLevel>(database_id, OWNER, AccessLevel::Owner),
+            viewer(OWNER),
+        )
+        .await
+        .unwrap();
+    let read_name = detail.tables[0].read_sql_name.clone();
+    let sql = format!("SELECT name FROM \"{read_name}\"");
+    assert_eq!(
+        text_cells(&svc.query_sql(viewer(OWNER), sql.clone()).await.unwrap()),
+        vec![vec!["Sam"]]
+    );
+
+    let other = svc
+        .create_database(CreateDatabase {
+            name: "Another offsite".into(),
+            owner_id: user(OWNER),
+        })
+        .await
+        .unwrap();
+    svc.create_table(
+        receipt::<EditAccessLevel>(other.id, OWNER, AccessLevel::Owner),
+        CreateTable {
+            database_id: other.id,
+            name: "Guests".into(),
+        },
+    )
+    .await
+    .unwrap();
+    svc.rename_database(
+        receipt::<EditAccessLevel>(database_id, OWNER, AccessLevel::Owner),
+        "Renamed offsite".into(),
+    )
+    .await
+    .unwrap();
+
+    for caller in [OWNER, VIEWER] {
+        let answer = svc.query_sql(viewer(caller), sql.clone()).await.unwrap();
+        assert_eq!(text_cells(&answer), vec![vec!["Sam"]]);
+        assert_eq!(answer.read_tables, vec![table_id]);
+        assert_eq!(answer.read_database_ids, vec![database_id]);
+        assert_eq!(answer.changes_applied, 0);
+    }
+    let stranger = svc
+        .query_sql(viewer(STRANGER), sql.clone())
+        .await
+        .unwrap_err();
+    assert!(matches!(stranger, QueryError::Sql(_)));
+    let write = exec(
+        &svc,
+        OWNER,
+        &format!("UPDATE \"{read_name}\" SET name = 'Changed'"),
+    )
+    .await
+    .unwrap_err();
+    assert!(
+        matches!(&write, QueryError::Sql(message) if message.contains("because it is a view")),
+        "{write:?}"
+    );
+    assert_eq!(
+        text_cells(&svc.query_sql(viewer(OWNER), sql).await.unwrap()),
+        vec![vec!["Sam"]]
+    );
+}
+
+#[tokio::test]
+async fn queries_refuse_writes_even_for_owners_without_changes_or_events() {
+    let (world, svc, _database_id, table_id) = seeded().await;
+    let (applied, published, version) = {
+        let world = world.lock().unwrap();
+        (
+            world.applied.len(),
+            world.published.len(),
+            world.tables[0].version,
+        )
+    };
+    for sql in [
+        "UPDATE guests SET status = 'Declined'",
+        "DELETE FROM guests",
+        "INSERT INTO guests (name) VALUES ('Intruder')",
+        "SELECT * FROM guests; UPDATE guests SET name = 'Changed'",
+        "WITH current AS (SELECT row_id FROM guests) DELETE FROM guests WHERE row_id IN (SELECT row_id FROM current)",
+        "UPDATE guests SET name = 'Changed' WHERE 0",
+        "PRAGMA writable_schema = ON",
+        "DROP TABLE guests",
+    ] {
+        let error = svc.query_sql(viewer(OWNER), sql.into()).await.unwrap_err();
+        assert!(matches!(error, QueryError::ReadOnly(_)), "{sql}: {error:?}");
+    }
+    let world = world.lock().unwrap();
+    assert_eq!(world.applied.len(), applied);
+    assert_eq!(world.published.len(), published);
+    assert_eq!(world.tables[0].version, version);
+    assert_eq!(world.rows[&table_id].len(), 1);
 }
 
 #[tokio::test]
@@ -972,6 +1237,7 @@ async fn schema_operations_respect_receipts() {
             receipt::<EditAccessLevel>(other, OWNER, AccessLevel::Owner),
             viewer(OWNER),
             CreateColumn {
+                infer_type: false,
                 table_id,
                 binding: ColumnBinding::NewDefinition {
                     name: "X".into(),
@@ -1079,6 +1345,150 @@ async fn schema_reads_name_tables_against_the_whole_catalog() {
 }
 
 #[tokio::test]
+async fn same_named_uuidv7_databases_support_first_load_writes_and_snapshots() {
+    for database_count in [2, 3] {
+        let world: Shared = Arc::default();
+        let svc = service(&world);
+        let mut ids = Vec::new();
+        {
+            let mut world = world.lock().unwrap();
+            for index in 1..=database_count {
+                // UUIDv7 databases created close together share their first six
+                // hexadecimal characters; the suffix must distinguish them.
+                let database_id = Uuid::from_u128(0x01a0b6bf_0000_7000_8000_000000000000 + index);
+                let table_id = Uuid::from_u128(0x01a0b6bf_0001_7000_8000_000000000000 + index);
+                world.databases.push(Database {
+                    id: database_id,
+                    name: "Untitled database".into(),
+                    owner_id: OWNER.into(),
+                    created_at: Utc::now(),
+                    trashed_at: None,
+                });
+                world.tables.push(Table {
+                    id: table_id,
+                    database_id,
+                    name: "Table 1".into(),
+                    position: "a0".into(),
+                    version: TableVersion(0),
+                });
+                for (caller, grant) in [(OWNER, AccessGrant::Owner), (VIEWER, AccessGrant::View)] {
+                    world
+                        .grants
+                        .entry(caller.into())
+                        .or_default()
+                        .push((database_id, grant));
+                }
+                ids.push((database_id, table_id));
+            }
+        }
+
+        let mut sql_names = HashSet::new();
+        for (index, (database_id, table_id)) in ids.into_iter().enumerate() {
+            let detail = svc
+                .get_database(
+                    receipt::<ViewAccessLevel>(database_id, OWNER, AccessLevel::Owner),
+                    viewer(OWNER),
+                )
+                .await
+                .unwrap();
+            let table = &detail.tables[0];
+
+            // This is the first grid load, before the user adds any columns.
+            // Both read endpoints build the whole viewer catalog, even though
+            // the statement references only this database's starter table.
+            let first_load = svc
+                .query_sql(
+                    viewer(OWNER),
+                    format!("SELECT * FROM \"{}\"", table.read_sql_name),
+                )
+                .await
+                .unwrap();
+            assert!(first_load.results[0].rows.is_empty());
+            assert_eq!(first_load.read_tables, vec![table_id]);
+            assert!(sql_names.insert(table.sql_name.clone()));
+            let empty = exec(
+                &svc,
+                OWNER,
+                &format!("SELECT * FROM \"{}\"", table.sql_name),
+            )
+            .await
+            .unwrap();
+            assert!(empty.results[0].rows.is_empty());
+
+            add_column(
+                &svc,
+                database_id,
+                table_id,
+                "Name",
+                DataType::String,
+                false,
+                None,
+            )
+            .await;
+            let label = format!("Record {index}");
+            let inserted = exec(
+                &svc,
+                OWNER,
+                &format!(
+                    "INSERT INTO \"{}\" (name) VALUES ('{label}')",
+                    table.sql_name
+                ),
+            )
+            .await
+            .unwrap();
+            assert_eq!(inserted.inserted_row_ids.len(), 1);
+            let updated_label = format!("Updated {index}");
+            let updated = svc
+                .exec_sql(
+                    viewer(OWNER),
+                    ExecRequest {
+                        sql: format!("UPDATE \"{}\" SET name = '{updated_label}'", table.sql_name),
+                        base_versions: Some(inserted.new_versions),
+                    },
+                )
+                .await
+                .unwrap();
+            assert_eq!(updated.changes_applied, 1);
+            for caller in [OWNER, VIEWER] {
+                let read = svc
+                    .query_sql(
+                        viewer(caller),
+                        format!("SELECT name FROM \"{}\"", table.read_sql_name),
+                    )
+                    .await
+                    .unwrap();
+                assert_eq!(text_cells(&read), vec![vec![updated_label.clone()]]);
+                assert_eq!(read.read_database_ids, vec![database_id]);
+                assert_eq!(read.read_tables, vec![table_id]);
+            }
+
+            let snapshot = svc
+                .sqlite_snapshot(
+                    receipt::<ViewAccessLevel>(database_id, VIEWER, AccessLevel::View),
+                    viewer(VIEWER),
+                )
+                .await
+                .unwrap();
+            assert_eq!(snapshot.versions, updated.new_versions);
+            let path = std::env::temp_dir()
+                .join(format!("databases-shared-prefix-{}.sqlite", Uuid::new_v4()));
+            std::fs::write(&path, &snapshot.bytes).unwrap();
+            let conn = rusqlite::Connection::open(&path).unwrap();
+            let names: Vec<String> = conn
+                .prepare("SELECT name FROM table_1")
+                .unwrap()
+                .query_map([], |row| row.get(0))
+                .unwrap()
+                .collect::<Result<_, _>>()
+                .unwrap();
+            assert_eq!(names, vec![updated_label]);
+            drop(conn);
+            std::fs::remove_file(path).unwrap();
+        }
+    }
+}
+
+#[tokio::test]
 async fn snapshot_contains_the_database() {
     let (_world, svc, db, _table) = seeded().await;
     let snapshot = svc
@@ -1121,6 +1531,119 @@ async fn rename_validates_the_name_and_writes_it() {
         .await
         .unwrap_err();
     assert!(matches!(err, DatabaseError::NotFound));
+}
+
+#[tokio::test]
+async fn table_rename_preserves_answers_and_retries_without_overwriting_a_new_name() {
+    let (world, svc, db, table_id) = seeded().await;
+    let alias = catalog::read_table_name(table_id);
+    let sql = format!("SELECT name FROM {alias}");
+    let before = svc.query_sql(viewer(OWNER), sql.clone()).await.unwrap();
+    let renamed = svc
+        .rename_table(
+            receipt::<EditAccessLevel>(db, OWNER, AccessLevel::Edit),
+            table_id,
+            "  Attendees  ".into(),
+            "Guests".into(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(renamed.name, "Attendees");
+    assert_eq!(
+        world.lock().unwrap().published.last(),
+        Some(&(table_id, renamed.version))
+    );
+    assert_eq!(
+        text_cells(&svc.query_sql(viewer(OWNER), sql).await.unwrap()),
+        text_cells(&before)
+    );
+    let retried = svc
+        .rename_table(
+            receipt::<EditAccessLevel>(db, OWNER, AccessLevel::Edit),
+            table_id,
+            "Attendees".into(),
+            "Guests".into(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(retried.version, renamed.version);
+    let error = svc
+        .rename_table(
+            receipt::<EditAccessLevel>(db, OWNER, AccessLevel::Edit),
+            table_id,
+            "People".into(),
+            "Guests".into(),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(error, DatabaseError::InvalidSchemaOperation(_)));
+    assert_eq!(
+        world
+            .lock()
+            .unwrap()
+            .tables
+            .iter()
+            .find(|t| t.id == table_id)
+            .unwrap()
+            .name,
+        "Attendees"
+    );
+}
+
+#[tokio::test]
+async fn table_rename_rejects_invalid_names_foreign_tables_and_trashed_databases() {
+    let (_world, svc, db, table_id) = seeded().await;
+    svc.create_table(
+        receipt::<EditAccessLevel>(db, OWNER, AccessLevel::Owner),
+        CreateTable {
+            database_id: db,
+            name: "People".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for name in [" ", " people "] {
+        let error = svc
+            .rename_table(
+                receipt::<EditAccessLevel>(db, OWNER, AccessLevel::Owner),
+                table_id,
+                name.into(),
+                "Guests".into(),
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(error, DatabaseError::InvalidSchemaOperation(_)));
+    }
+    let other = svc
+        .create_database(CreateDatabase {
+            name: "Elsewhere".into(),
+            owner_id: user(OWNER),
+        })
+        .await
+        .unwrap();
+    let error = svc
+        .rename_table(
+            receipt::<EditAccessLevel>(other.id, OWNER, AccessLevel::Owner),
+            table_id,
+            "People".into(),
+            "Guests".into(),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(error, DatabaseError::NotFound));
+    svc.trash_database(receipt::<OwnerAccessLevel>(db, OWNER, AccessLevel::Owner))
+        .await
+        .unwrap();
+    let error = svc
+        .rename_table(
+            receipt::<EditAccessLevel>(db, OWNER, AccessLevel::Owner),
+            table_id,
+            "People".into(),
+            "Guests".into(),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(error, DatabaseError::NotFound));
 }
 
 #[tokio::test]
@@ -1295,6 +1818,7 @@ async fn new_column(
         receipt::<EditAccessLevel>(db, OWNER, AccessLevel::Owner),
         viewer(OWNER),
         CreateColumn {
+            infer_type: false,
             table_id,
             binding: ColumnBinding::NewDefinition {
                 name: name.into(),
@@ -1334,6 +1858,7 @@ async fn joins_span_databases_with_different_grants() {
         receipt::<EditAccessLevel>(rooms_db.id, VIEWER, AccessLevel::Owner),
         viewer(VIEWER),
         CreateColumn {
+            infer_type: false,
             table_id: rooms,
             binding: ColumnBinding::NewDefinition {
                 name: "Name".into(),

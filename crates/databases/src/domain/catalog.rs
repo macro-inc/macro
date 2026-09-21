@@ -2,8 +2,9 @@
 //! property definitions behind them. Pure functions: the service fetches,
 //! this module shapes.
 //!
-//! Every user table gets a stable SQL name derived from its display name
-//! (`Summer Offsite / Guests` → `guests`), a leading `row_id` primary key,
+//! Every user table gets a SQL name derived from its display name
+//! (`Summer Offsite / Guests` → `guests`), an immutable read alias for saved
+//! queries, a leading `row_id` primary key,
 //! one column per placement, and — for every multi-valued or link column — a
 //! companion junction view `table__column(row_id, linked_id)` so joins stay
 //! flat.
@@ -275,9 +276,19 @@ fn junction_schema(
     }
 }
 
-/// The database-qualified, viewer-independent SQL name of a table:
-/// `<database>_<short database id>__<table>`. Always addressable.
+/// The preferred database-qualified SQL name of a table:
+/// `<database>_<full database id>__<table>`. UUIDv7 prefixes encode time,
+/// so a truncated id cannot distinguish databases created near each other.
 pub fn qualified_table_name(database: &Database, table_sql: &str) -> String {
+    format!(
+        "{}_{}__{}",
+        sql_identifier(&database.name),
+        database.id.simple(),
+        table_sql
+    )
+}
+
+fn legacy_qualified_table_name(database: &Database, table_sql: &str) -> String {
     format!(
         "{}_{}__{}",
         sql_identifier(&database.name),
@@ -286,21 +297,33 @@ pub fn qualified_table_name(database: &Database, table_sql: &str) -> String {
     )
 }
 
+/// Immutable read alias for saved answers. Display-name-derived identifiers
+/// cannot begin with this prefix, so user names cannot shadow it.
+pub fn read_table_name(table_id: TableId) -> String {
+    format!("_macro_table_{}", table_id.simple())
+}
+
 /// Build catalog entries for every user table the viewer can reach.
 ///
 /// Naming is designed so a persisted query never silently resolves to a
 /// different table depending on who runs it:
 ///
-/// - Within a database, table SQL names derive from the table name and are
-///   made unique with a short id suffix (stable per table).
-/// - Every table is always addressable by its qualified name
-///   (`offsite_1a2b3c__guests`), which depends on nothing but the database and
-///   the table.
+/// - Within a database, table SQL names derive from the table name. All
+///   normalized duplicates get a full table-ID suffix, and none gets the
+///   ambiguous bare name, regardless of input order.
+/// - Qualified names use the full database ID. Legacy short-ID names remain
+///   as read aliases only when unambiguous across the entire SQL namespace.
+/// - Its immutable read alias depends only on its table ID. Saved answers use
+///   this alias so renames and other databases cannot invalidate their source.
 /// - The bare name (`guests`) exists only when exactly one table across the
 ///   viewer's whole catalog claims it and it collides with no `reserved` name
 ///   (magic tables). When a second `guests` appears the bare name disappears
 ///   and statements using it fail loudly with "no such table" rather than
 ///   picking one.
+/// - Tables, aliases, and junctions share SQLite's case-insensitive namespace.
+///   Any conflicting display-derived name is omitted; a physical table that
+///   needs another name gets an internal UUID name. Immutable read aliases
+///   remain addressable regardless of display-name collisions.
 ///
 /// Whichever form is not the physical table is compiled as a `CREATE VIEW`,
 /// so **writes must name [`TableSchema::sql_name`]**; a statement writing
@@ -327,35 +350,56 @@ pub fn build_user_tables(
             .push(column);
     }
 
-    // Pass 1: per-database table names (stable), then count bare-name claims
-    // across the whole catalog.
-    let mut per_database_taken: HashMap<DatabaseId, HashSet<String>> = HashMap::new();
-    let mut base_names: Vec<(TableId, String)> = Vec::new();
-    let mut claims: HashMap<String, usize> = HashMap::new();
-    for reserved_name in reserved {
-        claims.insert(reserved_name.clone(), 2);
+    // Count normalized display names before allocating any SQL names, so
+    // ordering cannot give one duplicate another table's previous name.
+    let named_tables: Vec<_> = tables
+        .iter()
+        .filter(|table| {
+            grants.contains_key(&table.database_id)
+                && databases_by_id.contains_key(&table.database_id)
+        })
+        .map(|table| (table, sql_identifier(&table.name)))
+        .collect();
+    let mut per_database_claims: HashMap<DatabaseId, HashMap<String, usize>> = HashMap::new();
+    for (table, name) in &named_tables {
+        *per_database_claims
+            .entry(table.database_id)
+            .or_default()
+            .entry(name.clone())
+            .or_default() += 1;
     }
-    for table in tables {
-        let taken = per_database_taken.entry(table.database_id).or_default();
-        let table_sql = unique_name(&sql_identifier(&table.name), taken, &short_id(table.id));
-        *claims.entry(table_sql.clone()).or_default() += 1;
-        base_names.push((table.id, table_sql));
+    let mut base_names: HashMap<TableId, (String, bool)> = HashMap::new();
+    let mut claims: HashMap<String, usize> = reserved
+        .iter()
+        .map(|name| (name.to_ascii_lowercase(), 2))
+        .collect();
+    for (table, name) in named_tables {
+        let unambiguous = per_database_claims[&table.database_id][&name] == 1;
+        *claims.entry(name.clone()).or_default() += 1;
+        let table_sql = if unambiguous {
+            name
+        } else {
+            format!("{name}_{}", table.id.simple())
+        };
+        base_names.insert(table.id, (table_sql, unambiguous));
     }
 
-    tables
+    let mut entries: Vec<_> = tables
         .iter()
         .filter_map(|table| {
             let grant = *grants.get(&table.database_id)?;
             let database = databases_by_id.get(&table.database_id)?;
             let writable = grant.can_write();
-            let (_, table_sql) = base_names.iter().find(|(id, _)| *id == table.id)?;
+            let (table_sql, unambiguous) = base_names.get(&table.id)?;
             let qualified = qualified_table_name(database, table_sql);
-            let bare_available = claims.get(table_sql).copied().unwrap_or(0) == 1;
-            let (physical, aliases) = if bare_available {
+            let bare_available = *unambiguous && claims.get(table_sql).copied().unwrap_or(0) == 1;
+            let (physical, mut aliases) = if bare_available {
                 (table_sql.clone(), vec![qualified])
             } else {
                 (qualified, Vec::new())
             };
+            aliases.push(legacy_qualified_table_name(database, table_sql));
+            aliases.push(read_table_name(table.id));
 
             let mut taken_columns: HashSet<String> = [ROW_ID.to_string()].into_iter().collect();
             let mut schema_columns = vec![row_id_column()];
@@ -420,7 +464,56 @@ pub fn build_user_tables(
                 junctions,
             })
         })
-        .collect()
+        .collect();
+    resolve_namespace_conflicts(&mut entries, reserved);
+    entries
+}
+
+/// All schema objects must be considered together: a bare junction name can
+/// equal a different table's qualified alias, and a magic table can reserve
+/// either one. Ambiguous names disappear rather than changing their owner.
+fn resolve_namespace_conflicts(entries: &mut [TableEntry], reserved: &[String]) {
+    let mut claims: HashMap<String, usize> = reserved
+        .iter()
+        .map(|name| (name.to_ascii_lowercase(), 1))
+        .collect();
+    for schema in entries.iter().flat_map(|entry| {
+        std::iter::once(&entry.schema)
+            .chain(entry.junctions.iter().map(|junction| &junction.schema))
+    }) {
+        for name in std::iter::once(&schema.sql_name).chain(&schema.aliases) {
+            *claims.entry(name.to_ascii_lowercase()).or_default() += 1;
+        }
+    }
+    let mut taken: HashSet<String> = claims.keys().cloned().collect();
+    let resolve = |schema: &mut TableSchema, fallback: String, taken: &mut HashSet<String>| {
+        if claims[&schema.sql_name.to_ascii_lowercase()] > 1 {
+            schema.sql_name = unique_name(&fallback, taken, "internal");
+        }
+        schema
+            .aliases
+            .retain(|name| claims[&name.to_ascii_lowercase()] == 1);
+    };
+    for entry in entries {
+        let previous_name = entry.schema.sql_name.clone();
+        resolve(
+            &mut entry.schema,
+            format!("_macro_storage_table_{}", entry.table.id.simple()),
+            &mut taken,
+        );
+        for junction in &mut entry.junctions {
+            resolve(
+                &mut junction.schema,
+                format!("_macro_storage_junction_{}", junction.column_id.simple()),
+                &mut taken,
+            );
+            for foreign_key in &mut junction.schema.foreign_keys {
+                if foreign_key.references_table == previous_name {
+                    foreign_key.references_table = entry.schema.sql_name.clone();
+                }
+            }
+        }
+    }
 }
 
 /// Whether `name` addresses `entry` (its table or one of its aliases).

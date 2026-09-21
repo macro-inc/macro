@@ -18,6 +18,9 @@ pub mod ports;
 #[cfg(feature = "ports")]
 pub mod service;
 
+#[cfg(feature = "ports")]
+pub mod views;
+
 #[cfg(test)]
 pub mod test_support;
 

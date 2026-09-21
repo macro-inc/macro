@@ -19,7 +19,7 @@ import type {
 } from '@service-storage/databases';
 import { useQuery } from '@tanstack/solid-query';
 import { queryClient } from '../client';
-import { databasesKeys } from './keys';
+import { databaseQueryKeys, databasesKeys } from './keys';
 
 const DATABASE_STALE_TIME = 30 * 1000;
 
@@ -76,7 +76,10 @@ export async function querySql(sql: string): Promise<ExecOutcome> {
   const result = await storageServiceClient.databases.query({ sql });
   if (result.isErr()) {
     const failure = result.error[0];
-    throw new ExecError(failure?.code ?? 'HTTP_ERROR', failure?.message ?? 'The database could not answer that question.');
+    throw new ExecError(
+      failure?.code ?? 'HTTP_ERROR',
+      failure?.message ?? 'The database could not answer that question.'
+    );
   }
   return result.value;
 }
@@ -95,15 +98,20 @@ export function invalidateDatabase(databaseId: string) {
 }
 
 export function invalidateDatabaseRows(databaseId: string, tableId: string) {
-  return Promise.all([queryClient.invalidateQueries({
-    queryKey: databasesKeys.rows(databaseId, tableId).queryKey,
-  }), queryClient.invalidateQueries({
-    predicate: (query) => {
-      if (query.queryKey[0] !== 'database-query') return false;
-      const data = query.state.data as { read_versions?: Record<string, number> } | undefined;
-      return !!data?.read_versions && tableId in data.read_versions;
-    },
-  })]);
+  return Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: databasesKeys.rows(databaseId, tableId).queryKey,
+    }),
+    queryClient.invalidateQueries({
+      queryKey: databaseQueryKeys._def,
+      predicate: (query) => {
+        const data = query.state.data as
+          | { read_versions?: Record<string, number> }
+          | undefined;
+        return !!data?.read_versions && tableId in data.read_versions;
+      },
+    }),
+  ]);
 }
 
 /**
@@ -111,7 +119,8 @@ export function invalidateDatabaseRows(databaseId: string, tableId: string) {
  *
  * The version is the only part of the detail response a write moves, so
  * patching it in place spares the grid a schema refetch it would otherwise
- * make on every cell edit.
+ * make on every cell edit. Delayed write responses cannot move the schema
+ * version behind a newer refresh or acknowledged schema change.
  */
 export function applyDatabaseTableVersions(
   databaseId: string,
@@ -127,7 +136,7 @@ export function applyDatabaseTableVersions(
         ...previous,
         tables: previous.tables.map((table) => {
           const version = newVersions[table.table.id];
-          if (version === undefined || version === table.table.version) {
+          if (version === undefined || version <= table.table.version) {
             return table;
           }
           return { ...table, table: { ...table.table, version } };
@@ -135,21 +144,6 @@ export function applyDatabaseTableVersions(
       };
     }
   );
-}
-
-/** Add a table (tab) to a database and return its id. */
-export async function createDatabaseTable(params: {
-  databaseId: string;
-  name: string;
-}): Promise<string | undefined> {
-  const result = await storageServiceClient.databases.createTable({
-    id: params.databaseId,
-    name: params.name,
-  });
-  if (result.isErr()) return undefined;
-
-  await invalidateDatabase(params.databaseId);
-  return result.value.id;
 }
 
 /** Add a column to a table and return its id. */
@@ -224,8 +218,9 @@ export function downloadDatabaseSnapshot(databaseId: string): Promise<Blob> {
 /**
  * Create a database and return its id.
  *
- * The service seeds it with one starter table, so the block has something to
- * render the moment it opens.
+ * The service seeds a starter table. Give it a Name column so the first row is
+ * ready to edit. If setup fails, still open the created database: its empty
+ * state lets the user add a column without creating another database.
  */
 export async function createDatabase(params: {
   name: string;
@@ -238,6 +233,24 @@ export async function createDatabase(params: {
   if (result.isErr()) return undefined;
 
   const databaseId = result.value.id;
+  const detail = await storageServiceClient.databases.get({ id: databaseId });
+  if (detail.isOk()) {
+    const starter = detail.value.tables[0];
+    if (starter && starter.columns.length === 0) {
+      await storageServiceClient.databases.createColumn({
+        id: databaseId,
+        tableId: starter.table.id,
+        request: {
+          binding: {
+            kind: 'new',
+            name: 'Name',
+            data_type: 'STRING',
+            is_multi_select: false,
+          },
+        },
+      });
+    }
+  }
   analytics.track('create_entity', {
     entityType: 'database',
     entityId: databaseId,

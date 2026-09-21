@@ -4,7 +4,6 @@ import {
   LoadErrors,
   loadResult,
 } from '@core/block';
-import { storageServiceClient } from '@service-storage/client';
 import { lazy } from 'solid-js';
 
 export const definition = defineBlock({
@@ -20,9 +19,8 @@ export const definition = defineBlock({
   editPermissionEnabled: true,
   async load(source, _intent) {
     if (source.type !== 'dss') return LoadErrors.MISSING;
-    return await loadResult(
-      storageServiceClient.databases.get({ id: source.id })
-    );
+    const { loadDatabase } = await import('./queries/load-database');
+    return await loadResult(loadDatabase(source.id));
   },
   accepted: {},
   defaultFilename: 'Untitled database',

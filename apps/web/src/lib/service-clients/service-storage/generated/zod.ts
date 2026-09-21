@@ -5476,6 +5476,31 @@ export const listDatabasesResponseItem = zod
       .describe(
         'The access a viewer holds on a database, from its `entity_access` rows.'
       ),
+    tables: zod
+      .array(
+        zod
+          .object({
+            database_id: zod.uuid().describe('Owning database.'),
+            id: zod.uuid().describe('Identifier.'),
+            name: zod
+              .string()
+              .describe(
+                "Display name; also the basis of the table's SQL name."
+              ),
+            position: zod
+              .string()
+              .describe('Fractional index for tab ordering.'),
+            version: zod
+              .number()
+              .describe(
+                'Monotonic per-table version, bumped on every row\/column\/link mutation.\n\nThe cache key for query materializations and the invalidation signal for\nlive query chips.'
+              ),
+          })
+          .describe('One table (tab) of a database.')
+      )
+      .describe(
+        "Tables in tab order, so discovery can find a table independently of\nthe containing database's display name."
+      ),
   })
   .describe('A database as listed for a viewer.');
 export const listDatabasesResponse = zod.array(listDatabasesResponseItem);
@@ -5530,6 +5555,152 @@ export const execDatabaseSqlResponse = zod
       )
       .describe(
         'New versions of every written table, for client-side liveness.'
+      ),
+    read_database_ids: zod
+      .array(zod.uuid())
+      .describe(
+        'Databases containing the read dependencies, for live subscriptions.'
+      ),
+    read_tables: zod
+      .array(zod.uuid())
+      .describe('Dependency set of the statement, for liveness subscription.'),
+    read_versions: zod
+      .record(
+        zod.string(),
+        zod
+          .number()
+          .describe(
+            'Monotonic per-table version, bumped on every row\/column\/link mutation.\n\nThe cache key for query materializations and the invalidation signal for\nlive query chips.'
+          )
+      )
+      .describe(
+        'The version every user table in [`ExecOutcome::read_tables`] was at\nwhen this statement materialized it. Send these back as\n[`ExecRequest::base_versions`] on the follow-up write to get a real\ncompare-and-set over everything the statement read.'
+      ),
+    results: zod
+      .array(
+        zod
+          .object({
+            columns: zod
+              .array(
+                zod
+                  .object({
+                    entity_type: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'user',
+                            'chat',
+                            'channel',
+                            'channel_message',
+                            'document',
+                            'project',
+                            'email_thread',
+                            'calendar_event',
+                            'team',
+                            'call',
+                            'foreign_entity',
+                            'static_file',
+                            'crm_company',
+                            'crm_contact',
+                            'reminder',
+                            'skill',
+                            'agent_session',
+                            'scheduled_action',
+                            'initiative',
+                            'database',
+                          ])
+                          .describe('The type of an entity in Macro'),
+                      ])
+                      .optional()
+                      .describe(
+                        'Entity type of id values, when known — drives chip rendering.'
+                      ),
+                    name: zod.string().describe('Column name or alias.'),
+                    origin: zod
+                      .tuple([zod.string(), zod.string()])
+                      .nullish()
+                      .describe(
+                        'Origin `(table, column)` when the column traces to a single base\ncolumn — the precondition for write-through.'
+                      ),
+                  })
+                  .describe('One result column with its origin.')
+              )
+              .describe('Result columns.'),
+            rows: zod
+              .array(
+                zod.array(
+                  zod
+                    .union([
+                      zod.null().describe('SQL NULL.'),
+                      zod.number().describe('Integer (also booleans as 0\/1).'),
+                      zod.number().describe('Float.'),
+                      zod
+                        .string()
+                        .describe(
+                          'Text (also ids, dates as ISO-8601, resolved option display values).'
+                        ),
+                    ])
+                    .describe(
+                      'A value in the SQLite materialization, kept engine-agnostic so the domain\nnever depends on rusqlite types. Serializes as a plain JSON scalar.'
+                    )
+                )
+              )
+              .describe('Row values as JSON scalars.'),
+          })
+          .describe(
+            "A SELECT's result set with provenance for hydration and write-through."
+          )
+      )
+      .describe('Result sets of the SELECT statements, in order.'),
+    truncated_tables: zod
+      .array(zod.string())
+      .describe(
+        'Magic tables whose materialization hit its row cap; aggregates over\nthem are incomplete.'
+      ),
+  })
+  .describe('Outcome of an [`ExecRequest`].');
+
+/**
+ * @summary Run read-only SQL with the caller's current visibility.
+ */
+export const queryDatabaseSqlBody = zod
+  .object({
+    sql: zod
+      .string()
+      .describe('SQL to read. Writes are refused by the domain service.'),
+  })
+  .describe('Request body for read-only SQL queries.');
+
+export const queryDatabaseSqlResponseChangesAppliedMin = 0;
+
+export const queryDatabaseSqlResponseResultsItemRowsItemItemDefaultOne = null;
+
+export const queryDatabaseSqlResponse = zod
+  .object({
+    changes_applied: zod
+      .number()
+      .min(queryDatabaseSqlResponseChangesAppliedMin)
+      .describe('How many row changes were applied to Postgres.'),
+    inserted_row_ids: zod
+      .array(zod.uuid())
+      .describe('Server-minted ids for rows the statement inserted.'),
+    new_versions: zod
+      .record(
+        zod.string(),
+        zod
+          .number()
+          .describe(
+            'Monotonic per-table version, bumped on every row\/column\/link mutation.\n\nThe cache key for query materializations and the invalidation signal for\nlive query chips.'
+          )
+      )
+      .describe(
+        'New versions of every written table, for client-side liveness.'
+      ),
+    read_database_ids: zod
+      .array(zod.uuid())
+      .describe(
+        'Databases containing the read dependencies, for live subscriptions.'
       ),
     read_tables: zod
       .array(zod.uuid())
@@ -5710,7 +5881,19 @@ export const getDatabaseResponse = zod
                               ),
                           ])
                           .optional(),
+                        display_name: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            "Optional label for this placement. The property's name still defines\nits SQL identifier, so renaming a column does not break saved queries."
+                          ),
                         id: zod.uuid().describe('Identifier of the placement.'),
+                        infer_type: zod
+                          .boolean()
+                          .optional()
+                          .describe(
+                            "Whether the first nonempty value may settle this new text column's type."
+                          ),
                         position: zod
                           .string()
                           .describe('Fractional index for column ordering.'),
@@ -5874,6 +6057,11 @@ export const getDatabaseResponse = zod
                   )
               )
               .describe('Columns in display order.'),
+            read_sql_name: zod
+              .string()
+              .describe(
+                'Immutable read-only name for persisted queries; unaffected by renames\nor the other tables a viewer can access.'
+              ),
             sql_name: zod
               .string()
               .describe('Name to use in SQL (`FROM guests`).'),
@@ -5924,6 +6112,41 @@ export const createDatabaseTableBody = zod
     name: zod.string().describe('Display name.'),
   })
   .describe('Request body for creating a table.');
+
+/**
+ * @summary Rename a table in a database.
+ */
+export const renameDatabaseTableParams = zod.object({
+  id: zod.uuid().describe('Database id'),
+  table_id: zod.uuid().describe('Table id'),
+});
+
+export const renameDatabaseTableBody = zod
+  .object({
+    name: zod.string().describe('New display name.'),
+    previousName: zod
+      .string()
+      .describe('Name shown when the rename editor opened.'),
+  })
+  .describe(
+    'Request body for renaming a table without overwriting a concurrent rename.'
+  );
+
+export const renameDatabaseTableResponse = zod
+  .object({
+    database_id: zod.uuid().describe('Owning database.'),
+    id: zod.uuid().describe('Identifier.'),
+    name: zod
+      .string()
+      .describe("Display name; also the basis of the table's SQL name."),
+    position: zod.string().describe('Fractional index for tab ordering.'),
+    version: zod
+      .number()
+      .describe(
+        'Monotonic per-table version, bumped on every row\/column\/link mutation.\n\nThe cache key for query materializations and the invalidation signal for\nlive query chips.'
+      ),
+  })
+  .describe('One table (tab) of a database.');
 
 /**
  * @summary Add a column to a table.
@@ -5978,6 +6201,10 @@ export const createDatabaseColumnBody = zod
           .describe('Bind an existing user\/team\/system definition.'),
       ])
       .describe('How a new column obtains its definition.'),
+    infer_type: zod
+      .boolean()
+      .optional()
+      .describe('Infer the first value type of a newly owned text column.'),
     linkToDatabaseId: zod
       .uuid()
       .optional()
@@ -5988,6 +6215,371 @@ export const createDatabaseColumnBody = zod
       .describe('Link this column to another table (many-to-many).'),
   })
   .describe('Request body for creating a column.');
+
+/**
+ * @summary Rename a column's label in this table.
+ */
+export const renameDatabaseColumnParams = zod.object({
+  id: zod.uuid().describe('Database id'),
+  table_id: zod.uuid().describe('Table id'),
+  column_id: zod.uuid().describe('Column id'),
+});
+
+export const renameDatabaseColumnBody = zod
+  .object({
+    name: zod.string().describe('New display name.'),
+    previousName: zod
+      .string()
+      .describe('Label shown when the rename editor opened.'),
+  })
+  .describe(
+    "Rename one column placement without changing its property's SQL identifier."
+  );
+
+export const renameDatabaseColumnResponse = zod
+  .object({
+    column: zod
+      .object({
+        config: zod
+          .union([
+            zod.null(),
+            zod
+              .union([
+                zod
+                  .object({
+                    database_id: zod.uuid().describe('Target database.'),
+                    kind: zod.enum(['link']),
+                    table_id: zod.uuid().describe('Target table.'),
+                  })
+                  .describe(
+                    'A link column targeting another table; edges live in the junction.'
+                  ),
+                zod
+                  .object({
+                    kind: zod.enum(['lookup']),
+                    target: zod
+                      .string()
+                      .describe(
+                        'Target field on the other side (a definition id or magic column name).'
+                      ),
+                    via_column_id: zod
+                      .uuid()
+                      .describe(
+                        'The link\/entity column the lookup reads through.'
+                      ),
+                  })
+                  .describe(
+                    'A derived lookup through a link or entity column on the same table.'
+                  ),
+              ])
+              .describe(
+                'Column-kind specific configuration stored on the placement.'
+              ),
+          ])
+          .optional(),
+        display_name: zod
+          .string()
+          .nullish()
+          .describe(
+            "Optional label for this placement. The property's name still defines\nits SQL identifier, so renaming a column does not break saved queries."
+          ),
+        id: zod.uuid().describe('Identifier of the placement.'),
+        infer_type: zod
+          .boolean()
+          .optional()
+          .describe(
+            "Whether the first nonempty value may settle this new text column's type."
+          ),
+        position: zod
+          .string()
+          .describe('Fractional index for column ordering.'),
+        property_definition_id: zod
+          .uuid()
+          .describe('The bound property definition.'),
+        table_id: zod.uuid().describe('Table the column appears on.'),
+      })
+      .describe(
+        'A column: the placement of a property definition on a table.\n\nThe definition carries name, [`DataType`], multi-select flag, and options;\nthis carries only where it appears and column-kind configuration.'
+      ),
+    table_version: zod
+      .number()
+      .describe(
+        'Monotonic per-table version, bumped on every row\/column\/link mutation.\n\nThe cache key for query materializations and the invalidation signal for\nlive query chips.'
+      ),
+  })
+  .describe(
+    "A renamed placement and its table's version after the atomic update."
+  );
+
+/**
+ * @summary Settle a new empty text column's type.
+ */
+export const inferDatabaseColumnTypeParams = zod.object({
+  id: zod.uuid().describe('Database id'),
+  table_id: zod.uuid().describe('Table id'),
+  column_id: zod.uuid().describe('Column id'),
+});
+
+export const inferDatabaseColumnTypeBody = zod
+  .object({
+    base_version: zod
+      .number()
+      .describe(
+        'Monotonic per-table version, bumped on every row\/column\/link mutation.\n\nThe cache key for query materializations and the invalidation signal for\nlive query chips.'
+      ),
+    data_type: zod
+      .enum([
+        'BOOLEAN',
+        'DATE',
+        'NUMBER',
+        'STRING',
+        'SELECT_NUMBER',
+        'SELECT_STRING',
+        'TAG',
+        'ENTITY',
+        'LINK',
+      ])
+      .describe(
+        'Data type for property values, determining storage and validation.'
+      ),
+    specific_entity_type: zod
+      .union([
+        zod.null(),
+        zod
+          .enum([
+            'CALENDAR_EVENT',
+            'CALL_RECORD',
+            'CHANNEL',
+            'CHAT',
+            'COMPANY',
+            'DOCUMENT',
+            'PROJECT',
+            'TASK',
+            'THREAD',
+            'USER',
+          ])
+          .describe(
+            'Type of entity that can be referenced by entity properties.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe("Request to settle an empty column's first-value type.");
+
+export const inferDatabaseColumnTypeResponse = zod
+  .object({
+    column: zod
+      .object({
+        column: zod
+          .object({
+            config: zod
+              .union([
+                zod.null(),
+                zod
+                  .union([
+                    zod
+                      .object({
+                        database_id: zod.uuid().describe('Target database.'),
+                        kind: zod.enum(['link']),
+                        table_id: zod.uuid().describe('Target table.'),
+                      })
+                      .describe(
+                        'A link column targeting another table; edges live in the junction.'
+                      ),
+                    zod
+                      .object({
+                        kind: zod.enum(['lookup']),
+                        target: zod
+                          .string()
+                          .describe(
+                            'Target field on the other side (a definition id or magic column name).'
+                          ),
+                        via_column_id: zod
+                          .uuid()
+                          .describe(
+                            'The link\/entity column the lookup reads through.'
+                          ),
+                      })
+                      .describe(
+                        'A derived lookup through a link or entity column on the same table.'
+                      ),
+                  ])
+                  .describe(
+                    'Column-kind specific configuration stored on the placement.'
+                  ),
+              ])
+              .optional(),
+            display_name: zod
+              .string()
+              .nullish()
+              .describe(
+                "Optional label for this placement. The property's name still defines\nits SQL identifier, so renaming a column does not break saved queries."
+              ),
+            id: zod.uuid().describe('Identifier of the placement.'),
+            infer_type: zod
+              .boolean()
+              .optional()
+              .describe(
+                "Whether the first nonempty value may settle this new text column's type."
+              ),
+            position: zod
+              .string()
+              .describe('Fractional index for column ordering.'),
+            property_definition_id: zod
+              .uuid()
+              .describe('The bound property definition.'),
+            table_id: zod.uuid().describe('Table the column appears on.'),
+          })
+          .describe(
+            'A column: the placement of a property definition on a table.\n\nThe definition carries name, [`DataType`], multi-select flag, and options;\nthis carries only where it appears and column-kind configuration.'
+          ),
+        definition: zod
+          .object({
+            definition: zod
+              .object({
+                created_at: zod.iso.datetime({}),
+                data_type: zod
+                  .enum([
+                    'BOOLEAN',
+                    'DATE',
+                    'NUMBER',
+                    'STRING',
+                    'SELECT_NUMBER',
+                    'SELECT_STRING',
+                    'TAG',
+                    'ENTITY',
+                    'LINK',
+                  ])
+                  .describe(
+                    'Data type for property values, determining storage and validation.'
+                  ),
+                display_name: zod.string(),
+                id: zod.uuid(),
+                is_metadata: zod
+                  .boolean()
+                  .describe(
+                    'Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'
+                  ),
+                is_multi_select: zod.boolean(),
+                is_system: zod
+                  .boolean()
+                  .describe(
+                    'Flag to indicate if this is a system property (stored in DB).'
+                  ),
+                owner: zod
+                  .union([
+                    zod
+                      .object({
+                        scope: zod.enum(['user']),
+                        user_id: zod.string(),
+                      })
+                      .describe('User-scoped property.'),
+                    zod
+                      .object({
+                        scope: zod.enum(['team']),
+                        team_id: zod.uuid(),
+                      })
+                      .describe('Team-scoped property.'),
+                    zod
+                      .object({
+                        database_id: zod.uuid(),
+                        scope: zod.enum(['database']),
+                      })
+                      .describe(
+                        'Database-scoped property: the definition is a column of one Macro\ndatabase and is invisible to the shared user\/team property namespace.'
+                      ),
+                    zod
+                      .object({
+                        scope: zod.enum(['system']),
+                      })
+                      .describe(
+                        'System-owned property (no user, team, or database owner).'
+                      ),
+                  ])
+                  .describe(
+                    'Defines who owns a property - user-scoped, team-scoped, database-scoped, or system.'
+                  ),
+                specific_entity_type: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .enum([
+                        'CALENDAR_EVENT',
+                        'CALL_RECORD',
+                        'CHANNEL',
+                        'CHAT',
+                        'COMPANY',
+                        'DOCUMENT',
+                        'PROJECT',
+                        'TASK',
+                        'THREAD',
+                        'USER',
+                      ])
+                      .describe(
+                        'Type of entity that can be referenced by entity properties.'
+                      ),
+                  ])
+                  .optional(),
+                updated_at: zod.iso.datetime({}),
+              })
+              .describe('Property definition model (service representation).'),
+            property_options: zod.array(
+              zod
+                .object({
+                  color: zod.string().nullish(),
+                  created_at: zod.iso.datetime({}),
+                  display_order: zod.number(),
+                  id: zod.uuid(),
+                  property_definition_id: zod.uuid(),
+                  updated_at: zod.iso.datetime({}),
+                  value: zod
+                    .union([
+                      zod
+                        .object({
+                          type: zod.enum(['string']),
+                          value: zod
+                            .string()
+                            .describe(
+                              'String value for SelectString properties'
+                            ),
+                        })
+                        .describe('String value for SelectString properties'),
+                      zod
+                        .object({
+                          type: zod.enum(['number']),
+                          value: zod
+                            .number()
+                            .describe(
+                              'Number value for SelectNumber properties'
+                            ),
+                        })
+                        .describe('Number value for SelectNumber properties'),
+                    ])
+                    .describe(
+                      'The value of a property option - either a string or a number.'
+                    ),
+                })
+                .describe(
+                  'A selectable option for select-type properties (service representation).'
+                )
+            ),
+          })
+          .describe(
+            'Property definition with its associated options (service representation).'
+          ),
+        sql_name: zod.string().describe('Name to use in SQL.'),
+        writable: zod.boolean().describe('Whether SQL may write this column.'),
+      })
+      .describe('One column placement with the definition behind it.'),
+    table_version: zod
+      .number()
+      .describe(
+        'Monotonic per-table version, bumped on every row\/column\/link mutation.\n\nThe cache key for query materializations and the invalidation signal for\nlive query chips.'
+      ),
+  })
+  .describe(
+    'Settled schema and the version against which its first value can be written.'
+  );
 
 /**
  * @summary Add options to a select column.
@@ -6049,7 +6641,19 @@ export const addDatabaseColumnOptionsResponse = zod
               ),
           ])
           .optional(),
+        display_name: zod
+          .string()
+          .nullish()
+          .describe(
+            "Optional label for this placement. The property's name still defines\nits SQL identifier, so renaming a column does not break saved queries."
+          ),
         id: zod.uuid().describe('Identifier of the placement.'),
+        infer_type: zod
+          .boolean()
+          .optional()
+          .describe(
+            "Whether the first nonempty value may settle this new text column's type."
+          ),
         position: zod
           .string()
           .describe('Fractional index for column ordering.'),

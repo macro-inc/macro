@@ -17,17 +17,21 @@ use crate::domain::ports::DatabasesService;
 #[schemars(
     title = "ListDatabases",
     description = "\
-List the Macro databases the current user can reach, their own and ones shared with them. A \
-database is a table the user built — a guest list, an applicant tracker, a vendor list — made \
-of one or more tabs.\n\
+List every accessible Macro database AND its table tabs, including owned and shared data. \
+A database is a container; its name can differ from a requested table's name. For example, \
+the Tickets table might be inside a database named Product. Search every entry's `tables`, \
+not just database names.\n\
 \n\
 Start here whenever the user refers to \"my table\", \"the tracker\", or any named list of \
 theirs: this is the only way to turn that name into the `databaseId` every other database tool \
-needs. Each entry comes back with its `id`, `name`, and `grant` (view, comment, edit, or \
-owner) — `view` and `comment` mean QueryDatabase can read it but not write to it.\n\
+needs. Each entry includes `id`, `name`, `grant`, and nested `tables` with their ids, display \
+names, and stable read aliases. `view` and `comment` permit reading, not row/schema edits.\n\
 \n\
 Takes no arguments and returns every database, so there is no filter to get wrong. Follow it \
-with DescribeDatabase to see one database's tables and columns before writing SQL."
+with DescribeDatabase for the matching database's columns before writing SQL. Do not claim a \
+table is absent until you have checked the returned table names; resolve duplicate names \
+using their database context. An empty result means no accessible databases, not proof that \
+no such data exists elsewhere."
 )]
 pub struct ListDatabases {}
 
@@ -77,7 +81,8 @@ where
 /// reports as a failure rather than as "you have no databases yet".
 pub(super) fn summarize(databases: &[ToolDatabase]) -> String {
     match databases.len() {
-        0 => "The user has no databases yet. CreateDatabase makes one.".to_string(),
+        0 => "No accessible databases were found. CreateDatabase can create one when requested."
+            .to_string(),
         1 => "Found 1 database.".to_string(),
         n => format!("Found {n} databases."),
     }

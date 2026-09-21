@@ -146,6 +146,37 @@ Useful commands:
 `apply` touches only rows that carry the scenario `5eed` id marker, plus the
 persona accounts it created. It is safe to run against a stack that you tested in.
 
+### Database AI examples and evaluations
+
+With the local stack running and an authenticated Chromium tab open, run from
+`apps/web`:
+
+```bash
+bun scripts/evaluate-database-ai.ts --seed
+bun scripts/evaluate-database-ai.ts --run
+```
+
+`--seed` adds the synthetic Support desk and Sales pipeline examples and prints
+their local links. It keeps existing records and edits. `--run` makes real model
+calls and checks automatic source selection, all-table discovery (including
+delegated agents), joins, totals, charts,
+read-only refusal, and saved table/board views against actual SQL results. Its
+write checks reuse only the dedicated **AI evaluation** table and two named
+personal views. Combine `--seed --run` for the first run; without either flag,
+the script only prints usage.
+
+Defaults are frontend `http://database-ui.localhost:21710`, backend proxy
+`http://database-ui.localhost:21709`, and Chromium CDP `http://localhost:9334`.
+Override these with `DATABASE_AI_EVAL_BASE_URL`, `DATABASE_AI_EVAL_BACKEND_URL`,
+and `DATABASE_AI_EVAL_CDP_URL` for your instance. The script rejects nonlocal
+origins, reuses browser authentication without exporting credentials, and never
+navigates the browser. Bun launches the Playwright work under Node automatically.
+
+Results go to `/tmp/macro-database-ai-evaluation.json`; choose another `/tmp`
+path with `--output`. Failed checks exit nonzero. To rerun one case, use
+`--run --case delegated-agent-discovers-tickets`, for example. Model credentials
+must be configured as described below; `--seed` alone does not call a model.
+
 ## Integration Secrets
 
 A `--no-doppler` stack boots with deterministic stubs for every value the services' config loaders require. The stubs are enough to start the services. The third-party integrations they back do not work until you supply real values:
@@ -325,6 +356,11 @@ just stack down               # remove containers, volumes, and state
 ```
 
 All the `run_local` flags apply to `stack` too. This includes `--instance`, `--no-doppler`, `--no-build`, and `--binaries-dir`.
+
+`stack update` requires saved headless stack state. If that state is missing,
+it refuses to run instead of recreating an existing interactive stack and
+removing its data. For an interactive stack, use its rebuild action or rebuild
+and restart the affected services. `stack up` intentionally creates a fresh stack.
 
 The app is served at `<proxy>/app/`. The bundle resolves its backend from the origin it is served on. The same stack works on localhost or behind any hostname without a rebuild.
 

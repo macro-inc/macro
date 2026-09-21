@@ -28,7 +28,7 @@ Pick the type from what the values actually are, not from how they were typed at
 `date`. Use `text` only when the values really are free-form.\n\
 \n\
 - `isMultiSelect: true` makes the column hold several values at once. In SQL it reads as a \
-JSON array and also gets a companion `table__column(row_id, linkedId)` junction table; \
+JSON array and also gets a companion `table__column(row_id, linked_id)` junction table; \
 `col HAS 'x'` tests membership.\n\
 - `linkToTableId` makes it a **link column** pointing at another table, so rows on one side \
 reference rows on the other. Link columns are many-to-many and junction-backed; join through \
@@ -41,7 +41,8 @@ should accept in `options`. SQL only accepts those labels — a select column cr
 options accepts nothing — and more can be added later with AddColumnOptions.\n\
 \n\
 Requires edit access. The response is the table's database schema after the change, including \
-the new column's exact `sqlName`."
+the new column's exact `sqlName`. If `database` is null, the column was still created; \
+call DescribeDatabase using databaseId before continuing, without repeating AddColumn."
 )]
 pub struct AddColumn {
     /// The database the table belongs to.
@@ -109,10 +110,17 @@ impl ToolAnnotated for AddColumn {
 #[derive(Debug, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AddColumnResponse {
+    /// Database containing the committed column.
+    pub database_id: Uuid,
+    /// Table containing the committed column.
+    pub table_id: Uuid,
     /// The new column placement's id.
     pub column_id: Uuid,
     /// The database's schema after the change.
-    pub database: ToolDatabaseSchema,
+    pub database: Option<ToolDatabaseSchema>,
+    /// Follow-up guidance if schema refresh failed after the column was saved.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub warning: Option<String>,
 }
 
 #[async_trait]
@@ -155,6 +163,7 @@ where
                 receipt,
                 viewer_of(user_id),
                 CreateColumn {
+                    infer_type: false,
                     table_id: self.table_id,
                     binding: ColumnBinding::NewDefinition {
                         name: self.name.clone(),
@@ -168,18 +177,16 @@ where
             .await
             .map_err(database_error)?;
 
-        let view = service_context
-            .view_receipt(user_id, self.database_id)
-            .await?;
-        let detail = service_context
-            .service
-            .get_database(view, viewer_of(user_id))
-            .await
-            .map_err(database_error)?;
+        let (database, warning) = service_context
+            .schema_after_write(user_id, self.database_id)
+            .await;
 
         Ok(AddColumnResponse {
             column_id,
-            database: detail.into(),
+            database_id: self.database_id,
+            table_id: self.table_id,
+            database,
+            warning,
         })
     }
 }

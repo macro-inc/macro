@@ -20,8 +20,8 @@ use model_entity::EntityType;
 
 use crate::domain::models::{
     ApplyOutcome, Column, ColumnConfig, ColumnId, CreateColumn, CreateDatabase, CreateTable,
-    Database, DatabaseId, PropertyDefinitionId, Row, RowChange, RowId, Table, TableId,
-    TableVersion, Viewer,
+    Database, DatabaseId, PropertyDefinitionId, RenameColumnOutcome, Row, RowChange, RowId, Table,
+    TableId, TableVersion, Viewer,
 };
 use crate::domain::ports::DatabasesRepo;
 
@@ -355,8 +355,15 @@ impl DatabasesRepo for PgDatabasesRepo {
     }
 
     #[tracing::instrument(err, skip(self, cmd))]
-    async fn create_table(&self, cmd: &CreateTable) -> Result<Table, Self::Err> {
+    async fn create_table(&self, cmd: &CreateTable) -> Result<Option<Table>, Self::Err> {
         let mut transaction = self.pool.begin().await?;
+
+        sqlx::query!(
+            "SELECT id FROM databases WHERE id = $1 FOR UPDATE",
+            cmd.database_id
+        )
+        .fetch_one(&mut *transaction)
+        .await?;
 
         let max_position = sqlx::query_scalar!(
             r#"SELECT MAX(position) FROM database_tables WHERE database_id = $1"#,
@@ -370,7 +377,11 @@ impl DatabasesRepo for PgDatabasesRepo {
         let row = sqlx::query!(
             r#"
             INSERT INTO database_tables (id, database_id, name, position)
-            VALUES ($1, $2, $3, $4)
+            SELECT $1, $2, $3, $4
+            WHERE NOT EXISTS (
+                SELECT 1 FROM database_tables
+                WHERE database_id = $2 AND lower(name) = lower($3)
+            )
             RETURNING id, database_id, name, position, version
             "#,
             id,
@@ -378,18 +389,62 @@ impl DatabasesRepo for PgDatabasesRepo {
             cmd.name,
             position,
         )
-        .fetch_one(&mut *transaction)
+        .fetch_optional(&mut *transaction)
         .await?;
 
         transaction.commit().await?;
 
-        Ok(Table {
+        Ok(row.map(|row| Table {
             id: row.id,
             database_id: row.database_id,
             name: row.name,
             position: row.position,
             version: TableVersion(row.version),
-        })
+        }))
+    }
+
+    #[tracing::instrument(err, skip(self, table))]
+    async fn rename_table(
+        &self,
+        table: &Table,
+        name: &str,
+        previous_name: &str,
+    ) -> Result<Option<Table>, Self::Err> {
+        let mut transaction = self.pool.begin().await?;
+        // Serialize table naming and position allocation within a database.
+        sqlx::query!(
+            "SELECT id FROM databases WHERE id = $1 FOR UPDATE",
+            table.database_id
+        )
+        .fetch_one(&mut *transaction)
+        .await?;
+        let row = sqlx::query!(
+            r#"
+            UPDATE database_tables
+            SET name = $3, version = version + 1
+            WHERE id = $1 AND database_id = $2 AND name = $4
+              AND NOT EXISTS (
+                SELECT 1 FROM database_tables other
+                WHERE other.database_id = $2 AND other.id <> $1
+                  AND lower(other.name) = lower($3)
+              )
+            RETURNING id, database_id, name, position, version
+            "#,
+            table.id,
+            table.database_id,
+            name,
+            previous_name,
+        )
+        .fetch_optional(&mut *transaction)
+        .await?;
+        transaction.commit().await?;
+        Ok(row.map(|row| Table {
+            id: row.id,
+            database_id: row.database_id,
+            name: row.name,
+            position: row.position,
+            version: TableVersion(row.version),
+        }))
     }
 
     #[tracing::instrument(err, skip(self, cmd))]
@@ -414,14 +469,15 @@ impl DatabasesRepo for PgDatabasesRepo {
 
         sqlx::query!(
             r#"
-            INSERT INTO database_columns (id, table_id, property_definition_id, position, config)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO database_columns (id, table_id, property_definition_id, position, config, infer_type)
+            VALUES ($1, $2, $3, $4, $5, $6)
             "#,
             id,
             table_id,
             property_definition_id,
             position,
             config,
+            cmd.infer_type,
         )
         .execute(&mut *transaction)
         .await?;
@@ -438,6 +494,97 @@ impl DatabasesRepo for PgDatabasesRepo {
         transaction.commit().await?;
 
         Ok(id)
+    }
+
+    #[tracing::instrument(err, skip(self, table, column))]
+    async fn rename_column(
+        &self,
+        table: &Table,
+        column: &Column,
+        name: &str,
+    ) -> Result<Option<RenameColumnOutcome>, Self::Err> {
+        let mut transaction = self.pool.begin().await?;
+        let version = sqlx::query_scalar!(
+            r#"UPDATE database_tables SET version = version + 1
+            WHERE id = $1 AND database_id = $2 AND version = $3
+              AND EXISTS (SELECT 1 FROM database_columns WHERE id = $4 AND table_id = $1
+                          AND display_name IS NOT DISTINCT FROM $5)
+              AND EXISTS (SELECT 1 FROM databases WHERE id = $2 AND trashed_at IS NULL)
+            RETURNING version"#,
+            table.id,
+            table.database_id,
+            table.version.0,
+            column.id,
+            column.display_name,
+        )
+        .fetch_optional(&mut *transaction)
+        .await?;
+        let Some(version) = version else {
+            return Ok(None);
+        };
+        sqlx::query!(
+            "UPDATE database_columns SET display_name = $2 WHERE id = $1 AND table_id = $3",
+            column.id,
+            name,
+            table.id
+        )
+        .execute(&mut *transaction)
+        .await?;
+        transaction.commit().await?;
+        Ok(Some(RenameColumnOutcome {
+            column: Column {
+                display_name: Some(name.to_string()),
+                ..column.clone()
+            },
+            table_version: TableVersion(version),
+        }))
+    }
+
+    #[tracing::instrument(err, skip(self, table, column))]
+    async fn infer_column_type(
+        &self,
+        table: &Table,
+        column: &Column,
+        definition_id: PropertyDefinitionId,
+    ) -> Result<Option<TableVersion>, Self::Err> {
+        let mut transaction = self.pool.begin().await?;
+        // Row writers take this same lock before checking versions and cells.
+        let current = sqlx::query_scalar!(
+            "SELECT version FROM database_tables WHERE id = $1 AND database_id = $2 FOR UPDATE",
+            table.id,
+            table.database_id,
+        )
+        .fetch_optional(&mut *transaction)
+        .await?;
+        if current != Some(table.version.0) {
+            return Ok(None);
+        }
+        let updated = sqlx::query_scalar!(
+            r#"UPDATE database_columns SET property_definition_id = $4, infer_type = FALSE
+            WHERE id = $1 AND table_id = $2 AND property_definition_id = $3 AND infer_type
+              AND NOT EXISTS (SELECT 1 FROM database_rows WHERE table_id = $2 AND cells ? $5)
+              AND EXISTS (SELECT 1 FROM databases WHERE id = $6 AND trashed_at IS NULL)
+            RETURNING id"#,
+            column.id,
+            table.id,
+            column.property_definition_id,
+            definition_id,
+            column.property_definition_id.to_string(),
+            table.database_id,
+        )
+        .fetch_optional(&mut *transaction)
+        .await?;
+        if updated.is_none() {
+            return Ok(None);
+        }
+        let version = sqlx::query_scalar!(
+            "UPDATE database_tables SET version = version + 1 WHERE id = $1 RETURNING version",
+            table.id,
+        )
+        .fetch_one(&mut *transaction)
+        .await?;
+        transaction.commit().await?;
+        Ok(Some(TableVersion(version)))
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -554,6 +701,42 @@ impl DatabasesRepo for PgDatabasesRepo {
             }
         }
 
+        // Blind row writes retain cell-level last-write-wins, but must never
+        // write under a definition removed by a concurrent schema rebind.
+        // Table locks keep this binding check and inference mutually exclusive.
+        let mut binding_tables = Vec::new();
+        let mut binding_definitions = Vec::new();
+        for change in changes {
+            match change {
+                RowChange::Insert { table_id, cells } => {
+                    for id in cells.keys() {
+                        binding_tables.push(*table_id);
+                        binding_definitions.push(*id);
+                    }
+                }
+                RowChange::Update {
+                    table_id, cells, ..
+                } => {
+                    for id in cells.keys() {
+                        binding_tables.push(*table_id);
+                        binding_definitions.push(*id);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let stale_table = sqlx::query_scalar!(
+            r#"SELECT changed.table_id AS "table_id!"
+            FROM UNNEST($1::uuid[], $2::uuid[]) AS changed(table_id, definition_id)
+            WHERE NOT EXISTS (SELECT 1 FROM database_columns
+                WHERE table_id = changed.table_id AND property_definition_id = changed.definition_id)
+            LIMIT 1"#,
+            &binding_tables, &binding_definitions,
+        ).fetch_optional(&mut *transaction).await?;
+        if let Some(table_id) = stale_table {
+            return Ok(ApplyOutcome::VersionConflict { table_id });
+        }
+
         // Row positions: one MAX per inserted-into table, then increment in
         // memory rather than a round trip per row.
         let mut next_positions: HashMap<TableId, String> = HashMap::new();
@@ -668,6 +851,43 @@ impl DatabasesRepo for PgDatabasesRepo {
             }
         }
 
+        // SQL/AI/import writes also settle first-value inference. Only actual
+        // values count: clearing a cell or inserting an untouched row does not.
+        let mut valued_tables = Vec::new();
+        let mut valued_definitions = Vec::new();
+        for change in changes {
+            match change {
+                RowChange::Insert { table_id, cells } => {
+                    for id in cells.keys() {
+                        valued_tables.push(*table_id);
+                        valued_definitions.push(*id);
+                    }
+                }
+                RowChange::Update {
+                    table_id, cells, ..
+                } => {
+                    for (id, value) in cells {
+                        if value.is_some() {
+                            valued_tables.push(*table_id);
+                            valued_definitions.push(*id);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        if !valued_tables.is_empty() {
+            sqlx::query!(
+                r#"UPDATE database_columns SET infer_type = FALSE
+                WHERE infer_type AND (table_id, property_definition_id) IN
+                    (SELECT * FROM UNNEST($1::uuid[], $2::uuid[]))"#,
+                &valued_tables,
+                &valued_definitions,
+            )
+            .execute(&mut *transaction)
+            .await?;
+        }
+
         // Exactly one bump per written table, however many changes touched it.
         let bumped = sqlx::query!(
             r#"
@@ -746,7 +966,7 @@ impl DatabasesRepo for PgDatabasesRepo {
     async fn columns_for_tables(&self, table_ids: &[TableId]) -> Result<Vec<Column>, Self::Err> {
         let rows = sqlx::query!(
             r#"
-            SELECT id, table_id, property_definition_id, position, config
+            SELECT id, table_id, property_definition_id, position, config, display_name, infer_type
             FROM database_columns
             WHERE table_id = ANY($1)
             ORDER BY table_id, position
@@ -763,6 +983,8 @@ impl DatabasesRepo for PgDatabasesRepo {
                     property_definition_id: r.property_definition_id,
                     position: r.position,
                     config: r.config.map(serde_json::from_value).transpose()?,
+                    display_name: r.display_name,
+                    infer_type: r.infer_type,
                 })
             })
             .collect()

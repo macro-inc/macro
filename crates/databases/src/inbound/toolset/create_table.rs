@@ -9,7 +9,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::{DatabasesToolContext, ToolDatabaseSchema, database_error, viewer_of};
+use super::{DatabasesToolContext, ToolDatabaseSchema, database_error};
 use crate::domain::models::CreateTable as CreateTableCommand;
 use crate::domain::ports::DatabasesService;
 
@@ -30,7 +30,8 @@ tables in the same database can be joined in one query, and a link column betwee
 Requires edit access to the database. The response is the database's refreshed schema, so the \
 new table's `id` and its exact `sqlName` are there without a second call — SQL names are \
 derived from display names and disambiguated against the ones already taken, so read the \
-`sqlName` rather than deriving it yourself."
+`sqlName` rather than deriving it yourself. If `database` is null, creation still succeeded; \
+call DescribeDatabase using databaseId before continuing. Do not repeat the create."
 )]
 pub struct CreateTable {
     /// The database to add the table to.
@@ -53,10 +54,15 @@ impl ToolAnnotated for CreateTable {
 #[derive(Debug, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateTableResponse {
+    /// Database containing the committed table.
+    pub database_id: Uuid,
     /// The new table's id. Pass this to AddColumn.
     pub table_id: Uuid,
     /// The database's schema after the change.
-    pub database: ToolDatabaseSchema,
+    pub database: Option<ToolDatabaseSchema>,
+    /// A failed follow-up read does not undo the committed table.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub warning: Option<String>,
 }
 
 #[async_trait]
@@ -98,18 +104,15 @@ where
         // Read the schema back rather than deriving the SQL name here: the
         // catalog disambiguates names against the ones already taken, so a
         // locally computed one would be wrong exactly when it matters.
-        let view = service_context
-            .view_receipt(user_id, self.database_id)
-            .await?;
-        let detail = service_context
-            .service
-            .get_database(view, viewer_of(user_id))
-            .await
-            .map_err(database_error)?;
+        let (database, warning) = service_context
+            .schema_after_write(user_id, self.database_id)
+            .await;
 
         Ok(CreateTableResponse {
             table_id: table.id,
-            database: detail.into(),
+            database_id: self.database_id,
+            database,
+            warning,
         })
     }
 }

@@ -88,6 +88,22 @@ pub struct Column {
     pub position: String,
     /// Column-kind specific configuration.
     pub config: Option<ColumnConfig>,
+    /// Optional label for this placement. The property's name still defines
+    /// its SQL identifier, so renaming a column does not break saved queries.
+    #[serde(default)]
+    pub display_name: Option<String>,
+    /// Whether the first nonempty value may settle this new text column's type.
+    #[serde(default)]
+    pub infer_type: bool,
+}
+
+/// A renamed placement and its table's version after the atomic update.
+#[derive(utoipa::ToSchema, Debug, Clone, Serialize, Deserialize)]
+pub struct RenameColumnOutcome {
+    /// The placement with its new display label; IDs and binding are preserved.
+    pub column: Column,
+    /// Monotonic table version used to reconcile concurrent client refreshes.
+    pub table_version: TableVersion,
 }
 
 /// Column-kind specific configuration stored on the placement.
@@ -172,12 +188,38 @@ pub enum ColumnBinding {
 /// Command to add a column to a table.
 #[derive(Debug, Clone)]
 pub struct CreateColumn {
+    /// Allow first-value inference for a newly owned plain text column.
+    pub infer_type: bool,
     /// Table receiving the column.
     pub table_id: TableId,
     /// Definition source.
     pub binding: ColumnBinding,
     /// Column-kind configuration (links, lookups).
     pub config: Option<ColumnConfig>,
+}
+
+/// Settle a new empty column's type using its first value.
+#[derive(Debug, Clone)]
+pub struct InferColumnType {
+    /// Table containing the placement.
+    pub table_id: TableId,
+    /// Placement to settle.
+    pub column_id: ColumnId,
+    /// Requested first-value type: string, number, or entity.
+    pub data_type: DataType,
+    /// Required when the inferred type is an entity reference.
+    pub specific_entity_type: Option<models_properties::EntityType>,
+    /// Version of the schema used to interpret the first value.
+    pub base_version: TableVersion,
+}
+
+/// Settled schema and the version against which its first value can be written.
+#[derive(utoipa::ToSchema, Debug, Clone, Serialize)]
+pub struct InferColumnTypeOutcome {
+    /// Updated placement, property definition, and stable SQL identifier.
+    pub column: ColumnDetail,
+    /// Version after settling the column.
+    pub table_version: TableVersion,
 }
 
 /// Command to extend a select column's set of allowed options.
@@ -221,8 +263,8 @@ pub struct ExecRequest {
     /// human typing ad-hoc SQL into the console or for an agent tool, and
     /// wrong for a client re-sending a statement it built from data it
     /// already read. Such a client should send back the
-    /// [`ExecOutcome::read_versions`] of the previous run, which covers every
-    /// table the statement looked at, not only the ones it wrote.
+    /// [`ExecOutcome::read_versions`] of the previous run to guard tables
+    /// the follow-up statement writes. Read-only dependencies are not guarded.
     pub base_versions: Option<HashMap<TableId, TableVersion>>,
 }
 
@@ -509,10 +551,13 @@ pub struct ExecOutcome {
     /// Dependency set of the statement, for liveness subscription.
     #[schema(value_type = Vec<Uuid>)]
     pub read_tables: Vec<TableId>,
+    /// Databases containing the read dependencies, for live subscriptions.
+    #[schema(value_type = Vec<Uuid>)]
+    pub read_database_ids: Vec<DatabaseId>,
     /// The version every user table in [`ExecOutcome::read_tables`] was at
     /// when this statement materialized it. Send these back as
-    /// [`ExecRequest::base_versions`] on the follow-up write to get a real
-    /// compare-and-set over everything the statement read.
+    /// [`ExecRequest::base_versions`] to guard tables the follow-up statement
+    /// writes. Versions for tables it only reads are ignored.
     #[schema(value_type = HashMap<String, TableVersion>)]
     pub read_versions: HashMap<TableId, TableVersion>,
     /// Magic tables whose materialization hit its row cap; aggregates over
@@ -594,6 +639,9 @@ pub struct ListedDatabase {
     pub database: Database,
     /// The viewer's access.
     pub grant: AccessGrant,
+    /// Tables in tab order, so discovery can find a table independently of
+    /// the containing database's display name.
+    pub tables: Vec<Table>,
 }
 
 /// Everything a client needs to render and edit one database: tables,
@@ -616,6 +664,9 @@ pub struct TableDetail {
     pub table: Table,
     /// Name to use in SQL (`FROM guests`).
     pub sql_name: String,
+    /// Immutable read-only name for persisted queries; unaffected by renames
+    /// or the other tables a viewer can access.
+    pub read_sql_name: String,
     /// Columns in display order.
     pub columns: Vec<ColumnDetail>,
 }
@@ -649,6 +700,9 @@ pub enum DatabaseError {
     /// A schema operation was invalid (duplicate placement, bad binding, …).
     #[error("invalid schema operation: {0}")]
     InvalidSchemaOperation(String),
+    /// The schema changed after the client read its version.
+    #[error("The table changed. Refresh before entering this value.")]
+    VersionConflict,
     /// Persistence failure.
     #[error("repository error: {0:?}")]
     Repo(rootcause::Report),

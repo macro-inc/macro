@@ -36,6 +36,7 @@ import {
   type ComponentMetaMap,
   resolveComponent,
 } from './componentRegistry';
+import { contentReference } from './content-reference';
 import { createHistory, type History } from './history';
 import {
   isPreviewControllerContent,
@@ -84,18 +85,6 @@ export type SplitContent = {
 );
 
 export type SplitContentType = SplitContent['type'];
-
-/**
- * Build a bare content reference. The `type` literal union is wider than the
- * 25 constituents TypeScript will distribute over a discriminated union, so
- * `{ type, id }` no longer narrows on its own.
- */
-export function contentReference(
-  type: SplitContentType,
-  id: string
-): SplitContent {
-  return type === 'component' ? { type, id } : { type, id };
-}
 
 /**
  * Why a split's mounted content changed. Read via `useNavigationCause` to

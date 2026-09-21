@@ -161,14 +161,21 @@ const rsvp = await guests.addColumn({
 });
 await rsvp.addOptions(['Maybe']);
 
-// SQL addresses tables by their SQL names, across every database you can see.
-const [result] = await db.query(`SELECT * FROM ${await guests.sqlName()}`);
+// Queries are enforced as read-only by the server. Stable read names survive
+// table renames, so use them for saved queries and joins.
+const quoteName = (name: string) => `"${name.replaceAll('"', '""')}"`;
+const [result] = await db.query(
+  `SELECT * FROM ${quoteName(await guests.readSqlName())}`,
+);
 
 // Writes go through exec, which reports what changed and hands back the
 // versions to pass as baseVersions for a compare-and-set follow-up.
 const outcome = await macro.databases.exec({
-  sql: "INSERT INTO guests (email) VALUES ('ada@example.com')",
+  sql: `INSERT INTO ${quoteName(await guests.sqlName())} (email) VALUES ('ada@example.com')`,
 });
+
+await guests.rename('Attendees');
+await rsvp.rename('Response'); // SQL column names stay stable.
 
 const sqlite = await db.downloadSqlite(); // Uint8Array
 ```

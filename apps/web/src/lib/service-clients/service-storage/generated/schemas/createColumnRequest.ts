@@ -12,6 +12,8 @@ import type { ColumnBindingRequest } from './columnBindingRequest';
 export interface CreateColumnRequest {
   /** Definition source. */
   binding: ColumnBindingRequest;
+  /** Infer the first value type of a newly owned text column. */
+  infer_type?: boolean;
   /** Database of the linked table (defaults to this database). */
   linkToDatabaseId?: string;
   /** Link this column to another table (many-to-many). */

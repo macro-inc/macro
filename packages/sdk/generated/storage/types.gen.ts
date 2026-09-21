@@ -3013,9 +3013,18 @@ export type CollabSurfaceTokenResponse = {
 export type Column = {
     config?: null | ColumnConfig;
     /**
+     * Optional label for this placement. The property's name still defines
+     * its SQL identifier, so renaming a column does not break saved queries.
+     */
+    display_name?: string | null;
+    /**
      * Identifier of the placement.
      */
     id: string;
+    /**
+     * Whether the first nonempty value may settle this new text column's type.
+     */
+    infer_type?: boolean;
     /**
      * Fractional index for column ordering.
      */
@@ -3391,6 +3400,10 @@ export type CreateColumnRequest = {
      * Definition source.
      */
     binding: ColumnBindingRequest;
+    /**
+     * Infer the first value type of a newly owned text column.
+     */
+    infer_type?: boolean;
     /**
      * Database of the linked table (defaults to this database).
      */
@@ -5679,6 +5692,10 @@ export type ExecOutcome = {
         [key: string]: TableVersion;
     };
     /**
+     * Databases containing the read dependencies, for live subscriptions.
+     */
+    read_database_ids: Array<string>;
+    /**
      * Dependency set of the statement, for liveness subscription.
      */
     read_tables: Array<string>;
@@ -6705,6 +6722,35 @@ export type InFlightTurnSummary = {
 };
 
 /**
+ * Settled schema and the version against which its first value can be written.
+ */
+export type InferColumnTypeOutcome = {
+    /**
+     * Updated placement, property definition, and stable SQL identifier.
+     */
+    column: ColumnDetail;
+    /**
+     * Version after settling the column.
+     */
+    table_version: TableVersion;
+};
+
+/**
+ * Request to settle an empty column's first-value type.
+ */
+export type InferColumnTypeRequest = {
+    /**
+     * Table version used when interpreting the first value.
+     */
+    base_version: TableVersion;
+    /**
+     * First-value type: STRING, NUMBER, or ENTITY.
+     */
+    data_type: DataType;
+    specific_entity_type?: null | EntityType;
+};
+
+/**
  * Full initiative returned to a caller, including members, tasks, and share state.
  */
 export type InitiativeDetail = {
@@ -6870,6 +6916,11 @@ export type ListedDatabase = {
      * The viewer's access.
      */
     grant: AccessGrant;
+    /**
+     * Tables in tab order, so discovery can find a table independently of
+     * the containing database's display name.
+     */
+    tables: Array<Table>;
 };
 
 export type LocationResponseData = {
@@ -8153,6 +8204,16 @@ export type PropertyValue = {
 };
 
 /**
+ * Request body for read-only SQL queries.
+ */
+export type QueryRequestBody = {
+    /**
+     * SQL to read. Writes are refused by the domain service.
+     */
+    sql: string;
+};
+
+/**
  * A SELECT's result set with provenance for hydration and write-through.
  */
 export type QueryResult = {
@@ -8361,6 +8422,48 @@ export type RemoveParticipantsRequest = {
      * User ids to remove.
      */
     participants: Array<string>;
+};
+
+/**
+ * A renamed placement and its table's version after the atomic update.
+ */
+export type RenameColumnOutcome = {
+    /**
+     * The placement with its new display label; IDs and binding are preserved.
+     */
+    column: Column;
+    /**
+     * Monotonic table version used to reconcile concurrent client refreshes.
+     */
+    table_version: TableVersion;
+};
+
+/**
+ * Rename one column placement without changing its property's SQL identifier.
+ */
+export type RenameColumnRequest = {
+    /**
+     * New display name.
+     */
+    name: string;
+    /**
+     * Label shown when the rename editor opened.
+     */
+    previousName: string;
+};
+
+/**
+ * Request body for renaming a table without overwriting a concurrent rename.
+ */
+export type RenameTableRequest = {
+    /**
+     * New display name.
+     */
+    name: string;
+    /**
+     * Name shown when the rename editor opened.
+     */
+    previousName: string;
 };
 
 /**
@@ -10129,6 +10232,11 @@ export type TableDetail = {
      * Columns in display order.
      */
     columns: Array<ColumnDetail>;
+    /**
+     * Immutable read-only name for persisted queries; unaffected by renames
+     * or the other tables a viewer can access.
+     */
+    read_sql_name: string;
     /**
      * Name to use in SQL (`FROM guests`).
      */
@@ -13602,6 +13710,41 @@ export type ExecDatabaseSqlResponses = {
 
 export type ExecDatabaseSqlResponse = ExecDatabaseSqlResponses[keyof ExecDatabaseSqlResponses];
 
+export type QueryDatabaseSqlData = {
+    body: QueryRequestBody;
+    path?: never;
+    query?: never;
+    url: '/databases/query';
+};
+
+export type QueryDatabaseSqlErrors = {
+    /**
+     * Invalid SQL
+     */
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    /**
+     * Queries cannot write data
+     */
+    403: ErrorResponse;
+    /**
+     * Query budget exceeded
+     */
+    422: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type QueryDatabaseSqlError = QueryDatabaseSqlErrors[keyof QueryDatabaseSqlErrors];
+
+export type QueryDatabaseSqlResponses = {
+    200: ExecOutcome;
+};
+
+export type QueryDatabaseSqlResponse = QueryDatabaseSqlResponses[keyof QueryDatabaseSqlResponses];
+
 export type GetDatabaseData = {
     body?: never;
     path: {
@@ -13703,6 +13846,38 @@ export type CreateDatabaseTableResponses = {
 
 export type CreateDatabaseTableResponse = CreateDatabaseTableResponses[keyof CreateDatabaseTableResponses];
 
+export type RenameDatabaseTableData = {
+    body: RenameTableRequest;
+    path: {
+        /**
+         * Database id
+         */
+        id: string;
+        /**
+         * Table id
+         */
+        table_id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/tables/{table_id}';
+};
+
+export type RenameDatabaseTableErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RenameDatabaseTableError = RenameDatabaseTableErrors[keyof RenameDatabaseTableErrors];
+
+export type RenameDatabaseTableResponses = {
+    200: Table;
+};
+
+export type RenameDatabaseTableResponse = RenameDatabaseTableResponses[keyof RenameDatabaseTableResponses];
+
 export type CreateDatabaseColumnData = {
     body: CreateColumnRequest;
     path: {
@@ -13740,6 +13915,79 @@ export type CreateDatabaseColumnResponses = {
 };
 
 export type CreateDatabaseColumnResponse = CreateDatabaseColumnResponses[keyof CreateDatabaseColumnResponses];
+
+export type RenameDatabaseColumnData = {
+    body: RenameColumnRequest;
+    path: {
+        /**
+         * Database id
+         */
+        id: string;
+        /**
+         * Table id
+         */
+        table_id: string;
+        /**
+         * Column id
+         */
+        column_id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/tables/{table_id}/columns/{column_id}';
+};
+
+export type RenameDatabaseColumnErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RenameDatabaseColumnError = RenameDatabaseColumnErrors[keyof RenameDatabaseColumnErrors];
+
+export type RenameDatabaseColumnResponses = {
+    200: RenameColumnOutcome;
+};
+
+export type RenameDatabaseColumnResponse = RenameDatabaseColumnResponses[keyof RenameDatabaseColumnResponses];
+
+export type InferDatabaseColumnTypeData = {
+    body: InferColumnTypeRequest;
+    path: {
+        /**
+         * Database id
+         */
+        id: string;
+        /**
+         * Table id
+         */
+        table_id: string;
+        /**
+         * Column id
+         */
+        column_id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/tables/{table_id}/columns/{column_id}/infer-type';
+};
+
+export type InferDatabaseColumnTypeErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type InferDatabaseColumnTypeError = InferDatabaseColumnTypeErrors[keyof InferDatabaseColumnTypeErrors];
+
+export type InferDatabaseColumnTypeResponses = {
+    200: InferColumnTypeOutcome;
+};
+
+export type InferDatabaseColumnTypeResponse = InferDatabaseColumnTypeResponses[keyof InferDatabaseColumnTypeResponses];
 
 export type AddDatabaseColumnOptionsData = {
     body: AddColumnOptionsRequest;

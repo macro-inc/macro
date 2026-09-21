@@ -71,6 +71,8 @@ fn fixture() -> Fixture {
     let link_column = Uuid::new_v4();
     let columns = vec![
         Column {
+            infer_type: false,
+            display_name: None,
             id: Uuid::new_v4(),
             table_id: table.id,
             property_definition_id: status.definition.id,
@@ -78,6 +80,8 @@ fn fixture() -> Fixture {
             config: None,
         },
         Column {
+            infer_type: false,
+            display_name: None,
             id: Uuid::new_v4(),
             table_id: table.id,
             property_definition_id: people.definition.id,
@@ -85,6 +89,8 @@ fn fixture() -> Fixture {
             config: None,
         },
         Column {
+            infer_type: false,
+            display_name: None,
             id: Uuid::new_v4(),
             table_id: table.id,
             property_definition_id: when.definition.id,
@@ -92,6 +98,8 @@ fn fixture() -> Fixture {
             config: None,
         },
         Column {
+            infer_type: false,
+            display_name: None,
             id: link_column,
             table_id: table.id,
             property_definition_id: sessions.definition.id,

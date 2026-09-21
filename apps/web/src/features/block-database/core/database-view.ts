@@ -1,4 +1,5 @@
 import { match } from 'ts-pattern';
+import type { DatabaseEntityType } from './column-inference';
 
 export type DatabaseCellValue = string | number | null;
 
@@ -10,6 +11,9 @@ export type DatabaseViewColumn = {
   isMultiSelect: boolean;
   options: (string | number)[];
   writable: boolean;
+  specificEntityType?: DatabaseEntityType | null;
+  /** A new, empty Text column may adopt the type of its first entry. */
+  inferType?: boolean;
 };
 
 export type DatabaseFilterOperator =
@@ -43,6 +47,8 @@ export type DatabaseViewConfig = {
   filters: DatabaseFilter[];
   sorts: DatabaseSort[];
   hiddenColumns: string[];
+  /** Omitted on older views; unlisted columns follow in schema order. */
+  columnOrder?: string[];
   search: string;
 };
 
@@ -69,6 +75,43 @@ export function defaultDatabaseView(): DatabaseViewConfig {
     hiddenColumns: [],
     search: '',
   };
+}
+
+/** Stable ids preserve layout through schema changes without dropping fresh columns. */
+export function orderDatabaseColumns(
+  columns: readonly DatabaseViewColumn[],
+  order: readonly string[] = []
+): DatabaseViewColumn[] {
+  const remaining = new Map(columns.map((column) => [column.id, column]));
+  const ordered: DatabaseViewColumn[] = [];
+  for (const id of order) {
+    const column = remaining.get(id);
+    if (!column) continue;
+    ordered.push(column);
+    remaining.delete(id);
+  }
+  return [...ordered, ...remaining.values()];
+}
+
+/** Move past the next visible column; hidden fields keep their place for later. */
+export function moveDatabaseViewColumn(
+  view: DatabaseViewConfig,
+  columns: readonly DatabaseViewColumn[],
+  columnId: string,
+  direction: 'left' | 'right'
+): DatabaseViewConfig {
+  const ordered = orderDatabaseColumns(columns, view.columnOrder);
+  const visible = ordered.filter(
+    (column) => !view.hiddenColumns.includes(column.id)
+  );
+  const index = visible.findIndex((column) => column.id === columnId);
+  const neighbor = visible[index + (direction === 'left' ? -1 : 1)];
+  if (index < 0 || !neighbor) return view;
+  const columnOrder = ordered.map((column) => column.id);
+  const from = columnOrder.indexOf(columnId);
+  const to = columnOrder.indexOf(neighbor.id);
+  [columnOrder[from], columnOrder[to]] = [neighbor.id, columnId];
+  return reconcileDatabaseView({ ...view, columnOrder }, columns);
 }
 
 export const FILTER_OPERATORS: {
@@ -103,6 +146,12 @@ export function filterOperatorsFor(column: DatabaseViewColumn) {
       return !numeric && !date && !categorical;
     return true;
   }).map((operator) => {
+    if (column.isMultiSelect && column.dataType.startsWith('SELECT_')) {
+      if (operator.value === 'equals')
+        return { ...operator, label: 'contains' };
+      if (operator.value === 'not_equals')
+        return { ...operator, label: 'does not contain' };
+    }
     if (!date) return operator;
     const dateLabel: Partial<Record<DatabaseFilterOperator, string>> = {
       gt: 'is after',
@@ -121,8 +170,34 @@ export function isBoardGroupColumn(column: DatabaseViewColumn): boolean {
   );
 }
 
-function isEmpty(value: DatabaseCellValue): boolean {
-  return value === null || value === '' || value === '[]';
+function cellValues(
+  value: DatabaseCellValue,
+  column: DatabaseViewColumn
+): DatabaseCellValue[] {
+  if (column.isMultiSelect && typeof value === 'string') {
+    try {
+      const parsed: unknown = JSON.parse(value);
+      if (Array.isArray(parsed))
+        return parsed.filter(
+          (item): item is DatabaseCellValue =>
+            item === null ||
+            typeof item === 'string' ||
+            typeof item === 'number'
+        );
+    } catch {
+      // Older scalar values remain searchable when a property becomes multi-value.
+    }
+  }
+  return [value];
+}
+
+function isEmpty(
+  value: DatabaseCellValue,
+  column: DatabaseViewColumn
+): boolean {
+  return cellValues(value, column).every(
+    (item) => item === null || item === ''
+  );
 }
 
 function comparable(value: DatabaseCellValue, column: DatabaseViewColumn) {
@@ -140,24 +215,32 @@ export function matchesDatabaseFilter(
   column: DatabaseViewColumn,
   filter: DatabaseFilter
 ): boolean {
-  if (filter.operator === 'is_empty') return isEmpty(value);
-  if (filter.operator === 'is_not_empty') return !isEmpty(value);
+  if (filter.operator === 'is_empty') return isEmpty(value, column);
+  if (filter.operator === 'is_not_empty') return !isEmpty(value, column);
   // An unfinished filter must not make a table appear to have lost its rows.
   if (!filter.value.trim()) return true;
-  if (isEmpty(value)) return false;
-  const left = comparable(value, column);
   const right = comparable(filter.value, column);
   if (typeof right === 'number' && !Number.isFinite(right)) return true;
+  const values = cellValues(value, column)
+    .filter((item) => item !== null && item !== '')
+    .map((item) => comparable(item, column));
+  if (!values.length && !column.isMultiSelect) return false;
   return match(filter.operator)
-    .with('equals', () => left === right)
-    .with('not_equals', () => left !== right)
-    .with('contains', () => String(left).includes(String(right)))
-    .with('not_contains', () => !String(left).includes(String(right)))
-    .with('starts_with', () => String(left).startsWith(String(right)))
-    .with('gt', () => left > right)
-    .with('gte', () => left >= right)
-    .with('lt', () => left < right)
-    .with('lte', () => left <= right)
+    .with('equals', () => values.some((left) => left === right))
+    .with('not_equals', () => values.every((left) => left !== right))
+    .with('contains', () =>
+      values.some((left) => String(left).includes(String(right)))
+    )
+    .with('not_contains', () =>
+      values.every((left) => !String(left).includes(String(right)))
+    )
+    .with('starts_with', () =>
+      values.some((left) => String(left).startsWith(String(right)))
+    )
+    .with('gt', () => values.some((left) => left > right))
+    .with('gte', () => values.some((left) => left >= right))
+    .with('lt', () => values.some((left) => left < right))
+    .with('lte', () => values.some((left) => left <= right))
     .exhaustive();
 }
 
@@ -174,9 +257,11 @@ export function applyDatabaseView<Row>(
     if (
       search &&
       !columns.some((column) =>
-        String(getValue(row, column.id) ?? '')
-          .toLocaleLowerCase()
-          .includes(search)
+        cellValues(getValue(row, column.id), column).some((value) =>
+          String(value ?? '')
+            .toLocaleLowerCase()
+            .includes(search)
+        )
       )
     )
       return false;
@@ -196,9 +281,9 @@ export function applyDatabaseView<Row>(
       const aValue = getValue(a, column.id);
       const bValue = getValue(b, column.id);
       // Empty cells stay at the end in either direction.
-      if (isEmpty(aValue) && isEmpty(bValue)) continue;
-      if (isEmpty(aValue)) return 1;
-      if (isEmpty(bValue)) return -1;
+      if (isEmpty(aValue, column) && isEmpty(bValue, column)) continue;
+      if (isEmpty(aValue, column)) return 1;
+      if (isEmpty(bValue, column)) return -1;
       const left = comparable(aValue, column);
       const right = comparable(bValue, column);
       const order =
@@ -229,7 +314,7 @@ export function groupDatabaseRows<Row>(
 ): DatabaseRowGroup<Row>[] {
   const groups = new Map<string, DatabaseRowGroup<Row>>();
   const normalize = (value: DatabaseCellValue): DatabaseCellValue => {
-    if (isEmpty(value)) return null;
+    if (isEmpty(value, column)) return null;
     if (column.dataType === 'BOOLEAN') return Number(value) ? 1 : 0;
     // SELECT_NUMBER, like SELECT_STRING, exposes labels as SQLite TEXT.
     return String(value);
@@ -281,7 +366,9 @@ function isSort(value: unknown): value is DatabaseSort {
   );
 }
 
-export function isDatabaseViewConfig(value: unknown): value is DatabaseViewConfig {
+export function isDatabaseViewConfig(
+  value: unknown
+): value is DatabaseViewConfig {
   return (
     isRecord(value) &&
     (value.layout === 'table' || value.layout === 'board') &&
@@ -292,7 +379,10 @@ export function isDatabaseViewConfig(value: unknown): value is DatabaseViewConfi
     Array.isArray(value.sorts) &&
     value.sorts.every(isSort) &&
     Array.isArray(value.hiddenColumns) &&
-    value.hiddenColumns.every((id) => typeof id === 'string')
+    value.hiddenColumns.every((id) => typeof id === 'string') &&
+    (value.columnOrder === undefined ||
+      (Array.isArray(value.columnOrder) &&
+        value.columnOrder.every((id) => typeof id === 'string')))
   );
 }
 
@@ -315,13 +405,22 @@ export function reconcileDatabaseView(
   columns: readonly DatabaseViewColumn[]
 ): DatabaseViewConfig {
   const ids = new Set(columns.map((column) => column.id));
+  const columnOrder = orderDatabaseColumns(columns, view.columnOrder).map(
+    (column) => column.id
+  );
   return {
     ...view,
+    // Canonical schema order keeps a restored default view from looking unsaved.
+    columnOrder: columnOrder.every((id, index) => id === columns[index].id)
+      ? undefined
+      : columnOrder,
     groupBy: columns.some(
       (column) => column.id === view.groupBy && isBoardGroupColumn(column)
     )
       ? view.groupBy
-      : (columns.find(isBoardGroupColumn)?.id ?? null),
+      : view.layout === 'board'
+        ? (columns.find(isBoardGroupColumn)?.id ?? null)
+        : null,
     filters: view.filters.filter((filter) => ids.has(filter.columnId)),
     sorts: view.sorts.filter((sort) => ids.has(sort.columnId)),
     hiddenColumns: view.hiddenColumns.filter((id) => ids.has(id)),

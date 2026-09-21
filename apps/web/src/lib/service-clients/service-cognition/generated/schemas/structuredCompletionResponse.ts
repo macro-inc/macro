@@ -4,7 +4,10 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
+import type { StructuredToolActivity } from './structuredToolActivity';
 
 export interface StructuredCompletionResponse {
   result: unknown;
+  /** Actual completed tools, independent of the model's claims. */
+  toolActivity: StructuredToolActivity[];
 }

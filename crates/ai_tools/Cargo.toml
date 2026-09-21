@@ -76,6 +76,7 @@ reqwest.workspace = true
 readonly_pool = { path = "../readonly_pool" }
 reminders = { path = "../reminders", default-features = false, features = ["ai_tools", "postgres"] }
 rootcause = { workspace = true }
+saved_views = { path = "../saved_views" }
 schemars.workspace = true
 search_service_client = { path = "../search_service_client" }
 serde.workspace = true

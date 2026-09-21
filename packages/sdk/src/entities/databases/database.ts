@@ -4,6 +4,8 @@ import type {
   DatabaseDetail,
   DataType,
   ExecOutcome,
+  InferColumnTypeOutcome,
+  InferColumnTypeRequest,
   QueryResult,
   TableVersion,
 } from '../../../generated/storage/types.gen';
@@ -38,6 +40,8 @@ export type ColumnBinding =
 
 /** Options for {@link Database.addColumn}. */
 export type AddColumnOptions = ColumnBinding & {
+  /** Allow a newly owned, empty text column to infer its first value's type. */
+  inferType?: boolean;
   /**
    * Make this a link column pointing at another table (many-to-many). The
    * target may live in any database the caller can reach.
@@ -45,15 +49,22 @@ export type AddColumnOptions = ColumnBinding & {
   linkTo?: DatabaseTable;
 };
 
+/** Settle an empty inferred column using the table version the caller read. */
+export type InferColumnTypeOptions = {
+  dataType: 'STRING' | 'NUMBER' | 'ENTITY';
+  specificEntityType?: InferColumnTypeRequest['specific_entity_type'];
+  baseVersion: TableVersion;
+};
+
 /** Options for {@link Database.exec} and {@link DatabaseNamespace.exec}. */
 export interface ExecOptions {
   /** The statements to run, executed in one transaction. */
   sql: string;
   /**
-   * Compare-and-swap by SQL table name: the write is rejected with a 409 if
-   * any listed table has moved past the given version. Omit for cell-level
-   * last-write-wins. Versions come from {@link DatabaseTable.version} or from
-   * a previous outcome's `read_versions`.
+   * Compare-and-swap by table id: the write is rejected with a 409 if
+   * a listed table being written has moved past the given version. Read-only
+   * dependencies are not guarded. Omit for cell-level last-write-wins. Versions
+   * come from {@link DatabaseTable.version} or an outcome's `read_versions`.
    */
   baseVersions?: Record<string, TableVersion>;
 }
@@ -68,7 +79,7 @@ export interface ExecOptions {
 export class Database extends MacroEntity<DatabaseDetail> {
   protected async fetch(): Promise<DatabaseDetail> {
     return unwrap(
-      await this.client.storage.getDatabase({ path: { id: this.id } }),
+      await this.client.storage.getDatabase({ path: { id: this.id } })
     );
   }
 
@@ -80,10 +91,10 @@ export class Database extends MacroEntity<DatabaseDetail> {
   /** Create a database owned by the caller. */
   static async create(
     client: MacroClient,
-    opts: { name: string },
+    opts: { name: string }
   ): Promise<Database> {
     const record = unwrap(
-      await client.storage.createDatabase({ body: { name: opts.name } }),
+      await client.storage.createDatabase({ body: { name: opts.name } })
     );
     return new Database(client, record.id);
   }
@@ -101,7 +112,7 @@ export class Database extends MacroEntity<DatabaseDetail> {
    */
   static async exec(
     client: MacroClient,
-    opts: ExecOptions,
+    opts: ExecOptions
   ): Promise<ExecOutcome> {
     return unwrap(
       await client.storage.execDatabaseSql({
@@ -111,8 +122,13 @@ export class Database extends MacroEntity<DatabaseDetail> {
             ? { baseVersions: opts.baseVersions }
             : {}),
         },
-      }),
+      })
     );
+  }
+
+  /** Read SQL through the server-enforced read-only endpoint. */
+  static async query(client: MacroClient, sql: string): Promise<ExecOutcome> {
+    return unwrap(await client.storage.queryDatabaseSql({ body: { sql } }));
   }
 
   /**
@@ -128,19 +144,19 @@ export class Database extends MacroEntity<DatabaseDetail> {
 
   /** The user who owns the database. */
   readonly owner = this.mappedField('database', (record) =>
-    User.byId(this.client, record.owner_id),
+    User.byId(this.client, record.owner_id)
   );
 
   /** When the database was created. */
   readonly createdAt = this.mappedField(
     'database',
-    (record) => record.created_at,
+    (record) => record.created_at
   );
 
   /** When the database was trashed, if it has been. */
   readonly trashedAt = this.mappedField(
     'database',
-    (record) => record.trashed_at ?? undefined,
+    (record) => record.trashed_at ?? undefined
   );
 
   /** The caller's access on the database. */
@@ -148,7 +164,7 @@ export class Database extends MacroEntity<DatabaseDetail> {
 
   /** The database's tables, in tab order. */
   readonly tables = this.mappedField('tables', (tables) =>
-    tables.map((table) => DatabaseTable.byId(this, table.table.id)),
+    tables.map((table) => DatabaseTable.byId(this, table.table.id))
   );
 
   /** The table with the given display name, or `undefined` if there is none. */
@@ -164,9 +180,65 @@ export class Database extends MacroEntity<DatabaseDetail> {
       c.storage.createDatabaseTable({
         path: { id: this.id },
         body: { name: opts.name },
-      }),
+      })
     );
     return DatabaseTable.byId(this, table.id);
+  }
+
+  /** Rename a table only if its last-read name is still current. */
+  async renameTable(table: DatabaseTable, name: string): Promise<void> {
+    if (table.database.id !== this.id) {
+      throw new MacroError(
+        `table ${table.id} does not belong to database ${this.id}`
+      );
+    }
+    const previousName = await table.name();
+    await this.mutate((client) =>
+      client.storage.renameDatabaseTable({
+        path: { id: this.id, table_id: table.id },
+        body: { name, previousName },
+      })
+    );
+  }
+
+  /** Rename this column placement without changing shared definitions or SQL names. */
+  async renameColumn(column: DatabaseColumn, name: string): Promise<void> {
+    if (column.table.database.id !== this.id) {
+      throw new MacroError(
+        `column ${column.id} does not belong to database ${this.id}`
+      );
+    }
+    const previousName = await column.name();
+    await this.mutate((client) =>
+      client.storage.renameDatabaseColumn({
+        path: { id: this.id, table_id: column.table.id, column_id: column.id },
+        body: { name, previousName },
+      })
+    );
+  }
+
+  /** Adopt a first-value type only while the owned column is empty and inferable. */
+  async inferColumnType(
+    column: DatabaseColumn,
+    opts: InferColumnTypeOptions
+  ): Promise<InferColumnTypeOutcome> {
+    if (column.table.database.id !== this.id) {
+      throw new MacroError(
+        `column ${column.id} does not belong to database ${this.id}`
+      );
+    }
+    return this.mutate((client) =>
+      client.storage.inferDatabaseColumnType({
+        path: { id: this.id, table_id: column.table.id, column_id: column.id },
+        body: {
+          data_type: opts.dataType,
+          base_version: opts.baseVersion,
+          ...(opts.specificEntityType !== undefined
+            ? { specific_entity_type: opts.specificEntityType }
+            : {}),
+        },
+      })
+    );
   }
 
   /**
@@ -175,11 +247,11 @@ export class Database extends MacroEntity<DatabaseDetail> {
    */
   async addColumn(
     table: DatabaseTable,
-    opts: AddColumnOptions,
+    opts: AddColumnOptions
   ): Promise<DatabaseColumn> {
     if (table.database.id !== this.id) {
       throw new MacroError(
-        `table ${table.id} belongs to database ${table.database.id}, not ${this.id}`,
+        `table ${table.id} belongs to database ${table.database.id}, not ${this.id}`
       );
     }
     const binding: CreateColumnRequest['binding'] =
@@ -199,6 +271,9 @@ export class Database extends MacroEntity<DatabaseDetail> {
         path: { id: this.id, table_id: table.id },
         body: {
           binding,
+          ...(opts.inferType !== undefined
+            ? { infer_type: opts.inferType }
+            : {}),
           ...(opts.linkTo !== undefined
             ? {
                 linkToTableId: opts.linkTo.id,
@@ -206,7 +281,7 @@ export class Database extends MacroEntity<DatabaseDetail> {
               }
             : {}),
         },
-      }),
+      })
     );
     return DatabaseColumn.byId(table, columnId);
   }
@@ -218,30 +293,30 @@ export class Database extends MacroEntity<DatabaseDetail> {
    */
   async addColumnOptions(
     column: DatabaseColumn,
-    labels: string[],
+    labels: string[]
   ): Promise<ColumnDetail> {
     const table = column.table;
     if (table.database.id !== this.id) {
       throw new MacroError(
-        `column ${column.id} belongs to database ${table.database.id}, not ${this.id}`,
+        `column ${column.id} belongs to database ${table.database.id}, not ${this.id}`
       );
     }
     return this.mutate((c) =>
       c.storage.addDatabaseColumnOptions({
         path: { id: this.id, table_id: table.id, column_id: column.id },
         body: { labels },
-      }),
+      })
     );
   }
 
   /**
    * Run read-only SQL and return the result sets of its SELECTs, in order.
-   * A convenience over {@link DatabaseNamespace.exec}, which takes base
-   * versions and reports what a write changed; the query surface is the same
-   * one — every database the caller can reach, addressed by SQL name.
+   * A convenience over {@link DatabaseNamespace.query}, which also returns
+   * read versions for conditional follow-up writes. Both surfaces include every
+   * database the caller can reach, addressed by SQL name.
    */
   async query(sql: string): Promise<QueryResult[]> {
-    const { results } = await Database.exec(this.client, { sql });
+    const { results } = await Database.query(this.client, sql);
     return results;
   }
 
@@ -251,7 +326,7 @@ export class Database extends MacroEntity<DatabaseDetail> {
       await this.client.storage.downloadDatabaseSqlite({
         path: { id: this.id },
         parseAs: 'arrayBuffer',
-      }),
+      })
     ) as unknown as ArrayBuffer;
     return new Uint8Array(bytes);
   }

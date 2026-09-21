@@ -92,6 +92,17 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         options: Vec<PropertyOption>,
     ) -> impl Future<Output = Result<PropertyDefinition, Self::Err>> + Send;
 
+    /// Create a definition owned by a database, outside the shared user/team namespace.
+    /// The calling database domain service owns authorization and column-type policy.
+    fn create_database_property_definition(
+        &self,
+        database_id: Uuid,
+        display_name: &str,
+        data_type: DataType,
+        is_multi_select: bool,
+        specific_entity_type: Option<EntityType>,
+    ) -> impl Future<Output = Result<PropertyDefinition, Self::Err>> + Send;
+
     /// Delete a property definition and all associated data (cascades).
     /// A no-op if the definition doesn't exist.
     fn delete_property_definition(

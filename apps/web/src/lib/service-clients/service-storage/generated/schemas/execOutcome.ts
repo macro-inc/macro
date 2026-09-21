@@ -21,6 +21,8 @@ export interface ExecOutcome {
   inserted_row_ids: string[];
   /** New versions of every written table, for client-side liveness. */
   new_versions: ExecOutcomeNewVersions;
+  /** Databases containing the read dependencies, for live subscriptions. */
+  read_database_ids: string[];
   /** Dependency set of the statement, for liveness subscription. */
   read_tables: string[];
   /** The version every user table in [`ExecOutcome::read_tables`] was at

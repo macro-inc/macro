@@ -76,6 +76,8 @@ pub fn placement(
     config: Option<ColumnConfig>,
 ) -> Column {
     Column {
+        infer_type: false,
+        display_name: None,
         id: Uuid::new_v4(),
         table_id,
         property_definition_id: def.definition.id,

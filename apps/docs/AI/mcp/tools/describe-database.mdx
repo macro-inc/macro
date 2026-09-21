@@ -1,0 +1,40 @@
+---
+title: DescribeDatabase
+description: "Read one database's schema: tables with current writable `sqlName`, stable read-only `readSqlName`, and version, and each table's columns with their SQL names, value types, whether they hold multiple values, and the exact labels a select column accepts, plus specific entity kinds. Use table/column `name` only to match the user's language; use exact quoted SQL identifiers when executing.  **Call this before writing SQL for a database you have not already described in this conversation.** Guessing table or column names is the single most common way a query fails, and the schema is small. Get the `databaseId` from ListDatabases.  ## The magic tables  Magic tables expose Macro's own data to SQL, scoped to what the user can see:  - `documents(id, title, owner_id, created_at, updated_at)` - `people(id, name, email)`  They are read-only, and they are always in scope — join a user table's entity column against `people.id` or `documents.id` to resolve ids to names.  ## Writing SQL against it  SQLite dialect, with Macro's own rules on top:  - **`row_id` is the primary key** of every user table. It is minted by the server; never insert one yourself. - **Multi-valued columns are JSON arrays**, and each one also has a companion junction table `table__column(row_id, linked_id)` for flat joins. - **`col HAS 'x'`** tests membership in a multi-valued column. It is the one piece of sugar; everything else is plain SQLite. - **Select columns take their option labels as text** (`status = 'Going'`), never option ids. The options are explicit schema: only the labels the column carries are accepted, and new ones are added with AddColumnOptions. - **Entity columns hold actual Macro ids.** Resolve people through `people.id` (often `macro|email`) and documents through `documents.id`; never invent ids or replace them with names. Respect each column's `specificEntityType`. - **Writes are plain `INSERT` / `UPDATE` / `DELETE`** against the user table and are validated against the column schema; an unknown select option or a wrong type is rejected by the statement, not silently coerced. - **Use the exact identifiers returned by DescribeDatabase.** Quote SQL table and column identifiers with double quotes (escape an embedded quote by doubling it). A name containing a dot is one quoted identifier, not a schema qualifier. Display labels can differ from SQL names after a rename. - **Write to `sqlName`; read through `readSqlName`.** The stable read-only alias survives table renames and name collisions and is the right identifier for saved queries/charts. INSERT/UPDATE/DELETE must use the table's current `sqlName`. - **Schema uses tools, not SQL DDL.** CreateDatabase, CreateTable, AddColumn, AddColumnOptions, and SaveDatabaseView change structure/presentation. CREATE TABLE, ALTER TABLE, and CREATE VIEW are not supported in QueryDatabase. - Tables you only hold view access on are read-only, and magic tables always are."
+---
+
+# DescribeDatabase
+
+Read one database's schema: tables with current writable `sqlName`, stable read-only `readSqlName`, and version, and each table's columns with their SQL names, value types, whether they hold multiple values, and the exact labels a select column accepts, plus specific entity kinds. Use table/column `name` only to match the user's language; use exact quoted SQL identifiers when executing.
+
+**Call this before writing SQL for a database you have not already described in this conversation.** Guessing table or column names is the single most common way a query fails, and the schema is small. Get the `databaseId` from ListDatabases.
+
+## The magic tables
+
+Magic tables expose Macro's own data to SQL, scoped to what the user can see:
+
+- `documents(id, title, owner_id, created_at, updated_at)`
+- `people(id, name, email)`
+
+They are read-only, and they are always in scope — join a user table's entity column against `people.id` or `documents.id` to resolve ids to names.
+
+## Writing SQL against it
+
+SQLite dialect, with Macro's own rules on top:
+
+- **`row_id` is the primary key** of every user table. It is minted by the server; never insert one yourself.
+- **Multi-valued columns are JSON arrays**, and each one also has a companion junction table `table__column(row_id, linked_id)` for flat joins.
+- **`col HAS 'x'`** tests membership in a multi-valued column. It is the one piece of sugar; everything else is plain SQLite.
+- **Select columns take their option labels as text** (`status = 'Going'`), never option ids. The options are explicit schema: only the labels the column carries are accepted, and new ones are added with AddColumnOptions.
+- **Entity columns hold actual Macro ids.** Resolve people through `people.id` (often `macro|email`) and documents through `documents.id`; never invent ids or replace them with names. Respect each column's `specificEntityType`.
+- **Writes are plain `INSERT` / `UPDATE` / `DELETE`** against the user table and are validated against the column schema; an unknown select option or a wrong type is rejected by the statement, not silently coerced.
+- **Use the exact identifiers returned by DescribeDatabase.** Quote SQL table and column identifiers with double quotes (escape an embedded quote by doubling it). A name containing a dot is one quoted identifier, not a schema qualifier. Display labels can differ from SQL names after a rename.
+- **Write to `sqlName`; read through `readSqlName`.** The stable read-only alias survives table renames and name collisions and is the right identifier for saved queries/charts. INSERT/UPDATE/DELETE must use the table's current `sqlName`.
+- **Schema uses tools, not SQL DDL.** CreateDatabase, CreateTable, AddColumn, AddColumnOptions, and SaveDatabaseView change structure/presentation. CREATE TABLE, ALTER TABLE, and CREATE VIEW are not supported in QueryDatabase.
+- Tables you only hold view access on are read-only, and magic tables always are.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `databaseId` | string | Yes | Id of the database to describe, as returned by ListDatabases. |

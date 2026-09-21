@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::{DatabasesToolContext, magic_tables_note, query_error, sql_guide, viewer_of};
-use crate::domain::models::{ExecRequest, QueryResult, SqlValue};
+use crate::domain::models::{ExecOutcome, ExecRequest, QueryResult, SqlValue};
 use crate::domain::ports::DatabasesService;
 
 /// Run SQL against the user's databases.
@@ -47,6 +47,12 @@ own (\"no such column: guests.statuz\") — read it, fix the name, retry.\n\
         sql_guide!(),
         "\n\
 \n\
+For a request to change records, first read the relevant rows, then use their returned \
+`readVersions` as `baseVersions` to guard the tables being written. Versions for tables the \
+edit only reads are not checked. A conflict means re-read \
+and reconsider the edit. After changing rows, SELECT the affected records to verify the \
+actual result. On a connection failure, inspect before retrying an INSERT.\n\
+\n\
 Results come back as columns and rows. A column whose values are entity ids carries an \
 `entityType`, which is how the app renders it as a clickable chip rather than as raw text — \
 prefer selecting an entity column over stringifying it. Writes report `changesApplied` and, \
@@ -61,6 +67,60 @@ pub struct QueryDatabase {
                        the SQL names DescribeDatabase reported, not the names the user says."
     )]
     pub sql: String,
+    /// Optional versions from a previous QueryDatabase read. Reject the write
+    /// if a listed table being written changed. Read-only dependencies are not
+    /// guarded; omit for a read or intentional blind edit.
+    #[serde(default)]
+    pub base_versions: Option<Vec<ToolTableVersion>>,
+}
+
+/// Read-only query capability for document answers and automatic discovery.
+#[derive(Debug, Deserialize, JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+#[schemars(
+    title = "QueryDatabase",
+    description = "Read Macro database records using SQLite SELECT queries. Discover the relevant database with ListDatabases, then call DescribeDatabase to see ALL of its tables and exact columns. Use each table's stable readSqlName, including for joins. This tool cannot change records, schema, or saved views; the domain query service rejects writes regardless of the caller's edit permission. Results are permission-filtered for the current user. Inspect truncatedTables before reporting totals."
+)]
+pub struct ReadOnlyQueryDatabase {
+    /// Read-only SQL using stable readSqlName identifiers from DescribeDatabase.
+    pub sql: String,
+}
+
+impl ToolAnnotated for ReadOnlyQueryDatabase {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Query database");
+}
+
+#[async_trait]
+impl<S, E> AsyncTool<DatabasesToolContext<S, E>> for ReadOnlyQueryDatabase
+where
+    S: DatabasesService,
+    E: EntityAccessService,
+{
+    type Output = QueryDatabaseResponse;
+
+    #[tracing::instrument(skip_all, fields(user_id = ?request_context.user_id), err)]
+    async fn call(
+        &self,
+        service_context: ServiceContext<DatabasesToolContext<S, E>>,
+        request_context: RequestContext,
+    ) -> ToolResult<Self::Output> {
+        service_context
+            .service
+            .query_sql(viewer_of(&request_context.user_id), self.sql.clone())
+            .await
+            .map(Into::into)
+            .map_err(query_error)
+    }
+}
+
+/// Version of one table actually read by a query.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolTableVersion {
+    /// Stable table id, not a SQL name.
+    pub table_id: Uuid,
+    /// Version acknowledged by the read.
+    pub version: i64,
 }
 
 impl ToolAnnotated for QueryDatabase {
@@ -139,6 +199,10 @@ pub struct QueryDatabaseResponse {
     /// New version of every table written, keyed by table id.
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     pub new_versions: HashMap<Uuid, i64>,
+    /// Versions of the tables this query actually read. Supply these as
+    /// baseVersions to guard tables a later edit writes. Tables it only reads
+    /// are not guarded.
+    pub read_versions: Vec<ToolTableVersion>,
     /// Magic tables whose materialization hit its row cap. Any aggregate over
     /// one of these is computed on a partial table — say so rather than
     /// reporting the number as a total.
@@ -173,18 +237,41 @@ where
                 viewer_of(&request_context.user_id),
                 ExecRequest {
                     sql: self.sql.clone(),
-                    // Compare-and-swap is for surfaces that hold a stale copy
-                    // of a table; a tool call has none.
-                    base_versions: None,
+                    base_versions: self.base_versions.as_ref().map(|versions| {
+                        versions
+                            .iter()
+                            .map(|entry| {
+                                (
+                                    entry.table_id,
+                                    crate::domain::models::TableVersion(entry.version),
+                                )
+                            })
+                            .collect()
+                    }),
                 },
             )
             .await
             .map_err(query_error)?;
 
+        Ok(outcome.into())
+    }
+}
+
+impl From<ExecOutcome> for QueryDatabaseResponse {
+    fn from(outcome: ExecOutcome) -> Self {
         let results: Vec<ToolResultSet> = outcome.results.into_iter().map(Into::into).collect();
         let summary = summarize(&results, outcome.changes_applied, &outcome.truncated_tables);
+        let mut read_versions: Vec<_> = outcome
+            .read_versions
+            .into_iter()
+            .map(|(table_id, version)| ToolTableVersion {
+                table_id,
+                version: version.0,
+            })
+            .collect();
+        read_versions.sort_by_key(|entry| entry.table_id);
 
-        Ok(QueryDatabaseResponse {
+        Self {
             results,
             changes_applied: outcome.changes_applied,
             inserted_row_ids: outcome.inserted_row_ids,
@@ -195,7 +282,8 @@ where
                 .map(|(table_id, version)| (table_id, version.0))
                 .collect(),
             summary,
-        })
+            read_versions,
+        }
     }
 }
 

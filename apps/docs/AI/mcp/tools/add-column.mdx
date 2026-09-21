@@ -1,0 +1,30 @@
+---
+title: AddColumn
+description: "Add a column to a table in one of the user's databases. Columns are typed, and the type is what makes the data useful later — a `date` column sorts and filters by time, a `number` column sums, a `select` column constrains what can be written to it.  Pick the type from what the values actually are, not from how they were typed at you: \"Going / Maybe / Declined\" is a `select`, not `text`; \"$1,200\" is a `number`; \"Aug 13\" is a `date`. Use `text` only when the values really are free-form.  - `isMultiSelect: true` makes the column hold several values at once. In SQL it reads as a JSON array and also gets a companion `table__column(row_id, linked_id)` junction table; `col HAS 'x'` tests membership. - `linkToTableId` makes it a **link column** pointing at another table, so rows on one side reference rows on the other. Link columns are many-to-many and junction-backed; join through the junction rather than comparing the JSON array. - `entity` columns hold references to Macro things (people, documents). Their values are typed ids, and joining them against the `people` or `documents` magic table is how you get names.  Select and tag columns take their options as **explicit schema**: pass every label the column should accept in `options`. SQL only accepts those labels — a select column created with no options accepts nothing — and more can be added later with AddColumnOptions.  Requires edit access. The response is the table's database schema after the change, including the new column's exact `sqlName`. If `database` is null, the column was still created; call DescribeDatabase using databaseId before continuing, without repeating AddColumn."
+---
+
+# AddColumn
+
+Add a column to a table in one of the user's databases. Columns are typed, and the type is what makes the data useful later — a `date` column sorts and filters by time, a `number` column sums, a `select` column constrains what can be written to it.
+
+Pick the type from what the values actually are, not from how they were typed at you: "Going / Maybe / Declined" is a `select`, not `text`; "$1,200" is a `number`; "Aug 13" is a `date`. Use `text` only when the values really are free-form.
+
+- `isMultiSelect: true` makes the column hold several values at once. In SQL it reads as a JSON array and also gets a companion `table__column(row_id, linked_id)` junction table; `col HAS 'x'` tests membership.
+- `linkToTableId` makes it a **link column** pointing at another table, so rows on one side reference rows on the other. Link columns are many-to-many and junction-backed; join through the junction rather than comparing the JSON array.
+- `entity` columns hold references to Macro things (people, documents). Their values are typed ids, and joining them against the `people` or `documents` magic table is how you get names.
+
+Select and tag columns take their options as **explicit schema**: pass every label the column should accept in `options`. SQL only accepts those labels — a select column created with no options accepts nothing — and more can be added later with AddColumnOptions.
+
+Requires edit access. The response is the table's database schema after the change, including the new column's exact `sqlName`. If `database` is null, the column was still created; call DescribeDatabase using databaseId before continuing, without repeating AddColumn.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `databaseId` | string | Yes | Id of the database the table belongs to, from ListDatabases. |
+| `tableId` | string | Yes | Id of the table to add the column to, from DescribeDatabase or CreateTable. It must belong to databaseId. |
+| `name` | string | Yes | Display name of the column, as the user would head it — e.g. "Dietary Needs". The SQL name is derived from it. |
+| `dataType` | `"text"` \| `"number"` \| `"boolean"` \| `"date"` \| `"link"` \| `"select"` \| `"select_number"` \| `"tag"` \| `"entity"` | Yes | The value type of a column, as the model names it.  A deliberate mirror of [`DataType`] rather than a re-export: the property system's names are internal, and the tool vocabulary has to stay stable independently of them. |
+| `isMultiSelect` | boolean | No | True if a cell can hold several values at once. Defaults to false. Multi-valued cells read as JSON arrays in SQL and get a junction table; test membership with `col HAS 'x'`. |
+| `options` | string[] | No | For a select, select_number, or tag column, the allowed labels — e.g. ["Going", "Maybe", "Declined"]. SQL writes and reads these labels verbatim, and anything else is rejected by the statement, so list every value the data actually has. A select_number column's labels must be numbers. Omit for other column types; add more later with AddColumnOptions. |
+| `linkToTableId` | string | No | Id of another table to link to, making this a link column whose rows reference rows over there. Omit for an ordinary column. The target table must be one the user can reach. |

@@ -971,8 +971,9 @@ pub fn build_databases_tool_context(
     broker: ToolDatabasesEventBroker,
 ) -> ToolDatabasesToolContext {
     DatabasesToolContext::new(
-        databases::outbound::build_service(pool, events, broker),
+        databases::outbound::build_service(pool.clone(), events, broker),
         entity_access_service,
+        saved_views::PgViewStorage::new(pool),
     )
 }
 

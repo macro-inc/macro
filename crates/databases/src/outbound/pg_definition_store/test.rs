@@ -86,7 +86,10 @@ fn new_definition(name: &str, data_type: DataType) -> ColumnBinding {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn new_binding_creates_a_database_owned_definition(pool: PgPool) {
     let database_id = insert_database(&pool).await;
-    let store = PgDefinitionStore::new(pool);
+    let store = PgDefinitionStore::new(
+        pool.clone(),
+        properties::outbound::properties_pg_repo::PropertiesPgRepo::new(pool),
+    );
 
     let definition_id = store
         .resolve_binding(
@@ -119,7 +122,10 @@ async fn new_binding_creates_a_database_owned_definition(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_column_may_reuse_a_reserved_system_property_name(pool: PgPool) {
     let database_id = insert_database(&pool).await;
-    let store = PgDefinitionStore::new(pool);
+    let store = PgDefinitionStore::new(
+        pool.clone(),
+        properties::outbound::properties_pg_repo::PropertiesPgRepo::new(pool),
+    );
 
     // "Status" is a seeded system property; the reserved-name trigger applies to
     // the shared namespace only.
@@ -136,7 +142,10 @@ async fn a_column_may_reuse_a_reserved_system_property_name(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn existing_binding_returns_the_definition_id(pool: PgPool) {
     let database_id = insert_database(&pool).await;
-    let store = PgDefinitionStore::new(pool);
+    let store = PgDefinitionStore::new(
+        pool.clone(),
+        properties::outbound::properties_pg_repo::PropertiesPgRepo::new(pool),
+    );
 
     let created = store
         .resolve_binding(
@@ -162,7 +171,10 @@ async fn existing_binding_returns_the_definition_id(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn existing_binding_rejects_an_unknown_definition(pool: PgPool) {
     let database_id = insert_database(&pool).await;
-    let store = PgDefinitionStore::new(pool);
+    let store = PgDefinitionStore::new(
+        pool.clone(),
+        properties::outbound::properties_pg_repo::PropertiesPgRepo::new(pool),
+    );
     let missing = macro_uuid::generate_uuid_v7();
 
     let error = store
@@ -183,7 +195,10 @@ async fn existing_binding_rejects_an_unknown_definition(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn definitions_attaches_options_and_ignores_unknown_ids(pool: PgPool) {
     let database_id = insert_database(&pool).await;
-    let store = PgDefinitionStore::new(pool.clone());
+    let store = PgDefinitionStore::new(
+        pool.clone(),
+        properties::outbound::properties_pg_repo::PropertiesPgRepo::new(pool.clone()),
+    );
 
     let select_id = store
         .resolve_binding(
@@ -235,7 +250,10 @@ async fn definitions_attaches_options_and_ignores_unknown_ids(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn definitions_of_nothing_is_empty(pool: PgPool) {
-    let store = PgDefinitionStore::new(pool);
+    let store = PgDefinitionStore::new(
+        pool.clone(),
+        properties::outbound::properties_pg_repo::PropertiesPgRepo::new(pool),
+    );
 
     let definitions = store.definitions(&[]).await.expect("empty is not an error");
 
@@ -245,7 +263,10 @@ async fn definitions_of_nothing_is_empty(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn add_options_appends_to_the_definition(pool: PgPool) {
     let database_id = insert_database(&pool).await;
-    let store = PgDefinitionStore::new(pool);
+    let store = PgDefinitionStore::new(
+        pool.clone(),
+        properties::outbound::properties_pg_repo::PropertiesPgRepo::new(pool),
+    );
 
     let definition_id = store
         .resolve_binding(
@@ -301,7 +322,10 @@ async fn add_options_appends_to_the_definition(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn add_options_stores_numbers_for_a_numeric_select(pool: PgPool) {
     let database_id = insert_database(&pool).await;
-    let store = PgDefinitionStore::new(pool);
+    let store = PgDefinitionStore::new(
+        pool.clone(),
+        properties::outbound::properties_pg_repo::PropertiesPgRepo::new(pool),
+    );
 
     let definition_id = store
         .resolve_binding(
@@ -330,7 +354,10 @@ async fn add_options_stores_numbers_for_a_numeric_select(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn add_options_of_nothing_writes_nothing(pool: PgPool) {
     let database_id = insert_database(&pool).await;
-    let store = PgDefinitionStore::new(pool);
+    let store = PgDefinitionStore::new(
+        pool.clone(),
+        properties::outbound::properties_pg_repo::PropertiesPgRepo::new(pool),
+    );
     let definition_id = store
         .resolve_binding(
             database_id,

@@ -395,6 +395,43 @@ pub async fn create_property_definition(
     Ok(db_property_def.into())
 }
 
+/// Creates a database-owned definition without adding it to shared property lists.
+#[tracing::instrument(skip(pool), err)]
+pub async fn create_database_property_definition(
+    pool: &Pool<Postgres>,
+    database_id: Uuid,
+    display_name: &str,
+    data_type: DataType,
+    is_multi_select: bool,
+    specific_entity_type: Option<EntityType>,
+) -> anyhow::Result<PropertyDefinition> {
+    let id = macro_uuid::generate_uuid_v7();
+    let row = sqlx::query_as!(
+        db::PropertyDefinition,
+        r#"
+        INSERT INTO property_definitions (
+            id, database_id, display_name, data_type, is_multi_select, specific_entity_type
+        )
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING
+            id, team_id, user_id, database_id, display_name,
+            data_type AS "data_type: DataType",
+            is_multi_select,
+            specific_entity_type AS "specific_entity_type: EntityType",
+            created_at, updated_at, is_system
+        "#,
+        id,
+        database_id,
+        display_name,
+        data_type as DataType,
+        is_multi_select,
+        specific_entity_type as Option<EntityType>,
+    )
+    .fetch_one(pool)
+    .await?;
+    Ok(row.into())
+}
+
 /// Inserts a property option within an existing transaction.
 pub(super) async fn create_property_option_tx(
     tx: &mut sqlx::Transaction<'_, Postgres>,

@@ -6,9 +6,11 @@ import { ListNode } from '@lexical/list';
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { INSERT_TABLE_COMMAND, TableNode } from '@lexical/table';
 import {
+  $createDatabaseQueryNode,
   $createDocumentMentionNode,
   AwaitNode,
   CustomCodeNode,
+  DatabaseQueryNode,
   DocumentMentionNode,
   EquationNode,
   HorizontalRuleNode,
@@ -21,6 +23,7 @@ import VideoIcon from '@phosphor/file-video.svg';
 import MathIcon from '@phosphor/function.svg';
 import TableIcon from '@phosphor/grid-four.svg';
 import ImageIcon from '@phosphor/image.svg';
+import LightningIcon from '@phosphor/lightning.svg';
 import LinkIcon from '@phosphor/link.svg';
 import ListBullets from '@phosphor/list-bullets.svg';
 import ListChecks from '@phosphor/list-checks.svg';
@@ -32,6 +35,7 @@ import TextH3 from '@phosphor/text-h-three.svg';
 import TextH2 from '@phosphor/text-h-two.svg';
 import TextT from '@phosphor/text-t.svg';
 import type { LexicalEditor } from 'lexical';
+import { $insertNodes } from 'lexical';
 import { nanoid } from 'nanoid';
 import { INSERT_HORIZONTAL_RULE_COMMAND } from '..';
 import {
@@ -63,6 +67,35 @@ async function trackSlashTaskMention(
 }
 
 export const ACTIONS: Action[] = [
+  {
+    id: 'database-query',
+    name: 'Database',
+    keywords: [
+      'query',
+      'query-database',
+      'ask',
+      'database',
+      'live',
+      'answer',
+      'sql',
+    ],
+    category: ActionCategory.MEDIA,
+    icon: LightningIcon,
+    dependencies: [DatabaseQueryNode],
+    action: (editor) => {
+      queueMicrotask(() =>
+        editor.update(() => {
+          $insertNodes([
+            $createDatabaseQueryNode({
+              sql: '',
+              prompt: '',
+              displayMode: 'scalar',
+            }),
+          ]);
+        })
+      );
+    },
+  },
   {
     id: 'paragraph',
     name: 'Normal Text',

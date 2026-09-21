@@ -22,9 +22,11 @@ use crate::domain::ports::DatabasesService;
     title = "DescribeDatabase",
     description = concat!(
         "\
-Read one database's schema: its tables with the names to use in SQL, and each table's columns \
+Read one database's schema: tables with current writable `sqlName`, stable read-only \
+`readSqlName`, and version, and each table's columns \
 with their SQL names, value types, whether they hold multiple values, and the exact labels a \
-select column accepts.\n\
+select column accepts, plus specific entity kinds. Use table/column `name` only to match the \
+user's language; use exact quoted SQL identifiers when executing.\n\
 \n\
 **Call this before writing SQL for a database you have not already described in this \
 conversation.** Guessing table or column names is the single most common way a query fails, \

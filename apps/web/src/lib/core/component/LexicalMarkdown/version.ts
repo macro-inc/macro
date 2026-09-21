@@ -23,5 +23,8 @@
  * Version 4.1 - Sep 2026. Expandable session mentions reuse Magic Chip with a null message lock for the latest turn.
  * Version 4.2 - Sep 2026. ConnectAppNode: optional `target` (connections | harness) so the chip can connect Cursor.
  * Version 4.3 - Sep 2026. ReplyTargetNode references a message parent (channel or document) instead of a channel id.
+ * Version 5.0 - Sep 2026. Added source-only DatabaseQueryNode for live scalar and table answers.
+ * Version 5.1 - Sep 2026. DatabaseQueryNode remembers the table selected for questions.
+ * Version 5.2 - Sep 2026. DatabaseQueryNode persists live bar, line and pie chart settings.
  */
-export const MARKDOWN_VERSION_COUNTER = 4.3;
+export const MARKDOWN_VERSION_COUNTER = 5.2;

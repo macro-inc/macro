@@ -550,8 +550,8 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   {
     label: 'Database',
     icon: getIconConfig('database').icon,
-    description: 'Create table',
-    launcherHint: 'Rows, columns, and SQL',
+    description: 'Create database',
+    launcherHint: 'Tables and boards',
     keywords: ['new', 'make', 'add', 'database', 'table', 'db', 'sql'],
     blockName: 'database',
     hotkeyToken: TOKENS.create.database,

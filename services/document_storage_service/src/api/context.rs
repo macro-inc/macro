@@ -487,7 +487,7 @@ pub(crate) type DssUserApiKeyState =
 /// Type alias for the databases service.
 pub(crate) type DatabasesServiceType = DatabasesServiceImpl<
     PgDatabasesRepo,
-    PgDefinitionStore,
+    PgDefinitionStore<properties::outbound::properties_pg_repo::PropertiesPgRepo>,
     MagicTableRegistry,
     RusqliteExecutor,
     GatewayTableEventPublisher,

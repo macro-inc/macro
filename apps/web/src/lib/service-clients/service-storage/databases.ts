@@ -66,6 +66,15 @@ export interface DatabaseColumn {
   property_definition_id: string;
   position: string;
   config: ColumnConfig | null;
+  /** Placement label; omitted by older servers. SQL names stay unchanged. */
+  display_name?: string | null;
+  infer_type?: boolean;
+}
+
+/** Committed label and table version from a column rename. */
+export interface RenameColumnOutcome {
+  column: DatabaseColumn;
+  table_version: number;
 }
 
 /** The property definition behind a column. */
@@ -105,8 +114,10 @@ export interface DatabaseColumnDetail {
 /** One table with its columns and SQL name (`TableDetail`). */
 export interface DatabaseTableDetail {
   table: DatabaseTable;
-  /** Name to use in SQL (`FROM guests`). */
+  /** Physical name used by SQL writes (`INSERT INTO guests`). */
   sql_name: string;
+  /** Immutable read-only alias, available even when display names change. */
+  read_sql_name?: string;
   columns: DatabaseColumnDetail[];
 }
 
@@ -147,6 +158,8 @@ export interface ExecOutcome {
   new_versions: Record<string, number>;
   /** Tables the statement read, for liveness subscription. */
   read_tables: string[];
+  /** Parent databases of the actual read dependencies, for gateway tracking. */
+  read_database_ids?: string[];
   /**
    * The version every user table the statement read was at, keyed by table id.
    *
@@ -191,6 +204,7 @@ export type ColumnBindingRequest =
 
 /** Body of `POST /databases/{id}/tables/{tableId}/columns`. */
 export interface CreateColumnRequest {
+  infer_type?: boolean;
   binding: ColumnBindingRequest;
   linkToTableId?: string;
   linkToDatabaseId?: string;
@@ -199,6 +213,17 @@ export interface CreateColumnRequest {
 /** Response of the column route. */
 export interface CreateColumnResponse {
   columnId: string;
+}
+
+export interface InferColumnTypeRequest {
+  data_type: 'STRING' | 'NUMBER' | 'ENTITY';
+  specific_entity_type?: EntityType;
+  base_version: number;
+}
+
+export interface InferColumnTypeOutcome {
+  column: DatabaseColumnDetail;
+  table_version: number;
 }
 
 /**
@@ -287,11 +312,14 @@ async function execErrorResponseHandler(
 export const databasesClient = {
   /** Read-only execution, enforced by the server. Safe for live document queries. */
   async query(request: { sql: string }) {
-    return await databasesFetch<ExecOutcome, ExecErrorCode>('/databases/query', {
-      method: 'POST',
-      body: JSON.stringify(request),
-      errorResponseHandler: execErrorResponseHandler,
-    });
+    return await databasesFetch<ExecOutcome, ExecErrorCode>(
+      '/databases/query',
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+        errorResponseHandler: execErrorResponseHandler,
+      }
+    );
   },
 
   async list() {
@@ -316,6 +344,24 @@ export const databasesClient = {
     });
   },
 
+  async renameTable(params: {
+    id: string;
+    tableId: string;
+    name: string;
+    previousName: string;
+  }) {
+    return await databasesFetch<DatabaseTable>(
+      `/databases/${params.id}/tables/${params.tableId}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: params.name,
+          previousName: params.previousName,
+        }),
+      }
+    );
+  },
+
   async createColumn({
     id,
     tableId,
@@ -328,6 +374,56 @@ export const databasesClient = {
     return await databasesFetch<CreateColumnResponse>(
       `/databases/${id}/tables/${tableId}/columns`,
       { method: 'POST', body: JSON.stringify(request) }
+    );
+  },
+
+  async renameColumn(params: {
+    id: string;
+    tableId: string;
+    columnId: string;
+    name: string;
+    previousName: string;
+  }) {
+    return await databasesFetch<RenameColumnOutcome, 'INVALID_SCHEMA'>(
+      `/databases/${params.id}/tables/${params.tableId}/columns/${params.columnId}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: params.name,
+          previousName: params.previousName,
+        }),
+        errorResponseHandler: async (response) => ({
+          code: response.status === 400 ? 'INVALID_SCHEMA' : 'HTTP_ERROR',
+          message: errorMessageFromBody(await response.text(), response.status),
+        }),
+      }
+    );
+  },
+
+  async inferColumnType(params: {
+    id: string;
+    tableId: string;
+    columnId: string;
+    request: InferColumnTypeRequest;
+  }) {
+    return await databasesFetch<
+      InferColumnTypeOutcome,
+      'VERSION_CONFLICT' | 'INVALID_SCHEMA'
+    >(
+      `/databases/${params.id}/tables/${params.tableId}/columns/${params.columnId}/infer-type`,
+      {
+        method: 'POST',
+        body: JSON.stringify(params.request),
+        errorResponseHandler: async (response) => ({
+          code:
+            response.status === 409
+              ? 'VERSION_CONFLICT'
+              : response.status === 400
+                ? 'INVALID_SCHEMA'
+                : 'HTTP_ERROR',
+          message: errorMessageFromBody(await response.text(), response.status),
+        }),
+      }
     );
   },
 

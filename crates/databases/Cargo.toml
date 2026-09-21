@@ -31,7 +31,7 @@ entity_mutation = ["dep:entity_mutation", "ports"]
 gateway = ["dep:connection_gateway_client", "outbound"]
 # Driven adapters share the port contracts.
 outbound = ["ports"]
-ports = ["dep:entity_access", "dep:tokio", "dep:tracing"]
+ports = ["dep:async-trait", "dep:entity_access", "dep:saved_views", "dep:tokio", "dep:tracing"]
 # Postgres persistence for databases/tables/columns/rows/links.
 postgres = [
   "dep:entity_access_db_utils",
@@ -71,6 +71,7 @@ properties = { path = "../properties", optional = true, default-features = false
 rootcause = { workspace = true }
 rusqlite = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
+saved_views = { path = "../saved_views", optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }

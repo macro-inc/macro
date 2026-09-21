@@ -39,6 +39,7 @@ import {
   describeDatabaseHandler,
   listDatabasesHandler,
   queryDatabaseHandler,
+  saveDatabaseViewHandler,
 } from './DatabaseTools';
 import { deleteTagHandler } from './DeleteTag';
 import { displayResultsHandler } from './DisplayResults';
@@ -143,6 +144,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   CreateTable: createTableHandler,
   AddColumn: addColumnHandler,
   AddColumnOptions: addColumnOptionsHandler,
+  SaveDatabaseView: saveDatabaseViewHandler,
   ListEntities: listEntitiesHandler,
   ListInboxes: listInboxesHandler,
   ListLabels: listLabelsHandler,

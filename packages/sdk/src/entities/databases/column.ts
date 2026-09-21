@@ -5,6 +5,7 @@ import type {
   PropertyDefinitionWithOptions,
 } from '../../../generated/storage/types.gen';
 import { MacroNotFoundError } from '../../utils';
+import type { InferColumnTypeOptions } from './database';
 import type { DatabaseTable } from './table';
 
 /**
@@ -20,7 +21,7 @@ export class DatabaseColumn {
     /** The table this column belongs to. */
     readonly table: DatabaseTable,
     /** Identifier of the column placement. */
-    readonly id: string,
+    readonly id: string
   ) {}
 
   /** A handle to a column by id, within a table. Details load on first access. */
@@ -37,15 +38,30 @@ export class DatabaseColumn {
     const found = columns.find((column) => column.column.id === this.id);
     if (!found) {
       throw new MacroNotFoundError(
-        `column ${this.id} is not on table ${this.table.id}`,
+        `column ${this.id} is not on table ${this.table.id}`
       );
     }
     return found;
   }
 
-  /** The column's display name, from its property definition. */
+  /** The placement's display name, falling back to its property definition. */
   async name(): Promise<string> {
-    return (await this.detail()).definition.definition.display_name;
+    const detail = await this.detail();
+    return (
+      detail.column.display_name ?? detail.definition.definition.display_name
+    );
+  }
+
+  /** Rename this placement without changing its stable SQL column name. */
+  async rename(name: string): Promise<DatabaseColumn> {
+    await this.table.database.renameColumn(this, name);
+    return this;
+  }
+
+  /** Settle the type of an empty column created with inferType enabled. */
+  async inferType(opts: InferColumnTypeOptions): Promise<DatabaseColumn> {
+    await this.table.database.inferColumnType(this, opts);
+    return this;
   }
 
   /** The name to use for this column in SQL. */

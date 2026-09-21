@@ -36,4 +36,9 @@ export class DatabaseNamespace {
   exec(opts: ExecOptions): Promise<ExecOutcome> {
     return Database.exec(this.client, opts);
   }
+
+  /** Read-only SQL with actual read versions for a conditional follow-up write. */
+  query(sql: string): Promise<ExecOutcome> {
+    return Database.query(this.client, sql);
+  }
 }

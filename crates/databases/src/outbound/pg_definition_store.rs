@@ -15,6 +15,7 @@ use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
 use models_properties::{DataType, EntityType, db};
+use properties::domain::ports::PropertiesRepo;
 use properties::outbound::property_option_queries::{
     create_property_option, get_property_options, get_property_options_batch,
 };
@@ -29,6 +30,9 @@ pub enum PgDefinitionStoreError {
     /// Underlying database failure.
     #[error("database error")]
     Sqlx(#[from] sqlx::Error),
+    /// Failure from the owning properties domain.
+    #[error("properties error: {0}")]
+    Properties(#[source] anyhow::Error),
     /// A binding referenced a property definition that does not exist.
     #[error("property definition {0} not found")]
     NotFound(PropertyDefinitionId),
@@ -49,14 +53,15 @@ fn from_properties_error(error: anyhow::Error) -> PgDefinitionStoreError {
 /// [`ColumnDefinitionStore`] backed by MacroDB's `property_definitions` and
 /// `property_options` tables.
 #[derive(Debug, Clone)]
-pub struct PgDefinitionStore {
+pub struct PgDefinitionStore<P> {
     pool: PgPool,
+    properties: P,
 }
 
-impl PgDefinitionStore {
-    /// Create a store over the given pool.
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+impl<P: PropertiesRepo<Err = anyhow::Error>> PgDefinitionStore<P> {
+    /// Create a store with the owning properties domain port.
+    pub fn new(pool: PgPool, properties: P) -> Self {
+        Self { pool, properties }
     }
 
     /// Insert a definition owned by `database_id`, returning its id.
@@ -67,36 +72,21 @@ impl PgDefinitionStore {
         data_type: DataType,
         is_multi_select: bool,
     ) -> Result<PropertyDefinitionId, PgDefinitionStoreError> {
-        // `properties::create_property_definition` cannot be reused here: its
-        // `PropertyDefinitionOwner` encodes the "user or team" invariant and has
-        // no database arm, so a database-owned insert is written out directly.
-        let id = macro_uuid::generate_uuid_v7();
-        sqlx::query_scalar!(
-            r#"
-            INSERT INTO property_definitions (
-                id,
+        self.properties
+            .create_database_property_definition(
                 database_id,
-                display_name,
+                name,
                 data_type,
                 is_multi_select,
-                is_system
+                None,
             )
-            VALUES ($1, $2, $3, $4, $5, FALSE)
-            RETURNING id
-            "#,
-            id,
-            database_id,
-            name,
-            data_type as DataType,
-            is_multi_select,
-        )
-        .fetch_one(&self.pool)
-        .await
-        .map_err(Into::into)
+            .await
+            .map(|definition| definition.id)
+            .map_err(PgDefinitionStoreError::Properties)
     }
 }
 
-impl ColumnDefinitionStore for PgDefinitionStore {
+impl<P: PropertiesRepo<Err = anyhow::Error>> ColumnDefinitionStore for PgDefinitionStore<P> {
     type Err = PgDefinitionStoreError;
 
     #[tracing::instrument(skip(self), err)]
@@ -144,6 +134,37 @@ impl ColumnDefinitionStore for PgDefinitionStore {
                 .ok_or(PgDefinitionStoreError::NotFound(*id))
             }
         }
+    }
+
+    async fn create_inferred_definition(
+        &self,
+        database_id: DatabaseId,
+        name: &str,
+        data_type: DataType,
+        specific_entity_type: Option<EntityType>,
+    ) -> Result<PropertyDefinitionWithOptions, Self::Err> {
+        let definition = self
+            .properties
+            .create_database_property_definition(
+                database_id,
+                name,
+                data_type,
+                false,
+                specific_entity_type,
+            )
+            .await
+            .map_err(PgDefinitionStoreError::Properties)?;
+        Ok(PropertyDefinitionWithOptions {
+            definition,
+            property_options: Vec::new(),
+        })
+    }
+
+    async fn delete_unused_definition(&self, id: PropertyDefinitionId) -> Result<(), Self::Err> {
+        self.properties
+            .delete_property_definition(id)
+            .await
+            .map_err(PgDefinitionStoreError::Properties)
     }
 
     #[tracing::instrument(skip(self), err)]

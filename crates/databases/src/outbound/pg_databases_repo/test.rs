@@ -9,6 +9,9 @@ use sqlx::PgPool;
 use super::*;
 use crate::domain::models::{ColumnBinding, ColumnConfig};
 
+mod infer_column_type;
+mod rename_column;
+
 const USER: &str = "macro|databases-a@macro.com";
 
 fn user() -> MacroUserIdStr<'static> {
@@ -83,13 +86,15 @@ async fn fixture(pool: &PgPool) -> (PgDatabasesRepo, Table, Uuid) {
             name: "Guests".to_string(),
         })
         .await
-        .expect("table should insert");
+        .expect("table insert should succeed")
+        .expect("table name should be available");
 
     let definition_id = insert_definition(pool, "Name").await;
     repo.create_column(
         table.id,
         definition_id,
         &CreateColumn {
+            infer_type: false,
             table_id: table.id,
             binding: ColumnBinding::ExistingDefinition(definition_id),
             config: None,
@@ -175,6 +180,59 @@ async fn rename_trash_and_restore_round_trip(pool: PgPool) {
     assert!(database.trashed_at.is_none());
     // Trashing and restoring never touches the contents.
     assert_eq!(tables.len(), 2);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn table_rename_checks_previous_name_and_collision_atomically(pool: PgPool) {
+    let (repo, table, _) = fixture(&pool).await;
+    assert!(
+        repo.rename_table(&table, "table 1", "Guests")
+            .await
+            .unwrap()
+            .is_none()
+    );
+    let renamed = repo
+        .rename_table(&table, "Attendees", "Guests")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(renamed.id, table.id);
+    assert_eq!(renamed.position, table.position);
+    assert_eq!(renamed.version, TableVersion(2));
+    assert!(
+        repo.rename_table(&table, "People", "Guests")
+            .await
+            .unwrap()
+            .is_none()
+    );
+    let (_, tables) = repo.get_database(table.database_id).await.unwrap().unwrap();
+    assert_eq!(
+        tables.iter().find(|t| t.id == table.id).unwrap().name,
+        "Attendees"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn concurrent_table_create_and_rename_cannot_reserve_the_same_name(pool: PgPool) {
+    let (repo, table, _) = fixture(&pool).await;
+    let command = CreateTable {
+        database_id: table.database_id,
+        name: "people".into(),
+    };
+    let (renamed, created) = tokio::join!(
+        repo.rename_table(&table, "People", "Guests"),
+        repo.create_table(&command),
+    );
+    assert_ne!(renamed.unwrap().is_some(), created.unwrap().is_some());
+    let (_, tables) = repo.get_database(table.database_id).await.unwrap().unwrap();
+    assert_eq!(
+        tables
+            .iter()
+            .filter(|table| table.name.eq_ignore_ascii_case("people"))
+            .count(),
+        1
+    );
+    assert!(repo.create_table(&command).await.unwrap().is_none());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -315,6 +373,19 @@ async fn insert_then_update_merges_cells_and_bumps_version_once(pool: PgPool) {
         Some(&PropertyValue::Str("Priya".to_string()))
     );
 
+    repo.create_column(
+        table.id,
+        other_definition_id,
+        &CreateColumn {
+            table_id: table.id,
+            binding: ColumnBinding::ExistingDefinition(other_definition_id),
+            config: None,
+            infer_type: false,
+        },
+    )
+    .await
+    .expect("the second definition must be bound before writing it");
+
     let (minted, versions) = repo
         .apply_changes(
             &viewer(),
@@ -334,7 +405,7 @@ async fn insert_then_update_merges_cells_and_bumps_version_once(pool: PgPool) {
         .expect("no version conflict");
 
     assert!(minted.is_empty());
-    assert_eq!(versions, HashMap::from([(table.id, TableVersion(3))]));
+    assert_eq!(versions, HashMap::from([(table.id, TableVersion(4))]));
 
     let rows = repo
         .fetch_rows(table.id, 100)
@@ -394,6 +465,7 @@ async fn links_are_inserted_idempotently_and_removed(pool: PgPool) {
             table.id,
             link_definition_id,
             &CreateColumn {
+                infer_type: false,
                 table_id: table.id,
                 binding: ColumnBinding::ExistingDefinition(link_definition_id),
                 config: Some(ColumnConfig::Link {
@@ -497,6 +569,7 @@ async fn deleting_a_row_cascades_its_links(pool: PgPool) {
             table.id,
             link_definition_id,
             &CreateColumn {
+                infer_type: false,
                 table_id: table.id,
                 binding: ColumnBinding::ExistingDefinition(link_definition_id),
                 config: Some(ColumnConfig::Link {
@@ -578,12 +651,14 @@ async fn a_link_bumps_both_ends(pool: PgPool) {
             name: "Sessions".to_string(),
         })
         .await
-        .expect("table should insert");
+        .expect("table insert should succeed")
+        .expect("table name should be available");
     let session_name = insert_definition(&pool, "Session name").await;
     repo.create_column(
         sessions.id,
         session_name,
         &CreateColumn {
+            infer_type: false,
             table_id: sessions.id,
             binding: ColumnBinding::ExistingDefinition(session_name),
             config: None,
@@ -598,6 +673,7 @@ async fn a_link_bumps_both_ends(pool: PgPool) {
             guests.id,
             link_definition_id,
             &CreateColumn {
+                infer_type: false,
                 table_id: guests.id,
                 binding: ColumnBinding::ExistingDefinition(link_definition_id),
                 config: Some(ColumnConfig::Link {

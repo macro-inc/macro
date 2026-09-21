@@ -12,9 +12,10 @@ use models_properties::service::property_option::{PropertyOption, PropertyOption
 use crate::domain::models::{
     AccessGrant, AddColumnOptions, ApplyOutcome, Catalog, Column, ColumnBinding, ColumnDetail,
     ColumnId, CreateColumn, CreateDatabase, CreateTable, Database, DatabaseDetail, DatabaseError,
-    DatabaseId, ExecOutcome, ExecRequest, ListedDatabase, MaterializedTable, PropertyDefinitionId,
-    QueryError, QueryResult, RawRowChange, Row, RowChange, RowId, SqliteSnapshot, Table, TableDeps,
-    TableId, TableVersion, Viewer,
+    DatabaseId, ExecOutcome, ExecRequest, InferColumnType, InferColumnTypeOutcome, ListedDatabase,
+    MaterializedTable, PropertyDefinitionId, QueryError, QueryResult, RawRowChange,
+    RenameColumnOutcome, Row, RowChange, RowId, SqliteSnapshot, Table, TableDeps, TableId,
+    TableVersion, Viewer,
 };
 
 /// Outbound persistence port for databases, tables, column placements, rows,
@@ -69,11 +70,22 @@ pub trait DatabasesRepo: Send + Sync + 'static {
     fn delete_database(&self, id: DatabaseId)
     -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Insert a table.
+    /// Insert a table, atomically reserving its name within the database.
+    /// Returns `None` when that name is already taken (case-insensitively).
     fn create_table(
         &self,
         cmd: &CreateTable,
-    ) -> impl Future<Output = Result<Table, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<Table>, Self::Err>> + Send;
+
+    /// Rename only if the previous name still matches and the new name is free.
+    /// Returns `None` on a concurrent rename or name collision. Successful
+    /// renames bump the table version in the same transaction.
+    fn rename_table(
+        &self,
+        table: &Table,
+        name: &str,
+        previous_name: &str,
+    ) -> impl Future<Output = Result<Option<Table>, Self::Err>> + Send;
 
     /// Insert a column placement.
     fn create_column(
@@ -82,6 +94,26 @@ pub trait DatabasesRepo: Send + Sync + 'static {
         property_definition_id: PropertyDefinitionId,
         cmd: &CreateColumn,
     ) -> impl Future<Output = Result<ColumnId, Self::Err>> + Send;
+
+    /// Change a placement's label only if its table version and previous
+    /// override still match. Bumps the table version atomically; `None` is a
+    /// concurrent change. Property definitions and SQL identifiers stay intact.
+    fn rename_column(
+        &self,
+        table: &Table,
+        column: &Column,
+        name: &str,
+    ) -> impl Future<Output = Result<Option<RenameColumnOutcome>, Self::Err>> + Send;
+
+    /// Rebind an empty inference-enabled placement and settle its flag, only
+    /// when the table version and old binding still match. Locks the same table
+    /// version as row writes. `None` means a competing write or a nonempty column.
+    fn infer_column_type(
+        &self,
+        table: &Table,
+        column: &Column,
+        definition_id: PropertyDefinitionId,
+    ) -> impl Future<Output = Result<Option<TableVersion>, Self::Err>> + Send;
 
     /// Bump a table's version and return the new one.
     ///
@@ -180,6 +212,21 @@ pub trait ColumnDefinitionStore: Send + Sync + 'static {
         viewer: &Viewer,
         binding: &ColumnBinding,
     ) -> impl Future<Output = Result<PropertyDefinitionId, Self::Err>> + Send;
+
+    /// Create a fresh database-owned definition through the properties domain.
+    fn create_inferred_definition(
+        &self,
+        database_id: DatabaseId,
+        name: &str,
+        data_type: models_properties::DataType,
+        specific_entity_type: Option<models_properties::EntityType>,
+    ) -> impl Future<Output = Result<PropertyDefinitionWithOptions, Self::Err>> + Send;
+
+    /// Remove a replacement definition whose column rebind was refused.
+    fn delete_unused_definition(
+        &self,
+        id: PropertyDefinitionId,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Append select options to a definition, returning the created rows in
     /// the order given.
@@ -319,6 +366,15 @@ pub trait DatabasesService: Send + Sync + 'static {
         cmd: CreateTable,
     ) -> impl Future<Output = Result<Table, DatabaseError>> + Send;
 
+    /// Rename a table without changing its identity, records, or column bindings.
+    fn rename_table(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        table_id: TableId,
+        name: String,
+        previous_name: String,
+    ) -> impl Future<Output = Result<Table, DatabaseError>> + Send;
+
     /// Create a column: validate the binding and any link target against the
     /// viewer's world, resolve the definition, insert the placement.
     fn create_column(
@@ -327,6 +383,24 @@ pub trait DatabasesService: Send + Sync + 'static {
         viewer: Viewer,
         cmd: CreateColumn,
     ) -> impl Future<Output = Result<ColumnId, DatabaseError>> + Send;
+
+    /// Rename a column placement without changing its binding or SQL name.
+    fn rename_column(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        table_id: TableId,
+        column_id: ColumnId,
+        name: String,
+        previous_name: String,
+    ) -> impl Future<Output = Result<RenameColumnOutcome, DatabaseError>> + Send;
+
+    /// Settle the type of a new empty column without mutating shared definitions.
+    fn infer_column_type(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        viewer: Viewer,
+        cmd: InferColumnType,
+    ) -> impl Future<Output = Result<InferColumnTypeOutcome, DatabaseError>> + Send;
 
     /// Extend a select column's allowed options.
     ///
@@ -349,6 +423,14 @@ pub trait DatabasesService: Send + Sync + 'static {
         &self,
         viewer: Viewer,
         req: ExecRequest,
+    ) -> impl Future<Output = Result<ExecOutcome, QueryError>> + Send;
+
+    /// Read SQL as the viewer, refusing every write even with an edit grant.
+    /// Stored queries and automatic refreshes must use this surface.
+    fn query_sql(
+        &self,
+        viewer: Viewer,
+        sql: String,
     ) -> impl Future<Output = Result<ExecOutcome, QueryError>> + Send;
 
     /// Serialize one database into a SQLite file for takeout/local analysis.

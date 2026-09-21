@@ -4,6 +4,7 @@
 //!
 //! - `POST /exec` — run SQL (reads and writes) as the caller; the viewer's
 //!   catalog is the authorization boundary, enforced in the domain service.
+//! - `POST /query` — read-only SQL for live chips and query previews.
 //! - `GET /` — list the caller's databases; `POST /` — create one.
 //! - `GET /{id}` — schema detail (tables, columns, definitions, SQL names).
 //! - `GET /{id}/sqlite` — download a database as a SQLite file (takeout).
@@ -23,7 +24,7 @@ use axum::{
     extract::{FromRef, Path, State},
     http::{StatusCode, header},
     response::IntoResponse,
-    routing::{get, post},
+    routing::{get, patch, post},
 };
 use entity_access::domain::models::{EditAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
@@ -39,7 +40,8 @@ use uuid::Uuid;
 use crate::domain::models::{
     AddColumnOptions, ColumnBinding, ColumnConfig, ColumnDetail, ColumnId, CreateColumn,
     CreateDatabase, CreateTable, Database, DatabaseDetail, DatabaseError, ExecOutcome, ExecRequest,
-    ListedDatabase, QueryError, Table, TableVersion, Viewer,
+    InferColumnType, InferColumnTypeOutcome, ListedDatabase, QueryError, RenameColumnOutcome,
+    Table, TableVersion, Viewer,
 };
 use crate::domain::ports::DatabasesService;
 
@@ -103,12 +105,25 @@ where
         .route("/", get(list_databases_handler::<S, Eas, Auth>))
         .route("/", post(create_database_handler::<S, Eas, Auth>))
         .route("/exec", post(exec_handler::<S, Eas, Auth>))
+        .route("/query", post(query_handler::<S, Eas, Auth>))
         .route("/{id}", get(get_database_handler::<S, Eas, Auth>))
         .route("/{id}/sqlite", get(sqlite_snapshot_handler::<S, Eas, Auth>))
         .route("/{id}/tables", post(create_table_handler::<S, Eas, Auth>))
         .route(
+            "/{id}/tables/{table_id}",
+            patch(rename_table_handler::<S, Eas, Auth>),
+        )
+        .route(
             "/{id}/tables/{table_id}/columns",
             post(create_column_handler::<S, Eas, Auth>),
+        )
+        .route(
+            "/{id}/tables/{table_id}/columns/{column_id}",
+            patch(rename_column_handler::<S, Eas, Auth>),
+        )
+        .route(
+            "/{id}/tables/{table_id}/columns/{column_id}/infer-type",
+            post(infer_column_type_handler::<S, Eas, Auth>),
         )
         .route(
             "/{id}/tables/{table_id}/columns/{column_id}/options",
@@ -137,6 +152,26 @@ pub struct CreateDatabaseRequest {
 pub struct CreateTableRequest {
     /// Display name.
     pub name: String,
+}
+
+/// Request body for renaming a table without overwriting a concurrent rename.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameTableRequest {
+    /// New display name.
+    pub name: String,
+    /// Name shown when the rename editor opened.
+    pub previous_name: String,
+}
+
+/// Rename one column placement without changing its property's SQL identifier.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameColumnRequest {
+    /// New display name.
+    pub name: String,
+    /// Label shown when the rename editor opened.
+    pub previous_name: String,
 }
 
 /// How a new column obtains its definition.
@@ -169,6 +204,9 @@ pub enum ColumnBindingRequest {
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateColumnRequest {
+    /// Infer the first value type of a newly owned text column.
+    #[serde(default, rename = "infer_type")]
+    pub infer_type: bool,
     /// Definition source.
     pub binding: ColumnBindingRequest,
     /// Link this column to another table (many-to-many).
@@ -185,10 +223,18 @@ pub struct CreateColumnRequest {
 pub struct ExecRequestBody {
     /// The statements to run, executed in one transaction.
     pub sql: String,
-    /// Optional compare-and-swap: reject writes if any listed table has moved
-    /// past the given version. Omitted → cell-level last-write-wins.
+    /// Optional compare-and-swap: reject writes if a listed table being written
+    /// has moved past the given version. Read-only dependencies are not guarded.
+    /// Omitted → cell-level last-write-wins.
     #[schema(nullable = false)]
     pub base_versions: Option<HashMap<Uuid, i64>>,
+}
+
+/// Request body for read-only SQL queries.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct QueryRequestBody {
+    /// SQL to read. Writes are refused by the domain service.
+    pub sql: String,
 }
 
 /// Path params for the single-database routes.
@@ -372,6 +418,39 @@ where
     Ok(Json(outcome))
 }
 
+/// Run read-only SQL with the caller's current visibility.
+#[utoipa::path(
+    post,
+    tag = "databases",
+    operation_id = "query_database_sql",
+    path = "/databases/query",
+    request_body = QueryRequestBody,
+    responses(
+        (status = 200, body = ExecOutcome),
+        (status = 400, description = "Invalid SQL", body = ErrorResponse),
+        (status = 401, description = "Missing or invalid credentials", body = ErrorResponse),
+        (status = 403, description = "Queries cannot write data", body = ErrorResponse),
+        (status = 422, description = "Query budget exceeded", body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn query_handler<S, Eas, Auth>(
+    State(state): State<DatabasesRouterState<S, Eas, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Json(req): Json<QueryRequestBody>,
+) -> Result<Json<ExecOutcome>, QueryError>
+where
+    S: DatabasesService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    state
+        .service
+        .query_sql(viewer_of(&user), req.sql)
+        .await
+        .map(Json)
+}
+
 /// Download a database as a SQLite file.
 #[utoipa::path(
     get,
@@ -453,6 +532,47 @@ where
     Ok((StatusCode::CREATED, Json(table)))
 }
 
+/// Rename a table in a database.
+#[utoipa::path(
+    patch,
+    tag = "databases",
+    operation_id = "rename_database_table",
+    path = "/databases/{id}/tables/{table_id}",
+    params(("id" = Uuid, Path, description = "Database id"),
+           ("table_id" = Uuid, Path, description = "Table id")),
+    request_body = RenameTableRequest,
+    responses(
+        (status = 200, body = Table),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn rename_table_handler<S, Eas, Auth>(
+    access: DatabaseAccessLevelExtractor<EditAccessLevel, Eas, Auth>,
+    State(state): State<DatabasesRouterState<S, Eas, Auth>>,
+    Path(ColumnPath { table_id, .. }): Path<ColumnPath>,
+    Json(req): Json<RenameTableRequest>,
+) -> Result<Json<Table>, DatabaseError>
+where
+    S: DatabasesService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    state
+        .service
+        .rename_table(
+            access.entity_access_receipt,
+            table_id,
+            req.name,
+            req.previous_name,
+        )
+        .await
+        .map(Json)
+}
+
 /// Response for a created column.
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -520,6 +640,7 @@ where
             access.entity_access_receipt,
             viewer_of(&user),
             CreateColumn {
+                infer_type: req.infer_type,
                 table_id,
                 binding,
                 config,
@@ -530,6 +651,113 @@ where
         StatusCode::CREATED,
         Json(CreateColumnResponse { column_id }),
     ))
+}
+
+/// Rename a column's label in this table.
+#[utoipa::path(
+    patch,
+    tag = "databases",
+    operation_id = "rename_database_column",
+    path = "/databases/{id}/tables/{table_id}/columns/{column_id}",
+    params(("id" = Uuid, Path, description = "Database id"),
+           ("table_id" = Uuid, Path, description = "Table id"),
+           ("column_id" = Uuid, Path, description = "Column id")),
+    request_body = RenameColumnRequest,
+    responses(
+        (status = 200, body = RenameColumnOutcome),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn rename_column_handler<S, Eas, Auth>(
+    access: DatabaseAccessLevelExtractor<EditAccessLevel, Eas, Auth>,
+    State(state): State<DatabasesRouterState<S, Eas, Auth>>,
+    Path(ColumnOptionsPath {
+        table_id,
+        column_id,
+        ..
+    }): Path<ColumnOptionsPath>,
+    Json(req): Json<RenameColumnRequest>,
+) -> Result<Json<RenameColumnOutcome>, DatabaseError>
+where
+    S: DatabasesService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    state
+        .service
+        .rename_column(
+            access.entity_access_receipt,
+            table_id,
+            column_id,
+            req.name,
+            req.previous_name,
+        )
+        .await
+        .map(Json)
+}
+
+/// Request to settle an empty column's first-value type.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct InferColumnTypeRequest {
+    /// First-value type: STRING, NUMBER, or ENTITY.
+    pub data_type: DataType,
+    /// Required entity category for ENTITY.
+    pub specific_entity_type: Option<models_properties::EntityType>,
+    /// Table version used when interpreting the first value.
+    pub base_version: TableVersion,
+}
+
+/// Settle a new empty text column's type.
+#[utoipa::path(
+    post,
+    tag = "databases",
+    operation_id = "infer_database_column_type",
+    path = "/databases/{id}/tables/{table_id}/columns/{column_id}/infer-type",
+    params(("id" = Uuid, Path, description = "Database id"),
+           ("table_id" = Uuid, Path, description = "Table id"),
+           ("column_id" = Uuid, Path, description = "Column id")),
+    request_body = InferColumnTypeRequest,
+    responses((status = 200, body = InferColumnTypeOutcome),
+              (status = 400, body = ErrorResponse), (status = 401, body = ErrorResponse),
+              (status = 403, body = ErrorResponse), (status = 404, body = ErrorResponse),
+              (status = 409, body = ErrorResponse),
+              (status = 500, body = ErrorResponse))
+)]
+pub async fn infer_column_type_handler<S, Eas, Auth>(
+    access: DatabaseAccessLevelExtractor<EditAccessLevel, Eas, Auth>,
+    State(state): State<DatabasesRouterState<S, Eas, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(ColumnOptionsPath {
+        table_id,
+        column_id,
+        ..
+    }): Path<ColumnOptionsPath>,
+    Json(req): Json<InferColumnTypeRequest>,
+) -> Result<Json<InferColumnTypeOutcome>, DatabaseError>
+where
+    S: DatabasesService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    state
+        .service
+        .infer_column_type(
+            access.entity_access_receipt,
+            viewer_of(&user),
+            InferColumnType {
+                table_id,
+                column_id,
+                data_type: req.data_type,
+                specific_entity_type: req.specific_entity_type,
+                base_version: req.base_version,
+            },
+        )
+        .await
+        .map(Json)
 }
 
 /// Add options to a select column.
@@ -589,6 +817,7 @@ impl IntoResponse for DatabaseError {
         let status = match &self {
             DatabaseError::NotFound => StatusCode::NOT_FOUND,
             DatabaseError::Unauthorized => StatusCode::FORBIDDEN,
+            DatabaseError::VersionConflict => StatusCode::CONFLICT,
             DatabaseError::InvalidSchemaOperation(_) => StatusCode::BAD_REQUEST,
             DatabaseError::Repo(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };

@@ -4,6 +4,7 @@ import {
   AwaitNode,
   ConnectAppNode,
   ContactMentionNode,
+  DatabaseQueryNode,
   DateMentionNode,
   DiffInsertNode,
   DocumentCardNode,
@@ -34,6 +35,7 @@ import { AgentSessionMention } from './component/decorator/AgentSessionMention';
 import { Await } from './component/decorator/Await';
 import { ConnectApp } from './component/decorator/ConnectApp';
 import { ContactMention } from './component/decorator/ContactMention';
+import { DatabaseQuery } from './component/decorator/DatabaseQuery';
 import { DateMention } from './component/decorator/DateMention';
 import { DiffInsert } from './component/decorator/DiffInsert';
 import { DocumentCard } from './component/decorator/DocumentCard';
@@ -72,6 +74,7 @@ export function initializeLexical() {
   setDecorator(AgentSessionMentionNode, AgentSessionMention);
   setDecorator(ReplyTargetNode, ReplyTarget);
   setDecorator(ContactMentionNode, ContactMention);
+  setDecorator(DatabaseQueryNode, DatabaseQuery);
   setDecorator(DateMentionNode, DateMention);
   setDecorator(DiffInsertNode, DiffInsert);
   setDecorator(ImageNode, MarkdownImage);

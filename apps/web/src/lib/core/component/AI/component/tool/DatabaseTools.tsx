@@ -91,7 +91,12 @@ export const listDatabasesHandler = createToolRenderer({
               <For each={databases()}>
                 {(database) => (
                   <Tool.ListItem icon={<TableIcon class="size-3" />}>
-                    <div class="truncate text-ink text-xs">{database.name}</div>
+                    <div class="min-w-0 text-ink text-xs">
+                      <span class="block truncate">{database.name}</span>
+                      <span class="block truncate text-ink-muted">
+                        {database.tables?.map((table) => table.name).join(', ')}
+                      </span>
+                    </div>
                   </Tool.ListItem>
                 )}
               </For>
@@ -100,14 +105,14 @@ export const listDatabasesHandler = createToolRenderer({
         }
       >
         <div class="flex min-w-0 flex-1 items-center justify-between gap-3">
-          <span class="min-w-0 truncate">List tables</span>
+          <span class="min-w-0 truncate">Find database tables</span>
           <Tool.ResultToggle
             expanded={expanded()}
             onToggle={() => setExpanded((open) => !open)}
             showToggle={databases().length > 0}
             status={
               ctx.response
-                ? `${databases().length} table${databases().length === 1 ? '' : 's'}`
+                ? `${databases().length} database${databases().length === 1 ? '' : 's'}`
                 : undefined
             }
           />
@@ -243,6 +248,24 @@ export const addColumnOptionsHandler = createToolRenderer({
               · now {response().data.options.length} options
             </span>
           )}
+        </Show>
+      </span>
+    </BaseTool>
+  ),
+});
+
+export const saveDatabaseViewHandler = createToolRenderer({
+  name: 'SaveDatabaseView',
+  render: (ctx) => (
+    <BaseTool icon={TableIcon} renderContext={ctx.renderContext} type="call">
+      <span class="min-w-0 truncate">
+        {ctx.response ? 'Saved' : 'Save'}{' '}
+        {ctx.tool.data.view.layout === 'board' ? 'board' : 'view'}{' '}
+        <span class="text-ink">
+          {ctx.response?.data.name ?? ctx.tool.data.name}
+        </span>
+        <Show when={ctx.response}>
+          <span class="pl-1.5 text-ink-extra-muted">· Personal view</span>
         </Show>
       </span>
     </BaseTool>

@@ -26,7 +26,7 @@ use call::inbound::toolset::call_toolset;
 use channels::inbound::toolset::channel_toolset;
 use chat::inbound::toolset::chat_toolset;
 use crm::inbound::toolset::crm_toolset;
-use databases::inbound::toolset::databases_toolset;
+use databases::inbound::toolset::{databases_read_only_toolset, databases_toolset};
 use display_results::DisplayResults;
 use documents::inbound::toolset::document_toolset;
 use email::inbound::toolset::{email_toolset, mcp_toolset as email_mcp_toolset};
@@ -76,6 +76,18 @@ pub use tool_context::{
 };
 pub type AiToolSet = AsyncToolCollection<ToolServiceContext>;
 
+/// Database-only capabilities for the in-app database assistant. This excludes
+/// connectors and unrelated tools such as messaging and email.
+pub fn database_tools() -> AiToolSet {
+    AsyncToolCollection::new().add_subtoolset::<ToolDatabasesToolContext>(databases_toolset())
+}
+
+/// Discovery and enforced read-only SQL for automatically sourced document answers.
+pub fn database_read_only_tools() -> AiToolSet {
+    AsyncToolCollection::new()
+        .add_subtoolset::<ToolDatabasesToolContext>(databases_read_only_toolset())
+}
+
 pub struct ToolSetWithPrompt {
     pub toolset: Arc<AiToolSet>,
     pub prompt: Box<dyn std::fmt::Display + Send + Sync>,
@@ -107,6 +119,7 @@ pub(crate) fn subagent_toolset() -> AiToolSet {
         .add_subtoolset::<ToolBotToolContext>(bot_toolset())
         .add_subtoolset::<ToolTeamToolContext>(team_toolset())
         .add_subtoolset::<ToolCrmToolContext>(crm_toolset())
+        .add_subtoolset::<ToolDatabasesToolContext>(databases_toolset())
         .add_subtoolset::<ToolSkillToolContext>(skill_toolset())
         .add_subtoolset::<AnthropicToolContext>(anthropic_toolset())
 }
@@ -146,8 +159,7 @@ pub enum AiHost {
 pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
     let toolset = subagent_toolset()
         .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
-        .add_subtoolset::<ToolRemindersToolContext>(reminders_toolset())
-        .add_subtoolset::<ToolDatabasesToolContext>(databases_toolset());
+        .add_subtoolset::<ToolRemindersToolContext>(reminders_toolset());
     let toolset = match host {
         AiHost::Chat | AiHost::AgentSession => toolset
             .add_subtoolset::<ToolEmailToolContext>(email_toolset())

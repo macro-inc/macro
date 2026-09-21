@@ -11,6 +11,7 @@ pub mod agent_session;
 pub mod channel_mention;
 pub mod citations;
 pub mod connected_toolsets;
+pub mod databases;
 pub mod do_not;
 pub mod document_content_links;
 pub mod email;
@@ -42,6 +43,7 @@ pub static BASE_PROMPT: ComposedPrompt = tone::PROMPT
 /// `CreateCalendarEvent` directly and have no `SendEmail` at all.
 pub static DIRECT_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
     .compose(&tool_usage::PROMPT)
+    .compose(&databases::PROMPT)
     .compose(&skills::PROMPT)
     .compose(&document_content_links::PROMPT)
     .compose(&email::PROMPT);
@@ -52,6 +54,7 @@ pub static DIRECT_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
 /// own chain so the email section stays last.
 pub static TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
     .compose(&tool_usage::PROMPT)
+    .compose(&databases::PROMPT)
     .compose(&user_tools::PROMPT)
     .compose(&skills::PROMPT)
     .compose(&document_content_links::PROMPT)
@@ -63,10 +66,14 @@ pub static TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
 /// pending after it.
 pub static SESSION_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
     .compose(&tool_usage::PROMPT)
+    .compose(&databases::PROMPT)
     .compose(&user_tools::SESSION_PROMPT)
     .compose(&skills::PROMPT)
     .compose(&document_content_links::PROMPT)
     .compose(&email::PROMPT);
+
+/// Database-only agent instructions, without unrelated tool capabilities.
+pub static DATABASE_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT.compose(&databases::PROMPT);
 
 /// Citation, do-not, Macro-terms, and document-content-linking rules surfaced
 /// to external MCP clients, composed together. These are static; the
@@ -85,6 +92,7 @@ pub static SESSION_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
 static MCP_STATIC_INSTRUCTIONS: ComposedPrompt = citations::PROMPT
     .compose(&do_not::PROMPT)
     .compose(&about_macro::PROMPT)
+    .compose(&databases::PROMPT)
     .compose(&document_content_links::PROMPT);
 
 /// Builds the instructions surfaced to external MCP clients via the server

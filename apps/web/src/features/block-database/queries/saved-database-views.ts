@@ -1,14 +1,16 @@
 import { throwOnErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
+import type { View } from '@service-storage/generated/schemas/view';
+import type { ViewsResponse } from '@service-storage/generated/schemas/viewsResponse';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
-import {
-  type DatabaseViewConfig,
-  isSavedDatabaseViewConfig,
-  type SavedDatabaseView,
-  type SavedDatabaseViewConfig,
+import type {
+  DatabaseViewConfig,
+  SavedDatabaseView,
+  SavedDatabaseViewConfig,
 } from '../core/database-view';
 import { databaseViewKeys } from './keys';
+import { selectSavedDatabaseViews } from './saved-database-view-data';
 
 /** Personal views use the existing saved-views API; no database data is copied. */
 export function useSavedDatabaseViews(
@@ -24,21 +26,30 @@ export function useSavedDatabaseViews(
   }));
   // Resource reads are guarded: loading views must not suspend the table.
   const views = (): SavedDatabaseView[] =>
-    query.isSuccess
-      ? query.data.views.flatMap((entry) => {
-          const config = entry.config;
-          return isSavedDatabaseViewConfig(config) &&
-            config.databaseId === databaseId() &&
-            config.tableId === tableId()
-            ? [{ id: entry.id, name: entry.name, view: config.view }]
-            : [];
-        })
-      : [];
+    query.isPending
+      ? []
+      : selectSavedDatabaseViews(
+          query.data?.views ?? [],
+          databaseId(),
+          tableId()
+        );
   const invalidate = () => {
     void queryClient.invalidateQueries({
       queryKey: databaseViewKeys.saved.queryKey,
     });
   };
+  async function updateCachedViews(update: (views: View[]) => View[]) {
+    await queryClient.cancelQueries({
+      queryKey: databaseViewKeys.saved.queryKey,
+    });
+    queryClient.setQueryData<ViewsResponse>(
+      databaseViewKeys.saved.queryKey,
+      (current) => ({
+        excludedDefaultViews: current?.excludedDefaultViews ?? [],
+        views: update(current?.views ?? []),
+      })
+    );
+  }
   const save = useMutation(() => ({
     mutationFn: async (input: {
       id?: string;
@@ -66,11 +77,20 @@ export function useSavedDatabaseViews(
             config,
           })
         );
+        await updateCachedViews((views) =>
+          views.map((view) =>
+            view.id === input.id ? { ...view, name, config } : view
+          )
+        );
         return input.id;
       }
       const created = await throwOnErr(() =>
         storageServiceClient.views.createSavedView({ name, config })
       );
+      await updateCachedViews((views) => [
+        ...views.filter((view) => view.id !== created.id),
+        created,
+      ]);
       return created.id;
     },
     onSuccess: invalidate,
@@ -87,6 +107,9 @@ export function useSavedDatabaseViews(
           name,
         })
       );
+      await updateCachedViews((views) =>
+        views.map((view) => (view.id === input.id ? { ...view, name } : view))
+      );
     },
     onSuccess: invalidate,
   }));
@@ -96,6 +119,9 @@ export function useSavedDatabaseViews(
         throw new Error('This saved view is no longer available');
       await throwOnErr(() =>
         storageServiceClient.views.deleteView({ savedViewId: id })
+      );
+      await updateCachedViews((views) =>
+        views.filter((view) => view.id !== id)
       );
     },
     onSuccess: invalidate,

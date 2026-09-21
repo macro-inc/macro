@@ -6,6 +6,10 @@
 //! from the viewer's grants, so an unreadable table does not exist and an
 //! unwritable one is compiled read-only.
 
+mod infer_column_type;
+mod query;
+mod rename_column;
+
 #[cfg(test)]
 mod test;
 
@@ -31,18 +35,16 @@ use crate::domain::events::{
 };
 use crate::domain::materialize;
 use crate::domain::models::{
-    AccessGrant, AddColumnOptions, ApplyOutcome, Catalog, ColumnBinding, ColumnConfig,
-    ColumnDetail, ColumnId, CreateColumn, CreateDatabase, CreateTable, Database, DatabaseDetail,
-    DatabaseError, DatabaseId, ExecOutcome, ExecRequest, ListedDatabase, MaterializedTable,
-    QueryError, QueryResult, RawRowChange, Row, RowChange, RowId, SqliteSnapshot, Table, TableDeps,
-    TableDetail, TableId, TableSchema, TableSource, TableVersion, Viewer,
+    AccessGrant, AddColumnOptions, Catalog, ColumnBinding, ColumnConfig, ColumnDetail, ColumnId,
+    CreateColumn, CreateDatabase, CreateTable, Database, DatabaseDetail, DatabaseError, DatabaseId,
+    ExecOutcome, ExecRequest, InferColumnType, InferColumnTypeOutcome, ListedDatabase,
+    MaterializedTable, QueryError, RenameColumnOutcome, Row, RowChange, RowId, SqliteSnapshot,
+    Table, TableDeps, TableDetail, TableId, TableSchema, TableVersion, Viewer,
 };
 use crate::domain::ports::{
     AccessDirectory, ColumnDefinitionStore, DatabasesRepo, DatabasesService, MagicTables,
     SqlExecutor, TableEventPublisher,
 };
-use crate::domain::sugar::desugar;
-use crate::domain::translate::translate;
 
 /// Name of the table every new database starts with.
 const STARTER_TABLE_NAME: &str = "Table 1";
@@ -589,6 +591,7 @@ where
                 .into_iter()
                 .map(|entry| TableDetail {
                     sql_name: entry.schema.sql_name,
+                    read_sql_name: catalog::read_table_name(entry.table.id),
                     table: entry.table,
                     columns: entry
                         .columns
@@ -852,11 +855,32 @@ where
         let mut databases = self.repo.databases_by_ids(&ids).await.map_err(repo_err)?;
         databases.retain(|d| d.trashed_at.is_none());
         databases.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+        let live_ids: Vec<DatabaseId> = databases.iter().map(|database| database.id).collect();
+        let tables = self
+            .repo
+            .tables_for_databases(&live_ids)
+            .await
+            .map_err(repo_err)?;
+        let mut tables_by_database: HashMap<DatabaseId, Vec<Table>> = HashMap::new();
+        for table in tables {
+            tables_by_database
+                .entry(table.database_id)
+                .or_default()
+                .push(table);
+        }
+        for tables in tables_by_database.values_mut() {
+            tables.sort_by(|left, right| left.position.cmp(&right.position));
+        }
         Ok(databases
             .into_iter()
             .filter_map(|database| {
                 let grant = *grants.get(&database.id)?;
-                Some(ListedDatabase { database, grant })
+                let tables = tables_by_database.remove(&database.id).unwrap_or_default();
+                Some(ListedDatabase {
+                    database,
+                    grant,
+                    tables,
+                })
             })
             .collect())
     }
@@ -912,10 +936,68 @@ where
         self.repo
             .create_table(&CreateTable {
                 database_id: cmd.database_id,
-                name,
+                name: name.clone(),
             })
             .await
-            .map_err(repo_err)
+            .map_err(repo_err)?
+            .ok_or_else(|| {
+                DatabaseError::InvalidSchemaOperation(format!(
+                    "a table named `{name}` already exists in this database"
+                ))
+            })
+    }
+
+    #[tracing::instrument(skip(self, receipt), err)]
+    async fn rename_table(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        table_id: TableId,
+        name: String,
+        previous_name: String,
+    ) -> Result<Table, DatabaseError> {
+        let (_, tables) = self.database_for_edit(&receipt).await?;
+        let table = tables
+            .iter()
+            .find(|table| table.id == table_id)
+            .ok_or(DatabaseError::NotFound)?;
+        let name = validate_name(&name)?;
+        // A retry after a lost response is already complete.
+        if table.name == name {
+            return Ok(table.clone());
+        }
+        if tables
+            .iter()
+            .any(|other| other.id != table_id && same_name(&other.name, &name))
+        {
+            return Err(DatabaseError::InvalidSchemaOperation(format!(
+                "a table named `{name}` already exists in this database"
+            )));
+        }
+        let renamed = self.repo.rename_table(table, &name, &previous_name).await
+            .map_err(repo_err)?
+            .ok_or_else(|| DatabaseError::InvalidSchemaOperation(
+                "the table name changed or is already in use. Reopen Rename table and try again".into()
+            ))?;
+        self.publish(
+            receipt_attribution(&receipt),
+            &HashMap::from([(table_id, renamed.database_id)]),
+            &HashMap::from([(table_id, renamed.version)]),
+        )
+        .await;
+        Ok(renamed)
+    }
+
+    #[tracing::instrument(skip(self, receipt), err)]
+    async fn rename_column(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        table_id: TableId,
+        column_id: ColumnId,
+        name: String,
+        previous_name: String,
+    ) -> Result<RenameColumnOutcome, DatabaseError> {
+        self.rename_column_label(receipt, table_id, column_id, name, previous_name)
+            .await
     }
 
     #[tracing::instrument(skip(self, receipt), err)]
@@ -962,21 +1044,43 @@ where
             }
         }
 
-        // Column names are unique per table (case-insensitive), matching the
-        // SQL names they turn into.
+        if cmd.infer_type
+            && (cmd.config.is_some()
+                || !matches!(
+                    &cmd.binding,
+                    ColumnBinding::NewDefinition { data_type: DataType::String, is_multi_select: false, options, .. }
+                        if options.is_empty()
+                ))
+        {
+            return Err(DatabaseError::InvalidSchemaOperation(
+                "Only a new plain text column can infer its first value's type.".into(),
+            ));
+        }
+
+        // Effective display labels are unique per table (case-insensitive).
+        // Renamed placements keep their original definition and SQL name.
         let existing = self
             .repo
             .columns_for_tables(&[cmd.table_id])
             .await
             .map_err(repo_err)?;
         let existing_ids: Vec<Uuid> = existing.iter().map(|c| c.property_definition_id).collect();
-        let existing_names: Vec<String> = self
+        let definition_names: HashMap<_, _> = self
             .definitions
             .definitions(&existing_ids)
             .await
             .map_err(repo_err)?
             .into_iter()
-            .map(|d| d.definition.display_name)
+            .map(|d| (d.definition.id, d.definition.display_name))
+            .collect();
+        let existing_names: Vec<_> = existing
+            .iter()
+            .filter_map(|column| {
+                column
+                    .display_name
+                    .as_ref()
+                    .or_else(|| definition_names.get(&column.property_definition_id))
+            })
             .collect();
         let (binding, option_values) = match cmd.binding {
             ColumnBinding::NewDefinition {
@@ -1046,6 +1150,16 @@ where
             .await;
         }
         Ok(column_id)
+    }
+
+    #[tracing::instrument(skip(self, receipt, viewer), err)]
+    async fn infer_column_type(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        viewer: Viewer,
+        cmd: InferColumnType,
+    ) -> Result<InferColumnTypeOutcome, DatabaseError> {
+        self.settle_column_type(receipt, viewer, cmd).await
     }
 
     #[tracing::instrument(skip(self, receipt), err)]
@@ -1126,160 +1240,20 @@ where
 
     #[tracing::instrument(skip(self, req), err)]
     async fn exec_sql(&self, viewer: Viewer, req: ExecRequest) -> Result<ExecOutcome, QueryError> {
-        if req.sql.len() > MAX_SQL_LEN {
-            return Err(QueryError::BudgetExceeded);
-        }
-        let ViewerCatalog { entries, catalog } = self.build_catalog(&viewer).await?;
-        let sql = desugar(&req.sql);
+        self.run_sql(viewer, req, query::QueryMode::ReadWrite).await
+    }
 
-        let deps = {
-            let catalog = catalog.clone();
-            let sql = sql.clone();
-            self.blocking(move |exec| exec.analyze(&catalog, &sql))
-                .await?
-        };
-
-        // Fail early with a precise reason; the executor's authorizer enforces
-        // the same policy during execution.
-        let mut written_tables: Vec<TableId> = Vec::new();
-        for (name, referenced) in &deps.tables {
-            if !referenced.written {
-                continue;
-            }
-            let schema = catalog
-                .tables
-                .iter()
-                .find(|t| &t.sql_name == name || t.aliases.iter().any(|a| a == name))
-                .ok_or_else(|| QueryError::Sql(format!("no such table: {name}")))?;
-            if !schema.writable || &schema.sql_name != name {
-                return Err(QueryError::ReadOnly(format!("table {name} is read-only")));
-            }
-            match schema.source {
-                TableSource::UserTable(table_id) | TableSource::Junction { table_id, .. } => {
-                    if !written_tables.contains(&table_id) {
-                        written_tables.push(table_id);
-                    }
-                }
-                TableSource::Magic(_) => {
-                    return Err(QueryError::ReadOnly(format!("table {name} is read-only")));
-                }
-            }
-        }
-
-        let mut loaded = Loaded::default();
-        let (tables, truncated_tables) = self
-            .materialize_deps(&viewer, &entries, &deps, &mut loaded)
-            .await?;
-        let (results, raw_changes): (Vec<QueryResult>, Vec<RawRowChange>) = {
-            let catalog = catalog.clone();
-            let sql = sql.clone();
-            self.blocking(move |exec| exec.execute(&catalog, tables, &sql))
-                .await?
-        };
-        let changes = translate(raw_changes, &entries)?;
-        self.validate_links(&changes, &entries, &mut loaded).await?;
-
-        // A truncated magic table is a partial view of the world. Reading one
-        // is merely incomplete (and reported as such); writing from one is
-        // wrong — the statement's WHERE clause never saw the missing rows.
-        if !written_tables.is_empty() && !truncated_tables.is_empty() {
-            return Err(QueryError::TruncatedDependency(truncated_tables.join(", ")));
-        }
-
-        // A link edge belongs to both ends: the target table's rows gain (or
-        // lose) a backlink, so its version moves too and compare-and-set
-        // covers it.
-        for change in &changes {
-            let (RowChange::Link { column_id, .. } | RowChange::Unlink { column_id, .. }) = change
-            else {
-                continue;
-            };
-            let target = entries
-                .iter()
-                .find_map(|e| e.columns.iter().find(|c| c.column.id == *column_id))
-                .and_then(|c| match &c.column.config {
-                    Some(ColumnConfig::Link { table_id, .. }) => Some(*table_id),
-                    _ => None,
-                });
-            if let Some(target) = target
-                && !written_tables.contains(&target)
-            {
-                written_tables.push(target);
-            }
-        }
-
-        let expected_versions: HashMap<TableId, TableVersion> = req
-            .base_versions
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|(table_id, _)| written_tables.contains(table_id))
-            .collect();
-        let (inserted_row_ids, new_versions) = if changes.is_empty() {
-            (Vec::new(), HashMap::new())
-        } else {
-            match self
-                .repo
-                .apply_changes(&viewer, &changes, &expected_versions)
-                .await
-                .map_err(infra)?
-            {
-                ApplyOutcome::Applied(applied) => applied,
-                ApplyOutcome::VersionConflict { table_id } => {
-                    return Err(QueryError::VersionConflict { table_id });
-                }
-            }
-        };
-        let database_of: HashMap<TableId, DatabaseId> = entries
-            .iter()
-            .map(|e| (e.table.id, e.table.database_id))
-            .collect();
-        self.publish(
-            Some(events::Attribution::user(viewer.user_id.clone())),
-            &database_of,
-            &new_versions,
+    #[tracing::instrument(skip(self, sql), err)]
+    async fn query_sql(&self, viewer: Viewer, sql: String) -> Result<ExecOutcome, QueryError> {
+        self.run_sql(
+            viewer,
+            ExecRequest {
+                sql,
+                base_versions: None,
+            },
+            query::QueryMode::ReadOnly,
         )
-        .await;
-
-        let read_tables: Vec<TableId> = deps
-            .tables
-            .keys()
-            .filter_map(|name| {
-                entries
-                    .iter()
-                    .find(|e| {
-                        catalog::entry_answers_to(e, name)
-                            || e.junctions
-                                .iter()
-                                .any(|j| catalog::junction_answers_to(j, name))
-                    })
-                    .map(|e| e.table.id)
-            })
-            .collect::<HashSet<_>>()
-            .into_iter()
-            .collect();
-
-        // The version each read table was at when this statement materialized
-        // it. A client that re-sends these as `base_versions` gets a real
-        // compare-and-set on everything it looked at, not only what it wrote.
-        let read_versions: HashMap<TableId, TableVersion> = read_tables
-            .iter()
-            .filter_map(|table_id| {
-                entries
-                    .iter()
-                    .find(|e| e.table.id == *table_id)
-                    .map(|e| (*table_id, e.table.version))
-            })
-            .collect();
-
-        Ok(ExecOutcome {
-            results,
-            changes_applied: changes.len(),
-            inserted_row_ids,
-            new_versions,
-            read_tables,
-            read_versions,
-            truncated_tables,
-        })
+        .await
     }
 
     #[tracing::instrument(skip(self, receipt), err)]

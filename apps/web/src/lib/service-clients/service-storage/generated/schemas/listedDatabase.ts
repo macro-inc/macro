@@ -7,6 +7,7 @@
 
 import type { AccessGrant } from './accessGrant';
 import type { Database } from './database';
+import type { Table } from './table';
 
 /**
  * A database as listed for a viewer.
@@ -16,4 +17,7 @@ export interface ListedDatabase {
   database: Database;
   /** The viewer's access. */
   grant: AccessGrant;
+  /** Tables in tab order, so discovery can find a table independently of
+the containing database's display name. */
+  tables: Table[];
 }
