@@ -555,7 +555,7 @@ changes alone do not require bringing up a frontend or backend stack.
    obsolete modules once callers are migrated; avoid barrels that reintroduce
    dependencies on the entire feature.
 7. **Register enforcement and verify.** Add the adopting feature's layer globs to
-   both TypeScript and TSX feature rules below. Test the changed behavior, inspect
+   the feature rules below. Test the changed behavior, inspect
    warnings, and exercise affected UI surfaces. Update
    [the agent interaction guide](AGENT_GUIDE/README.md) if routes or interaction
    behavior changed; a file move alone does not change that guide.
@@ -563,9 +563,10 @@ changes alone do not require bringing up a frontend or backend stack.
 ## Enforcement and reference limitations
 
 The rules live in [rules/ast-grep](../rules/ast-grep), configured by
-[sgconfig.yml](../sgconfig.yml). Each family has a `ts-` and `tsx-` rule because
-the scanner treats those languages separately. When a feature adopts the layout,
-update `files` in all eight rule files with the corresponding layer paths:
+[sgconfig.yml](../sgconfig.yml). Each family is a single `ts-` rule: it declares
+`language: tsx`, and `languageGlobs` in `sgconfig.yml` routes `.ts` files to that
+parser too. When a feature adopts the layout, update `files` in all four rule
+files with the corresponding layer paths:
 
 | Rule family | Layer globs to register | Main check |
 | --- | --- | --- |

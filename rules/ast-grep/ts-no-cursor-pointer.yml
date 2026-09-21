@@ -1,4 +1,4 @@
-id: tsx-no-cursor-pointer
+id: ts-no-cursor-pointer
 language: tsx
 severity: warning
 message: Don't add cursor-pointer to clickable elements.

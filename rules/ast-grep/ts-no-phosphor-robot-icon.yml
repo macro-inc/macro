@@ -1,7 +1,5 @@
 id: ts-no-phosphor-robot-icon
-language: typescript
-# Twin of tsx-no-phosphor-robot-icon — ast-grep rules are single-language, and
-# `tsx` only scans .tsx files.
+language: tsx
 severity: error
 message: Don't import Phosphor's robot icon — use the sparkle icon for agents and bots.
 note: |-

@@ -1,7 +1,5 @@
 id: ts-feature-components-presentational
-language: typescript
-# Twin of tsx-feature-components-presentational — ast-grep rules are
-# single-language, and `tsx` only scans .ts files.
+language: tsx
 severity: warning
 message: Feature components take resolved values and return JSX. Data, reactivity wiring, and navigation belong to primitives/ and views/.
 note: |-

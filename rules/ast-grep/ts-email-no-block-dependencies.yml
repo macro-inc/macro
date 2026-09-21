@@ -1,5 +1,5 @@
 id: ts-email-no-block-dependencies
-language: typescript
+language: tsx
 severity: error
 message: Email features must not import block signals or block packages. Put host integration in block-email/EmailBlockAdapter.tsx.
 files:

@@ -1,4 +1,4 @@
-id: tsx-no-raw-tailwind-palette
+id: ts-no-raw-tailwind-palette
 language: tsx
 severity: error
 message: Raw Tailwind palette classes are disabled in @theme and render NOTHING. Use semantic color tokens.

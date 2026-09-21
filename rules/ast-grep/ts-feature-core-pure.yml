@@ -1,7 +1,5 @@
 id: ts-feature-core-pure
-language: typescript
-# Twin of tsx-feature-core-pure — ast-grep rules are single-language, and
-# `tsx` only scans .tsx files.
+language: tsx
 severity: warning
 message: Feature core modules stay pure TypeScript — no Solid, urql, queries, generated GraphQL, app modules, or sibling layers.
 note: |-

@@ -1,4 +1,4 @@
-id: tsx-no-class-string-consts
+id: ts-no-class-string-consts
 language: tsx
 severity: warning
 message: Don't hoist Tailwind class strings into named constants — shared markup+styling is a component, not a string.

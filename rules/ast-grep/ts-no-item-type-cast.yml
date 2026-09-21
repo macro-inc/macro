@@ -1,7 +1,5 @@
 id: ts-no-item-type-cast
-language: typescript
-# Twin of tsx-no-item-type-cast — ast-grep rules are single-language, and
-# `tsx` only scans .tsx files.
+language: tsx
 severity: error
 message: Don't cast to ItemType — parse the string with stringToItemType from @service-storage/client.
 note: |-

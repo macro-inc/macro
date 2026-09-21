@@ -178,8 +178,8 @@ TypeScript · `[ui]` UI / UX conventions
 
 - **FE-01** `[data]` Never call a service client outside the `queries` package — UI code
   calling an endpoint directly is usually re-fetching data an existing query already
-  caches. (#3750, #3961 · enforced: ast-grep `ts-no-service-client-outside-queries` +
-  `tsx-no-service-client-outside-queries`, warning · also: AGENTS.md)
+  caches. (#3750, #3961 · enforced: ast-grep `ts-no-service-client-outside-queries`,
+  warning · also: AGENTS.md)
 - **FE-02** `[data]` Every query module has a `keys.ts` structured like the existing
   ones. (#3710)
 - **FE-03** `[data]` Conditional fetching uses a debounced signal passed to TanStack
@@ -240,11 +240,11 @@ TypeScript · `[ui]` UI / UX conventions
 - **FE-25** `[ui]` Semantic color tokens, not raw Tailwind palette classes — the default
   palette is disabled via `--color-*: initial` in `apps/web/src/index.css`, so
   classes like `text-red-500` silently render nothing. (enforced: ast-grep
-  `tsx-no-raw-tailwind-palette`, CI error · also: AGENTS.md)
+  `ts-no-raw-tailwind-palette`, CI error · also: AGENTS.md)
 - **FE-26** `[ui]` Prefer composition over configurability; keep reusable components
   small and free of queries/complex state. (also: AGENTS.md)
 - **FE-27** `[ui]` Don't add `cursor-pointer` to clickable elements. (enforced: ast-grep
-  `tsx-no-cursor-pointer`, warning · also: AGENTS.md)
+  `ts-no-cursor-pointer`, warning · also: AGENTS.md)
 - **FE-28** `[ui]` Dialogs rely on Kobalte's default autofocus: make the intended
   target the first tabbable element and preserve focus ownership for restoration.
   Override `onOpenAutoFocus` only for a proven lifecycle requirement, and verify
@@ -260,11 +260,11 @@ TypeScript · `[ui]` UI / UX conventions
   (`const DAY_CELL_CLASS = '...'`) — shared markup+styling is a component; a class
   string can't carry structure, props, or behavior. Extract a component, or inline the
   literal at its single use; styling variants are component props, not exported
-  strings. (enforced: ast-grep `tsx-no-class-string-consts`, warning)
+  strings. (enforced: ast-grep `ts-no-class-string-consts`, warning)
 - **FE-31** `[ts]` Never cast a string to `ItemType` — parse it with `stringToItemType`
   from `@service-storage/client`, the one owner of entity-type spellings (email
   threads alone are stored as `email`, `thread`, and `email_thread`). (#6043 ·
-  enforced: ast-grep `ts-no-item-type-cast` + `tsx-no-item-type-cast`, CI error)
+  enforced: ast-grep `ts-no-item-type-cast`, CI error)
 - **FE-32** `[ui]` Prefer styling in the component (Tailwind on the markup). Reserve
   `@utility` in `apps/web/src/index.css` for styles widely shared across many
   components — not one-off or two-callsite layouts. (#6038 · also: apps/web/AGENTS.md)
@@ -299,10 +299,10 @@ TypeScript · `[ui]` UI / UX conventions
   stubs; these are documented migration gaps.
   The detailed document covers layer responsibilities, narrow reference exceptions,
   adoption, and review.
-  Register adopting feature paths in both language variants of every feature
-  rule. (enforced: ast-grep `ts-/tsx-feature-core-pure`,
-  `ts-/tsx-feature-components-presentational`, `ts-/tsx-feature-data-no-ui`,
-  `ts-/tsx-feature-layers-use-context`, warning; currently scoped to activity.
+  Register adopting feature paths in every feature rule. (enforced: ast-grep
+  `ts-feature-core-pure`, `ts-feature-components-presentational`,
+  `ts-feature-data-no-ui`, `ts-feature-layers-use-context`, warning;
+  currently scoped to activity.
   Separate production composition and source-contract inversion still require
   explicit review; the existing rules do not enforce them.)
 - **FE-34** `[arch]` Treat the legacy block state system as adapter-boundary code,
@@ -319,4 +319,4 @@ TypeScript · `[ui]` UI / UX conventions
 - **FE-35** `[ui]` Don't import Phosphor's robot icon — agent and bot marks use
   the sparkle icon (`@phosphor/sparkle.svg` or the matching
   `@phosphor-icons/core` sparkle asset). (enforced: ast-grep
-  `ts-no-phosphor-robot-icon` + `tsx-no-phosphor-robot-icon`, CI error)
+  `ts-no-phosphor-robot-icon`, CI error)

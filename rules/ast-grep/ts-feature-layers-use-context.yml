@@ -1,7 +1,5 @@
 id: ts-feature-layers-use-context
-language: typescript
-# Twin of tsx-feature-layers-use-context — ast-grep rules are single-language,
-# and `tsx` only scans .tsx files.
+language: tsx
 severity: warning
 message: Supply app capabilities through feature-owned contracts; construct production adapters at the feature root.
 note: |-
@@ -12,7 +10,7 @@ note: |-
   feature's `Context` record so every layer runs against mocks in tests. Keep `context/` free of production imports. Only production entry points
   and adapters at the feature root construct app capabilities. The pure
   `@core/user/macroId` identity helpers are a documented exception. Adopting features add their layer paths to
-  `files` in each ts-/tsx-feature-* rule. Block-agent uses `ui/` for
+  `files` in each ts-feature-* rule. Block-agent uses `ui/` for
   presentation and `component/` for composition.
 files:
   - apps/web/src/features/block-agent/queries/**

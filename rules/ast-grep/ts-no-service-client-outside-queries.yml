@@ -1,7 +1,5 @@
 id: ts-no-service-client-outside-queries
-language: typescript
-# Twin of tsx-no-service-client-outside-queries — ast-grep rules are
-# single-language, and `tsx` only scans .tsx files.
+language: tsx
 severity: warning
 message: Don't import a service client outside the queries package — wrap the call in a query/mutation under queries/ and import that instead.
 note: |-
