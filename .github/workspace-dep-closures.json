@@ -1437,8 +1437,7 @@
     ],
     "bot_id": [
       "crates/bot_id",
-      "crates/cowlike",
-      "crates/workspace-hack"
+      "crates/cowlike"
     ],
     "bot_token": [
       "crates/bot_token",
@@ -5753,8 +5752,7 @@
       "crates/model_owner",
       "crates/non_empty",
       "crates/notification_state",
-      "crates/predicate_index",
-      "crates/workspace-hack"
+      "crates/predicate_index"
     ],
     "item_filters": [
       "crates/bot_id",
@@ -5766,8 +5764,7 @@
       "crates/model_file_type",
       "crates/model_owner",
       "crates/non_empty",
-      "crates/notification_state",
-      "crates/workspace-hack"
+      "crates/notification_state"
     ],
     "kafka_util": [
       "crates/kafka_util",
@@ -6687,8 +6684,7 @@
       "crates/bot_id",
       "crates/cowlike",
       "crates/macro_user_id",
-      "crates/model_owner",
-      "crates/workspace-hack"
+      "crates/model_owner"
     ],
     "model_user": [
       "crates/cowlike",

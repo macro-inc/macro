@@ -10872,9 +10872,7 @@ export const getItemsSoupResponse = zod
                       .describe('The time the project was deleted'),
                     id: zod.uuid().describe('The id of the project'),
                     name: zod.string().describe('The name of the project'),
-                    ownerId: zod
-                      .string()
-                      .describe('The user id of who created the project'),
+                    ownerId: zod.string().describe('The owner of the project'),
                     parentId: zod
                       .uuid()
                       .nullish()
@@ -13316,7 +13314,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "Filter by session owner. Examples: ['macro|user1@user.com']. Empty to\ninclude every owner."
+            "Filter by session owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
           ),
       })
       .optional()
@@ -13533,7 +13531,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "Filter by chat owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+            "Filter by chat owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
           ),
         project_ids: zod
           .array(zod.string())
@@ -13618,7 +13616,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "Filter by document owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+            "Filter by document owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
           ),
         project_ids: zod
           .array(zod.string())
@@ -13843,7 +13841,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "Filter by project owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+            "Filter by project owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
           ),
         project_ids: zod
           .array(zod.string())
@@ -14848,9 +14846,7 @@ export const postItemsSoupResponse = zod
                       .describe('The time the project was deleted'),
                     id: zod.uuid().describe('The id of the project'),
                     name: zod.string().describe('The name of the project'),
-                    ownerId: zod
-                      .string()
-                      .describe('The user id of who created the project'),
+                    ownerId: zod.string().describe('The owner of the project'),
                     parentId: zod
                       .uuid()
                       .nullish()
@@ -18265,9 +18261,7 @@ export const postItemsSoupAstResponse = zod
                       .describe('The time the project was deleted'),
                     id: zod.uuid().describe('The id of the project'),
                     name: zod.string().describe('The name of the project'),
-                    ownerId: zod
-                      .string()
-                      .describe('The user id of who created the project'),
+                    ownerId: zod.string().describe('The owner of the project'),
                     parentId: zod
                       .uuid()
                       .nullish()
@@ -21952,7 +21946,7 @@ export const postItemsSoupAstGroupedResponse = zod
                             .describe('The name of the project'),
                           ownerId: zod
                             .string()
-                            .describe('The user id of who created the project'),
+                            .describe('The owner of the project'),
                           parentId: zod
                             .uuid()
                             .nullish()
@@ -25369,7 +25363,7 @@ export const postItemsSoupAstGroupedResponse = zod
                             .describe('The name of the project'),
                           ownerId: zod
                             .string()
-                            .describe('The user id of who created the project'),
+                            .describe('The owner of the project'),
                           parentId: zod
                             .uuid()
                             .nullish()

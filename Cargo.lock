@@ -2906,7 +2906,6 @@ dependencies = [
  "thiserror 2.0.18",
  "utoipa",
  "uuid",
- "workspace-hack",
 ]
 
 [[package]]
@@ -11180,7 +11179,6 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.18",
  "uuid",
- "workspace-hack",
 ]
 
 [[package]]
