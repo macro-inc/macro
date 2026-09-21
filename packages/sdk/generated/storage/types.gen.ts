@@ -5720,8 +5720,8 @@ export type ExecOutcome = {
     /**
      * The version every user table in [`ExecOutcome::read_tables`] was at
      * when this statement materialized it. Send these back as
-     * [`ExecRequest::base_versions`] on the follow-up write to get a real
-     * compare-and-set over everything the statement read.
+     * [`ExecRequest::base_versions`] to guard tables the follow-up statement
+     * writes. Versions for tables it only reads are ignored.
      */
     read_versions: {
         [key: string]: TableVersion;
@@ -5742,8 +5742,9 @@ export type ExecOutcome = {
  */
 export type ExecRequestBody = {
     /**
-     * Optional compare-and-swap: reject writes if any listed table has moved
-     * past the given version. Omitted → cell-level last-write-wins.
+     * Optional compare-and-swap: reject writes if a listed table being written
+     * has moved past the given version. Read-only dependencies are not guarded.
+     * Omitted → cell-level last-write-wins.
      */
     baseVersions?: {
         [key: string]: number;

@@ -27,8 +27,8 @@ export interface ExecOutcome {
   read_tables: string[];
   /** The version every user table in [`ExecOutcome::read_tables`] was at
 when this statement materialized it. Send these back as
-[`ExecRequest::base_versions`] on the follow-up write to get a real
-compare-and-set over everything the statement read. */
+[`ExecRequest::base_versions`] to guard tables the follow-up statement
+writes. Versions for tables it only reads are ignored. */
   read_versions: ExecOutcomeReadVersions;
   /** Result sets of the SELECT statements, in order. */
   results: QueryResult[];

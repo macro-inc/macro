@@ -9,7 +9,7 @@ import type { TableVersion } from './tableVersion';
 /**
  * The version every user table in [`ExecOutcome::read_tables`] was at
 when this statement materialized it. Send these back as
-[`ExecRequest::base_versions`] on the follow-up write to get a real
-compare-and-set over everything the statement read.
+[`ExecRequest::base_versions`] to guard tables the follow-up statement
+writes. Versions for tables it only reads are ignored.
  */
 export type ExecOutcomeReadVersions = { [key: string]: TableVersion };

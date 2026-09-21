@@ -6,7 +6,8 @@
  */
 
 /**
- * Optional compare-and-swap: reject writes if any listed table has moved
-past the given version. Omitted → cell-level last-write-wins.
+ * Optional compare-and-swap: reject writes if a listed table being written
+has moved past the given version. Read-only dependencies are not guarded.
+Omitted → cell-level last-write-wins.
  */
 export type ExecRequestBodyBaseVersions = { [key: string]: number };

@@ -5020,7 +5020,7 @@ export interface NameSearch {
  * - **Schema uses tools, not SQL DDL.** CreateDatabase, CreateTable, AddColumn, AddColumnOptions, and SaveDatabaseView change structure/presentation. CREATE TABLE, ALTER TABLE, and CREATE VIEW are not supported in QueryDatabase.
  * - Tables you only hold view access on are read-only, and magic tables always are.
  *
- * For a request to change records, first read the relevant rows, then use their returned `readVersions` as `baseVersions` when the edit depends on that read. A conflict means re-read and reconsider the edit. After changing rows, SELECT the affected records to verify the actual result. On a connection failure, inspect before retrying an INSERT.
+ * For a request to change records, first read the relevant rows, then use their returned `readVersions` as `baseVersions` to guard the tables being written. Versions for tables the edit only reads are not checked. A conflict means re-read and reconsider the edit. After changing rows, SELECT the affected records to verify the actual result. On a connection failure, inspect before retrying an INSERT.
  *
  * Results come back as columns and rows. A column whose values are entity ids carries an `entityType`, which is how the app renders it as a clickable chip rather than as raw text — prefer selecting an entity column over stringifying it. Writes report `changesApplied` and, for inserts, the `insertedRowIds` the server minted.
  */
@@ -5031,7 +5031,8 @@ export interface QueryDatabase {
   sql: string;
   /**
    * Optional versions from a previous QueryDatabase read. Reject the write
-   * if a referenced table changed; omit for a read or intentional blind edit.
+   * if a listed table being written changed. Read-only dependencies are not
+   * guarded; omit for a read or intentional blind edit.
    */
   baseVersions?: ToolTableVersion[] | null;
 }
@@ -5071,8 +5072,9 @@ export interface QueryDatabaseResponse {
     [k: string]: number;
   };
   /**
-   * Versions of the rows this query actually read. Supply these as
-   * baseVersions for a later edit that depends on those values.
+   * Versions of the tables this query actually read. Supply these as
+   * baseVersions to guard tables a later edit writes. Tables it only reads
+   * are not guarded.
    */
   readVersions: ToolTableVersion[];
   /**

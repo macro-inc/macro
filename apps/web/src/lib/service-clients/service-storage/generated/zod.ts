@@ -5547,7 +5547,7 @@ export const execDatabaseSqlBody = zod
       .record(zod.string(), zod.number())
       .optional()
       .describe(
-        'Optional compare-and-swap: reject writes if any listed table has moved\npast the given version. Omitted → cell-level last-write-wins.'
+        'Optional compare-and-swap: reject writes if a listed table being written\nhas moved past the given version. Read-only dependencies are not guarded.\nOmitted → cell-level last-write-wins.'
       ),
     sql: zod
       .string()
@@ -5598,7 +5598,7 @@ export const execDatabaseSqlResponse = zod
           )
       )
       .describe(
-        'The version every user table in [`ExecOutcome::read_tables`] was at\nwhen this statement materialized it. Send these back as\n[`ExecRequest::base_versions`] on the follow-up write to get a real\ncompare-and-set over everything the statement read.'
+        'The version every user table in [`ExecOutcome::read_tables`] was at\nwhen this statement materialized it. Send these back as\n[`ExecRequest::base_versions`] to guard tables the follow-up statement\nwrites. Versions for tables it only reads are ignored.'
       ),
     results: zod
       .array(
@@ -5739,7 +5739,7 @@ export const queryDatabaseSqlResponse = zod
           )
       )
       .describe(
-        'The version every user table in [`ExecOutcome::read_tables`] was at\nwhen this statement materialized it. Send these back as\n[`ExecRequest::base_versions`] on the follow-up write to get a real\ncompare-and-set over everything the statement read.'
+        'The version every user table in [`ExecOutcome::read_tables`] was at\nwhen this statement materialized it. Send these back as\n[`ExecRequest::base_versions`] to guard tables the follow-up statement\nwrites. Versions for tables it only reads are ignored.'
       ),
     results: zod
       .array(
