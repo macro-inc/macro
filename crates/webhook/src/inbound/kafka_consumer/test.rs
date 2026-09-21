@@ -178,6 +178,13 @@ impl WebhookEventIngestionService for FlakyIngestionService {
         Ok(())
     }
 
+    async fn ingest_message_event(
+        &self,
+        _event: Event<messages::outbound::broker::MessageTopicEvent>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        Ok(())
+    }
+
     async fn ingest_webhook_event(
         &self,
         _event: Event<WebhookTopicEvent>,

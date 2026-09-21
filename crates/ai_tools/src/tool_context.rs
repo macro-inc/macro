@@ -189,12 +189,8 @@ pub type ToolCommsService = ChannelListServiceImpl<
 pub type ToolChannelEventDispatcher = std::sync::Arc<dyn ChannelEventDispatcher>;
 
 /// Type alias for the channel messages service implementation used by AI tools.
-pub type ToolChannelMessagesService = ChannelServiceImpl<
-    PgChannelsRepo,
-    ToolChannelEventDispatcher,
-    NoopChannelReferenceSharePermissions,
-    LexicalMentionExtractor,
->;
+pub type ToolChannelMessagesService =
+    ChannelServiceImpl<PgChannelsRepo, ToolChannelEventDispatcher, NoopChannelReferenceSharePermissions>;
 
 /// Type alias for the channel AI tool context.
 pub type ToolChannelToolContext =
@@ -219,7 +215,6 @@ pub fn build_channel_tool_context_without_side_effects(
     build_channel_tool_context_with_dispatcher(
         pool,
         std::sync::Arc::new(NoopChannelEventDispatcher),
-        lexical_client,
         messages,
     )
 }
@@ -402,8 +397,7 @@ fn message_service_with_side_effects(
 pub fn build_channel_tool_context_with_dispatcher(
     pool: sqlx::PgPool,
     dispatcher: ToolChannelEventDispatcher,
-    lexical_client: Arc<lexical_client::LexicalClient>,
-    messages: Arc<dyn messages::domain::api::MessageCommands>,
+    messages: Arc<dyn messages::domain::api::MessageServiceApi>,
 ) -> ToolChannelToolContext {
     ChannelToolContext::new(
         messages,
@@ -411,8 +405,7 @@ pub fn build_channel_tool_context_with_dispatcher(
             PgChannelsRepo::new(pool.clone()),
             dispatcher,
             NoopChannelReferenceSharePermissions,
-        )
-        .with_mention_extractor(LexicalMentionExtractor::new(lexical_client)),
+        ),
         entity_access::domain::service::EntityAccessServiceImpl::new(
             entity_access::outbound::PgAccessRepository::new(pool),
         ),
