@@ -11,6 +11,7 @@
 
 import type { Sdk as AgentHarnessSdk } from '../../generated/agent-harness/sdk.gen';
 import type { Sdk as AuthSdk } from '../../generated/auth/sdk.gen';
+import type { Sdk as CalendarSdk } from '../../generated/calendar/sdk.gen';
 import type { Sdk as CognitionSdk } from '../../generated/cognition/sdk.gen';
 import type { Sdk as ConnectionSdk } from '../../generated/connection/sdk.gen';
 import type { Sdk as ContactsSdk } from '../../generated/contacts/sdk.gen';
@@ -120,6 +121,14 @@ export const authExcluded = [
 export const authBacklog = [
   'macroApiToken',
 ] as const satisfies readonly (keyof AuthSdk)[];
+
+export const calendarExcluded = [
+  // Health probe is infra, not SDK surface.
+  'healthHandler',
+] as const satisfies readonly (keyof CalendarSdk)[];
+
+export const calendarBacklog =
+  [] as const satisfies readonly (keyof CalendarSdk)[];
 
 export const cognitionExcluded = [
   'addMcpServer',
