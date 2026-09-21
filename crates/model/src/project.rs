@@ -16,7 +16,6 @@ pub struct Project {
     pub id: String,
     /// The name of the project
     pub name: String,
-    /// Who owns the project
     #[schema(value_type = String)]
     #[sqlx(try_from = "String")]
     pub user_id: Owner,
