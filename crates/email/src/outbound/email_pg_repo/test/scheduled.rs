@@ -109,10 +109,11 @@ async fn sent_or_claimed_delivery_rejects_update_cancel_and_migration(
     assert!(
         repo.delete_draft_message(
             message,
-            Uuid::parse_str("11111111-1111-1111-1111-111111111111")?
+            Uuid::parse_str("11111111-1111-1111-1111-111111111111")?,
+            &[link],
         )
-        .await
-        .is_err()
+        .await?
+        .is_none()
     );
     sqlx::query!(
         "UPDATE email_scheduled_messages SET processing = false, sent = true WHERE message_id = $1",
@@ -183,6 +184,80 @@ async fn service_authorizes_actor_and_validates_future_time(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
+async fn scheduled_source_rejects_delete_and_migration_into_existing_reply(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use crate::domain::models::CreateDraftInput;
+    use crate::domain::ports::NoOpEnqueuer;
+    use crm::domain::service::NoOpCrmService;
+    use frecency::{
+        domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage,
+    };
+
+    let service = EmailServiceImpl {
+        email_repo: EmailPgRepo::new(pool.clone()),
+        frecency_service: FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(pool.clone())),
+        enqueuer: NoOpEnqueuer,
+        crm_service: NoOpCrmService,
+        entity_access_management_service: (),
+        macro_event_broker: NoopMacroEventBroker,
+        sent_undo_delay_secs: 5,
+    };
+    let (link, message) = identity();
+    service
+        .change_schedule(actor(), link, message, future(), None)
+        .await?;
+    assert!(matches!(
+        service.delete_draft_for_user_impl(actor(), message).await,
+        Err(EmailErr::MessageDeliveryConflict(id)) if id == message
+    ));
+    let target_link = Uuid::parse_str("cccccccc-cccc-cccc-cccc-cccccccccccc")?;
+    let target_draft = Uuid::parse_str("ee000005-0000-0000-0000-000000000005")?;
+    let input = CreateDraftInput {
+        db_id: Some(message),
+        provider_id: None,
+        replying_to_id: Some(Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?),
+        provider_thread_id: None,
+        thread_db_id: None,
+        subject: "must not overwrite the target reply".to_string(),
+        to: vec![],
+        cc: vec![],
+        bcc: vec![],
+        body_text: Some("stale autosave".to_string()),
+        body_html: None,
+        body_macro: None,
+        headers_json: None,
+        send_time: None,
+        include_signature: None,
+        actor: None,
+        draft_client_binding: None,
+        thread_client_binding: None,
+    };
+    assert!(matches!(
+        service.save_draft_for_user_impl(actor(), Some(target_link), input).await,
+        Err(EmailErr::MessageDeliveryConflict(id)) if id == message
+    ));
+    let subject = sqlx::query_scalar!(
+        "SELECT subject FROM email_messages WHERE id = $1",
+        target_draft
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(subject.as_deref(), Some("Re: Hello World"));
+    assert!(
+        service
+            .email_repo
+            .get_simple_message(message, &[link])
+            .await?
+            .is_some()
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
 async fn waiting_transition_observes_committed_claim(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = EmailPgRepo::new(pool.clone());
     let (link, message) = identity();
@@ -234,6 +309,8 @@ fn stale_input(message: Uuid) -> ResolvedDraftInput {
         headers_json: None,
         send_time: None,
         actor_id: None,
+        draft_client_id: None,
+        thread_client_id: None,
     }
 }
 
@@ -292,10 +369,7 @@ async fn stale_autosave_cannot_mutate_confirmed_claimed_or_sent_message(
     });
     wait_for_transaction_waiter(&pool, blocker).await?;
     tx.commit().await?;
-    assert!(matches!(
-        save.await?,
-        Err(EmailErr::MessageDeliveryConflict(_))
-    ));
+    assert!(save.await??.is_none());
     let row = sqlx::query!(
         "SELECT is_sent, is_draft, subject FROM email_messages WHERE id = $1",
         message

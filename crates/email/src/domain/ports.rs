@@ -292,7 +292,9 @@ pub trait EmailRepo: Send + Sync + 'static {
     /// Insert a message within a transaction, including thread insert (if new),
     /// recipients, thread metadata update, and user history. Ordinary drafts never
     /// schedule delivery; non-drafts may create an immediate-send undo window.
-    /// Reject existing sent, scheduled, or processing identities transactionally.
+    /// Lock and re-read client-handle bindings, bind handles to the final rows,
+    /// and return their authoritative IDs. Return None when an owner/sent guard
+    /// rejects the write; reject scheduled/processing identities transactionally.
     /// If `new_thread` is Some, the thread is created inside the same transaction.
     fn insert_message(
         &self,
@@ -301,7 +303,7 @@ pub trait EmailRepo: Send + Sync + 'static {
         link_id: Uuid,
         new_thread: Option<ThreadRow>,
         is_draft: bool,
-    ) -> impl Future<Output = Result<(), EmailErr>> + Send;
+    ) -> impl Future<Output = Result<Option<SettledDraftIds>, EmailErr>> + Send;
 
     /// Fetch a label by its database ID and link ID.
     fn get_label_by_id(

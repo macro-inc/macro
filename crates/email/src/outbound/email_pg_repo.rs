@@ -308,7 +308,7 @@ impl EmailRepo for EmailPgRepo {
         link_id: Uuid,
         new_thread: Option<ThreadRow>,
         is_draft: bool,
-    ) -> Result<(), EmailErr> {
+    ) -> Result<Option<SettledDraftIds>, EmailErr> {
         draft::insert_message(&self.pool, input, contacts, link_id, new_thread, is_draft).await
     }
 

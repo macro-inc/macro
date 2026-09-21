@@ -246,6 +246,15 @@ where
             if raced.is_some_and(|m| m.is_sent || !m.is_draft) {
                 return Err(EmailErr::MessageAlreadySent(draft_id));
             }
+            if self
+                .email_repo
+                .scheduled_send_times_by_message_ids(&[msg.db_id])
+                .await
+                .map_err(anyhow::Error::from)?
+                .contains_key(&msg.db_id)
+            {
+                return Err(EmailErr::MessageDeliveryConflict(draft_id));
+            }
             return Ok(DeletedUserDraft {
                 deleted: false,
                 thread_deleted: false,
@@ -342,7 +351,39 @@ where
         let Some(settled) = self
             .email_repo
             .insert_message(&resolved, &contacts, link_id, new_thread, is_draft)
-            .await?;
+            .await?
+        else {
+            // A concurrent first save can settle a client handle on a different
+            // row. Classify the authoritative row, not our discarded candidate.
+            let rejected_id = match resolved.draft_client_id {
+                Some(handle) => self
+                    .email_repo
+                    .message_id_for_client_draft_id(handle, &accessible_link_ids)
+                    .await
+                    .map_err(anyhow::Error::from)?
+                    .unwrap_or(resolved.db_id),
+                None => resolved.db_id,
+            };
+            let rejected = self
+                .email_repo
+                .get_simple_message(rejected_id, &accessible_link_ids)
+                .await
+                .map_err(anyhow::Error::from)?;
+            if rejected.as_ref().is_some_and(|m| m.is_sent || !m.is_draft) {
+                return Err(EmailErr::MessageAlreadySent(rejected_id));
+            }
+            if rejected.is_some()
+                && self
+                    .email_repo
+                    .scheduled_send_times_by_message_ids(&[rejected_id])
+                    .await
+                    .map_err(anyhow::Error::from)?
+                    .contains_key(&rejected_id)
+            {
+                return Err(EmailErr::MessageDeliveryConflict(rejected_id));
+            }
+            return Err(EmailErr::MessageNotFound(rejected_id));
+        };
 
         Ok(CreatedDraft {
             db_id: settled.message_db_id,
@@ -427,13 +468,26 @@ where
             // across the move, and the delete's cascade drops any client-handle
             // binding — the save's binding upsert re-points the handle at the
             // recreated row in the same transaction, so queued offline saves
-            // keep converging. A raced delete (`None`) is fine — the row is
-            // gone either way, and a raced send is caught by the insert's
-            // owner guard.
-            self.email_repo
+            // keep converging. A guarded miss may instead mean the source is
+            // now scheduled: do not continue and adopt another reply draft in
+            // the target inbox while that committed source is still present.
+            let deleted = self
+                .email_repo
                 .delete_draft_message(msg.db_id, msg.thread_db_id, accessible_link_ids)
                 .await
                 .map_err(anyhow::Error::from)?;
+            if deleted.is_none()
+                && let Some(retained) = self
+                    .email_repo
+                    .get_simple_message(msg.db_id, accessible_link_ids)
+                    .await
+                    .map_err(anyhow::Error::from)?
+            {
+                if retained.is_sent || !retained.is_draft {
+                    return Err(EmailErr::MessageAlreadySent(msg.db_id));
+                }
+                return Err(EmailErr::MessageDeliveryConflict(msg.db_id));
+            }
             input.provider_id = None;
             input.thread_db_id = None;
             input.provider_thread_id = None;

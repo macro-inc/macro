@@ -1201,6 +1201,73 @@ async fn test_save_racing_a_committed_binding_adopts_it(
     Ok(())
 }
 
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_client_handle_replay_cannot_replace_a_scheduled_or_sent_winner(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use crate::domain::scheduled::{EmailSchedulingRepo, ScheduleChange};
+
+    let repo = EmailPgRepo::new(pool.clone());
+    let link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let handle = macro_uuid::generate_uuid_v7();
+    let actor = MacroUserIdStr::parse_from_str("macro|user1@test.com")?;
+    let contacts = UpsertedContacts {
+        from_contact_id: None,
+        recipients: vec![],
+    };
+    let (winner, winner_thread, winner_id) = first_save_of(handle, link, "confirmed content");
+    repo.insert_message(&winner, &contacts, link, Some(winner_thread), true)
+        .await?
+        .expect("the first save applies");
+    repo.change_schedule(
+        link,
+        winner_id,
+        &actor,
+        ScheduleChange::Set(Utc::now() + chrono::Duration::hours(1)),
+        None,
+    )
+    .await?;
+
+    // This queued save was captured before the first save confirmed its IDs.
+    let (replay, replay_thread, replay_id) = first_save_of(handle, link, "stale queued content");
+    assert!(matches!(
+        repo.insert_message(&replay, &contacts, link, Some(replay_thread.clone()), true)
+            .await,
+        Err(EmailErr::MessageDeliveryConflict(id)) if id == winner_id
+    ));
+    assert!(!message_exists(&pool, replay_id).await?);
+    assert!(!thread_exists(&pool, replay_thread.db_id).await?);
+    assert_eq!(
+        repo.message_id_for_client_draft_id(handle, &[link]).await?,
+        Some(winner_id)
+    );
+    let subject = sqlx::query_scalar!(
+        "SELECT subject FROM email_messages WHERE id = $1",
+        winner_id
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(subject.as_deref(), Some("confirmed content"));
+
+    sqlx::query!(
+        "UPDATE email_messages SET is_sent = true, is_draft = false WHERE id = $1",
+        winner_id
+    )
+    .execute(&pool)
+    .await?;
+    assert!(
+        repo.insert_message(&replay, &contacts, link, Some(replay_thread.clone()), true)
+            .await?
+            .is_none()
+    );
+    assert!(!message_exists(&pool, replay_id).await?);
+    assert!(!thread_exists(&pool, replay_thread.db_id).await?);
+    Ok(())
+}
+
 // A handle can name a binding under more than one accessible inbox when a
 // move's cascade did not land, and the lookup breaks that tie by recency. A
 // rebind has to count as the newest binding, or the handle keeps resolving to

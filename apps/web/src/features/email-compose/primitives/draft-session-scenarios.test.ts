@@ -344,6 +344,8 @@ describe.each(['reply', 'compose'] as const)(
           ...root,
           send: root.sendEmail,
           schedule: root.handleSendTimeChange,
+          cancelSchedule: root.cancelSchedule,
+          addAttachment: (file: File) => root.handleAddAttachments([file]),
         };
       }
       const root = mountEmailComposer(context);
@@ -353,9 +355,72 @@ describe.each(['reply', 'compose'] as const)(
           root.state.context.onSend();
           await vi.advanceTimersByTimeAsync(0);
         },
-        schedule: root.state.context.onSendTimeChange,
+        schedule: root.state.context.schedule.onSelect,
+        cancelSchedule: root.state.context.schedule.onCancel,
+        addAttachment: (file: File) =>
+          root.state.context.onAddAttachments([{ type: 'local', file }]),
       };
     };
+
+    it('commits local schedule intent only after queued handles become server-confirmed', async () => {
+      const context = createComposeContext();
+      vi.mocked(context.drafts.saveDraft).mockImplementation(async (input) =>
+        queued(input)
+      );
+      vi.mocked(context.attachmentStorage.uploadAttachments).mockImplementation(
+        async ({ attachments, onAttachmentAdded }) => {
+          for (const file of attachments) onAttachmentAdded?.(file, 'uploaded');
+        }
+      );
+      const root = mount(context);
+      try {
+        root.edit('Schedule once synced');
+        await root.addAttachment(new File(['bytes'], 'notes.txt'));
+        root.schedule(new Date('2027-01-01T12:00:00Z'));
+        await vi.advanceTimersByTimeAsync(600);
+        await root.send();
+        expect(context.delivery.schedule).not.toHaveBeenCalled();
+        expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+        expect(
+          context.attachmentStorage.uploadAttachments
+        ).not.toHaveBeenCalled();
+        const observer = vi.mocked(context.draftLifecycle.observe).mock
+          .calls[0][0];
+        expect(observer.draftId()).toBeUndefined();
+        const [first, second] = savedInputs(context);
+        expect(first.clientHandles?.draftId).toBeTruthy();
+        expect(second.clientHandles).toEqual(first.clientHandles);
+        expect(first.draft).not.toHaveProperty('send_time');
+        expect(second.draft).not.toHaveProperty('send_time');
+
+        vi.mocked(context.drafts.saveDraft).mockResolvedValue(
+          committed('scheduled-server')
+        );
+        await root.send();
+        expect(savedInputs(context)[2].clientHandles).toEqual(
+          first.clientHandles
+        );
+        expect(
+          context.attachmentStorage.uploadAttachments
+        ).toHaveBeenCalledExactlyOnceWith(
+          expect.objectContaining({
+            draftId: 'scheduled-server',
+            inboxId: 'inbox',
+          })
+        );
+        expect(context.delivery.schedule).toHaveBeenCalledExactlyOnceWith(
+          {
+            draftId: 'scheduled-server',
+            sendTime: '2027-01-01T12:00:00.000Z',
+            includeSignature: undefined,
+          },
+          'inbox'
+        );
+        expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+      } finally {
+        root.dispose();
+      }
+    });
 
     it('does not send or schedule over a queued update to an existing server draft', async () => {
       const context = createComposeContext();
@@ -374,12 +439,48 @@ describe.each(['reply', 'compose'] as const)(
           { subtext: 'Draft still syncing, try again' }
         );
         await root.schedule?.(new Date('2027-01-01T12:00:00Z'));
+        await root.send();
         expect(context.delivery.schedule).not.toHaveBeenCalled();
         vi.mocked(context.drafts.saveDraft).mockResolvedValue(
           committed('existing')
         );
+        await root.schedule?.(null);
         await root.send();
         expect(context.delivery.sendMessage).toHaveBeenCalledOnce();
+      } finally {
+        root.dispose();
+      }
+    });
+
+    it('resumes saving after a schedule-locked rejection is explicitly cancelled', async () => {
+      const context = createComposeContext();
+      vi.mocked(context.drafts.saveDraft).mockResolvedValue(
+        committed('existing')
+      );
+      const root = mount(context);
+      try {
+        root.edit('Saved content');
+        await vi.advanceTimersByTimeAsync(600);
+        root.schedule(new Date('2027-01-01T12:00:00Z'));
+        vi.mocked(context.drafts.saveDraft).mockImplementationOnce(async () => {
+          context.setDraftLifecycle({
+            type: 'scheduled',
+            draftId: 'existing',
+            threadId: 'thread',
+            inboxId: 'inbox',
+            sendTime: '2027-01-01T12:00:00Z',
+            observedAt: Date.now(),
+          });
+          throw new DraftPersistRejected('INVALID');
+        });
+        await root.send();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(context.delivery.schedule).not.toHaveBeenCalled();
+        expect(await root.cancelSchedule()).toBe(true);
+        root.edit('Editable after cancellation');
+        await vi.advanceTimersByTimeAsync(600);
+        expect(context.drafts.saveDraft).toHaveBeenCalledTimes(3);
+        expect(savedInputs(context)[2].draft.db_id).toBe('existing');
       } finally {
         root.dispose();
       }

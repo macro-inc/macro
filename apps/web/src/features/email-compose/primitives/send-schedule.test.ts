@@ -1,11 +1,6 @@
 import { emailKeys } from '@queries/email/keys';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
-import {
-  createComponent,
-  createMemo,
-  createRoot,
-  createSignal,
-} from 'solid-js';
+import { createComponent, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { message } from '../../email-message/tests/messages';
 import type {
@@ -16,12 +11,7 @@ import { decodeBase64Utf8 } from '../core/decode-base64';
 import { emailDraftLifecycleSource } from '../queries/draft-lifecycle';
 import { createComposeContext } from '../tests/capabilities';
 import { mountEmailComposer } from '../tests/composer';
-import { createEmailEditor, setEmailEditorText } from '../tests/editor';
-import { createEmailFormState } from './email-form-state';
-import {
-  createReplyComposer,
-  type ReplyComposerOptions,
-} from './reply-composer';
+import { mountReplyComposer } from '../tests/reply';
 
 const fetchLifecycleThread = vi.hoisted(() => vi.fn());
 vi.mock('@queries/email/thread', () => ({
@@ -30,59 +20,6 @@ vi.mock('@queries/email/thread', () => ({
 vi.mock('@core/cross-tab/cross-tab-bus', () => ({
   createCrossTabBus: () => ({ publish() {}, subscribe: () => () => {} }),
 }));
-
-function replyComposer(
-  composeContext: EmailComposeContext,
-  replyingTo = () => message('parent'),
-  callbacks: Pick<ReplyComposerOptions, 'sideEffectOnSend' | 'onMarkDone'> = {}
-) {
-  return createRoot((dispose) => {
-    const editor = createEmailEditor('Ready to send');
-    const parent = replyingTo();
-    const form = createEmailFormState(
-      {
-        viewerEmail: composeContext.viewerEmail,
-        inboxes: composeContext.accounts.inboxes,
-      },
-      { type: 'replying_to', messageId: parent.db_id },
-      { getMessageById: () => parent, getDraftForMessageReply: () => undefined }
-    );
-    const state = createReplyComposer(
-      {
-        ...callbacks,
-        ...composeContext,
-        focusAfterReplyRequest: () => true,
-        sourceEntityId: 'thread',
-        replyingTo,
-        session: {
-          thread: () => ({
-            db_id: 'thread',
-            link_id: 'inbox',
-            inbox_visible: false,
-          }),
-          recipientOptions: () => [],
-          isPersonalReply: () => false,
-          onDraftRemoved() {},
-          exitToThread: () => false,
-          replyRequest: { replyType: () => undefined, clear() {} },
-        },
-      },
-      () => editor,
-      { container: () => undefined, footer: () => undefined },
-      () => form
-    );
-    state.onContentChange('Ready to send');
-    return {
-      ...state,
-      sendActionDisabled: createMemo(state.sendActionDisabled),
-      dispose,
-      edit(text: string) {
-        setEmailEditorText(editor, text);
-        state.onContentChange(text);
-      },
-    };
-  });
-}
 
 function composer(
   kind: 'standalone' | 'reply',
@@ -246,7 +183,7 @@ describe('send and schedule ordering', () => {
 
   it('does not send a reply when delivery overtakes its pre-send save', async () => {
     const context = createComposeContext();
-    const state = replyComposer(context);
+    const state = mountReplyComposer(context);
     state.edit('Previously saved');
     await vi.advanceTimersByTimeAsync(600);
     const pending = Promise.withResolvers<PersistedEmailIdentity>();
@@ -423,7 +360,7 @@ describe('send and schedule ordering', () => {
 
   it('ignores confirmed-schedule edits and quoted-text toggles', async () => {
     const context = createComposeContext();
-    const state = replyComposer(context);
+    const state = mountReplyComposer(context);
     try {
       state.edit('Persist before scheduling elsewhere');
       await vi.advanceTimersByTimeAsync(600);
@@ -562,7 +499,7 @@ describe('send and schedule ordering', () => {
     const composeContext = createComposeContext();
     const failure = new Error('Draft save failed');
     vi.mocked(composeContext.drafts.saveDraft).mockRejectedValueOnce(failure);
-    const state = replyComposer(composeContext);
+    const state = mountReplyComposer(composeContext);
     try {
       expect(state.handleSendTimeChange(new Date('2026-12-01T12:00:00Z'))).toBe(
         true
@@ -810,11 +747,39 @@ describe('send and schedule ordering', () => {
       state.edit('Forwarding');
       await vi.advanceTimersByTimeAsync(500);
       state.handleRemoveAttachment(attachment);
+      expect(
+        composeContext.attachmentStorage.removeForwardedAttachment
+      ).not.toHaveBeenCalled();
       finish({ draftId: 'draft', threadId: 'thread', inboxId: 'inbox' });
       await vi.advanceTimersByTimeAsync(0);
       expect(
         composeContext.attachmentStorage.addForwardedAttachments
       ).not.toHaveBeenCalled();
+    } finally {
+      state.dispose();
+    }
+  });
+
+  it('persists forwarded references once per committed reply save', async () => {
+    const context = createComposeContext();
+    const state = mountReplyComposer(context);
+    try {
+      state.form.attachments.add({
+        type: 'forwarded',
+        attachmentId: 'source-file',
+        fileName: 'review.txt',
+        mimeType: 'text/plain',
+        fileSize: 10,
+      });
+      state.edit('Forwarded content');
+      await vi.advanceTimersByTimeAsync(600);
+      expect(
+        context.attachmentStorage.addForwardedAttachments
+      ).toHaveBeenCalledExactlyOnceWith({
+        draftId: 'draft',
+        inboxId: 'inbox',
+        attachments: [{ attachmentId: 'source-file' }],
+      });
     } finally {
       state.dispose();
     }

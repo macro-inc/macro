@@ -65,6 +65,7 @@ export interface DraftClientHandles {
 
 export interface SaveEmailDraft {
   draft: EmailDraft;
+  clientHandles?: DraftClientHandles;
   previousThreadId?: string;
   inboxId?: string;
   completingThread?: boolean;
