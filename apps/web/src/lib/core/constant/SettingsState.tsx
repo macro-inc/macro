@@ -41,8 +41,7 @@ export type SettingsTab =
 
 // Where "Back to app" (and move-to-split) should return to: the layout the user
 // was on when they opened settings. A full base-relative URL — path plus query
-// and hash — so layout state carried outside the path (notably the `preview`
-// param encoding Controller/Viewer Preview Pairs) survives the round trip.
+// and hash — so content locations survive the round trip.
 // Undefined when settings was deep-linked, in which case we fall back to
 // DEFAULT_ROUTE.
 const [settingsReturnTo, setSettingsReturnTo] = createSignal<string>();
@@ -131,9 +130,8 @@ export const useSettingsState = () => {
   // Capture the current layout (minus any settings split) as where "Back to
   // app"/"Move to split" should return to, then clobber every other split so
   // settings becomes the sole one. Shared by opening settings fresh and by
-  // collapsing a docked-alongside layout back down to solo. The query and hash
-  // are captured too: the `preview` param is what links Controller/Viewer
-  // Preview Pairs, so returning to the path alone would sever them.
+  // collapsing a docked-alongside layout back down to solo. Capture query and
+  // hash too so content locations are restored.
   const collapseToSoloSettings = (tab: SettingsTab) => {
     setSettingsReturnTo(
       stripSettingsSplitFromUrl(
@@ -222,9 +220,7 @@ export const useSettingsState = () => {
     // Strip any settings split already in the target layout before re-adding
     // one, so repeatedly toggling fullscreen ⇄ split reuses a single settings
     // split (on the current tab) instead of stacking a new one each cycle.
-    // The return layout's query/hash ride along — appending settings at the
-    // end keeps `preview` indices valid — so its Preview Pairs re-link when
-    // the URL sync rebuilds the layout.
+    // Preserve the return layout's query and hash when appending settings.
     const returnTo = stripSettingsSplitFromUrl(
       settingsReturnTo() ?? DEFAULT_ROUTE
     );

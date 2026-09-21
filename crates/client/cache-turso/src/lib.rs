@@ -12,6 +12,7 @@
 mod driver;
 mod error;
 mod key;
+pub mod query_telemetry;
 mod storage;
 
 pub use error::{PhysicalResetReason, TursoStorageError};

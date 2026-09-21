@@ -51,10 +51,6 @@ vi.mock('@app/features/inbox-view/inbox-view', () => ({}));
 vi.mock('@app/features/next-soup/filters/filter-store', () => ({}));
 vi.mock('@app/features/next-soup/filters/filter-store/query-store', () => ({}));
 vi.mock('@app/features/next-soup/sidebar/soup-filter-presets', () => ({}));
-vi.mock(
-  '@app/features/next-soup/soup-view/non-member-channel-preview',
-  () => ({})
-);
 vi.mock('@app/features/next-soup/soup-view/soup-view', () => ({}));
 vi.mock('@app/features/next-soup/use-recent-view-flag', () => ({}));
 vi.mock('@app/features/reminders/ReminderEditorSplit', () => ({}));
@@ -70,7 +66,6 @@ vi.mock('@core/context/user', () => ({}));
 vi.mock('@core/mobile/isTouchDevice', () => ({}));
 vi.mock('@queries/agent-schedule/entities', () => ({}));
 vi.mock('@ui', () => ({}));
-vi.mock('../previewController', () => ({}));
 
 beforeEach(() => {
   vi.clearAllMocks();
