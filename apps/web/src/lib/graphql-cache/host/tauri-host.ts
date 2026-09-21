@@ -156,14 +156,25 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       return undefined;
     });
 
-  const unlistenHydration: Promise<UnlistenFn | undefined> =
-    listen<CacheChangedPayload>(CACHE_HYDRATED_EVENT, (event) => {
-      const revision = parseCacheRevision(event.payload.revision);
-      for (const cb of hydrationSubscribers) cb(revision);
-    }).catch((error) => {
+  async function listenForHydration(): Promise<UnlistenFn | undefined> {
+    try {
+      return await listen<CacheChangedPayload>(
+        CACHE_HYDRATED_EVENT,
+        (event) => {
+          const revision = parseCacheRevision(event.payload.revision);
+          for (const cb of hydrationSubscribers) cb(revision);
+        }
+      );
+    } catch (error) {
       console.warn('graphql cache hydration listener failed', error);
       return undefined;
-    });
+    }
+  }
+  const unlistenHydration = listenForHydration();
+  async function removeHydrationListener(): Promise<void> {
+    const unlisten = await unlistenHydration;
+    unlisten?.();
+  }
 
   const ready = request<void>('graphql_cache_init', {
     scope: options.scope,
@@ -476,7 +487,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       settlementSubscribers.clear();
       void unlistenOps.then((fn) => fn?.());
       void unlistenCacheChanges.then((fn) => fn?.());
-      void unlistenHydration.then((fn) => fn?.());
+      void removeHydrationListener();
       void unlistenSettlements.then((fn) => fn?.());
     },
   };

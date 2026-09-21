@@ -104,12 +104,18 @@ export function useHistoryQuery() {
   createEffect(() => {
     const host = graphqlCacheHost();
     if (!host) return;
-    const refresh = leadingAndTrailing(throttle, () => {
-      void activeQueryClient.invalidateQueries({
-        queryKey: historyKeys.graphqlList.queryKey,
-      });
-    }, HISTORY_CACHE_REFRESH_INTERVAL_MS);
-    const unsubscribe = host.onCacheChanged(refresh, { includeHydration: true });
+    const refresh = leadingAndTrailing(
+      throttle,
+      () => {
+        void activeQueryClient.invalidateQueries({
+          queryKey: historyKeys.graphqlList.queryKey,
+        });
+      },
+      HISTORY_CACHE_REFRESH_INTERVAL_MS
+    );
+    const unsubscribe = host.onCacheChanged(refresh, {
+      includeHydration: true,
+    });
     onCleanup(() => {
       unsubscribe();
       refresh.clear();

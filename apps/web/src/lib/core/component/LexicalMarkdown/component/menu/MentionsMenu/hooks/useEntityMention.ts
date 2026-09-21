@@ -48,8 +48,7 @@ export function useEntityMention(
     hasMore: () => usesRankedList() && entityList.hasMore(),
     isLoading: () =>
       usesRankedList() ? entityList.isLoading() : quickAccess.isLoading(),
-    isLoadingMore: () =>
-      usesRankedList() && entityList.isLoadingMore(),
+    isLoadingMore: () => usesRankedList() && entityList.isLoadingMore(),
     loadMore: async () => {
       if (usesRankedList()) await entityList.loadMore();
     },

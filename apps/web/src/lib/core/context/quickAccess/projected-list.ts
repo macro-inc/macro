@@ -3,13 +3,27 @@ import type {
   SearchCursor,
   SearchDocumentWire,
 } from '@graphql-cache/index';
-import { type Accessor, createEffect, createSignal, onCleanup, untrack } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createSignal,
+  onCleanup,
+  untrack,
+} from 'solid-js';
 import type { Bucket } from './types';
 
 // Only these buckets can be materialized from cache hits. Other Quick Access
 // sources (contacts, CRM, sessions) are merged locally, after the search limit.
 const PROJECTED_BUCKETS: ReadonlySet<Bucket> = new Set([
-  'document', 'note', 'task', 'snippet', 'skill', 'chat', 'project', 'channel', 'dm',
+  'document',
+  'note',
+  'task',
+  'snippet',
+  'skill',
+  'chat',
+  'project',
+  'channel',
+  'dm',
 ]);
 const BROWSE_PAGE_SIZE = 50;
 const SEARCH_LIMIT = 500;
@@ -31,16 +45,25 @@ export function createProjectedList<T extends { id: string }>(options: {
   enabled?: Accessor<boolean>;
   materialize: (documents: SearchDocumentWire[]) => Promise<T[]>;
 }) {
-  const buckets = options.buckets.length === 0
-    ? [...PROJECTED_BUCKETS]
-    : options.buckets.filter((bucket) => PROJECTED_BUCKETS.has(bucket));
+  const buckets =
+    options.buckets.length === 0
+      ? [...PROJECTED_BUCKETS]
+      : options.buckets.filter((bucket) => PROJECTED_BUCKETS.has(bucket));
   const [items, setItems] = createSignal<T[]>([]);
   const [hasMore, setHasMore] = createSignal(false);
-  const [loading, setLoading] = createSignal<'idle' | 'initial' | 'more'>('idle');
+  const [loading, setLoading] = createSignal<'idle' | 'initial' | 'more'>(
+    'idle'
+  );
   let current: Request | undefined;
-  onCleanup(() => { current = undefined; });
+  onCleanup(() => {
+    current = undefined;
+  });
 
-  const fetchPages = async (request: Request, pageCount: number, append: boolean) => {
+  const fetchPages = async (
+    request: Request,
+    pageCount: number,
+    append: boolean
+  ) => {
     request.busy = true;
     setLoading(append ? 'more' : 'initial');
     const previous = append ? untrack(items) : [];
@@ -50,7 +73,9 @@ export function createProjectedList<T extends { id: string }>(options: {
     try {
       do {
         const page = await options.host.search({
-          profile: 'quick-access-v1', buckets, query: request.query,
+          profile: 'quick-access-v1',
+          buckets,
+          query: request.query,
           limit: request.query ? SEARCH_LIMIT : BROWSE_PAGE_SIZE,
           ...(cursor ? { cursor } : {}),
         });
@@ -96,7 +121,11 @@ export function createProjectedList<T extends { id: string }>(options: {
     }
     const sameQuery = previous?.query === query;
     if (!sameQuery) setItems([]);
-    const request: Request = { query, pages: sameQuery ? previous?.pages ?? 1 : 1, busy: false };
+    const request: Request = {
+      query,
+      pages: sameQuery ? (previous?.pages ?? 1) : 1,
+      busy: false,
+    };
     current = request;
     void fetchPages(request, request.pages, false);
   });

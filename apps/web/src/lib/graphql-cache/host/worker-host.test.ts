@@ -1045,7 +1045,9 @@ describe('createWorkerCacheHost', () => {
     const operations = vi.fn();
     host.onCacheChanged(foreground);
     host.onOpsAffected(operations);
-    const unsubscribe = host.onCacheChanged(quickAccess, { includeHydration: true });
+    const unsubscribe = host.onCacheChanged(quickAccess, {
+      includeHydration: true,
+    });
     await host.currentRevision();
     const adapter = requireAdapter();
     adapter.push({ kind: 'cache-hydrated', revision: INITIAL_CACHE_REVISION });
