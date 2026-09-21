@@ -50,6 +50,14 @@ vi.mock('../queries/reachable-repositories', () => ({
     retry: vi.fn(),
   }),
 }));
+vi.mock('../queries/repository-branches', () => ({
+  createRepositoryBranches: () => ({
+    branches: () => ['main', 'develop', 'feature/home'],
+    loading: () => false,
+    error: () => false,
+    retry: vi.fn(),
+  }),
+}));
 vi.mock('../components/AgentGlyph', () => ({ AgentIcon: () => <span /> }));
 
 vi.mock('@queries/agents/models', () => ({
@@ -223,10 +231,7 @@ describe('agent-led new conversation', () => {
       screen.getByRole('button', { name: 'Branch' }).textContent
     ).toContain('develop');
     fireEvent.click(screen.getByRole('button', { name: 'Branch' }));
-    fireEvent.input(screen.getByRole('textbox', { name: 'Starting branch' }), {
-      target: { value: 'feature/home' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Use branch' }));
+    fireEvent.click(screen.getByRole('option', { name: 'feature/home' }));
     await selectAgent(/^Chat default$/);
     expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(true);
     expect(
@@ -289,16 +294,16 @@ describe('agent-led new conversation', () => {
       screen.getByRole('button', { name: 'Branch' }).textContent
     ).toContain('develop');
     fireEvent.click(screen.getByRole('button', { name: 'Branch' }));
-    fireEvent.input(screen.getByRole('textbox', { name: 'Starting branch' }), {
-      target: { value: 'feature/home' },
+    fireEvent.input(screen.getByRole('combobox', { name: 'Search branches' }), {
+      target: { value: 'feature/other' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Use branch' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Use feature/other' }));
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenLastCalledWith({
       botId: CURSOR_BOT_ID,
       prompt: 'Prompt',
       repoUrl: 'https://github.com/macro-inc/macro',
-      repoBranch: 'feature/home',
+      repoBranch: 'feature/other',
     });
   });
   it('uses a saved agent without sending a per-session model override', async () => {

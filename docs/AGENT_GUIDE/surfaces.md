@@ -73,6 +73,13 @@ Touch devices render the legacy Notifications view without waiting for the new a
 views feature flag. Desktop waits for flag readiness before choosing the new Home
 view or its legacy fallback.
 
+On a cold launch, notification transport follows the GraphQL Soup flag reactively:
+if the flag arrives after REST starts, the GraphQL notification query must actually
+start too. Verify a reload with delayed flags retains non-email notifications once
+loading settles, including when the list itself uses REST (notified-at sorting).
+Email alone is not sufficient verification: its inbox membership does not require
+the global notification feed.
+
 GraphQL-attached notification rows share the global feed's local seen/done
 overrides: Mark Done and Undo reflect local intent without waiting for an older
 cached notification snapshot to be replaced. These display overrides do not turn
@@ -186,6 +193,12 @@ source shows a retry notice while the other source stays usable. Document typing
 alone is not yet attributed by Activity; Home reflects the actions the existing
 Activity system records.
 
+Calendar reminder rows use the reminder delivery time for Home's date section,
+including on a cold GraphQL load with notification sorting disabled. Verify that
+an older reminder stays in its older section after the event's metadata syncs;
+opening its details should show the expected occurrence. A newer reminder or your
+own later activity can move the row forward, but a calendar sync alone should not.
+
 On mobile, this route always renders the original Notifications soup view,
 regardless of the new-app-views flag. The dock and search scope use the bell icon
 and **Notifications** label; Home is desktop-only. Notifications uses the existing
@@ -241,6 +254,13 @@ Full email client. Tabs: `Signal` / `Noise` / `Sent` / `Calendar` / `Drafts` / `
 `All`. Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
 shows `Connect your email` (Gmail/Google Workspace OAuth) — most functionality needs a
 connected account. Search is `Ctrl+F` within the surface.
+
+When switching email tabs or inboxes, the list shows current-query cached results
+or a scoped `Loading email` spinner until they arrive—not the previous tab's rows
+under the new heading. Active searches also hide retained results and show loading
+while selected tag sets are pending. Background refreshes retain the current list. To check this,
+rapidly alternate Signal, Noise, and Sent, then change inboxes; a delayed cache or
+network read must not leave the old rows visible or expose their Load more action.
 
 The new views reuse the legacy filter option rows and searchable submenus.
 Their triggers are icon-only buttons matching the surrounding view controls;
@@ -360,6 +380,8 @@ send or discard, its sender and scheduling controls cannot change the operation.
 Attachments that can be opened are buttons named by their filename; Tab to one
 and press Enter or Space. Removal is a separate button named `Remove <filename>`.
 Removing a forwarded file keeps the received original.
+When checking draft autosave, edit the body of a draft with uploaded or forwarded
+attachments, wait for the save, and reopen it; the attachments should remain visible.
 AI email tool drafts persist body-only edits; changing recipients or the subject
 is not required to save the body.
 The three-dot button beneath a body reveals quoted content and a trimmed
@@ -377,6 +399,22 @@ send reports failure and restores its original reply editor if it is still mount
 A failure from an older, unmounted editor must not overwrite a newer edited reply.
 A presentation or refresh error after successful delivery is not a reason to send
 again.
+
+Send and schedule are refused with a notice while the device is offline, while a
+draft is still syncing (its save was accepted locally but not yet confirmed by the
+server; retry after a moment), or while an attachment has no completed upload. The
+composer keeps its content in each case. Attachments cannot be added while
+offline: a blocking notice explains and nothing is attached.
+For a new standalone email, a failed REST draft save is best-effort: Send can
+still proceed without a draft ID when no save was queued and no attachment is
+waiting to upload. A server rejection blocks sending even an existing draft.
+An internal draft-save failure, including a failed response read after the save
+commits, stays queued and retries with backoff. It must not permanently disable
+autosave; Send stays blocked until a save is confirmed. Invalid or unauthorized
+writes still stop retrying.
+Test this with a previously saved draft as well as a new one: a queued edit must
+block Send and scheduling until a save commits. Reopening a cached draft while
+offline must retain its uploaded attachments and confirmed scheduled time.
 
 While a schedule change is pending, immediate send and further schedule changes
 are disabled. Reply recipients cannot be edited or dragged during scheduling,
@@ -566,6 +604,10 @@ and summaries appear here; empty state notes "Calls are available to agents."
 
 On phones, recorded call headers omit the **Call Again** action.
 
+A channel's `Calls` tab lists that channel's recordings with the same rows, filtered
+by the channel id. Its search field matches call names and transcripts in that
+channel.
+
 If a recording fails to play, reload the page to obtain a fresh recording link,
 or use **Open or download recording**. The playback warning does not assume
 that the failure is caused by an unsupported media format.
@@ -666,6 +708,19 @@ Requires authentication and the `enable-activity-feed` flag. Direct navigation a
 restored splits wait for flags to load; when disabled, they redirect to Home
 (`/app/component/inbox`) without loading the activity feed.
 
+When checking Activity, enable GraphQL Soup as well as the activity flag. Verify
+that an initial visit resolves entity names in both the feed and Most active,
+then reload and scroll through another page. Preview loading and live name
+updates should keep the page responsive without repeatedly fetching previews.
+
+Activity refreshes live after recorded actions. With two pages loaded, make an
+action in another tab and verify the feed retains its page-boundary rows while
+the action count and heatmap update. An open entity activity panel should also
+refresh for actions by another authorized user. After disconnecting and
+reconnecting the websocket, verify recovery without requiring another action.
+Hidden tabs defer refresh until visible; purges refresh all mounted activity
+queries through the normal access checks.
+
 GitHub-style actions heatmap (one a11y node per day — makes snapshots huge; prefer saving the
 snapshot to a file), then a `Most active` section header (styled like the feed's day headers)
 over a wrapping row of pill chips (entity icon, name, action count; click opens the entity,
@@ -706,13 +761,31 @@ and prevent dismissal; canceling leaves the underlying data unchanged.
 
 ## Settings — `/app/settings/<section>`
 
+### Team membership
+
+Team membership has no size cap, including free teams. Invitations and domain
+auto-join must keep working beyond five members and the former stage-plan limits.
+Free-team joins do not create a paid subscription, bill a seat, or grant premium
+roles. Teams with an existing paid subscription retain their per-seat billing;
+enterprise teams retain their billing bypass.
+
+Under **Team**, owners/admins can turn **Auto-join on domain** off and can restrict
+invitations to admins with **Members can invite**. These controls still apply.
+To verify the membership flow, use a local free team with five members: invite
+and accept a sixth member, then sign up another user on its enabled auto-join
+domain. Both should appear in the team's member list and configured auto-join
+channels without an upgrade prompt. Repeat with auto-join disabled to verify a
+same-domain signup is not added automatically.
+
+### Navigation
+
 On phones, **More views → Settings** opens an inset glass sheet over the current
 page. The main page has a profile shortcut and grouped Account, Preferences,
 Workspace, and enabled agent/admin sections. Tap a row to open that settings
 page inside the sheet; **Back to settings** returns to the grouped list at its
 previous scroll position. **Close settings** at the top right, Escape, an
 outside tap, or a downward swipe dismisses the sheet. Opening Settings again
-starts at the main page; explicit links (for example Connections) open their
+starts at the main page; explicit links (for example Account) open their
 section directly. Existing settings URLs open the requested section in the sheet
 and restore the underlying app route. The header stays visible while forms
 scroll, including with the keyboard open. Desktop settings retain their panel
@@ -726,7 +799,7 @@ Workspace → `Team`, `Tags`, `CRM` (enable/disable; once enabled, a `Deal stage
 with `Customize stages`, inline rename, reorder by drag handle or arrow keys (up/down
 buttons on touch), delete, `Add stage`, `Reset to defaults`, and `Closed stages`
 checkboxes, editable by the role set as `edit_stages_role`),
-`Connections` (email/tool OAuth), `MCP server`
+`Integrations` (personal Gmail/GitHub accounts), `MCP server`
 (setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE), `Agents`, `Bots`, `Harness`;
 `Log out`.
 `Agents` lists team and private agents with `Create agent` / `Edit <name>` dialogs grouped
@@ -738,11 +811,12 @@ with a connected / not-connected dot for the *current viewer* plus an inline `Co
 that opens the Pipedream Connect flow inside the dialog. Unconnected picks never block
 saving; each teammate connects their own account. An agent session that calls a picked
 but unconnected app gets a tool result saying so, and the agent's reply renders a
-`Connect <app>` chip that opens Settings → Connections for that app.
+`Connect <app>` chip that opens Agents → Connections for that app. MCP integrations
+are managed on that page, rather than in Settings.
 `Back to app` returns to the previous surface. Open via user-email button menu or `Ctrl+;`.
 
 `Agents` → `Create agent` (or edit an existing agent) opens runtime selectors.
-The model list is loaded live and independently for In-memory, connected Cursor, and every
+The model list is loaded live and independently for Macro Agent, connected Cursor, and every
 registered macrod harness. The selected harness stays selected when the list refreshes.
 A paired macrod connects on startup, so models can load before any agents are bound.
 A harness can show `Loading models…`, an unsupported message, or

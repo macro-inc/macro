@@ -198,7 +198,7 @@ impl TryFrom<AgentSessionRow> for AgentSession {
         Ok(Self {
             id: AgentSessionId::new_from_uuid(row.id),
             name: row.name,
-            owner_id: MacroUserIdStr::try_from(row.owner_id)
+            owner_id: Owner::from_principal_str(&row.owner_id)
                 .context("agent session has an unparseable owner")?,
             thread_id: row.thread_id,
             thread_parent: row.thread_parent.map(|parent| parent.0),
@@ -259,6 +259,13 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         } = params;
         let mcp_servers_json = serde_json::to_value(mcp_servers.servers())
             .context("serialize agent session mcp servers")?;
+        // The row's `owner_id` references `"User"`, the owner's grant is a
+        // user access row, and the session lands in the owner's history:
+        // this store holds user-owned sessions, and says so before writing
+        // anything rather than letting the foreign key say it for a bot.
+        let owner_user = owner_id
+            .as_user()
+            .ok_or_else(|| AgentSessionError::OwnerNotUser(owner_id.owner_type()))?;
 
         // The session row and its access grants land together: a crash between
         // the two would leave a session nobody - not even its owner -
@@ -294,7 +301,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
                 NULL::TEXT AS "external_last_run_id?"
             "#,
             id.as_uuid(),
-            owner_id.as_ref(),
+            owner_user.as_ref(),
             thread_id,
             originating_message_id,
             bot_id.as_uuid(),
@@ -328,7 +335,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             &mut transaction,
             &id.as_uuid(),
             EntityType::AgentSession,
-            owner_id.as_ref(),
+            owner_user.as_ref(),
             EntityAccessSourceType::User,
             AccessLevel::Owner,
         )
@@ -340,7 +347,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             NewEntityRecord::new(
                 id.as_uuid(),
                 RegisteredEntityType::AgentSession,
-                Owner::User(owner_id.clone()),
+                owner_id.clone(),
             ),
         )
         .await
@@ -379,7 +386,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         // row is what Soup's `viewed_at` and the frecency ranking read, so
         // without it a brand-new session would rank below everything the
         // owner has ever opened.
-        upsert_user_history(&mut transaction, owner_id.as_ref(), &id.as_uuid())
+        upsert_user_history(&mut transaction, owner_user.as_ref(), &id.as_uuid())
             .await
             .context("failed to record the agent session in the owner's history")?;
 
@@ -478,7 +485,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
                         bot: None,
                         id,
                         name: row.name,
-                        owner_id: MacroUserIdStr::try_from(row.owner_id)
+                        owner_id: Owner::from_principal_str(&row.owner_id)
                             .context("agent session has an unparseable owner")?,
                         bot_id: BotId::new_from_uuid(row.bot_id),
                         status: parse_status(&row.status, row.status_event_name)?,

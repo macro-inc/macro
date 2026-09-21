@@ -1,8 +1,10 @@
+import { SaveEmailDraftDocument } from '@service-storage/graphql/generated/graphql';
 import {
   markGraphqlEmailThreadSeen,
   markGraphqlEmailThreadUnread,
 } from '@service-storage/graphql-email-read-state';
 import { executeGraphqlSetFavoriteMutation } from '@service-storage/graphql-favorites';
+import { shouldRetryGraphqlMutation } from '@service-storage/graphql-mutation-retry';
 import {
   type Client,
   CombinedError,
@@ -2342,6 +2344,87 @@ describe('normalizedCacheExchange', () => {
         kind: 'queued',
         transactionId: 'txn-1',
       });
+    });
+
+    it('retries a draft response failure with the same handles and commits after recovery', async () => {
+      vi.useFakeTimers();
+      try {
+        const variables = {
+          input: {
+            draftId: 'draft-handle',
+            threadDbId: 'thread-handle',
+            subject: 'Saved',
+          },
+        };
+        const saved = {
+          saveEmailDraft: {
+            draftId: 'server-draft',
+            draft: {
+              __typename: 'GraphqlSoupEmailMessage',
+              id: 'server-draft',
+            },
+            thread: {
+              __typename: 'GraphqlSoupEmailThread',
+              id: 'server-thread',
+            },
+          },
+        };
+        const error = new CombinedError({
+          graphQLErrors: [
+            {
+              message: 'attachment loading failed after commit',
+              extensions: { code: 'INTERNAL', retryable: true },
+            },
+          ],
+        });
+        let attempts = 0;
+        const { ops, results, forwarded } = harness(
+          host,
+          () => {
+            attempts += 1;
+            return attempts === 1
+              ? { error, data: undefined }
+              : { data: saved };
+          },
+          { shouldRetryMutation: shouldRetryGraphqlMutation }
+        );
+        ops.next(
+          makeOperation(
+            'mutation',
+            createRequest(SaveEmailDraftDocument, variables),
+            makeMutationOp(1, saved).context
+          )
+        );
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(attempts).toBe(1);
+        expect(host.rollbacks).toHaveLength(0);
+        expect(host.defers).toEqual([
+          { transactionId: 'txn-1', error: error.message },
+        ]);
+        expect(results[0]?.error).toBeUndefined();
+        expect(optimisticMutationDispositionOf(results[0])).toEqual({
+          kind: 'queued',
+          transactionId: 'txn-1',
+        });
+        await vi.advanceTimersByTimeAsync(1_000);
+
+        expect(attempts).toBe(2);
+        expect(forwarded.map((op) => op.variables)).toEqual([
+          variables,
+          variables,
+        ]);
+        expect(host.begins).toHaveLength(1);
+        expect(host.commits).toEqual([
+          expect.objectContaining({
+            transactionId: 'txn-1',
+            data: saved,
+          }),
+        ]);
+        expect(host.rollbacks).toHaveLength(0);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('accepts later local writes while a deferred offline head blocks the network', async () => {

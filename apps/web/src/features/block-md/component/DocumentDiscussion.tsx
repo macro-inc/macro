@@ -82,7 +82,6 @@ export function MessageDocumentDiscussion(props: {
       <DocumentConversation
         parent={parent}
         canWrite={permissions.canComment()}
-        canManage={permissions.isOwner()}
         targetId={params.commentId()}
         label={props.label}
         buildLink={(message) =>

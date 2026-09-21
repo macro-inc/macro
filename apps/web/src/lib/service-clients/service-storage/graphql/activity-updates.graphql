@@ -1,0 +1,12 @@
+# Recorded rows or a signal to refresh mounted activity queries after a purge.
+subscription ActivityUpdates {
+  activityUpdates {
+    __typename
+    ... on GraphqlActivityEvent {
+      ...ActivityEventFields
+    }
+    ... on GraphqlActivityInvalidation {
+      refresh
+    }
+  }
+}

@@ -1,4 +1,4 @@
-/** Agent messages on the channel's end-anchored TanStack scroll surface. */
+/** Top-aligned agent messages with end-following for overflowing transcripts. */
 import { ScrollToBottomOverlay } from '@channel/Channel/ScrollToBottomOverlay';
 import {
   ThreadList,
@@ -110,15 +110,16 @@ export function Transcript(props: { searchTarget?: AgentMessageTarget }) {
   const insets = () =>
     isTouchDevice()
       ? {
-          start: splitPanel?.contentOffsetTop() ?? 0,
+          start: (splitPanel?.contentOffsetTop() ?? 0) + 16,
           end: FloatRegions.hostHeight(),
         }
-      : { start: 0, end: 0 };
+      : { start: 16, end: 0 };
 
   return (
     <div class="relative flex-1 min-h-0" ref={setTranscriptEl}>
       <ThreadList
         keys={keys}
+        shortListAlign="start"
         initialPosition={
           initialTarget && initialSessionId
             ? {

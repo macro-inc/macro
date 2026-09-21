@@ -1,4 +1,5 @@
 use super::*;
+use bot_id::{CLAUDE_BOT_ID, CODEX_BOT_ID, CURSOR_BOT_ID};
 
 #[test]
 fn only_external_runtimes_prompt_by_default() {
@@ -97,6 +98,30 @@ fn registered_harness_limit_wins_over_runtime_kind_and_persona_choice() {
             }
             .resolve(),
             PermissionPolicy::Prompt
+        );
+    }
+}
+
+#[test]
+fn first_party_cloud_kinds_own_a_fixed_harness_slug() {
+    assert_eq!(AgentKind::Cursor.harness_slug(), Some("cursor"));
+    assert_eq!(AgentKind::CodexCloud.harness_slug(), Some("codex-cloud"));
+    assert_eq!(AgentKind::ClaudeCloud.harness_slug(), Some("claude-cloud"));
+    assert_eq!(AgentKind::SandboxedCoder.harness_slug(), None);
+    assert_eq!(AgentKind::InMemory.harness_slug(), None);
+    assert_eq!(AgentKind::External.harness_slug(), None);
+
+    // A create-path fallback that stamped the sandboxed-coder default is
+    // corrected from the bot, not from the wrong slug it was handed.
+    for (bot, slug) in [
+        (CURSOR_BOT_ID, "cursor"),
+        (CODEX_BOT_ID, "codex-cloud"),
+        (CLAUDE_BOT_ID, "claude-cloud"),
+    ] {
+        assert_eq!(
+            AgentKind::for_session(bot, "opencode").harness_slug(),
+            Some(slug),
+            "{bot:?}"
         );
     }
 }

@@ -9,6 +9,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { $insertReferencedPaste } from '@macro-inc/lexical-core';
+import PlusIcon from '@phosphor/plus.svg';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Button, ComposerSurface, SendButton } from '@ui';
 import {
@@ -69,7 +70,7 @@ export function ChatComposer(props: {
   const disabled = () => !!props.blockedReason || props.session?.disabled;
   const canSendNext = () =>
     !hasContent() &&
-    !props.session?.stopPending &&
+    !props.session?.sendNextHeld &&
     props.session?.hasQueuedMessages &&
     props.session.onStop &&
     !disabled();
@@ -179,10 +180,28 @@ export function ChatComposer(props: {
       }}
     >
       <div ref={container} data-keep-keyboard class="min-w-0">
+        <Show when={props.drawer}>
+          <div
+            class="composer-drawer"
+            data-open={props.drawerOpen ? '' : undefined}
+            aria-hidden={!props.drawerOpen}
+            inert={!props.drawerOpen}
+          >
+            <div class="composer-drawer-inner">
+              <div
+                class="composer-drawer-content"
+                role="group"
+                aria-label="Repository settings"
+              >
+                {props.drawer}
+              </div>
+            </div>
+          </div>
+        </Show>
         <ComposerSurface
           as="div"
           data-agent-composer="chat"
-          class="relative z-10 min-w-0 rounded-[32px] transition-[height] duration-150 ease-out motion-reduce:transition-none"
+          class="relative z-10 min-w-0 rounded-[32px] transition-[height] duration-200 ease-[cubic-bezier(0.77,0,0.175,1)] motion-reduce:transition-none"
           style={{
             height: height() === undefined ? undefined : `${height()}px`,
           }}
@@ -204,10 +223,24 @@ export function ChatComposer(props: {
               <Input.Attachments kind="document" class="pb-0" />
               <div
                 ref={setLayout}
-                data-composer-compact={isCompact()}
-                class="group/composer flex min-w-0 data-[composer-compact=false]:flex-col data-[composer-compact=false]:items-stretch items-end gap-2 p-[7.5px]"
+                data-composer-compact={!props.drawerOpen && isCompact()}
+                data-composer-coding={props.drawerOpen || undefined}
+                class="group/composer flex min-w-0 data-[composer-compact=false]:flex-wrap items-end gap-2 p-[7.5px] pl-3 data-[composer-compact=false]:pb-2.5 data-[composer-compact=false]:px-3 data-[composer-coding=true]:pt-4"
               >
-                <div class="max-h-60 min-w-0 flex-1 self-center group-data-[composer-compact=false]/composer:flex-none group-data-[composer-compact=false]/composer:self-stretch overflow-y-auto px-[9.375px]">
+                <Show when={props.onAttachFiles}>
+                  <div
+                    data-composer-controls
+                    class="shrink-0 group-data-[composer-compact=false]/composer:order-1"
+                  >
+                    <Input.AttachFilesAction
+                      accept={null}
+                      disabled={disabled()}
+                    >
+                      <PlusIcon />
+                    </Input.AttachFilesAction>
+                  </div>
+                </Show>
+                <div class="max-h-60 min-w-0 flex-1 self-center group-data-[composer-compact=false]/composer:flex-none group-data-[composer-compact=false]/composer:basis-full overflow-y-auto px-[9.375px] group-data-[composer-compact=true]/composer:px-0 group-data-[composer-coding=true]/composer:min-h-[58px]">
                   <MarkdownShell
                     class="h-auto min-h-6 text-base leading-6 [&_[data-markdown-editable]]:min-h-6 [&_[data-markdown-editable]]:outline-none [&_[data-markdown-editable]>.md-p]:my-0 [&_[data-markdown-placeholder]]:max-w-full [&_[data-markdown-placeholder]>p]:m-0 [&_[data-markdown-placeholder]>p]:truncate"
                     config={editor}
@@ -224,17 +257,11 @@ export function ChatComposer(props: {
                 </div>
                 <div
                   data-composer-controls
-                  class="flex min-w-0 max-w-[55%] group-data-[composer-compact=false]/composer:max-w-none shrink-0 items-center"
+                  class="order-2 flex min-w-0 max-w-[55%] group-data-[composer-compact=false]/composer:max-w-none group-data-[composer-compact=false]/composer:flex-1 shrink-0 items-center gap-2"
                   role="group"
                   aria-label="Composer settings"
                 >
                   <div class="ml-auto flex min-w-0 max-w-full items-center gap-2 [&_.menu]:right-0 [&_.menu]:left-auto [&_.menu-anchor]:min-w-0 [&_.pill]:max-w-full">
-                    <Show when={props.onAttachFiles}>
-                      <Input.AttachFilesAction
-                        accept={null}
-                        disabled={disabled()}
-                      />
-                    </Show>
                     {props.selector}
                     <Show
                       when={
@@ -285,24 +312,6 @@ export function ChatComposer(props: {
             </div>
           </Input.DropZone>
         </ComposerSurface>
-        <Show when={props.drawer}>
-          <div
-            class="composer-drawer"
-            data-open={props.drawerOpen ? '' : undefined}
-            aria-hidden={!props.drawerOpen}
-            inert={!props.drawerOpen}
-          >
-            <div class="composer-drawer-inner">
-              <div
-                class="composer-drawer-content"
-                role="group"
-                aria-label="Repository settings"
-              >
-                {props.drawer}
-              </div>
-            </div>
-          </div>
-        </Show>
       </div>
     </InputProvider>
   );

@@ -15,8 +15,8 @@ use calendar_events::domain::{
         GoogleWatchConfig, OccurrenceRange,
     },
     service::{
-        GoogleCalendarBackfillCoordinator, GoogleCalendarBackfillFailureService,
-        GoogleCalendarBackfillRunError,
+        CalendarReauthAnnouncer, GoogleCalendarBackfillCoordinator,
+        GoogleCalendarBackfillFailureService, GoogleCalendarBackfillRunError,
     },
 };
 use calendar_events::outbound::{google::GoogleCalendarClient, pg::PgCalendarRepository};
@@ -33,6 +33,7 @@ use crate::backfill_queue::CalendarBackfillMessage;
 use crate::calendar_backfill_adapters::RedisCalendarRequestGate;
 use crate::calendar_outbox::republish_calendar_job;
 use crate::calendar_ratelimit::CalendarRateLimiter;
+use crate::calendar_reauth::LinkManagerReauthNotifier;
 use crate::pubsub_util::cg_refresh_calendar;
 
 /// The event broker used by the backfill coordinator.
@@ -50,6 +51,9 @@ type GoogleCalendarBackfillService = GoogleCalendarBackfillCoordinator<
 type GoogleCalendarBackfillFailureHandler =
     GoogleCalendarBackfillFailureService<PgCalendarRepository>;
 
+/// Concrete reauth-required announcer for this service.
+type CalendarReauth = CalendarReauthAnnouncer<LinkManagerReauthNotifier>;
+
 /// Everything a backfill worker needs to process one calendar delivery.
 #[derive(Clone)]
 pub struct CalendarBackfillContext {
@@ -60,6 +64,7 @@ pub struct CalendarBackfillContext {
     connection_gateway_client: connection_gateway_client::client::ConnectionGatewayClient,
     coordinator: Arc<GoogleCalendarBackfillService>,
     failure: Arc<GoogleCalendarBackfillFailureHandler>,
+    reauth: Arc<CalendarReauth>,
     calendar_sync_enabled: bool,
 }
 
@@ -74,6 +79,7 @@ impl CalendarBackfillContext {
         auth_service_client: AuthServiceClient,
         connection_gateway_client: connection_gateway_client::client::ConnectionGatewayClient,
         macro_event_broker: CalendarEventBroker,
+        reauth_notifier: LinkManagerReauthNotifier,
         watch: Option<GoogleWatchConfig>,
         calendar_sync_enabled: bool,
     ) -> Self {
@@ -92,6 +98,7 @@ impl CalendarBackfillContext {
             watch,
         ));
         let failure = Arc::new(GoogleCalendarBackfillFailureService::new(repository));
+        let reauth = Arc::new(CalendarReauthAnnouncer::new(reauth_notifier));
         Self {
             db,
             sqs_worker,
@@ -100,6 +107,7 @@ impl CalendarBackfillContext {
             connection_gateway_client,
             coordinator,
             failure,
+            reauth,
             calendar_sync_enabled,
         }
     }
@@ -318,6 +326,7 @@ async fn run_coordinator(
     match run_result {
         Ok(()) => Disposition::Ack,
         Err(error) => {
+            ctx.reauth.announce_run_error(link.id, &error).await;
             let retryable = matches!(
                 error,
                 GoogleCalendarBackfillRunError::Busy
@@ -358,7 +367,10 @@ async fn fail_unclaimed(
         )
         .await
     {
-        Ok(_) => Disposition::Ack,
+        Ok(outcome) => {
+            ctx.reauth.announce_unclaimed(link_id, &outcome).await;
+            Disposition::Ack
+        }
         Err(error) => {
             tracing::error!(error = ?error, %calendar_job_id, "failed to record terminal calendar backfill failure");
             Disposition::Retry(anyhow::anyhow!(

@@ -469,7 +469,7 @@ body.tauri-ios {
 
      Bands:
        0- 99  in-page — viewer internals (0-19), app chrome (20-30),
-              floating widgets (90)
+              cross-panel content (31), floating widgets (90)
      100-199  modal stack, drag previews, menus
      200-299  always on top — tooltips, toasts
 
@@ -483,7 +483,6 @@ body.tauri-ios {
      local ordering. */
 
   /* ---- 0-99: in-page --------------------------------------------------- */
-  --z-index-main-view-layout: 0;
   --z-index-user-highlight:   1;
   --z-index-annotation-layer: 2;
   /* Split-view header title strip. Local to the header's own stacking
@@ -513,6 +512,9 @@ body.tauri-ios {
   /* Split panel header/side-panel chrome: above the panel's content and the
      rest of the in-page chrome, below floating widgets. */
   --z-index-split-panel-chrome: 30;
+  /* PDF margin comments cross the document panel boundary and must remain
+     interactive when they overlap side-panel chrome. */
+  --z-index-pdf-comments: 31;
 
   /* App-level floating widgets (`z-float`: draggable call controls, incoming
      calls). Above all other in-page content, below the modal stack. */

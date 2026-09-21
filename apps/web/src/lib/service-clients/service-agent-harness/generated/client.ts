@@ -6,6 +6,7 @@
  */
 import type {
   AgentRepositoriesResponse,
+  AgentRepositoryBranchesResponse,
   AgentSessionChangesPatchResponse,
   AgentSessionChangesResponse,
   AgentSessionLogResponse,
@@ -18,6 +19,7 @@ import type {
   CreateAgentSessionResponse,
   EditQueuedActionRequest,
   EmptyRequest,
+  ListAgentRepositoryBranchesParams,
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
   PreviewAgentSessionsRequest,
@@ -167,6 +169,90 @@ export const listAgentRepositories = async (
     status: res.status,
     headers: res.headers,
   } as listAgentRepositoriesResponse;
+};
+
+/**
+ * @summary List the branches on one repository the caller can start a session from.
+ */
+export type listAgentRepositoryBranchesResponse200 = {
+  data: AgentRepositoryBranchesResponse;
+  status: 200;
+};
+
+export type listAgentRepositoryBranchesResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type listAgentRepositoryBranchesResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type listAgentRepositoryBranchesResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type listAgentRepositoryBranchesResponse502 = {
+  data: void;
+  status: 502;
+};
+
+export type listAgentRepositoryBranchesResponseSuccess =
+  listAgentRepositoryBranchesResponse200 & {
+    headers: Headers;
+  };
+export type listAgentRepositoryBranchesResponseError = (
+  | listAgentRepositoryBranchesResponse400
+  | listAgentRepositoryBranchesResponse401
+  | listAgentRepositoryBranchesResponse403
+  | listAgentRepositoryBranchesResponse502
+) & {
+  headers: Headers;
+};
+
+export type listAgentRepositoryBranchesResponse =
+  | listAgentRepositoryBranchesResponseSuccess
+  | listAgentRepositoryBranchesResponseError;
+
+export const getListAgentRepositoryBranchesUrl = (
+  params: ListAgentRepositoryBranchesParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/agent-repositories/branches?${stringifiedParams}`
+    : `/agent-repositories/branches`;
+};
+
+export const listAgentRepositoryBranches = async (
+  params: ListAgentRepositoryBranchesParams,
+  options?: RequestInit
+): Promise<listAgentRepositoryBranchesResponse> => {
+  const res = await fetch(getListAgentRepositoryBranchesUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listAgentRepositoryBranchesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listAgentRepositoryBranchesResponse;
 };
 
 /**

@@ -46,7 +46,7 @@ import { PdfSplitToolbar } from './PdfSplitToolbar';
 
 export function TopBar() {
   const pdf = usePdfDocument();
-  const [documentProxy] = pdf.state.signals.documentProxy;
+  const documentProxy = pdf.documentProxy;
   const isAuth = useIsAuthenticated();
   const documentId = useBlockId();
   const blockName = useBlockName();

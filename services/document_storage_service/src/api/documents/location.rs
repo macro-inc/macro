@@ -67,9 +67,10 @@ pub async fn get_location_handler(
         .as_deref()
         .and_then(|f| FileType::from_str(f).ok());
 
+    let owner = document_context.owner.principal_id();
     let response_data = get_presigned_url_by_type(
         &state,
-        document_context.owner.as_ref(),
+        &owner,
         &document_id,
         file_type,
         params.document_version_id,

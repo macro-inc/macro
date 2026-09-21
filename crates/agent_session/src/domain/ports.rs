@@ -12,6 +12,7 @@ use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessa
 use bots::domain::models::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use model_owner::Owner;
 use std::num::NonZeroUsize;
 
 /// A bidirectional connection to an agent runtime.
@@ -103,24 +104,27 @@ pub enum ManagedPersonaError {
     NotAgent,
     /// The bot is served by an external runtime.
     External,
-    /// The user does not own or belong to the persona's owner.
+    /// The owner does not own or belong to the persona's owner, or is not
+    /// a user at all.
     Forbidden,
     /// Looking up the persona or its owner failed.
     Lookup(AgentSessionError),
 }
 
-/// Resolve and authorize a managed persona for a user.
+/// Resolve and authorize a managed persona for the session's owner.
 ///
 /// Ownership policy lives in the domain: private personas belong to their
 /// owner, team personas are available to team members, selected-channel
 /// personas are available to anyone who can `@` them in a shared channel,
 /// and managed system bots (the deployment's own coders) are available to
-/// everyone, exactly as they are when mentioned in a channel.
-pub async fn managed_persona_for_user<Bots: BotDirectory>(
+/// everyone, exactly as they are when mentioned in a channel. Every rule is
+/// about a person, so an owner that is not a user selects nothing.
+pub async fn managed_persona_for_owner<Bots: BotDirectory>(
     bots: &Bots,
     bot_id: BotId,
-    user: &MacroUserIdStr<'static>,
+    owner: &Owner,
 ) -> std::result::Result<SelectedManagedPersona, ManagedPersonaError> {
+    let user = owner.as_user().ok_or(ManagedPersonaError::Forbidden)?;
     let facts = bots
         .bot_facts(bot_id)
         .await
@@ -200,8 +204,8 @@ pub struct OpenExternalAgentSession {
     pub workspace: String,
     /// Repository nominally checked out at `workspace`, when stated.
     pub repo_url: Option<String>,
-    /// The user who owns the session.
-    pub owner: MacroUserIdStr<'static>,
+    /// Who owns the session.
+    pub owner: Owner,
     /// The thread whose mention triggered the session, when one did.
     pub thread: Option<SessionThread>,
     /// Instructions the session's runtime works under, when any were stated.
@@ -219,8 +223,8 @@ pub struct OpenManagedSession {
     pub repo_url: Option<String>,
     /// Starting branch for the selected repository.
     pub repo_branch: Option<super::repository_branch::RepositoryBranch>,
-    /// The user who owns the session and is credited for its messages.
-    pub owner: MacroUserIdStr<'static>,
+    /// Who owns the session and is credited for its messages.
+    pub owner: Owner,
     /// First prompt to deliver once the sandbox is attached. `None` opens an
     /// idle session its owner prompts from the session's own surface.
     pub prompt: Option<String>,

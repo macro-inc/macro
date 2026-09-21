@@ -2,14 +2,10 @@ import { agentsRouteId } from '@app/features/agents-view/core/route';
 import { createContentInstanceRegistry } from '@core/contentInstanceRegistry';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import type { Navigator } from '@solidjs/router';
-import { batch, createMemo, createRoot, createSignal } from 'solid-js';
+import { batch, createRoot, createSignal } from 'solid-js';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { createSplitLayout, type SplitContent } from '../layoutManager';
 import { createLayoutUrlSync } from '../layoutUrlSync';
-import {
-  loadRestorablePreviewLayout,
-  type PreviewQueryValue,
-} from '../previewPersistence';
 
 vi.mock('../componentRegistry', () => ({
   resolveComponent: vi.fn((id: string, params: Record<string, string>) => ({
@@ -55,7 +51,6 @@ function createMockOrchestrator(): BlockOrchestrator {
 type HarnessOptions = {
   managerContent: SplitContent[];
   urlSegments: string[];
-  previewQuery?: PreviewQueryValue;
   search?: string;
   hash?: string;
 };
@@ -69,36 +64,21 @@ function createHarness(options: HarnessOptions) {
       options.managerContent
     );
     const [pairs, setPairs] = createSignal(options.urlSegments);
-    const [previewQuery, setPreviewQuery] = createSignal<PreviewQueryValue>(
-      options.previewQuery
-    );
     const [search, setSearch] = createSignal(options.search ?? '');
-    const [hash, setHash] = createSignal(options.hash ?? '');
-    const decodedLayout = createMemo(() =>
-      loadRestorablePreviewLayout(pairs(), previewQuery())
-    );
 
-    createLayoutUrlSync(manager, pairs, previewQuery, decodedLayout, {
+    createLayoutUrlSync(manager, pairs, {
       navigate: navigate as Navigator,
       search,
-      hash,
     });
 
     return {
       manager,
       navigate,
       dispose,
-      setUrl(
-        segments: string[],
-        preview: PreviewQueryValue,
-        nextSearch = '',
-        nextHash = ''
-      ) {
+      setUrl(segments: string[], nextSearch = '') {
         batch(() => {
           setPairs(segments);
-          setPreviewQuery(preview);
           setSearch(nextSearch);
-          setHash(nextHash);
         });
       },
     };
@@ -137,19 +117,19 @@ describe('layout URL synchronization', () => {
     expect(harness.navigate).toHaveBeenLastCalledWith('/agents/session-1', {
       replace: false,
     });
-    harness.setUrl(['agents', 'session-1'], undefined);
+    harness.setUrl(['agents', 'session-1']);
     await flushUrlSync();
     handle.replace({ next: code });
     await flushUrlSync();
     expect(harness.navigate).toHaveBeenLastCalledWith('/coders/session-2', {
       replace: false,
     });
-    harness.setUrl(['coders', 'session-2'], undefined);
+    harness.setUrl(['coders', 'session-2']);
     await flushUrlSync();
-    harness.setUrl(['agents', 'session-1'], undefined);
+    harness.setUrl(['agents', 'session-1']);
     await flushUrlSync();
     expect(harness.manager.splits()[0].content).toEqual(chat);
-    harness.setUrl(['coders', 'session-2'], undefined);
+    harness.setUrl(['coders', 'session-2']);
     await flushUrlSync();
     expect(harness.manager.splits()[0].content).toEqual(code);
     harness.dispose();
@@ -205,51 +185,7 @@ describe('layout URL synchronization', () => {
     harness.dispose();
   });
 
-  it('coalesces preview engagement into one canonical manager-to-URL update', async () => {
-    const harness = createHarness({
-      managerContent: [{ type: 'component', id: 'inbox' }],
-      urlSegments: ['component', 'inbox'],
-    });
-
-    await flushUrlSync();
-    harness.navigate.mockClear();
-    harness.manager.engagePreviewMode(harness.manager.splits()[0].id);
-    await flushUrlSync();
-
-    expect(harness.navigate).toHaveBeenCalledTimes(1);
-    expect(harness.navigate).toHaveBeenCalledWith(
-      `/${harness.manager.getUrlSegments().join('/')}?preview=0`,
-      { replace: false }
-    );
-
-    harness.dispose();
-  });
-
-  it('preserves unrelated query and hash state for a query-only update', async () => {
-    const harness = createHarness({
-      managerContent: [
-        { type: 'component', id: 'inbox' },
-        { type: 'component', id: 'preview-empty' },
-      ],
-      urlSegments: ['component', 'inbox', 'component', 'preview-empty'],
-      search: '?keep=value',
-      hash: '#selection',
-    });
-
-    await flushUrlSync();
-    harness.navigate.mockClear();
-    harness.manager.engagePreviewMode(harness.manager.splits()[0].id);
-    await flushUrlSync();
-
-    expect(harness.navigate).toHaveBeenCalledWith(
-      `/${harness.manager.getUrlSegments().join('/')}?keep=value&preview=0#selection`,
-      { replace: false }
-    );
-
-    harness.dispose();
-  });
-
-  it('reconciles URL path and preview state without navigating back', async () => {
+  it('reconciles URL paths without navigating back', async () => {
     const harness = createHarness({
       managerContent: [{ type: 'component', id: 'inbox' }],
       urlSegments: ['component', 'inbox'],
@@ -257,16 +193,15 @@ describe('layout URL synchronization', () => {
     await flushUrlSync();
     harness.navigate.mockClear();
 
-    harness.setUrl(['component', 'inbox', 'md', 'doc-1'], '0', '?preview=0');
+    harness.setUrl(['component', 'inbox', 'md', 'doc-1']);
     await flushUrlSync();
 
-    const [controller, viewer] = harness.manager.splits();
-    expect(controller.content).toMatchObject({
+    const [list, detail] = harness.manager.splits();
+    expect(list.content).toMatchObject({
       type: 'component',
       id: 'inbox',
     });
-    expect(viewer.content).toMatchObject({ type: 'md', id: 'doc-1' });
-    expect(harness.manager.viewerOf(controller.id)).toBe(viewer.id);
+    expect(detail.content).toMatchObject({ type: 'md', id: 'doc-1' });
     expect(harness.navigate).not.toHaveBeenCalled();
 
     harness.dispose();
@@ -286,45 +221,6 @@ describe('layout URL synchronization', () => {
     });
 
     harness.dispose();
-  });
-
-  it('restores a Preview Pair across a settings clobber round trip', async () => {
-    const harness = createHarness({
-      managerContent: [{ type: 'component', id: 'mail' }],
-      urlSegments: ['component', 'mail'],
-    });
-    await flushUrlSync();
-
-    // Engage preview and give the viewer real content, like opening an item.
-    const controllerId = harness.manager.splits()[0].id;
-    harness.manager.engagePreviewMode(controllerId);
-    const viewerId = harness.manager.viewerOf(controllerId)!;
-    harness.manager.getSplit(viewerId)!.replace({
-      next: { type: 'md', id: 'doc-1' },
-      mergeHistory: true,
-    });
-    await flushUrlSync();
-    harness.setUrl(['component', 'mail', 'md', 'doc-1'], '0', '?preview=0');
-    await flushUrlSync();
-
-    // Open settings: clobber down to a lone settings split
-    // (collapseToSoloSettings), then apply the URL the sync emitted.
-    harness.manager.replaceAllSplits({ type: 'component', id: 'settings' });
-    await flushUrlSync();
-    harness.setUrl(['settings', 'account'], undefined, '');
-    await flushUrlSync();
-
-    // Close settings: navigate back to the captured return URL.
-    harness.setUrl(['component', 'mail', 'md', 'doc-1'], '0', '?preview=0');
-    await flushUrlSync();
-
-    const [controller, viewer] = harness.manager.splits();
-    expect(controller.content).toMatchObject({
-      type: 'component',
-      id: 'mail',
-    });
-    expect(viewer.content).toMatchObject({ type: 'md', id: 'doc-1' });
-    expect(harness.manager.viewerOf(controller.id)).toBe(viewer.id);
   });
 
   it('uses replace navigation and clears location state for replace-caused path changes', async () => {

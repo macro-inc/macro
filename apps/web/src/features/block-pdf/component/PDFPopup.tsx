@@ -1,25 +1,12 @@
 import type { IHighlight } from '@block-pdf/model/Highlight';
-import { useSplitLayout } from '@components/app/split-layout/layout';
-import { useIsAuthenticated } from '@core/auth';
-import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
-import { createMarkdownFile } from '@core/util/create';
 import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
-import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
-import NotesIcon from '@phosphor-icons/core/bold/file-md-bold.svg?component-solid';
-import LoadingIcon from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import ChatIcon from '@phosphor-icons/core/regular/chat-teardrop.svg?component-solid';
-import PasteIcon from '@phosphor-icons/core/regular/clipboard-text.svg?component-solid';
 import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
 import TrashIcon from '@phosphor-icons/core/regular/trash.svg?component-solid';
-import { generateTitle } from '@service-cognition/client';
-import { createCallback } from '@solid-primitives/rootless';
 import { Button } from '@ui';
 import {
-  createEffect,
-  createMemo,
   createSignal,
-  For,
   Match,
   onCleanup,
   onMount,
@@ -27,6 +14,7 @@ import {
   Switch,
 } from 'solid-js';
 import { usePdfDocument } from '../context/pdf-document-context';
+import { usePdfViewer } from '../context/pdf-viewer-context';
 
 type PDFPopupProps = {
   highlightProps: {
@@ -53,12 +41,6 @@ type PDFPopupProps = {
     /** share the currently selected region of the document */
     share: () => void;
   };
-  aiProps?: {
-    attachmentId: string;
-  };
-  insertProps?: {
-    insertText: (text: string) => void;
-  };
   /** where to anchor the popup */
   anchorRef: HTMLElement;
 };
@@ -68,300 +50,107 @@ function HighlightIcon() {
   return <div class="size-4 bg-[oklch(0.905_0.182_98.111)] rounded-full"></div>;
 }
 
-function LoadingContent(props: { lines: number }) {
-  return (
-    <div class="flex flex-col justify-center items-start w-full py-2">
-      <For each={Array.from({ length: props.lines })}>
-        {() => <div class="bg-edge animate-pulse rounded-md h-2 mb-2 w-full" />}
-      </For>
-      <div class="bg-edge animate-pulse rounded-md h-2 mb-2 w-[65%]" />
-    </div>
-  );
-}
-
 export function PDFPopup(props: PDFPopupProps) {
-  const _isAuthenticated = useIsAuthenticated();
-
   const pdf = usePdfDocument();
+  const rootElement = usePdfViewer().rootElement;
   const blockId = pdf.documentId();
-  const [completion] = pdf.state.signals.popupCompletion;
-  const [selectedText, setSelectedText] = pdf.state.signals.popupSelectedText;
-  const isGenerating = () => completion()?.status !== 'completed';
-
-  const [copied, setCopied] = createSignal(false);
-  const [isLoading, setIsLoading] = createSignal<boolean>(false);
-  let markdownRootRef!: HTMLDivElement;
-
-  const width = () => (completion() === undefined ? 'w-auto' : '600px');
-
-  const { replaceOrInsertSplit } = useSplitLayout();
-
-  createEffect(() => {
-    const currentSelection = window.getSelection()?.toString();
-    if (currentSelection && currentSelection.length > 0) {
-      setSelectedText(currentSelection);
-    }
-  });
-
-  const _selectedText = createMemo(() => {
-    const currentSelection = selectedText();
-    if (currentSelection && currentSelection.length > 0) {
-      return currentSelection;
-    }
-    return props.highlightProps.currentHighlight?.text;
-  });
-
-  const handleCopy = async () => {
-    const cleanedText = completion()?.content;
-    if (!cleanedText) {
-      return;
-    }
-    const html = markdownRootRef?.outerHTML ?? null;
-    if (!html) {
-      try {
-        await navigator.clipboard.writeText(cleanedText);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      } catch {}
-      return;
-    }
-
-    const clipboardItem = new ClipboardItem({
-      'text/plain': new Blob([cleanedText], { type: 'text/plain' }),
-      'text/html': new Blob([html], { type: 'text/html' }),
-    });
-    let written = false;
-    // try rich and plain first. Not avail in all browsers and contexts.
-    try {
-      await navigator.clipboard.write([clipboardItem]);
-      written = true;
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {}
-
-    if (!written) {
-      try {
-        await navigator.clipboard.writeText(cleanedText);
-        written = true;
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      } catch {}
-    }
-  };
-
-  const handleEditInMarkdown = createCallback(async () => {
-    setIsLoading(true);
-    const content = completion()?.content;
-    if (!content) {
-      return;
-    }
-
-    const title = await generateTitle(content);
-    const documentId = await createMarkdownFile({
-      content,
-      title: title ?? `${pdf.documentName()} - AI Explanation`,
-    });
-
-    if (!documentId) {
-      console.error('Error opening AI message in Notes');
-      setIsLoading(false);
-      return;
-    }
-
-    replaceOrInsertSplit({
-      type: 'md',
-      id: documentId,
-    });
-    setIsLoading(false);
-  });
 
   onMount(() => {
-    const handler = (e: Event) => {
-      e.stopPropagation();
+    const stopSelectionChangePropagation = (event: Event) => {
+      event.stopPropagation();
     };
-
-    const blockElement = pdf.rootElement();
-    if (blockElement) {
-      blockElement.addEventListener('selectionchange', handler, {
-        capture: true,
-      });
-    }
-
+    const blockElement = rootElement();
+    blockElement?.addEventListener(
+      'selectionchange',
+      stopSelectionChangePropagation,
+      { capture: true }
+    );
     onCleanup(() => {
-      if (blockElement) {
-        blockElement.removeEventListener('selectionchange', handler, {
-          capture: true,
-        });
-      }
+      blockElement?.removeEventListener(
+        'selectionchange',
+        stopSelectionChangePropagation,
+        { capture: true }
+      );
     });
   });
 
   const PDFPopupToolbar = () => {
     const [locationCopied, setLocationCopied] = createSignal(false);
     return (
-      <>
-        <div class="flex flex-row items-center space-x-2 justify-between w-full">
-          {/*<Show when={isAuthenticated() && !!selectedText() && props.aiProps}>
-						{(aiProps) => (
-							<AskAi
-								attachmentId={aiProps().attachmentId}
-								blockName="pdf"
-								setCompletion={setCompletion}
-								selectedText={selectedText()!}
-							/>
-						)}
-					</Show>*/}
-          <div class="flex flex-row space-x-2 items-center">
-            <Show when={completion() && props.insertProps}>
-              {(insertProps) => (
+      <div class="flex flex-row items-center space-x-2 justify-between w-full">
+        <div class="flex flex-row space-x-2 items-center">
+          <Switch>
+            <Match when={!props.highlightProps.currentHighlight}>
+              <Show when={props.highlightProps.canCreate}>
                 <Button
                   variant="ghost"
                   size="icon-md"
-                  onClick={() =>
-                    insertProps().insertText(completion()!.content)
-                  }
-                  title="Insert AI response"
+                  onClick={() => {
+                    props.highlightProps.highlight();
+                  }}
                 >
-                  <PasteIcon />
+                  <HighlightIcon />
                 </Button>
-              )}
-            </Show>
+              </Show>
+            </Match>
+            <Match when={props.highlightProps.currentHighlight}>
+              <Show when={props.highlightProps.canEdit}>
+                <Button
+                  variant="ghost"
+                  size="icon-md"
+                  onClick={() => {
+                    props.highlightProps.removeHighlight();
+                  }}
+                >
+                  <TrashIcon />
+                </Button>
+              </Show>
+            </Match>
+          </Switch>
 
-            <Switch>
-              <Match when={!props.highlightProps.currentHighlight}>
-                <Show when={props.highlightProps.canCreate}>
-                  <Button
-                    variant="ghost"
-                    size="icon-md"
-                    onClick={() => {
-                      props.highlightProps.highlight();
-                    }}
-                  >
-                    <HighlightIcon />
-                  </Button>
-                </Show>
-              </Match>
-              <Match when={props.highlightProps.currentHighlight}>
-                <Show when={props.highlightProps.canEdit}>
-                  <Button
-                    variant="ghost"
-                    size="icon-md"
-                    onClick={() => {
-                      props.highlightProps.removeHighlight();
-                    }}
-                  >
-                    <TrashIcon />
-                  </Button>
-                </Show>
-              </Match>
-            </Switch>
-
-            <Show
-              when={
-                props.highlightProps.currentHighlight
-                  ? props.commentProps.canEdit
-                  : props.commentProps.canCreate
+          <Show
+            when={
+              props.highlightProps.currentHighlight
+                ? props.commentProps.canEdit
+                : props.commentProps.canCreate
+            }
+          >
+            <Button
+              variant="ghost"
+              size="icon-md"
+              onClick={(e: MouseEvent | KeyboardEvent) =>
+                props.commentProps.placeComment(e as MouseEvent)
               }
             >
-              <Button
-                variant="ghost"
-                size="icon-md"
-                onClick={(e: MouseEvent | KeyboardEvent) =>
-                  props.commentProps.placeComment(e as MouseEvent)
-                }
-              >
-                <ChatIcon />
-              </Button>
-            </Show>
-          </div>
-          <Show when={props.shareLinkProps}>
-            {(shareLinkProps) => (
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setLocationCopied(true);
-                  shareLinkProps().share();
-                }}
-              >
-                {locationCopied() ? (
-                  <CheckIcon class="text-success" />
-                ) : (
-                  <LinkIcon />
-                )}
-                {locationCopied() ? 'Copied' : 'Share'}
-              </Button>
-            )}
+              <ChatIcon />
+            </Button>
           </Show>
         </div>
-
-        <Show when={completion()}>
-          {(completion) => (
-            <div
-              class="flex flex-col items-center space-x-2 w-full px-2 border-t border-edge mt-1"
-              style={{
-                width: width(),
+        <Show when={props.shareLinkProps}>
+          {(shareLinkProps) => (
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setLocationCopied(true);
+                shareLinkProps().share();
               }}
             >
               <Show
-                when={
-                  completion().status !== 'loading' &&
-                  completion().content.length > 0
+                when={locationCopied()}
+                fallback={
+                  <>
+                    <LinkIcon />
+                    Share
+                  </>
                 }
-                fallback={<LoadingContent lines={4} />}
               >
-                <div class="w-full max-w-full overflow-hidden">
-                  <ChatMessageMarkdown
-                    text={completion().content}
-                    generating={isGenerating}
-                    rootRef={(ref: HTMLDivElement) => {
-                      markdownRootRef = ref;
-                    }}
-                  />
-                </div>
+                <CheckIcon class="text-success" />
+                Copied
               </Show>
-              <div class="w-full border-t border-edge">
-                <div class="flex flex-row w-full justify-end text-ink-muted mt-1">
-                  <div class="w-fit mr-2">
-                    <button
-                      class="flex flex-row items-center space-x-1 hover:bg-hover hover-transition-bg rounded-md p-1 text-xs font-sans"
-                      onClick={() => {
-                        !isLoading() && handleEditInMarkdown();
-                      }}
-                    >
-                      <Show
-                        when={!isLoading() && !isGenerating()}
-                        fallback={<LoadingIcon class="size-3 animate-spin" />}
-                      >
-                        <NotesIcon class="size-3 text-note" />
-                      </Show>
-                      <p>Edit in Notes</p>
-                    </button>
-                  </div>
-                  <div class="w-fit">
-                    <button
-                      class="flex flex-row items-center space-x-1 hover:bg-hover hover-transition-bg rounded-md p-1 text-xs font-sans"
-                      onClick={handleCopy}
-                    >
-                      <Show
-                        when={!isGenerating()}
-                        fallback={<LoadingIcon class="size-3 animate-spin" />}
-                      >
-                        <Show
-                          when={!copied()}
-                          fallback={<CheckIcon class="size-3 text-success" />}
-                        >
-                          <ClipboardIcon class="size-3" />
-                        </Show>
-                      </Show>
-                      <p>{copied() ? 'Copied!' : 'Copy'}</p>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
+            </Button>
           )}
         </Show>
-      </>
+      </div>
     );
   };
 

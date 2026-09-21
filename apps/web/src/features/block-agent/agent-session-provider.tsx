@@ -6,10 +6,7 @@ import { isCursorBotId } from '@core/constant/cursorAgent';
 import { useUserId } from '@core/context/user';
 import { idToDisplayName } from '@core/user/util';
 import { useAgentSessionExternalUrlQuery } from '@queries/agent-session/session';
-import type {
-  AgentAction,
-  AgentSessionResponse,
-} from '@service-agent-harness/generated/schemas';
+import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
 import {
   type Accessor,
   createEffect,
@@ -23,6 +20,7 @@ import {
   type QueueController,
 } from './context/create-queue-controller';
 import { resolveSessionId } from './context/resolve-session-id';
+import { createSendNext } from './context/send-next';
 import { createInteractionController } from './primitives/create-interaction-controller';
 import type { QuoteInsert } from './ui';
 
@@ -59,20 +57,13 @@ export function AgentSessionProvider(
       return served.remove(actionId);
     },
   };
-  const sendNext = () => {
-    const head = queue.entries()[0];
-    if (!head) return;
-    const action: AgentAction | undefined =
-      head.kind === 'prompt' && head.prompt != null
-        ? { type: 'prompt', prompt: head.prompt }
-        : head.kind === 'compact'
-          ? { type: 'compact' }
-          : undefined;
-    void live.issue({ type: 'stop' })?.then((result) => {
-      if (result.isErr()) live.retract(head.actionId);
-    });
-    if (action) live.expect(head.actionId, action);
-  };
+  const sendNext = createSendNext({
+    currentTurn: live.currentTurn,
+    entries: queue.entries,
+    issue: live.issue,
+    expect: live.expect,
+    retract: live.retract,
+  });
   const interactions = createInteractionController({
     sessionId,
     pending: () => live.metadata()?.pendingInteractions ?? [],

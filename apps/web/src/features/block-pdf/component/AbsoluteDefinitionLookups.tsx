@@ -1,6 +1,9 @@
 import type Term from '../model/Term';
+import {
+  usePopupContextUpdate,
+  usePopupStore,
+} from '../signal/definitionPopup';
 import { useIsPopup } from '../signal/pdfViewer';
-import { usePopupContextUpdate, usePopupStore } from '../store/definitionPopup';
 import { DefinitionLookup } from './DefinitionLookup/index';
 
 interface IProps {

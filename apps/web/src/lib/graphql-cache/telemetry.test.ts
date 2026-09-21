@@ -168,6 +168,51 @@ describe('cache telemetry privacy contract', () => {
 });
 
 describe('cache telemetry sampling and failure isolation', () => {
+  it('never samples or aggregates slow SQL executions and strips query payloads', () => {
+    const events: CacheTelemetryEnvelope[] = [];
+    const recorder = new CacheTelemetryRecorder(
+      new CacheTelemetryReporter(browserCacheTelemetryContext('treatment'), {
+        emit: (event) => events.push(event),
+      })
+    );
+    for (let i = 0; i < 3; i++) {
+      recorder.record({
+        name: 'graphql_cache.slow_query',
+        operationCategory: 'storage',
+        durationMs: 201,
+        queryFingerprint: 'a430d84680aabd0b',
+        outcome: i === 0 ? 'error' : 'success',
+        sql: 'SELECT private-data',
+        parameters: ['secret'],
+        result: ['secret'],
+      } as unknown as CacheTelemetryObservation);
+    }
+    recorder.flush();
+    expect(events).toHaveLength(3);
+    for (const event of events) {
+      expect(event).toMatchObject({
+        name: 'graphql_cache.slow_query',
+        durationMs: 201,
+        queryFingerprint: 'a430d84680aabd0b',
+      });
+      expect(
+        isCacheTelemetryObservation({
+          name: event.name,
+          operationCategory: event.operationCategory,
+          queryFingerprint: event.queryFingerprint,
+          durationMs: event.durationMs,
+        })
+      ).toBe(true);
+    }
+    expect(JSON.stringify(events)).not.toMatch(/private-data|secret/);
+    recorder.record({
+      name: 'graphql_cache.slow_query',
+      operationCategory: 'storage',
+      queryFingerprint: 'SELECT private-data',
+    });
+    expect(events[3]).not.toHaveProperty('queryFingerprint');
+  });
+
   it('uses weighted aggregates, independent event sampling, and unsampled errors', () => {
     const observations: CacheTelemetryObservation[] = [];
     const recorder = new CacheTelemetryRecorder(
