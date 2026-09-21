@@ -15,6 +15,7 @@ import {
   type SplitContent,
   SplitEvent,
 } from '../layoutManager';
+import { shouldShowSplitCloseButton } from '../layoutUtils';
 import { createMobileSwipeLayout } from '../mobile/createMobileSwipeLayout';
 
 vi.mock('@core/component/Toast/Toast', () => ({
@@ -510,6 +511,33 @@ describe('layoutManager', () => {
 
       dispose();
       expect(first.findOpenView(content)).toBeUndefined();
+    });
+  });
+
+  it('navigates and closes adjacent list and detail splits independently', () => {
+    createRoot((dispose) => {
+      const manager = createSplitLayout(createMockOrchestrator(), [
+        { type: 'component', id: 'inbox' },
+        { type: 'md', id: 'detail' },
+      ]);
+      const [list, detail] = manager.splits();
+      const listHandle = manager.getSplit(list.id)!;
+      const detailHandle = manager.getSplit(detail.id)!;
+
+      manager.openWithSplit(
+        { type: 'email', id: 'thread' },
+        { handle: listHandle }
+      );
+      expect(listHandle.content()).toEqual({ type: 'email', id: 'thread' });
+      expect(detailHandle.content()).toEqual({ type: 'md', id: 'detail' });
+      expect(manager.splits()).toHaveLength(2);
+
+      listHandle.goBack();
+      expect(listHandle.content()).toEqual({ type: 'component', id: 'inbox' });
+      expect(detailHandle.content()).toEqual({ type: 'md', id: 'detail' });
+      listHandle.close();
+      expect(manager.splits().map((split) => split.id)).toEqual([detail.id]);
+      dispose();
     });
   });
 
@@ -1553,13 +1581,16 @@ describe('layoutManager', () => {
         ]);
 
         const [fg, bg] = manager.splits();
+        expect(shouldShowSplitCloseButton(manager)).toBe(true);
         manager.activateSplit(fg.id);
         manager.setExclusionFilter((split) => split.id === bg.id);
+        expect(shouldShowSplitCloseButton(manager)).toBe(false);
 
         manager.activateSplit(bg.id);
         expect(manager.activeSplitId()).toBe(fg.id);
 
         manager.setExclusionFilter(undefined);
+        expect(shouldShowSplitCloseButton(manager)).toBe(true);
         manager.activateSplit(bg.id);
         expect(manager.activeSplitId()).toBe(bg.id);
 

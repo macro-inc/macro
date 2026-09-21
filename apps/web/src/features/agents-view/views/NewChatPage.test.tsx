@@ -1,3 +1,4 @@
+import type { InputAttachmentData } from '@channel/Input/types';
 import { CURSOR_BOT_ID } from '@core/constant/cursorAgent';
 import { MACRO_CODER_BOT_ID } from '@core/constant/macroCoder';
 import {
@@ -15,8 +16,15 @@ import { NewChatPage } from './NewChatPage';
 
 const mocks = vi.hoisted(() => ({
   openSettings: vi.fn(),
+  attachments: [] as InputAttachmentData[],
   recentIds: [] as string[],
+  recentUrls: [] as string[],
   repositories: [] as { url: string; defaultBranch?: string }[],
+}));
+vi.mock('@core/util/upload', () => ({ uploadFile: vi.fn() }));
+vi.mock('@channel/Input', async () => ({
+  ...(await import('../../channel/Input/attachment-tracker')),
+  uploadInputAttachments: vi.fn(),
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
 vi.mock('@core/constant/SettingsState', () => ({
@@ -29,7 +37,10 @@ vi.mock('@app/features/block-agent/context/recent-agent-selections', () => ({
   }),
 }));
 vi.mock('../primitives/recent-repositories', () => ({
-  createRecentRepositories: () => ({ urls: () => [], remember: vi.fn() }),
+  createRecentRepositories: () => ({
+    urls: () => mocks.recentUrls,
+    remember: vi.fn(),
+  }),
 }));
 vi.mock('../queries/reachable-repositories', () => ({
   createReachableRepositories: () => ({
@@ -80,7 +91,7 @@ type ComposerProps = {
   drawerOpen: boolean;
   draft: string;
   onDraftChange: (draft: string) => void;
-  onSend: (prompt: string) => void;
+  onSend: (prompt: string, attachments: InputAttachmentData[]) => void;
 };
 vi.mock('../components/ChatComposer', () => ({
   ChatComposer: (props: ComposerProps) => (
@@ -94,7 +105,14 @@ vi.mock('../components/ChatComposer', () => ({
         value={props.draft}
         onInput={(event) => props.onDraftChange(event.currentTarget.value)}
       />
-      <button onClick={() => props.onSend(props.draft || 'Prompt')}>
+      <button
+        onClick={() =>
+          props.onSend(
+            props.draft || (mocks.attachments.length ? '' : 'Prompt'),
+            mocks.attachments
+          )
+        }
+      >
         Send
       </button>
     </>
@@ -148,7 +166,9 @@ async function hoverAgent(name: string) {
 describe('agent-led new conversation', () => {
   let motionStyles: HTMLStyleElement;
   beforeEach(() => {
+    mocks.attachments = [];
     mocks.recentIds = [MACRO_CODER_BOT_ID];
+    mocks.recentUrls = [];
     mocks.repositories = [
       { url: 'https://github.com/macro-inc/macro', defaultBranch: 'develop' },
     ];
@@ -229,7 +249,24 @@ describe('agent-led new conversation', () => {
       repoBranch: 'feature/home',
     });
   });
-  it('starts a typed repository on main and a listed one on its default branch', async () => {
+  it('starts a new conversation on Choose repository, not the last used one', async () => {
+    mocks.recentIds = [CURSOR_BOT_ID];
+    mocks.recentUrls = ['https://github.com/macro-inc/macro'];
+    const send = page();
+    expect(
+      screen.getByRole('button', { name: 'Repository' }).textContent
+    ).toContain('Choose repository');
+    expect(
+      screen.getByRole('button', { name: 'Repository' }).textContent
+    ).not.toContain('macro-inc/macro');
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith({
+      botId: CURSOR_BOT_ID,
+      prompt: 'Prompt',
+      repoUrl: undefined,
+    });
+  });
+  it('refuses an unlisted repository and starts a listed one on its default branch', async () => {
     const send = page();
     await selectAgent(/Cursor/);
     fireEvent.click(screen.getByRole('button', { name: 'Repository' }));
@@ -239,39 +276,29 @@ describe('agent-led new conversation', () => {
         target: { value: 'macro-inc/other' },
       }
     );
-    expect(
-      screen.queryByRole('option', { name: 'Choose automatically' })
-    ).toBeNull();
-    fireEvent.click(
-      screen.getByRole('option', { name: 'Use macro-inc/other' })
+    expect(screen.queryAllByRole('option')).toHaveLength(0);
+    expect(screen.getByText(/No repositories match/).textContent).toContain(
+      'macro-inc/other'
     );
+    fireEvent.input(
+      screen.getByRole('combobox', { name: 'Search repositories' }),
+      { target: { value: '' } }
+    );
+    fireEvent.click(screen.getByRole('option', { name: 'macro-inc/macro' }));
     expect(
       screen.getByRole('button', { name: 'Branch' }).textContent
-    ).toContain('main');
+    ).toContain('develop');
     fireEvent.click(screen.getByRole('button', { name: 'Branch' }));
     fireEvent.input(screen.getByRole('textbox', { name: 'Starting branch' }), {
-      target: { value: 'feature/other' },
+      target: { value: 'feature/home' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Use branch' }));
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenLastCalledWith({
       botId: CURSOR_BOT_ID,
       prompt: 'Prompt',
-      repoUrl: 'https://github.com/macro-inc/other',
-      repoBranch: 'feature/other',
-    });
-    // Another repository drops the chosen branch for its own default.
-    fireEvent.click(screen.getByRole('button', { name: 'Repository' }));
-    fireEvent.click(screen.getByRole('option', { name: 'macro-inc/macro' }));
-    expect(
-      screen.getByRole('button', { name: 'Branch' }).textContent
-    ).toContain('develop');
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-    expect(send).toHaveBeenLastCalledWith({
-      botId: CURSOR_BOT_ID,
-      prompt: 'Prompt',
       repoUrl: 'https://github.com/macro-inc/macro',
-      repoBranch: 'develop',
+      repoBranch: 'feature/home',
     });
   });
   it('uses a saved agent without sending a per-session model override', async () => {
@@ -404,12 +431,28 @@ describe('agent-led new conversation', () => {
     );
   });
   it('groups by kind and selects direct models through Macro with readable names and icons', async () => {
-    const send = page();
+    const send = page(true, [
+      {
+        bot: { id: 'saved-agent', name: 'Reviewer', handle: 'reviewer' },
+        harness: 'in-memory',
+        default_model: 'saved-default',
+      },
+    ]);
     await selectAgent(/Cursor/);
     openAgents();
-    const coding = within(screen.getByRole('group', { name: 'Coding agents' }));
-    expect(screen.queryByRole('group', { name: 'Agents' })).toBeNull();
-    const models = within(screen.getByRole('group', { name: 'Models' }));
+    const modelsGroup = screen.getByRole('group', { name: 'Models' });
+    const agentsGroup = screen.getByRole('group', { name: 'Agents' });
+    const codingGroup = screen.getByRole('group', { name: 'Coding agents' });
+    expect(
+      modelsGroup.compareDocumentPosition(agentsGroup) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(
+      agentsGroup.compareDocumentPosition(codingGroup) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    const coding = within(codingGroup);
+    const models = within(modelsGroup);
     expect(coding.getByRole('menuitem', { name: /Cursor/ })).toBeTruthy();
     expect(coding.queryByRole('menuitem', { name: /Macro/ })).toBeNull();
     expect(screen.queryByRole('menuitem', { name: /Macro/ })).toBeNull();
@@ -457,4 +500,31 @@ describe('agent-led new conversation', () => {
     );
     expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(true);
   });
+});
+
+it('starts a conversation with an uploaded image and no text', () => {
+  mocks.attachments = [
+    {
+      id: 'sfs-image',
+      name: 'pasted.png',
+      kind: 'image',
+      mimeType: 'image/png',
+      size: 123,
+    },
+  ];
+  const start = page();
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  expect(start).toHaveBeenCalledWith(
+    expect.objectContaining({
+      prompt: '',
+      attachments: [
+        {
+          uri: expect.stringContaining('sfs-image'),
+          name: 'pasted.png',
+          mimeType: 'image/png',
+          size: 123,
+        },
+      ],
+    })
+  );
 });

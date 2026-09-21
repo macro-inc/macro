@@ -202,6 +202,7 @@ describe('deriveMagicChipPresentation', () => {
             },
             {
               kind: 'permission',
+              requestId: 'perm-1',
               toolCall: 'tool',
               options: [],
               outcome: { kind },
@@ -223,7 +224,7 @@ describe('deriveMagicChipPresentation', () => {
       response: response({
         parts: [
           {
-            kind: 'elicitation',
+            kind: 'elicitation' as const,
             requestId: 0,
             toolCall: 'tool',
             message: 'Which approach?',
@@ -362,7 +363,8 @@ describe('deriveMagicChipPresentation', () => {
 
   describe('a question the agent is waiting on', () => {
     const asking = {
-      question: {
+      request: {
+        kind: 'elicitation' as const,
         requestId: 9,
         turn: 0,
         toolCall: 'toolu_evt',
@@ -380,6 +382,7 @@ describe('deriveMagicChipPresentation', () => {
         },
       },
       canAnswer: true,
+      answering: false,
     };
 
     it('outranks whatever else the open turn is doing, keeping the answer so far', () => {
@@ -478,7 +481,8 @@ describe('presentationStatus', () => {
     busy: true,
   };
   const question = {
-    question: {
+    request: {
+      kind: 'elicitation' as const,
       requestId: 1,
       turn: 0,
       toolCall: null,
@@ -499,14 +503,14 @@ describe('presentationStatus', () => {
       presentationStatus({
         kind: 'asking',
         markdown: '',
-        asking: { ...question, canAnswer: true },
+        asking: { ...question, canAnswer: true, answering: false },
       })
     ).toEqual({ label: 'Waiting for you', busy: false });
     expect(
       presentationStatus({
         kind: 'asking',
         markdown: '',
-        asking: { ...question, canAnswer: false },
+        asking: { ...question, canAnswer: false, answering: false },
       })
     ).toEqual({ label: 'Waiting for an editor', busy: false });
   });

@@ -22,6 +22,8 @@ use specta::Type;
 mod elicitation;
 /// Per-push change reports.
 mod event;
+/// Requests currently awaiting a user response.
+mod interaction;
 /// Session-level metadata.
 mod metadata;
 /// The parts a message is made of.
@@ -47,6 +49,7 @@ pub use elicitation::{
     ElicitationSchema, PendingElicitation,
 };
 pub use event::{FoldEvent, OwnedFoldEvent};
+pub use interaction::{PendingInteraction, PendingPermission};
 pub use metadata::{AvailableCommand, Harness, ModelOption, SessionMetadata, TurnState};
 pub use part::{Control, ControlOutcome, MessagePart, StopReason};
 pub use permission::{PermissionOption, PermissionOptionKind, PermissionOutcome};
@@ -74,6 +77,33 @@ pub struct TurnId(pub u32);
 #[serde(transparent)]
 #[specta(transparent)]
 pub struct ToolUseId(pub String);
+
+/// The JSON-RPC id of a request the agent made, as the agent wrote it.
+///
+/// Kept in the agent's own shape - a number stays a number - because an
+/// answer has to echo it exactly; `"7"` does not answer `7`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Type)]
+#[serde(untagged)]
+pub enum AgentRequestId {
+    /// A numeric id. Exported as a plain TypeScript number: agents count
+    /// requests from zero, nowhere near where an `i64` stops round-tripping.
+    Number(#[specta(type = i32)] i64),
+    /// A string id.
+    Str(String),
+}
+
+impl From<&agent_client_protocol::schema::v1::RequestId> for AgentRequestId {
+    fn from(id: &agent_client_protocol::schema::v1::RequestId) -> Self {
+        use agent_client_protocol::schema::v1::RequestId;
+        match id {
+            RequestId::Number(number) => Self::Number(*number),
+            RequestId::Str(text) => Self::Str(text.clone()),
+            // Requests carry an id by definition; a null one is a protocol
+            // violation the fold renders rather than rejects.
+            RequestId::Null => Self::Str(id.to_string()),
+        }
+    }
+}
 
 /// The natural key of a [`FoldedMessage`] within its session.
 ///

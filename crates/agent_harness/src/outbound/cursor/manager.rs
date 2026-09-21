@@ -284,7 +284,10 @@ where
         fields(agent.session.id = %session.id)
     )]
     async fn client_for(&self, session: &AgentSession) -> Result<(CursorClient, Option<String>)> {
-        let config = self.keys.resolve(&session.owner_id).await?;
+        // The key is a person's: a session owned by anything else has no
+        // Cursor account to run on, and is refused here rather than resolved
+        // as though it did.
+        let config = self.keys.resolve(session.owner_user()?).await?;
         let client = CursorClient::new(CursorConfig {
             api_key: ApiKey::new(config.key.expose()),
             base_url: self.base_url.clone(),
@@ -322,6 +325,7 @@ where
         restore: Option<RestoredCursorSession>,
     ) -> Result<agent_session::domain::connection::RuntimeAttachment<PipeTransport>> {
         let session_id = session.id;
+        let owner = session.owner_user()?.clone();
         let owner_binding: Option<agent_session::domain::connection::AttachmentActivation>;
         let journal: Arc<dyn cursor_cloud_agents::domain::journal::CursorJournal> = match &self
             .journal_storage
@@ -367,7 +371,7 @@ where
                 super::pull_request::CursorPullRequestReporter {
                     service: service.clone(),
                     session: session_id,
-                    owner: session.owner_id.clone(),
+                    owner: owner.clone(),
                 },
             ));
         }
@@ -378,7 +382,7 @@ where
             Arc::clone(&self.repositories),
             self.sessions.clone(),
             Arc::clone(&self.usage),
-            session.owner_id.clone(),
+            owner,
             session_id,
         );
         let service = Arc::new(

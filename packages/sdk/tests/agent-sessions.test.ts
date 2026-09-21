@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import type { AgentSessionResponse } from '../generated/agent-harness/types.gen';
+import type {
+  AgentSessionChangesResponse,
+  AgentSessionResponse,
+} from '../generated/agent-harness/types.gen';
 import { Macro } from '../src/macro';
 
 const originalFetch = globalThis.fetch;
@@ -24,6 +27,76 @@ afterEach(() => {
 });
 
 describe('AgentSession', () => {
+  test('reads fresh changes and patch data and requests asynchronous capture', async () => {
+    const requests: Request[] = [];
+    const snapshot: AgentSessionChangesResponse = {
+      capturing: false,
+      changeset: null,
+      attempt: null,
+    };
+    const patch = 'diff --git a/file.txt b/file.txt\n';
+    globalThis.fetch = (async (input) => {
+      const request = input instanceof Request ? input : new Request(input);
+      requests.push(request);
+      if (request.url.endsWith('/patch')) {
+        return Response.json({ patch });
+      }
+      if (request.url.endsWith('/refresh')) {
+        snapshot.capturing = true;
+        return Response.json(snapshot, { status: 202 });
+      }
+      return Response.json(snapshot);
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { 'agent-harness': 'https://agent.example.test' },
+    });
+    const agent = macro.agentSessions.byId(sessionId);
+
+    await expect(agent.changes()).resolves.toEqual(snapshot);
+    await expect(agent.changesPatch()).resolves.toBe(patch);
+    await expect(agent.refreshChanges()).resolves.toMatchObject({
+      capturing: true,
+    });
+    await expect(agent.changes()).resolves.toMatchObject({ capturing: true });
+
+    const base = `https://agent.example.test/agent-sessions/${sessionId}/changes`;
+    expect(requests.map((request) => [request.method, request.url])).toEqual([
+      ['GET', base],
+      ['GET', `${base}/patch`],
+      ['POST', `${base}/refresh`],
+      ['GET', base],
+    ]);
+    expect(
+      requests.every(
+        (request) =>
+          request.headers.get('authorization') === 'Bearer user-token',
+      ),
+    ).toBe(true);
+  });
+
+  test('preserves access errors from changes endpoints', async () => {
+    globalThis.fetch = (async (_input) =>
+      Response.json({ message: 'Forbidden' }, { status: 403 })) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { 'agent-harness': 'https://agent.example.test' },
+    });
+    const agent = macro.agentSessions.byId(sessionId);
+
+    for (const read of [
+      () => agent.changes(),
+      () => agent.changesPatch(),
+      () => agent.refreshChanges(),
+    ]) {
+      await expect(read()).rejects.toMatchObject({
+        name: 'MacroApiError',
+        status: 403,
+        data: { message: 'Forbidden' },
+      });
+    }
+  });
+
   test('renames through the agent-harness service with user auth', async () => {
     let request: Request | undefined;
     globalThis.fetch = (async (input) => {

@@ -262,7 +262,9 @@ const graphqlSoupClient = createClient({
   preferGetMethod: false,
 });
 
-function createGraphqlSoupWebSocketClient(): GraphqlWsClient {
+function createGraphqlSoupWebSocketClient(
+  onConnected: () => void
+): GraphqlWsClient {
   const resolveWebSocketUrl = createGraphqlSoupWebSocketUrlResolver({
     dssHost,
     bearerTokenAuth: ENABLE_BEARER_TOKEN_AUTH,
@@ -277,6 +279,7 @@ function createGraphqlSoupWebSocketClient(): GraphqlWsClient {
   return createGraphqlWsClient({
     url: resolveWebSocketUrl,
     retryAttempts: SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS,
+    on: { connected: onConnected },
     shouldRetry: shouldRetryGraphqlSoupWebSocket,
   });
 }
@@ -312,8 +315,10 @@ function disposeUncachedRealtimeClient(): void {
 function getUncachedRealtimeClient(): Client {
   if (uncachedRealtimeClient) return uncachedRealtimeClient;
 
-  const websocketClient = createGraphqlSoupWebSocketClient();
   const subscriptionsLifecycle = createGraphqlSoupSubscriptionsLifecycle();
+  const websocketClient = createGraphqlSoupWebSocketClient(
+    subscriptionsLifecycle.connected
+  );
   const client = createClient({
     url: `${dssHost}/items/soup/graphql`,
     preferGetMethod: false,
@@ -427,7 +432,9 @@ export function getGraphqlSoupClient(): Client {
             onInitializationError,
             rolloutCohort: rollout.cohort,
           });
-      const graphqlWsClient = createGraphqlSoupWebSocketClient();
+      const graphqlWsClient = createGraphqlSoupWebSocketClient(
+        subscriptionsLifecycle.connected
+      );
       websocketClient = graphqlWsClient;
       const client = createClient({
         url: `${dssHost}/items/soup/graphql`,

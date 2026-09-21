@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            request_url,\n            request_headers_redacted,\n            request_body,\n            event,\n            event_schema_version,\n            event_entity_type,\n            event_entity_id,\n            event_ordering_key\n        FROM webhook_delivery\n        WHERE webhook_id = $1 AND event_id = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "request_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "request_headers_redacted",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "request_body",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "event",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "event_schema_version",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "event_entity_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "event_entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "event_ordering_key",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "99c1afe678447276f96470657a80b018d73395ce772073ccac806029fcd5079b"
+}

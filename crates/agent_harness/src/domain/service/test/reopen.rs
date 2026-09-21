@@ -10,7 +10,7 @@ async fn codex_session(
         CreateAgentSessionParams {
             repo_branch: None,
             id,
-            owner_id: sender(),
+            owner_id: model_owner::Owner::User(sender()),
             bot_id: bot_id::CODEX_BOT_ID,
             thread_id: None,
             originating_message_id: None,

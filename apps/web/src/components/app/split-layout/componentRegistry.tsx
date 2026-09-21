@@ -6,7 +6,10 @@ import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { ChannelsView } from '@app/features/channels-view/channels-view';
-import { DriveView } from '@app/features/drive-view/drive-view';
+import {
+  DriveView,
+  type DriveViewProps,
+} from '@app/features/drive-view/drive-view';
 import { EmailCompose } from '@app/features/email-compose/email-compose';
 import { EmailView } from '@app/features/email-view/email-view';
 import { GettingStarted } from '@app/features/getting-started';
@@ -20,6 +23,7 @@ import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-prese
 import { SoupView } from '@app/features/next-soup/soup-view/soup-view';
 import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
 import { ReminderEditorSplit } from '@app/features/reminders/ReminderEditorSplit';
+import { McpConnections } from '@app/features/settings/McpConnections';
 import { SettingsPanelComponentWrapper } from '@app/features/settings/Settings';
 import { TasksView } from '@app/features/tasks-view/tasks-view';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
@@ -117,7 +121,7 @@ type ComponentParams = Record<string, unknown>;
 
 type ComponentFactory = (params: ComponentParams) => JSXElement;
 
-type DocumentsComponentParams = {
+type DocumentsComponentParams = DriveViewProps & {
   initialFilters?: Query;
   initialClientFilters?: SetPredicatesInput<string>;
 };
@@ -409,6 +413,13 @@ function RegisteredAgentsView(params: ComponentParams) {
   const panel = useSplitPanelOrThrow();
   const agentsFlag = useFeatureFlag(enableChatV3Agents);
   const useAgentsWorkspace = () => agentsFlag().enabled && !isTouchDevice();
+  const connectionsRequested = () => {
+    const content = panel.handle.content();
+    return (
+      content.type === 'component' &&
+      content.params?.agentPage === 'connections'
+    );
+  };
 
   createRenderEffect(() => {
     if (agentsFlag().loading) return;
@@ -422,19 +433,26 @@ function RegisteredAgentsView(params: ComponentParams) {
       <Show
         when={useAgentsWorkspace()}
         fallback={
-          route ? (
-            <RedirectSplit
-              to={{
-                type:
-                  route.conversation.type === 'agent_session'
-                    ? 'agent'
-                    : 'chat',
-                id: route.conversation.id,
-              }}
-            />
-          ) : (
-            <LegacyAgentsView />
-          )
+          <Show
+            when={connectionsRequested()}
+            fallback={
+              route ? (
+                <RedirectSplit
+                  to={{
+                    type:
+                      route.conversation.type === 'agent_session'
+                        ? 'agent'
+                        : 'chat',
+                    id: route.conversation.id,
+                  }}
+                />
+              ) : (
+                <LegacyAgentsView />
+              )
+            }
+          >
+            <McpConnections />
+          </Show>
         }
       >
         <AgentsView initialRoute={route} />
@@ -507,10 +525,7 @@ registerComponent(
             />
           }
         >
-          <DriveView
-            initialFilters={params.initialFilters}
-            initialClientFilters={params.initialClientFilters}
-          />
+          <DriveView initialFacets={params.initialFacets} />
         </Show>
       </Show>
     );
@@ -847,6 +862,11 @@ if (LOCAL_ONLY) {
   registerComponent(
     'agent-replay',
     lazy(() => import('@app/features/block-agent/debug/replay/Replay'))
+  );
+
+  registerComponent(
+    'agent-changes-ui',
+    lazy(() => import('@app/features/agent-changes/debug/Gallery'))
   );
 
   registerComponent(

@@ -1,15 +1,17 @@
 import { ChannelInput, type InputHandle } from '@channel/Input';
 import { buildPostMessageSendPayload } from '@channel/Input/message-payload';
+import { buildMessageLink } from '@channel/Thread/utils/message-actions';
 import { useMessageBotMentionUsers } from '@channel/use-channel-bot-mention-users';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { useUserId } from '@core/context/user';
 import { useContacts } from '@queries/contacts/contacts';
 import { useMessageLink } from '@queries/messages/document-messages';
 import { useSendMessageMutation } from '@queries/messages/mutations';
+import { useChannelReferenceThreadsQuery } from '@queries/messages/references';
 import { useMessageTimelineQuery } from '@queries/messages/timeline';
 import type { MessageParent } from '@service-storage/messages';
 import { createMemo, createSignal, For, Show } from 'solid-js';
-import { MessageThread } from './MessageThread';
+import { MessageThread, MessageThreadFromSource } from './MessageThread';
 import type { MessageData } from './types';
 
 /** The root composer, inline below the roots or floating on touch devices. */
@@ -65,6 +67,7 @@ export function DocumentConversation(props: {
   hideWhenEmpty?: boolean;
 }) {
   const [expanded, setExpanded] = createSignal(true);
+  const [includeReferences, setIncludeReferences] = createSignal(false);
   const target = useMessageLink(
     () => props.parent,
     () => props.targetId
@@ -74,6 +77,10 @@ export function DocumentConversation(props: {
     () => props.parent,
     target.rootId,
     target.resolved
+  );
+  const references = useChannelReferenceThreadsQuery(
+    () => props.parent,
+    includeReferences
   );
   // Until the link resolves, the shared latest page would flash before the window jumps.
   const messages = () =>
@@ -91,8 +98,25 @@ export function DocumentConversation(props: {
   const messagesById = createMemo(
     () => new Map(messages().map((message) => [message.id, message]))
   );
+  // Keyed by root so a refreshed list keeps each source thread's drafts and
+  // focus; a failed refetch keeps the last authorized list rather than
+  // unmounting the threads. Unchecking empties it even though the disabled
+  // query retains its last result.
+  const sourcesById = createMemo(
+    () =>
+      new Map(
+        (includeReferences() && !references.isPending
+          ? (references.data ?? [])
+          : []
+        ).map((item) => [item.root_id, item])
+      )
+  );
   return (
-    <Show when={!props.hideWhenEmpty || messages().length > 0}>
+    <Show
+      when={
+        !props.hideWhenEmpty || messages().length > 0 || sourcesById().size > 0
+      }
+    >
       <section class="mt-3 pb-12" data-document-conversation>
         <button
           type="button"
@@ -102,6 +126,16 @@ export function DocumentConversation(props: {
           {expanded() ? '▾' : '▸'} {props.label ?? 'Discussion'}
         </button>
         <Show when={expanded() || props.targetId}>
+          <label class="mt-2 flex items-center gap-2 text-xs text-ink-muted">
+            <input
+              type="checkbox"
+              checked={includeReferences()}
+              onChange={(event) =>
+                setIncludeReferences(event.currentTarget.checked)
+              }
+            />
+            Include channel mentions
+          </label>
           <StaticMarkdownContext>
             <Show when={!target.resolved() || query.isPending}>
               <p class="text-xs text-ink-muted">Loading comments...</p>
@@ -137,6 +171,46 @@ export function DocumentConversation(props: {
               >
                 Load newer comments
               </button>
+            </Show>
+            <Show when={includeReferences()}>
+              <Show when={references.isPending}>
+                <p class="text-xs text-ink-muted">
+                  Loading channel mentions...
+                </p>
+              </Show>
+              <Show when={references.isError}>
+                <button onClick={() => void references.refetch()}>
+                  Could not load channel mentions. Retry
+                </button>
+              </Show>
+              <Show when={references.isSuccess && sourcesById().size === 0}>
+                <p class="text-xs text-ink-muted">
+                  No channel threads mention this document.
+                </p>
+              </Show>
+              <For each={[...sourcesById().keys()]}>
+                {(id) => {
+                  const item = () => sourcesById().get(id)!;
+                  return (
+                    <div class="mt-4" data-source-channel-thread={id}>
+                      <a
+                        class="text-xs text-ink-muted underline"
+                        href={buildMessageLink(
+                          item().parent.id,
+                          item().root_id
+                        )}
+                      >
+                        From {item().channel_name || 'Channel conversation'}
+                      </a>
+                      <MessageThreadFromSource
+                        parent={item().parent}
+                        rootId={item().root_id}
+                        canWrite={item().can_reply}
+                      />
+                    </div>
+                  );
+                }}
+              </For>
             </Show>
             <Show when={props.canWrite && !props.hideComposer}>
               <div class="mt-4">

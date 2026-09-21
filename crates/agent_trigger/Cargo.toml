@@ -48,4 +48,5 @@ messages = { path = "../messages", features = ["test-utils"] }
 agent_session = { path = "../agent_session", features = ["test-utils"] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 mockall = { workspace = true }
+model_owner = { path = "../model_owner" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

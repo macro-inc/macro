@@ -703,10 +703,13 @@ export const enableSpreadsheets = defineFlag({
 /**
  * Document comments read and write through the shared message API and render
  * with the channel message components; the legacy annotation comment stores
- * stay in place while this is off. Channels are not gated. Override locally with
- * VITE_ENABLE_UNIFIED_DOCUMENT_DISCUSSIONS.
+ * stay in place while this is off. Channels are not gated. On in dev, where the
+ * legacy comments have already been imported into the message store; production
+ * follows PostHog and stays off until its own import has run. Override locally
+ * with VITE_ENABLE_UNIFIED_DOCUMENT_DISCUSSIONS.
  */
 export const enableUnifiedDocumentDiscussions = defineFlag({
   key: 'enable-unified-document-discussions',
   env: 'ENABLE_UNIFIED_DOCUMENT_DISCUSSIONS',
+  default: onInDev,
 });

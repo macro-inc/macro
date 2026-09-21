@@ -1,17 +1,21 @@
 //! The machine itself: one input in, ordered effects out.
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 
 use agent_client_protocol::schema::v1::{
     ClientCapabilities, CreateElicitationRequest, CreateElicitationResponse, ElicitationAction,
     ElicitationCapabilities, ElicitationFormCapabilities, ElicitationMode, ElicitationScope,
     ElicitationUrlCapabilities, InitializeRequest, InitializeResponse, LoadSessionRequest,
-    LoadSessionResponse, McpServer, NewSessionRequest, NewSessionResponse, PermissionOptionKind,
-    RequestId, RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse,
-    Response, ResumeSessionRequest, ResumeSessionResponse, SelectedPermissionOutcome, SessionId,
+    LoadSessionResponse, McpServer, NewSessionRequest, NewSessionResponse, PermissionOptionId,
+    PermissionOptionKind, RequestId, RequestPermissionOutcome, RequestPermissionRequest, Response,
+    ResumeSessionRequest, ResumeSessionResponse, SelectedPermissionOutcome, SessionConfigKind,
+    SessionId, SetSessionConfigOptionResponse,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
-use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
+use agent_runtime_protocol::domain::action::{
+    AgentAction, AgentActionId, AgentPermissionAction, MODEL_CONFIG_ID, PermissionAnswer,
+    permission_response,
+};
 use agent_runtime_protocol::domain::schema::v0::{
     AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage,
 };
@@ -22,8 +26,9 @@ use crate::domain::error::AgentSessionError;
 use crate::domain::model::AgentSessionId;
 
 use super::types::{
-    CloseReason, Effect, Input, PendingAction, PendingElicitation, RuntimeStatus, SessionOpening,
-    SessionPhase, SessionRestoreSupport, StopReason,
+    CloseReason, Effect, Input, OutstandingPermission, PendingAction, PendingElicitation,
+    PermissionPolicy, RuntimeStatus, SessionOpening, SessionPhase, SessionRestoreSupport,
+    StopReason,
 };
 
 const INITIAL_REQUEST_NUM: u64 = 0;
@@ -57,11 +62,23 @@ pub struct SessionMachine<Token> {
     /// `session/resume`, and `session/load` alike, because the agent process
     /// behind a reconnect is fresh and holds no server from before.
     mcp_servers: Vec<McpServer>,
+    permission_policy: PermissionPolicy,
+    /// Only for a newly created ACP session; restored sessions retain their model.
+    initial_model: Option<String>,
+    /// Permission requests the agent is waiting on, keyed by the agent's own
+    /// request id - the id an answer has to echo. Only ever populated under
+    /// [`PermissionPolicy::Prompt`]; auto-accept answers on arrival.
+    outstanding_permissions: HashMap<RequestId, OutstandingPermission>,
 }
 
 impl<Token> SessionMachine<Token> {
     /// A fresh connection for `id`: booting, nothing queued.
-    pub fn new(id: AgentSessionId, workspace: String, mcp_servers: Vec<McpServer>) -> Self {
+    pub fn new(
+        id: AgentSessionId,
+        workspace: String,
+        mcp_servers: Vec<McpServer>,
+        permission_policy: PermissionPolicy,
+    ) -> Self {
         Self {
             id,
             initialization: None,
@@ -74,6 +91,9 @@ impl<Token> SessionMachine<Token> {
             reload_required: false,
             workspace,
             mcp_servers,
+            permission_policy,
+            initial_model: None,
+            outstanding_permissions: HashMap::new(),
         }
     }
 
@@ -83,6 +103,7 @@ impl<Token> SessionMachine<Token> {
         session_id: SessionId,
         workspace: String,
         mcp_servers: Vec<McpServer>,
+        permission_policy: PermissionPolicy,
     ) -> Self {
         Self {
             id,
@@ -96,7 +117,17 @@ impl<Token> SessionMachine<Token> {
             reload_required: false,
             workspace,
             mcp_servers,
+            permission_policy,
+            initial_model: None,
+            outstanding_permissions: HashMap::new(),
         }
+    }
+
+    /// Select this model before releasing prompts on a newly created ACP session.
+    #[must_use]
+    pub fn with_initial_model(mut self, model: Option<String>) -> Self {
+        self.initial_model = model;
+        self
     }
 
     /// The session this connection belongs to.
@@ -121,9 +152,9 @@ impl<Token> SessionMachine<Token> {
     pub fn status(&self) -> RuntimeStatus {
         match &self.phase {
             SessionPhase::Booting => RuntimeStatus::Booting,
-            SessionPhase::Initializing { .. } | SessionPhase::Opening { .. } => {
-                RuntimeStatus::Handshaking
-            }
+            SessionPhase::Initializing { .. }
+            | SessionPhase::Opening { .. }
+            | SessionPhase::ConfiguringModel { .. } => RuntimeStatus::Handshaking,
             SessionPhase::Live { session_id, .. } => RuntimeStatus::Live {
                 session_id: session_id.clone(),
             },
@@ -193,6 +224,13 @@ impl<Token> SessionMachine<Token> {
     ) -> Vec<Effect<Token>> {
         let mut effects = Vec::new();
 
+        // An answer is not a request of ours to queue and mint an id for: it
+        // resolves one the agent made, and it is only ever valid while that
+        // request is open, which cannot be before the session is live.
+        if let AgentAction::RespondToPermission(answer) = &action {
+            self.on_permission_answer(from, answer, token, &mut effects);
+            return effects;
+        }
         // A stop cancels the question the agent is waiting on, and does so
         // before the cancel notification goes out, so the agent hears the
         // answer to its request before it hears that the turn is over.
@@ -203,7 +241,8 @@ impl<Token> SessionMachine<Token> {
         let session_id = match &self.phase {
             SessionPhase::Booting
             | SessionPhase::Initializing { .. }
-            | SessionPhase::Opening { .. } => {
+            | SessionPhase::Opening { .. }
+            | SessionPhase::ConfiguringModel { .. } => {
                 // An answer cannot be queued: it names a request id that only
                 // a live connection could have received, and any connection
                 // that opens from here is a fresh one.
@@ -325,6 +364,9 @@ impl<Token> SessionMachine<Token> {
         if !matches!(self.phase, SessionPhase::Booting) {
             return;
         }
+        // Request ids restart with the connection, so nothing recorded before
+        // it could be answered now. Empty in practice; cleared on principle.
+        self.outstanding_permissions.clear();
 
         match self.build_initialize_request() {
             Ok((initialize, request_id)) => {
@@ -351,12 +393,13 @@ impl<Token> SessionMachine<Token> {
                 && frame.response_id() == Some(request_id)
             {
                 self.in_flight_turn = None;
+                self.cancel_outstanding_permissions(effects);
                 if self.reload_required {
                     self.begin_reload(effects);
                 }
                 return;
             }
-            self.respond_to_permission_request(&frame, effects);
+            self.on_permission_request(&frame, effects);
             self.hold_or_refuse_elicitation(&frame, effects);
             return;
         }
@@ -369,6 +412,11 @@ impl<Token> SessionMachine<Token> {
             }
             SessionPhase::Opening { request_id, .. } if frame.response_id() == Some(request_id) => {
                 self.on_session_opened(&frame, effects);
+            }
+            SessionPhase::ConfiguringModel { request_id, .. }
+                if frame.response_id() == Some(request_id) =>
+            {
+                self.on_model_selected(&frame, effects);
             }
             _ => {}
         }
@@ -492,15 +540,72 @@ impl<Token> SessionMachine<Token> {
             }
         };
 
-        self.phase = SessionPhase::Live {
-            session_id: session_id.clone(),
-            elicitation: None,
-        };
         if persist {
+            if let Some(model) = self.initial_model.take() {
+                let request_id = self.next_id();
+                match AgentAction::set_model(&model).to_runtime(&session_id, request_id.clone()) {
+                    Ok(message) => {
+                        self.phase = SessionPhase::ConfiguringModel {
+                            request_id,
+                            session_id,
+                            model,
+                        };
+                        effects.push(Effect::Send {
+                            from: None,
+                            message,
+                        });
+                    }
+                    Err(error) => self.die(
+                        StopReason::HandshakeNotBuildable(error.to_string()),
+                        effects,
+                    ),
+                }
+                return;
+            }
             effects.push(Effect::PersistAcpSession {
                 session_id: session_id.clone(),
             });
         }
+        self.finish_opening(session_id, effects);
+    }
+
+    fn on_model_selected(&mut self, frame: &RawJsonRpcMessage, effects: &mut Vec<Effect<Token>>) {
+        let SessionPhase::ConfiguringModel {
+            session_id, model, ..
+        } = &self.phase
+        else {
+            return;
+        };
+        let selected = match frame {
+            RawJsonRpcMessage::Response(Response::Result { result, .. }) => {
+                serde_json::from_value::<SetSessionConfigOptionResponse>(result.clone())
+                    .ok()
+                    .is_some_and(|response| {
+                        response.config_options.iter().any(|option| {
+                            option.id.to_string() == MODEL_CONFIG_ID
+                                && matches!(&option.kind, SessionConfigKind::Select(select)
+                                if select.current_value.to_string() == *model)
+                        })
+                    })
+            }
+            _ => false,
+        };
+        if !selected {
+            self.die(StopReason::ModelNotSelected(model.clone()), effects);
+            return;
+        }
+        let session_id = session_id.clone();
+        effects.push(Effect::PersistAcpSession {
+            session_id: session_id.clone(),
+        });
+        self.finish_opening(session_id, effects);
+    }
+
+    fn finish_opening(&mut self, session_id: SessionId, effects: &mut Vec<Effect<Token>>) {
+        self.phase = SessionPhase::Live {
+            session_id: session_id.clone(),
+            elicitation: None,
+        };
         if self.reload_required {
             self.begin_reload(effects);
             return;
@@ -584,11 +689,11 @@ impl<Token> SessionMachine<Token> {
         )
     }
 
-    /// Permission prompts require a client response. This autonomous agent has
-    /// no approval UI, so approve the broadest offered allow option instead of
-    /// leaving the turn blocked forever.
-    fn respond_to_permission_request(
-        &self,
+    /// A `session/request_permission` from the agent. The agent blocks until
+    /// it is answered, so every path out of here either answers now or records
+    /// the request so a user's answer can find it.
+    fn on_permission_request(
+        &mut self,
         frame: &RawJsonRpcMessage,
         effects: &mut Vec<Effect<Token>>,
     ) {
@@ -599,39 +704,101 @@ impl<Token> SessionMachine<Token> {
             return;
         }
 
-        let outcome = request
-            .params
-            .clone()
-            .and_then(|params| {
-                serde_json::from_value::<RequestPermissionRequest>(params.into_value()).ok()
-            })
-            .and_then(|request| {
-                request
+        let parsed = request.params.clone().and_then(|params| {
+            serde_json::from_value::<RequestPermissionRequest>(params.into_value()).ok()
+        });
+        let Some(parsed) = parsed else {
+            // Nothing to show a user and nothing to choose from, under either
+            // policy; cancelling is the only answer that does not invent one.
+            self.send_permission_response(
+                None,
+                request.id.clone(),
+                RequestPermissionOutcome::Cancelled,
+                effects,
+            );
+            return;
+        };
+
+        match self.permission_policy {
+            PermissionPolicy::AutoAccept => {
+                let outcome = parsed
                     .options
                     .iter()
                     .find(|option| matches!(option.kind, PermissionOptionKind::AllowAlways))
                     .or_else(|| {
-                        request
+                        parsed
                             .options
                             .iter()
                             .find(|option| matches!(option.kind, PermissionOptionKind::AllowOnce))
                     })
-                    .map(|option| option.option_id.clone())
-            })
-            .map(|option_id| {
-                RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new(option_id))
-            })
-            .unwrap_or(RequestPermissionOutcome::Cancelled);
-        let response = RequestPermissionResponse::new(outcome);
-        let Ok(result) = serde_json::to_value(response) else {
+                    .map(|option| {
+                        RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new(
+                            option.option_id.clone(),
+                        ))
+                    })
+                    .unwrap_or(RequestPermissionOutcome::Cancelled);
+                self.send_permission_response(None, request.id.clone(), outcome, effects);
+            }
+            // Nothing goes out: the logged request is what the fold renders
+            // as a pending prompt, and the answer arrives as a command.
+            PermissionPolicy::Prompt => {
+                let options = parsed
+                    .options
+                    .into_iter()
+                    .map(|option| option.option_id)
+                    .collect();
+                self.outstanding_permissions
+                    .insert(request.id.clone(), OutstandingPermission { options });
+            }
+        }
+    }
+
+    /// A user's answer to a request held open under
+    /// [`PermissionPolicy::Prompt`].
+    fn on_permission_answer(
+        &mut self,
+        from: Option<MacroUserIdStr<'static>>,
+        answer: &AgentPermissionAction,
+        token: Token,
+        effects: &mut Vec<Effect<Token>>,
+    ) {
+        if matches!(self.phase, SessionPhase::Dead) {
+            effects.push(Effect::Complete {
+                token,
+                result: Err(AgentSessionError::Disconnected(self.id)),
+            });
+            return;
+        }
+        let Some(outstanding) = self.outstanding_permissions.get(&answer.request_id) else {
+            effects.push(Effect::Complete {
+                token,
+                result: Err(AgentSessionError::PermissionRequestNotFound(self.id)),
+            });
             return;
         };
-        effects.push(Effect::Send {
-            from: None,
-            message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::response(
-                request.id.clone(),
-                Ok(result),
-            ))),
+        if let PermissionAnswer::Selected { option_id } = &answer.answer
+            && !outstanding
+                .options
+                .iter()
+                .any(|offered| offered == &PermissionOptionId::new(option_id.clone()))
+        {
+            effects.push(Effect::Complete {
+                token,
+                result: Err(AgentSessionError::PermissionOptionUnknown(self.id)),
+            });
+            return;
+        }
+
+        self.outstanding_permissions.remove(&answer.request_id);
+        self.send_permission_response(
+            from,
+            answer.request_id.clone(),
+            answer.answer.to_acp(),
+            effects,
+        );
+        effects.push(Effect::Complete {
+            token,
+            result: Ok(()),
         });
     }
 
@@ -743,6 +910,35 @@ impl<Token> SessionMachine<Token> {
         });
     }
 
+    /// Resolve every request the agent is still waiting on with `Cancelled`.
+    /// ACP requires each request to be answered, and once the turn is over -
+    /// cancelled, ended, or the connection gone - there is no answer to give.
+    fn cancel_outstanding_permissions(&mut self, effects: &mut Vec<Effect<Token>>) {
+        let ids: Vec<RequestId> = self
+            .outstanding_permissions
+            .drain()
+            .map(|(id, _)| id)
+            .collect();
+        for id in ids {
+            self.send_permission_response(None, id, RequestPermissionOutcome::Cancelled, effects);
+        }
+    }
+
+    fn send_permission_response(
+        &self,
+        from: Option<MacroUserIdStr<'static>>,
+        request_id: RequestId,
+        outcome: RequestPermissionOutcome,
+        effects: &mut Vec<Effect<Token>>,
+    ) {
+        match permission_response(request_id, outcome) {
+            Ok(message) => effects.push(Effect::Send { from, message }),
+            Err(error) => {
+                tracing::error!(error = ?error, id = %self.id, "could not build a permission response")
+            }
+        }
+    }
+
     /// Send everything queued, oldest first. Each action's [`Effect::Complete`]
     /// directly follows its [`Effect::Send`], so the shell aborting a batch
     /// mid-way strands no false completions - and an action that cannot be
@@ -772,6 +968,11 @@ impl<Token> SessionMachine<Token> {
                         from: queued.from,
                         message,
                     });
+                    // ACP: after `session/cancel`, the client answers every
+                    // permission request still open with `Cancelled`.
+                    if matches!(queued.action, AgentAction::Stop) {
+                        self.cancel_outstanding_permissions(effects);
+                    }
                     effects.push(Effect::Complete {
                         token: queued.token,
                         result: Ok(()),
@@ -794,6 +995,14 @@ impl<Token> SessionMachine<Token> {
     fn die(&mut self, reason: StopReason, effects: &mut Vec<Effect<Token>>) {
         self.phase = SessionPhase::Dead;
         self.in_flight_turn = None;
+        // Open permission requests are answered `Cancelled` while the agent
+        // can still hear it. When the transport itself is what died, the
+        // sends could only fail; the agent is gone either way.
+        if reason.transport_is_up() {
+            self.cancel_outstanding_permissions(effects);
+        } else {
+            self.outstanding_permissions.clear();
+        }
         while let Some(queued) = self.pending.pop_front() {
             effects.push(Effect::Complete {
                 token: queued.token,

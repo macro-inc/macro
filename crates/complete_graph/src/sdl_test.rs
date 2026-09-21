@@ -119,6 +119,8 @@ fn soup_response_schema_exposes_frontend_fields() {
         "type GraphqlNewNotification {",
         "notification: GraphqlNotification!",
         "type GraphqlUpdatedNotification {",
+        "activityUpdates: GraphqlActivityPatch!",
+        "union GraphqlActivityPatch = GraphqlActivityEvent | GraphqlActivityInvalidation",
         "type GraphqlNotification {",
         "metadata: GraphqlNotifEvent!",
     ] {

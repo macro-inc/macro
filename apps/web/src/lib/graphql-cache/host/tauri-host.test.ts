@@ -2,9 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const invokeMock = vi.hoisted(() => vi.fn());
 const listenMock = vi.hoisted(() => vi.fn());
+const emitMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
-vi.mock('@tauri-apps/api/event', () => ({ listen: listenMock }));
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: listenMock,
+  emit: emitMock,
+}));
 
 import {
   type EntityFilterCacheArgs,
@@ -40,6 +44,7 @@ describe('createTauriCacheHost', () => {
     vi.clearAllMocks();
     eventCallbacks = new Map();
     invokeMock.mockResolvedValue(null);
+    emitMock.mockResolvedValue(undefined);
     listenMock.mockImplementation((event: string, cb: EventCallback) => {
       eventCallbacks.set(event, cb);
       return Promise.resolve(unlisten);
@@ -410,7 +415,12 @@ describe('createTauriCacheHost', () => {
 
   it('returns only the native hydration projection', async () => {
     const host = createTauriCacheHost({ scope: 'scope-1' });
-    const hydration = { kind: 'data' as const, data: { cursor: 'next' } };
+    const hydration = {
+      kind: 'data' as const,
+      data: { cursor: 'next' },
+      revision: '1',
+      revisionAdvanced: true,
+    };
     invokeMock.mockImplementation((command: string) =>
       Promise.resolve(command === 'graphql_cache_hydrate' ? hydration : null)
     );
@@ -422,6 +432,9 @@ describe('createTauriCacheHost', () => {
         identity: 'user-1',
       })
     ).resolves.toEqual(hydration);
+    expect(emitMock).toHaveBeenCalledWith('graphql-cache://cache-hydrated', {
+      revision: '1',
+    });
     expect(invokeMock).toHaveBeenCalledWith('graphql_cache_hydrate', {
       query: 'query Backfill { items @cacheOnly { id } cursor }',
       operationName: undefined,
@@ -429,6 +442,112 @@ describe('createTauriCacheHost', () => {
       data: { items: [{ id: '1' }], cursor: 'next' },
       identity: 'user-1',
     });
+  });
+
+  it.each(['data', 'void'])(
+    'skips native no-op hydration notifications (%s)',
+    async (kind) => {
+      const host = createTauriCacheHost({ scope: 'scope-1' });
+      const hydration = {
+        kind,
+        data: null,
+        revision: '5',
+        revisionAdvanced: false,
+      };
+      invokeMock.mockImplementation(async (command: string) =>
+        command === 'graphql_cache_hydrate' ? hydration : null
+      );
+      await expect(
+        host.hydrateQuery({ query: '{ x }', data: { x: 1 } })
+      ).resolves.toEqual(hydration);
+      expect(emitMock).not.toHaveBeenCalled();
+      host.dispose();
+    }
+  );
+
+  it('deduplicates repeated and out-of-order legacy revisions without an extra IPC read', async () => {
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    const revisions = [
+      '9007199254740993',
+      '9007199254740993',
+      '9007199254740992',
+      '9007199254740994',
+    ];
+    invokeMock.mockImplementation(async (command: string) =>
+      command === 'graphql_cache_hydrate'
+        ? { kind: 'void', revision: revisions.shift() }
+        : null
+    );
+    for (let i = 0; i < 4; i++)
+      await host.hydrateQuery({ query: '{ x }', data: { x: 1 } });
+    expect(emitMock.mock.calls).toEqual([
+      ['graphql-cache://cache-hydrated', { revision: '9007199254740993' }],
+      ['graphql-cache://cache-hydrated', { revision: '9007199254740994' }],
+    ]);
+    expect(invokeMock).not.toHaveBeenCalledWith(
+      'graphql_cache_current_revision',
+      expect.anything()
+    );
+    host.dispose();
+  });
+
+  it.each(['cache-changed', 'cache-hydrated'])(
+    'does not re-announce a legacy revision already observed via %s',
+    async (event) => {
+      const host = createTauriCacheHost({ scope: 'scope-1' });
+      eventCallbacks.get(`graphql-cache://${event}`)?.({
+        payload: { revision: '7' },
+      });
+      invokeMock.mockImplementation(async (command: string) =>
+        command === 'graphql_cache_hydrate'
+          ? { kind: 'void', revision: '7' }
+          : null
+      );
+      await host.hydrateQuery({ query: '{ x }', data: { x: 1 } });
+      expect(emitMock).not.toHaveBeenCalled();
+      host.dispose();
+    }
+  );
+
+  it('delivers cross-window hydration only to opted-in listeners', async () => {
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    const foreground = vi.fn();
+    const quickAccess = vi.fn();
+    const operations = vi.fn();
+    host.onCacheChanged(foreground);
+    host.onOpsAffected(operations);
+    const unsubscribe = host.onCacheChanged(quickAccess, {
+      includeHydration: true,
+    });
+    const hydrated = () =>
+      eventCallbacks.get('graphql-cache://cache-hydrated')?.({
+        payload: { revision: INITIAL_CACHE_REVISION },
+      });
+    hydrated();
+    expect(quickAccess).toHaveBeenCalledOnce();
+    expect(foreground).not.toHaveBeenCalled();
+    expect(operations).not.toHaveBeenCalled();
+    unsubscribe();
+    hydrated();
+    expect(quickAccess).toHaveBeenCalledOnce();
+    host.onCacheChanged(quickAccess, { includeHydration: true });
+    host.dispose();
+    hydrated();
+    expect(quickAccess).toHaveBeenCalledOnce();
+  });
+
+  it('does not fail a committed hydration when its notification fails', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    const hydration = { kind: 'void', revision: '1', revisionAdvanced: true };
+    invokeMock.mockResolvedValue(hydration);
+    emitMock.mockRejectedValueOnce(new Error('notification failed'));
+    await expect(
+      host.hydrateQuery({ query: '{ x }', data: { x: 1 } })
+    ).resolves.toEqual(hydration);
+    expect(emitMock).toHaveBeenCalledOnce();
+    warning.mockRestore();
+    host.dispose();
   });
 
   it('settles optimistic writes through the dedicated commands', async () => {

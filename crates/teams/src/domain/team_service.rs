@@ -39,9 +39,9 @@ use crate::domain::{
         TeamMemberRoleChangedMetadata, TeamUpdatedMetadata,
     },
     model::{
-        CreateTeamError, CustomerError, DeleteTeamError, FREE_TEAM_MAX_MEMBERS,
-        InviteUsersToTeamError, JoinTeamError, PatchTeamCrmSettingsResponse, PatchTeamRequest,
-        RemoveTeamInviteError, RemoveUserFromTeamError, RestorePermissionsForTeamMembersError,
+        CreateTeamError, CustomerError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
+        PatchTeamCrmSettingsResponse, PatchTeamRequest, RemoveTeamInviteError,
+        RemoveUserFromTeamError, RestorePermissionsForTeamMembersError,
         RevokePermissionsForTeamMembersError, Team, TeamError, TeamInvite, TeamInviteDetails,
         TeamMember, TeamMembers, TeamRole, TeamWithMembers, ToggleAutoJoinDomainError,
         TryJoinTeamByDomainError, is_generic_email_domain, team_slug_from_name,
@@ -418,7 +418,7 @@ where
 
     /// Runs [`Self::backfill_legacy_team_subscription`], treating "the owner
     /// simply has no active subscription" as a benign outcome: the team is a
-    /// free team (capped at [`FREE_TEAM_MAX_MEMBERS`]) rather than an error.
+    /// free team rather than an error. Team size does not require an upgrade.
     /// Every other failure still propagates.
     async fn backfill_legacy_team_subscription_or_free(
         &self,
@@ -711,32 +711,12 @@ where
             }
         }
 
-        let team_plan = self.team_repository.get_team_plan(&team_id).await?;
-        let seat_count = self.team_repository.get_team_seat_count(&team_id).await?;
-
+        // Membership is not capped by plan or team size. Existing invite
+        // permissions still apply; billing and entitlements are handled on join.
         let new_invites = self
             .team_repository
             .get_new_invites(&team_id, invites.clone())
             .await?;
-
-        if let Some(team_plan) = team_plan
-            && seat_count + new_invites.len() as i32 > team_plan.seat_cap()
-        {
-            return Err(InviteUsersToTeamError::NotEnoughOpenSeats);
-        }
-
-        // Free teams (no subscription) are capped at FREE_TEAM_MAX_MEMBERS.
-        if !enterprise
-            && team_plan.is_none()
-            && self
-                .team_repository
-                .get_team_subscription_id(&team_id)
-                .await?
-                .is_none()
-            && seat_count + new_invites.len() as i32 > FREE_TEAM_MAX_MEMBERS
-        {
-            return Err(InviteUsersToTeamError::NotEnoughOpenSeats);
-        }
 
         let new_invite_emails: HashSet<String> = new_invites
             .iter()
@@ -1263,47 +1243,8 @@ where
             };
 
             match team_subscription_id {
-                // Free team: no seat billing, but the member count (which
-                // already includes this newly accepted member) must stay
-                // within the free limit.
-                None => {
-                    let seat_count = match self
-                        .team_repository
-                        .get_team_seat_count(&team_member.team_id)
-                        .await
-                    {
-                        Ok(seat_count) => seat_count,
-                        Err(error) => {
-                            self.team_repository
-                                .rollback_accept_team_invite(&accepted_invite)
-                                .await
-                                .inspect_err(|rollback_err| {
-                                    tracing::error!(
-                                        error=?rollback_err,
-                                        "unable to rollback accepted team invite after getting team seat count failed"
-                                    );
-                                })
-                                .ok();
-                            return Err(JoinTeamError::TeamError(error));
-                        }
-                    };
-
-                    if seat_count > FREE_TEAM_MAX_MEMBERS {
-                        self.team_repository
-                            .rollback_accept_team_invite(&accepted_invite)
-                            .await
-                            .inspect_err(|rollback_err| {
-                                tracing::error!(
-                                    error=?rollback_err,
-                                    "unable to rollback accepted team invite after the free member limit check"
-                                );
-                            })
-                            .ok();
-                        return Err(JoinTeamError::FreeTeamLimitReached);
-                    }
-
-                    None
-                }
+                // Free membership never creates a paid seat or grants premium roles.
+                None => None,
                 Some(subscription_id) => {
                     if let Err(e) = self
                         .customer_repository
@@ -1782,16 +1723,6 @@ where
             .get_team_enterprise_status(&team_id)
             .await?;
 
-        // Mirror the seat-cap check from invite_users_to_team - an
-        // auto-join must not push the team past its plan's seat cap.
-        if let Some(team_plan) = self.team_repository.get_team_plan(&team_id).await? {
-            let seat_count = self.team_repository.get_team_seat_count(&team_id).await?;
-            if seat_count + 1 > team_plan.seat_cap() {
-                tracing::info!(%team_id, %user_id, "skipping team auto-join: team is at its seat cap");
-                return Ok(None);
-            }
-        }
-
         // Add the user to the team directly (no invite), then run the same
         // billing / roles / channels side effects as join_team, rolling
         // the membership back if any of them fail.
@@ -1874,38 +1805,8 @@ where
             };
 
             match team_subscription_id {
-                // Free team: no seat billing. The member count (already
-                // bumped by add_user_to_team) must stay within the free
-                // limit - over the cap, skip the auto-join silently like
-                // the plan seat-cap check above.
-                None => {
-                    let seat_count = match self.team_repository.get_team_seat_count(&team_id).await
-                    {
-                        Ok(seat_count) => seat_count,
-                        Err(error) => {
-                            self.rollback_add_user_to_team(
-                                &team_id,
-                                user_id,
-                                "getting team seat count",
-                            )
-                            .await;
-                            return Err(error.into());
-                        }
-                    };
-
-                    if seat_count > FREE_TEAM_MAX_MEMBERS {
-                        tracing::info!(%team_id, %user_id, "skipping team auto-join: free team is at its member limit");
-                        self.rollback_add_user_to_team(
-                            &team_id,
-                            user_id,
-                            "the free member limit check",
-                        )
-                        .await;
-                        return Ok(None);
-                    }
-
-                    None
-                }
+                // Free membership never creates a paid seat or grants premium roles.
+                None => None,
                 Some(subscription_id) => {
                     if let Err(e) = self
                         .customer_repository
