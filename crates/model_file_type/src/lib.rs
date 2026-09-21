@@ -716,8 +716,9 @@ generate_file_types!(
     (Torrent, "torrent", "application/x-bittorrent", Data),
     (Ics, "ics", "text/calendar", Data),
     (Vcf, "vcf", "text/vcard", Data),
-    // Vector graphics
-    (Ai, "ai", "application/postscript", Vector),
+    // Vector graphics. Adobe Illustrator (.ai) files usually embed a PDF
+    // representation, so Macro opens them in the PDF viewer.
+    (Ai, "ai", "application/postscript", Pdf),
     (Eps, "eps", "application/postscript", Vector),
     (Ps, "ps", "application/postscript", Vector),
     (Dxf, "dxf", "image/vnd.dxf", Vector),

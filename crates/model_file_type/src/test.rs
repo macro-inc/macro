@@ -14,3 +14,10 @@ fn native_spreadsheet_extension_and_content_type_round_trip() {
     assert_ne!(FileType::from_str("xlsx").unwrap(), file_type);
     assert_ne!(FileType::from_str("csv").unwrap(), file_type);
 }
+
+#[test]
+fn adobe_illustrator_files_open_in_pdf_viewer() {
+    let file_type = FileType::from_str("ai").unwrap();
+    assert_eq!(file_type.mime_type(), "application/postscript");
+    assert_eq!(file_type.macro_app_path().to_string(), "pdf");
+}
