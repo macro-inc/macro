@@ -11,10 +11,12 @@ export function TerminalToolCall(props: {
 }) {
   return (
     <ToolCard
-      title={props.common.label}
+      title={props.common.title}
+      activeTitle={props.common.activeTitle}
+      icon={props.common.icon}
       subtitle={props.detail.command ?? undefined}
       status={props.common.status}
-      muted={props.common.muted}
+      failed={props.common.failed}
       trailing={props.common.trailing}
       hasContent={Boolean(props.detail.output)}
     >

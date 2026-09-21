@@ -10,7 +10,6 @@ import type {
   ToolName,
 } from '@service-agent-fold/generated/types';
 import type { JSX } from 'solid-js';
-import { match } from 'ts-pattern';
 import type { ToolStatus } from '../../ui';
 
 export type ToolUsePart = Extract<MessagePart, { kind: 'tool_use' }>;
@@ -36,12 +35,18 @@ export type ToolCallContext = {
 export type ToolCallCommon = {
   /** The ACP tool call id. */
   id: string;
+  /** The tool's own name, for the components that key off it. */
   label: string;
+  /** What the row reads: the verb for the call's kind, or the tool's name. */
+  title: string;
+  /** What the title reads while the call runs, for a title that is a verb. */
+  activeTitle: string | undefined;
+  /** The glyph for the call's kind. */
+  icon: JSX.Element;
   /** The MCP server the tool was reached over, for a tool that was. */
   server: string | undefined;
   status: ToolStatus;
-  /** The chat block's failed treatment: faded row, quiet trailing label. */
-  muted: boolean;
+  failed: boolean;
   trailing: JSX.Element | undefined;
 };
 
@@ -63,25 +68,4 @@ export function pathsSubtitle(paths: string[]): string | undefined {
   if (paths.length === 0) return undefined;
   if (paths.length === 1) return paths[0];
   return `${paths.length} files`;
-}
-
-/**
- * What a call touched, in a word — the subtitle its card would show, for the
- * one-line summary a collapsed group gives its latest call.
- */
-export function toolCallDetail(part: ToolUsePart): string | undefined {
-  return match(part.detail)
-    .with({ kind: 'terminal' }, (detail) => detail.command ?? undefined)
-    .with({ kind: 'edit' }, (detail) =>
-      pathsSubtitle(detail.diffs.map((diff) => diff.path))
-    )
-    .with(
-      { kind: 'read' },
-      { kind: 'delete' },
-      { kind: 'move' },
-      { kind: 'search' },
-      (detail) => pathsSubtitle(detail.paths)
-    )
-    .with({ kind: 'subagent' }, (detail) => detail.title)
-    .otherwise(() => undefined);
 }

@@ -27,6 +27,8 @@ import {
   toolServer,
 } from './shared';
 import { TerminalToolCall } from './TerminalToolCall';
+import { toolIcon, toolVerbs } from './tool-appearance';
+import { toolTitle } from './tool-name';
 import { UserToolCall } from './UserToolCall';
 
 export function ToolCallPart(props: {
@@ -40,15 +42,21 @@ export function ToolCallPart(props: {
   // live turn either, so it settles too.
   const status = () =>
     settledToolStatus(props.part.status, props.context?.inFlight ?? false);
-  // The chat block's failed-tool treatment: the same row, faded, with a quiet
-  // trailing label — not a separate error card.
+  // What the row calls the tool: the verb for its kind where the fold named
+  // one, and where only the name identifies the tool, that name in words a
+  // reader would use (see `toolTitle`).
+  const verbs = () => toolVerbs(props.part.detail.kind);
+  const named = () => toolTitle(toolLabel(props.part.name));
   const common = (): ToolCallCommon => ({
     id: props.part.id,
     label: toolLabel(props.part.name),
+    title: verbs()?.done ?? named().title,
+    activeTitle: verbs()?.active ?? named().activeTitle,
+    icon: toolIcon(props.part.detail.kind),
     server: toolServer(props.part.name),
     status: status(),
-    muted: failed(),
-    trailing: failed() ? <span class="text-ink">Failed</span> : undefined,
+    failed: failed(),
+    trailing: failed() ? <span class="text-failure">Failed</span> : undefined,
   });
 
   return match(props.part.detail)

@@ -111,9 +111,10 @@ export function SubagentToolCall(props: {
   return (
     <ToolCard
       title={props.detail.title}
+      icon={props.common.icon}
       subtitle={subtitle()}
       status={props.common.status}
-      muted={props.common.muted || props.detail.result?.error != null}
+      failed={props.common.failed || props.detail.result?.error != null}
       trailing={trailing()}
       defaultOpen={props.detail.children.length > 0}
       hasContent={hasBody()}

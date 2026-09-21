@@ -7,7 +7,7 @@ import type {
   MessagePart,
 } from '@service-agent-fold/generated/types';
 import { cleanup, render } from '@solidjs/testing-library';
-import type { JSX } from 'solid-js';
+import { For, type JSX } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Message } from './AgentMessage';
@@ -69,18 +69,16 @@ vi.mock('../ui', () => ({
   ),
   ActionLine: (props: { label: string }) => <div>{props.label}</div>,
   ToolGroup: (props: {
-    count: number;
+    indices: readonly number[];
     active: boolean;
-    latest: { label: string; detail?: string };
-    children: JSX.Element;
+    children: (index: number) => JSX.Element;
   }) => (
     <div
       data-active={String(props.active)}
-      data-count={props.count}
-      data-latest={`${props.latest.label}${props.latest.detail ? ` · ${props.latest.detail}` : ''}`}
+      data-count={props.indices.length}
       data-testid="group"
     >
-      {props.children}
+      <For each={props.indices}>{(index) => props.children(index)}</For>
     </div>
   ),
 }));
@@ -147,7 +145,6 @@ describe('Message tool grouping', () => {
     const group = view.getByTestId('group');
     expect(group.dataset.count).toBe('3');
     expect(group.dataset.active).toBe('false');
-    expect(group.dataset.latest).toBe('Bash · cargo test');
     expect(view.getAllByTestId('tool').map((el) => el.dataset.index)).toEqual([
       '1',
       '2',
@@ -229,7 +226,6 @@ describe('Message tool grouping', () => {
     );
     expect(view.getByTestId('group')).toBe(group);
     expect(group.dataset.count).toBe('3');
-    expect(group.dataset.latest).toBe('Read · c.rs');
     expect(view.getAllByTestId('tool').map((el) => el.dataset.index)).toEqual([
       '1',
       '2',

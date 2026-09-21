@@ -29,6 +29,8 @@ import {
   UserToolComposer,
   type UserToolRequest,
 } from './LiveElicitation';
+import { toolIcon } from './tool-appearance';
+import { toolTitle } from './tool-name';
 import { UserToolCall } from './UserToolCall';
 
 type ElicitationPartData = Extract<MessagePart, { kind: 'elicitation' }>;
@@ -189,10 +191,13 @@ function ResolvedElicitation(props: { part: ElicitationPartData }) {
           common={{
             id: props.part.toolCall ?? String(props.part.requestId),
             label: reviewed().request.tool,
+            title: toolTitle(reviewed().request.tool).title,
+            activeTitle: undefined,
+            icon: toolIcon('user_tool'),
             server: undefined,
             status:
               reviewed().toolOutcome.kind === 'failed' ? 'failed' : 'completed',
-            muted: reviewed().toolOutcome.kind === 'failed',
+            failed: reviewed().toolOutcome.kind === 'failed',
             trailing: undefined,
           }}
         />
@@ -235,7 +240,7 @@ function ResolvedQuestion(props: { part: ElicitationPartData }) {
       title="Question"
       subtitle={props.part.message}
       status={props.part.outcome.kind === 'errored' ? 'failed' : 'completed'}
-      muted={props.part.outcome.kind === 'errored'}
+      failed={props.part.outcome.kind === 'errored'}
       trailing={<span class="text-ink">{outcomeLabel(props.part)}</span>}
       hasContent={shown().length > 0 || Boolean(refusal())}
     >
