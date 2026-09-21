@@ -3259,6 +3259,7 @@ dependencies = [
  "models_email",
  "redis",
  "reqwest 0.13.4",
+ "rootcause",
  "secretsmanager_client",
  "serde",
  "serde_json",

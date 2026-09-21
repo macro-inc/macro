@@ -27,6 +27,7 @@ const REPO_ROOT = '../../..';
 
 type CreateCalendarServiceArgs = {
   calendarBackfillQueueArn: pulumi.Output<string> | string;
+  linkManagerQueueArn: pulumi.Output<string> | string;
   vpc: {
     vpcId: pulumi.Output<string> | string;
     privateSubnetIds: pulumi.Output<string[]> | string[];
@@ -55,6 +56,7 @@ export class CalendarService extends pulumi.ComponentResource {
     name: string,
     {
       calendarBackfillQueueArn,
+      linkManagerQueueArn,
       vpc,
       tags,
       platform,
@@ -110,6 +112,11 @@ export class CalendarService extends pulumi.ComponentResource {
                 'sqs:DeleteMessage',
               ],
               Resource: [pulumi.interpolate`${calendarBackfillQueueArn}`],
+              Effect: 'Allow',
+            },
+            {
+              Action: ['sqs:SendMessage'],
+              Resource: [pulumi.interpolate`${linkManagerQueueArn}`],
               Effect: 'Allow',
             },
           ],

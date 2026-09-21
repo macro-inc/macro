@@ -4,6 +4,7 @@ import { Queue, Redis } from '../../packages/resources';
 import {
   BASE_DOMAIN,
   config,
+  getLinkManagerQueue,
   getMacroApiToken,
   stack,
 } from '../../packages/shared';
@@ -91,6 +92,11 @@ const backfillQueue = new Queue('calendar-service-backfill', {
 export const calendarBackfillQueueArn = pulumi.interpolate`${backfillQueue.queue.arn}`;
 export const calendarBackfillQueueName = pulumi.interpolate`${backfillQueue.queue.name}`;
 
+// Reauth-required notifications are enqueued onto email-service's shared
+// link-manager queue, whose consumer owns the reconnect-your-inbox
+// notification. calendar-service is granted send-only access to it.
+const { linkManagerQueueArn } = getLinkManagerQueue();
+
 const secretKeyArns = [
   authenticationServiceInternalApiKeyArn,
   jwtSecretKeyArn,
@@ -117,6 +123,7 @@ const containerEnvVars = [
 
 const calendarService = new CalendarService('calendar-service', {
   calendarBackfillQueueArn,
+  linkManagerQueueArn,
   vpc: coparse_api_vpc,
   tags,
   containerEnvVars,

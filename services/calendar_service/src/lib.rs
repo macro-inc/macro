@@ -17,6 +17,8 @@ pub mod calendar_backfill_adapters;
 pub mod calendar_outbox;
 /// Redis-backed Google Calendar API quota gate.
 pub mod calendar_ratelimit;
+/// Link-manager queue adapter for reauth-required notifications.
+pub mod calendar_reauth;
 /// Connection-gateway calendar refresh notifier.
 pub mod calendar_refresh;
 /// Access-token adapter for user-initiated calendar mutations.
