@@ -9,8 +9,10 @@ and mounts `AgentChangesControllerProvider` around `ChangesPane` or
 `AgentChangesSplit`. Give each host a stable `scopeKey` (for example,
 `pr:<foreign-entity-id>`) to isolate its locally persisted collapse state and notes.
 The optional `agent` capability enables inline note creation and sending; omit it
-for a read-only PR viewer. Clipboard, external navigation, and notifications are
-host callbacks.
+for a read-only PR viewer. The optional `canHaveChanges` accessor hides every
+control and the pane while false; the session host reports it from the harness so
+a chat-only (in-memory) session shows no GitHub chrome. Clipboard, external
+navigation, and notifications are host callbacks.
 
 The source owns fetching, cache identity, and conversion into the feature's core
 changeset types. A PR entity adapter should resolve its GitHub owner/repository/PR
