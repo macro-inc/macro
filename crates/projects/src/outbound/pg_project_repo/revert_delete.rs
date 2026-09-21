@@ -1,6 +1,3 @@
-#[cfg(test)]
-mod test;
-
 use model_owner::Owner;
 use sqlx::{Postgres, Transaction};
 
