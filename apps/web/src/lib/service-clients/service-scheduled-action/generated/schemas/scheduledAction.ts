@@ -24,6 +24,10 @@ available regardless. */
   /** Time of the next scheduled firing (derived from the cron on write). UI
 uses this to render "next run" without having to parse the cron itself. */
   next_run_at: string;
+  /** Who the action belongs to. Every action is user-owned today, but the
+type no longer says so: the principal string on the wire and in the
+`owner` column is the same, and a bot- or team-owned row decodes
+rather than failing to parse. */
   owner: string;
   schedule: Schedule;
   task: ScheduledActionTask;
