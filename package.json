@@ -68,12 +68,14 @@
 			"packages/observability",
 			"packages/email-renderer",
 			"packages/collaboration",
+			"packages/machine",
 			"packages/loro-mirror",
 			"packages/lexical-core",
 			"services/ai-editing-worker",
 			"services/bots/anthropic-status-bot",
 			"services/bots/stripe-payment-bot",
-			"services/lexical-service"
+			"services/lexical-service",
+			"packages/spreadsheet"
 		],
 		"catalog": {
 			"loro-crdt": "1.13.7"

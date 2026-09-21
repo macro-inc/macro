@@ -14,7 +14,10 @@ use super::{
 };
 use bot_token::HashedBotToken;
 use chrono::{DateTime, Utc};
-use entity_access::domain::models::{EntityAccessReceipt, EntityType, MemberParticipantRole};
+use entity_access::domain::models::{
+    BotReceiptScope, Entity, EntityAccessReceipt, EntityPermission, EntityType,
+    MemberParticipantRole, ParticipantRole,
+};
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
@@ -281,18 +284,23 @@ where
         caller: MacroUserIdStr<'static>,
         owner: &BotOwner,
         harness_id: Option<HarnessId>,
+        auto_accept_permissions: Option<bool>,
     ) -> Result<(), BotError> {
         let Some(harness_id) = harness_id else {
             return Ok(());
         };
         let harness_owner = self
             .repo
-            .get_harness_owner(harness_id)
+            .get_harness_facts(harness_id)
             .await
             .map_err(|err| BotError::Repo(err.into()))?
             .ok_or_else(|| BotError::BadRequest("unknown harness".to_string()))?;
 
-        let usable = match (owner, harness_owner) {
+        validate_permission_bypass(
+            harness_owner.allow_permission_bypass,
+            auto_accept_permissions,
+        )?;
+        let usable = match (owner, harness_owner.owner) {
             (
                 BotOwner::Team { team_id },
                 HarnessOwner::Team {
@@ -436,8 +444,13 @@ where
         let owner = self
             .agent_owner_for_request(caller.clone(), req.team_id)
             .await?;
-        self.ensure_harness_usable(caller.clone(), &owner, req.harness_id)
-            .await?;
+        self.ensure_harness_usable(
+            caller.clone(),
+            &owner,
+            req.harness_id,
+            req.auto_accept_permissions,
+        )
+        .await?;
         let created_by_user_id = caller.clone();
         let agent = self
             .repo
@@ -487,8 +500,13 @@ where
         let owner = self
             .owner_for_agent_update(caller.clone(), &current, req.team_id)
             .await?;
-        self.ensure_harness_usable(caller.clone(), &owner, req.harness_id)
-            .await?;
+        self.ensure_harness_usable(
+            caller.clone(),
+            &owner,
+            req.harness_id,
+            req.auto_accept_permissions,
+        )
+        .await?;
         let requested_name = req.name.clone();
         let requested_handle = req.handle.clone();
         let requested_description = req.description.clone();
@@ -826,6 +844,26 @@ where
         }
     }
 
+    async fn channel_message_access(
+        &self,
+        bot_id: BotId,
+        channel_id: Uuid,
+    ) -> Result<EntityAccessReceipt<messages::domain::service::MessageWrite>, BotError> {
+        self.ensure_bot_in_channel(bot_id, channel_id).await?;
+        EntityAccessReceipt::try_new_bot(
+            bot_id.into_storage_id(),
+            BotReceiptScope::Channel { channel_id },
+            Entity {
+                entity_id: channel_id.to_string(),
+                entity_type: EntityType::Channel,
+            },
+            EntityPermission::ChannelRole {
+                role: ParticipantRole::Member,
+            },
+        )
+        .map_err(|_| BotError::Unauthorized)
+    }
+
     async fn authenticate_token(&self, token: &str) -> Result<AuthenticatedBot, BotError> {
         let candidate = self
             .repo
@@ -848,3 +886,16 @@ where
         Ok(self.authenticate_candidate(candidate).await?.bot)
     }
 }
+
+/// A persona cannot override its harness operator's permission policy.
+fn validate_permission_bypass(allowed: bool, requested: Option<bool>) -> Result<(), BotError> {
+    if requested == Some(true) && !allowed {
+        return Err(BotError::BadRequest(
+            "this harness requires permission prompts".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod test;

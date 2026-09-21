@@ -1,6 +1,7 @@
 use document_sub_type::DocumentSubType;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{DocumentMetadata, FileType, VersionIDWithTimeStamps};
+use model_owner::Owner;
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::team_share::TeamShareCreation;
 use share_permission_db_utils::team_share::{self, TeamShareError};
@@ -399,6 +400,7 @@ pub async fn insert_new_document(
         sub_type: requested_sub_type,
         skip_history,
         attribution: _,
+        initial_link_share: _,
     } = args;
 
     let now = chrono::Utc::now();
@@ -481,7 +483,7 @@ pub async fn insert_new_document(
     Ok(DocumentMetadata::new_document(
         &document_id.to_string(),
         document_version.id,
-        user_id,
+        Owner::User(user_id),
         &document_name,
         file_type,
         &document_version.sha,

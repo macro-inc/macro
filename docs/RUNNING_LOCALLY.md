@@ -115,6 +115,13 @@ When startup finishes, the command prints the frontend URL and the important ser
 
 Open the frontend URL in your browser.
 
+The local environment supplies both `LOCAL_AWS_URL` (the container endpoint)
+and `LOCAL_AWS_PUBLIC_URL` (the instance's published LocalStack port). SFS and
+other presigned uploads use the public endpoint in browser-facing URLs. If an
+upload attempts `localhost:4566` on a named instance, rebuild the service and
+reload its generated environment; named instances publish storage on their own
+port.
+
 The stack does not create accounts in advance. Passwordless login creates a user
 on demand. Register with any email address. FusionAuth sends you a one-time code
 by email. That email lands in **Mailpit** at http://localhost:8025, not in a real
@@ -204,6 +211,8 @@ GenAI content is bounded by `genai_telemetry`; check
 While `run_local` is attached:
 
 - Press `r` to rebuild the changed Rust services and reload them.
+- Press `f` to restart Vite with the same frontend port and configuration. This
+  also recovers a stuck frontend reload and leaves backend services and data intact.
 - Press `q` to stop the stack and exit.
 
 Use `q`, not the terminal close button. `q` stops and removes the containers at once. The next start does not have to clean up a stale stack.
@@ -238,6 +247,28 @@ The generated files for an instance live here:
 ```text
 infra/local/generated/<instance>
 ```
+
+### Access a remote dev server through one URL
+
+`run_local` and `run_dev` serve API requests and backend WebSockets through Vite,
+so the browser needs only the frontend port. For example, forward a remote
+instance's frontend with `ssh -N -L 3000:127.0.0.1:20110 your-dev-host`, then open
+`http://localhost:3000/app/`. A WebSocket-capable reverse proxy can instead expose
+that frontend under a different hostname/port, including HTTPS. Vite HMR follows
+the page's origin; no separate HMR or backend port forward is needed.
+
+The launcher sets `VITE_LOCAL_BACKEND_ORIGIN=same-origin` and supplies Vite's
+server-only `MACRO_LOCAL_BACKEND_PROXY` and `MACRO_LOCAL_BACKEND_ROUTES` from the
+selected instance and backend inventory. The proxy preserves paths, query
+strings, cookies, streaming responses and WebSocket upgrades. AI-editing and
+enabled browser telemetry also use same-origin paths. Bare `bun run dev` without
+these variables still uses hosted services; `TAURI_DEV_HOST` remains an explicit
+native HMR override. Keep local dev stacks private: same-origin routing does not
+add authentication or make passwordless local login safe to publish.
+
+The stack launches Vite directly with Node (available in the Nix shell), because
+Bun's Node HTTP compatibility currently hangs on Vite's proxied WebSocket
+upgrades. Bun is still used for dependency installation and builds.
 
 ## Port Conflicts (macOS)
 

@@ -6,7 +6,7 @@ import { useChannelName } from '@core/context/channels';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { type Accessor, createMemo, type JSX } from 'solid-js';
+import { type Accessor, createMemo, type JSX, untrack } from 'solid-js';
 import { match } from 'ts-pattern';
 import { entityTypeToItemType } from '../utils';
 
@@ -62,25 +62,30 @@ export function usePropertyEntityDisplay(
 ): PropertyEntityDisplayResult {
   const previewType = () => entityTypeToItemType(entityType());
 
-  const previewWrapper = () => {
+  const previewSource = createMemo(() => {
     const eType = entityType();
     const pType = previewType();
     if (isPreviewable(eType)) {
-      return useItemPreview(() => ({
-        id: entityId(),
-        type: pType,
-      }))[0];
+      return untrack(
+        () =>
+          useItemPreview(() => ({
+            id: entityId(),
+            type: pType,
+          }))[0]
+      );
     }
-  };
-  const preview = createMemo(() => previewWrapper()?.());
+  });
+  // Keep subscription ownership separate from its value: a live result must
+  // not dispose and reacquire the preview that produced it.
+  const preview = () => previewSource()?.();
 
-  const channelNameWrapper = () => {
+  const channelNameSource = createMemo(() => {
     const eType = entityType();
     if (eType === 'CHANNEL') {
       return useChannelName(entityId());
     }
-  };
-  const channelName = createMemo(() => channelNameWrapper()?.());
+  });
+  const channelName = () => channelNameSource()?.();
 
   const userNameWrapper = () => {
     const eType = entityType();

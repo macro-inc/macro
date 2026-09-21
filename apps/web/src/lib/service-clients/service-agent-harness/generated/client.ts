@@ -5,20 +5,27 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  AgentRepositoriesResponse,
+  AgentSessionChangesPatchResponse,
+  AgentSessionChangesResponse,
   AgentSessionLogResponse,
   AgentSessionQueueResponse,
   AgentSessionResponse,
+  CompleteRequest,
   ControlRequest,
   ControlResponse,
   CreateAgentSessionRequest,
   CreateAgentSessionResponse,
   EditQueuedActionRequest,
+  EmptyRequest,
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
   PreviewAgentSessionsRequest,
   PreviewAgentSessionsResponse,
   RenameAgentSessionRequest,
   SandboxSizeBody,
+  StartResponse,
+  StatusResponse,
 } from './schemas';
 
 /**
@@ -103,6 +110,63 @@ export const loadAgentModelsHandler = async (
     status: res.status,
     headers: res.headers,
   } as loadAgentModelsHandlerResponse;
+};
+
+/**
+ * @summary List the GitHub repositories the caller can select for a coding session.
+ */
+export type listAgentRepositoriesResponse200 = {
+  data: AgentRepositoriesResponse;
+  status: 200;
+};
+
+export type listAgentRepositoriesResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type listAgentRepositoriesResponse502 = {
+  data: void;
+  status: 502;
+};
+
+export type listAgentRepositoriesResponseSuccess =
+  listAgentRepositoriesResponse200 & {
+    headers: Headers;
+  };
+export type listAgentRepositoriesResponseError = (
+  | listAgentRepositoriesResponse401
+  | listAgentRepositoriesResponse502
+) & {
+  headers: Headers;
+};
+
+export type listAgentRepositoriesResponse =
+  | listAgentRepositoriesResponseSuccess
+  | listAgentRepositoriesResponseError;
+
+export const getListAgentRepositoriesUrl = () => {
+  return `/agent-repositories`;
+};
+
+export const listAgentRepositories = async (
+  options?: RequestInit
+): Promise<listAgentRepositoriesResponse> => {
+  const res = await fetch(getListAgentRepositoriesUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listAgentRepositoriesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listAgentRepositoriesResponse;
 };
 
 /**
@@ -497,8 +561,212 @@ export const deleteAgentSession = async (
 };
 
 /**
+ * @summary The latest captured changes of an agent session: the changed files with
+statuses and line counts, and how the latest capture attempt went.
+ */
+export type getAgentSessionChangesResponse200 = {
+  data: AgentSessionChangesResponse;
+  status: 200;
+};
+
+export type getAgentSessionChangesResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getAgentSessionChangesResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type getAgentSessionChangesResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type getAgentSessionChangesResponseSuccess =
+  getAgentSessionChangesResponse200 & {
+    headers: Headers;
+  };
+export type getAgentSessionChangesResponseError = (
+  | getAgentSessionChangesResponse401
+  | getAgentSessionChangesResponse403
+  | getAgentSessionChangesResponse500
+) & {
+  headers: Headers;
+};
+
+export type getAgentSessionChangesResponse =
+  | getAgentSessionChangesResponseSuccess
+  | getAgentSessionChangesResponseError;
+
+export const getGetAgentSessionChangesUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/changes`;
+};
+
+export const getAgentSessionChanges = async (
+  sessionId: string,
+  options?: RequestInit
+): Promise<getAgentSessionChangesResponse> => {
+  const res = await fetch(getGetAgentSessionChangesUrl(sessionId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentSessionChangesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentSessionChangesResponse;
+};
+
+/**
+ * @summary The unified diff behind the session's latest changeset.
+ */
+export type getAgentSessionChangesPatchResponse200 = {
+  data: AgentSessionChangesPatchResponse;
+  status: 200;
+};
+
+export type getAgentSessionChangesPatchResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getAgentSessionChangesPatchResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type getAgentSessionChangesPatchResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type getAgentSessionChangesPatchResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type getAgentSessionChangesPatchResponseSuccess =
+  getAgentSessionChangesPatchResponse200 & {
+    headers: Headers;
+  };
+export type getAgentSessionChangesPatchResponseError = (
+  | getAgentSessionChangesPatchResponse401
+  | getAgentSessionChangesPatchResponse403
+  | getAgentSessionChangesPatchResponse404
+  | getAgentSessionChangesPatchResponse500
+) & {
+  headers: Headers;
+};
+
+export type getAgentSessionChangesPatchResponse =
+  | getAgentSessionChangesPatchResponseSuccess
+  | getAgentSessionChangesPatchResponseError;
+
+export const getGetAgentSessionChangesPatchUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/changes/patch`;
+};
+
+export const getAgentSessionChangesPatch = async (
+  sessionId: string,
+  options?: RequestInit
+): Promise<getAgentSessionChangesPatchResponse> => {
+  const res = await fetch(getGetAgentSessionChangesPatchUrl(sessionId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentSessionChangesPatchResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentSessionChangesPatchResponse;
+};
+
+/**
+ * @summary Capture the session's changes again now. Answers at once with the state
+as it stands; the capture runs on and viewers are told when it lands.
+ */
+export type refreshAgentSessionChangesResponse202 = {
+  data: AgentSessionChangesResponse;
+  status: 202;
+};
+
+export type refreshAgentSessionChangesResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type refreshAgentSessionChangesResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type refreshAgentSessionChangesResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type refreshAgentSessionChangesResponseSuccess =
+  refreshAgentSessionChangesResponse202 & {
+    headers: Headers;
+  };
+export type refreshAgentSessionChangesResponseError = (
+  | refreshAgentSessionChangesResponse401
+  | refreshAgentSessionChangesResponse403
+  | refreshAgentSessionChangesResponse500
+) & {
+  headers: Headers;
+};
+
+export type refreshAgentSessionChangesResponse =
+  | refreshAgentSessionChangesResponseSuccess
+  | refreshAgentSessionChangesResponseError;
+
+export const getRefreshAgentSessionChangesUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/changes/refresh`;
+};
+
+export const refreshAgentSessionChanges = async (
+  sessionId: string,
+  options?: RequestInit
+): Promise<refreshAgentSessionChangesResponse> => {
+  const res = await fetch(getRefreshAgentSessionChangesUrl(sessionId), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: refreshAgentSessionChangesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as refreshAgentSessionChangesResponse;
+};
+
+/**
  * Edit access suffices: whoever can prompt the bot through its thread can
 prompt it here.
+
+A caller may name the action with `actionId`; the response echoes it.
+Re-posting an id the session still holds queued or in flight reports that
+action's status rather than accepting a duplicate.
  * @summary Perform a control operation on a live agent session.
  */
 export type controlAgentSessionResponse200 = {
@@ -989,4 +1257,198 @@ export const putAgentSessionSandboxSize = async (
     status: res.status,
     headers: res.headers,
   } as putAgentSessionSandboxSizeResponse;
+};
+
+/**
+ * @summary Read connection status for the authenticated user only.
+ */
+export type statusResponse200 = {
+  data: StatusResponse;
+  status: 200;
+};
+
+export type statusResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type statusResponseSuccess = statusResponse200 & {
+  headers: Headers;
+};
+export type statusResponseError = statusResponse401 & {
+  headers: Headers;
+};
+
+export type statusResponse = statusResponseSuccess | statusResponseError;
+
+export const getStatusUrl = () => {
+  return `/claude-auth`;
+};
+
+export const status = async (
+  options?: RequestInit
+): Promise<statusResponse> => {
+  const res = await fetch(getStatusUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: statusResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as statusResponse;
+};
+
+/**
+ * @summary Forget only the authenticated user's grant and cancel pending consent.
+ */
+export type disconnectResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type disconnectResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type disconnectResponseSuccess = disconnectResponse204 & {
+  headers: Headers;
+};
+export type disconnectResponseError = disconnectResponse403 & {
+  headers: Headers;
+};
+
+export type disconnectResponse =
+  | disconnectResponseSuccess
+  | disconnectResponseError;
+
+export const getDisconnectUrl = () => {
+  return `/claude-auth`;
+};
+
+export const disconnect = async (
+  emptyRequest: EmptyRequest,
+  options?: RequestInit
+): Promise<disconnectResponse> => {
+  const res = await fetch(getDisconnectUrl(), {
+    ...options,
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(emptyRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: disconnectResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as disconnectResponse;
+};
+
+/**
+ * @summary Exchange one code; never return access or refresh tokens.
+ */
+export type completeResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type completeResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type completeResponse409 = {
+  data: void;
+  status: 409;
+};
+
+export type completeResponse502 = {
+  data: void;
+  status: 502;
+};
+
+export type completeResponseSuccess = completeResponse204 & {
+  headers: Headers;
+};
+export type completeResponseError = (
+  | completeResponse400
+  | completeResponse409
+  | completeResponse502
+) & {
+  headers: Headers;
+};
+
+export type completeResponse = completeResponseSuccess | completeResponseError;
+
+export const getCompleteUrl = () => {
+  return `/claude-auth/complete`;
+};
+
+export const complete = async (
+  completeRequest: CompleteRequest,
+  options?: RequestInit
+): Promise<completeResponse> => {
+  const res = await fetch(getCompleteUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(completeRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: completeResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as completeResponse;
+};
+
+/**
+ * @summary Create an expiring PKCE challenge for the authenticated user.
+ */
+export type startResponse200 = {
+  data: StartResponse;
+  status: 200;
+};
+
+export type startResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type startResponse429 = {
+  data: void;
+  status: 429;
+};
+
+export type startResponseSuccess = startResponse200 & {
+  headers: Headers;
+};
+export type startResponseError = (startResponse403 | startResponse429) & {
+  headers: Headers;
+};
+
+export type startResponse = startResponseSuccess | startResponseError;
+
+export const getStartUrl = () => {
+  return `/claude-auth/start`;
+};
+
+export const start = async (
+  emptyRequest: EmptyRequest,
+  options?: RequestInit
+): Promise<startResponse> => {
+  const res = await fetch(getStartUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(emptyRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: startResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as startResponse;
 };

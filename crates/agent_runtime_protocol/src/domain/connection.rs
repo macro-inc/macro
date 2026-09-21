@@ -98,7 +98,7 @@ impl Drop for ServerConnection {
 /// Agent Runtime-side access to one logical service connection.
 pub struct RuntimeConnection {
     outbound: UnboundedSender<ToServerMessage>,
-    driver: tokio::task::AbortHandle,
+    driver: tokio::task::JoinHandle<()>,
 }
 
 impl RuntimeConnection {
@@ -131,9 +131,16 @@ impl RuntimeConnection {
             outbound.clone(),
             acp_driver,
             Arc::new(model_probes),
-        ))
-        .abort_handle();
+        ));
         (Self { outbound, driver }, acp)
+    }
+
+    /// Wait for the service transport to close, independently of the ACP peer.
+    /// Callers can cancel an idle ACP subprocess when the service goes away.
+    pub async fn closed(&mut self) {
+        if !self.driver.is_finished() {
+            let _ = (&mut self.driver).await;
+        }
     }
 
     /// Send a system event notification to the Agent Service.

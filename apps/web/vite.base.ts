@@ -11,6 +11,7 @@ import tsconfigpaths from 'vite-tsconfig-paths';
 // @ts-ignore
 import { version } from './package.json';
 import { keepImportMetaDev } from './scripts/keep-import-meta-dev';
+import { localDevServer } from './scripts/local-dev-server';
 
 function readShortSha(): string {
   try {
@@ -161,6 +162,12 @@ export const createAppViteConfig = (): UserConfigFn => {
           'vscode-oniguruma',
           // 'solid-devtools/setup',
           'libheif-js/wasm-bundle',
+          // Prebundle lazy spreadsheet worker dependencies before the first
+          // use, which would otherwise reload the page and discard its draft.
+          '@ironcalc/wasm',
+          'exceljs',
+          'fflate',
+          'saxes',
         ],
         // loro-crdt is a wasm singleton. The app imports it directly (esbuild
         // pre-bundles a copy) while the linked `@loro-mirror/core` workspace
@@ -193,10 +200,7 @@ export const createAppViteConfig = (): UserConfigFn => {
         port: Number(process.env.PORT || 3000),
         host: '0.0.0.0',
         strictPort: true,
-        hmr: {
-          protocol: 'ws',
-          host: process.env.TAURI_DEV_HOST || 'localhost',
-        },
+        ...localDevServer(process.env),
         cors: true,
         watch: {
           usePolling: true,

@@ -1,7 +1,14 @@
 import { analytics } from '@app/lib/analytics';
+import { useChannelsContext } from '@core/context/channels';
+import { useUserId } from '@core/context/user';
 import type { KrispNoiseFilter } from '@livekit/krisp-noise-filter';
 import type { BackgroundProcessorWrapper } from '@livekit/track-processors';
-import type { CallTokenResponse } from '@service-call/client';
+import {
+  fetchActiveCall,
+  invalidateActiveCallQueries,
+  requestCallToken,
+  useLeaveCallMutation,
+} from '@queries/call/call';
 import { makePersisted } from '@solid-primitives/storage';
 import type {
   AudioCaptureOptions,
@@ -20,25 +27,29 @@ import {
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { CallAudioSink } from './CallAudioSink';
-import {
-  type CallSessionConnectMetadata,
-  type CallSessionDisconnectOptions,
-  createCallSessionController,
-} from './CallSessionController';
+import { createCallSessionController } from './CallSessionController';
+import { createCallLifecycle } from './call-lifecycle';
+import { publishCallResolution } from './call-resolution';
 import { createLatestAsyncRequestQueue } from './latest-async-request-queue';
 import {
   getKrisp,
   getLivekit,
   isKrispSupported,
   LK_CONNECTION_STATE,
+  LK_ROOM_EVENT,
   LK_TRACK_SOURCE,
   loadKrisp,
   loadLivekit,
 } from './livekit-loader';
+import { bindNativeCallLifecycle } from './native-call-lifecycle';
 import {
   type NativeCallConnectionState,
   useMaybeNativeCallState,
 } from './native-call-state';
+import {
+  isNativeIosCallKitEnabled,
+  registerCallKitCallEndedHandler,
+} from './use-callkit';
 
 type LivekitJsCallController = ReturnType<
   typeof import('./LivekitJsCallController')['createLivekitJsCallController']
@@ -268,9 +279,10 @@ type CallStoreState = {
   /** Which channel block has the Call tab selected (synced from channel UI). */
   callPageChannelId: string | null;
   backgroundEffect: BackgroundEffect;
-  // Mirrors the call's `share_with_team` flag. Defaults to true to match the
-  // server-side default for newly-created calls; synced from the toggle
-  // endpoint's response on each flip.
+  // Mirrors the active call's pending share-with-team toggle (applied as
+  // canonical team sharing when the call is archived). Seeded from the call
+  // record once it loads and kept in sync by the
+  // `call_share_with_team_toggled` event and local toggles.
   isSharedWithTeam: boolean;
 };
 
@@ -295,7 +307,7 @@ const initialState: CallStoreState = {
   joinError: null,
   callPageChannelId: null,
   backgroundEffect: { type: 'none' },
-  isSharedWithTeam: true,
+  isSharedWithTeam: false,
 };
 
 // Persisted across reloads — background effect is a privacy preference users
@@ -341,6 +353,8 @@ const [persistedNoiseSuppressionMode, setPersistedNoiseSuppressionMode] =
   });
 
 export type CallState = {
+  /** Shared join, leave, and recovery lifecycle, with a reactive snapshot. */
+  callLifecycle: ReturnType<typeof createCallLifecycle>;
   /** The LiveKit Room instance, null when not in a call */
   room: () => Room | null;
   /** Current connection state */
@@ -377,15 +391,6 @@ export type CallState = {
   activeAudioOutputDeviceId: () => string | null;
   /** Currently active video input device ID */
   activeVideoInputDeviceId: () => string | null;
-  /** Whether joining this channel needs a fresh call token */
-  shouldRequestSessionToken: (channelId: string) => boolean;
-  /** Connect the active call session using the right platform controller */
-  connectSession: (
-    tokenResponse: CallTokenResponse,
-    metadata?: CallSessionConnectMetadata
-  ) => Promise<void>;
-  /** Disconnect the active call session using the right platform controller */
-  disconnectSession: (options?: CallSessionDisconnectOptions) => Promise<void>;
   /** Toggle local audio */
   toggleAudio: () => Promise<void>;
   /** Toggle local video */
@@ -404,16 +409,10 @@ export type CallState = {
   isNoiseSuppressed: () => boolean;
   /** Toggle mic noise suppression on/off */
   toggleNoiseSuppression: () => Promise<void>;
-  /** Begin an optimistic join to a channel */
-  beginOptimisticJoin: (channelId: string) => void;
-  /** Rollback an optimistic join to a channel */
-  rollbackOptimisticJoin: () => void;
   /** Whether we're in the optimistic join window */
   isConnecting: () => boolean;
   /** Error message from a failed join attempt */
   joinError: () => string | null;
-  /** Set the join error message */
-  setJoinError: (error: string | null) => void;
   /**
    * Which channel has the Call tab focused in a channel split. `null` when no
    * channel block reports the Call tab.
@@ -431,9 +430,9 @@ export type CallState = {
   backgroundEffect: () => BackgroundEffect;
   /** Set the background effect (blur with intensity or image background) */
   setBackgroundEffect: (effect: BackgroundEffect) => Promise<void>;
-  /** Whether the call is currently shared with the creator's team */
+  /** Whether the active call is currently shared with the creator's team */
   isSharedWithTeam: () => boolean;
-  /** Update the locally-cached share-with-team flag (call after a toggle RPC) */
+  /** Update the locally-cached team-sharing flag (after a record load, an edit, or a sync event) */
   setSharedWithTeam: (value: boolean) => void;
 };
 
@@ -456,6 +455,9 @@ export function useCallContextOptional(): CallState | undefined {
  * and all readonly call state. Returns reactive state + mutation actions.
  */
 function createCallState() {
+  const channels = useChannelsContext();
+  const userId = useUserId();
+  const leaveMutation = useLeaveCallMutation();
   const nativeCall = useMaybeNativeCallState();
   const [room, setRoom] = createSignal<Room | null>(null);
   const [store, setStore] = createStore<CallStoreState>({
@@ -1106,9 +1108,6 @@ function createCallState() {
     currentConnectionState() === LK_CONNECTION_STATE.Reconnecting ||
     currentConnectionState() === LK_CONNECTION_STATE.SignalReconnecting;
 
-  const currentJoinError = () =>
-    currentNativeCallSnapshot() ? null : store.joinError;
-
   // --- mutations ---
 
   async function finishLocalMediaSetup(targetRoom: Room, setupVersion: number) {
@@ -1207,7 +1206,6 @@ function createCallState() {
     setRemoteParticipants: (participants) => {
       setStore('remoteParticipants', participants);
     },
-    setSharedWithTeam: (value) => setStore('isSharedWithTeam', value),
     clearOptimisticJoin: () => {
       setStore('optimisticJoinChannelId', null);
       setStore('joinError', null);
@@ -1227,7 +1225,7 @@ function createCallState() {
     },
     jsDisconnect: async () => {
       // Cancel a connect that is still waiting on its dynamic import. This is
-      // also reached by timeout/error recovery in useCall.
+      // also reached by timeout/error recovery in the call lifecycle.
       browserConnectGeneration += 1;
       if (!livekitJsPromise) return;
       const controller = await getLivekitJsController();
@@ -1359,7 +1357,7 @@ function createCallState() {
 
   function beginOptimisticJoin(channelId: string) {
     // Do not clear joinError here — retries should keep the error panel visible
-    // with `isJoining` until LiveKit connects (see useCall join mutation).
+    // with `isJoining` until LiveKit connects.
     setStore('optimisticJoinChannelId', channelId);
   }
 
@@ -1400,6 +1398,70 @@ function createCallState() {
     }
   }
 
+  const lifecycle = createCallLifecycle({
+    shouldRequestToken: callSession.shouldRequestToken,
+    requestToken: requestCallToken,
+    connect: (token) =>
+      callSession.connectWithToken(token, {
+        channelTitle: channels.channelsById()[token.channelId]?.name ?? null,
+      }),
+    disconnect: callSession.disconnect,
+    leave: (id) => leaveMutation.mutateAsync(id),
+    lookup: fetchActiveCall,
+    currentCall: () => {
+      const channelId = currentActiveChannelId();
+      return channelId
+        ? { channelId, callId: currentActiveCallId() }
+        : undefined;
+    },
+    beginJoin: beginOptimisticJoin,
+    rollbackJoin: rollbackOptimisticJoin,
+    setError: setJoinError,
+    watch: (_call, disconnected, nativeEnded) => {
+      // Capture the room: its own disconnect handler resets the store first.
+      const currentRoom = room();
+      currentRoom?.on(LK_ROOM_EVENT.Disconnected, disconnected);
+      const unregister = registerCallKitCallEndedHandler(nativeEnded);
+      return () => {
+        currentRoom?.off(LK_ROOM_EVENT.Disconnected, disconnected);
+        unregister();
+      };
+    },
+    onJoined: (call) => {
+      const answeringUserId = userId();
+      if (answeringUserId && call.callId) {
+        publishCallResolution({
+          type: 'answered',
+          callId: call.callId,
+          answeredBy: answeringUserId,
+        });
+      }
+      void invalidateActiveCallQueries();
+      analytics.track('call_action', {
+        action: 'joined',
+        channelId: call.channelId,
+      });
+    },
+    onLeft: (channelId) =>
+      analytics.track('call_action', {
+        action: 'left',
+        channelId,
+        leaveReason: 'user_initiated',
+      }),
+    reportError: (error) => console.error('call lifecycle failed', error),
+  });
+  const [lifecycleSnapshot, setLifecycleSnapshot] = createSignal(
+    lifecycle.getState()
+  );
+  const unsubscribeLifecycle = lifecycle.subscribe((state) =>
+    setLifecycleSnapshot(state)
+  );
+
+  const unsubscribeNative =
+    isNativeIosCallKitEnabled() && nativeCall
+      ? bindNativeCallLifecycle(nativeCall, lifecycle)
+      : undefined;
+
   // --- cleanup ---
 
   const handleBeforeUnload = () => {
@@ -1408,6 +1470,9 @@ function createCallState() {
   window.addEventListener('beforeunload', handleBeforeUnload);
 
   onCleanup(() => {
+    unsubscribeNative?.();
+    unsubscribeLifecycle();
+    lifecycle.dispose();
     disposed = true;
     browserConnectGeneration += 1;
     window.removeEventListener('beforeunload', handleBeforeUnload);
@@ -1421,6 +1486,13 @@ function createCallState() {
   // --- public API ---
 
   const state: CallState = {
+    callLifecycle: {
+      ...lifecycle,
+      getState: () => {
+        lifecycleSnapshot();
+        return lifecycle.getState();
+      },
+    },
     // readonly state
     room,
     connectionState: currentConnectionState,
@@ -1451,9 +1523,6 @@ function createCallState() {
     isConnecting: currentIsConnecting,
 
     // mutations
-    shouldRequestSessionToken: callSession.shouldRequestToken,
-    connectSession: callSession.connectWithToken,
-    disconnectSession: callSession.disconnect,
     toggleAudio,
     toggleVideo,
     toggleScreenShare,
@@ -1464,10 +1533,7 @@ function createCallState() {
     isNoiseSuppressed: () =>
       isNoiseSuppressionEnabled(store.noiseSuppressionMode),
     toggleNoiseSuppression,
-    beginOptimisticJoin,
-    rollbackOptimisticJoin,
-    joinError: currentJoinError,
-    setJoinError,
+    joinError: () => store.joinError,
     callPageChannelId: () => store.callPageChannelId,
     syncCallPageTab,
     isCallPage: () => {

@@ -504,6 +504,21 @@ export const StorageService = new Svc('Document++ Storage Service API')
     modifies: true,
     throws: withFetchErrors('INVALID_RESPONSE'),
   })
+  .fn('createSpreadsheetDocument', {
+    description: 'Create a native spreadsheet with content in sync-service.',
+    args: {
+      documentName: z.string(),
+      projectId: z.string().optional(),
+      sha: z.string(),
+    },
+    result: {
+      metadata:
+        schemas.createDocumentResponse.shape.data._def.left.shape
+          .documentMetadata,
+    },
+    modifies: true,
+    throws: withFetchErrors('INVALID_RESPONSE'),
+  })
   .fn('copyDocument', {
     description: schemas.copyDocumentResponse.description!,
     args: {

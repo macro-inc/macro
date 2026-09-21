@@ -94,7 +94,7 @@ pub fn decode_jwt(
                         .into();
 
                     if !res {
-                        error!("provided header: {internal_key} did not match expected value");
+                        error!("provided internal authentication key did not match expected value");
                     }
                     res
                 }
@@ -131,6 +131,39 @@ pub fn decode_jwt(
         .context("failed to decode `AuthToken`")?;
 
     Ok(claims)
+}
+
+/// Dedicated access boundary for document HTTP requests. Internal service
+/// credentials do not substitute for a signed, document-scoped user grant.
+pub fn document_access(
+    req: &worker::Request,
+    env: &worker::Env,
+    document_id: &str,
+) -> Result<
+    (crate::domain::document::DocumentAccess, AuthToken),
+    crate::domain::document::DocumentError,
+> {
+    use crate::domain::document::DocumentError;
+
+    let header = req
+        .headers()
+        .get(header_names::AUTHORIZATION)
+        .map_err(|_| DocumentError::Unauthorized)?
+        .ok_or(DocumentError::Unauthorized)?;
+    let token = header
+        .strip_prefix("Bearer ")
+        .ok_or(DocumentError::Unauthorized)?;
+    let claims = macro_sync_service_jwt::decode::<AuthToken>(
+        token,
+        &Secrets::from(env).document_permissions_secret,
+    )
+    .map_err(|_| DocumentError::Unauthorized)?;
+    let access = crate::domain::document::DocumentAccess::authorize(
+        document_id,
+        &claims.document_id,
+        claims.access_level >= AccessLevel::Edit,
+    )?;
+    Ok((access, claims))
 }
 
 #[cfg(test)]

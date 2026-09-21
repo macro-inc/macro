@@ -3,14 +3,15 @@ use crate::domain::error::SessionError;
 use crate::domain::event::{CursorEvent, InteractionUpdate, ToolCallEvent, Truncation};
 use crate::domain::journal::NativeRecord;
 use crate::domain::model::{
-    McpHeader, McpServer, McpTransport, RepoUrl, RunListing, RunOutcome, RunStatus,
+    ConversationLine, ConversationSpeaker, McpHeader, McpServer, McpTransport, RepoUrl, RunListing,
+    RunOutcome, RunStatus,
 };
-use crate::domain::ports::StreamConnectError;
+use crate::domain::ports::{NoArtifactStore, StreamConnectError};
 use crate::testing::{CursorCall, FakeCursor, FixedChooser, RecordingNotifier};
 use agent_client_protocol::schema::v1::{SessionUpdate, StopReason, ToolCallStatus};
 use std::path::Path;
 
-type Service = CursorSessionService<FakeCursor, RecordingNotifier, FixedChooser>;
+type Service = CursorSessionService<FakeCursor, RecordingNotifier, FixedChooser, NoArtifactStore>;
 
 fn service(repo: Option<RepoUrl>) -> (Arc<Service>, FakeCursor, RecordingNotifier) {
     let cursor = FakeCursor::new();
@@ -20,6 +21,7 @@ fn service(repo: Option<RepoUrl>) -> (Arc<Service>, FakeCursor, RecordingNotifie
         notifier.clone(),
         FixedChooser(repo.clone(), repo.is_some()),
         Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
     ));
     (service, cursor, notifier)
 }
@@ -88,6 +90,13 @@ async fn load(
         "a successful load re-enables sync"
     );
     notifier.updates()[before..].to_vec()
+}
+
+fn line(speaker: ConversationSpeaker, text: &str) -> ConversationLine {
+    ConversationLine {
+        speaker,
+        text: text.to_owned(),
+    }
 }
 
 fn finished(run: &str) -> CursorEvent {
@@ -1279,6 +1288,7 @@ async fn restore_recovers_runs_after_the_durable_watermark_once() {
         notifier.clone(),
         FixedChooser(None, false),
         Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
     );
     let session = SessionId::new("cursor-acp-restored");
     service.restore_session_with_watermark(
@@ -1395,6 +1405,7 @@ async fn restore_without_a_watermark_hydrates_every_run_on_load() {
         notifier.clone(),
         FixedChooser(None, false),
         Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
     );
     let session = SessionId::new("cursor-acp-restored");
     service.restore_session_with_watermark(
@@ -1458,6 +1469,7 @@ async fn restore_waits_for_session_load_before_recovering_runs() {
         notifier.clone(),
         FixedChooser(None, false),
         Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
     );
     let session = SessionId::new("cursor-acp-restored");
     service.restore_session_with_watermark(
@@ -1489,10 +1501,15 @@ async fn restore_waits_for_session_load_before_recovering_runs() {
 }
 
 /// A foreign run whose stream is gone (retention expired) is captured from
-/// its run record, so the recorded answer is durable. But the record carries
-/// no original prompt: recovery must not ask the client to reload a history
-/// it cannot project, and an explicit load must fail rather than invent one —
-/// the client's prior view stays in place until a load succeeds.
+/// its run record, so the recorded answer is durable. The record carries no
+/// original prompt, so recovery must not ask the client to reload a history
+/// it cannot project.
+///
+/// An explicit load still succeeds. It is the only way back to a session
+/// whose runtime has gone: the harness reattaches by loading, so a load that
+/// refuses is every later prompt refused as disconnected, with nothing the
+/// user can do about it. The answer is served without the line that asked
+/// for it, and the gap is reported.
 #[tokio::test(start_paused = true)]
 async fn an_expired_foreign_stream_falls_back_to_the_run_record() {
     let (service, cursor, notifier) = service(None);
@@ -1548,29 +1565,143 @@ async fn an_expired_foreign_stream_falls_back_to_the_run_record() {
             .any(|e| e.run.as_ref() == Some(&foreign) && e.input == JournalInput::Reconciled)
     );
 
-    let error = service
+    service
         .replay_session(&session)
         .await
-        .err()
-        .expect("a run without its original prompt cannot replace history");
+        .expect("a run without its original prompt still loads")
+        .complete();
     assert!(
-        error.to_string().contains("original prompt unavailable"),
-        "{error}"
-    );
-    assert_eq!(
-        notifier.updates().len(),
-        before,
-        "a failed load publishes nothing: the prior view is retained"
+        notifier.updates().len() > before,
+        "the load serves the history it does have"
     );
     assert!(
-        !ready_for_sync(&service, &session),
-        "nothing syncs or prompts until a load succeeds"
+        ready_for_sync(&service, &session),
+        "a loaded session is promptable again"
     );
     assert_eq!(
         service.journal.read(&session).await.expect("journal"),
         entries,
-        "the failed load discards nothing captured"
+        "the load discards nothing captured"
     );
+    service
+        .prompt(&session, "still reachable after the gap")
+        .await
+        .expect_err("no stream is scripted, but the prompt is not refused as unloaded");
+}
+
+/// The gap the load survives is closed when Cursor's conversation names the
+/// prompt. The mirrored run's answer is matched against the conversation and
+/// the line before it is journaled as that run's prompt, so it projects into
+/// place and the next load needs no lookup.
+#[tokio::test(start_paused = true)]
+async fn a_lost_prompt_is_recovered_from_the_cursor_conversation() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    service.prompt(&session, "first").await.expect("first turn");
+
+    cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("run-foreign-1"),
+            status: RunStatus::Finished,
+        },
+        RunListing {
+            id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Finished,
+        },
+    ]);
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Finished,
+        text: Some("the old answer".to_owned()),
+    });
+    service.sync_foreign_runs().await;
+
+    cursor.script_conversation(vec![
+        line(ConversationSpeaker::User, "what was asked on cursor.com"),
+        line(ConversationSpeaker::Agent, "the old answer"),
+    ]);
+    service
+        .replay_session(&session)
+        .await
+        .expect("load")
+        .complete();
+
+    let entries = service.journal.read(&session).await.expect("journal");
+    let foreign = CursorRunId::new("run-foreign-1");
+    let recovered = entries
+        .iter()
+        .find_map(|e| match &e.input {
+            JournalInput::Prompt(blocks) if e.run.is_none() => blocks.iter().find_map(|b| {
+                matches!(b, ContentBlock::Text(t) if t.text == "what was asked on cursor.com")
+                    .then_some(e.sequence)
+            }),
+            _ => None,
+        })
+        .expect("the recovered prompt is journaled");
+    assert!(
+        entries.iter().any(|e| e.run.as_ref() == Some(&foreign)
+            && e.input == JournalInput::PromptAccepted(recovered)),
+        "and is linked to the run it opened"
+    );
+    assert!(
+        notifier.updates().iter().any(|(_, update)| matches!(
+            update,
+            SessionUpdate::UserMessageChunk(c)
+                if matches!(&c.content, ContentBlock::Text(t) if t.text == "what was asked on cursor.com")
+        )),
+        "the load publishes it as part of the transcript"
+    );
+    assert!(ready_for_sync(&service, &session));
+}
+
+/// An answer the agent gave more than once names no single turn, so nothing
+/// is attached. A wrong question against a real answer is worse than none.
+#[tokio::test(start_paused = true)]
+async fn an_ambiguous_conversation_match_recovers_nothing() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    service.prompt(&session, "first").await.expect("first turn");
+
+    cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("run-foreign-1"),
+            status: RunStatus::Finished,
+        },
+        RunListing {
+            id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Finished,
+        },
+    ]);
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Finished,
+        text: Some("done".to_owned()),
+    });
+    service.sync_foreign_runs().await;
+
+    cursor.script_conversation(vec![
+        line(ConversationSpeaker::User, "first way of asking"),
+        line(ConversationSpeaker::Agent, "done"),
+        line(ConversationSpeaker::User, "second way of asking"),
+        line(ConversationSpeaker::Agent, "done"),
+    ]);
+    service
+        .replay_session(&session)
+        .await
+        .expect("the load still succeeds without the prompt")
+        .complete();
+
+    let entries = service.journal.read(&session).await.expect("journal");
+    assert!(
+        !entries.iter().any(|e| matches!(&e.input, JournalInput::Prompt(blocks)
+            if blocks.iter().any(|b| matches!(b, ContentBlock::Text(t) if t.text.contains("way of asking"))))),
+        "neither candidate is guessed at"
+    );
+    assert!(ready_for_sync(&service, &session));
 }
 
 /// A run that is still executing cannot become the watermark when its stream
@@ -1667,6 +1798,7 @@ async fn durable_multiturn_load_replays_full_history_and_supports_continuation()
         live.clone(),
         FixedChooser(None, false),
         journal.clone(),
+        NoArtifactStore,
     );
     let id = service.new_session(Path::new(""), vec![]);
     for (prompt, fixture) in [
@@ -1693,6 +1825,7 @@ async fn durable_multiturn_load_replays_full_history_and_supports_continuation()
         replayed.clone(),
         FixedChooser(None, false),
         journal.clone(),
+        NoArtifactStore,
     ));
     restored.restore_session(id.clone(), Some(CursorAgentId::new("bc-fake")), None, None);
     restored.replay_session(&id).await.unwrap().complete();
@@ -1776,6 +1909,7 @@ async fn append_failure_publishes_nothing_and_never_advances_delivery_or_retries
         output.clone(),
         FixedChooser(None, false),
         journal.clone(),
+        NoArtifactStore,
     );
     let id = service.new_session(Path::new(""), vec![]);
     let tx = cursor.script_stream();
@@ -2328,6 +2462,7 @@ async fn model_resolution_precedes_intent_and_definite_rejection_aborts_it() {
             RecordingNotifier::new(),
             FixedChooser(None, false),
             journal.clone(),
+            NoArtifactStore,
         )
         .with_default_model(Some("model".into())),
     );
@@ -2357,6 +2492,7 @@ async fn model_resolution_precedes_intent_and_definite_rejection_aborts_it() {
     service.replay_session(&id).await.unwrap().complete();
 }
 
+mod artifacts;
 mod fold;
 
 #[tokio::test]
@@ -2564,6 +2700,110 @@ async fn an_unconnected_repository_reaches_the_client_as_an_instruction() {
     );
 }
 
+/// After Cursor refuses the first create, the next prompt is almost always
+/// about the refusal ("what's the error?"), which is no evidence of where
+/// the work belongs. The repository decided from the first prompt has to
+/// stand, and the agent that finally starts has to see the message that
+/// was refused, or it is asked about a conversation it never had.
+#[tokio::test]
+async fn a_refused_create_keeps_its_repository_and_carries_the_prompt_forward() {
+    struct CountingChooser(RepoUrl, Arc<std::sync::atomic::AtomicUsize>);
+    impl RepositoryChooser for CountingChooser {
+        async fn choose(
+            &self,
+            _: &str,
+            _: &std::path::Path,
+        ) -> Result<SessionIntent, rootcause::Report> {
+            self.1.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(SessionIntent {
+                repository: Some(self.0.clone()),
+                open_pull_request: true,
+            })
+        }
+    }
+
+    let repo = RepoUrl::parse("https://github.com/macro-inc/macro").expect("an https remote");
+    let cursor = FakeCursor::new();
+    let choices = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let service = Arc::new(CursorSessionService::new(
+        cursor.clone(),
+        RecordingNotifier::new(),
+        CountingChooser(repo.clone(), choices.clone()),
+        Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
+    ));
+    let id = service.new_session(Path::new(""), vec![]);
+
+    cursor.script_repository_rejection();
+    let refusal = service
+        .prompt(&id, "fix the notification grouping bug")
+        .await
+        .expect_err("the first create is refused");
+
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    service
+        .prompt(&id, "what's the error?")
+        .await
+        .expect("the second create succeeds");
+
+    assert_eq!(
+        choices.load(std::sync::atomic::Ordering::SeqCst),
+        1,
+        "the repository is decided once, on the prompt that carried the evidence"
+    );
+    let creates: Vec<_> = cursor
+        .calls()
+        .into_iter()
+        .filter_map(|call| match call {
+            CursorCall::CreateAgent(prompt, repo, ..) => Some((prompt, repo)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(creates.len(), 2, "one refused create, one accepted");
+    assert_eq!(creates[0].1.as_ref(), Some(&repo));
+    assert_eq!(
+        creates[1].1.as_ref(),
+        Some(&repo),
+        "the follow-up is created against the same repository"
+    );
+    assert_eq!(creates[0].0, "fix the notification grouping bug");
+    let carried = &creates[1].0;
+    assert!(
+        carried.contains("fix the notification grouping bug"),
+        "the refused prompt rides along: {carried}"
+    );
+    assert!(
+        carried.contains(&refusal.to_string()),
+        "and so does what the person was told: {carried}"
+    );
+    assert!(
+        carried.ends_with("what's the error?"),
+        "the current prompt is last, marked as the one to answer: {carried}"
+    );
+
+    // Once an agent exists nothing is carried any more: the conversation is
+    // on cursor.com, and the next prompt is an ordinary follow-up run.
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-2")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    service
+        .prompt(&id, "thanks")
+        .await
+        .expect("a follow-up run");
+    let follow_up = cursor
+        .calls()
+        .into_iter()
+        .rev()
+        .find_map(|call| match call {
+            CursorCall::CreateRun(_, prompt, ..) => Some(prompt),
+            _ => None,
+        })
+        .expect("a run was created");
+    assert_eq!(follow_up, "thanks");
+}
+
 #[tokio::test]
 async fn repository_setup_failure_is_retryable_and_not_reported_as_prompt_ambiguity() {
     struct UnavailableChooser;
@@ -2582,6 +2822,7 @@ async fn repository_setup_failure_is_retryable_and_not_reported_as_prompt_ambigu
         RecordingNotifier::new(),
         UnavailableChooser,
         Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
     );
     let id = service.new_session(Path::new(""), vec![]);
     for _ in 0..2 {
@@ -2655,6 +2896,7 @@ async fn repository_choice_receives_each_sessions_working_directory() {
         RecordingNotifier::new(),
         RecordingChooser::default(),
         Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
     );
     for cwd in ["/workspace/one", "/workspace/two"] {
         let id = service.new_session(Path::new(cwd), vec![]);
@@ -2750,8 +2992,12 @@ async fn a_run_that_never_ends_is_reported_in_words_the_prompter_can_act_on() {
         "leaked source location: {message}"
     );
     assert!(
-        message.contains("has not reported a result"),
+        message.contains("stopped waiting"),
         "must say what actually happened: {message}"
+    );
+    assert!(
+        message.contains("Send another message"),
+        "must say what to do about it: {message}"
     );
 }
 
@@ -2768,6 +3014,7 @@ async fn giving_up_on_an_unfinished_run_is_still_journalled_as_interrupted() {
         RecordingNotifier::new(),
         FixedChooser(None, false),
         journal.clone(),
+        NoArtifactStore,
     ));
     let session = service.new_session(Path::new(""), Vec::new());
 
@@ -3218,13 +3465,14 @@ async fn a_rejected_resume_position_reconnects_once_without_one() {
     );
 }
 
-/// Cursor heartbeats an open stream, so a long gap on a run that has not
-/// ended is a connection that stopped delivering. The run record still gets
-/// its check — that is what closes a turn whose stream hangs after the answer
-/// — but a still-running run gets a fresh connection rather than a stream that
-/// has gone silent.
+/// Cursor does not heartbeat an open stream, and a run at work says nothing
+/// for minutes at a time - a tool call waiting on CI, a long build. Seen
+/// live: a run that opened its pull request a minute after its turn had
+/// given up, having spent its whole reconnect budget in the first minute of
+/// a silence that Cursor's own record said was fine. A quiet connection on a
+/// run still going is kept, and the record confirms the run is alive.
 #[tokio::test(start_paused = true)]
-async fn a_quiet_stream_reconnects_when_the_run_is_still_going() {
+async fn a_quiet_stream_is_kept_while_the_run_is_still_going() {
     let (service, cursor, notifier) = service(None);
     let session = service.new_session(Path::new(""), Vec::new());
 
@@ -3237,31 +3485,118 @@ async fn a_quiet_stream_reconnects_when_the_run_is_still_going() {
             "evt-1",
         )
         .expect("stream open");
-    // The sender stays alive: the connection is open and says nothing.
+    // The record is asked once at the first quiet check, and says: working.
     cursor.script_run_result(RunOutcome {
         status: RunStatus::Running,
         text: None,
     });
-    let resumed = cursor.script_stream();
-    resumed
+
+    let turn = {
+        let service = Arc::clone(&service);
+        let session = session.clone();
+        tokio::spawn(async move { service.prompt(&session, "hi").await })
+    };
+    // Past the first quiet check, well short of the silence that replaces a
+    // connection: the same connection then speaks again.
+    tokio::time::sleep(STREAM_QUIET_TIMEOUT + std::time::Duration::from_secs(5)).await;
+    quiet
         .send(CursorEvent::Assistant {
             text: " done".to_owned(),
         })
         .expect("stream open");
-    resumed.send(finished("run-fake-1")).expect("stream open");
-    resumed.send(CursorEvent::Done).expect("stream open");
-    drop(resumed);
+    quiet.send(finished("run-fake-1")).expect("stream open");
+    quiet.send(CursorEvent::Done).expect("stream open");
+    drop(quiet);
+
+    let stop = turn
+        .await
+        .expect("the turn task completes")
+        .expect("the same stream finishes the turn");
+    assert_eq!(stop, StopReason::EndTurn);
+    assert_eq!(
+        cursor.resume_positions(),
+        vec![None],
+        "a connection that is merely quiet is not replaced"
+    );
+    assert_eq!(agent_texts(&notifier.updates()), vec!["thinking", " done"]);
+}
+
+/// Silence long enough does buy a fresh connection - insurance against a
+/// socket that died without saying so - but it never spends the reconnect
+/// budget, which rations a transport that is failing. A run that is quiet
+/// for far longer than the budget would allow of failures still streams.
+#[tokio::test(start_paused = true)]
+async fn a_long_silence_reconnects_without_spending_the_reconnect_budget() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    // Record checks per silent connection before it is replaced: the first
+    // at the quiet timeout, then every recheck until the silence is long.
+    let checks_per_silence = {
+        let mut silence = STREAM_QUIET_TIMEOUT;
+        let mut checks = 1;
+        while silence < STREAM_SILENCE_BEFORE_RECONNECT {
+            silence += STREAM_QUIET_RECHECK;
+            checks += 1;
+        }
+        checks
+    };
+    // More silent connections in a row than the reconnect budget allows of
+    // failing ones. Each is held open (the sender kept) and says nothing.
+    let silent_connections = STREAM_RECONNECT_ATTEMPTS + 2;
+    let mut held = Vec::new();
+    let first = cursor.script_stream();
+    first
+        .send_with_id(
+            CursorEvent::Assistant {
+                text: "thinking".to_owned(),
+            },
+            "evt-1",
+        )
+        .expect("stream open");
+    held.push(first);
+    for _ in 0..checks_per_silence {
+        cursor.script_run_result(RunOutcome {
+            status: RunStatus::Running,
+            text: None,
+        });
+    }
+    for _ in 1..silent_connections {
+        held.push(cursor.script_stream());
+        for _ in 0..checks_per_silence {
+            cursor.script_run_result(RunOutcome {
+                status: RunStatus::Running,
+                text: None,
+            });
+        }
+    }
+    let speaking = cursor.script_stream();
+    speaking
+        .send(CursorEvent::Assistant {
+            text: " done".to_owned(),
+        })
+        .expect("stream open");
+    speaking.send(finished("run-fake-1")).expect("stream open");
+    speaking.send(CursorEvent::Done).expect("stream open");
+    drop(speaking);
 
     let stop = service
         .prompt(&session, "hi")
         .await
-        .expect("the reconnect finishes the turn");
+        .expect("the run is still streamed after a long silence");
     assert_eq!(stop, StopReason::EndTurn);
-    drop(quiet);
+    drop(held);
+    let positions = cursor.resume_positions();
     assert_eq!(
-        cursor.resume_positions(),
-        vec![None, Some("evt-1".to_owned())],
-        "the quiet connection is replaced, not merely polled around"
+        positions.len(),
+        silent_connections + 1,
+        "every silent connection was replaced, past the failure budget: {positions:?}"
+    );
+    assert!(
+        positions[1..]
+            .iter()
+            .all(|position| position.as_deref() == Some("evt-1")),
+        "each replacement resumes from the last record heard: {positions:?}"
     );
     assert_eq!(agent_texts(&notifier.updates()), vec!["thinking", " done"]);
 }

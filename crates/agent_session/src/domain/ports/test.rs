@@ -1,7 +1,8 @@
-use super::{BotDirectory, BotFacts, ManagedPersonaError, managed_persona_for_user};
+use super::{BotDirectory, BotFacts, ManagedPersonaError, managed_persona_for_owner};
 use bots::domain::models::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use model_owner::Owner;
 
 const OWNER: &str = "macro|owner@example.com";
 const TEAMMATE: &str = "macro|teammate@example.com";
@@ -75,6 +76,10 @@ fn user(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(id.to_owned()).unwrap()
 }
 
+fn owner(id: &str) -> Owner {
+    Owner::User(user(id))
+}
+
 impl BotDirectory for Directory {
     async fn bot_facts(&self, bot: BotId) -> super::Result<Option<BotFacts>> {
         Ok((bot == BotId::TEST_A).then(|| self.facts.clone()))
@@ -100,7 +105,7 @@ impl BotDirectory for Directory {
 #[tokio::test]
 async fn owner_can_select_a_private_persona() {
     let selected =
-        managed_persona_for_user(&Directory::managed_private(), BotId::TEST_A, &user(OWNER))
+        managed_persona_for_owner(&Directory::managed_private(), BotId::TEST_A, &owner(OWNER))
             .await
             .expect("owner");
     assert_eq!(selected.bot_id, BotId::TEST_A);
@@ -108,10 +113,10 @@ async fn owner_can_select_a_private_persona() {
 
 #[tokio::test]
 async fn stranger_cannot_select_a_private_all_channel_persona() {
-    let error = managed_persona_for_user(
+    let error = managed_persona_for_owner(
         &Directory::managed_private(),
         BotId::TEST_A,
-        &user(STRANGER),
+        &owner(STRANGER),
     )
     .await
     .expect_err("private all-channel personas stay with their owner");
@@ -120,10 +125,10 @@ async fn stranger_cannot_select_a_private_all_channel_persona() {
 
 #[tokio::test]
 async fn channel_co_member_can_select_a_selected_channel_persona() {
-    let selected = managed_persona_for_user(
+    let selected = managed_persona_for_owner(
         &Directory::managed_selected_channel(),
         BotId::TEST_A,
-        &user(TEAMMATE),
+        &owner(TEAMMATE),
     )
     .await
     .expect("channel co-member");
@@ -132,10 +137,10 @@ async fn channel_co_member_can_select_a_selected_channel_persona() {
 
 #[tokio::test]
 async fn stranger_cannot_select_a_selected_channel_persona_without_membership() {
-    let error = managed_persona_for_user(
+    let error = managed_persona_for_owner(
         &Directory::managed_selected_channel(),
         BotId::TEST_A,
-        &user(STRANGER),
+        &owner(STRANGER),
     )
     .await
     .expect_err("no shared channel");
@@ -145,7 +150,7 @@ async fn stranger_cannot_select_a_selected_channel_persona_without_membership() 
 #[tokio::test]
 async fn team_member_can_select_a_team_persona() {
     let selected =
-        managed_persona_for_user(&Directory::managed_team(), BotId::TEST_A, &user(TEAMMATE))
+        managed_persona_for_owner(&Directory::managed_team(), BotId::TEST_A, &owner(TEAMMATE))
             .await
             .expect("team member");
     assert_eq!(selected.bot_id, BotId::TEST_A);
@@ -154,7 +159,7 @@ async fn team_member_can_select_a_team_persona() {
 #[tokio::test]
 async fn stranger_cannot_select_a_team_all_channel_persona() {
     let error =
-        managed_persona_for_user(&Directory::managed_team(), BotId::TEST_A, &user(STRANGER))
+        managed_persona_for_owner(&Directory::managed_team(), BotId::TEST_A, &owner(STRANGER))
             .await
             .expect_err("all-channel team personas stay with the team");
     assert!(matches!(error, ManagedPersonaError::Forbidden));
@@ -162,12 +167,26 @@ async fn stranger_cannot_select_a_team_all_channel_persona() {
 
 #[tokio::test]
 async fn channel_co_member_can_select_a_team_selected_channel_persona() {
-    let selected = managed_persona_for_user(
+    let selected = managed_persona_for_owner(
         &Directory::managed_team_selected_channel(),
         BotId::TEST_A,
-        &user(TEAMMATE),
+        &owner(TEAMMATE),
     )
     .await
     .expect("channel co-member");
     assert_eq!(selected.bot_id, BotId::TEST_A);
+}
+
+#[tokio::test]
+async fn an_owner_that_is_not_a_user_selects_no_persona() {
+    // Every persona rule is about a person - who owns it, whose team it
+    // belongs to, who shares a channel with it - so a bot owner matches none
+    // of them, even for a persona anyone could otherwise select.
+    let result = managed_persona_for_owner(
+        &Directory::managed_private(),
+        BotId::TEST_A,
+        &Owner::Bot(BotId::TEST_A),
+    )
+    .await;
+    assert!(matches!(result, Err(ManagedPersonaError::Forbidden)));
 }

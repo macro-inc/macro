@@ -21,6 +21,7 @@ use crate::{
     auth::{AccessLevel, TokenFrom, decode_jwt},
     constants::USER_PEER_D1_BINDING,
     d1::{PeerWithUserId, get_user_id_from_peer_id, insert_user_mapping},
+    domain::document::DocumentAttribution,
     dss_internal::{DssInternal, DssInternalClient, InteractionReason},
     error::ResultExt,
     generated::schema::InitializeFromSnapshotRequest,
@@ -46,12 +47,17 @@ pub mod status_codes {
 
 const DOCUMENT_ID_KEY: &str = "DOCUMENT_ID";
 
+mod document_api;
+mod document_effects;
+
 mod path {
     pub const CONNECT: &str = "connect";
     pub const EXISTS: &str = "exists";
     pub const INITIALIZE: &str = "initialize";
     pub const RAW: &str = "raw";
     pub const SNAPSHOT: &str = "snapshot";
+    pub const STATE: &str = "state";
+    pub const UPDATE: &str = "update";
     pub const ACTIVE_PEERS_MARKER: &str = "active_peers";
     pub const PEER: &str = "peer";
     pub const METADATA: &str = "metadata";
@@ -107,14 +113,6 @@ pub struct WebSocketMetadata {
 
 pub type WsMetaMap = BTreeMap<String, WebSocketMetadata>;
 
-/// Who a published snapshot's edits are attributed to: the non-human peer that
-/// wrote them and, when its token carried one, the user it acted for.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EditAttribution {
-    pub actor: String,
-    pub on_behalf_of: Option<String>,
-}
-
 /// Attribution from currently-connected websocket metadata only.
 ///
 /// Closed sockets must not contribute an `actor`: the isolate stays warm while
@@ -122,9 +120,9 @@ pub struct EditAttribution {
 /// attributing later human edits.
 fn edit_attribution_from_meta<'a>(
     metas: impl IntoIterator<Item = &'a WebSocketMetadata>,
-) -> Option<EditAttribution> {
+) -> Option<DocumentAttribution> {
     metas.into_iter().find_map(|meta| {
-        meta.actor.clone().map(|actor| EditAttribution {
+        meta.actor.clone().map(|actor| DocumentAttribution {
             actor,
             on_behalf_of: meta.user_id.clone(),
         })
@@ -230,7 +228,7 @@ mod u64_serde_strings {
 #[cfg(test)]
 mod actor_attribution_test {
     use super::{
-        AccessLevel, CloseFlush, EditAttribution, WebSocketMetadata, edit_attribution_from_meta,
+        AccessLevel, CloseFlush, DocumentAttribution, WebSocketMetadata, edit_attribution_from_meta,
     };
 
     fn meta(actor: Option<&str>, user_id: Option<&str>) -> WebSocketMetadata {
@@ -259,7 +257,7 @@ mod actor_attribution_test {
         );
         assert_eq!(
             edit_attribution_from_meta([&stale, &human]),
-            Some(EditAttribution {
+            Some(DocumentAttribution {
                 actor: "bot|stale".to_string(),
                 on_behalf_of: Some("macro|first@example.com".to_string()),
             })
@@ -405,7 +403,7 @@ async fn report_new_doc_state(
     document_id: &str,
     snapshot: &[u8],
     env: &Env,
-    attribution: Option<EditAttribution>,
+    attribution: Option<DocumentAttribution>,
 ) {
     if let Err(err) = DssInternalClient::new(env)
         .publish_shallow_snapshot(document_id, snapshot)
@@ -414,8 +412,11 @@ async fn report_new_doc_state(
         warn!(error=?err, "failed to push snapshot to DSS");
     }
     #[cfg(feature = "search-service")]
-    if let Err(err) = crate::sps::update(document_id, env, attribution).await {
-        warn!(error=?err, "failed to update search index");
+    if let Err(err) = DssInternalClient::new(env)
+        .publish_sync_content_updated(document_id, attribution)
+        .await
+    {
+        warn!(error=?err, "failed to publish document content change");
     }
 }
 
@@ -449,7 +450,7 @@ impl DocumentSyncSession {
         self.state.get_websockets()
     }
 
-    fn edit_attribution(&self) -> Option<EditAttribution> {
+    fn edit_attribution(&self) -> Option<DocumentAttribution> {
         let connected: BTreeSet<String> = self
             .state
             .get_websockets()
@@ -528,6 +529,11 @@ impl DocumentSyncSession {
             // connect authenticates via jwt in query
             (path::CONNECT, Some(document_id)) => {
                 return self.connect_handler(req, document_id).await;
+            }
+            (operation @ (path::STATE | path::UPDATE), Some(document_id)) => {
+                return self
+                    .document_handler(req, document_id, operation == path::UPDATE)
+                    .await;
             }
 
             // EXIST, PEER, and WAKEUP don't require auth
@@ -1037,6 +1043,12 @@ pub static ROUTER: LazyLock<Router<&str>> = LazyLock::new(|| {
         .unwrap();
     router
         .insert("/document/{document_id}/snapshot", path::SNAPSHOT)
+        .unwrap();
+    router
+        .insert("/document/{document_id}/state", path::STATE)
+        .unwrap();
+    router
+        .insert("/document/{document_id}/update", path::UPDATE)
         .unwrap();
     router
         .insert("/document/{document_id}/peer/{peer_id}", path::PEER)

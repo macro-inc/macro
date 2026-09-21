@@ -8,7 +8,8 @@ use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
 use crate::domain::model::{
-    PropertyOptionReplaceOutcome, PropertyOptionReplacePlan, UpdatePropertyOptionOutcome,
+    GetOrCreatePropertyOptionResult, PropertyOptionReplaceOutcome, PropertyOptionReplacePlan,
+    UpdatePropertyOptionOutcome,
 };
 
 /// Gets a single property option by ID.
@@ -161,6 +162,74 @@ pub async fn create_property_option(
         created_at: row.created_at,
         updated_at: row.updated_at,
     })
+}
+
+/// Resolve an option without overwriting an existing option's metadata.
+#[tracing::instrument(skip(pool), err)]
+pub async fn get_or_create_property_option(
+    pool: &Pool<Postgres>,
+    property_definition_id: Uuid,
+    display_order: i32,
+    value: PropertyOptionValue,
+    color: Option<String>,
+) -> anyhow::Result<GetOrCreatePropertyOptionResult> {
+    if let Some(option) = get_property_options(pool, property_definition_id)
+        .await?
+        .into_iter()
+        .find(|option| option.value == value)
+    {
+        return Ok(GetOrCreatePropertyOptionResult {
+            option,
+            created: false,
+        });
+    }
+
+    match create_property_option(
+        pool,
+        property_definition_id,
+        display_order,
+        value.clone(),
+        color,
+    )
+    .await
+    {
+        Ok(option) => Ok(GetOrCreatePropertyOptionResult {
+            option,
+            created: true,
+        }),
+        Err(error) => {
+            // Only a collision on the value is recoverable. Do not hide a
+            // missing definition, connection failure, or unrelated constraint.
+            let duplicate_value = error
+                .downcast_ref::<sqlx::Error>()
+                .and_then(sqlx::Error::as_database_error)
+                .is_some_and(|error| {
+                    error.is_unique_violation()
+                        && matches!(
+                            error.constraint(),
+                            Some(
+                                "unique_property_options_string_value"
+                                    | "unique_property_options_string_value_sha256"
+                                    | "unique_property_options_number_value"
+                            )
+                        )
+                });
+            if !duplicate_value {
+                return Err(error);
+            }
+            // The failed insert waits for the winning transaction to commit.
+            // A fresh read can therefore resolve its option under READ COMMITTED.
+            let option = get_property_options(pool, property_definition_id)
+                .await?
+                .into_iter()
+                .find(|option| option.value == value)
+                .ok_or(error)?;
+            Ok(GetOrCreatePropertyOptionResult {
+                option,
+                created: false,
+            })
+        }
+    }
 }
 
 /// Updates a property option's value, color, and display order in place.

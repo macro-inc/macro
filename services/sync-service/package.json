@@ -1,10 +1,9 @@
 {
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.16.17",
     "@types/jsonwebtoken": "^9.0.9",
     "bebop-tools": "^3.1.3",
     "miniflare": "^4.20260617.0",
-    "vitest": "^4.1.0"
+    "vitest": "5.0.1"
   },
   "dependencies": {
     "bebop": "^3.1.3",

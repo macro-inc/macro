@@ -69,12 +69,12 @@ export function notDoneFilter(notificationSource: NotificationSource) {
   };
 }
 
-/** Document filter (markdown, canvas) - excludes tasks */
+/** Native document filter (markdown, canvas, spreadsheets) - excludes tasks */
 export function documentFilter(entity: EntityData): boolean {
   if (entity.type !== 'document') return false;
   if (entity.subType?.type === 'task') return false;
   const fileType = entity.fileType ?? '';
-  return fileType === 'md' || fileType === 'canvas';
+  return ['md', 'canvas', 'spreadsheet'].includes(fileType);
 }
 
 export function taskFilter(entity: EntityData): boolean {
@@ -118,7 +118,7 @@ export function projectFilter(entity: EntityData): boolean {
 export function fileFilter(entity: EntityData): boolean {
   if (entity.type !== 'document') return false;
   const fileType = entity.fileType ?? '';
-  return !['md', 'canvas'].includes(fileType);
+  return !['md', 'canvas', 'spreadsheet'].includes(fileType);
 }
 
 export function githubPrFilter(entity: EntityData): boolean {
@@ -260,7 +260,7 @@ export function filesAndFolderFilter(entity: EntityData): boolean {
 
   if (entity.type === 'document') {
     const fileType = entity.fileType ?? '';
-    return !['md', 'canvas'].includes(fileType);
+    return !['md', 'canvas', 'spreadsheet'].includes(fileType);
   }
 
   return true;

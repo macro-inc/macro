@@ -4,19 +4,21 @@ import {
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
+import { toSubType } from '@entity/types/entity';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { emailClient } from '@service-email/client';
 import type { ApiThread } from '@service-email/generated/schemas';
 import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
+import { entityMessagesClient } from '@service-storage/messages';
 import { formatDocumentName } from '@service-storage/util/filename';
 import type { InfiniteData } from '@tanstack/solid-query';
 import { fetchAgentSessionMentionPreviews } from '../agent-session/mention-fetchers';
-import { normalizeMessageSender } from '../channel/message-sender';
 import { queryClient } from '../client';
 import { emailKeys } from '../email/keys';
 import { threadQueryOptions } from '../email/thread';
 import { representativeThreadMessage } from '../email/thread-subject';
+import { normalizeMessageSender } from '../messages/message-sender';
 import type { ItemEntity, MessageContext, PreviewItem } from './types';
 
 async function fetchSessionPreviews(ids: string[]): Promise<PreviewItem[]> {
@@ -70,6 +72,7 @@ async function fetchChannelPreviews(
           rawName: channel.channel_name,
           name: channel.channel_name,
           channelType: channel.channel_type,
+          profilePictureId: channel.profile_picture_id,
         };
       case 'no_access':
       case 'does_not_exist':
@@ -87,24 +90,16 @@ export async function fetchMessageContext(
   messageId: string,
   signal?: AbortSignal
 ): Promise<MessageContext | null> {
-  const msgResult = await storageServiceClient.getMessageWithContext({
-    channel_id: channelId,
-    message_id: messageId,
-    signal,
-  });
-
-  if (msgResult.isErr()) {
+  if (signal?.aborted) return null;
+  try {
+    const message = await entityMessagesClient.get(
+      { type: 'channel', id: channelId },
+      messageId
+    );
+    return signal?.aborted ? null : normalizeMessageSender(message);
+  } catch {
     return null;
   }
-
-  const msgData = msgResult.value;
-  const message = msgData.messages[0];
-
-  if (!message) {
-    return null;
-  }
-
-  return normalizeMessageSender(message);
 }
 
 async function fetchDocumentPreviews(ids: string[]): Promise<PreviewItem[]> {
@@ -135,16 +130,7 @@ async function fetchDocumentPreviews(ids: string[]): Promise<PreviewItem[]> {
           fileType: doc.file_type as FileType,
           owner: doc.owner,
           updatedAt: doc.updated_at,
-          subType:
-            doc.sub_type === null || doc.sub_type === undefined
-              ? undefined
-              : {
-                  type: doc.sub_type.type,
-                  is_completed:
-                    'is_completed' in doc.sub_type
-                      ? doc.sub_type.is_completed
-                      : undefined,
-                },
+          subType: toSubType(doc.sub_type) ?? undefined,
         };
       case 'no_access':
       case 'does_not_exist':

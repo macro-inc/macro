@@ -1,6 +1,6 @@
 use document_sub_type::DocumentSubType;
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::document::DocumentMetadata;
+use model_owner::Owner;
 use sqlx::{Pool, Postgres};
 
 /// Used to get all documents in a paginated format
@@ -110,9 +110,8 @@ pub async fn get_all_documents(
         Ok(DocumentMetadata {
             document_id: row.document_id,
             document_version_id: row.document_version_id,
-            owner: MacroUserIdStr::parse_from_str(&row.owner)
-                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
-                .into_owned(),
+            owner: Owner::from_principal_str(&row.owner)
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
             document_name: row.document_name,
             file_type: row.file_type,
             sha: row.sha,

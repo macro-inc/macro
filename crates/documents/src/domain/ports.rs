@@ -7,6 +7,7 @@ pub mod create;
 pub mod editing;
 pub mod markdown;
 pub mod mentions;
+pub mod sync;
 
 use std::future::Future;
 
@@ -403,7 +404,7 @@ pub async fn task_property_edit_receipt<A: EntityAccessService>(
         .await
 }
 
-/// Use case for relaying document content-upload events.
+/// Use cases for relaying document content-change events.
 pub trait DocumentContentEventService: Send + Sync + 'static {
     /// Load the document owner and publish a content-uploaded event.
     fn publish_content_uploaded(
@@ -411,6 +412,15 @@ pub trait DocumentContentEventService: Send + Sync + 'static {
         document_id: &str,
         file_type: FileType,
         document_version_id: Option<String>,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+
+    /// Resolve the stored file type and publish a sync-content event. Sync callers
+    /// supply document identity and attribution without interpreting the content.
+    fn publish_sync_content_updated(
+        &self,
+        document_id: &str,
+        actor: Option<String>,
+        on_behalf_of: Option<String>,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 }
 

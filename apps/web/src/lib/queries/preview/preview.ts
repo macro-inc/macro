@@ -156,7 +156,7 @@ function useItemPreviewQuery(
 export function useItemPreview(item: Accessor<ItemEntity>) {
   const previewQuery = useItemPreviewQuery(item);
 
-  const maybeChannelMessageQuery = useQuery(() => {
+  const maybeMessageQuery = useQuery(() => {
     const item_ = item();
     const channelId = item_.type === 'channel' ? item_.id : '';
     const messageId = item_.type === 'channel' ? (item_.messageId ?? '') : '';
@@ -177,9 +177,12 @@ export function useItemPreview(item: Accessor<ItemEntity>) {
 
   const preview = createMemo(() => {
     const data = previewQuery.data();
-    const channelMessageData = queryReadyGate(maybeChannelMessageQuery)
-      ? maybeChannelMessageQuery.data
-      : undefined;
+    // Disabled message queries are pending but not loading. Reading their
+    // data still suspends briefly whenever a preview row mounts.
+    const channelMessageData =
+      !maybeMessageQuery.isPending && queryReadyGate(maybeMessageQuery)
+        ? maybeMessageQuery.data
+        : undefined;
 
     if (!data) {
       return {

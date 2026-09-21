@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.sender_id FROM comms_messages m\n               JOIN comms_message_threads t ON t.root_id = COALESCE(m.thread_id, m.id)\n               WHERE m.id = $1 AND m.parent_entity_type = $2 AND m.parent_entity_id = $3\n                   AND m.deleted_at IS NULL AND t.deleted_at IS NULL FOR UPDATE OF t, m",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sender_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "91e23a41ff59f8b68982313ea6e2655a5afb954ecce637ec5c8d67cf139fc946"
+}

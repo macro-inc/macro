@@ -6,7 +6,7 @@
 
 [macro]
 # Base URL of the agent-harness service. Its ws(s) twin hosts the runtime
-# gateway the daemon dials per session.
+# gateway the daemon connects to on startup.
 api_url = "http://localhost:50009/agent-harness"
 # Base URL of the storage service (harness pairing + live event stream).
 storage_url = "http://localhost:50009/dss"
@@ -21,6 +21,10 @@ name = "erics-macbook"
 # Optional: "private" (default) or "team". Team harnesses can run agents any
 # of your teammates create. The approval dialog arrives preselected to this.
 scope = "private"
+# Allow agents to bypass tool permissions, subject to web confirmation.
+# When enabled, agents can run commands and edit files without approval.
+# Changes apply at the next pairing.
+allow_permission_bypass = false
 
 [harness]
 command = "hermes"

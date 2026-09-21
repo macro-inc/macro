@@ -1,23 +1,20 @@
-import {
-  activeCommentThreadSignal,
-  noScrollToActiveCommentThreadSignal,
-  useIsActiveThreadSelector,
-} from '@block-pdf/store/comments/commentStore';
+import { useIsActiveThreadSelector } from '@block-pdf/store/comments/commentStore';
 import type { IThreadPlaceable } from '@block-pdf/type/placeables';
 import { cn } from '@ui';
-import type { Component } from 'solid-js';
+import { type Component, Show } from 'solid-js';
+import { usePdfComments } from '../../context/pdf-comments-context';
 
 export const FreeCommentPlaceable: Component<{
   payload: NonNullable<IThreadPlaceable['payload']>;
 }> = (props) => {
   const isActiveThreadSelector = useIsActiveThreadSelector();
-  const setActiveThreadId = activeCommentThreadSignal.set;
+  const comments = usePdfComments();
 
   return (
     <CommentIndicator
       threadId={props.payload.threadId}
       isActive={isActiveThreadSelector(props.payload.threadId)}
-      setActive={() => setActiveThreadId(props.payload.threadId)}
+      setActive={() => comments.activateThread(props.payload.threadId)}
       numComments={props.payload.comments.length}
     />
   );
@@ -33,10 +30,8 @@ function CommentIndicator(props: {
   isActive: boolean;
   setActive?: () => void;
 }) {
-  const setNoScrollToActiveCommentThread =
-    noScrollToActiveCommentThreadSignal.set;
+  const comments = usePdfComments();
 
-  // SCUFFED, decide how to define this color
   return (
     <div
       class={cn(
@@ -46,18 +41,18 @@ function CommentIndicator(props: {
           : 'bg-[oklch(0.93_0.034_272.788)] text-[oklch(0.585_0.233_277.117)] hover:bg-[oklch(0.87_0.065_274.039)] hover:text-[oklch(0.511_0.262_276.966)]'
       )}
       on:mousedown={() => {
-        setNoScrollToActiveCommentThread(true);
+        comments.suppressScrolling();
         props.setActive?.();
       }}
       on:mouseup={() => {
-        setNoScrollToActiveCommentThread(false);
+        comments.restoreScrolling();
       }}
     >
-      {props.numComments > 1 && !props.isActive && (
+      <Show when={props.numComments > 1 && !props.isActive}>
         <div class="size-2.5 absolute top-[-3.5px] right-[-3.5px] bg-[oklch(0.785_0.115_274.713)] text-[oklch(0.457_0.24_277.023)] flex items-center justify-center rounded-full text-[6px]">
           {props.numComments}
         </div>
-      )}
+      </Show>
       <svg
         xmlns="http://www.w3.org/2000/svg"
         fill="none"

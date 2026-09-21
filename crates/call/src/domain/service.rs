@@ -12,6 +12,10 @@ use entity_access::domain::ports::EntityAccessService;
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
+use models_permissions::share_permission::access_level::AccessLevel;
+use models_permissions::share_permission::team_share::{
+    AuthorizedTeamShareCommand, TeamShareLevel, TeamShareRequest, authorize_team_share,
+};
 use notification::domain::models::apple::VoipPushPayload;
 use notification::domain::models::apple::{
     APNSPushNotification, Alert, AlertDictionary, Aps, PushNotificationData,
@@ -33,7 +37,8 @@ use crate::domain::events::{
     CallStartedMetadata,
 };
 use crate::domain::models::{
-    EditCallRecordRequest, EditCallTranscriptRequest, VoipPushPayloadRequest,
+    EditCallRecordRepoArgs, EditCallRecordRequest, EditCallTranscriptRequest,
+    VoipPushPayloadRequest,
 };
 
 use super::models::{
@@ -230,6 +235,40 @@ impl<
         publish_call_event(&self.event_broker, event);
     }
 
+    /// Authorize an explicit (`teamShareAccessLevel`) or legacy (`shareWithTeam`)
+    /// canonical team-share change on an archived call against the persisted
+    /// creator.
+    ///
+    /// Returns `Ok(None)` without loading anything when the request carries
+    /// neither input, so renames and link changes never take the shared
+    /// team-share guard. Calls only share with the team at View, so any other
+    /// explicit level is rejected before facts load. Effective Edit (or even
+    /// Owner) access is not enough: only the call's actual creator may share it.
+    async fn authorize_call_team_share(
+        &self,
+        receipt: &EntityAccessReceipt<EditAccessLevel>,
+        call_id: &Uuid,
+        request: TeamShareRequest,
+    ) -> Result<Option<AuthorizedTeamShareCommand>, CallError> {
+        if request == TeamShareRequest::default() {
+            return Ok(None);
+        }
+        if let Some(Some(level)) = request.access_level
+            && level != AccessLevel::View
+        {
+            return Err(CallError::InvalidRequest(
+                "calls can only be shared with the team at view access".to_string(),
+            ));
+        }
+        let facts = self.repo.get_team_share_facts(call_id).await?;
+        Ok(authorize_team_share(
+            receipt.acting_user_id(),
+            &facts,
+            request,
+            TeamShareLevel::View,
+        )?)
+    }
+
     fn publish_archived_call_event(
         &self,
         archived: &ArchivedCall,
@@ -383,6 +422,31 @@ fn resolve_ring_status(
         Some(call) if call.id != *requested_call_id => RingStatus::Ended,
         Some(_) if is_participant => RingStatus::Answered,
         Some(_) => RingStatus::Ringing,
+    }
+}
+
+/// Normalize the team-share inputs of an edit on a live call into the pending
+/// share-with-team toggle: `Ok(None)` when neither input is present.
+///
+/// Calls only share at View, so any other explicit level is rejected, as are
+/// explicit and legacy inputs that disagree.
+fn live_share_intent(request: TeamShareRequest) -> Result<Option<bool>, CallError> {
+    let explicit = match request.access_level {
+        Some(Some(AccessLevel::View)) => Some(true),
+        Some(Some(_)) => {
+            return Err(CallError::InvalidRequest(
+                "calls can only be shared with the team at view access".to_string(),
+            ));
+        }
+        Some(None) => Some(false),
+        None => None,
+    };
+    match (explicit, request.legacy_enabled) {
+        (Some(explicit), Some(legacy)) if explicit != legacy => Err(CallError::InvalidRequest(
+            "legacy and explicit team-share inputs contradict each other".to_string(),
+        )),
+        (Some(explicit), _) => Ok(Some(explicit)),
+        (None, legacy) => Ok(legacy),
     }
 }
 
@@ -543,8 +607,7 @@ impl<
                 match self
                     .repo
                     .create_call(&call_id, channel_id, &room_name, user_id.copied())
-                    .await
-                    .map_err(|e| CallError::Internal(e.into()))?
+                    .await?
                 {
                     Some(call) => {
                         // We are the creator — dispatch transcription agent (best-effort).
@@ -922,11 +985,7 @@ impl<
                         .map_err(|e| CallError::Internal(e.into()))?
                 {
                     tracing::info!(call_id = %call.id, room_name, "archiving call on room_finished");
-                    let archived = self
-                        .repo
-                        .archive_call(&call.id)
-                        .await
-                        .map_err(|e| CallError::Internal(e.into()))?;
+                    let archived = self.repo.archive_call(&call.id).await?;
                     self.publish_archived_call_event(&archived, CallArchiveReason::RoomFinished);
 
                     // Fire-and-forget summarization now that the
@@ -1039,11 +1098,7 @@ impl<
                 if remaining == 0 {
                     tracing::info!(call_id = %call.id, room_name, "last participant left, archiving call");
                     let egress_id = call.egress_id.clone();
-                    let archived = self
-                        .repo
-                        .archive_call(&call.id)
-                        .await
-                        .map_err(|e| CallError::Internal(e.into()))?;
+                    let archived = self.repo.archive_call(&call.id).await?;
                     self.publish_archived_call_event(
                         &archived,
                         CallArchiveReason::LastParticipantLeft,
@@ -1382,31 +1437,132 @@ impl<
         let call_id = macro_uuid::string_to_uuid(&entity.entity_id)
             .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call entity receipt")))?;
         let actor_user_id = event_actor_user_id(receipt.auth());
-        let custom_name = request.custom_name.clone();
-        let share_with_team = request.share_with_team;
-        let channel_id = self
+
+        let record = self
             .repo
             .get_call_record_by_call_id(&call_id)
             .await
-            .map_err(|e| CallError::Internal(e.into()))?
-            .map(|record| record.channel_id);
+            .map_err(|e| CallError::Internal(e.into()))?;
+        let team_share_request = TeamShareRequest {
+            access_level: request
+                .share_permission
+                .as_ref()
+                .and_then(|p| p.team_share_access_level),
+            legacy_enabled: request.share_with_team,
+        };
+        let custom_name = request.custom_name.clone();
+        let mut share_permission = request.share_permission;
+
+        // While the call is live, team sharing is the pending toggle on the
+        // active call (any Edit-level caller may flip it, like the toggle
+        // endpoint); it becomes canonical state when the call is archived.
+        // Once archived, the change is authorized against the persisted
+        // creator before any write, so a rejected request publishes nothing.
+        let live_share_with_team = match &record {
+            Some(record) if record.is_active => live_share_intent(team_share_request)?,
+            _ => None,
+        };
+        let team_share = if live_share_with_team.is_some() {
+            // The repository refuses a team level without a command; the live
+            // intent is carried separately.
+            if let Some(permission) = share_permission.as_mut() {
+                permission.team_share_access_level = None;
+            }
+            None
+        } else {
+            self.authorize_call_team_share(&receipt, &call_id, team_share_request)
+                .await?
+        };
+        // Events report the committed team-share outcome, never the raw request.
+        let share_with_team = live_share_with_team.or_else(|| {
+            team_share
+                .as_ref()
+                .map(|command| command.target().is_some())
+        });
 
         self.repo
-            .patch_call_record(&call_id, &request)
-            .await
-            .map_err(|e| CallError::Internal(e.into()))?;
+            .patch_call_record(
+                &call_id,
+                &EditCallRecordRepoArgs {
+                    share_permission,
+                    custom_name: request.custom_name,
+                    team_share,
+                    live_share_with_team,
+                },
+            )
+            .await?;
 
-        if let Some(channel_id) = channel_id {
-            self.publish_call_event(&CallMacroEvent::record_updated(CallRecordUpdatedMetadata {
-                call_id,
-                channel_id,
-                actor_user_id,
-                custom_name,
-                share_with_team,
-            }));
+        let Some(record) = record else {
+            return Ok(());
+        };
+
+        self.publish_call_event(&CallMacroEvent::record_updated(CallRecordUpdatedMetadata {
+            call_id,
+            channel_id: record.channel_id,
+            actor_user_id,
+            custom_name,
+            share_with_team,
+        }));
+
+        // Participants of an in-progress call mirror the pending toggle in
+        // their call UI; tell them when it changed.
+        if let Some(share_with_team) = live_share_with_team {
+            self.send_call_participant_event(
+                &call_id,
+                "call_share_with_team_toggled",
+                &serde_json::json!({
+                    "call_id": call_id,
+                    "channel_id": record.channel_id,
+                    "share_with_team": share_with_team,
+                    "toggled_by": receipt.get_authenticated_user().ok(),
+                }),
+            )
+            .await;
         }
 
         Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn toggle_share_with_team(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+    ) -> Result<bool, CallError> {
+        let entity = receipt.entity();
+        if entity.entity_type != EntityType::Call {
+            return Err(CallError::Internal(anyhow::anyhow!(
+                "expected Call entity in receipt, got {:?}",
+                entity.entity_type
+            )));
+        }
+
+        let call_id = macro_uuid::string_to_uuid(&entity.entity_id)
+            .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call entity receipt")))?;
+        let actor_user_id = event_actor_user_id(receipt.auth());
+
+        let (new_value, channel_id) = self.repo.toggle_share_with_team(&call_id).await?;
+
+        self.publish_call_event(&CallMacroEvent::record_updated(CallRecordUpdatedMetadata {
+            call_id,
+            channel_id,
+            actor_user_id,
+            custom_name: None,
+            share_with_team: Some(new_value),
+        }));
+
+        self.send_call_participant_event(
+            &call_id,
+            "call_share_with_team_toggled",
+            &serde_json::json!({
+                "call_id": call_id,
+                "channel_id": channel_id,
+                "share_with_team": new_value,
+                "toggled_by": receipt.get_authenticated_user().ok(),
+            }),
+        )
+        .await;
+
+        Ok(new_value)
     }
 
     #[tracing::instrument(err, skip(self, request), fields(num_assignments = request.assignments.len()))]
@@ -1430,52 +1586,6 @@ impl<
             .patch_call_transcript_custom_speakers(&call_id, &request.assignments)
             .await
             .map_err(|e| CallError::Internal(e.into()))
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn toggle_share_with_team(
-        &self,
-        receipt: EntityAccessReceipt<EditAccessLevel>,
-    ) -> Result<bool, CallError> {
-        let entity = receipt.entity();
-        if entity.entity_type != EntityType::Call {
-            return Err(CallError::Internal(anyhow::anyhow!(
-                "expected Call entity in receipt, got {:?}",
-                entity.entity_type
-            )));
-        }
-
-        let call_id = macro_uuid::string_to_uuid(&entity.entity_id)
-            .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call entity receipt")))?;
-        let actor_user_id = event_actor_user_id(receipt.auth());
-
-        let (new_value, channel_id) = self
-            .repo
-            .toggle_share_with_team(&call_id)
-            .await
-            .map_err(|e| CallError::Internal(e.into()))?;
-
-        self.publish_call_event(&CallMacroEvent::record_updated(CallRecordUpdatedMetadata {
-            call_id,
-            channel_id,
-            actor_user_id,
-            custom_name: None,
-            share_with_team: Some(new_value),
-        }));
-
-        self.send_call_participant_event(
-            &call_id,
-            "call_share_with_team_toggled",
-            &serde_json::json!({
-                "call_id": call_id,
-                "channel_id": channel_id,
-                "share_with_team": new_value,
-                "toggled_by": receipt.get_authenticated_user().ok(),
-            }),
-        )
-        .await;
-
-        Ok(new_value)
     }
 
     #[tracing::instrument(err, skip(self, request, user_id), fields(num_call_ids = request.call_ids.len()))]

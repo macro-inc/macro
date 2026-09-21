@@ -37,6 +37,26 @@
 //! steps into the subagent's children and takes the closing prose as its
 //! answer, so the transcript reads like the child had streamed.
 //!
+//! Every external tool goes through one dispatcher tool, `mcp`, so that is
+//! the only name the wire ever gives an MCP call. Which tool was really
+//! called is in the arguments, beside the tool's own:
+//!
+//! ```json
+//! { "name": "macro-ReadContent", "toolName": "ReadContent",
+//!   "serverIdentifier": "macro", "providerIdentifier": "macro",
+//!   "toolCallId": "call_…", "args": { "documentId": "…" } }
+//! ```
+//!
+//! and the result is MCP's, in Cursor's spelling, under the translator's
+//! `result` key: `{ "result": { "success": { "content": [{ "text": { "text":
+//! "…" } }], "structuredContent": … } } }`, or one of the failure variants
+//! (`error`, `rejected`, `permissionDenied`, `toolNotFound`,
+//! `serverNotFound`). The reader names the call `server`/`tool`, hands the
+//! fold the tool's own arguments without the dispatcher's, and unwraps the
+//! result to what the tool returned, so a reader sees the exchange and not
+//! the plumbing. The arguments arrive on the first update rather than the
+//! announcement, so the name is patched in when they do.
+//!
 //! Every shape is a serde type below and read by deserializing, never by
 //! walking `Value`s. A field the types do not name is ignored; a frame they
 //! cannot read is "no information", same as every reader. Proto oneofs are
@@ -48,9 +68,9 @@ use std::collections::BTreeMap;
 use lazy_regex::regex_is_match;
 use serde::Deserialize;
 use serde::de::IgnoredAny;
-use serde_json::Value;
+use serde_json::{Map, Value};
 
-use super::{HarnessReader, SubagentInput, ToolFrame, generic, raw};
+use super::{HarnessReader, SubagentInput, ToolFrame, generic, mcp, raw};
 use crate::domain::model::{
     AnsiText, FileDiff, MessagePart, SubagentResult, ToolDetail, ToolName, ToolStatus, ToolUseId,
 };
@@ -58,9 +78,42 @@ use crate::domain::model::{
 /// Reader for Cursor's conventions.
 pub struct Cursor;
 
+/// The dispatcher tool every MCP call is made through.
+const MCP_TOOL: &str = "mcp";
+
 impl HarnessReader for Cursor {
     fn announces(&self, name: &str) -> bool {
         regex_is_match!(r"(?i)cursor", name)
+    }
+
+    /// An `mcp` call's real name, `server`/`tool`, once its arguments have
+    /// arrived. Any other title is the name, as the generic reading has it.
+    fn reported_tool_name(&self, frame: &ToolFrame<'_>) -> Option<ToolName> {
+        if frame.title.is_some_and(|title| title != MCP_TOOL) {
+            return None;
+        }
+        McpArguments::read(frame.raw_input).map(McpArguments::into_name)
+    }
+
+    /// The tool's own arguments: for an `mcp` call, out of the dispatcher's
+    /// envelope; for anything else, `rawInput` as it is.
+    fn tool_input(&self, frame: &ToolFrame<'_>) -> Option<Value> {
+        let raw_input = frame.raw_input?;
+        Some(match McpArguments::read(Some(raw_input)) {
+            Some(_) => McpArguments::tool_input(raw_input),
+            None => raw_input.clone(),
+        })
+    }
+
+    /// The tool's own result, out of Cursor's `{ result: { success | error |
+    /// … } }` envelope - and, for an MCP call, out of MCP's content blocks
+    /// in Cursor's spelling. A `rawOutput` that is not Cursor's envelope is
+    /// read the neutral way.
+    fn unwrap_tool_output(&self, raw: &Value) -> (Value, Option<String>) {
+        match RawOutput::read(raw) {
+            Some(output) => output.result.into_tool_output(),
+            None => mcp::unwrap_call_result(raw),
+        }
     }
 
     fn subagent_input(&self, frame: &ToolFrame<'_>) -> SubagentInput {
@@ -191,15 +244,29 @@ impl TaskOutput {
     }
 }
 
-/// Cursor's result envelope, shared by the `task` call and every call the
-/// child made: `success` with the payload, or `error` (`failure` for the
-/// shell tool), and sometimes a flag beside them (`isBackground`) - hence a
-/// struct of optionals rather than a one-key enum.
+/// Cursor's result envelope, shared by the `task` call, every call the
+/// child made, and every top-level call's `rawOutput`: `success` with the
+/// payload, or `error` (`failure` for the shell tool), or for an MCP call
+/// one of the ways the dispatcher can refuse (`rejected`,
+/// `permissionDenied`, `toolNotFound`, `serverNotFound`), and sometimes a
+/// flag beside them (`isBackground`) - hence a struct of optionals rather
+/// than a one-key enum.
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct Envelope<Payload> {
     success: Option<Payload>,
     failure: Option<Payload>,
     error: Option<Value>,
+    /// The MCP dispatcher's refusals, all read alike: the call never reached
+    /// the tool, and the payload says why.
+    #[serde(
+        default,
+        alias = "rejected",
+        alias = "permissionDenied",
+        alias = "toolNotFound",
+        alias = "serverNotFound"
+    )]
+    refused: Option<Value>,
 }
 
 /// By hand rather than derived: the derive would demand `Payload: Default`,
@@ -210,19 +277,25 @@ impl<Payload> Default for Envelope<Payload> {
             success: None,
             failure: None,
             error: None,
+            refused: None,
         }
     }
 }
 
 impl<Payload> Envelope<Payload> {
     fn is_reported(&self) -> bool {
-        self.success.is_some() || self.failure.is_some() || self.error.is_some()
+        self.success.is_some() || self.failure.is_some() || self.failed()
+    }
+
+    /// Whether the envelope reports the call as not having succeeded.
+    fn failed(&self) -> bool {
+        self.error.is_some() || self.refused.is_some()
     }
 
     fn status(&self) -> ToolStatus {
         if self.success.is_some() {
             ToolStatus::Completed
-        } else if self.failure.is_some() || self.error.is_some() {
+        } else if self.failure.is_some() || self.failed() {
             ToolStatus::Failed
         } else {
             // Nothing recorded: not evidence either way.
@@ -235,11 +308,219 @@ impl<Payload> Envelope<Payload> {
         self.success.as_ref().or(self.failure.as_ref())
     }
 
+    /// Why the call failed, as text: the error or refusal Cursor reported.
     fn error_text(&self) -> Option<String> {
-        Some(match self.error.as_ref()? {
-            Value::String(text) => text.clone(),
-            other => other.to_string(),
-        })
+        self.error
+            .as_ref()
+            .or(self.refused.as_ref())
+            .map(failure_text)
+    }
+}
+
+impl Envelope<Value> {
+    /// The tool's own result and the error text, for a call whose payload
+    /// this reader has no type for: an MCP result out of its content blocks,
+    /// anything else as Cursor wrote it. A failure payload (the shell tool's
+    /// `{ stderr, exitCode }`) is both the result and, as text, the error.
+    fn into_tool_output(self) -> (Value, Option<String>) {
+        let mut error = self.error_text();
+        if self.success.is_none()
+            && let Some(failure) = &self.failure
+        {
+            error = error.or_else(|| Some(failure_text(failure)));
+        }
+        let Some(payload) = self.success.or(self.failure) else {
+            return (Value::Null, error);
+        };
+        match McpSuccess::read(&payload) {
+            Some(result) => {
+                let (value, mcp_error) = result.into_tool_output();
+                (value, error.or(mcp_error))
+            }
+            None => (payload, error),
+        }
+    }
+}
+
+/// A failure payload as text: the string it is, the message a structured
+/// one carries under its usual key, else the whole thing as JSON.
+fn failure_text(value: &Value) -> String {
+    const MESSAGE_KEYS: &[&str] = &["error", "message", "reason", "stderr"];
+    match value {
+        Value::String(text) => text.clone(),
+        Value::Object(fields) => MESSAGE_KEYS
+            .iter()
+            .find_map(|key| fields.get(*key).and_then(Value::as_str))
+            .map_or_else(|| value.to_string(), str::to_owned),
+        other => other.to_string(),
+    }
+}
+
+// --- The `mcp` dispatcher ---
+
+/// The `mcp` tool's arguments: which server and tool, beside the tool's own
+/// arguments. Recognized by shape - `toolName` with a server identifier -
+/// rather than by title alone, because the title (`mcp`) is also what a
+/// child's `mcpToolCall` step is keyed by, where there is no title to read.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct McpArguments {
+    tool_name: String,
+    #[serde(default)]
+    server_identifier: Option<String>,
+    #[serde(default)]
+    provider_identifier: Option<String>,
+}
+
+impl McpArguments {
+    /// The dispatcher's own keys: everything of Cursor's around the tool's
+    /// arguments, per its `McpArgs` message.
+    const DISPATCHER_KEYS: &'static [&'static str] = &[
+        "name",
+        "toolName",
+        "toolCallId",
+        "providerIdentifier",
+        "serverIdentifier",
+        "smartModeApproval",
+        "smartModeApprovalOnly",
+        "skipApproval",
+    ];
+
+    /// The envelope `raw_input` is, if it is one: a named tool on a named
+    /// server. `None` for any other tool's arguments.
+    fn read(raw_input: Option<&Value>) -> Option<Self> {
+        let arguments: Self = raw(raw_input)?;
+        (!arguments.tool_name.is_empty() && arguments.server().is_some()).then_some(arguments)
+    }
+
+    /// The server, by whichever identifier Cursor filled in. The two are the
+    /// same string in every recording; `serverIdentifier` is the newer field.
+    fn server(&self) -> Option<&str> {
+        [&self.server_identifier, &self.provider_identifier]
+            .into_iter()
+            .flatten()
+            .map(String::as_str)
+            .find(|server| !server.is_empty())
+    }
+
+    fn into_name(self) -> ToolName {
+        ToolName::Mcp {
+            server: self.server().unwrap_or_default().to_owned(),
+            tool: self.tool_name,
+        }
+    }
+
+    /// The tool's own arguments, out of the dispatcher's envelope: whatever
+    /// is not the dispatcher's, and - when that is Cursor's `args` map alone
+    /// - the map itself. A call to a tool that takes nothing has `{}`.
+    fn tool_input(raw_input: &Value) -> Value {
+        let Value::Object(fields) = raw_input else {
+            return raw_input.clone();
+        };
+        let mut own: Map<String, Value> = fields
+            .iter()
+            .filter(|(key, _)| !Self::DISPATCHER_KEYS.contains(&key.as_str()))
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect();
+        if own.len() == 1
+            && let Some(args @ Value::Object(_)) = own.remove("args")
+        {
+            return args;
+        }
+        Value::Object(own)
+    }
+}
+
+/// A top-level call's `rawOutput`: Cursor's result under the translator's
+/// `result` key.
+#[derive(Deserialize)]
+struct RawOutput {
+    result: Envelope<Value>,
+}
+
+impl RawOutput {
+    /// `None` for a `rawOutput` that is not Cursor's envelope - one with no
+    /// outcome under `result` at all.
+    fn read(raw_output: &Value) -> Option<Self> {
+        let output: Self = raw(Some(raw_output))?;
+        output.result.is_reported().then_some(output)
+    }
+}
+
+/// MCP's `CallToolResult` in Cursor's spelling: content items keyed by
+/// their kind (`{ "text": { "text": … } }`, `{ "image": … }`) rather than
+/// tagged, and - for the dispatcher's own tools - sometimes one string
+/// where the items would be.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct McpSuccess {
+    content: Option<McpContent>,
+    structured_content: Option<Value>,
+    #[serde(default)]
+    is_error: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum McpContent {
+    Items(Vec<McpContentItem>),
+    Text(String),
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum McpContentItem {
+    Text(StepText),
+    /// Anything that is not text - an image, a kind this reader does not
+    /// know - carries nothing the fold shows.
+    #[serde(untagged)]
+    Other(IgnoredAny),
+}
+
+impl McpSuccess {
+    /// The payload as an MCP result, if it is one. A success payload of
+    /// Cursor's own tools (`{ path }`, `{ stdout }`) has neither `content`
+    /// nor `structuredContent` and is not.
+    fn read(payload: &Value) -> Option<Self> {
+        let result: Self = raw(Some(payload))?;
+        (result.content.is_some() || result.structured_content.is_some()).then_some(result)
+    }
+
+    /// The text items' text, in order.
+    fn texts(&self) -> Vec<&str> {
+        match &self.content {
+            None => Vec::new(),
+            Some(McpContent::Text(text)) => vec![text.as_str()],
+            Some(McpContent::Items(items)) => items
+                .iter()
+                .filter_map(|item| match item {
+                    McpContentItem::Text(StepText { text }) => Some(text.as_str()),
+                    McpContentItem::Other(_) => None,
+                })
+                .collect(),
+        }
+    }
+
+    /// The tool's own result, read the way [`mcp::unwrap_call_result`] reads
+    /// the standard envelope: `structuredContent`; else the first text that
+    /// parses as JSON; else the texts joined; else `null`. The error is the
+    /// texts, when the result marks itself one.
+    fn into_tool_output(self) -> (Value, Option<String>) {
+        let texts = self.texts();
+        let error = self.is_error.then(|| texts.join("\n"));
+        if let Some(structured) = self.structured_content {
+            return (structured, error);
+        }
+        if let Some(parsed) = texts
+            .iter()
+            .find_map(|text| serde_json::from_str::<Value>(text).ok())
+        {
+            return (parsed, error);
+        }
+        if texts.is_empty() {
+            return (Value::Null, error);
+        }
+        (Value::String(texts.join("\n")), error)
     }
 }
 
@@ -379,7 +660,7 @@ impl KnownToolCall {
         let (name, status, detail) = self.descriptor.into_detail();
         MessagePart::ToolUse {
             id: ToolUseId(collapse_whitespace(&self.tool_call_id)),
-            name: ToolName::native(name),
+            name,
             status,
             detail,
         }
@@ -409,13 +690,23 @@ enum Descriptor {
     #[serde(rename = "taskToolCall")]
     Task(ToolBody<Value, IgnoredAny>),
     #[serde(rename = "mcpToolCall")]
-    Mcp(ToolBody<Value, IgnoredAny>),
+    Mcp(ToolBody<Value, Value>),
 }
 
 impl Descriptor {
-    /// The tool's name in Cursor's own vocabulary (the descriptor key's
-    /// stem), how far it got, and what it did.
-    fn into_detail(self) -> (&'static str, ToolStatus, ToolDetail) {
+    /// The tool's name - in Cursor's own vocabulary (the descriptor key's
+    /// stem), or for an MCP call the server and tool it dispatched to - how
+    /// far it got, and what it did.
+    fn into_detail(self) -> (ToolName, ToolStatus, ToolDetail) {
+        if let Self::Mcp(body) = self {
+            return body.into_mcp_call();
+        }
+        let (name, status, detail) = self.into_native_detail();
+        (ToolName::native(name), status, detail)
+    }
+
+    /// Every descriptor but [`Self::Mcp`], which `into_detail` has taken.
+    fn into_native_detail(self) -> (&'static str, ToolStatus, ToolDetail) {
         match self {
             Self::Shell(body) => {
                 let status = body.result.status();
@@ -477,7 +768,9 @@ impl Descriptor {
                 ToolDetail::Think { output: None },
             ),
             Self::Task(body) => ("task", body.result.status(), body.into_other()),
-            Self::Mcp(body) => ("mcp", body.result.status(), body.into_other()),
+            // Taken by `into_detail`; named here so the match stays
+            // exhaustive when a descriptor is added.
+            Self::Mcp(body) => (MCP_TOOL, body.result.status(), body.into_other()),
         }
     }
 }
@@ -506,7 +799,37 @@ impl<Outcome> ToolBody<Value, Outcome> {
             kind: "other".to_owned(),
             output: None,
             input: self.args,
+            result: None,
+            error: None,
         }
+    }
+}
+
+impl ToolBody<Value, Value> {
+    /// A child's MCP call, read as a top-level one is: named for the server
+    /// and tool, its own arguments out of the dispatcher's envelope, its
+    /// result out of MCP's.
+    fn into_mcp_call(self) -> (ToolName, ToolStatus, ToolDetail) {
+        let status = self.result.status();
+        let name = McpArguments::read(self.args.as_ref())
+            .map_or_else(|| ToolName::native(MCP_TOOL), McpArguments::into_name);
+        let input = self.args.as_ref().map(McpArguments::tool_input);
+        let (result, error) = if self.result.is_reported() {
+            match self.result.into_tool_output() {
+                (Value::Null, error) => (None, error),
+                (value, error) => (Some(value), error),
+            }
+        } else {
+            (None, None)
+        };
+        let detail = ToolDetail::Other {
+            kind: "other".to_owned(),
+            output: None,
+            input,
+            result,
+            error,
+        };
+        (name, status, detail)
     }
 }
 
@@ -616,6 +939,8 @@ impl UnknownToolCall {
                 kind: "other".to_owned(),
                 output: None,
                 input: None,
+                result: None,
+                error: None,
             },
         }
     }

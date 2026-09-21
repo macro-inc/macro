@@ -13,7 +13,7 @@ import { Dropdown } from '@ui';
 import { createEffect, createSignal, Show } from 'solid-js';
 import { VList } from 'virtua/solid';
 import { Tools } from '../constants';
-import { selectedFileSignal } from '../operation/file';
+import { useCanvasDocument } from '../context/canvas-document-context';
 import { useSelect } from '../operation/select';
 import { useToolManager } from '../signal/toolManager';
 
@@ -24,7 +24,7 @@ type FileItem = {
 };
 
 function ItemOption(props: { file: FileItem; type: ItemType }) {
-  const setSelectedFile = selectedFileSignal.set;
+  const [, setSelectedFile] = useCanvasDocument().state.signals.selectedFile;
   const toolManager = useToolManager();
   const select = useSelect();
 

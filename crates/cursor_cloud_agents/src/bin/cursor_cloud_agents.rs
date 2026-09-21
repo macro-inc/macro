@@ -142,6 +142,7 @@ async fn main() -> ExitCode {
             notifier.clone(),
             chooser,
             Arc::new(cursor_cloud_agents::outbound::memory_journal::MemoryJournal::default()),
+            cursor_cloud_agents::domain::ports::NoArtifactStore,
         )
         .with_default_model(configured_model),
     );

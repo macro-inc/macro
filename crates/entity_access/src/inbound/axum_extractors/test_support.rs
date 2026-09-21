@@ -169,12 +169,16 @@ impl EntityAccessService for FakeEntityAccessService {
 
     async fn get_entity_permission(
         &self,
-        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
-        _entity_id: &str,
-        _entity_type: EntityType,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        entity_id: &str,
+        entity_type: EntityType,
         _user_org_id: Option<i64>,
     ) -> Result<EntityPermission, AccessError> {
-        panic!("unexpected get_entity_permission call")
+        let access_level = self
+            .get_access_level(user_id, entity_id, entity_type)
+            .await?
+            .ok_or(AccessError::Unauthorized)?;
+        Ok(EntityPermission::AccessLevel { access_level })
     }
 
     async fn get_crm_entity_permission_with_team(

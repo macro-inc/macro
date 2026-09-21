@@ -56,8 +56,8 @@ function ComposeFieldRow(props: {
   return (
     <div
       class={cn(
-        'flex gap-2 py-1 border-b border-edge-muted focus-within:border-accent',
-        ctx.isMobile() ? 'items-start' : 'items-center'
+        'flex gap-2 border-b border-edge-muted focus-within:border-ink/20',
+        ctx.isMobile() ? 'items-start py-1' : 'items-center py-3'
       )}
       classList={{ 'border-accent bg-accent/10': isDragOver() }}
       onDragOver={handleDragOver}
@@ -320,7 +320,7 @@ export function ComposeRecipients(props: {
     <Show
       when={ctx.isMobile()}
       fallback={
-        <div class="flex flex-col gap-2">
+        <div class="flex flex-col">
           {toRow()}
           <Show when={isCcVisible()}>{ccRow()}</Show>
           <Show when={isBccVisible()}>{bccRow()}</Show>

@@ -63,6 +63,8 @@ topics! {
     MacroTeamsTopic => "macro.teams",
     /// Channel lifecycle, message, participant, and attachment events.
     MacroChannelsTopic => "macro.channels",
+    /// Shared channel and document message events.
+    MacroMessagesTopic => "macro.messages",
     /// Signals telling the agent harness to open or feed an agent session.
     MacroAgentSessionsTopic => "macro.agent_sessions",
     /// Email lifecycle events (links, messages, threads, labels).
@@ -73,6 +75,8 @@ topics! {
     MacroMentionsTopic => "macro.mentions",
     /// Notifications awaiting delivery through WebSocket connections.
     MacroNotificationsTopic => "macro.notifications",
+    /// Recorded activity rows awaiting delivery to realtime subscribers.
+    MacroActivityTopic => "macro.activity",
     /// AI chat lifecycle and message events.
     MacroChatsTopic => "macro.chats",
     /// Calendar event changes, from provider sync and user mutations alike.

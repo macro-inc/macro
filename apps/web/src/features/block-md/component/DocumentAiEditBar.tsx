@@ -2,7 +2,7 @@ import { buildChatEditor } from '@core/component/AI/component/input/buildChatEdi
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import clickOutside from '@core/directive/clickOutside';
 import { TOKENS } from '@core/hotkey/tokens';
-import { AnimatedStarIcon } from '@icon/wide-star';
+import SparkleIcon from '@phosphor/sparkle.svg';
 import {
   cancelAiEdit,
   requestAiEdit,
@@ -24,7 +24,6 @@ export function DocumentAiEditBar(props: { documentId: string }) {
   const [expanded, setExpanded] = createSignal(false);
   const [editing, setEditing] = createSignal(false);
   const [hovering, setHovering] = createSignal(false);
-  const [focused, setFocused] = createSignal(false);
   const [prompt, setPrompt] = createSignal('');
 
   let editor = buildChatEditor();
@@ -108,7 +107,7 @@ export function DocumentAiEditBar(props: { documentId: string }) {
                 'ai-edit-star-breathing text-accent': editing(),
               }}
             >
-              <AnimatedStarIcon triggerAnimation={hovering() && !editing()} />
+              <SparkleIcon />
             </span>
             <span
               class="text-xs font-medium"
@@ -119,19 +118,11 @@ export function DocumentAiEditBar(props: { documentId: string }) {
           </Button>
         }
       >
-        <ComposerSurface
-          onFocusIn={() => setFocused(true)}
-          onFocusOut={(event) => {
-            const next = event.relatedTarget as Node | null;
-            if (next && event.currentTarget.contains(next)) return;
-            setFocused(false);
-          }}
-          class="h-auto w-96 max-w-full"
-        >
+        <ComposerSurface class="h-auto w-96 max-w-full">
           <div class="flex flex-col gap-2 p-2" use:clickOutside={collapse}>
             <div class="flex items-start gap-2">
               <span class="flex h-8 w-4 shrink-0 items-center justify-center text-accent">
-                <AnimatedStarIcon triggerAnimation={focused()} />
+                <SparkleIcon />
               </span>
               <div class="min-w-0 grow text-base text-ink">
                 <MarkdownShell

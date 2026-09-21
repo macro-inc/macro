@@ -54,8 +54,13 @@ import {
   mapApiSoupItemToEntity,
   mapSoupPageToEntityList,
 } from '../transform-utils';
+import { registerGraphqlSoupRevalidations } from './active-queries';
 import { makeGraphqlSoupInput } from './ast';
 import { isCachedMailView, materializeMailView } from './mail-view';
+import {
+  usePendingGraphqlSoupDeleteIds,
+  withoutPendingGraphqlSoupDeletes,
+} from './optimistic-deletions';
 import {
   materializeReconciledSoup,
   soupItemKey,
@@ -98,6 +103,7 @@ export function createGraphqlSoupAstItemsQuery(
   options: Accessor<GraphqlSoupAstItemsQueryOptions>
 ): GraphqlSoupAstItemsQuery {
   const instructionsIdQuery = useInstructionsMdIdQuery();
+  const pendingDeleteIds = usePendingGraphqlSoupDeleteIds();
   const [offline, setOffline] = createSignal(
     typeof navigator !== 'undefined' && !navigator.onLine
   );
@@ -127,6 +133,7 @@ export function createGraphqlSoupAstItemsQuery(
   const firstPageInput = createMemo(() => inputForCursor(null));
   const isSupported = () => firstPageInput() !== undefined;
   type ServerProjection = {
+    pageParams: readonly (string | null)[];
     data: SoupAstItemsData;
     records: Accessor<GraphqlSoupItem[]>;
   };
@@ -460,6 +467,7 @@ export function createGraphqlSoupAstItemsQuery(
     const showSupportedForeignEntities = projectionForeignEntities();
     return ({
       pages,
+      pageParams,
     }: UrqlInfiniteData<SoupQuery, string | null>): ServerProjection => {
       const mappedPages = pages.map(mapGraphqlSoupPage);
       const oldestFetchedTimestamp = soupPageTimestamp(
@@ -478,6 +486,7 @@ export function createGraphqlSoupAstItemsQuery(
         // Publish them atomically without walking their entire notification
         // payload again. Mapped entities retain deep reactivity and identity.
         records: () => records,
+        pageParams,
         data: { entities, groups: undefined, oldestFetchedTimestamp },
       };
     };
@@ -525,6 +534,17 @@ export function createGraphqlSoupAstItemsQuery(
       select: selectPages(),
     };
   });
+
+  onCleanup(
+    registerGraphqlSoupRevalidations(() => {
+      if (!query.isEnabled) return [];
+      const cursors = new Set([null, ...(query.data?.pageParams ?? [])]);
+      return [...cursors].flatMap((cursor) => {
+        const input = inputForCursor(cursor);
+        return input ? [{ document: SoupDocument, variables: { input } }] : [];
+      });
+    })
+  );
 
   // Capture membership/sort evidence for each published projection, so a later
   // cache revision cannot change the baseline of an in-flight reconciliation.
@@ -622,11 +642,12 @@ export function createGraphqlSoupAstItemsQuery(
   return {
     data: createMemo(() => {
       const data = displayData();
-      return (
+      return withoutPendingGraphqlSoupDeletes(
         data && {
           ...data,
           oldestFetchedTimestamp: query.data?.data.oldestFetchedTimestamp,
-        }
+        },
+        pendingDeleteIds()
       );
     }),
     error,

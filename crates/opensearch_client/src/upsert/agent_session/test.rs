@@ -71,6 +71,80 @@ fn index_override_selects_a_physical_backfill_index() {
     );
 }
 
+/// Capture actual HTTP requests so both index and bulk serialization are covered.
+async fn capture_reconcile_requests(index_override: Option<&str>) -> Vec<String> {
+    use std::io::{BufRead, Read, Write};
+    use std::net::TcpListener;
+    use std::time::Duration;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = std::thread::spawn(move || {
+        let mut requests = Vec::new();
+        for body in [
+            r#"{}"#,
+            r#"{"errors":false}"#,
+            r#"{"failures":[],"timed_out":false}"#,
+        ] {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            let mut reader = std::io::BufReader::new(&mut stream);
+            let mut request = String::new();
+            reader.read_line(&mut request).unwrap();
+            requests.push(request);
+            let mut content_length = 0;
+            loop {
+                let mut line = String::new();
+                reader.read_line(&mut line).unwrap();
+                if line == "\r\n" {
+                    break;
+                }
+                if let Some(value) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                    content_length = value.trim().parse::<usize>().unwrap();
+                }
+            }
+            reader.read_exact(&mut vec![0; content_length]).unwrap();
+            write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+        }
+        requests
+    });
+    let client =
+        crate::OpensearchClient::new(format!("http://{address}"), "".into(), "".into()).unwrap();
+    let result = client
+        .reconcile_agent_session(&args(), index_override)
+        .await;
+    result.unwrap();
+    server.join().unwrap()
+}
+
+#[tokio::test]
+async fn normal_parent_and_bulk_writes_require_an_alias() {
+    let requests = capture_reconcile_requests(None).await;
+    assert!(
+        requests[0].starts_with("POST /agent_sessions/_doc/session-1?"),
+        "{requests:?}"
+    );
+    assert!(requests[1].starts_with("POST /agent_sessions/_bulk?"));
+    for request in &requests[..2] {
+        assert!(request.contains("require_alias=true"), "{request}");
+    }
+}
+
+#[tokio::test]
+async fn explicit_backfill_overrides_allow_a_physical_index() {
+    let requests = capture_reconcile_requests(Some("scratch-index")).await;
+    assert!(
+        requests[0].starts_with("POST /scratch-index/_doc/session-1?"),
+        "{requests:?}"
+    );
+    assert!(requests[1].starts_with("POST /scratch-index/_bulk?"));
+    for request in &requests[..2] {
+        assert!(request.contains("require_alias=false"), "{request}");
+    }
+}
+
 /// Uses only a uniquely named scratch index; never changes application indices.
 #[tokio::test]
 #[ignore = "requires local OpenSearch at http://localhost:9200"]

@@ -16,3 +16,6 @@ strum = { workspace = true }
 thiserror = { workspace = true }
 utoipa = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

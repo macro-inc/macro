@@ -3,7 +3,7 @@ import {
   ProviderIcon,
 } from '@core/component/AI/component/ProviderIcon';
 import { getChatStoredModel } from '@core/component/AI/util/storage';
-import { EntityIcon } from '@core/component/EntityIcon';
+import { EntityIcon, type EntityIconProps } from '@core/component/EntityIcon';
 import { Show } from 'solid-js';
 
 /** Soup supplies the saved model; a local draft selection takes precedence. */
@@ -12,6 +12,7 @@ export function ChatProviderIcon(props: {
   model?: string | null;
   class?: string;
   animate?: boolean;
+  weight?: EntityIconProps['weight'];
 }) {
   const model = () => {
     const stored = getChatStoredModel(props.id);
@@ -23,7 +24,12 @@ export function ChatProviderIcon(props: {
     <Show
       when={modelProvider(model())}
       fallback={
-        <EntityIcon targetType="chat" size="fill" class={props.class} />
+        <EntityIcon
+          targetType="chat"
+          size="fill"
+          class={props.class}
+          weight={props.weight}
+        />
       }
     >
       <ProviderIcon

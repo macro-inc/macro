@@ -9,6 +9,7 @@ use entity_access::domain::models::{
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::Owner;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_properties::EntityType as StorageEntityType;
 use sqlx::{Pool, Postgres};
@@ -140,9 +141,10 @@ impl<Svc: EntityAccessService> PermissionService for PermissionServiceImpl<Svc> 
                     storage_entity_type(entity_type)?,
                 )
                 .await?;
+                let owner = Owner::from_principal_str(&owner)?;
 
                 // If you are the owner fast return
-                if user_id.is_some_and(|u| owner == u.as_ref()) {
+                if user_id.is_some_and(|u| owner.is_user(u)) {
                     return Ok(access_receipt(
                         caller_auth(user_id),
                         entity_id,

@@ -26,9 +26,20 @@ export {
   type ElicitationFormProps,
 } from './ElicitationForm';
 export { FoldedAnsiText } from './FoldedAnsiText';
+export {
+  exchangeText,
+  FoldedExchange,
+  type FoldedExchangeProps,
+} from './FoldedExchange';
 export { FoldedOutput } from './FoldedOutput';
 export { FoldedPathList } from './FoldedPathList';
 export { FoldedTerminal } from './FoldedTerminal';
+export {
+  type PermissionOptionItem,
+  type PermissionOptionKind,
+  PermissionOptions,
+  type PermissionOptionsProps,
+} from './PermissionOptions';
 export { PierreDiff } from './PierreDiff';
 export { QuestionAnswers, type QuestionAnswersProps } from './QuestionAnswers';
 export {
@@ -54,8 +65,8 @@ export {
   type AnsweredQuestion,
   type FileDiff,
   isToolActive,
+  settledToolStatus,
   type TodoItem,
   type ToolStatus,
 } from './types';
 export { WorkingLine } from './WorkingLine';
-export { createVerbDraw, WORKING_LABEL } from './working-verbs';

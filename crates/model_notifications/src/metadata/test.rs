@@ -577,7 +577,7 @@ fn channel_mention_title_falls_back_to_bot_display_name() {
 fn document_mention(sub_type: Option<NotificationDocumentSubType>) -> DocumentMentionMetadata {
     DocumentMentionMetadata {
         document_name: "Q3 plan".to_string(),
-        owner: uid("macro|owner@macro.com"),
+        owner: Owner::from_principal_str("macro|owner@macro.com").unwrap(),
         file_type: Some("md".to_string()),
         sub_type,
         channel: ChannelMentionMetadata {
@@ -986,6 +986,10 @@ fn agent_session_ref() -> AgentSessionNotificationRef {
         session_name: "Fix the flaky test".to_string(),
         bot_id: Uuid::parse_str("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb").unwrap(),
         bot_name: "Macro Coder".to_string(),
+        parent: Some(AgentSessionOriginParent {
+            kind: "channel".to_string(),
+            id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc".to_string(),
+        }),
         channel_id: Some(Uuid::parse_str("cccccccc-cccc-4ccc-8ccc-cccccccccccc").unwrap()),
         thread_id: Some(Uuid::parse_str("dddddddd-dddd-4ddd-8ddd-dddddddddddd").unwrap()),
         announcement_message_id: None,

@@ -16,10 +16,13 @@ export const INBOX_ENTRY_STATE_KEY = 'inbox.view';
 export const INBOX_LIST_ENTRY_STATE_KEY = 'inbox.listState';
 const homeFilterStorage = createUserScopedStorage('macro:home:filters:v1');
 
-/** Home now offers All or Unread; retire saved read-only selections. */
+/** Status is a single choice; an empty selection means All. */
 export function normalizeInboxFacets(raw: unknown) {
   const facets = normalizeFacetSelection(raw);
-  if (facets.read?.length !== 1 || facets.read[0] !== 'unread') {
+  if (
+    facets.read?.length !== 1 ||
+    !['unread', 'read'].includes(facets.read[0])
+  ) {
     delete facets.read;
   }
   return facets;

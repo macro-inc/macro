@@ -1,6 +1,5 @@
-import { highestOrderSignal } from '@block-canvas/store/canvasData';
-import type { BlockStore } from '@core/block';
-import { createMemo, createSignal, untrack } from 'solid-js';
+import { createMemo, createSignal, type Setter, untrack } from 'solid-js';
+import type { SetStoreFunction, Store } from 'solid-js/store';
 import {
   type CanvasEdge,
   type CanvasEntity,
@@ -100,16 +99,24 @@ function compare(a: Renderable, b: Renderable): number {
 }
 
 export function createRenderQueue(
-  nodeStore: BlockStore<Record<CanvasId, CanvasNode>>,
-  edgeStore: BlockStore<Record<CanvasId, CanvasEdge>>,
-  groupStore: BlockStore<Record<CanvasId, CanvasGroup>>
+  nodeStore: [
+    Store<Record<CanvasId, CanvasNode>>,
+    SetStoreFunction<Record<CanvasId, CanvasNode>>,
+  ],
+  edgeStore: [
+    Store<Record<CanvasId, CanvasEdge>>,
+    SetStoreFunction<Record<CanvasId, CanvasEdge>>,
+  ],
+  groupStore: [
+    Store<Record<CanvasId, CanvasGroup>>,
+    SetStoreFunction<Record<CanvasId, CanvasGroup>>,
+  ],
+  setHighestOrder: Setter<number>
 ) {
   const [nodes, setNodes] = nodeStore;
   const [edges, setEdges] = edgeStore;
   const [groups, setGroups] = groupStore;
   const [list, setList] = createSignal<Renderable[]>([]);
-  const setHighestOrder = highestOrderSignal.set;
-
   const sorted = createMemo(() => {
     const _list = list();
 

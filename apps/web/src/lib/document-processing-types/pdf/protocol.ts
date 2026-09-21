@@ -1,4 +1,4 @@
-import type { IComment } from '@core/comments/commentType';
+import type { Comment } from '@service-storage/generated/schemas/comment';
 import { z } from 'zod';
 
 const numberSetSchema = z
@@ -26,7 +26,7 @@ export type PdfThreadPayload = {
   rootId: number;
   anchorId: string;
   page: number;
-  comments: IComment[];
+  comments: Comment[];
   isResolved: boolean;
 };
 

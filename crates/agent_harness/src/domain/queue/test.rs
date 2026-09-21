@@ -161,6 +161,24 @@ fn removal_skips_the_removed_entry_at_dispatch() {
 }
 
 #[test]
+fn mark_announced_remembers_the_chip_on_the_waiting_entry() {
+    let queues = SessionQueues::new();
+    let session = AgentSessionId::TEST_A;
+    let first = prompt_entry("first");
+    let second = prompt_entry("second");
+    queues.enqueue(session, first.clone()).unwrap();
+    queues.enqueue(session, second.clone()).unwrap();
+
+    let chip = Uuid::from_u128(0xc1);
+    queues
+        .mark_announced(session, second.action_id, chip)
+        .unwrap();
+
+    assert_eq!(queues.claim_next(session).unwrap().announced, None);
+    assert_eq!(queues.claim_next(session).unwrap().announced, Some(chip));
+}
+
+#[test]
 fn a_requeued_entry_is_next_in_line() {
     let queues = SessionQueues::new();
     let session = AgentSessionId::TEST_A;
@@ -179,6 +197,33 @@ fn a_requeued_entry_is_next_in_line() {
 }
 
 #[test]
+fn enqueue_front_puts_the_entry_ahead_of_waiting_work() {
+    let queues = SessionQueues::new();
+    let session = AgentSessionId::TEST_A;
+    let waiting = prompt_entry("queued earlier");
+    let steer = prompt_entry("steer");
+    queues.enqueue(session, waiting.clone()).unwrap();
+    queues.enqueue_front(session, steer.clone()).unwrap();
+
+    assert_eq!(
+        queues
+            .list(session)
+            .iter()
+            .map(|entry| entry.action_id)
+            .collect::<Vec<_>>(),
+        [steer.action_id, waiting.action_id]
+    );
+    assert_eq!(
+        queues.claim_next(session).unwrap().action_id,
+        steer.action_id
+    );
+    assert_eq!(
+        queues.claim_next(session).unwrap().action_id,
+        waiting.action_id
+    );
+}
+
+#[test]
 fn the_cap_refuses_the_overflowing_entry() {
     let queues = SessionQueues::new();
     let session = AgentSessionId::TEST_A;
@@ -190,6 +235,10 @@ fn the_cap_refuses_the_overflowing_entry() {
 
     assert_eq!(
         queues.enqueue(session, prompt_entry("one too many")),
+        Err(QueueError::Full)
+    );
+    assert_eq!(
+        queues.enqueue_front(session, prompt_entry("nor at the front")),
         Err(QueueError::Full)
     );
 }

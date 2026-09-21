@@ -36,6 +36,7 @@ use agent_session::domain::ports::{
     AgentSessionQueueChanged, ControlDisposition, ControlEvent, QueuedControl,
 };
 use agent_session::domain::service::AgentSessionService;
+use agent_session::domain::session::PermissionPolicy;
 use bot_id::BotId;
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
@@ -46,19 +47,50 @@ use tracing::instrument::WithSubscriber as _;
 
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{
-    AgentKind, AnnounceOrigin, AnnouncePrompt, CommandOutcome, DeliverAction, HarnessCommand,
-    HarnessDefaults, OpenSession, SessionAnnouncement, SpawnContainer, is_macro_staff,
+    AgentKind, AnnounceOrigin, AnnouncePrompt, CommandOutcome, DeclinedMention, DeliverAction,
+    HarnessCommand, HarnessDefaults, OpenSession, SessionAnnouncement, SpawnContainer,
+    is_macro_staff,
 };
 use crate::domain::pending::PendingCommands;
 use crate::domain::ports::{
-    AgentPromptComposer, AgentSessionNotifier, ChannelPromptContext, CommandForwarder,
-    ContainerManager, PromptMentions, RuntimeConnections, SandboxEgressProvisioner,
-    SessionAnnouncer,
+    AgentPromptComposer, AgentSessionNotifier, CommandForwarder, ContainerManager,
+    MessagePromptContext, PermissionPolicySource, PromptMentions, RuntimeConnections,
+    SandboxEgressProvisioner, SessionAnnouncer,
 };
 use crate::domain::queue::{InFlightTurn, QueueError, QueuedEntry, SessionQueues};
 use crate::domain::sandbox::SandboxResizeEffect;
 
 use self::queue::{ErasedForwarder, SessionWorkers};
+
+/// [`PermissionPolicySource`], object-safe, erased for the same reason as
+/// [`ErasedForwarder`].
+trait ErasedPermissionPolicySource: Send + Sync + 'static {
+    fn permission_policy<'a>(
+        &'a self,
+        bot: BotId,
+    ) -> std::pin::Pin<
+        Box<
+            dyn Future<Output = anyhow::Result<crate::domain::model::PermissionPolicyConfig>>
+                + Send
+                + 'a,
+        >,
+    >;
+}
+
+impl<S: PermissionPolicySource> ErasedPermissionPolicySource for S {
+    fn permission_policy<'a>(
+        &'a self,
+        bot: BotId,
+    ) -> std::pin::Pin<
+        Box<
+            dyn Future<Output = anyhow::Result<crate::domain::model::PermissionPolicyConfig>>
+                + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(PermissionPolicySource::permission_policy(self, bot))
+    }
+}
 
 struct AgentHarnessInner<
     Sessions,
@@ -80,6 +112,7 @@ struct AgentHarnessInner<
     prompt_composer: PromptComposer,
     egress: Egress,
     forwarder: Box<dyn ErasedForwarder>,
+    permission_policies: Box<dyn ErasedPermissionPolicySource>,
     defaults: HarnessDefaults,
     /// Turn-occupying actions waiting for their session's running turn to
     /// end. In-memory beside the live actors this replica manages.
@@ -159,6 +192,7 @@ pub struct AgentHarnessService<
         Notifier,
     >,
     workers: Arc<SessionWorkers>,
+    repositories: Option<Arc<dyn crate::domain::ports::ReachableRepositories>>,
 }
 
 // Manual Clone impl so the port types don't need to be Clone (both fields
@@ -194,6 +228,7 @@ impl<
         Self {
             inner: Arc::clone(&self.inner),
             workers: Arc::clone(&self.workers),
+            repositories: self.repositories.clone(),
         }
     }
 }
@@ -227,7 +262,7 @@ where
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
-    PromptContext: ChannelPromptContext,
+    PromptContext: MessagePromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
     Lifecycle: AgentSessionLifecyclePublisher,
@@ -248,6 +283,7 @@ where
         prompt_composer: PromptComposer,
         egress: Egress,
         forwarder: impl CommandForwarder,
+        permission_policies: impl PermissionPolicySource,
         defaults: impl Into<HarnessDefaults>,
         lifecycle_publisher: Lifecycle,
         pending: PendingCommands,
@@ -264,6 +300,7 @@ where
                 prompt_composer,
                 egress,
                 forwarder: Box::new(forwarder),
+                permission_policies: Box::new(permission_policies),
                 defaults: defaults.into(),
                 queues: SessionQueues::new(),
                 busy: pending,
@@ -272,7 +309,17 @@ where
                 notifier,
             }),
             workers: Arc::new(DashMap::new()),
+            repositories: None,
         }
+    }
+
+    /// Enable explicit repository choices, authorized against the owner's reachable repositories.
+    pub fn with_repositories(
+        mut self,
+        repositories: Arc<dyn crate::domain::ports::ReachableRepositories>,
+    ) -> Self {
+        self.repositories = Some(repositories);
+        self
     }
 
     /// Queue one command behind any work already running for its session.
@@ -318,6 +365,10 @@ where
         session_id: AgentSessionId,
         prompt: AnnouncePrompt,
     ) -> Result<()> {
+        self.inner
+            .prompt_context
+            .authorize_origin(&prompt.sender, &prompt.origin)
+            .await?;
         // Re-read rather than trusted: the row is what vouches that the
         // trigger's session and bot actually belong together.
         let session = self.inner.sessions.get_session(session_id).await?;
@@ -336,7 +387,7 @@ where
             .announce(SessionAnnouncement {
                 session_id,
                 bot_id: session.bot_id,
-                origin_channel_id: prompt.origin.channel_id,
+                origin_parent: prompt.origin.parent,
                 origin_thread_id: prompt.origin.thread_id,
                 origin_message_id: prompt.origin.message_id,
                 prompted_message_id: self
@@ -394,7 +445,7 @@ where
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
-    PromptContext: ChannelPromptContext,
+    PromptContext: MessagePromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
     Lifecycle: AgentSessionLifecyclePublisher,

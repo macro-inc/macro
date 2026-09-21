@@ -33,6 +33,7 @@ export default defineConfig({
       '../../packages/email-renderer/vitest.config.ts',
       '../../packages/collaboration/vitest.collab.config.ts',
       '../../packages/collaboration/vitest.transport.config.ts',
+      '../../packages/machine/vitest.config.ts',
       {
         // Core package tests
         extends: './src/lib/core/vitest.config.ts',
@@ -50,6 +51,7 @@ export default defineConfig({
         },
       },
       {
+        extends: false,
         // Resolve solid-js to its reactive browser build (the default
         // server-side build is inert), needed by the solid/ bindings.
         plugins: [tsconfigPaths(), solidPlugin()],
@@ -65,6 +67,7 @@ export default defineConfig({
         },
       },
       {
+        extends: false,
         plugins: [tsconfigPaths(), solidPlugin()],
         ssr: {
           resolve: {
@@ -78,12 +81,14 @@ export default defineConfig({
         },
       },
       {
+        extends: false,
         test: {
           include: ['scripts/**/*.{test,spec}.{ts,tsx}'],
           name: 'scripts',
         },
       },
       {
+        extends: false,
         test: {
           environment: 'jsdom',
           globals: true,
@@ -92,6 +97,7 @@ export default defineConfig({
         },
       },
       {
+        extends: false,
         plugins: [tsconfigPaths()],
         test: {
           environment: 'jsdom',
@@ -167,12 +173,36 @@ export default defineConfig({
         },
       },
       {
+        // Keep transition primitives on the same browser runtime as their callers.
+        // Optimizing the CommonJS entry otherwise bundles a second Solid instance.
+        extends: './src/lib/core/vitest.config.ts',
+        resolve: {
+          alias: {
+            'solid-transition-group': fileURLToPath(
+              new URL(
+                '../../node_modules/solid-transition-group/dist/index.js',
+                import.meta.url
+              )
+            ),
+          },
+        },
+        ssr: {
+          resolve: { conditions: ['browser', 'development'] },
+        },
+        test: {
+          deps: { optimizer: { client: { enabled: false } } },
+          include: ['src/components/view-shell/**/*.{test,spec}.{ts,tsx}'],
+          name: 'view-shell',
+        },
+      },
+      {
         // App-shell and feature tests without a specialized environment.
         extends: './src/lib/core/vitest.config.ts',
         test: {
           environment: 'jsdom',
           exclude: [
             ...configDefaults.exclude,
+            'src/components/view-shell/**/*',
             'src/features/{theme,block-channel,block-call,block-pr,block-md,channel,notifications,block-email,email-message,email-thread,email-compose}/**/*',
           ],
           include: [

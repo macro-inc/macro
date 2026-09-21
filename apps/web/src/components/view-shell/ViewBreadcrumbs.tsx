@@ -1,11 +1,12 @@
 import CaretRightIcon from '@phosphor/caret-right.svg';
-import { cn } from '@ui';
+import { cn, Tooltip } from '@ui';
 import {
   type Accessor,
-  children,
   createContext,
   createMemo,
+  createRoot,
   For,
+  getOwner,
   type JSX,
   onCleanup,
   onMount,
@@ -105,6 +106,7 @@ export type ViewBreadcrumbsButtonProps = Omit<
   'aria-current'
 > & {
   isActive?: boolean;
+  tooltip?: string;
 };
 
 function BreadcrumbButton(props: ViewBreadcrumbsButtonProps) {
@@ -112,10 +114,11 @@ function BreadcrumbButton(props: ViewBreadcrumbsButtonProps) {
     'children',
     'class',
     'isActive',
+    'tooltip',
     'type',
   ]);
 
-  return (
+  const button = () => (
     <button
       {...rest}
       type={local.type ?? 'button'}
@@ -131,9 +134,29 @@ function BreadcrumbButton(props: ViewBreadcrumbsButtonProps) {
       {local.children}
     </button>
   );
+
+  return (
+    <Show when={local.tooltip} fallback={button()}>
+      {(tooltip) => (
+        <Tooltip class="min-w-0" label={tooltip()}>
+          {button()}
+        </Tooltip>
+      )}
+    </Show>
+  );
 }
 
 export type ViewBreadcrumbsSeparatorProps = JSX.SvgSVGAttributes<SVGSVGElement>;
+
+function ReturnButton(props: ViewBreadcrumbsButtonProps) {
+  const [local, rest] = splitProps(props, ['children', 'class']);
+
+  return (
+    <BreadcrumbButton {...rest} class={cn('shrink-0', local.class)}>
+      {local.children}
+    </BreadcrumbButton>
+  );
+}
 
 function Separator(props: ViewBreadcrumbsSeparatorProps) {
   const [local, rest] = splitProps(props, ['class']);
@@ -161,10 +184,19 @@ function Item<TMetadata = unknown>(props: ViewBreadcrumbsItemProps<TMetadata>) {
     isActive: () => context.value() === props.value,
     onSelect: () => context.onChange(props.value),
   };
-  const resolvedChildren = children(() => {
-    const child = props.children;
-    return <>{typeof child === 'function' ? child(state) : child}</>;
-  });
+  const owner = getOwner();
+  const render = () => {
+    let dispose!: () => void;
+    // Outlets can overlap during navigation. Each needs its own DOM, while
+    // retaining the item's provider context and the outlet's cleanup lifetime.
+    const content = createRoot((cleanup) => {
+      dispose = cleanup;
+      const child = props.children;
+      return <>{typeof child === 'function' ? child(state) : child}</>;
+    }, owner);
+    onCleanup(dispose);
+    return content;
+  };
   let unregister: (() => void) | undefined;
 
   onMount(() => {
@@ -172,7 +204,7 @@ function Item<TMetadata = unknown>(props: ViewBreadcrumbsItemProps<TMetadata>) {
       value: () => props.value,
       metadata: () => props.metadata,
       order: () => props.order,
-      render: resolvedChildren,
+      render,
     });
   });
   onCleanup(() => unregister?.());
@@ -186,12 +218,23 @@ export type ViewBreadcrumbsOutletProps = Omit<
 > & {
   children?: JSX.Element;
   fallback?: JSX.Element;
+  separator?: (state: ViewBreadcrumbsSeparatorState) => JSX.Element;
+};
+
+export type ViewBreadcrumbsSeparatorState = {
+  previous: ViewBreadcrumbsEntry<unknown>;
+  next?: ViewBreadcrumbsEntry<unknown>;
 };
 
 /** Renders mounted breadcrumb items in order. */
 function Outlet(props: ViewBreadcrumbsOutletProps) {
   const context = useViewBreadcrumbsContext();
-  const [local, rest] = splitProps(props, ['children', 'class', 'fallback']);
+  const [local, rest] = splitProps(props, [
+    'children',
+    'class',
+    'fallback',
+    'separator',
+  ]);
   const entries = createMemo(() =>
     [...context.entries].sort(
       (left, right) =>
@@ -202,6 +245,10 @@ function Outlet(props: ViewBreadcrumbsOutletProps) {
   );
   const hasActiveItem = () =>
     entries().some((entry) => entry.value() === context.value());
+  const renderSeparator = (
+    previous: ViewBreadcrumbsEntry<unknown>,
+    next?: ViewBreadcrumbsEntry<unknown>
+  ) => local.separator?.({ previous, next }) ?? <Separator />;
 
   return (
     <nav
@@ -213,13 +260,18 @@ function Outlet(props: ViewBreadcrumbsOutletProps) {
         {(entry, index) => (
           <>
             <Show when={index() > 0}>
-              <Separator />
+              {renderSeparator(entries()[index() - 1]!, entry)}
             </Show>
             {entry.render()}
           </>
         )}
       </For>
-      <Show when={!hasActiveItem()}>{local.fallback}</Show>
+      <Show when={!hasActiveItem() && local.fallback != null}>
+        <Show when={entries().at(-1)}>
+          {(entry) => renderSeparator(entry())}
+        </Show>
+        {local.fallback}
+      </Show>
       {local.children}
     </nav>
   );
@@ -228,6 +280,7 @@ function Outlet(props: ViewBreadcrumbsOutletProps) {
 export const ViewBreadcrumbs = Object.assign(Root, {
   Root,
   Button: BreadcrumbButton,
+  ReturnButton,
   Item,
   Separator,
   Outlet,

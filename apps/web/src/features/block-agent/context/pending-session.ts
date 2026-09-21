@@ -18,7 +18,10 @@
 
 import { markMessageSent } from '@core/util/message-send-motion';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
-import type { CreateAgentSessionRequest } from '@service-agent-harness/generated/schemas';
+import type {
+  CreateAgentSessionRequest,
+  PromptAttachment,
+} from '@service-agent-harness/generated/schemas';
 import { type Accessor, createSignal } from 'solid-js';
 
 /**
@@ -32,6 +35,8 @@ export type PendingSession = {
   sessionId: Accessor<string | undefined>;
   /** The create failed — this block has nothing to become. */
   failed: Accessor<boolean>;
+  /** The startup error returned by the service. */
+  error: Accessor<string | undefined>;
 };
 
 const pending = new Map<string, PendingSession>();
@@ -49,8 +54,16 @@ export type StartPendingSessionOptions = {
   botId?: string;
   /** First prompt, delivered after any model override. */
   prompt?: string;
+  /** Uploaded SFS files delivered with the first prompt. */
+  attachments?: PromptAttachment[];
   /** Optional model switch applied before the first prompt. */
   modelOverride?: string;
+  /**
+   * Explicit GitHub repository for the managed Cursor session.
+   */
+  repoUrl?: string;
+  /** Starting branch for the selected repository. */
+  repoBranch?: string;
 };
 
 /**
@@ -62,16 +75,26 @@ export function startPendingSession(
 ): string {
   const placeholder = `${PLACEHOLDER_PREFIX}${crypto.randomUUID()}`;
   const [sessionId, setSessionId] = createSignal<string>();
-  const [failed, setFailed] = createSignal(false);
-  pending.set(placeholder, { sessionId, failed });
+  const [error, setError] = createSignal<string>();
+  pending.set(placeholder, {
+    sessionId,
+    failed: () => error() !== undefined,
+    error,
+  });
 
   void agentHarnessServiceClient
     .create({
       ...(options.botId ? { botId: options.botId } : {}),
+      ...(options.repoUrl
+        ? { repoUrl: options.repoUrl, repoBranch: options.repoBranch }
+        : {}),
     } satisfies CreateAgentSessionRequest)
     .then(async (result) => {
       if (result.isErr()) {
-        setFailed(true);
+        setError(
+          result.error.map((error) => error.message).join(' ') ||
+            'The agent session could not be created.'
+        );
         return;
       }
       const id = result.value.session.id;
@@ -81,25 +104,38 @@ export function startPendingSession(
           model: options.modelOverride,
         });
         if (changed.isErr()) {
-          setFailed(true);
+          setError(
+            changed.error.map((error) => error.message).join(' ') ||
+              'The selected model could not be applied.'
+          );
           return;
         }
       }
-      const prompt = options.prompt?.trim();
-      if (prompt) {
+      const prompt = options.prompt?.trim() ?? '';
+      if (prompt || options.attachments?.length) {
         const delivered = await agentHarnessServiceClient.control(id, {
           type: 'prompt',
           prompt,
+          ...(options.attachments?.length
+            ? { attachments: options.attachments }
+            : {}),
         });
         if (delivered.isErr()) {
-          setFailed(true);
+          setError(
+            delivered.error.map((error) => error.message).join(' ') ||
+              'The first message could not be sent.'
+          );
           return;
         }
         markMessageSent(`agent:${id}:${delivered.value.actionId}`);
       }
       setSessionId(id);
     })
-    .catch(() => setFailed(true));
+    .catch(() =>
+      setError(
+        'Could not reach the agent service. Check your connection and try again.'
+      )
+    );
 
   return placeholder;
 }

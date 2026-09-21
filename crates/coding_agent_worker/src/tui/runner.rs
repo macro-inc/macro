@@ -10,7 +10,7 @@ use super::logging::LogBuffer;
 use super::platform::open_pending_browser;
 use super::quickstart::{Quickstart, QuickstartAction};
 use super::ui;
-use crate::config::{Config, IdentityScope};
+use crate::config::Config;
 
 #[cfg(test)]
 mod test;
@@ -132,15 +132,14 @@ async fn run_quickstart(
                 let saved = if existing_config.is_some() {
                     ConfigForm::load(config_path).and_then(|mut form| {
                         form.apply_quickstart(agent, &workspace, quickstart.scope);
+                        form.set_permission_bypass(quickstart.allow_permission_bypass);
                         form.save()
                     })
                 } else {
                     ConfigForm::create(config_path, agent, &workspace).and_then(|()| {
-                        if quickstart.scope == IdentityScope::Private {
-                            return Ok(());
-                        }
                         let mut form = ConfigForm::load(config_path)?;
                         form.set_scope(quickstart.scope);
+                        form.set_permission_bypass(quickstart.allow_permission_bypass);
                         form.save()
                     })
                 };

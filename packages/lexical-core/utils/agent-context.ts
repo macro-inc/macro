@@ -14,9 +14,17 @@ export type AgentContextMessage = {
   content: string;
 };
 
-/** Input used to compose an agent prompt with private channel context. */
+/** The authorized conversation a prompt was posted in. */
+export type AgentContextParent = {
+  type: 'channel' | 'document';
+  id: string;
+};
+
+/** Input used to compose an agent prompt with private conversation context. */
 export type AgentContextPrompt = {
   promptMarkdown: string;
+  /** Supplied by the message service, never by the prompt's author. */
+  parent?: AgentContextParent;
   messages?: AgentContextMessage[];
 };
 
@@ -29,8 +37,9 @@ function escapeAgentContextTags(markdown: string): string {
 }
 
 /**
- * Prefix a prompt with a private AgentContext node containing chronological
- * channel history. The internal markdown transformer owns envelope encoding.
+ * Prefix a prompt with a private AgentContext node naming the conversation it
+ * came from and containing its chronological history. The internal markdown
+ * transformer owns envelope encoding.
  */
 export function composeAgentContextPrompt(input: AgentContextPrompt): string {
   const editor = createHeadlessEditor({
@@ -49,17 +58,20 @@ export function composeAgentContextPrompt(input: AgentContextPrompt): string {
 
   editor.update(
     () => {
-      if (!input.messages?.length) return;
+      if (!input.messages?.length && !input.parent) return;
 
-      const contextText = input.messages
+      const history = (input.messages ?? [])
         .map(
           (message, index) =>
             `Prior message ${index + 1}:\nSender: ${message.sender}\nContent: ${message.content}`
         )
         .join('\n\n');
+      const location = input.parent
+        ? `Conversation parent: ${JSON.stringify(input.parent)}`
+        : '';
       const context = $createAgentContextNode({
         version: 1,
-        text: contextText,
+        text: [location, history].filter(Boolean).join('\n\n'),
       });
       const firstChild = $getRoot().getFirstChild();
       if (firstChild) firstChild.insertBefore(context);

@@ -30,17 +30,20 @@ mod test;
 
 use crate::domain::model::{McpHeader, McpServer, McpTransport};
 use crate::domain::model_options::{MODEL_CONFIG_ID, cursor_model_config_options};
-use crate::domain::ports::{CursorAgents, RepositoryChooser, RunStream, SessionNotifier};
+use crate::domain::ports::{
+    ArtifactStore, CursorAgents, CursorArtifacts, RepositoryChooser, RunStream, SessionNotifier,
+};
 use crate::domain::service::CursorSessionService;
+use crate::domain::slash_commands::cursor_slash_commands;
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
-    AgentCapabilities, AuthenticateRequest, AuthenticateResponse, CancelNotification,
-    CloseSessionRequest, CloseSessionResponse, ContentBlock, ContentChunk, Error as AcpError,
-    HttpHeader, Implementation, InitializeRequest, InitializeResponse, LoadSessionRequest,
-    LoadSessionResponse, McpCapabilities, McpServer as AcpMcpServer, Meta, NewSessionRequest,
-    NewSessionResponse, PromptCapabilities, PromptRequest, PromptResponse, SessionConfigOption,
-    SessionId, SessionNotification, SessionUpdate, SetSessionConfigOptionRequest,
-    SetSessionConfigOptionResponse, TextContent,
+    AgentCapabilities, AuthenticateRequest, AuthenticateResponse, AvailableCommandsUpdate,
+    CancelNotification, CloseSessionRequest, CloseSessionResponse, ContentBlock, ContentChunk,
+    Error as AcpError, HttpHeader, Implementation, InitializeRequest, InitializeResponse,
+    LoadSessionRequest, LoadSessionResponse, McpCapabilities, McpServer as AcpMcpServer, Meta,
+    NewSessionRequest, NewSessionResponse, PromptCapabilities, PromptRequest, PromptResponse,
+    SessionConfigOption, SessionId, SessionNotification, SessionUpdate,
+    SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, TextContent,
 };
 use agent_client_protocol::{
     Agent, ByteStreams, Client, ConnectTo, ConnectionTo, on_receive_notification,
@@ -310,8 +313,8 @@ fn agent_capabilities() -> AgentCapabilities {
 ///
 /// A clean EOF from the client is `Ok`; transport and protocol-level failures
 /// are the SDK's error.
-pub async fn serve<Reader, Writer, Cursor, Notifier, Chooser>(
-    service: Arc<CursorSessionService<Cursor, Notifier, Chooser>>,
+pub async fn serve<Reader, Writer, Cursor, Notifier, Chooser, Store>(
+    service: Arc<CursorSessionService<Cursor, Notifier, Chooser, Store>>,
     notifier: AcpNotifier,
     reader: Reader,
     writer: Writer,
@@ -319,9 +322,10 @@ pub async fn serve<Reader, Writer, Cursor, Notifier, Chooser>(
 where
     Reader: tokio::io::AsyncRead + Send + 'static,
     Writer: tokio::io::AsyncWrite + Send + 'static,
-    Cursor: CursorAgents + RunStream + Send + Sync + 'static,
+    Cursor: CursorAgents + CursorArtifacts + RunStream + Send + Sync + 'static,
     Notifier: SessionNotifier + Send + Sync + 'static,
     Chooser: RepositoryChooser + 'static,
+    Store: ArtifactStore + 'static,
 {
     serve_transport(
         service,
@@ -339,16 +343,17 @@ where
 ///
 /// A clean EOF from the client is `Ok`; transport and protocol-level failures
 /// are the SDK's error.
-pub async fn serve_transport<Transport, Cursor, Notifier, Chooser>(
-    service: Arc<CursorSessionService<Cursor, Notifier, Chooser>>,
+pub async fn serve_transport<Transport, Cursor, Notifier, Chooser, Store>(
+    service: Arc<CursorSessionService<Cursor, Notifier, Chooser, Store>>,
     notifier: AcpNotifier,
     transport: Transport,
 ) -> Result<(), AcpError>
 where
     Transport: ConnectTo<Agent> + 'static,
-    Cursor: CursorAgents + RunStream + Send + Sync + 'static,
+    Cursor: CursorAgents + CursorArtifacts + RunStream + Send + Sync + 'static,
     Notifier: SessionNotifier + Send + Sync + 'static,
     Chooser: RepositoryChooser + 'static,
+    Store: ArtifactStore + 'static,
 {
     let startup_notifier = notifier.clone();
     Agent
@@ -391,7 +396,13 @@ where
                     let mcp_servers = forwardable_mcp_servers(request.mcp_servers);
                     let session = service.new_session(&request.cwd, mcp_servers);
                     let options = session_config_options(&service, &session).await;
-                    responder.respond(NewSessionResponse::new(session).config_options(options))
+                    let response = responder
+                        .respond(NewSessionResponse::new(session.clone()).config_options(options));
+                    // After the session exists, same as Cursor's own ACP agent:
+                    // commands arrive on `session/update`, not on the new-session
+                    // result. A failure here costs the `/` menu, not the session.
+                    advertise_slash_commands(&notifier, &session).await;
+                    response
                 }
             },
             on_receive_request!(),
@@ -450,6 +461,7 @@ where
                         responder.respond(LoadSessionResponse::new().config_options(options));
                     if response.is_ok() {
                         guard.complete();
+                        advertise_slash_commands(&notifier, &session).await;
                     }
                     response
                 }
@@ -547,14 +559,15 @@ where
 /// A failure to reach `GET /v1/models` costs the picker, not the session: the
 /// options come back empty and the client simply has nothing to offer, which is
 /// the state it was in before any of this existed.
-async fn session_config_options<Cursor, Notifier, Chooser>(
-    service: &CursorSessionService<Cursor, Notifier, Chooser>,
+async fn session_config_options<Cursor, Notifier, Chooser, Store>(
+    service: &CursorSessionService<Cursor, Notifier, Chooser, Store>,
     session: &SessionId,
 ) -> Vec<SessionConfigOption>
 where
-    Cursor: CursorAgents + RunStream,
+    Cursor: CursorAgents + CursorArtifacts + RunStream,
     Notifier: SessionNotifier,
     Chooser: RepositoryChooser,
+    Store: ArtifactStore,
 {
     let models = match service.models().await {
         Ok(models) => models,
@@ -584,6 +597,27 @@ where
     // If Cursor ever drops the entry there is no honest resting value, and no
     // picker beats one resting on a guess.
     cursor_model_config_options(&models, current)
+}
+
+/// Advertise the curated Cursor slash-command catalog as an
+/// `available_commands_update`.
+///
+/// There is no `GET /v1/skills` to fetch — see [`cursor_slash_commands`]. The
+/// fold stores whatever this notification carries, and the agents-block
+/// composer only opens `/` when that list is non-empty. Sending nothing is
+/// why Cursor sessions used to treat `/` as plain text.
+async fn advertise_slash_commands(notifier: &AcpNotifier, session: &SessionId) {
+    if let Err(error) = notifier
+        .notify(
+            session,
+            SessionUpdate::AvailableCommandsUpdate(AvailableCommandsUpdate::new(
+                cursor_slash_commands(),
+            )),
+        )
+        .await
+    {
+        tracing::warn!(error = %error, "could not advertise cursor slash commands");
+    }
 }
 
 /// Concatenate a prompt's content blocks into the single string Cursor takes.

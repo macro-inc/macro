@@ -1,4 +1,7 @@
-import type { FoldedMessage } from '@service-agent-fold/generated/types';
+import type {
+  FoldedMessage,
+  TurnState,
+} from '@service-agent-fold/generated/types';
 import { cleanup, render } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
@@ -8,6 +11,7 @@ import { Transcript } from './Transcript';
 
 const session = vi.hoisted(() => ({
   sessionId: () => 'session',
+  turn: (): TurnState => 'idle',
   messages: () => [] as FoldedMessage[],
   quoteSelection: vi.fn(),
   touch: false,
@@ -26,10 +30,16 @@ vi.mock('@components/app/mobile/float-regions/float-region-state', () => ({
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => session.touch,
 }));
-vi.mock('@ui', () => ({ cn: (...classes: string[]) => classes.join(' ') }));
+vi.mock('@ui', async () => ({
+  cn: (...classes: string[]) => classes.join(' '),
+  ...(await import('@ui/components/Layer')),
+}));
 vi.mock('./AgentMessage', () => ({
-  Message: (props: { message: FoldedMessage }) => (
-    <span data-message={`${props.message.turn}:${props.message.author.kind}`}>
+  Message: (props: { message: FoldedMessage; inFlight: boolean }) => (
+    <span
+      data-in-flight={String(props.inFlight)}
+      data-message={`${props.message.turn}:${props.message.author.kind}`}
+    >
       {JSON.stringify(props.message.parts)}
     </span>
   ),
@@ -90,6 +100,7 @@ beforeEach(() => {
   viewport = 400;
   rowHeight = 96;
   session.touch = false;
+  session.turn = () => 'idle';
   session.bottom = () => 80;
   vi.stubGlobal(
     'ResizeObserver',
@@ -174,6 +185,45 @@ function mount(initial: FoldedMessage[]) {
   )!;
   return { ...view, scroller, setMessages };
 }
+
+describe('Transcript live turn', () => {
+  const inFlight = (view: { container: HTMLElement }) =>
+    [...view.container.querySelectorAll<HTMLElement>('[data-message]')].map(
+      (el) => `${el.dataset.message}=${el.dataset.inFlight}`
+    );
+
+  it('marks only the newest turn live, however many messages lack a stop', async () => {
+    // Every one of these reads `stop: null`; a superseded turn keeps it.
+    const [turn, setTurn] = createSignal<TurnState>('running');
+    session.turn = turn;
+    const view = mount([message(0), message(1), message(2)]);
+    await settle();
+    expect(inFlight(view)).toEqual([
+      '0:agent=false',
+      '1:agent=false',
+      '2:agent=true',
+    ]);
+
+    // The runtime went away: the block stops working, and so does the tail.
+    setTurn('disconnected');
+    await settle();
+    expect(inFlight(view)).toEqual([
+      '0:agent=false',
+      '1:agent=false',
+      '2:agent=false',
+    ]);
+  });
+
+  it('marks nothing live while the newest turn is a prompt awaiting its reply', async () => {
+    session.turn = () => 'running';
+    const view = mount([
+      message(0),
+      { ...message(1), author: { kind: 'user', userId: 'u' } } as FoldedMessage,
+    ]);
+    await settle();
+    expect(inFlight(view)).toEqual(['0:agent=false', '1:user=false']);
+  });
+});
 
 describe('Transcript with the shared TanStack ThreadList', () => {
   it('positions a cold-link target after the initial latest layout commits', async () => {

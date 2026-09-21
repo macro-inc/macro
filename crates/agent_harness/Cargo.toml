@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+claude_cloud_agents = { path = "../claude_cloud_agents" }
 async-trait = { workspace = true }
 codex_cloud_agents = { path = "../codex_cloud_agents", features = ["postgres"] }
 codex_connection = { path = "../codex_connection" }
@@ -29,7 +30,6 @@ bot_id = { path = "../bot_id" }
 harness_id = { path = "../harness_id" }
 channel_sender = { path = "../channel_sender" }
 chrono = { workspace = true }
-channels = { path = "../channels", features = ["ports"] }
 lexical_client = { path = "../lexical_client" }
 dashmap = { workspace = true }
 futures = { workspace = true }
@@ -50,7 +50,9 @@ macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model-entity = { path = "../model-entity" }
 model_notifications = { path = "../model_notifications" }
+model_owner = { path = "../model_owner" }
 notification = { path = "../notification" }
+messages = { path = "../messages", features = ["broker", "ports"] }
 opentelemetry = { workspace = true, features = ["trace"] }
 reqwest = { workspace = true }
 redis = { workspace = true, features = ["aio", "tokio-comp"] }
@@ -76,6 +78,8 @@ utoipa = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+channels = { path = "../channels", default-features = false }
+messages = { path = "../messages", features = ["test-utils"] }
 uuid = { workspace = true }
 agent_fold = { path = "../agent_fold", features = ["test-utils"] }
 agent_session = { path = "../agent_session", features = ["test-utils"] }
@@ -83,3 +87,4 @@ bot_id = { path = "../bot_id", features = ["test-utils"] }
 harness_id = { path = "../harness_id", features = ["test-utils"] }
 mockall = { workspace = true }
 model_user = { path = "../model_user" }
+tower = { workspace = true }

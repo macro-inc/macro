@@ -262,7 +262,9 @@ const graphqlSoupClient = createClient({
   preferGetMethod: false,
 });
 
-function createGraphqlSoupWebSocketClient(): GraphqlWsClient {
+function createGraphqlSoupWebSocketClient(
+  onConnected: () => void
+): GraphqlWsClient {
   const resolveWebSocketUrl = createGraphqlSoupWebSocketUrlResolver({
     dssHost,
     bearerTokenAuth: ENABLE_BEARER_TOKEN_AUTH,
@@ -277,6 +279,7 @@ function createGraphqlSoupWebSocketClient(): GraphqlWsClient {
   return createGraphqlWsClient({
     url: resolveWebSocketUrl,
     retryAttempts: SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS,
+    on: { connected: onConnected },
     shouldRetry: shouldRetryGraphqlSoupWebSocket,
   });
 }
@@ -312,8 +315,10 @@ function disposeUncachedRealtimeClient(): void {
 function getUncachedRealtimeClient(): Client {
   if (uncachedRealtimeClient) return uncachedRealtimeClient;
 
-  const websocketClient = createGraphqlSoupWebSocketClient();
   const subscriptionsLifecycle = createGraphqlSoupSubscriptionsLifecycle();
+  const websocketClient = createGraphqlSoupWebSocketClient(
+    subscriptionsLifecycle.connected
+  );
   const client = createClient({
     url: `${dssHost}/items/soup/graphql`,
     preferGetMethod: false,
@@ -427,7 +432,9 @@ export function getGraphqlSoupClient(): Client {
             onInitializationError,
             rolloutCohort: rollout.cohort,
           });
-      const graphqlWsClient = createGraphqlSoupWebSocketClient();
+      const graphqlWsClient = createGraphqlSoupWebSocketClient(
+        subscriptionsLifecycle.connected
+      );
       websocketClient = graphqlWsClient;
       const client = createClient({
         url: `${dssHost}/items/soup/graphql`,
@@ -603,6 +610,9 @@ function mapDocumentSubType(subType: GraphqlSoupDocument['subType']) {
     .with({ __typename: 'GraphqlSkillSubType' }, () => ({
       type: 'skill' as const,
     }))
+    .with({ __typename: 'GraphqlInitiativeDescriptionSubType' }, () => {
+      return undefined;
+    })
     .exhaustive();
 }
 
@@ -728,6 +738,8 @@ function mapGraphqlNotificationMetadata(
             text: metadata.mentionedInDocumentCommentText,
             senderProfilePictureUrl:
               metadata.mentionedInDocumentCommentSenderProfilePictureUrl,
+            senderDisplayName:
+              metadata.mentionedInDocumentCommentSenderDisplayName,
           },
         }) satisfies NotifEventMember<'mentioned_in_document_comment'>
     )
@@ -748,6 +760,8 @@ function mapGraphqlNotificationMetadata(
             text: metadata.repliedToDocumentCommentThreadText,
             senderProfilePictureUrl:
               metadata.repliedToDocumentCommentThreadSenderProfilePictureUrl,
+            senderDisplayName:
+              metadata.repliedToDocumentCommentThreadSenderDisplayName,
           },
         }) satisfies NotifEventMember<'replied_to_document_comment_thread'>
     )
@@ -768,6 +782,7 @@ function mapGraphqlNotificationMetadata(
             text: metadata.commentedOnDocumentText,
             senderProfilePictureUrl:
               metadata.commentedOnDocumentSenderProfilePictureUrl,
+            senderDisplayName: metadata.commentedOnDocumentSenderDisplayName,
           },
         }) satisfies NotifEventMember<'commented_on_document'>
     )

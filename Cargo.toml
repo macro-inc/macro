@@ -3,7 +3,7 @@ resolver = "2"
 
 members = [
   "crates/activity",
-  "crates/agent", "crates/agent_egress", "crates/agent_fold",
+  "crates/agent", "crates/agent_changes", "crates/agent_egress", "crates/agent_fold",
   "crates/agent_harness",
   "crates/agent_inmem",
   "crates/agent_runtime_protocol", "crates/agent_session",
@@ -29,6 +29,7 @@ members = [
   "crates/crm",
   "crates/cursor_api_key",
   "crates/cursor_cloud_agents",
+  "crates/claude_cloud_agents",
   "crates/embedding",
   "crates/email_api_client",
   "crates/entity_mutation",
@@ -40,6 +41,7 @@ members = [
   "crates/genai_telemetry",
   "crates/generic_email_domains",
   "crates/gmail_client",
+  "crates/google_token",
   "crates/graphql_activity",
   "crates/graphql_channel",
   "crates/graphql_common",
@@ -51,6 +53,7 @@ members = [
   "crates/graphql_properties",
   "crates/graphql_soup",
   "crates/graphql_soup_filter_input",
+  "crates/gtm_invite",
   "crates/harness_id",
   "crates/harness_token",
   "crates/harnesses",
@@ -67,6 +70,7 @@ members = [
   "crates/macro_sync_service_jwt",
   "crates/maybe_send",
   "crates/memory",
+  "crates/messages",
   "crates/model_owner",
   "crates/mcp_select",
   "crates/mcp_toolset",
@@ -93,6 +97,7 @@ members = [
   "services/agent_trigger_service",
   "services/ai_projections_refresh_handler",
   "services/authentication_service",
+  "services/calendar_service",
   "services/call_recording_preview_handler",
   "services/connection_gateway",
   "services/contacts_service",
@@ -302,6 +307,7 @@ sqlx = { version = "0.8.6", features = [
   "uuid",
 ] }
 sqlx-core = { version = "0.8.6" }
+sse-core = { version = "0.2.3", default-features = false, features = ["std"] }
 strum = { version = "0.27.1", features = ["derive"] }
 tempfile = "3"
 thiserror = "2.0.0"

@@ -11,6 +11,29 @@ fn caller() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("models@example.com").unwrap()
 }
 
+#[tokio::test]
+async fn claude_is_unavailable_unless_explicitly_configured() {
+    let service = AgentModelsServiceImpl::new(
+        Access(true),
+        Probe::new(unsupported),
+        Probe::new(unsupported),
+        Probe::new(unsupported),
+        Duration::from_secs(1),
+    );
+    let result = service
+        .load(
+            caller(),
+            LoadAgentModels {
+                harness: ModelHarness::ClaudeCloud,
+                harness_id: None,
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(result.status, AgentModelsStatus::Unsupported);
+    assert!(result.models.is_empty());
+}
+
 fn options() -> Vec<SessionConfigOption> {
     vec![SessionConfigOption::select(
         "model",
@@ -65,6 +88,63 @@ impl CursorModelProbe for Probe {
         self.calls.fetch_add(1, Ordering::Relaxed);
         (self.result)()
     }
+}
+
+impl ClaudeModelProbe for Probe {
+    fn probe<'a>(
+        &'a self,
+        _caller: &'a MacroUserIdStr<'static>,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<RawModelProbe, ModelProbeError>> + Send + 'a>>
+    {
+        Box::pin(async move {
+            self.calls.fetch_add(1, Ordering::Relaxed);
+            (self.result)()
+        })
+    }
+}
+
+#[tokio::test]
+async fn claude_models_are_never_returned_for_in_memory() {
+    let claude = std::sync::Arc::new(Probe::new(|| {
+        Ok(RawModelProbe::Options(vec![SessionConfigOption::select(
+            "model",
+            "Model",
+            SessionConfigValueId::new("claude-fable-5-1"),
+            vec![SessionConfigSelectOption::new(
+                "claude-fable-5-1",
+                "Fable 5.1",
+            )],
+        )]))
+    }));
+    let service = AgentModelsServiceImpl::new(
+        Access(true),
+        Probe::new(available),
+        Probe::new(unsupported),
+        Probe::new(unsupported),
+        Duration::from_secs(1),
+    )
+    .with_claude(claude.clone());
+
+    for (harness, expected) in [
+        (ModelHarness::ClaudeCloud, "claude-fable-5-1"),
+        (ModelHarness::InMemory, "fast"),
+    ] {
+        let result = service
+            .load(
+                caller(),
+                LoadAgentModels {
+                    harness,
+                    harness_id: None,
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(result.status, AgentModelsStatus::Available);
+        assert_eq!(result.models.len(), 1);
+        assert_eq!(result.models[0].id, expected);
+    }
+    assert_eq!(claude.calls(), 1);
+    assert_eq!(service.in_memory.calls(), 1);
 }
 
 impl MacrodModelProbe for Probe {

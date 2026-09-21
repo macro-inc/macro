@@ -1,12 +1,9 @@
-import { searchLocationPendingSignal } from '@block-pdf/signal/location';
 import type { FindBarController } from '@core/component/createFindBarController';
 import { FindBar } from '@core/component/FindBar';
 import { IS_MAC } from '@core/constant/isMac';
-import { blockElementSignal } from '@core/signal/blockElement';
 import { createEffect, createSignal, onCleanup, Show, untrack } from 'solid-js';
+import { usePdfViewer } from '../context/pdf-viewer-context';
 import {
-  isSearchOpenSignal,
-  searchSignal,
   useJumpToResult,
   useSearchClose,
   useSearchResults,
@@ -14,18 +11,18 @@ import {
 } from '../signal/search';
 
 export function SimpleSearch() {
+  const pdfViewer = usePdfViewer();
+  const rootElement = pdfViewer.rootElement;
   const searchStart = useSearchStart();
   const searchResults = useSearchResults();
   const jumpToResult = useJumpToResult();
   const closeSearchBar = useSearchClose();
-  const locationPending = searchLocationPendingSignal.get;
+  const locationPending = pdfViewer.searchNavigationPending;
   const [inputEl, setInputEl] = createSignal<HTMLInputElement>();
-
-  const [isOpen, setIsOpen] = isSearchOpenSignal;
-  const [searchText, setSearchText] = searchSignal;
+  const [isOpen, setIsOpen] = createSignal(false);
+  const [searchText, setSearchText] = createSignal('');
   const [isPending, setIsPending] = createSignal(false);
 
-  // Re-run the active search when the bar opens (or re-opens with prior text).
   createEffect(() => {
     if (untrack(locationPending)) return;
     const text = untrack(searchText);
@@ -76,8 +73,6 @@ export function SimpleSearch() {
     setIsOpen(false);
   };
 
-  // PDF.js owns the search state (queries, results, cursor). Expose it as a
-  // FindBarController so it can drive the shared <FindBar> UI.
   const controller: FindBarController = {
     isOpen,
     query: searchText,
@@ -115,15 +110,12 @@ export function SimpleSearch() {
     }
   };
 
-  const blockElement = blockElementSignal.get;
   createEffect(() => {
-    const element = blockElement();
+    const element = rootElement();
     if (!element) return;
     element.addEventListener('keydown', handleHotkey);
-    document.addEventListener('keydown', handleHotkey);
     onCleanup(() => {
       element.removeEventListener('keydown', handleHotkey);
-      document.removeEventListener('keydown', handleHotkey);
     });
   });
 

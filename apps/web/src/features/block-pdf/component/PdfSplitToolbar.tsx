@@ -1,30 +1,26 @@
-import { showTabBarSignal } from '@block-pdf/signal/placeables';
 import {
   SplitToolbarLeft,
   SplitToolbarRight,
 } from '@components/app/split-layout/components/SplitToolbar';
 import { ENABLE_PDF_MARKUP } from '@core/constant/featureFlags';
-import { useCanEdit } from '@core/signal/permissions';
 import Tabs from '@phosphor/tabs.svg';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
-import { pdfDocumentProxy } from '../signal/document';
+import { usePdfDocument } from '../context/pdf-document-context';
 import { MarkupToolbar } from './MarkupToolbar';
 import { PageNumberInput } from './PageNumberInput';
 
-function TabsToggle() {
-  const canEdit = useCanEdit();
-  const [showTabBar, setShowTabBar] = showTabBarSignal;
+export function PdfTabsToggle() {
+  const pdf = usePdfDocument();
+  const canEdit = pdf.permissions.canEdit;
 
   return (
     <Show when={canEdit()}>
       <Button
         size="icon-sm"
-        label={showTabBar() ? 'Hide Tabs' : 'Show Tabs'}
+        label={pdf.tabs.isVisible() ? 'Hide Tabs' : 'Show Tabs'}
         variant="ghost"
-        onClick={() => {
-          setShowTabBar(!showTabBar());
-        }}
+        onClick={pdf.tabs.commands.toggleVisibility}
       >
         <Tabs />
       </Button>
@@ -32,20 +28,27 @@ function TabsToggle() {
   );
 }
 
-export function PdfSplitToolbar() {
+export function PdfToolbarControls() {
   return (
-    <Show when={pdfDocumentProxy()}>
+    <div class="flex items-center gap-2">
+      <PageNumberInput />
+      <Show when={ENABLE_PDF_MARKUP}>
+        <div class="h-5 w-px bg-edge" />
+        <MarkupToolbar />
+      </Show>
+    </div>
+  );
+}
+
+export function PdfSplitToolbar() {
+  const documentProxy = usePdfDocument().documentProxy;
+  return (
+    <Show when={documentProxy()}>
       <SplitToolbarLeft>
-        <div class="flex items-center gap-2">
-          <PageNumberInput />
-          <Show when={ENABLE_PDF_MARKUP}>
-            <div class="h-5 w-px bg-edge" />
-            <MarkupToolbar />
-          </Show>
-        </div>
+        <PdfToolbarControls />
       </SplitToolbarLeft>
       <SplitToolbarRight>
-        <TabsToggle />
+        <PdfTabsToggle />
       </SplitToolbarRight>
     </Show>
   );

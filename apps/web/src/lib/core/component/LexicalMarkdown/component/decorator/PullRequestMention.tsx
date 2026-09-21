@@ -339,7 +339,10 @@ function PullRequestPreviewBody(props: { id: string; fallbackLabel?: string }) {
   );
 }
 
-function PullRequestPreviewCard(props: { id: string; fallbackLabel?: string }) {
+export function PullRequestPreviewCard(props: {
+  id: string;
+  fallbackLabel?: string;
+}) {
   return (
     <div class="select-none overflow-hidden w-80 text-ink">
       <Surface depth={3} class="rounded-xl shadow-lg shadow-drop-shadow">

@@ -1,5 +1,7 @@
 //! Native capture contract and the shared live/load processing machine.
+use super::artifact::{CollectedArtifact, artifact_markdown};
 use super::event::{CursorEvent, InteractionUpdate};
+use super::inline_image::InlineImageFilter;
 use super::model::{CursorRunId, RunOutcome, RunStatus};
 use super::translate::TranslateMachine;
 use agent_client_protocol::schema::v1::{
@@ -72,6 +74,16 @@ pub enum JournalInput {
     Poll(String),
     /// A local terminal decision (e.g. stop during a disconnected poll).
     Interrupted(String),
+    /// The walkthrough files this run produced, re-hosted and durable.
+    ///
+    /// Journaled before the text announcing them is sent, so a crash between
+    /// the two re-announces on replay rather than losing files nobody can
+    /// fetch again — Cursor's own download links last fifteen minutes.
+    /// Carries the collected list rather than the rendered markdown because
+    /// the rendering is a pure function of it
+    /// ([`artifact_markdown`](super::artifact::artifact_markdown)), and one
+    /// copy of it is the only way live and replay cannot disagree.
+    ArtifactsCollected(Vec<CollectedArtifact>),
     /// Capture has reconciled this run; distinct from ACP delivery checkpoint.
     Reconciled,
 }
@@ -109,6 +121,9 @@ struct RunState {
     prompt: bool,
     text: String,
     terminal: Option<RunStatus>,
+    /// What the reader sees of `text`: the same stream minus the `<img>`
+    /// tags Cursor writes for files only its sandbox can reach.
+    images: InlineImageFilter,
 }
 /// Complete live/replay state, including user prompts and terminal tool cleanup.
 #[derive(Debug, Default)]
@@ -131,6 +146,14 @@ impl ReplayMachine {
         self.runs
             .get(run)
             .is_some_and(|s| s.prompt && s.terminal.is_some())
+    }
+    /// The run's answer as this journal captured it, empty string and all.
+    ///
+    /// Only the final step's text: a new step clears what came before, the
+    /// same way Cursor's own final text keeps only the last step. That is
+    /// what makes it comparable with a line of the agent's conversation.
+    pub fn answer(&self, run: &CursorRunId) -> Option<&str> {
+        self.runs.get(run).map(|state| state.text.as_str())
     }
     /// Durable provider terminal status, independent of the reconciliation marker.
     pub fn terminal_status(&self, run: &CursorRunId) -> Option<RunStatus> {
@@ -177,6 +200,14 @@ impl ReplayMachine {
                     .collect())
             }
             JournalInput::Sse(record) => self.event(run, record.decode()),
+            JournalInput::ArtifactsCollected(artifacts) => {
+                if artifacts.is_empty() {
+                    return Ok(Vec::new());
+                }
+                Ok(vec![SessionUpdate::AgentMessageChunk(ContentChunk::new(
+                    ContentBlock::Text(TextContent::new(artifact_markdown(artifacts))),
+                ))])
+            }
             JournalInput::Poll(raw) => {
                 let value: serde_json::Value =
                     serde_json::from_str(raw).map_err(|e| rootcause::report!(e))?;
@@ -239,7 +270,11 @@ impl ReplayMachine {
             // the rest; this is what happens when it does not.
             CursorEvent::Status { status, .. } if status.is_terminal() => {
                 state.terminal = Some(status);
-                Ok(self.translator.close_open_calls())
+                let mut updates = self.translator.push(CursorEvent::Assistant {
+                    text: state.images.flush(),
+                });
+                updates.extend(self.translator.close_open_calls());
+                Ok(updates)
             }
             CursorEvent::Interaction(InteractionUpdate::Other { kind })
                 if kind == "step-started" =>
@@ -247,7 +282,9 @@ impl ReplayMachine {
                 // Cursor's final result contains the final step, not earlier
                 // commentary emitted before tool execution in the same run.
                 state.text.clear();
-                Ok(Vec::new())
+                Ok(self.translator.push(CursorEvent::Assistant {
+                    text: state.images.flush(),
+                }))
             }
             CursorEvent::Interaction(InteractionUpdate::UserMessage { text }) => {
                 if state.prompt {
@@ -260,6 +297,7 @@ impl ReplayMachine {
             }
             CursorEvent::Assistant { text } => {
                 state.text.push_str(&text);
+                let text = state.images.push(&text);
                 Ok(self.translator.push(CursorEvent::Assistant { text }))
             }
             CursorEvent::Result {
@@ -287,11 +325,9 @@ impl ReplayMachine {
                     // what the user watched arrive - stays as it is.
                     match text.strip_prefix(state.text.as_str()) {
                         Some(suffix) => {
-                            if !suffix.is_empty() {
-                                updates.extend(self.translator.push(CursorEvent::Assistant {
-                                    text: suffix.to_owned(),
-                                }));
-                            }
+                            updates.extend(self.translator.push(CursorEvent::Assistant {
+                                text: state.images.push(suffix),
+                            }));
                             state.text = text;
                         }
                         None => tracing::warn!(
@@ -302,6 +338,9 @@ impl ReplayMachine {
                         ),
                     }
                 }
+                updates.extend(self.translator.push(CursorEvent::Assistant {
+                    text: state.images.flush(),
+                }));
                 updates.extend(self.translator.push(CursorEvent::Result {
                     run_id,
                     status: status.clone(),

@@ -137,6 +137,34 @@ fn users(emails: &[&str]) -> Vec<MacroUserIdStr<'static>> {
 }
 
 #[tokio::test]
+async fn picture_changes_refresh_all_participant_sessions_without_notifications() {
+    let realtime = FakeRealtime::default();
+    let notifications = FakeNotifications::default();
+    let contacts = FakeContacts::default();
+    let service = ChannelSideEffectService::new(
+        FakeContext::default(),
+        realtime.clone(),
+        notifications.clone(),
+        contacts.clone(),
+    );
+    let channel_id = Uuid::new_v4();
+    let recipients = users(&["owner@test.com", "member@test.com"]);
+    service
+        .handle(ChannelEvent::PictureChanged {
+            channel_id,
+            recipients: recipients.clone(),
+        })
+        .await;
+    let effects = realtime.effects.lock().unwrap();
+    assert!(
+        matches!(&effects[..], [ChannelRealtimeEffect::PictureChanged { channel_id: id, recipients: actual }]
+        if *id == channel_id && actual == &recipients)
+    );
+    assert!(notifications.effects.lock().unwrap().is_empty());
+    assert!(contacts.users.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn macro_ai_bot_profile_is_builtin_without_context_lookup() {
     let lookup_count = Arc::new(Mutex::new(0));
     let service = ChannelSideEffectService::new(

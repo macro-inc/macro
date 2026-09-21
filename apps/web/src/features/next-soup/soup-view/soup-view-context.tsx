@@ -962,6 +962,7 @@ export const SoupViewContextProvider: FlowComponent<
     owners: ownerFilter(),
     stages: stageFilter(),
     resolveCompanyStage,
+    companyStageLabel: dealStages.stageLabel,
   });
 
   // This is temporary while we are experimenting/handling

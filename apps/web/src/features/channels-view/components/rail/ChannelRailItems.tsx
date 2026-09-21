@@ -19,7 +19,7 @@ import BellSlashIcon from '@phosphor/bell-slash.svg';
 import XIcon from '@phosphor/x.svg';
 import PhoneCallIcon from '@phosphor-fill/phone-call-fill.svg';
 import PhoneIncomingIcon from '@phosphor-fill/phone-incoming-fill.svg';
-import { getBotDisplayName } from '@queries/channel/message-sender';
+import { getBotDisplayName } from '@queries/messages/message-sender';
 import { Button, cn, Tooltip } from '@ui';
 import { Match, type ParentProps, Show, Switch } from 'solid-js';
 import { formatDetailedTimestamp, isDirectMessage } from '../../utils';
@@ -210,7 +210,7 @@ export function ChannelAvatar(props: {
   size?: 'sm' | 'md';
 }) {
   const sizeClass = () =>
-    props.size === 'md' ? 'size-9 [&_svg]:size-4.5' : 'size-6 [&_svg]:size-3.5';
+    props.size === 'md' ? 'size-9 [&_svg]:size-4.5' : 'size-5 [&_svg]:size-4';
 
   return (
     <Switch>

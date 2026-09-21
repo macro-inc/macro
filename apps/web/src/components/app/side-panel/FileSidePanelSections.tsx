@@ -26,6 +26,34 @@ export function FileSidePanelSections() {
   );
 }
 
+export type DocumentFileSidePanelSectionsProps = {
+  documentId: string;
+  documentName: string;
+  canEdit: boolean;
+};
+
+export function DocumentFileSidePanelSections(
+  props: DocumentFileSidePanelSectionsProps
+) {
+  return (
+    <>
+      <DocumentFileDetailsSection documentId={props.documentId} order={10} />
+      <EntityTagsSection
+        entityId={props.documentId}
+        entityType="DOCUMENT"
+        canEdit={props.canEdit}
+        order={20}
+      />
+      <DocumentFilePropertiesSection
+        documentId={props.documentId}
+        documentName={props.documentName}
+        canEdit={props.canEdit}
+        order={30}
+      />
+    </>
+  );
+}
+
 export function FileDetailsSection(props: { order?: number }) {
   return (
     <SidePanel.Section
@@ -34,7 +62,23 @@ export function FileDetailsSection(props: { order?: number }) {
       defaultOpen
       order={props.order}
     >
-      <DetailsSectionContent />
+      <BlockDetailsSectionContent />
+    </SidePanel.Section>
+  );
+}
+
+export function DocumentFileDetailsSection(props: {
+  documentId: string;
+  order?: number;
+}) {
+  return (
+    <SidePanel.Section
+      id="details"
+      title="Details"
+      defaultOpen
+      order={props.order}
+    >
+      <DetailsSectionContent documentId={props.documentId} />
     </SidePanel.Section>
   );
 }
@@ -48,6 +92,30 @@ export function FilePropertiesSection(props: { order?: number }) {
       order={props.order}
     >
       <PropertiesSectionContent />
+    </SidePanel.Section>
+  );
+}
+
+export function DocumentFilePropertiesSection(props: {
+  documentId: string;
+  documentName: string;
+  canEdit: boolean;
+  order?: number;
+}) {
+  return (
+    <SidePanel.Section
+      id="properties"
+      title="Properties"
+      defaultOpen
+      order={props.order}
+    >
+      <EntityPropertiesSection
+        entityId={props.documentId}
+        entityType="DOCUMENT"
+        canEdit={props.canEdit}
+        documentName={props.documentName}
+        showTags={false}
+      />
     </SidePanel.Section>
   );
 }
@@ -82,9 +150,13 @@ function PropertiesSectionContent() {
   );
 }
 
-function DetailsSectionContent() {
+function BlockDetailsSectionContent() {
   const blockId = useBlockId();
-  const query = useDocumentMetadataQuery(() => blockId);
+  return <DetailsSectionContent documentId={blockId} />;
+}
+
+function DetailsSectionContent(props: { documentId: string }) {
+  const query = useDocumentMetadataQuery(() => props.documentId);
   const metadata = createMemo(() => query.data);
 
   return (

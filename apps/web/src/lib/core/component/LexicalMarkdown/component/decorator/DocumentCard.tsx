@@ -1,10 +1,5 @@
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
-import {
-  isInBlock,
-  type PreviewState,
-  useBlockOwner,
-  useMaybeBlockName,
-} from '@core/block';
+import { isInBlock, type PreviewState, useMaybeBlockName } from '@core/block';
 import { useItemPreviewData } from '@core/component/ItemPreview';
 import { toast } from '@core/component/Toast/Toast';
 import { resolveBlockAlias, verifyBlockName } from '@core/constant/allBlocks';
@@ -13,7 +8,6 @@ import { canNestBlock, createBlockInstance } from '@core/orchestrator';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { matches } from '@core/util/match';
-import DotsThree from '@icon/dots-three-large.svg';
 import {
   $convertCardToMention,
   $getId,
@@ -27,6 +21,7 @@ import {
 } from '@macro-inc/lexical-core';
 import Minimize from '@phosphor/arrows-in.svg';
 import Clipboard from '@phosphor/clipboard.svg';
+import DotsThree from '@phosphor/dots-three.svg';
 import LoadingSpinner from '@phosphor/spinner.svg';
 import TrashSimple from '@phosphor/trash-simple.svg';
 import {
@@ -48,6 +43,7 @@ import {
   createMemo,
   createRoot,
   createSignal,
+  getOwner,
   Match,
   onCleanup,
   runWithOwner,
@@ -188,22 +184,24 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
     NonNullable<DocumentCardDecoratorProps['previewComponent']> | undefined
   >(undefined);
 
-  const blockOwner = useBlockOwner();
+  // Cached previews outlive individual Lexical decorator instances, so attach
+  // them to the editor lifecycle rather than the decorator lifecycle.
+  const previewOwner = wrapper?.owner ?? getOwner();
 
   const registerPreviewElement = (
     nodeId: string,
     getElement: () => JSX.Element
   ) =>
-    runWithOwner(blockOwner, () => {
-      let disposeOnBlockUnmount: () => void = () => {};
-      onCleanup(() => disposeOnBlockUnmount());
+    runWithOwner(previewOwner, () => {
+      let disposeOnOwnerCleanup: () => void = () => {};
+      onCleanup(() => disposeOnOwnerCleanup());
 
       return createRoot((dispose) => {
         const element = createMemo(getElement);
         setDocumentCardPreviewComponent(nodeId, element, dispose);
-        disposeOnBlockUnmount = () => unsetDocumentCardPreviewCache(nodeId);
+        disposeOnOwnerCleanup = () => unsetDocumentCardPreviewCache(nodeId);
         return element;
-      }, blockOwner);
+      }, previewOwner);
     });
 
   createEffect(() => {

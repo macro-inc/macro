@@ -89,7 +89,7 @@ where
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
-    PromptContext: ChannelPromptContext,
+    PromptContext: MessagePromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
     Lifecycle: AgentSessionLifecyclePublisher,
@@ -186,7 +186,7 @@ where
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
-    PromptContext: ChannelPromptContext,
+    PromptContext: MessagePromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
     Lifecycle: AgentSessionLifecyclePublisher,
@@ -289,10 +289,27 @@ where
             // an edited entry is delivered later under its original identity,
             // so rewriting (or dropping) what a Daytona session is about to
             // run is the same privilege as prompting it.
+            HarnessCommand::Deliver(DeliverAction {
+                actor,
+                action: AgentAction::RespondToPermission(_),
+                ..
+            }) => {
+                if actor.is_none() {
+                    return Err(AgentSessionError::Forbidden.into());
+                }
+            }
             HarnessCommand::Deliver(DeliverAction { actor, .. })
             | HarnessCommand::EditQueued { actor, .. }
             | HarnessCommand::RemoveQueued { actor, .. } => {
                 let session = self.sessions.get_session(session_id).await?;
+                if AgentKind::for_session(session.bot_id, &session.harness)
+                    == AgentKind::ClaudeCloud
+                    && !actor
+                        .as_ref()
+                        .is_some_and(|actor| session.owner_id.is_user(actor))
+                {
+                    return Err(AgentSessionError::Forbidden.into());
+                }
                 if AgentKind::of(session.bot_id) == AgentKind::SandboxedCoder
                     && !actor.as_ref().is_some_and(is_macro_staff)
                 {
@@ -489,36 +506,67 @@ where
     /// necessarily: entries can linger from a drain that failed, and FIFO
     /// order holds regardless. The outcome reports what happened to *this*
     /// action - still waiting, or on the wire.
+    ///
+    /// An action whose id this session already holds is the same action
+    /// arriving twice - a caller retrying a control request under the id it
+    /// named. It reports what became of the first copy instead of queueing a
+    /// second, so a retry cannot double-prompt. Only what this replica still
+    /// holds is checked: an id whose action has already finished its turn is
+    /// no longer anywhere to be seen, and accepting it again is indistinguishable
+    /// from asking for the same thing twice on purpose.
+    ///
+    /// A channel follow-up (`announce` set) that lands on a running turn
+    /// steers: it goes to the front of the queue, a stop cancels the current
+    /// turn, and the chip is posted on that follow-up immediately - so it
+    /// flushes next, ahead of anything queued before it.
     pub(super) async fn enqueue_then_dispatch(
         &self,
         session_id: AgentSessionId,
         command: DeliverAction,
     ) -> Result<CommandOutcome> {
         let action_id = command.id;
+        if self.queues.contains(session_id, action_id) {
+            return Ok(CommandOutcome::Queued);
+        }
+        if self
+            .busy
+            .turn(session_id)
+            .is_some_and(|turn| turn.action_id == action_id)
+        {
+            return Ok(CommandOutcome::Completed);
+        }
         let prompt = match &command.action {
             AgentAction::Prompt(prompt) => Some(prompt.prompt.clone()),
             _ => None,
         };
         let actor = command.actor.clone();
-        queue_result(
-            self.queues.enqueue(
-                session_id,
-                QueuedEntry {
-                    action_id,
-                    action: command.action,
-                    actor: command.actor,
-                    announce: command.announce,
-                    announced: None,
-                    created_at: chrono::Utc::now(),
-                },
-            ),
-            session_id,
-        )?;
+        let announce = command.announce.clone();
+        let action = command.action.clone();
+        let steers = announce.is_some() && self.busy.turn(session_id).is_some();
+        let entry = QueuedEntry {
+            action_id,
+            action: command.action,
+            actor: command.actor,
+            announce: command.announce,
+            announced: None,
+            created_at: chrono::Utc::now(),
+        };
+        let enqueued = if steers {
+            self.queues.enqueue_front(session_id, entry)
+        } else {
+            self.queues.enqueue(session_id, entry)
+        };
+        queue_result(enqueued, session_id)?;
         // Mentions are a fact about the prompt, not the turn: published as
         // soon as the prompt is accepted, whether it dispatches now or waits.
         if let Some(prompt) = prompt {
-            self.publish_mentions(session_id, action_id, actor, &prompt)
+            self.publish_mentions(session_id, action_id, actor.clone(), &prompt)
                 .await;
+        }
+
+        if steers {
+            self.steer_channel_follow_up(session_id, action_id, &action, actor.as_ref(), announce)
+                .await?;
         }
 
         let dispatched = if self.busy.is_pending(session_id) {
@@ -548,6 +596,58 @@ where
         } else {
             CommandOutcome::Completed
         })
+    }
+
+    /// Cancel a running turn and post the chip on the channel follow-up that
+    /// interrupted it. The follow-up is already at the front of the queue,
+    /// so it flushes as the next prompt once the cancelled turn ends.
+    ///
+    /// Stop is delivered first: the fold records it as its own control turn,
+    /// and the chip has to name the prompt turn that comes after that, not
+    /// the id the fold would have handed out before the cancel. A failed
+    /// cancel is best-effort — the prompt is already queued and still drains
+    /// when the current turn ends on its own.
+    async fn steer_channel_follow_up(
+        &self,
+        session_id: AgentSessionId,
+        action_id: AgentActionId,
+        action: &AgentAction,
+        actor: Option<&MacroUserIdStr<'static>>,
+        announce: Option<AnnounceOrigin>,
+    ) -> Result<()> {
+        if let Err(error) = self
+            .deliver(
+                session_id,
+                DeliverAction {
+                    id: AgentActionId::mint(),
+                    action: AgentAction::Stop,
+                    actor: actor.cloned(),
+                    announce: None,
+                },
+            )
+            .await
+        {
+            tracing::warn!(
+                error = ?error,
+                %session_id,
+                "failed to stop the running turn for a channel follow-up"
+            );
+        }
+
+        // Front of the queue, so the next prompt turn is this one's.
+        let prompted_message_id = self.sessions.next_prompt_message_id(session_id).await?;
+        let announcement = self
+            .announcement(session_id, action, actor, announce, prompted_message_id)
+            .await?;
+        if let Some(announcement) = announcement {
+            let announced = self.announcer.announce(announcement).await?;
+            queue_result(
+                self.queues
+                    .mark_announced(session_id, action_id, announced.message_id),
+                session_id,
+            )?;
+        }
+        Ok(())
     }
 
     /// Push the queue as it now stands to the session's viewers.
@@ -738,7 +838,7 @@ pub(super) async fn run_session_worker<
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
-    PromptContext: ChannelPromptContext,
+    PromptContext: MessagePromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
     Lifecycle: AgentSessionLifecyclePublisher,

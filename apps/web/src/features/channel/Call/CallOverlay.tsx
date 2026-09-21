@@ -15,7 +15,7 @@ import {
 import { LK_TRACK_SOURCE } from './livekit-loader';
 import { MutedMicrophoneBadge } from './MutedMicrophoneBadge';
 import { TrackView } from './TrackView';
-import { useToggleShareWithTeam } from './use-toggle-share-with-team';
+import { useActiveCallTeamShare } from './use-toggle-share-with-team';
 
 function VideoTag(props: {
   children: JSXElement;
@@ -44,7 +44,7 @@ function ParticipantTileWrapper(props: {
   return (
     <div
       class={cn(
-        'relative flex items-center justify-center rounded-lg overflow-hidden bg-message min-h-30 border border-edge-muted',
+        'relative flex items-center justify-center rounded-lg overflow-hidden bg-panel min-h-30 border border-edge-muted',
         props.isSpeaking && 'ring-inset ring-2 ring-accent',
         props.isConnecting && 'animate-pulse',
         props.class
@@ -211,7 +211,7 @@ function ScreenShareTile(props: { participant: RemoteParticipant }) {
   };
 
   return (
-    <div class="relative size-full flex items-center justify-center rounded-lg overflow-hidden bg-message border border-edge-muted">
+    <div class="relative size-full flex items-center justify-center rounded-lg overflow-hidden bg-panel border border-edge-muted">
       <TrackView track={screenTrack()} fit="contain" />
 
       <VideoTag variant="truncated">{displayName()}'s screen</VideoTag>
@@ -224,7 +224,9 @@ export function CallOverlay(props: { onLeave: () => void }) {
   const currentUserId = useUserId();
   const currentUserName = useAuthor();
   const isConnecting = () => callCtx.isConnecting();
-  const handleToggleShareWithTeam = useToggleShareWithTeam();
+  const teamShare = useActiveCallTeamShare();
+  const teamShareLocked = () =>
+    isConnecting() || !teamShare.canToggle() || teamShare.isPending();
 
   const splitPanel = useSplitPanel();
   const panelWidth = () => splitPanel?.panelSize.width ?? Infinity;
@@ -354,14 +356,14 @@ export function CallOverlay(props: { onLeave: () => void }) {
             placement="top"
             label={
               callCtx.isSharedWithTeam()
-                ? 'Everyone can view the transcript and AI summary'
-                : 'Let everyone view the transcript and AI summary'
+                ? "The creator's team can view the transcript and AI summary once the call ends"
+                : "Let the creator's team view the transcript and AI summary once the call ends"
             }
           >
             <button
               type="button"
-              onClick={() => void handleToggleShareWithTeam()}
-              disabled={isConnecting()}
+              onClick={() => void teamShare.toggle()}
+              disabled={teamShareLocked()}
               role="checkbox"
               aria-checked={callCtx.isSharedWithTeam()}
               class={cn(
@@ -369,7 +371,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
                 'border border-ink-muted/[0.08] bg-ink-muted/[0.025]',
                 'text-ink-muted/70 hover:text-ink hover:bg-ink-muted/[0.06]',
                 callCtx.isSharedWithTeam() && 'text-ink',
-                isConnecting() && 'pointer-events-none opacity-50'
+                teamShareLocked() && 'pointer-events-none opacity-50'
               )}
             >
               <InlineCheckbox checked={callCtx.isSharedWithTeam()} />

@@ -671,6 +671,8 @@ enum GraphqlDocumentSubType {
     Snippet,
     /// The skill option.
     Skill,
+    /// The initiative description option.
+    InitiativeDescription,
 }
 
 impl GraphqlDocumentSubType {
@@ -680,6 +682,7 @@ impl GraphqlDocumentSubType {
             Self::Task => DocumentSubType::Task,
             Self::Snippet => DocumentSubType::Snippet,
             Self::Skill => DocumentSubType::Skill,
+            Self::InitiativeDescription => DocumentSubType::InitiativeDescription,
         }
     }
 }

@@ -7,10 +7,10 @@
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::events::AgentSessionLifecycleEvent;
 use crate::domain::model::{
-    AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreview,
-    AgentSessionPreviewData, ChannelSession, ClaimOutcome, CreateAgentSessionParams,
-    DEFAULT_AGENT_SESSION_NAME, LogAppended, ManagerFence, ReplicaAddress, ReplicaId, SandboxSize,
-    SessionBot, SessionClaim, SessionManager, SessionStatus, StoredAgentSessionLog,
+    AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreviewData,
+    ClaimOutcome, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME, LogAppended, ManagerFence,
+    ReplicaAddress, ReplicaId, SandboxSize, SessionBot, SessionClaim, SessionManager,
+    SessionPreviewCandidate, SessionStatus, StoredAgentSessionLog, ThreadSession,
 };
 use crate::domain::ports::{
     AgentSessionLifecyclePublisher, AgentSessionLogRepo, AgentSessionRealtime, AgentSessionRepo,
@@ -129,13 +129,14 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
     async fn create(&self, params: CreateAgentSessionParams) -> Result<AgentSession> {
         let now = chrono::Utc::now();
         let session = AgentSession {
+            repo_branch: params.repo_branch,
             pull_request_url: None,
             id: params.id,
             name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
             owner_id: params.owner_id,
             thread_id: params.thread_id,
             // The in-memory repo has no comms rows to derive a channel from.
-            thread_channel_id: None,
+            thread_parent: None,
             originating_message_id: params.originating_message_id,
             bot_id: params.bot_id,
             model: params.model,
@@ -165,28 +166,29 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         &self,
         viewer: &MacroUserIdStr<'static>,
         ids: &[AgentSessionId],
-    ) -> Result<Vec<AgentSessionPreview>> {
+    ) -> Result<Vec<SessionPreviewCandidate>> {
         // No `entity_access` rows to consult here: the owner is the one grant
-        // `create` always writes, so ownership stands in for access.
+        // `create` always writes, so ownership stands in for a grant.
         let sessions = self
             .sessions
             .lock()
             .expect("in-memory session store is not poisoned");
         Ok(ids
             .iter()
-            .map(|id| match sessions.get(id) {
-                None => AgentSessionPreview::DoesNotExist(*id),
-                Some(session) if session.owner_id != *viewer => AgentSessionPreview::NoAccess(*id),
-                Some(session) => AgentSessionPreview::Access(Box::new(AgentSessionPreviewData {
+            .filter_map(|id| sessions.get(id))
+            .map(|session| SessionPreviewCandidate {
+                data: AgentSessionPreviewData {
                     bot: None,
-                    id: *id,
+                    id: session.id,
                     name: session.name.clone(),
                     owner_id: session.owner_id.clone(),
                     bot_id: session.bot_id,
                     status: session.status.clone(),
                     created_at: session.created_at,
                     modified_at: session.modified_at,
-                })),
+                },
+                has_grant: session.owner_id.is_user(viewer),
+                thread_parent: session.thread_parent.clone(),
             })
             .collect())
     }
@@ -235,11 +237,11 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         Ok(found)
     }
 
-    async fn find_for_channel(
+    async fn find_for_thread(
         &self,
         thread_id: Option<Uuid>,
         bot_id: Option<BotId>,
-    ) -> Result<ChannelSession> {
+    ) -> Result<ThreadSession> {
         let sessions = self
             .sessions
             .lock()
@@ -251,8 +253,8 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
                 && Some(session.bot_id) == bot_id
         });
         Ok(match matched {
-            Some(session) => ChannelSession::CreatedFromThread(session.clone()),
-            None => ChannelSession::None,
+            Some(session) => ThreadSession::CreatedFromThread(session.clone()),
+            None => ThreadSession::None,
         })
     }
 
@@ -266,7 +268,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             .lock()
             .expect("in-memory session store is not poisoned")
             .values()
-            .filter(|session| session.owner_id.as_ref() == owner.as_ref())
+            .filter(|session| session.owner_id.is_user(owner))
             .cloned()
             .collect();
         found.sort_by(|a, b| {
@@ -600,6 +602,49 @@ impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
         self.create_fenced_with_boundary(log, claim, None).await
     }
 
+    async fn create_batch_fenced(
+        &self,
+        entries: Vec<StoredAgentSessionLog>,
+        claim: &SessionClaim,
+    ) -> Result<Vec<StoredAgentSessionLog>> {
+        if entries.is_empty() {
+            return Ok(entries);
+        }
+        if entries
+            .iter()
+            .any(|stored| stored.entry.agent_session_id != claim.session)
+        {
+            return Err(AgentSessionError::FencedOut(claim.session));
+        }
+        let _transaction = self.log_transaction.lock().unwrap();
+        let session = claim.session;
+        {
+            let leases = self.leases.lock().unwrap();
+            if !matches!(
+                leases.get(&session), Some((holder, fence))
+                    if *holder == Some(claim.replica) && *fence == claim.fence.0
+            ) || !self.sessions.lock().unwrap().contains_key(&session)
+            {
+                return Err(AgentSessionError::FencedOut(session));
+            }
+        }
+        // Consecutive microseconds from one instant, as the Postgres store
+        // does, so a batch orders by `(created_at, id)` in append order.
+        let now = chrono::Utc::now();
+        let mut stored_entries = Vec::with_capacity(entries.len());
+        for (index, stored) in entries.into_iter().enumerate() {
+            let mut created = self.create_log(stored.entry)?;
+            created.id = stored.id;
+            created.created_at = now + chrono::Duration::microseconds(index as i64);
+            let mut logs = self.logs.lock().unwrap();
+            let rows = logs.get_mut(&session).expect("create_log inserted the row");
+            let row = rows.last_mut().expect("create_log inserted the row");
+            *row = created.clone();
+            stored_entries.push(created);
+        }
+        Ok(stored_entries)
+    }
+
     async fn create_fenced_with_boundary(
         &self,
         log: AgentSessionLog,
@@ -690,13 +735,16 @@ impl agent_fold::domain::ports::LogRepo for InMemoryAgentSessionRepo {
 pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
     let now = chrono::Utc::now();
     AgentSession {
+        repo_branch: None,
         pull_request_url: None,
         id,
         name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
-        owner_id: macro_user_id::user_id::MacroUserIdStr::try_from_email("owner@example.com")
-            .expect("valid macro user id"),
+        owner_id: model_owner::Owner::User(
+            macro_user_id::user_id::MacroUserIdStr::try_from_email("owner@example.com")
+                .expect("valid macro user id"),
+        ),
         thread_id: None,
-        thread_channel_id: None,
+        thread_parent: None,
         originating_message_id: None,
         bot_id: BotId::new_from_uuid(Uuid::from_u128(0xb07)),
         model: "claude-sonnet-5".to_string(),
@@ -870,7 +918,7 @@ impl crate::domain::pull_request::SessionPullRequestRepo for InMemoryAgentSessio
         let mut sessions = self.sessions.lock().unwrap();
         let stored = sessions
             .get_mut(&session)
-            .filter(|stored| &stored.owner_id == owner)
+            .filter(|stored| stored.owner_id.is_user(owner))
             .ok_or(AgentSessionError::Forbidden)?;
         if stored.pull_request_url.as_deref() == Some(url) {
             return Ok(false);

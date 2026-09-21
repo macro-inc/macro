@@ -7,10 +7,12 @@ import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { useUserInfoQuery } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
 import { useEmailLinksQuery } from '@queries/email/link';
+import { useGtmInviteOfferQuery } from '@queries/gtm-invite/links';
 import { useImportQuery } from '@queries/import';
 import { useMcpServersQuery } from '@queries/mcp-servers';
 import { useOnboardingQuery } from '@queries/onboarding';
 import { usePipedreamConnectionsQuery } from '@queries/pipedream-connectors';
+import type { GtmInviteOffer } from '@service-auth/generated/schemas/gtmInviteOffer';
 import { useNavigate } from '@solidjs/router';
 import { cn } from '@ui';
 import { Stepper } from '@ui/components/Stepper';
@@ -92,6 +94,8 @@ interface StepControls {
   startPremiumCheckout: (tier: 'premium') => void;
   /** Finish after checkout confirmed payment (or an existing license). */
   finishPremium: () => void;
+  /** The free-month promotion an invite-link signup holds, once known. */
+  inviteOffer: () => GtmInviteOffer | null;
 }
 
 interface ConnectorStepCopy {
@@ -222,6 +226,7 @@ function buildSteps(
       render: (controls) => (
         <PlanStep
           finishing={controls.finishing()}
+          inviteOffer={controls.inviteOffer()}
           onFree={controls.finishFree}
           onStartCheckout={controls.startPremiumCheckout}
           onPremiumPaid={controls.finishPremium}
@@ -270,6 +275,12 @@ function FlowContent() {
   // Analytics inputs; read only from handlers/effects so they never
   // suspend this boundary.
   const linksQuery = useEmailLinksQuery();
+  // An account that signed up through a GTM invite link holds a free-month
+  // promotion; the plan step shows it in place of the picker. Guarded read so
+  // a pending fetch never suspends the flow.
+  const inviteOfferQuery = useGtmInviteOfferQuery({ enabled: needsOnboarding });
+  const inviteOffer = () =>
+    inviteOfferQuery.isSuccess ? inviteOfferQuery.data : null;
   const serversQuery = useMcpServersQuery({ neverSuspend: true });
   const pipedreamQuery = usePipedreamConnectionsQuery({ neverSuspend: true });
   const analytics = useAnalytics();
@@ -346,6 +357,16 @@ function FlowContent() {
   );
   const currentStep = createMemo(() => steps()[stepIndex()]);
   const currentStepKey = createMemo(() => currentStep().key);
+  // The plan step's header follows the offer without rebuilding the steps
+  // (which would remount the step mid-flow).
+  const stepTitle = () =>
+    currentStep().key === 'plan' && inviteOffer()
+      ? 'Your first month is on us'
+      : currentStep().title;
+  const stepSubtitle = () =>
+    currentStep().key === 'plan' && inviteOffer()
+      ? 'Your invite comes with Macro Premium free for the first month. You can change plans anytime.'
+      : currentStep().subtitle;
   const userId = () => userInfoQuery.data?.userId;
 
   // The current step's hero-module state: the email module lights once any
@@ -440,6 +461,7 @@ function FlowContent() {
     finishFree: (planSkipped) => void finish.finishFree(planSkipped),
     startPremiumCheckout: (tier) => void finish.startPremiumCheckout(tier),
     finishPremium: () => void finish.finishPremium(),
+    inviteOffer,
   };
 
   // Heal a half-landed finish: NewOnboardingRedirect keys off
@@ -548,11 +570,11 @@ function FlowContent() {
                     }}
                   >
                     <h1 class="text-2xl font-semibold tracking-tight text-ink">
-                      {currentStep().title}
+                      {stepTitle()}
                     </h1>
-                    <Show when={currentStep().subtitle}>
+                    <Show when={stepSubtitle()}>
                       <p class="max-w-md text-sm leading-relaxed text-ink-muted">
-                        {currentStep().subtitle}
+                        {stepSubtitle()}
                       </p>
                     </Show>
                   </div>

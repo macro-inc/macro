@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO agent_configs (bot_id, instructions, harness, default_model, channel_scope, harness_id)\n        VALUES ($1, 'prompt', 'macrod', 'default', 'all', $2)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2a71491350e271cdae98edcab6314abc10ffdf95660b452bb67c3c9ada3e98b1"
+}

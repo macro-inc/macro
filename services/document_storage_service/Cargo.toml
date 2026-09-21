@@ -58,6 +58,7 @@ bzip2 = { workspace = true, default-features = false, features = [
 cal = { path = "../../crates/cal", features = ["axum", "outbound"] }
 call = { path = "../../crates/call" }
 channel_bots = { path = "../../crates/channel_bots" }
+messages = { path = "../../crates/messages", features = ["broker", "delivery", "inbound"] }
 channels = { path = "../../crates/channels", features = [
   "entity_mutation",
   "inbound",
@@ -148,6 +149,7 @@ mockall = { workspace = true }
 model = { path = "../../crates/model" }
 model-entity = { path = "../../crates/model-entity" }
 model_notifications = { path = "../../crates/model_notifications" }
+model_owner = { path = "../../crates/model_owner" }
 model_user = { path = "../../crates/model_user" }
 models_bulk_upload = { path = "../../crates/models_bulk_upload" }
 models_dcs = { path = "../../crates/models_dcs" }
@@ -205,6 +207,7 @@ sqs_client = { path = "../../crates/sqs_client", default-features = false, featu
   "search",
 ] }
 sqs_worker = { path = "../../crates/sqs_worker" }
+static_file_service_client = { path = "../../crates/static_file_service_client" }
 sync_service_client = { path = "../../crates/sync_service_client" }
 sync_service_hex = { path = "../../crates/sync_service", package = "sync_service_hex", features = [
   "inbound",

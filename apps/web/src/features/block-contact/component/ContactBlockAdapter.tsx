@@ -1,3 +1,6 @@
+import { CrmCopyLinkButton } from '@companies/components/CrmCopyLinkButton';
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
+import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
 import { Contact } from '@contacts/Contact/Contact';
 import { useBlockId } from '@core/block';
 
@@ -8,5 +11,14 @@ import { useBlockId } from '@core/block';
  */
 export function ContactBlockAdapter() {
   const contactId = useBlockId();
-  return <Contact contactId={contactId} />;
+  return (
+    <>
+      <SplitHeaderRight>
+        <HeaderIsland>
+          <CrmCopyLinkButton type="contact" id={contactId} />
+        </HeaderIsland>
+      </SplitHeaderRight>
+      <Contact contactId={contactId} />
+    </>
+  );
 }

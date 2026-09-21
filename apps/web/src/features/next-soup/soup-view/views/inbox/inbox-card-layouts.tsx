@@ -41,14 +41,14 @@ import ChatTextIcon from '@phosphor-icons/core/regular/chat-text.svg?component-s
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import PhoneIcon from '@phosphor-icons/core/regular/phone.svg?component-solid';
 import QuestionIcon from '@phosphor-icons/core/regular/question.svg?component-solid';
-import RobotIcon from '@phosphor-icons/core/regular/robot.svg?component-solid';
+import AgentIcon from '@phosphor-icons/core/regular/sparkle.svg?component-solid';
 import UserPlusIcon from '@phosphor-icons/core/regular/user-plus.svg?component-solid';
 import {
   PropertiesProvider,
   type PropertySaveHandler,
 } from '@property/context/PropertiesContext';
 import type { PropertyApiValues, Property as PropertyT } from '@property/types';
-import { senderFromStorageId } from '@queries/channel/message-sender';
+import { senderFromStorageId } from '@queries/messages/message-sender';
 import type { ItemEntity } from '@queries/preview';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-storage/generated/schemas';
@@ -125,6 +125,7 @@ const getNotificationSenderFallbackName = (
   const content = notification.notification_metadata.content as
     | {
         sender?: string;
+        senderDisplayName?: string | null;
         senderGithubLogin?: string;
         botName?: string;
         mentionedBy?: string;
@@ -143,6 +144,10 @@ const getNotificationSenderFallbackName = (
       return content?.mentionedBy ?? content?.botName;
     case 'channel_message_send':
       return content?.sender ?? notification.sender_id ?? undefined;
+    case 'commented_on_document':
+    case 'mentioned_in_document_comment':
+    case 'replied_to_document_comment_thread':
+      return content?.senderDisplayName ?? undefined;
     case 'github_pr_status_changed':
     case 'github_review_requested':
     case 'github_pr_comment':
@@ -286,7 +291,7 @@ const tagBubbleIcon = (tag: NotificationTag) =>
     ))
     .with('call_started', () => () => <PhoneIcon class={AVATAR_GLYPH_CLASS} />)
     .with('agent_session_settled', () => () => (
-      <RobotIcon class={AVATAR_GLYPH_CLASS} />
+      <AgentIcon class={AVATAR_GLYPH_CLASS} />
     ))
     .with('agent_session_waiting_for_input', () => () => (
       <QuestionIcon class={AVATAR_GLYPH_CLASS} />

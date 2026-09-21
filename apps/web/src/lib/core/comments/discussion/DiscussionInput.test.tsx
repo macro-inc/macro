@@ -10,6 +10,8 @@ const editor = vi.hoisted(() => ({
 }));
 const pickPhotos = vi.hoisted(() => vi.fn<() => Promise<File[] | null>>());
 const addMedia = vi.hoisted(() => vi.fn());
+const failure = vi.hoisted(() => vi.fn());
+vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure } }));
 
 vi.mock('@solid-primitives/platform', () => ({
   get isIOS() {
@@ -23,8 +25,14 @@ vi.mock('@core/mobile/nativePhotoLibrary', () => ({
 vi.mock('@core/util/platform', () => ({
   isPlatform: (platform: string) => platform === 'ios' && editor.isIOS,
 }));
-vi.mock('@core/component/LexicalMarkdown/utils/create-has-line-breaks', () => ({
-  createHasLineBreaks: () => () => false,
+vi.mock('@core/component/LexicalMarkdown/utils/create-composer-layout', () => ({
+  createComposerLayout: (
+    _editor: unknown,
+    options: { mode?: () => 'auto' | 'expanded' | 'collapsed' }
+  ) => ({
+    isCompact: () => options.mode?.() !== 'expanded',
+    hasMultilineContent: () => false,
+  }),
 }));
 vi.mock('@channel/Input/ActionButton', () => ({}));
 vi.mock('@channel/Input/context', () => ({}));
@@ -231,7 +239,8 @@ describe('discussion submission focus', () => {
         throw new Error('Send failed');
       },
     });
-    await expect(handle.send()).rejects.toThrow('Send failed');
+    expect(await handle.send()).toBe(false);
+    expect(failure).toHaveBeenCalledWith('Send failed');
     await vi.runAllTimersAsync();
     expect(document.activeElement).toBe(field);
     expect(field.value).toBe('My comment');

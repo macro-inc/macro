@@ -67,7 +67,18 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
   /** Participants, both active and historic. */
   readonly participants = this.field('participants');
 
-  /** Whether the recording is shared with the team. */
+  /**
+   * The canonical access level granted to the creator's team once the call is
+   * archived, or null when it is not shared. Calls only ever grant `'view'`;
+   * while the call is live this is null and {@link CallRecord.shareWithTeam}
+   * carries the pending toggle.
+   */
+  readonly teamShareAccessLevel = this.field('teamShareAccessLevel');
+
+  /**
+   * Whether the call is shared with the creator's team: the pending toggle
+   * while the call is live, the canonical grant once it is archived.
+   */
   readonly shareWithTeam = this.field('shareWithTeam');
 
   /** URL of the call recording, once available. */
@@ -85,6 +96,23 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
       c.storage.editCallRecord({
         path: { call_id: this.id },
         body: { customName: name ?? '' },
+      }),
+    );
+  }
+
+  /**
+   * Share the call with the creator's team (view access), or unshare it.
+   * While the call is live this sets the pending toggle any participant with
+   * edit access may change; once archived only the call's creator may change
+   * it and the API answers 403 otherwise.
+   */
+  async setTeamShare(shared: boolean): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.editCallRecord({
+        path: { call_id: this.id },
+        body: {
+          sharePermission: { teamShareAccessLevel: shared ? 'view' : null },
+        },
       }),
     );
   }

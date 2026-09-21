@@ -1,11 +1,14 @@
 use std::future::Future;
 
-use channels::domain::{
-    models::{PostMessageNotificationPolicy, PostMessageRequest, Sender, SimpleMention},
-    ports::ChannelService,
-};
+use channels::domain::models::Sender;
+use entity_access::domain::{models::EntityType, ports::EntityAccessService};
 use macro_user_id::user_id::MacroUserIdStr;
 use mention_utils::serialize::user_mention;
+use messages::domain::{
+    api::MessageCommands,
+    models::{MessageAttribution, PostMessage, PostMessageNotificationPolicy, SimpleMention},
+    service::MessageWrite,
+};
 use rootcause::{Report, prelude::ResultExt};
 use uuid::Uuid;
 
@@ -17,30 +20,54 @@ const JULIA_EMAIL: &str = "julia@macro.com";
 const TEO_EMAIL: &str = "teo@macro.com";
 
 /// The channel operation required to post a new user's welcome messages.
-pub trait SupportChannelMessageGateway: Send + Sync + 'static {
+pub trait SupportChannelMessageGateway: Send + Sync {
     /// Post a welcome message.
     fn post_message(
         &self,
         actor: Sender,
         channel_id: Uuid,
-        request: PostMessageRequest,
+        request: PostMessage,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
-impl<T> SupportChannelMessageGateway for T
-where
-    T: ChannelService,
-{
+/// Posts through the shared message commands with the support sender's current
+/// channel membership.
+pub struct AuthorizedSupportChannelMessages<A> {
+    messages: std::sync::Arc<dyn MessageCommands>,
+    access: std::sync::Arc<A>,
+}
+
+impl<A> AuthorizedSupportChannelMessages<A> {
+    /// Compose the message writer with the access service that verifies membership.
+    pub fn new(messages: std::sync::Arc<dyn MessageCommands>, access: std::sync::Arc<A>) -> Self {
+        Self { messages, access }
+    }
+}
+
+impl<A: EntityAccessService> SupportChannelMessageGateway for AuthorizedSupportChannelMessages<A> {
     async fn post_message(
         &self,
         actor: Sender,
         channel_id: Uuid,
-        request: PostMessageRequest,
+        request: PostMessage,
     ) -> Result<(), Report> {
-        ChannelService::post_message(self, actor, channel_id, request)
+        let user = actor
+            .as_user()
+            .ok_or_else(|| rootcause::report!("support messages require a user sender"))?;
+        let access = self
+            .access
+            .generate_entity_access_receipt::<MessageWrite>(
+                user,
+                None,
+                &channel_id.to_string(),
+                EntityType::Channel,
+            )
+            .await
+            .context("support sender must be a channel member")?;
+        self.messages
+            .post(access, request)
             .await
             .context("failed to post Macro support welcome message")?;
-
         Ok(())
     }
 }
@@ -84,14 +111,15 @@ If you have any feedback or find any bugs let us know here.",
         .post_message(
             Sender::new_from_user(julia),
             channel_id,
-            PostMessageRequest {
+            PostMessage {
+                attribution: MessageAttribution::Unprompted,
+                notification_policy: PostMessageNotificationPolicy::MentionsOnly,
                 content: welcome,
-                mentions,
                 thread_id: None,
+                anchor: None,
+                mentions,
                 attachments: Vec::new(),
                 nonce: None,
-                notification_policy: PostMessageNotificationPolicy::MentionsOnly,
-                triggered_by: None,
             },
         )
         .await?;

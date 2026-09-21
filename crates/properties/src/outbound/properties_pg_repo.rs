@@ -16,8 +16,9 @@ use super::{
 };
 use crate::domain::model::{
     EntityPropertiesKey, EntityPropertyInfo, EntityPropertyMutationSnapshot,
-    GetOrCreateTagDefinitionResult, PropertyDefinitionOwner, PropertyOptionReplaceOutcome,
-    PropertyOptionReplacePlan, TagPromotionOutcome, TagRemapOutcome, UpdatePropertyOptionOutcome,
+    GetOrCreatePropertyOptionResult, GetOrCreateTagDefinitionResult, PropertyDefinitionOwner,
+    PropertyOptionReplaceOutcome, PropertyOptionReplacePlan, TagPromotionOutcome, TagRemapOutcome,
+    UpdatePropertyOptionOutcome,
 };
 use crate::domain::ports::PropertiesRepo;
 use models_properties::DataType;
@@ -178,6 +179,24 @@ impl PropertiesRepo for PropertiesPgRepo {
         color: Option<String>,
     ) -> Result<PropertyOption, Self::Err> {
         property_option_queries::create_property_option(
+            &self.pool,
+            property_definition_id,
+            display_order,
+            value,
+            color,
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_or_create_property_option(
+        &self,
+        property_definition_id: Uuid,
+        display_order: i32,
+        value: PropertyOptionValue,
+        color: Option<String>,
+    ) -> Result<GetOrCreatePropertyOptionResult, Self::Err> {
+        property_option_queries::get_or_create_property_option(
             &self.pool,
             property_definition_id,
             display_order,

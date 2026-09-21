@@ -1,13 +1,13 @@
 import { useViewTabHotkeys, ViewSidebar } from '@app/components/view-shell';
 import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { AnimatedNoiseIcon } from '@icon/wide-noise';
-import { AnimatedSignalIcon } from '@icon/wide-signal';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import FileIcon from '@phosphor/file.svg';
 import PaperPlaneTiltIcon from '@phosphor/paper-plane-tilt.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
+import SignalIcon from '@phosphor/wave-sine.svg';
+import NoiseIcon from '@phosphor/waveform.svg';
 import { SidebarTagsSection } from '@property/tags/SidebarTagsSection';
 import { pressHandlers } from '@ui';
 import { type Component, For } from 'solid-js';
@@ -19,8 +19,8 @@ import type { EmailTab } from '../types';
 import { EmailInboxList } from './EmailInboxSelector';
 
 const TAB_ICONS: Record<EmailTab, Component<{ class?: string }>> = {
-  important: AnimatedSignalIcon,
-  noise: AnimatedNoiseIcon,
+  important: SignalIcon,
+  noise: NoiseIcon,
   sent: PaperPlaneTiltIcon,
   calendar: CalendarBlankIcon,
   drafts: FileIcon,
@@ -76,14 +76,14 @@ export function EmailSidebar() {
   });
 
   return (
-    <ViewSidebar.Root aria-label="Email navigation" class="gap-4">
+    <ViewSidebar.Root aria-label="Email navigation">
       <SidebarCreateHeader
         title="Email"
         label="New email"
         onCreate={() => composeEmail()}
       />
 
-      <ViewSidebar.Content class="flex flex-col gap-6">
+      <ViewSidebar.Content>
         <EmailInboxList />
 
         <EmailNavigation />

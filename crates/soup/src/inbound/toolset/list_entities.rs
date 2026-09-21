@@ -146,7 +146,7 @@ pub enum EntityItem {
         #[serde(skip_serializing_if = "Option::is_none")]
         file_type: Option<String>,
         /// The document's sub type: "task" for Macro tasks, "snippet" for snippets,
-        /// "skill" for skills.
+        /// "skill" for skills, "initiative_description" for an initiative's description.
         #[serde(skip_serializing_if = "Option::is_none")]
         sub_type: Option<String>,
         /// Tags on the document visible to the user.
@@ -262,6 +262,7 @@ impl EntityItem {
                         SoupDocumentSubType::Task { .. } => "task",
                         SoupDocumentSubType::Snippet {} => "snippet",
                         SoupDocumentSubType::Skill {} => "skill",
+                        SoupDocumentSubType::InitiativeDescription {} => "initiative_description",
                     }
                     .to_string()
                 }),

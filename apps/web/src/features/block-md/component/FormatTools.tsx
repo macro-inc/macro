@@ -12,7 +12,6 @@ import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import type { ValidHotkey } from '@core/hotkey/types';
-import DotsThreeLarge from '@icon/dots-three-large.svg';
 import {
   $isTableCellNode,
   $isTableSelection,
@@ -28,6 +27,7 @@ import TextCode from '@phosphor/code.svg';
 import CodeBlock from '@phosphor/code-block.svg';
 import CornersIn from '@phosphor/corners-in.svg';
 import CornersOut from '@phosphor/corners-out.svg';
+import DotsThreeLarge from '@phosphor/dots-three.svg';
 import ThreeDots from '@phosphor/dots-three.svg';
 import MathIcon from '@phosphor/function.svg';
 import Grid from '@phosphor/grid-four.svg';

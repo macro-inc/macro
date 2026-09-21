@@ -40,19 +40,53 @@ impl From<rootcause::Report> for SessionError {
 #[error("{0}")]
 pub struct PromptRejected(pub String);
 
-/// A prompt rejected specifically because Cursor cannot reach the session's
-/// repository — the account has not connected it to Cursor's GitHub app.
+/// A prompt rejected specifically because Cursor could not use the session's
+/// repository.
 ///
 /// A distinct context because it is the one rejection the user can act on,
 /// and acting on it happens outside Macro. `detail` keeps Cursor's own body
 /// for the logs; [`Self::user_message`] is what a person should read.
 #[derive(Debug, Error)]
-#[error("cursor cannot access {repo}: {detail}")]
+#[error("cursor cannot use {repo} ({reason}): {detail}")]
 pub struct RepositoryUnavailable {
     /// The repository the session asked Cursor to work in.
     pub repo: RepoUrl,
+    /// Which of Cursor's refusals this was.
+    pub reason: RepositoryRejection,
     /// Cursor's own error body, verbatim.
     pub detail: String,
+}
+
+/// The ways Cursor has refused a repository, as seen in production.
+///
+/// Each maps to a different sentence for the user: an inaccessible repository
+/// wants the GitHub app connected, while a branch Cursor could not verify is
+/// usually Cursor's own verification flaking — the ref exists — so the
+/// message must not send the user off to rename a branch that is fine.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RepositoryRejection {
+    /// `repository_access` / `integration_not_connected`: the account cannot
+    /// reach the repository at all.
+    Inaccessible,
+    /// `validation_error` "Failed to verify existence of branch …": Cursor's
+    /// GitHub-side check could not confirm the starting ref. Observed to be
+    /// intermittent for refs that exist, so the client retries it before
+    /// surfacing it.
+    BranchUnverifiable {
+        /// The ref the request asked to start from.
+        starting_ref: String,
+    },
+}
+
+impl std::fmt::Display for RepositoryRejection {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Inaccessible => formatter.write_str("inaccessible"),
+            Self::BranchUnverifiable { starting_ref } => {
+                write!(formatter, "could not verify branch {starting_ref}")
+            }
+        }
+    }
 }
 
 impl RepositoryUnavailable {
@@ -63,8 +97,15 @@ impl RepositoryUnavailable {
             .repo
             .github_owner_and_name()
             .unwrap_or_else(|| self.repo.as_str());
-        format!(
-            "Cursor can't access {repo}. Connect the repository to Cursor's GitHub app, then prompt again."
-        )
+        match &self.reason {
+            RepositoryRejection::Inaccessible => format!(
+                "Cursor can't access {repo}. Connect the repository to Cursor's GitHub app, then prompt again."
+            ),
+            RepositoryRejection::BranchUnverifiable { starting_ref } => format!(
+                "Cursor couldn't verify that branch '{starting_ref}' exists in {repo}, even after retrying. \
+                 This is usually transient on Cursor's side; prompt again in a moment. \
+                 If it keeps happening, check that {repo} is connected to Cursor's GitHub app."
+            ),
+        }
     }
 }

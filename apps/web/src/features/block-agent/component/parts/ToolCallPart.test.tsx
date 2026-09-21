@@ -6,6 +6,7 @@ import type { MessagePart } from '@service-agent-fold/generated/types';
 import { render } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
+import type { ToolCallContext } from './shared';
 import { ToolCallPart } from './ToolCallPart';
 
 // The chat block's tool renderer is mocked to a marker: it transitively pulls
@@ -58,15 +59,21 @@ vi.mock('./TextPart', () => ({
 // ToolCard pulls in kobalte + svg sprites and PierreDiff pulls in the diff
 // engine — the layer under test here is the per-kind card components and the
 // dispatcher's routing/common-derivation, which render for real.
-vi.mock('../../ui', () => ({
+vi.mock('../../ui', async () => ({
+  ...(await import('../../ui/types')),
   ToolCard: (props: {
     title: JSX.Element;
     subtitle?: string;
     trailing?: JSX.Element;
+    status: string;
     muted?: boolean;
     children?: JSX.Element;
   }) => (
-    <div data-muted={String(props.muted ?? false)} data-testid="tool-card">
+    <div
+      data-muted={String(props.muted ?? false)}
+      data-status={props.status}
+      data-testid="tool-card"
+    >
       <span data-testid="title">{props.title}</span>
       <span data-testid="subtitle">{props.subtitle}</span>
       <span data-testid="trailing">{props.trailing}</span>
@@ -89,15 +96,43 @@ vi.mock('../../ui', () => ({
   FoldedOutput: (props: { text: string }) => (
     <pre data-testid="output">{props.text}</pre>
   ),
+  FoldedExchange: (props: {
+    request?: unknown;
+    response?: unknown;
+    responseText?: string | null;
+    error?: string | null;
+  }) => (
+    <div data-testid="exchange">
+      <pre data-testid="request">
+        {props.request == null ? '' : JSON.stringify(props.request, null, 2)}
+      </pre>
+      <pre data-testid="response">
+        {props.response == null
+          ? (props.responseText ?? '')
+          : JSON.stringify(props.response, null, 2)}
+      </pre>
+      <pre data-testid="error">{props.error ?? ''}</pre>
+    </div>
+  ),
   FoldedPathList: (props: { paths: string[] }) => (
     <div data-testid="path-list">{props.paths.join(',')}</div>
   ),
-  Thought: (props: { text: string }) => (
-    <div data-testid="thought">{props.text}</div>
+  Thought: (props: { text: string; active?: boolean }) => (
+    <div data-active={String(props.active ?? false)} data-testid="thought">
+      {props.text}
+    </div>
   ),
 }));
 
 type ToolUsePart = Extract<MessagePart, { kind: 'tool_use' }>;
+
+/** Where a part sits in a turn that is (or is not) still running. */
+const context = (inFlight: boolean): ToolCallContext => ({
+  sessionId: 'session',
+  messageId: 'session:0:agent',
+  partIndex: 0,
+  inFlight,
+});
 
 function toolUse(
   detail: ToolUsePart['detail'],
@@ -138,7 +173,7 @@ describe('ToolCallPart routing', () => {
     );
   });
 
-  it('shows an MCP tool by its own name, without the server namespace', () => {
+  it('shows an MCP tool by its own name, with the server beside it', () => {
     const rendered = render(() => (
       <ToolCallPart
         part={{
@@ -147,12 +182,66 @@ describe('ToolCallPart routing', () => {
             acpKind: 'other',
             output: null,
             input: null,
+            result: null,
+            error: null,
           }),
           name: { kind: 'mcp', server: 'deepwiki', tool: 'ask' },
         }}
       />
     ));
     expect(rendered.getByTestId('title').textContent).toBe('ask');
+    expect(rendered.getByTestId('subtitle').textContent).toBe('deepwiki');
+  });
+
+  it('shows an MCP call as its request and response', () => {
+    const rendered = render(() => (
+      <ToolCallPart
+        part={{
+          ...toolUse({
+            kind: 'other',
+            acpKind: 'other',
+            output: null,
+            input: { documentId: '4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e46' },
+            result: { content: { text: 'Q3 plan' }, comments: [] },
+            error: null,
+          }),
+          name: { kind: 'mcp', server: 'macro', tool: 'ReadContent' },
+        }}
+      />
+    ));
+    expect(rendered.getByTestId('title').textContent).toBe('ReadContent');
+    expect(rendered.getByTestId('request').textContent).toContain(
+      '"documentId": "4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e46"'
+    );
+    expect(rendered.getByTestId('response').textContent).toContain(
+      '"text": "Q3 plan"'
+    );
+    expect(rendered.getByTestId('error').textContent).toBe('');
+  });
+
+  it('shows a failed MCP call faded, with the error as subtitle and in the body', () => {
+    const rendered = render(() => (
+      <ToolCallPart
+        part={{
+          ...toolUse(
+            {
+              kind: 'other',
+              acpKind: 'other',
+              output: null,
+              input: {},
+              result: null,
+              error: 'user declined',
+            },
+            { status: 'failed' }
+          ),
+          name: { kind: 'mcp', server: 'ops', tool: 'deploy' },
+        }}
+      />
+    ));
+    expect(rendered.getByTestId('tool-card').dataset.muted).toBe('true');
+    expect(rendered.getByTestId('subtitle').textContent).toBe('user declined');
+    expect(rendered.getByTestId('error').textContent).toBe('user declined');
+    expect(rendered.getByTestId('trailing').textContent).toBe('Failed');
   });
 
   it('renders an edit with computed +/− counts and the diff body', () => {
@@ -183,7 +272,7 @@ describe('ToolCallPart routing', () => {
     expect(rendered.getByTestId('path-list').textContent).toBe('a.rs,b.rs');
   });
 
-  it('routes unmodeled kinds to the output fallback', () => {
+  it('routes unmodeled kinds to the exchange card, with reported text as the response', () => {
     const rendered = render(() => (
       <ToolCallPart
         part={toolUse({
@@ -191,10 +280,21 @@ describe('ToolCallPart routing', () => {
           acpKind: 'custom_tool',
           output: 'raw result',
           input: null,
+          result: null,
+          error: null,
         })}
       />
     ));
-    expect(rendered.getByTestId('body').textContent).toContain('raw result');
+    expect(rendered.getByTestId('request').textContent).toBe('');
+    expect(rendered.getByTestId('response').textContent).toBe('raw result');
+  });
+
+  it('routes fetch and think to the plain output card', () => {
+    const rendered = render(() => (
+      <ToolCallPart part={toolUse({ kind: 'fetch', output: 'page body' })} />
+    ));
+    expect(rendered.getByTestId('output').textContent).toBe('page body');
+    expect(rendered.queryByTestId('exchange')).toBeNull();
   });
 });
 
@@ -212,10 +312,22 @@ describe('ToolCallPart Macro tools', () => {
     );
 
   it('renders a known Macro tool with the chat component', () => {
-    const rendered = render(() => <ToolCallPart part={readContent()} />);
+    const rendered = render(() => (
+      <ToolCallPart part={readContent()} context={context(true)} />
+    ));
     expect(rendered.getByTestId('macro-tool').textContent).toBe('ReadContent');
     expect(rendered.getByTestId('macro-tool').dataset.complete).toBe('false');
     expect(rendered.queryByTestId('tool-card')).toBeNull();
+  });
+
+  it('does not leave a call the turn cut off streaming in the chat component', () => {
+    // The turn ended with this call still `running` in the log; it settles
+    // and, with no response to show, keeps the labelled card.
+    const rendered = render(() => (
+      <ToolCallPart part={readContent()} context={context(false)} />
+    ));
+    expect(rendered.queryByTestId('macro-tool')).toBeNull();
+    expect(rendered.getByTestId('tool-card').dataset.status).toBe('completed');
   });
 
   it('passes the unwrapped output as the chat response once complete', () => {
@@ -252,7 +364,10 @@ describe('ToolCallPart Macro tools', () => {
     ));
     expect(rendered.queryByTestId('macro-tool')).toBeNull();
     expect(rendered.getByTestId('title').textContent).toBe('BrandNewTool');
-    expect(rendered.getByTestId('body').textContent).toContain(
+    expect(rendered.getByTestId('request').textContent).toContain(
+      '"anything": 1'
+    );
+    expect(rendered.getByTestId('response').textContent).toContain(
       '"result": "ok"'
     );
   });
@@ -570,6 +685,50 @@ describe('ToolCallPart subagents', () => {
     );
   });
 
+  it('shimmers only a trailing child thought while the subagent is live', () => {
+    const rendered = render(() => (
+      <ToolCallPart
+        part={toolUse(
+          {
+            kind: 'subagent',
+            title: 'Add 5+5 with Python',
+            agentType: 'general-purpose',
+            description: 'Add 5+5 with Python',
+            prompt: 'Run python and report the output.',
+            background: false,
+            children: [
+              { kind: 'thought', text: 'already decided' },
+              toolUse(
+                {
+                  kind: 'terminal',
+                  command: 'python3 -c "print(5+5)"',
+                  output: '10',
+                  exitCode: 0,
+                },
+                { id: 'child', name: 'Bash' }
+              ),
+              { kind: 'thought', text: 'still weighing this' },
+            ],
+            result: null,
+          },
+          { name: 'Agent', status: 'running' }
+        )}
+        context={{
+          sessionId: 'session',
+          messageId: 'session:0:agent',
+          partIndex: 0,
+          inFlight: true,
+        }}
+      />
+    ));
+    const rows = rendered.getAllByTestId('thought');
+    expect(rows.map((el) => el.textContent)).toEqual([
+      'already decided',
+      'still weighing this',
+    ]);
+    expect(rows.map((el) => el.dataset.active)).toEqual(['false', 'true']);
+  });
+
   it('shows a failed subagent faded with its error', () => {
     const rendered = render(() => (
       <ToolCallPart
@@ -593,6 +752,71 @@ describe('ToolCallPart subagents', () => {
     expect(rendered.getByTestId('output').textContent).toBe(
       'Subagent failed: boom'
     );
+  });
+});
+
+describe('ToolCallPart settling', () => {
+  const running = () =>
+    toolUse(
+      { kind: 'terminal', command: 'cargo test', output: null, exitCode: null },
+      { name: 'Bash', status: 'running' }
+    );
+
+  it('keeps a running call active while its turn is live', () => {
+    const rendered = render(() => (
+      <ToolCallPart part={running()} context={context(true)} />
+    ));
+    expect(rendered.getByTestId('tool-card').dataset.status).toBe('running');
+  });
+
+  it('settles a running call once its turn is over, without calling it failed', () => {
+    const rendered = render(() => (
+      <ToolCallPart part={running()} context={context(false)} />
+    ));
+    expect(rendered.getByTestId('tool-card').dataset.status).toBe('completed');
+    expect(rendered.getByTestId('tool-card').dataset.muted).toBe('false');
+    expect(rendered.getByTestId('trailing').textContent).toBe('');
+  });
+
+  it('settles a call with no turn to place it in', () => {
+    const rendered = render(() => <ToolCallPart part={running()} />);
+    expect(rendered.getByTestId('tool-card').dataset.status).toBe('completed');
+  });
+
+  it('settles a subagent and its nested children with the turn', () => {
+    const rendered = render(() => (
+      <ToolCallPart
+        part={toolUse(
+          {
+            kind: 'subagent',
+            title: 'Add 5+5 with Python',
+            agentType: 'general-purpose',
+            description: 'Add 5+5 with Python',
+            prompt: 'Run python and report the output.',
+            background: false,
+            children: [
+              toolUse(
+                {
+                  kind: 'terminal',
+                  command: 'python3 -c "print(5+5)"',
+                  output: null,
+                  exitCode: null,
+                },
+                { id: 'child', name: 'Bash', status: 'running' }
+              ),
+              { kind: 'thought', text: 'still weighing this' },
+            ],
+            result: null,
+          },
+          { name: 'Agent', status: 'running' }
+        )}
+        context={context(false)}
+      />
+    ));
+    expect(
+      rendered.getAllByTestId('tool-card').map((el) => el.dataset.status)
+    ).toEqual(['completed', 'completed']);
+    expect(rendered.getByTestId('thought').dataset.active).toBe('false');
   });
 });
 

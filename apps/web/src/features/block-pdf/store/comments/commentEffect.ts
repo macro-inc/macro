@@ -1,54 +1,52 @@
+import { usePdfCommentRealtimeBehavior } from '@block-pdf/store/commentsResource';
+import { isPdfDraftThreadId } from '@block-pdf/type/comments';
 import { createEffect, createMemo } from 'solid-js';
+import { usePdfComments } from '../../context/pdf-comments-context';
 import {
   useDeleteNewComments,
   useScrollToCommentThread,
 } from './commentOperations';
-import {
-  activeCommentThreadSignal,
-  commentsStore,
-  noScrollToActiveCommentThreadSignal,
-} from './commentStore';
 
-// remove the new temporary comment when it is no longer active
 const useDeleteNewCommentEffect = () => {
   const deleteNewComments = useDeleteNewComments();
-  const activeCommentThread = activeCommentThreadSignal.get;
+  const activeCommentThreadId = usePdfComments().activeThreadId;
 
   createEffect(() => {
-    const activeThreadId = activeCommentThread();
-    if (!activeThreadId || activeThreadId !== -1) {
+    const activeThreadId = activeCommentThreadId();
+    if (!isPdfDraftThreadId(activeThreadId)) {
       deleteNewComments();
     }
   });
 };
 
-// scroll to the active comment thread
 const useScrollToActiveThreadEffect = () => {
   const scrollToCommentThread = useScrollToCommentThread();
-  const comments = commentsStore.get;
-  const activeCommentThread = activeCommentThreadSignal.get;
-
-  const noScrollToActiveCommentThread = noScrollToActiveCommentThreadSignal.get;
-  const noScroll = createMemo(() => {
-    return noScrollToActiveCommentThread();
-  });
-  const hasMatch = createMemo(() => {
-    return comments.find((c) => c.threadId === activeCommentThread()) != null;
+  const commentsContext = usePdfComments();
+  const comments = commentsContext.all;
+  const activeCommentThreadId = commentsContext.activeThreadId;
+  const activeThreadScrollingSuppressed = commentsContext.scrollingSuppressed;
+  const hasActiveThread = createMemo(() => {
+    const activeThreadId = activeCommentThreadId();
+    return (
+      activeThreadId != null &&
+      comments().some((comment) => comment.threadId === activeThreadId)
+    );
   });
 
   createEffect(() => {
-    if (noScroll()) return;
+    if (activeThreadScrollingSuppressed()) return;
 
-    const activeThreadId = activeCommentThread();
+    const activeThreadId = activeCommentThreadId();
     if (activeThreadId == null) return;
+    if (!hasActiveThread()) return;
 
-    if (!hasMatch()) return;
-
-    scrollToCommentThread(activeThreadId);
+    if (typeof activeThreadId === 'number')
+      scrollToCommentThread(activeThreadId);
   });
 };
 
 export const usePdfCommentEffects = () => {
+  usePdfCommentRealtimeBehavior();
   useDeleteNewCommentEffect();
   useScrollToActiveThreadEffect();
 };

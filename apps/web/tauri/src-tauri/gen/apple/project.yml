@@ -2,7 +2,7 @@ name: app
 options:
   bundleIdPrefix: com.macro.app.prod
   deploymentTarget:
-    iOS: 14.0
+    iOS: 15.0
 packages:
   CallKitPlugin:
     path: ../../../callkit_plugin/ios
@@ -72,6 +72,11 @@ targets:
         NSPhotoLibraryUsageDescription: "This app needs access to your photo library to upload attachments."
         LSApplicationQueriesSchemes:
           - macro
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+          UISceneConfigurations:
+            UIWindowSceneSessionRoleApplication:
+              - UISceneConfigurationName: TaoScene
         UIBackgroundModes:
           - audio
           - voip

@@ -1,17 +1,24 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { useGetRootViewer } from '@block-pdf/signal/pdfViewer';
-import { commentsStore } from '@block-pdf/store/comments/commentStore';
-import type { PdfRootLayout } from '@block-pdf/type/comments';
-import { useBlockId } from '@core/block';
-import { type DeleteCommentInfo, isRoot } from '@core/comments/commentType';
+import { usePdfDocument } from '@block-pdf/context/pdf-document-context';
+import {
+  isPdfDraftThreadId,
+  type PdfRootLayout,
+} from '@block-pdf/type/comments';
+import {
+  type CommentId,
+  type DeleteCommentInfo,
+  isRoot,
+  type ThreadId,
+} from '@core/comments/commentType';
 import { threadMeasureContainerId } from '@core/comments/Thread';
-import { blockElementSignal } from '@core/signal/blockElement';
 import type {
   CreateCommentRequest,
   EditCommentRequest,
 } from '@service-storage/generated/schemas';
 import type { CreateCommentResponse } from '@service-storage/generated/schemas/createCommentResponse';
 import { createCallback } from '@solid-primitives/rootless';
+import { usePdfComments } from '../../context/pdf-comments-context';
+import { usePdfViewer } from '../../context/pdf-viewer-context';
 import {
   useAttachHighlightCommentResource,
   useCreateFreeCommentResource,
@@ -20,27 +27,30 @@ import {
   useDeleteCommentResource,
   useEditCommentResource,
 } from '../commentsResource';
-import { highlightsUuidMap } from '../highlight';
-import { newThreadPlaceable, useDeleteNewFreeComment } from './freeComments';
+import { useDeleteNewFreeComment, useNewThreadPlaceable } from './freeComments';
 import { useDeleteNewHighlightComment } from './highlightComments';
 
 export function useCreateComment() {
   const analytics = useAnalytics();
+  const annotations = usePdfDocument().annotations;
+  const comments = usePdfComments().all;
 
   const deleteNewComments = useDeleteNewComments();
   const createFreeComment = useCreateFreeCommentResource();
   const createHighlightComment = useCreateHighlightCommentResource();
   const attachHighlightComment = useAttachHighlightCommentResource();
   const createThreadReply = useCreateThreadReplyResource();
+  const newThreadPlaceable = useNewThreadPlaceable();
 
   return createCallback(
-    async (info: CreateCommentRequest & { threadId: number }) => {
+    async (
+      info: Omit<CreateCommentRequest, 'threadId'> & { threadId: ThreadId }
+    ) => {
       analytics.track('comment_create', { blockType: 'pdf' });
       const { threadId, text, mentions } = info;
 
-      // new thread + anchor
-      if (threadId === -1) {
-        const comment = commentsStore.get.find((c) => c.threadId === threadId);
+      if (isPdfDraftThreadId(threadId)) {
+        const comment = comments().find((c) => c.threadId === threadId);
         if (!comment) {
           console.error('Unable to comment');
           return null;
@@ -49,7 +59,7 @@ export function useCreateComment() {
         let response: CreateCommentResponse | null = null;
         switch (comment.type) {
           case 'highlight':
-            const highlight = highlightsUuidMap()?.[comment.anchorId];
+            const highlight = annotations.highlightsByUuid()[comment.anchorId];
             if (!highlight) {
               console.error('Unable to find highlight');
               return response;
@@ -70,10 +80,10 @@ export function useCreateComment() {
             }
             break;
           case 'free':
-            const newThreadPlaceable_ = newThreadPlaceable();
+            const newThreadPlaceableValue = newThreadPlaceable();
             if (
-              !newThreadPlaceable_ ||
-              newThreadPlaceable_.internalId !== comment.anchorId
+              !newThreadPlaceableValue ||
+              newThreadPlaceableValue.internalId !== comment.anchorId
             ) {
               console.error('Unable to find new thread placeable');
               return response;
@@ -81,7 +91,7 @@ export function useCreateComment() {
 
             response = await createFreeComment(
               text,
-              newThreadPlaceable_,
+              newThreadPlaceableValue,
               mentions
             );
             break;
@@ -97,7 +107,8 @@ export function useCreateComment() {
         return response;
       }
 
-      return await createThreadReply(info);
+      if (typeof threadId !== 'number') return null;
+      return await createThreadReply({ ...info, threadId });
     }
   );
 }
@@ -107,10 +118,17 @@ export function useUpdateComment() {
 
   const editComment = useEditCommentResource();
 
-  return createCallback((commentId: number, info: EditCommentRequest) => {
-    analytics.track('comment_update', { blockType: 'pdf' });
-    return editComment(commentId, info);
-  });
+  return createCallback(
+    (
+      commentId: CommentId,
+      info: Omit<EditCommentRequest, 'threadId'> & { threadId: ThreadId }
+    ) => {
+      analytics.track('comment_update', { blockType: 'pdf' });
+      if (typeof commentId !== 'number' || typeof info.threadId !== 'number')
+        return Promise.resolve(false);
+      return editComment(commentId, { ...info, threadId: info.threadId });
+    }
+  );
 }
 
 export function useDeleteComment() {
@@ -122,10 +140,11 @@ export function useDeleteComment() {
   return createCallback(async (info: DeleteCommentInfo) => {
     const commentId = info.commentId;
 
-    if (commentId === -1) {
+    if (isPdfDraftThreadId(commentId)) {
       deleteNewComments();
       return false;
     }
+    if (typeof commentId !== 'number') return false;
 
     const success = await deleteComment(commentId, {
       removeAnchorThreadOnly: info.removeAnchorThreadOnly,
@@ -149,10 +168,12 @@ export function useDeleteNewComments() {
 }
 
 export function useScrollToCommentThread() {
-  const viewer = useGetRootViewer();
-  const comments = commentsStore.get;
-  const blockElement = blockElementSignal.get;
-  const documentId = useBlockId();
+  const pdf = usePdfDocument();
+  const pdfViewer = usePdfViewer();
+  const { documentId } = pdf;
+  const rootElement = pdfViewer.rootElement;
+  const viewer = pdfViewer.root.instance;
+  const comments = usePdfComments().all;
 
   const scrollIntoView = (el: HTMLElement) => {
     el.scrollIntoView({
@@ -163,11 +184,11 @@ export function useScrollToCommentThread() {
   };
 
   return async (threadId: number) => {
-    const measureContainerId = threadMeasureContainerId(documentId, threadId);
+    const measureContainerId = threadMeasureContainerId(documentId(), threadId);
     let measureContainer = document.getElementById(measureContainerId);
-    const blockEl = blockElement();
-    if (!blockEl) {
-      console.error('Unable to find block element');
+    const pdfRoot = rootElement();
+    if (!pdfRoot) {
+      console.error('Unable to find PDF document root element');
       return;
     }
 
@@ -197,13 +218,11 @@ export function useScrollToCommentThread() {
         }
       });
 
-      // If the element is already in the DOM, start observing it immediately
-      // otherwise, listen for it to be added to the DOM
       if (measureContainer) {
         intersectionObserver.observe(measureContainer);
         scrollIntoView(measureContainer);
       } else {
-        mutationObserver.observe(blockEl, {
+        mutationObserver.observe(pdfRoot, {
           childList: true,
           subtree: true,
         });
@@ -214,12 +233,11 @@ export function useScrollToCommentThread() {
           const viewer_ = viewer();
           if (!viewer_) return;
 
-          const rootComment = comments
+          const rootComment = comments()
             .filter(isRoot)
             .find((c) => c.threadId === threadId) as PdfRootLayout | undefined;
           if (!rootComment) return;
 
-          // if the comment is already in the viewport, we don't need to scroll
           if (measureContainer) return;
 
           mutationObserver.disconnect();
@@ -234,7 +252,7 @@ export function useScrollToCommentThread() {
             scrollIntoView(measureContainer);
             intersectionObserver.observe(measureContainer);
           } else {
-            mutationObserver.observe(blockEl, {
+            mutationObserver.observe(pdfRoot, {
               childList: true,
               subtree: true,
             });
@@ -242,7 +260,6 @@ export function useScrollToCommentThread() {
         }, 250);
       }
 
-      // automatically clean up after a timeout period
       setTimeout(() => {
         intersectionObserver.disconnect();
         mutationObserver.disconnect();

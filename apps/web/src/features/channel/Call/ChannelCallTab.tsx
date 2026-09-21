@@ -1,7 +1,7 @@
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
 import { UserGroup } from '@core/component/UserGroup';
 import { getDisplayName, tryMacroId } from '@core/user';
-import PhoneIcon from '@icon/wide-call.svg';
+import PhoneIcon from '@phosphor/phone-call.svg';
 import { useActiveCallQuery, useCallRecordQuery } from '@queries/call/call';
 import { Button } from '@ui';
 import { type Accessor, createMemo, Match, Show, Switch } from 'solid-js';
@@ -108,13 +108,13 @@ export function ChannelCallTab(props: {
     onLeave: () => setActiveTab(getCallLeaveTab()),
   });
 
-  const handleRetry = async () => {
+  async function handleJoin() {
     try {
       await call.joinCall();
-    } catch {
-      // joinError is set inside useCall join mutation onError
+    } catch (error) {
+      console.error('Failed to join call', error);
     }
-  };
+  }
 
   return (
     <Switch
@@ -122,7 +122,7 @@ export function ChannelCallTab(props: {
         <JoinCallEmptyState
           channelId={props.channelId}
           isJoining={call.isJoining()}
-          onJoin={() => void call.joinCall()}
+          onJoin={handleJoin}
         />
       }
     >
@@ -139,7 +139,7 @@ export function ChannelCallTab(props: {
           </Show>
           <button
             type="button"
-            onClick={handleRetry}
+            onClick={handleJoin}
             disabled={call.isJoining()}
             class="rounded-lg bg-surface-2 px-4 py-2 text-sm text-ink hover:bg-surface-3 transition-colors disabled:opacity-50 disabled:pointer-events-none"
           >

@@ -232,6 +232,17 @@ impl BotService for TestBotService {
         unimplemented!()
     }
 
+    async fn channel_message_access(
+        &self,
+        _bot_id: BotId,
+        _channel_id: Uuid,
+    ) -> Result<
+        entity_access::domain::models::EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        BotError,
+    > {
+        unimplemented!()
+    }
+
     async fn ensure_bot_in_channel(
         &self,
         _bot_id: BotId,

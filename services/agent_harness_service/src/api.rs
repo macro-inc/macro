@@ -5,10 +5,15 @@
 
 use std::time::Duration;
 
+use agent_changes::domain::service::AgentChanges;
+use agent_changes::inbound::axum_router::{AgentChangesRouterState, agent_changes_router};
 use agent_egress::domain::service::EgressService;
 use agent_egress::inbound::axum_router::{EgressRouterState, egress_router};
 use agent_harness::domain::model_load::AgentModelsService;
 use agent_harness::inbound::model_load::{AgentModelsRouterState, agent_models_router};
+use agent_harness::inbound::repositories::{
+    AgentRepositoriesRouterState, agent_repositories_router,
+};
 use agent_harness::inbound::runtime_gateway::{RuntimeGatewayState, runtime_gateway_router};
 use agent_session::domain::ports::{
     AgentSessionNotificationRecipient, BotDirectory, SessionOpener,
@@ -56,15 +61,20 @@ fn health_router(ready: tokio::sync::watch::Receiver<bool>) -> Router {
 }
 
 /// All route state served by the public agent-harness HTTP listener.
-pub struct ApiStates<T, R, Opener, Bots, Access, Auth, Models> {
+pub struct ApiStates<T, R, Opener, Bots, Access, Auth, Models, Changes> {
     read: AgentSessionRouterState<T, Access, Auth>,
     control: AgentSessionControlState<R, Access, Auth>,
     create: CreateSessionState<Opener, Bots, Auth>,
     gateway: RuntimeGatewayState<Auth>,
     models: AgentModelsRouterState<Models, Auth>,
+    repositories: AgentRepositoriesRouterState<Auth>,
+    claude_auth: Router,
+    changes: AgentChangesRouterState<Changes, Access, Auth>,
 }
 
-impl<T, R, Opener, Bots, Access, Auth, Models> ApiStates<T, R, Opener, Bots, Access, Auth, Models> {
+impl<T, R, Opener, Bots, Access, Auth, Models, Changes>
+    ApiStates<T, R, Opener, Bots, Access, Auth, Models, Changes>
+{
     /// Group the independently constructed route states for the HTTP server.
     pub fn new(
         read: AgentSessionRouterState<T, Access, Auth>,
@@ -72,6 +82,8 @@ impl<T, R, Opener, Bots, Access, Auth, Models> ApiStates<T, R, Opener, Bots, Acc
         create: CreateSessionState<Opener, Bots, Auth>,
         gateway: RuntimeGatewayState<Auth>,
         models: AgentModelsRouterState<Models, Auth>,
+        repositories: AgentRepositoriesRouterState<Auth>,
+        changes: AgentChangesRouterState<Changes, Access, Auth>,
     ) -> Self {
         Self {
             read,
@@ -79,7 +91,16 @@ impl<T, R, Opener, Bots, Access, Auth, Models> ApiStates<T, R, Opener, Bots, Acc
             create,
             gateway,
             models,
+            repositories,
+            claude_auth: Router::new(),
+            changes,
         }
+    }
+
+    /// Attach the optional owner-authenticated Claude demo connection routes.
+    pub fn with_claude_auth(mut self, router: Router) -> Self {
+        self.claude_auth = router;
+        self
     }
 }
 
@@ -114,8 +135,8 @@ where
 }
 
 /// Build the router and serve it until the process is asked to stop.
-pub async fn setup_and_serve<T, R, Opener, Bots, Access, Auth, Models>(
-    states: ApiStates<T, R, Opener, Bots, Access, Auth, Models>,
+pub async fn setup_and_serve<T, R, Opener, Bots, Access, Auth, Models, Changes>(
+    states: ApiStates<T, R, Opener, Bots, Access, Auth, Models, Changes>,
     runtime_commands_ready: tokio::sync::watch::Receiver<bool>,
     port: u16,
     shutdown: impl Future<Output = ()> + Send + 'static,
@@ -128,6 +149,7 @@ where
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
     Models: AgentModelsService,
+    Changes: AgentChanges,
 {
     let inner = api_router(states)
         .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
@@ -152,8 +174,8 @@ where
         .context("agent harness service http failed")
 }
 
-fn api_router<T, R, Opener, Bots, Access, Auth, Models>(
-    states: ApiStates<T, R, Opener, Bots, Access, Auth, Models>,
+fn api_router<T, R, Opener, Bots, Access, Auth, Models, Changes>(
+    states: ApiStates<T, R, Opener, Bots, Access, Auth, Models, Changes>,
 ) -> Router
 where
     T: AgentSessionService,
@@ -163,14 +185,18 @@ where
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
     Models: AgentModelsService,
+    Changes: AgentChanges,
 {
     let agent_sessions = agent_session_read_router(states.read.clone())
         .merge(agent_session_control_router(states.control))
-        .merge(agent_session_create_router(states.create));
+        .merge(agent_session_create_router(states.create))
+        .merge(agent_changes_router(states.changes));
     Router::new()
         .nest("/agent-sessions", agent_sessions)
         .merge(agent_sandbox_size_router(states.read))
         .merge(agent_models_router(states.models))
+        .merge(agent_repositories_router(states.repositories))
+        .merge(states.claude_auth)
         .nest("/runtime", runtime_gateway_router(states.gateway))
 }
 

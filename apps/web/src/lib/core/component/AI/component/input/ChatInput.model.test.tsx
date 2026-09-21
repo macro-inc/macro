@@ -108,8 +108,14 @@ vi.mock('@service-cognition/client', () => ({
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
 }));
-vi.mock('@core/component/LexicalMarkdown/utils/create-has-line-breaks', () => ({
-  createHasLineBreaks: () => () => false,
+vi.mock('@core/component/LexicalMarkdown/utils/create-composer-layout', () => ({
+  createComposerLayout: (
+    _editor: unknown,
+    options: { mode?: () => 'auto' | 'expanded' | 'collapsed' }
+  ) => ({
+    isCompact: () => options.mode?.() !== 'expanded',
+    hasMultilineContent: () => false,
+  }),
 }));
 vi.mock('@core/auth/license', () => ({ useHasPaidAccess: () => () => true }));
 vi.mock('@core/component/AI/signal/attachment', () => ({
@@ -147,13 +153,11 @@ vi.mock('@core/mobile/virtualKeyboard', () => ({
 vi.mock('@core/mobile/useTouchOutsideToDismissKeyboard', () => ({
   useTouchOutsideToDismissKeyboard: () => {},
 }));
-vi.mock('@core/util/getItemBlockName', () => ({}));
 vi.mock('@core/util/upload', () => ({}));
 vi.mock('@solid-primitives/resize-observer', () => ({
   createElementSize: () => ({ width: 44, height: 20 }),
 }));
 vi.mock('./Attachment', () => ({ AttachmentList: () => null }));
-vi.mock('./ChatAttachMenu', () => ({ ChatAttachMenu: () => null }));
 vi.mock('./useAiDataConsent', () => ({
   useAiDataConsentGate: () => ({ ConsentDialog: () => null }),
 }));

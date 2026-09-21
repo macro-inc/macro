@@ -29,6 +29,31 @@ vi.mock('./codex/views/CodexHarness', () => ({
   CodexHarness: () => <div data-testid="codex-harness" />,
 }));
 
+const claudeFlag = vi.hoisted(() => ({ enabled: true, source: vi.fn() }));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: (flag: { key: string }) => {
+    expect(flag.key).toBe('claude-cloud');
+    return () => ({ enabled: claudeFlag.enabled });
+  },
+}));
+
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => 'macro|demo@example.com',
+}));
+vi.mock('@queries/claude-auth/connection', () => ({
+  useClaudeConnectionSource: () => {
+    claudeFlag.source();
+    return {
+      status: () => ({ enabled: true, connected: false, ephemeral: true }),
+      failed: () => false,
+      begin: vi.fn(),
+      complete: vi.fn(),
+      disconnect: vi.fn(),
+      refresh: vi.fn(),
+    };
+  },
+}));
+
 const mocks = vi.hoisted(() => ({
   status: {
     isSuccess: true,
@@ -194,13 +219,28 @@ beforeEach(() => {
 
 describe('Harness', () => {
   it.each([false, true])(
-    'gates Codex settings on rollout access %s',
+    'offers Codex settings even when rollout access is %s',
     (enabled) => {
       codexAccess.enabled = enabled;
       render(() => <Harness />);
-      expect(screen.queryByTestId('codex-harness') !== null).toBe(enabled);
+      expect(screen.getByTestId('codex-harness')).toBeTruthy();
     }
   );
+
+  it('offers Claude connection when the rollout flag is off', () => {
+    claudeFlag.enabled = false;
+    claudeFlag.source.mockClear();
+    try {
+      render(() => <Harness />);
+      expect(
+        screen.queryByRole('region', { name: 'Claude Cloud connection' })
+      ).toBeTruthy();
+      expect(claudeFlag.source).toHaveBeenCalled();
+      expect(screen.getByRole('heading', { name: 'Cursor' })).toBeTruthy();
+    } finally {
+      claudeFlag.enabled = true;
+    }
+  });
 
   it.each(['success', 'error'] as const)(
     'keeps settings visible while Cursor models load and after %s',
@@ -278,11 +318,17 @@ describe('Harness', () => {
     }
   );
 
-  it('shows the three configurable harness options', () => {
+  it('shows Claude with the Anthropic logo above Cursor in the harness list', () => {
     render(() => <Harness />);
 
     expect(screen.getByRole('heading', { name: 'In-memory' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Cursor' })).toBeTruthy();
+    const claude = screen.getByRole('heading', { name: 'Claude Cloud' });
+    const cursor = screen.getByRole('heading', { name: 'Cursor' });
+    expect(
+      claude.compareDocumentPosition(cursor) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(screen.getByLabelText('Anthropic')).toBeTruthy();
     expect(
       screen.getByRole('heading', { name: 'Bring your own agent' })
     ).toBeTruthy();
