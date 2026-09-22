@@ -2,6 +2,8 @@
 
 use std::sync::Arc;
 
+use futures::FutureExt;
+
 use super::*;
 use crate::domain::models::MAX_ACTION_TIME;
 
@@ -103,6 +105,12 @@ impl<R: EventRunRepository, A: CurrentOwnerAccess, E: EventExecutor> EventRunDis
             Ok(run) => run,
             Err(reason) => return self.cancel(&pending, reason).await,
         };
+        let mut cancellation = std::pin::pin!(cancellation);
+        // Authorization may have been in flight when intake stopped. Do not
+        // start a fresh claim after shutdown; already-started claims are terminal.
+        if cancellation.as_mut().now_or_never().is_some() {
+            return Ok(DispatchResult::NotStarted);
+        }
         let started_at = Utc::now();
         let Some(run) = self
             .repository

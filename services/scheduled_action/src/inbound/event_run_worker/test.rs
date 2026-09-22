@@ -9,6 +9,8 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
+const CONCURRENT_RUNS: u16 = 2;
+
 #[derive(Clone)]
 struct Service {
     state: Arc<State>,
@@ -78,7 +80,13 @@ async fn bounded_batches_continue_after_failed_run() {
     let service = service(25, false);
     tokio::time::timeout(
         Duration::from_secs(2),
-        run(service.clone(), service.shutdown.clone(), Duration::ZERO),
+        run(
+            service.clone(),
+            service.shutdown.clone(),
+            TaskTracker::new(),
+            PageSize::try_from(CONCURRENT_RUNS).unwrap(),
+            Duration::ZERO,
+        ),
     )
     .await
     .unwrap();
@@ -87,16 +95,19 @@ async fn bounded_batches_continue_after_failed_run() {
         service.state.maximum.load(Ordering::SeqCst),
         usize::from(CONCURRENT_RUNS)
     );
-    assert_eq!(service.state.maintenance.load(Ordering::SeqCst), 3);
+    assert_eq!(service.state.maintenance.load(Ordering::SeqCst), 13);
     assert_eq!(service.state.active.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]
 async fn shutdown_signals_active_runs_and_awaits_completion_without_claiming_more() {
     let service = service(25, true);
+    let executions = TaskTracker::new();
     let worker = tokio::spawn(run(
         service.clone(),
         service.shutdown.clone(),
+        executions.clone(),
+        PageSize::try_from(CONCURRENT_RUNS).unwrap(),
         Duration::ZERO,
     ));
     tokio::time::timeout(Duration::from_secs(2), async {
@@ -106,6 +117,7 @@ async fn shutdown_signals_active_runs_and_awaits_completion_without_claiming_mor
     })
     .await
     .unwrap();
+    assert_eq!(executions.len(), usize::from(CONCURRENT_RUNS));
     service.shutdown.cancel();
     tokio::time::timeout(Duration::from_secs(2), worker)
         .await
@@ -116,5 +128,6 @@ async fn shutdown_signals_active_runs_and_awaits_completion_without_claiming_mor
         usize::from(CONCURRENT_RUNS)
     );
     assert_eq!(service.state.active.load(Ordering::SeqCst), 0);
-    assert_eq!(service.state.pending.lock().unwrap().len(), 15);
+    assert_eq!(service.state.pending.lock().unwrap().len(), 23);
+    assert!(executions.is_empty());
 }

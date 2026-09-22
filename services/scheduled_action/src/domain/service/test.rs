@@ -210,6 +210,35 @@ async fn default_gate_rejects_event_creation_and_transition_but_allows_cron() {
 }
 
 #[tokio::test]
+async fn gate_off_rejects_enabling_an_existing_event_action() {
+    let enabled = service(true);
+    let mut config = configuration(true);
+    config.enabled = false;
+    let action = enabled
+        .create_action(CreateScheduledAction::Canonical(config.clone()), user())
+        .await
+        .unwrap();
+    let disabled = TestService::new(
+        enabled.repo.clone(),
+        enabled.executor.clone(),
+        enabled.dispatcher_tx.clone(),
+    )
+    .with_event_management_enabled(false);
+    config.enabled = true;
+    assert_policy(
+        disabled
+            .update_action(
+                &action.id.unwrap(),
+                UpdateScheduledAction::Canonical(config),
+                user(),
+            )
+            .await,
+        ActionPolicyError::EventManagementDisabled,
+    );
+    assert!(!enabled.repo.actions.lock().unwrap()[0].enabled);
+}
+
+#[tokio::test]
 async fn cron_without_future_firings_is_bad_input() {
     let svc = service(true);
     let mut input = configuration(false);

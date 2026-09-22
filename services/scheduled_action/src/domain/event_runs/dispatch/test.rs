@@ -13,6 +13,22 @@ async fn dispatch(
 }
 
 #[tokio::test]
+async fn shutdown_before_claim_leaves_work_pending() {
+    let (repo, access, executor, pending) = setup();
+    let service = EventDispatchService::new(repo.clone(), access, executor.clone());
+    assert_eq!(
+        service
+            .dispatch(pending, std::future::ready(()))
+            .await
+            .unwrap(),
+        DispatchResult::NotStarted
+    );
+    assert!(repo.0.lock().unwrap().started.is_empty());
+    assert_eq!(repo.0.lock().unwrap().pending.len(), 1);
+    assert!(executor.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn access_revoked_after_admission_cancels_without_execution() {
     let (repo, access, executor, pending) = setup();
     *access.denied.lock().unwrap() = true;
