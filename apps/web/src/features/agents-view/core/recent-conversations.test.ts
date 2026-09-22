@@ -46,6 +46,19 @@ const kindOf = (botId: string | undefined) =>
   (botId && KINDS[botId]) || 'agent';
 
 describe('selectRecentAgentConversations', () => {
+  it('searches the visible fallback title for each conversation type', () => {
+    const unnamedSession = session('session', { name: '' });
+    const unnamedChat = chat('chat', { name: '' });
+    const rows = [unnamedSession, unnamedChat];
+
+    expect(selectRecentAgentConversations(rows, OWNER, 'conversation')).toEqual(
+      [unnamedSession]
+    );
+    expect(selectRecentAgentConversations(rows, OWNER, 'chat')).toEqual([
+      unnamedChat,
+    ]);
+  });
+
   it('keeps only the owner’s conversations, newest first, matching the search', () => {
     const mine = session('a', { updatedAt: '2026-09-15T08:00:00Z' });
     const newer = chat('b', { updatedAt: '2026-09-15T11:00:00Z' });

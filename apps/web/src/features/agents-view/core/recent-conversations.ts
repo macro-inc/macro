@@ -56,7 +56,14 @@ export function selectRecentAgentConversations(
     .filter(
       (entity) =>
         !query ||
-        (entity.name || 'Untitled chat').toLocaleLowerCase().includes(query)
+        (
+          entity.name ||
+          (entity.type === 'agent_session'
+            ? 'Untitled conversation'
+            : 'Untitled chat')
+        )
+          .toLocaleLowerCase()
+          .includes(query)
     )
     .toSorted(
       (left, right) =>

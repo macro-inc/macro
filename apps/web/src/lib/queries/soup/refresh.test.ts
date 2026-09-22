@@ -93,3 +93,20 @@ it('leaves unrelated loaded REST lists alone for a known session', async () => {
   expect(unrelated).not.toHaveBeenCalled();
   expect(client.getQueryData(otherKey)).toBe('already loaded');
 });
+
+it('retries a real query failure so persisted metadata can replace the cached row', async () => {
+  const queryFn = vi.fn(async () => 'updated branch');
+  queryFn.mockRejectedValueOnce(new Error('temporary outage'));
+  const observer = new QueryObserver(client, {
+    queryKey: key,
+    queryFn,
+    initialData: 'old branch',
+    staleTime: Infinity,
+  });
+  unsubscribers.push(observer.subscribe(() => {}));
+
+  await refreshAgentSessionLists('session');
+
+  expect(queryFn).toHaveBeenCalledTimes(2);
+  expect(client.getQueryData(key)).toBe('updated branch');
+});
