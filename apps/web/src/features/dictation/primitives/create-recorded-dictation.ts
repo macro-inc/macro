@@ -133,7 +133,7 @@ export function createRecordedDictation(options: {
     attempt = 0;
     setVolumeHistory([]);
     setPhase('starting');
-    setMessage('Audio is sent to OpenAI Whisper only when you confirm.');
+    setMessage('');
     const current = options.createRecorder({
       onLevel: (level) => {
         if (recorder === current && phase() === 'listening')
