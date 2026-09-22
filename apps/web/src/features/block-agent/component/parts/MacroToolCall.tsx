@@ -3,8 +3,8 @@
  * server, or called natively by Macro's own agent.
  *
  * Successful calls reuse their registered result renderer and its disclosure.
- * Running, stopped, failed, and unsupported calls keep the compact tool row
- * with a readable exchange, without wrapping a second caret around rich results.
+ * Running, stopped, failed, and unsupported calls keep a summary-only row.
+ * Only registered result renderers supply disclosures; raw payloads stay hidden.
  */
 
 import {
@@ -26,7 +26,7 @@ import {
 } from '@service-cognition/generated/tools/tool';
 import { createMemo, ErrorBoundary, type JSX, Show, Suspense } from 'solid-js';
 import { match } from 'ts-pattern';
-import { FoldedExchange, ToolCard } from '../../ui';
+import { ToolCard } from '../../ui';
 import type { ToolCallCommon, ToolCallContext } from './shared';
 
 type MacroDetail = Extract<ToolDetail, { kind: 'macro' }>;
@@ -97,18 +97,7 @@ export function MacroToolCall(props: {
             ? resultSummary(response())
             : undefined)
       }
-      hasContent={
-        props.detail.input != null ||
-        props.detail.output != null ||
-        Boolean(props.detail.error)
-      }
-    >
-      <FoldedExchange
-        request={props.detail.input}
-        response={props.detail.output}
-        error={error()}
-      />
-    </ToolCard>
+    />
   );
   const canRenderResults = () =>
     props.common.status === 'completed' &&

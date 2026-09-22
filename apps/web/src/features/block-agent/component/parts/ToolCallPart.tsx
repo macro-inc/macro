@@ -4,12 +4,13 @@
  *
  * The fold has already decided what every call is: a coding-harness tool by
  * kind (terminal, edit, read, ...), a Macro tool by name, a user tool the
- * user finishes, or a delegated subagent. This is a pure match over that
- * closed vocabulary — nothing here reads ACP, parses raw JSON, or guesses a
- * tool from its title.
+ * user finishes, or a delegated subagent. Generic calls explicitly addressed
+ * to Macro's MCP server may also use a registered renderer, after that renderer
+ * validates the payload. External servers never select Macro UI by name alone.
  */
 
-import { type JSX, Match, Switch } from 'solid-js';
+import { hasToolRenderer } from '@core/component/AI/component/tool/handler';
+import { type JSX, Match, Show, Switch } from 'solid-js';
 import { settledToolStatus } from '../../ui';
 import { DisplayResultsToolCall } from './DisplayResultsToolCall';
 import { EditToolCall } from './EditToolCall';
@@ -97,7 +98,27 @@ export function ToolCallPart(props: {
         {(detail) => <OutputToolCall detail={detail()} common={common()} />}
       </Match>
       <Match when={props.part.detail.kind === 'other' && props.part.detail}>
-        {(detail) => <ExchangeToolCall detail={detail()} common={common()} />}
+        {(detail) => (
+          <Show
+            when={
+              props.part.name.kind === 'mcp' &&
+              props.part.name.server === 'macro' &&
+              hasToolRenderer(props.part.name.tool)
+            }
+            fallback={<ExchangeToolCall detail={detail()} common={common()} />}
+          >
+            <MacroToolCall
+              detail={{
+                kind: 'macro',
+                input: detail().input,
+                output: detail().result ?? detail().output,
+                error: detail().error,
+              }}
+              common={common()}
+              context={props.context}
+            />
+          </Show>
+        )}
       </Match>
       <Match when={props.part.detail.kind === 'macro' && props.part.detail}>
         {(detail) => (

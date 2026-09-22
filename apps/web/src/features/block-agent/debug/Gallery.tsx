@@ -542,8 +542,8 @@ const FIXTURE_MESSAGE: FoldedMessage = {
         error: null,
       },
     },
-    // An MCP call the fold has no model for - a Cursor session reaching
-    // Macro's server, whose exchange is the request and response JSON.
+    // A Macro MCP call whose payload does not fit the registered renderer:
+    // keep its summary visible without exposing the raw exchange.
     {
       kind: 'tool_use',
       id: 'demo-mcp-macro',

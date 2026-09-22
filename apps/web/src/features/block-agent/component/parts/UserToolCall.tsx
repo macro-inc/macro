@@ -59,9 +59,8 @@ function outcomeLabel(outcome: UserToolOutcome): string {
 }
 
 /**
- * The draft, typed by the tool's own schema, when the input fits it. A
- * draft that does not - a tool this block has no view for, or arguments the
- * schema rejects - shows as JSON instead.
+ * The draft, typed by the tool's own schema, when the input fits it.
+ * Unsupported tools and rejected arguments remain summary-only rows.
  */
 function typedDraft(
   common: ToolCallCommon,
@@ -105,28 +104,29 @@ export function UserToolCall(props: {
       subtitle={draft() && draftSubtitle(draft()!)}
       muted={props.common.muted || failure() !== undefined}
       trailing={props.common.trailing ?? outcomeLabel(outcome())}
+      hasContent={draft() !== undefined}
     >
-      <Switch
-        fallback={
-          <FoldedOutput text={JSON.stringify(props.detail.input, null, 2)} />
-        }
-      >
-        <Match when={failure()}>
-          {(message) => <FoldedOutput text={message()} />}
-        </Match>
-        <Match when={draft()?.name === 'SendEmail' && draft()}>
-          {(tool) => (
-            <EmailDraft
-              email={tool().data as SendEmail}
-              inFlight={props.context?.inFlight ?? false}
-            />
-          )}
-        </Match>
-        <Match when={draft()?.name === 'CreateCalendarEvent' && draft()}>
-          {(tool) => <EventDraft event={tool().data as CreateCalendarEvent} />}
-        </Match>
-      </Switch>
-      <OutcomeLink outcome={outcome()} />
+      <Show when={draft()}>
+        <Switch>
+          <Match when={failure()}>
+            {(message) => <FoldedOutput text={message()} />}
+          </Match>
+          <Match when={draft()?.name === 'SendEmail' && draft()}>
+            {(tool) => (
+              <EmailDraft
+                email={tool().data as SendEmail}
+                inFlight={props.context?.inFlight ?? false}
+              />
+            )}
+          </Match>
+          <Match when={draft()?.name === 'CreateCalendarEvent' && draft()}>
+            {(tool) => (
+              <EventDraft event={tool().data as CreateCalendarEvent} />
+            )}
+          </Match>
+        </Switch>
+        <OutcomeLink outcome={outcome()} />
+      </Show>
     </ToolCard>
   );
 }
