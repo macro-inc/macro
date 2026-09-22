@@ -3804,9 +3804,13 @@
       "services/docx_unzip_handler"
     ],
     "dynamodb_client": [
+      "crates/bot_id",
+      "crates/cowlike",
       "crates/dynamodb_client",
       "crates/macro_aws_config",
       "crates/macro_env_var",
+      "crates/macro_user_id",
+      "crates/model_owner",
       "crates/models_bulk_upload",
       "crates/s3_key",
       "crates/workspace-hack"
@@ -7766,6 +7770,10 @@
       "crates/workspace-hack"
     ],
     "s3_key": [
+      "crates/bot_id",
+      "crates/cowlike",
+      "crates/macro_user_id",
+      "crates/model_owner",
       "crates/s3_key",
       "crates/workspace-hack"
     ],

@@ -5789,7 +5789,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "unicode-segmentation",
- "urlencoding",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -5818,6 +5817,7 @@ dependencies = [
  "macro_sha_count_client",
  "macro_uuid",
  "model",
+ "model_owner",
  "redis",
  "s3_client",
  "s3_key",
@@ -14692,6 +14692,7 @@ name = "s3_key"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "model_owner",
  "urlencoding",
  "workspace-hack",
 ]
