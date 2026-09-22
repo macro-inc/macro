@@ -115,7 +115,6 @@ export function TaskList(props: TaskListProps) {
     entity: EntityData,
     options: {
       openInNewSplit?: boolean;
-      replacePreview?: boolean;
       mergeHistory?: boolean;
     } = {}
   ) {
@@ -543,8 +542,6 @@ export function TaskList(props: TaskListProps) {
 
                                       openEntity(project, {
                                         openInNewSplit,
-                                        replacePreview:
-                                          event.altKey && !openInNewSplit,
                                       });
                                     }}
                                     onChecked={(selected, shiftKey) =>

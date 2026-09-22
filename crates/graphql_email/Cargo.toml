@@ -8,6 +8,7 @@ publish = false
 async-graphql = { workspace = true, features = ["dataloader"] }
 chrono = { workspace = true }
 email = { path = "../email", default-features = false, features = ["ports"] }
+email_utils = { path = "../email_utils" }
 entity_access = { path = "../entity_access", default-features = false }
 futures = { workspace = true }
 graphql_common = { path = "../graphql_common" }

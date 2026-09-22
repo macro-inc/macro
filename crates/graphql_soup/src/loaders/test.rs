@@ -18,6 +18,7 @@ use item_filters::{
         project::ProjectLiteral,
     },
 };
+use model_owner::Owner;
 use models_pagination::{Paginated, PaginatedCursor};
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_soup::{document::SoupDocument, item::SoupItem};
@@ -183,7 +184,7 @@ fn document_named(id: Uuid, name: impl Into<String>) -> SoupItem<()> {
     SoupItem::Document(SoupDocument {
         id,
         document_version_id: 1,
-        owner_id: user("macro|owner@example.com"),
+        owner_id: Owner::from_principal_str("macro|owner@example.com").expect("valid owner"),
         name: name.into(),
         file_type: None,
         sha: None,

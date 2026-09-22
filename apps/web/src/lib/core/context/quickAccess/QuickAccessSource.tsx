@@ -33,9 +33,11 @@ import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
 import { formatDocumentName } from '@service-storage/util/filename';
 import { createLazyMemo } from '@solid-primitives/memo';
+import { leadingAndTrailing, throttle } from '@solid-primitives/scheduled';
 import { toDate } from 'date-fns';
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import { searchQuickAccessItems } from './entity-search';
+import { createProjectedList } from './projected-list';
 import type {
   Bucket,
   BucketCombination,
@@ -318,11 +320,24 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   const cacheHost = graphqlCacheHost?.disabled ? undefined : graphqlCacheHost;
   const [cacheRevision, setCacheRevision] = createSignal(0);
   const cachedChannelsQuery = useCachedGraphqlChannelsQuery(cacheHost);
-  const unsubscribeCacheChanges = cacheHost?.onCacheChanged(() => {
-    setCacheRevision((revision) => revision + 1);
-    void cachedChannelsQuery.refetch();
+  const refreshCachedLists = leadingAndTrailing(
+    throttle,
+    () => {
+      setCacheRevision((revision) => revision + 1);
+      void cachedChannelsQuery.refetch();
+    },
+    250
+  );
+  const unsubscribeCacheChanges = cacheHost?.onCacheChanged(
+    refreshCachedLists,
+    {
+      includeHydration: true,
+    }
+  );
+  onCleanup(() => {
+    unsubscribeCacheChanges?.();
+    refreshCachedLists.clear();
   });
-  onCleanup(() => unsubscribeCacheChanges?.());
   const instructionsIdQuery = useInstructionsMdIdQuery();
   const { query: crmCompaniesQuery, companies: crmCompaniesAccessor } =
     useQuickAccessCrmCompaniesQuery();
@@ -879,131 +894,88 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       return resolveEntries(indices);
     });
 
-    const [projectedItems, setProjectedItems] = createSignal<
-      | {
-          recordKeys: string[];
-          materialized: Map<string, QuickAccessItem>;
-        }
-      | undefined
-    >(undefined);
-    if (options && cacheHost) {
-      let generation = 0;
-      onCleanup(() => {
-        generation += 1;
-      });
-      createEffect(() => {
-        cacheRevision();
-        const enabled = options.enabled?.() !== false;
-        const query = options.searchTerm?.() ?? '';
-        const currentGeneration = ++generation;
-        if (!enabled) {
-          setProjectedItems(undefined);
-          return;
-        }
-        void (async () => {
-          try {
-            const page = await cacheHost.search({
-              profile: 'quick-access-v1',
-              buckets,
-              query,
-              limit: query.trim() ? 500 : 50,
-            });
-            const missingDocuments = page.documents.filter(({ recordKey }) => {
-              const separator = recordKey.indexOf(':');
-              const id =
-                separator < 0 ? recordKey : recordKey.slice(separator + 1);
-              return !itemCache.has(id);
-            });
-            const [historyItems, cachedChannelItems] = await Promise.all([
-              materializeCachedGraphqlHistoryItems(cacheHost, missingDocuments),
-              materializeCachedGraphqlChannels(cacheHost, missingDocuments),
-            ]);
-            if (currentGeneration !== generation) return;
-            const materializedHistoryItems = new Map(
-              historyItems.map((item) => [item.id, item] as const)
-            );
-            const materializedChannelItems = new Map(
-              cachedChannelItems.map((item) => [item.id, item] as const)
-            );
-            const recordKeys: string[] = [];
-            const materialized = new Map<string, QuickAccessItem>();
-            const seen = new Set<string>();
-            for (const document of page.documents) {
-              const separator = document.recordKey.indexOf(':');
-              const id =
-                separator < 0
-                  ? document.recordKey
-                  : document.recordKey.slice(separator + 1);
-              if (seen.has(id)) continue;
-              if (itemCache.get(id)?.item) {
-                seen.add(id);
-                recordKeys.push(document.recordKey);
-                continue;
-              }
-              const historyItem = materializedHistoryItems.get(id);
-              const cachedChannel = materializedChannelItems.get(id);
-              let item: QuickAccessItem | undefined;
-              if (historyItem) {
-                const entity = historyItemToEntity(historyItem);
-                item = {
-                  kind: 'entity',
-                  id,
-                  bucket: getBucketForHistoryItem(historyItem),
-                  searchText: getEntitySearchText(entity),
-                  sortTimestamp: document.timestampMs,
-                  timestamps: {
-                    updatedAt: historyItem.updatedAt,
-                    createdAt: historyItem.createdAt,
-                  },
-                  data: entity,
-                };
-              } else if (cachedChannel) {
-                item = channelToQuickAccessItem(
-                  cachedChannel,
-                  document.timestampMs
-                );
-              }
-              if (!item) continue;
-              seen.add(id);
-              recordKeys.push(document.recordKey);
-              materialized.set(id, item);
-            }
-            setProjectedItems({ recordKeys, materialized });
-          } catch {
-            if (currentGeneration === generation) {
-              setProjectedItems({ recordKeys: [], materialized: new Map() });
-            }
-          }
-        })();
-      });
-    }
+    const localItems = createLazyMemo(() =>
+      options
+        ? searchQuickAccessItems(baseList(), options.searchTerm?.() ?? '')
+        : baseList()
+    );
+    const projected =
+      options && cacheHost
+        ? createProjectedList<QuickAccessItem>({
+            host: cacheHost,
+            buckets,
+            revision: cacheRevision,
+            searchTerm: options.searchTerm,
+            enabled: options.enabled,
+            existingItems: localItems,
+            materialize: async (documents) => {
+              const idOf = (recordKey: string) =>
+                recordKey.slice(recordKey.indexOf(':') + 1);
+              const missing = documents.filter(
+                ({ recordKey }) => !itemCache.has(idOf(recordKey))
+              );
+              const [historyItems, cachedChannelItems] = await Promise.all([
+                materializeCachedGraphqlHistoryItems(cacheHost, missing),
+                materializeCachedGraphqlChannels(cacheHost, missing),
+              ]);
+              const historyById = new Map(
+                historyItems.map((item) => [item.id, item])
+              );
+              const channelsById = new Map(
+                cachedChannelItems.map((item) => [item.id, item])
+              );
+              return documents.flatMap((document): QuickAccessItem[] => {
+                const id = idOf(document.recordKey);
+                const cached = itemCache.get(id)?.item;
+                if (cached) return [cached];
+                const historyItem = historyById.get(id);
+                if (historyItem) {
+                  const entity = historyItemToEntity(historyItem);
+                  return [
+                    {
+                      kind: 'entity',
+                      id,
+                      bucket: getBucketForHistoryItem(historyItem),
+                      searchText: getEntitySearchText(entity),
+                      sortTimestamp: document.timestampMs,
+                      timestamps: {
+                        updatedAt: historyItem.updatedAt,
+                        createdAt: historyItem.createdAt,
+                      },
+                      data: entity,
+                    },
+                  ];
+                }
+                const channel = channelsById.get(id);
+                return channel
+                  ? [channelToQuickAccessItem(channel, document.timestampMs)]
+                  : [];
+              });
+            },
+          })
+        : undefined;
 
     const list = createLazyMemo(() => {
-      const base = baseList();
-      if (!options) return base;
-      const local = searchQuickAccessItems(base, options.searchTerm?.() ?? '');
-      const projected = projectedItems();
-      if (!projected) return local;
+      const local = localItems();
+      if (!projected || options?.enabled?.() === false) return local;
 
       // Search describes cached contents, not corpus completeness. Preserve
-      // projection rank, then append server/local candidates as fallback.
-      const ranked = projected.recordKeys.flatMap((recordKey) => {
-        const separator = recordKey.indexOf(':');
-        const key = separator < 0 ? recordKey : recordKey.slice(separator + 1);
-        const item =
-          itemCache.get(key)?.item ?? projected.materialized.get(key);
-        return item ? [item] : [];
-      });
+      // projection rank, then append candidates from the existing local sources.
+      const ranked = projected
+        .items()
+        .map((item) => itemCache.get(item.id)?.item ?? item);
       const seen = new Set(ranked.map((item) => item.id));
       return ranked.concat(local.filter((item) => !seen.has(item.id)));
     });
     return {
       items: list,
       totalCount: () => list().length,
-      hasMore: () => false,
-      isLoading: () => false,
-      isLoadingMore: () => false,
-      loadMore: async () => undefined,
+      hasMore: () => projected?.hasMore() ?? false,
+      isLoading: () => projected?.isLoading() ?? false,
+      isLoadingMore: () => projected?.isLoadingMore() ?? false,
+      loadMore: async () => {
+        await projected?.loadMore();
+      },
     };
   }) as QuickAccessContextValue['useList'];
 

@@ -20,13 +20,21 @@ vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => true }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanel: () => undefined,
 }));
-vi.mock('@core/block', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  useBlockId: () => 'document',
-  useBlockAliasedName: () => 'md',
+vi.mock('../context/markdown-document-context', () => ({
+  useMarkdownDocument: () => ({
+    documentId: () => 'document',
+    kind: () => 'task',
+    permissions: {
+      canComment: () => true,
+      isOwner: () => false,
+    },
+  }),
 }));
 vi.mock('@core/messages/DocumentConversation', () => ({
   DocumentConversation: (props: {
+    parent: { type: string; id: string };
+    canWrite: boolean;
+    buildLink: (message: { id: string }) => string;
     hideComposer?: boolean;
     hideWhenEmpty?: boolean;
   }) => {
@@ -38,10 +46,6 @@ vi.mock('@core/messages/DocumentConversation', () => ({
     onCleanup(mocks.unmount);
     return <textarea aria-label="Comment draft" />;
   },
-}));
-vi.mock('@core/signal/permissions', () => ({
-  useCanComment: () => () => true,
-  useIsDocumentOwner: () => () => false,
 }));
 vi.mock('@core/component/ParamsProvider', () => ({
   useUrlParams: () => ({ commentId: () => null }),
@@ -93,9 +97,25 @@ describe('mobile document discussion accessory behind the flag', () => {
   it('moves the composer to the accessory and hides an empty conversation', () => {
     setup();
     expect(mocks.conversation).toHaveBeenCalledWith(
-      expect.objectContaining({ hideComposer: true, hideWhenEmpty: true })
+      expect.objectContaining({
+        parent: { type: 'document', id: 'document' },
+        canWrite: true,
+        hideComposer: true,
+        hideWhenEmpty: true,
+      })
     );
     expect(mocks.mount).toHaveBeenCalledOnce();
+  });
+
+  it('builds links from the markdown document kind without a block context', () => {
+    setup();
+    const conversationProps = mocks.conversation.mock.calls[0][0] as {
+      buildLink: (message: { id: string }) => string;
+    };
+    const link = new URL(conversationProps.buildLink({ id: 'comment' }));
+
+    expect(link.pathname).toBe('/app/task/document');
+    expect(link.searchParams.get('comment_id')).toBe('comment');
   });
 
   it('hides during document typing and restores the same draft when the keyboard closes', () => {

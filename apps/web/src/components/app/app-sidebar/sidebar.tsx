@@ -230,6 +230,7 @@ const SIDEBAR_LINKS = [
     label: 'Documents',
     href: LIST_VIEW_PATHS.documents,
     params: {
+      initialFacets: { type: ['doc-markdown'] },
       initialFilters: markdownDocumentsQuery ?? {},
       initialClientFilters: {
         and: ['document-or-file'],
@@ -295,10 +296,13 @@ type OpenWithSplitFn = ReturnType<typeof useSplitLayout>['openWithSplit'];
 const isMarkdownDocumentsParams = (
   params: SidebarItem['params'] | undefined
 ): boolean => {
+  const facets = params?.initialFacets as
+    | { type?: readonly unknown[] }
+    | undefined;
+  if (facets?.type?.includes('doc-markdown')) return true;
   const initialClientFilters = params?.initialClientFilters as
     | { or?: readonly unknown[] }
     | undefined;
-
   return initialClientFilters?.or?.includes('doc-markdown') ?? false;
 };
 

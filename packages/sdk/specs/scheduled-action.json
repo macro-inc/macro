@@ -518,7 +518,8 @@
             "description": "Time of the next scheduled firing (derived from the cron on write). UI\nuses this to render \"next run\" without having to parse the cron itself."
           },
           "owner": {
-            "type": "string"
+            "type": "string",
+            "description": "Who the action belongs to. Every action is user-owned today, but the\ntype no longer says so: the principal string on the wire and in the\n`owner` column is the same, and a bot- or team-owned row decodes\nrather than failing to parse."
           },
           "schedule": {
             "$ref": "#/components/schemas/Schedule"

@@ -1,7 +1,6 @@
 import { displaySubject } from '@app/features/email-compose/core/subject-text';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { toEntityLoadError } from '@core/component/EntityLoadGate';
@@ -59,9 +58,6 @@ export default function BlockEmail() {
   };
 
   const notificationSource = useGlobalNotificationSource();
-  // A Preview Pair Viewer shows the thread passively — wait longer before
-  // marking it seen so scanning/previewing doesn't clear unread state.
-  const isPreview = !!useSplitPanel()?.handle.isViewerSplit();
 
   const title = () => {
     const data = threadData();
@@ -80,7 +76,7 @@ export default function BlockEmail() {
             notificationSource={notificationSource}
             threadId={threadId()}
             linkId={threadData()?.thread?.link_id}
-            debounceTime={isPreview ? 1_500 : 100}
+            debounceTime={100}
             onRetry={() => void threadQuery.refetch()}
           >
             <Show when={threadId()}>

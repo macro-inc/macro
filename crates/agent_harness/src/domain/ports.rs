@@ -4,6 +4,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use crate::domain::model::PermissionPolicyConfig;
 use agent_session::domain::connection::RuntimeAttachment;
 use agent_session::domain::model::{AgentMcpServers, AgentSessionId, SandboxSize};
 use agent_session::domain::ports::AgentConnector;
@@ -40,6 +41,25 @@ pub enum CommandTarget {
 pub trait ReachableRepositories: Send + Sync + 'static {
     /// Every repository `user` reaches, sorted by `owner/name`.
     async fn for_user(&self, user: &MacroUserIdStr<'_>) -> Result<Vec<ReachableRepository>>;
+}
+
+/// The branches on one repository a user can start a coding session from.
+///
+/// Separate from [`ReachableRepositories`] because listing every repository
+/// is a cached installation sweep, and listing one repository's branches is
+/// a scoped call after proving the user reaches that repository.
+#[async_trait::async_trait]
+pub trait RepositoryBranches: Send + Sync + 'static {
+    /// Branch names on `owner`/`name`, in the order GitHub returned them.
+    ///
+    /// [`HarnessError::RepositoryUnavailable`] when the user cannot reach the
+    /// repository. An empty repository is an empty list.
+    async fn for_repository(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        owner: &str,
+        name: &str,
+    ) -> Result<Vec<String>>;
 }
 
 /// Forwards commands to the replica currently responsible for execution.
@@ -83,6 +103,18 @@ pub trait HarnessBindings: Send + Sync + 'static {
         &self,
         bot: BotId,
     ) -> impl Future<Output = anyhow::Result<Option<HarnessId>>> + Send;
+}
+
+/// Loads facts for the domain to resolve a bot's permission policy.
+///
+/// Resolved at attach time like [`HarnessBindings`], so changing the agent's
+/// setting takes effect on its existing sessions the next time they attach.
+pub trait PermissionPolicySource: Send + Sync + 'static {
+    /// The persona choice and harness limit for `bot` right now.
+    fn permission_policy(
+        &self,
+        bot: BotId,
+    ) -> impl Future<Output = anyhow::Result<PermissionPolicyConfig>> + Send;
 }
 
 /// Durable attach/detach bookkeeping for harness runtime connections.

@@ -1038,6 +1038,34 @@ describe('createWorkerCacheHost', () => {
     host.dispose();
   });
 
+  it('delivers hydration only to opted-in subscribers and cleans them up', async () => {
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    const foreground = vi.fn();
+    const quickAccess = vi.fn();
+    const operations = vi.fn();
+    host.onCacheChanged(foreground);
+    host.onOpsAffected(operations);
+    const unsubscribe = host.onCacheChanged(quickAccess, {
+      includeHydration: true,
+    });
+    await host.currentRevision();
+    const adapter = requireAdapter();
+    adapter.push({ kind: 'cache-hydrated', revision: INITIAL_CACHE_REVISION });
+    expect(quickAccess).toHaveBeenCalledOnce();
+    expect(foreground).not.toHaveBeenCalled();
+    expect(operations).not.toHaveBeenCalled();
+    adapter.push({ kind: 'cache-changed', revision: INITIAL_CACHE_REVISION });
+    expect(quickAccess).toHaveBeenCalledTimes(2);
+    expect(foreground).toHaveBeenCalledOnce();
+    unsubscribe();
+    adapter.push({ kind: 'cache-hydrated', revision: INITIAL_CACHE_REVISION });
+    expect(quickAccess).toHaveBeenCalledTimes(2);
+    host.onCacheChanged(quickAccess, { includeHydration: true });
+    host.dispose();
+    adapter.push({ kind: 'cache-hydrated', revision: INITIAL_CACHE_REVISION });
+    expect(quickAccess).toHaveBeenCalledTimes(2);
+  });
+
   it('strictly filters pushes to the exact client operation prefix', async () => {
     const host = createWorkerCacheHost({ scope: 'scope-1' });
     const affected: number[][] = [];

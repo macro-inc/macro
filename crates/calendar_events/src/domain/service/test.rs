@@ -3,17 +3,17 @@ use crate::domain::ports::{CalendarEventChange, CalendarEventWriteOutcome, Retir
 use crate::domain::{
     models::{
         AttendeeResponseStatus, CalendarAttendee, CalendarBackfillClaim,
-        CalendarBackfillFailureDisposition, CalendarBackfillJobKey, CalendarCreationTarget,
-        CalendarEvent, CalendarEventMutationTarget, CalendarEventSource, CalendarOccurrence,
-        CalendarSyncStatus, DisconnectedGoogleCalendar, EventReminders, EventStatus, EventTime,
-        EventTransparency, EventType, EventVisibility, GOOGLE_CALENDAR_FULL_SCOPE,
-        GOOGLE_CALENDAR_SCOPES, GoogleBackfillRunReport, GoogleCalendarSyncSnapshot,
-        GoogleEventSource, GoogleEventSyncBatch, GoogleWatchChannel, GoogleWatchConfig,
-        ProviderCalendar, StoredGoogleCalendar,
+        CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJobKey,
+        CalendarCreationTarget, CalendarEvent, CalendarEventMutationTarget, CalendarEventSource,
+        CalendarOccurrence, CalendarSyncStatus, DisconnectedGoogleCalendar, EventReminders,
+        EventStatus, EventTime, EventTransparency, EventType, EventVisibility,
+        GOOGLE_CALENDAR_FULL_SCOPE, GOOGLE_CALENDAR_SCOPES, GoogleBackfillRunReport,
+        GoogleCalendarSyncSnapshot, GoogleEventSource, GoogleEventSyncBatch, GoogleWatchChannel,
+        GoogleWatchConfig, ProviderCalendar, StoredGoogleCalendar,
     },
     ports::{
-        CalendarBackfillRepository, CalendarEventWrite, CalendarRepository, GoogleCalendarProvider,
-        GoogleEventSyncContext, GoogleProviderError,
+        CalendarBackfillRepository, CalendarEventWrite, CalendarReauthNotifier, CalendarRepository,
+        GoogleCalendarProvider, GoogleEventSyncContext, GoogleProviderError,
     },
 };
 use chrono::{TimeZone, Utc};
@@ -1334,4 +1334,133 @@ async fn google_coordinator_keeps_calendar_permission_health_separate_from_gmail
         lifecycle.failures.lock().unwrap().as_slice(),
         &[CalendarBackfillFailureDisposition::CalendarPermissionRequired]
     );
+}
+
+#[derive(Clone, Default)]
+struct FakeReauthNotifier {
+    notified: Arc<Mutex<Vec<Uuid>>>,
+    fail: bool,
+}
+
+impl FakeReauthNotifier {
+    fn failing() -> Self {
+        Self {
+            notified: Arc::default(),
+            fail: true,
+        }
+    }
+}
+
+impl CalendarReauthNotifier for FakeReauthNotifier {
+    async fn notify_reauth_required(&self, email_link_id: Uuid) -> Result<(), Report> {
+        self.notified.lock().unwrap().push(email_link_id);
+        if self.fail {
+            return Err(rootcause::report!("reauth notifier unavailable"));
+        }
+        Ok(())
+    }
+}
+
+fn reauth_outcome(link_reauth_transitioned: bool) -> CalendarBackfillFailureOutcome {
+    CalendarBackfillFailureOutcome {
+        job_transitioned: true,
+        link_reauth_transitioned,
+    }
+}
+
+#[tokio::test]
+async fn reauth_announcer_fires_when_unclaimed_failure_consumed_the_edge() {
+    let notifier = FakeReauthNotifier::default();
+    let announcer = CalendarReauthAnnouncer::new(notifier.clone());
+    let link = Uuid::now_v7();
+
+    announcer
+        .announce_unclaimed(link, &reauth_outcome(true))
+        .await;
+
+    assert_eq!(notifier.notified.lock().unwrap().as_slice(), &[link]);
+}
+
+#[tokio::test]
+async fn reauth_announcer_is_silent_when_unclaimed_failure_did_not_transition() {
+    let notifier = FakeReauthNotifier::default();
+    let announcer = CalendarReauthAnnouncer::new(notifier.clone());
+
+    announcer
+        .announce_unclaimed(Uuid::now_v7(), &reauth_outcome(false))
+        .await;
+
+    assert!(notifier.notified.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn reauth_announcer_fires_when_run_error_consumed_the_edge() {
+    let notifier = FakeReauthNotifier::default();
+    let announcer = CalendarReauthAnnouncer::new(notifier.clone());
+    let link = Uuid::now_v7();
+
+    announcer
+        .announce_run_error(
+            link,
+            &GoogleCalendarBackfillRunError::ReauthRequired {
+                message: "grant revoked".to_string(),
+                link_reauth_transitioned: true,
+            },
+        )
+        .await;
+
+    assert_eq!(notifier.notified.lock().unwrap().as_slice(), &[link]);
+}
+
+#[tokio::test]
+async fn reauth_announcer_is_silent_on_calendar_permission_required() {
+    // A `CalendarPermissionRequired` disposition surfaces as a `ReauthRequired`
+    // run error carrying `link_reauth_transitioned: false`: the calendar scope
+    // is missing but the Gmail grant is healthy, so no inbox edge was consumed.
+    let notifier = FakeReauthNotifier::default();
+    let announcer = CalendarReauthAnnouncer::new(notifier.clone());
+
+    announcer
+        .announce_run_error(
+            Uuid::now_v7(),
+            &GoogleCalendarBackfillRunError::ReauthRequired {
+                message: "calendar scope missing".to_string(),
+                link_reauth_transitioned: false,
+            },
+        )
+        .await;
+
+    assert!(notifier.notified.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn reauth_announcer_is_silent_on_non_reauth_run_errors() {
+    let notifier = FakeReauthNotifier::default();
+    let announcer = CalendarReauthAnnouncer::new(notifier.clone());
+    let link = Uuid::now_v7();
+
+    for error in [
+        GoogleCalendarBackfillRunError::Permanent("permanent".to_string()),
+        GoogleCalendarBackfillRunError::Retryable("transient".to_string()),
+        GoogleCalendarBackfillRunError::LeaseLost,
+    ] {
+        announcer.announce_run_error(link, &error).await;
+    }
+
+    assert!(notifier.notified.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn reauth_announcer_swallows_a_failing_notifier() {
+    let notifier = FakeReauthNotifier::failing();
+    let announcer = CalendarReauthAnnouncer::new(notifier.clone());
+    let link = Uuid::now_v7();
+
+    // A notifier failure must not surface: the DB edge is already consumed and
+    // the caller's delivery must still ack.
+    announcer
+        .announce_unclaimed(link, &reauth_outcome(true))
+        .await;
+
+    assert_eq!(notifier.notified.lock().unwrap().as_slice(), &[link]);
 }

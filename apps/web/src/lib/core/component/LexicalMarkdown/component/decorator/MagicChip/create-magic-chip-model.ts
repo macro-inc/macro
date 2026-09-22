@@ -2,12 +2,16 @@ import {
   harnessDisplayName,
   harnessTitle,
   modelDisplayName,
+  sessionHarnessSlug,
 } from '@app/features/block-agent/component/compose-agent-session-options';
 import {
-  createElicitationController,
-  type ElicitationController,
-} from '@app/features/block-agent/context/create-elicitation-controller';
+  toolCallDetail,
+  toolLabel,
+} from '@app/features/block-agent/component/parts/shared';
+import type { InteractionController } from '@app/features/block-agent/context/interaction';
+import { createInteractionController } from '@app/features/block-agent/primitives/create-interaction-controller';
 import { AgentSession } from '@core/agent-session/AgentSession';
+import { toast } from '@core/component/Toast/Toast';
 import {
   MAGIC_CHIP_STATUSES,
   type MagicChipData,
@@ -25,8 +29,8 @@ import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
 import {
   deriveMagicChipPresentation,
   type MagicChipHeader,
+  type MagicChipInteraction,
   type MagicChipPresentation,
-  type MagicChipQuestion,
 } from './presentation';
 
 function magicChipStatus(
@@ -44,14 +48,19 @@ type SessionIdentity = {
 };
 
 /**
- * The persona as the header names it: the runtime's product name followed
- * by "Agent" (`Macro Agent`, `Cursor Agent`), a titled slug for a runtime
- * the composer does not name.
+ * The persona as the header names it: the runtime's product name, with
+ * "Agent" appended when that name does not already end in it (`Macro Agent`,
+ * `Cursor Agent`). A titled slug for a runtime the composer does not name.
  */
-function agentName(harness: string | undefined): string | undefined {
+function agentName(session: {
+  harness?: string;
+  botId?: string;
+}): string | undefined {
+  const harness = sessionHarnessSlug(session);
   if (!harness) return undefined;
   const known = harnessDisplayName(harness);
-  return `${known === harness ? harnessTitle(harness) : known} Agent`;
+  const base = known === harness ? harnessTitle(harness) : known;
+  return base.endsWith(' Agent') ? base : `${base} Agent`;
 }
 
 /**
@@ -87,7 +96,7 @@ function upsert(
  *
  * Also the chip's half of answering a question the agent stops to ask in
  * that turn: the session's metadata names the live question, the session
- * row names its owner, and {@link ElicitationController} sends the answer.
+ * row reports edit access, and the shared interaction controller sends the answer.
  * The header names the persona and model from the session row and the fold.
  *
  * The fold is the shared {@link AgentSession} for the id, so a chip and a
@@ -96,7 +105,7 @@ function upsert(
 export function createMagicChipModel(props: MagicChipData): {
   presentation: Accessor<MagicChipPresentation>;
   header: Accessor<MagicChipHeader | undefined>;
-  elicitation: ElicitationController;
+  interactions: InteractionController;
 } {
   const [messages, setMessages] = createSignal<FoldedMessage[]>([]);
   const sessionQuery = useAgentSessionQuery(() => props.agentSessionId);
@@ -109,7 +118,7 @@ export function createMagicChipModel(props: MagicChipData): {
     return (status ? magicChipStatus(status) : undefined) ?? props.status;
   };
   const [metadata, setMetadata] = createSignal<SessionMetadata>();
-  const pendingElicitation = () => metadata()?.pendingElicitation ?? undefined;
+  const pending = () => metadata()?.pendingInteractions ?? [];
   // The last system event's wire name, which the fold carries as status.
   const latestEvent = () => metadata()?.status ?? undefined;
 
@@ -144,25 +153,43 @@ export function createMagicChipModel(props: MagicChipData): {
     props.promptedMessage?.turn ??
     messages().reduce(
       (latest, message) => Math.max(latest, message.turn),
-      pendingElicitation()?.turn ?? 0
+      pending().reduce((latest, request) => Math.max(latest, request.turn), 0)
     );
 
-  // A locked chip only offers questions from its anchored turn.
-  const questionForTurn = () => {
-    const question = pendingElicitation();
-    return question?.turn === turn() ? question : undefined;
-  };
-  const elicitation = createElicitationController({
-    pending: questionForTurn,
+  // An anchored chip only offers interactions from its own turn.
+  const pendingForTurn = () =>
+    pending().filter((request) => request.turn === turn());
+  const interactions = createInteractionController({
+    sessionId: () => props.agentSessionId,
+    pending: pendingForTurn,
     canEdit,
     issue: (action) => live.issue(action),
+    onFailure: toast.failure,
   });
-  const asking = (): MagicChipQuestion | undefined => {
-    const question = questionForTurn();
-    if (!question) return undefined;
+  const asking = (): MagicChipInteraction | undefined => {
+    const request = pendingForTurn()[0];
+    if (!request) return undefined;
+    const tool = messages()
+      .find(
+        (message) =>
+          message.author.kind === 'agent' && message.turn === request.turn
+      )
+      ?.parts.find(
+        (part) => part.kind === 'tool_use' && part.id === request.toolCall
+      );
     return {
-      question,
-      canAnswer: elicitation.canAnswer(),
+      request,
+      canAnswer: interactions.canAnswer(),
+      answering: interactions.answering(request),
+      ...(request.kind === 'permission' && tool?.kind === 'tool_use'
+        ? {
+            action:
+              tool.detail.kind === 'terminal'
+                ? 'Run command'
+                : toolLabel(tool.name),
+            detail: toolCallDetail(tool),
+          }
+        : {}),
     };
   };
 
@@ -185,7 +212,8 @@ export function createMagicChipModel(props: MagicChipData): {
   });
 
   const header = createMemo((): MagicChipHeader | undefined => {
-    const agent = agentName(session()?.harness);
+    const current = session();
+    const agent = current ? agentName(current) : undefined;
     const model = modelName(metadata(), session());
     const pullRequestUrl = session()?.pullRequestUrl ?? undefined;
     return agent || model || pullRequestUrl
@@ -193,5 +221,5 @@ export function createMagicChipModel(props: MagicChipData): {
       : undefined;
   });
 
-  return { presentation, header, elicitation };
+  return { presentation, header, interactions };
 }

@@ -625,6 +625,21 @@ pub trait CalendarRefreshNotifier: Send + Sync + 'static {
     ) -> impl Future<Output = ()> + Send;
 }
 
+/// Outbound port that announces one connected inbox's Google grant has gone
+/// dead and needs reconnection. The notification itself — reconnect-your-inbox
+/// email, `email.link_reauth_required` topic event, activity row — is owned by
+/// email_service's link-manager consumer; calendar_service backs this port by
+/// enqueuing onto the shared link-manager queue that consumer already drains.
+/// Best effort at the edge: the announcer logs and swallows a delivery failure,
+/// since the failure the notification describes is already durably recorded.
+pub trait CalendarReauthNotifier: Send + Sync + 'static {
+    /// Announce that `email_link_id`'s grant requires reauthorization.
+    fn notify_reauth_required(
+        &self,
+        email_link_id: Uuid,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
 /// Inbound service port for user-initiated calendar event mutations.
 pub trait CalendarMutationService: Send + Sync + 'static {
     /// Create an event on the selected calendar — or the requester's (or

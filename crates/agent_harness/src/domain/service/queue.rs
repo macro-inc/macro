@@ -289,13 +289,24 @@ where
             // an edited entry is delivered later under its original identity,
             // so rewriting (or dropping) what a Daytona session is about to
             // run is the same privilege as prompting it.
+            HarnessCommand::Deliver(DeliverAction {
+                actor,
+                action: AgentAction::RespondToPermission(_),
+                ..
+            }) => {
+                if actor.is_none() {
+                    return Err(AgentSessionError::Forbidden.into());
+                }
+            }
             HarnessCommand::Deliver(DeliverAction { actor, .. })
             | HarnessCommand::EditQueued { actor, .. }
             | HarnessCommand::RemoveQueued { actor, .. } => {
                 let session = self.sessions.get_session(session_id).await?;
                 if AgentKind::for_session(session.bot_id, &session.harness)
                     == AgentKind::ClaudeCloud
-                    && actor.as_ref() != Some(&session.owner_id)
+                    && !actor
+                        .as_ref()
+                        .is_some_and(|actor| session.owner_id.is_user(actor))
                 {
                     return Err(AgentSessionError::Forbidden.into());
                 }

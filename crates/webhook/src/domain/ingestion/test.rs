@@ -32,6 +32,7 @@ use entity_access::domain::models::{
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use messages::domain::models::SimpleMention;
+use model_owner::Owner;
 use serde_json::Value;
 use std::{
     collections::BTreeMap,
@@ -454,7 +455,7 @@ fn document_event_cases() -> Vec<EventCase> {
             TestBrokerEvent::Document(Event::with_schema_version(
                 DocumentTopicEvent::Created(DocumentCreatedMetadata {
                     document_id: DOCUMENT_ID.to_string(),
-                    owner: user_id("macro|owner@example.com"),
+                    owner: Owner::User(user_id("macro|owner@example.com")),
                     actor: None,
                     on_behalf_of: None,
                     document_name: "notes".to_string(),
@@ -474,7 +475,7 @@ fn document_event_cases() -> Vec<EventCase> {
             TestBrokerEvent::Document(Event::with_schema_version(
                 DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
                     document_id: DOCUMENT_ID.to_string(),
-                    owner: user_id("macro|owner@example.com"),
+                    owner: Owner::User(user_id("macro|owner@example.com")),
                     actor_user_id: Some(user_id("macro|editor@example.com")),
                     actor: None,
                     on_behalf_of: None,
@@ -513,7 +514,7 @@ fn document_event_cases() -> Vec<EventCase> {
                     document_id: COPIED_DOCUMENT_ID.to_string(),
                     source_document_id: DOCUMENT_ID.to_string(),
                     source_version_id: None,
-                    owner: user_id("macro|owner@example.com"),
+                    owner: Owner::User(user_id("macro|owner@example.com")),
                     document_name: "notes (copy)".to_string(),
                     file_type: None,
                     project_id: None,
@@ -536,7 +537,7 @@ fn search_only_document_event_cases() -> Vec<(&'static str, Event<DocumentTopicE
             Event::new(DocumentTopicEvent::ContentUploaded(
                 DocumentContentUploadedMetadata {
                     document_id: DOCUMENT_ID.to_string(),
-                    owner: user_id("macro|owner@example.com"),
+                    owner: Owner::User(user_id("macro|owner@example.com")),
                     file_type: "pdf".parse().expect("valid file type"),
                     document_version_id: Some("convert".to_string()),
                 },

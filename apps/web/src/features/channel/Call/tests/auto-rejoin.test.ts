@@ -88,6 +88,16 @@ describe('auto-rejoin target', () => {
     ).toBe('call_ended');
   });
 
+  it('matches uppercase native UUIDs with lowercase server UUIDs', () => {
+    const callId = '01991b2a-f4e0-7000-a000-111111111111';
+    expect(
+      checkAutoRejoinTarget({
+        attempt: { ...attempt(), callId: callId.toUpperCase() },
+        activeCall: { callId },
+      })
+    ).toBeNull();
+  });
+
   it('refuses to join a different call that started in the meantime', () => {
     expect(
       checkAutoRejoinTarget({

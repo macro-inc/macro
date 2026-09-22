@@ -11,6 +11,12 @@ import * as zod from 'zod';
  */
 export const listAgentsResponseItem = zod
   .object({
+    auto_accept_permissions: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "Whether the agent's sessions approve ACP permission requests without\nasking. `None` means always prompt. Bypass also requires the harness's opt-in."
+      ),
     bot: zod
       .object({
         avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
@@ -122,6 +128,12 @@ export const listAgentsResponse = zod.array(listAgentsResponseItem);
  */
 export const createAgentBody = zod
   .object({
+    auto_accept_permissions: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "Whether the agent's sessions approve ACP permission requests without\nasking. Omit to always prompt."
+      ),
     avatar_url: zod
       .string()
       .nullish()
@@ -203,6 +215,12 @@ export const updateAgentParams = zod.object({
 
 export const updateAgentBody = zod
   .object({
+    auto_accept_permissions: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "Whether the agent's sessions approve ACP permission requests without\nasking. Omit to always prompt."
+      ),
     avatar_url: zod
       .string()
       .nullish()
@@ -279,6 +297,12 @@ export const updateAgentBody = zod
 
 export const updateAgentResponse = zod
   .object({
+    auto_accept_permissions: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "Whether the agent's sessions approve ACP permission requests without\nasking. `None` means always prompt. Bypass also requires the harness's opt-in."
+      ),
     bot: zod
       .object({
         avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
@@ -8996,6 +9020,12 @@ it, and creation is throttled in the domain service.
  */
 export const createHarnessPairingBody = zod
   .object({
+    allow_permission_bypass: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Daemon operator consent ceiling. Omitted by older clients; web approval decides.'
+      ),
     host: zod
       .string()
       .nullish()
@@ -9038,6 +9068,12 @@ export const getHarnessPairingResponse = zod
       .string()
       .nullish()
       .describe('Display-only description of the machine.'),
+    requested_allow_permission_bypass: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Daemon operator consent ceiling; false forbids bypass at approval.'
+      ),
     requested_name: zod
       .string()
       .describe('Harness display name the daemon asked for.'),
@@ -9063,6 +9099,12 @@ export const approveHarnessPairingParams = zod.object({
 
 export const approveHarnessPairingBody = zod
   .object({
+    allow_permission_bypass: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether agents may bypass ACP permission requests on this harness.'
+      ),
     name: zod
       .string()
       .nullish()
@@ -9078,6 +9120,12 @@ export const approveHarnessPairingBody = zod
 
 export const approveHarnessPairingResponse = zod
   .object({
+    allow_permission_bypass: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether agents may bypass ACP permission requests on this harness.'
+      ),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
@@ -9138,6 +9186,12 @@ export const claimHarnessPairingResponse = zod
   .object({
     harness: zod
       .object({
+        allow_permission_bypass: zod
+          .boolean()
+          .optional()
+          .describe(
+            'Whether agents may bypass ACP permission requests on this harness.'
+          ),
         connected: zod
           .boolean()
           .describe('Whether the daemon currently holds a runtime connection.'),
@@ -9186,6 +9240,12 @@ export const claimHarnessPairingResponse = zod
  */
 export const listHarnessesResponseItem = zod
   .object({
+    allow_permission_bypass: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether agents may bypass ACP permission requests on this harness.'
+      ),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
@@ -9228,6 +9288,12 @@ export const listHarnessesResponse = zod.array(listHarnessesResponseItem);
  */
 export const getSelfHarnessResponse = zod
   .object({
+    allow_permission_bypass: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether agents may bypass ACP permission requests on this harness.'
+      ),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
@@ -10821,9 +10887,7 @@ export const getItemsSoupResponse = zod
                       .describe('The time the project was deleted'),
                     id: zod.uuid().describe('The id of the project'),
                     name: zod.string().describe('The name of the project'),
-                    ownerId: zod
-                      .string()
-                      .describe('The user id of who created the project'),
+                    ownerId: zod.string().describe('The owner of the project'),
                     parentId: zod
                       .uuid()
                       .nullish()
@@ -13265,7 +13329,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "Filter by session owner. Examples: ['macro|user1@user.com']. Empty to\ninclude every owner."
+            "Filter by session owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
           ),
       })
       .optional()
@@ -13482,7 +13546,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "Filter by chat owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+            "Filter by chat owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
           ),
         project_ids: zod
           .array(zod.string())
@@ -13567,7 +13631,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "Filter by document owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+            "Filter by document owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
           ),
         project_ids: zod
           .array(zod.string())
@@ -13792,7 +13856,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "Filter by project owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+            "Filter by project owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
           ),
         project_ids: zod
           .array(zod.string())
@@ -14797,9 +14861,7 @@ export const postItemsSoupResponse = zod
                       .describe('The time the project was deleted'),
                     id: zod.uuid().describe('The id of the project'),
                     name: zod.string().describe('The name of the project'),
-                    ownerId: zod
-                      .string()
-                      .describe('The user id of who created the project'),
+                    ownerId: zod.string().describe('The owner of the project'),
                     parentId: zod
                       .uuid()
                       .nullish()
@@ -18214,9 +18276,7 @@ export const postItemsSoupAstResponse = zod
                       .describe('The time the project was deleted'),
                     id: zod.uuid().describe('The id of the project'),
                     name: zod.string().describe('The name of the project'),
-                    ownerId: zod
-                      .string()
-                      .describe('The user id of who created the project'),
+                    ownerId: zod.string().describe('The owner of the project'),
                     parentId: zod
                       .uuid()
                       .nullish()
@@ -21901,7 +21961,7 @@ export const postItemsSoupAstGroupedResponse = zod
                             .describe('The name of the project'),
                           ownerId: zod
                             .string()
-                            .describe('The user id of who created the project'),
+                            .describe('The owner of the project'),
                           parentId: zod
                             .uuid()
                             .nullish()
@@ -25318,7 +25378,7 @@ export const postItemsSoupAstGroupedResponse = zod
                             .describe('The name of the project'),
                           ownerId: zod
                             .string()
-                            .describe('The user id of who created the project'),
+                            .describe('The owner of the project'),
                           parentId: zod
                             .uuid()
                             .nullish()

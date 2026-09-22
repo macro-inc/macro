@@ -1,7 +1,6 @@
 import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';
 import { ChannelInput } from '@channel/Input';
 import { buildPostMessageSendPayload } from '@channel/Input/message-payload';
-import { useBlockAliasedName } from '@core/block';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { createTheme } from '@core/component/LexicalMarkdown/theme';
 import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
@@ -88,6 +87,7 @@ export type CommentsContextType = {
   messageOperations?: MessageCommentOperations;
   getCommentById: (id: CommentId) => Root | Reply | undefined;
   documentId: string;
+  documentType: 'md' | 'task' | 'snippet' | 'skill' | 'pdf';
   ownedComment: (id: CommentId) => boolean;
   inComment: boolean;
   highlightedCommentId: Accessor<CommentId | null>;
@@ -113,6 +113,7 @@ export const CommentsContext = createContext<CommentsContextType>({
   commentOperations: noopCommentOperations,
   getCommentById: (_id) => undefined,
   documentId: '',
+  documentType: 'md',
   ownedComment: () => false,
   inComment: false,
   highlightedCommentId: () => null,
@@ -132,6 +133,13 @@ type ThreadBodyProps = {
    * instead of hover-revealed buttons (the touch drawer has no hover).
    */
   actionsDropdown?: boolean;
+  /**
+   * The host already draws a card — the floating margin thread. A draft's
+   * composer drops its own card chrome so it does not read as a box inside a
+   * box. The touch drawer leaves this off: there the composer sits on the
+   * drawer body and its card is the only one.
+   */
+  flatComposer?: boolean;
 };
 
 /**
@@ -143,9 +151,9 @@ type ThreadBodyProps = {
 export function ThreadBody(props: ThreadBodyProps) {
   // PDF flag-on discussions are deferred, so PDF stays on the legacy path even
   // when the flag is on; only markdown documents use the message thread.
-  const blockName = useBlockAliasedName();
+  const context = useContext(CommentsContext);
   return isFeatureEnabled(enableUnifiedDocumentDiscussions) &&
-    blockName !== 'pdf' ? (
+    context.documentType !== 'pdf' ? (
     <MessageThreadBody {...props} />
   ) : (
     <LegacyThreadBody {...props} />
@@ -155,7 +163,6 @@ export function ThreadBody(props: ThreadBodyProps) {
 /** Document threads render the shared message thread; a draft composes its root. */
 function MessageThreadBody(props: ThreadBodyProps) {
   const context = useContext(CommentsContext);
-  const blockName = useBlockAliasedName();
   // Workspace users for @-mentions, matching the legacy comment composer.
   const participants = useContacts();
   const parent = () => ({ type: 'document' as const, id: context.documentId });
@@ -171,6 +178,7 @@ function MessageThreadBody(props: ThreadBodyProps) {
           <ChannelInput
             parent={parent()}
             participants={participants}
+            flat={props.flatComposer}
             input={{ mode: 'reply', placeholder: 'Leave a comment...' }}
             onClose={() => context.setActiveThread(null)}
             onSend={async (snapshot) => {
@@ -191,13 +199,12 @@ function MessageThreadBody(props: ThreadBodyProps) {
           parent={parent()}
           rootId={String(props.comment.threadId)}
           canWrite={context.canComment()}
-          canManage={context.isDocumentOwner()}
           hideReplyInput={props.hideReplyInput}
           onEditingChange={context.setMessageEditing}
           targetId={targetId()}
           buildLink={(message) =>
             buildSimpleEntityUrl(
-              { type: blockName, id: context.documentId },
+              { type: context.documentType, id: context.documentId },
               { [MD_URL_PARAMS.commentId]: message.id }
             )
           }
@@ -438,6 +445,7 @@ export function Thread(props: {
             comment={props.comment}
             isActive={props.isActive}
             theme={props.theme}
+            flatComposer
           />
         </div>
       </Layer>

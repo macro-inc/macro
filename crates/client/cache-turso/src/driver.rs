@@ -88,6 +88,9 @@ pub(crate) fn query_prepared(
 }
 
 fn run_prepared(statement: &mut Statement, values: Values) -> Result<(Rows, i64), RunFailure> {
+    // Time binding, stepping/I/O, row collection, and cleanup, not worker queue
+    // wait or statement preparation. Reused statements are timed per execution.
+    let timer = crate::query_telemetry::QueryTimer::start();
     let execution = (|| {
         if statement.parameters_count() != values.len() {
             return Err(TursoStorageError::Database);
@@ -144,11 +147,15 @@ fn run_prepared(statement: &mut Statement, values: Values) -> Result<(Rows, i64)
     // surrounding transaction unusable, regardless of the underlying class.
     let reset = checked_reset(statement);
     statement.clear_bindings();
-    match (execution, reset) {
+    let result = match (execution, reset) {
         (Ok(value), Ok(())) => Ok(value),
         (Err(error), Ok(())) => Err(RunFailure::execution(error)),
         (execution, Err(_)) => Err(RunFailure::cleanup(execution.is_ok())),
+    };
+    if let Some(timer) = timer {
+        timer.finish(statement.get_sql(), result.is_ok());
     }
+    result
 }
 
 fn checked_reset(statement: &mut Statement) -> Result<(), TursoStorageError> {

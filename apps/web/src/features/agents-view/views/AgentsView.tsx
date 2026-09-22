@@ -1,6 +1,7 @@
 import { ViewShell } from '@app/components/view-shell';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
+import { McpConnections } from '@app/features/settings/McpConnections';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -46,7 +47,7 @@ import { Topbar } from '../components/Topbar';
 import { DataModeProvider, dataModeFor } from '../context/data-mode';
 import { type AgentKind, modeForKind } from '../core/agent-kind';
 import type { AgentsMode } from '../core/mode';
-import type { AgentsPage } from '../core/pages';
+import { type AgentsPage, parseAgentsPage } from '../core/pages';
 import {
   type AgentConversationEntity,
   type AgentConversationTarget,
@@ -178,6 +179,28 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
       }
     )
   );
+  const openPage = (next: AgentsPage) => {
+    setSelected(undefined);
+    setPage(next);
+  };
+  createEffect(
+    on(
+      () => {
+        const content = panel.handle.content();
+        return content.type === 'component'
+          ? content.params?.agentPageRequest
+          : undefined;
+      },
+      () => {
+        const content = panel.handle.content();
+        const next =
+          content.type === 'component'
+            ? parseAgentsPage(content.params?.agentPage)
+            : undefined;
+        if (next) openPage(next);
+      }
+    )
+  );
   const openRoster = (kind: AgentKind) => {
     setSelected(undefined);
     setRosterKind(kind);
@@ -199,13 +222,17 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
       });
       return;
     }
-    if (panel.handle.content().id === next.id) return;
+    if (panel.handle.content().id === next.id) {
+      setSelected({ conversation, activeConversationId: conversation.id });
+      return;
+    }
     panel.handle.replace({ next, referredFrom: 'agents' });
   };
   const startConversation = (start: StartConversation) => {
     const id = startPendingSession({
       botId: start.botId,
       prompt: start.prompt,
+      attachments: start.attachments,
       modelOverride: start.modelOverride,
       repoUrl: start.repoUrl,
       repoBranch: start.repoBranch,
@@ -293,6 +320,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
 
   const pageTitle = () => {
     if (page() === 'agents') return 'Agents';
+    if (page() === 'connections') return 'Connections';
     return 'New conversation';
   };
 
@@ -321,6 +349,10 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
             >
               <ViewShell.Aside>
                 <AgentsSidebar
+                  activePage={selected() ? undefined : page()}
+                  onOpenPage={(next) =>
+                    next === 'agents' ? openRoster('agent') : openPage(next)
+                  }
                   modeForConversation={modeForConversation}
                   activeConversationId={selected()?.activeConversationId}
                   search={search()}
@@ -354,6 +386,9 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                         <div class="body">
                           <Suspense fallback={<LoadingComposer />}>
                             <Switch>
+                              <Match when={page() === 'connections'}>
+                                <McpConnections />
+                              </Match>
                               <Match when={page() === 'agents'}>
                                 <RosterPage
                                   kind={rosterKind()}

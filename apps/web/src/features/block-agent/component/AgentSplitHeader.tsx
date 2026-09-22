@@ -1,3 +1,4 @@
+import { ChangesToggle } from '@app/features/agent-changes/agent-changes';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions/use-block-entity-commands';
 import {
   type BlockTool,
@@ -33,9 +34,13 @@ import {
   sessionOriginThread,
 } from '../context/origin-thread';
 import { AgentPullRequestChip } from './AgentPullRequestChip';
-import { harnessTitle } from './compose-agent-session-options';
+import {
+  harnessTitle,
+  sessionHarnessTitle,
+  sessionRepositoryUrl,
+} from './compose-agent-session-options';
 
-export { harnessTitle };
+export { harnessTitle, sessionRepositoryUrl };
 
 /** Shared title precedence for standalone and workspace agent sessions. */
 export function agentSessionTitle(
@@ -44,7 +49,7 @@ export function agentSessionTitle(
 ): string {
   const name = session?.name;
   if (name && name !== 'Agent Session') return name;
-  return transcriptTitle ?? name ?? harnessTitle(session?.harness);
+  return transcriptTitle ?? name ?? sessionHarnessTitle(session ?? {});
 }
 
 /**
@@ -125,17 +130,18 @@ export function AgentSplitHeader(props: {
     },
   ];
 
-  const ops: FileOperation[] = [
+  const openRepository: FileOperation = {
+    label: 'Open repository',
+    icon: GitBranch,
+    action: () => {
+      const url = sessionRepositoryUrl(props.session);
+      if (url) openExternalUrl(url);
+    },
+  };
+  const ops = (): FileOperation[] => [
     { op: 'rename' },
     { op: 'delete' },
-    {
-      label: 'Open repository',
-      icon: GitBranch,
-      action: () => {
-        const url = props.session?.repoUrl;
-        if (url) openExternalUrl(url);
-      },
-    },
+    ...(sessionRepositoryUrl(props.session) ? [openRepository] : []),
   ];
 
   return (
@@ -162,6 +168,7 @@ export function AgentSplitHeader(props: {
             {(url) => <AgentPullRequestChip url={url()} />}
           </Show>
           <Show when={!isMobile()}>
+            <ChangesToggle />
             <For each={tools}>
               {(tool) => (
                 <Show when={!tool.condition || tool.condition()}>
@@ -193,7 +200,7 @@ export function AgentSplitHeader(props: {
       <ResponsiveBlockToolbar
         tools={shareTools}
         menuTools={tools}
-        ops={entity() ? ops : []}
+        ops={entity() ? ops() : []}
         id={sessionId() ?? ''}
         itemType="agent_session"
         entity={entity()}

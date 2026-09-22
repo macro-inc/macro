@@ -728,7 +728,7 @@ fn compile_document_literal(
         }
         DocumentLiteral::ProjectId(id) => exact_uuid(vocabulary::project_id(), id),
         DocumentLiteral::Owner(owner) => {
-            return exact_utf8(vocabulary::owner(), owner.to_string());
+            return exact_utf8(vocabulary::owner(), owner.principal_id());
         }
         DocumentLiteral::SubType(sub_type) if supports_v2_facts => {
             return exact_utf8(vocabulary::document_sub_type(), sub_type.to_string());
@@ -763,7 +763,7 @@ fn compile_project_literal(literal: &ProjectLiteral) -> Result<PredicateExpr, Co
         ProjectLiteral::ProjectId(id) => exact_uuid(vocabulary::project_id(), id),
         ProjectLiteral::ProjectIdSelf(id) => exact_uuid(vocabulary::id(), id),
         ProjectLiteral::Owner(owner) => {
-            return exact_utf8(vocabulary::owner(), owner.to_string());
+            return exact_utf8(vocabulary::owner(), owner.principal_id());
         }
         ProjectLiteral::CreatedAt(date) => date_expr(vocabulary::created_at(), date),
         ProjectLiteral::UpdatedAt(date) => date_expr(vocabulary::updated_at(), date),
@@ -776,7 +776,7 @@ fn compile_chat_literal(literal: &ChatLiteral) -> Result<PredicateExpr, CompileE
         ChatLiteral::ChatId(id) => exact_uuid(vocabulary::id(), id),
         ChatLiteral::ProjectId(id) => exact_uuid(vocabulary::project_id(), id),
         ChatLiteral::Owner(owner) => {
-            return exact_utf8(vocabulary::owner(), owner.to_string());
+            return exact_utf8(vocabulary::owner(), owner.principal_id());
         }
         ChatLiteral::CreatedAt(date) => date_expr(vocabulary::created_at(), date),
         ChatLiteral::UpdatedAt(date) => date_expr(vocabulary::updated_at(), date),

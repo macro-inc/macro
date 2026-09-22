@@ -14,11 +14,11 @@ mod tests;
 
 use std::collections::HashMap;
 
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::project::{
     BasicProject, Project, ProjectPreviewData, ProjectPreviewV2, ProjectWithUploadRequest,
     WithProjectId,
 };
+use model_owner::Owner;
 use sqlx::PgPool;
 
 use crate::domain::models::{
@@ -38,6 +38,30 @@ impl PgProjectRepo {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
+}
+
+fn decode_owner(value: &str) -> Result<Owner, sqlx::Error> {
+    Owner::from_principal_str(value).map_err(|error| sqlx::Error::Decode(Box::new(error)))
+}
+
+fn map_project(
+    id: String,
+    name: String,
+    user_id: String,
+    parent_id: Option<String>,
+    created_at: Option<chrono::DateTime<chrono::Utc>>,
+    updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+) -> Result<Project, sqlx::Error> {
+    Ok(Project {
+        id,
+        name,
+        user_id: decode_owner(&user_id)?,
+        parent_id,
+        created_at,
+        updated_at,
+        deleted_at,
+    })
 }
 
 impl ProjectRepo for PgProjectRepo {
@@ -69,9 +93,7 @@ impl ProjectRepo for PgProjectRepo {
         .try_map(|row| {
             Ok(BasicProject {
                 id: row.id,
-                user_id: MacroUserIdStr::parse_from_str(&row.user_id)
-                    .map_err(|error| sqlx::Error::Decode(Box::new(error)))?
-                    .into_owned(),
+                user_id: decode_owner(&row.user_id)?,
                 parent_id: row.parent_id,
                 name: row.name,
                 deleted_at: row.deleted_at,
@@ -83,8 +105,7 @@ impl ProjectRepo for PgProjectRepo {
 
     #[tracing::instrument(err, skip(self))]
     async fn get_project_by_id(&self, project_id: &str) -> Result<Option<Project>, Self::Err> {
-        sqlx::query_as!(
-            Project,
+        sqlx::query!(
             r#"
             SELECT
                 p.id,
@@ -99,14 +120,24 @@ impl ProjectRepo for PgProjectRepo {
             "#,
             project_id,
         )
+        .try_map(|row| {
+            map_project(
+                row.id,
+                row.name,
+                row.user_id,
+                row.parent_id,
+                row.created_at,
+                row.updated_at,
+                row.deleted_at,
+            )
+        })
         .fetch_optional(&self.pool)
         .await
     }
 
     #[tracing::instrument(err, skip(self))]
     async fn get_projects_for_user(&self, user_id: &str) -> Result<Vec<Project>, Self::Err> {
-        sqlx::query_as!(
-            Project,
+        sqlx::query!(
             r#"
             SELECT
                 p.id,
@@ -126,6 +157,17 @@ impl ProjectRepo for PgProjectRepo {
             "#,
             user_id,
         )
+        .try_map(|row| {
+            map_project(
+                row.id,
+                row.name,
+                row.user_id,
+                row.parent_id,
+                row.created_at,
+                row.updated_at,
+                row.deleted_at,
+            )
+        })
         .fetch_all(&self.pool)
         .await
     }
@@ -154,17 +196,19 @@ impl ProjectRepo for PgProjectRepo {
             "#,
             user_id,
         )
-        .map(|row| ProjectWithUploadRequest {
-            project: Project {
-                id: row.id,
-                name: row.name,
-                user_id: row.user_id,
-                parent_id: row.parent_id,
-                created_at: row.created_at,
-                updated_at: row.updated_at,
-                deleted_at: None,
-            },
-            upload_request_id: row.upload_request_id,
+        .try_map(|row| {
+            Ok(ProjectWithUploadRequest {
+                project: map_project(
+                    row.id,
+                    row.name,
+                    row.user_id,
+                    row.parent_id,
+                    row.created_at,
+                    row.updated_at,
+                    None,
+                )?,
+                upload_request_id: row.upload_request_id,
+            })
         })
         .fetch_all(&self.pool)
         .await
@@ -200,8 +244,7 @@ impl ProjectRepo for PgProjectRepo {
         &self,
         project_ids: &[String],
     ) -> Result<Vec<ProjectPreviewV2>, Self::Err> {
-        let found = sqlx::query_as!(
-            ProjectPreviewData,
+        let found = sqlx::query!(
             r#"
             WITH RECURSIVE project_path AS (
                 SELECT
@@ -238,6 +281,15 @@ impl ProjectRepo for PgProjectRepo {
             "#,
             project_ids,
         )
+        .try_map(|row| {
+            Ok(ProjectPreviewData {
+                id: row.id,
+                name: row.name,
+                owner: decode_owner(&row.owner)?,
+                path: row.path,
+                updated_at: row.updated_at,
+            })
+        })
         .fetch_all(&self.pool)
         .await?;
 

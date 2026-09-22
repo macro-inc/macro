@@ -1,9 +1,12 @@
 use agent_client_protocol::schema::v1::SessionId;
-use agent_runtime_protocol::domain::schema::v0::SystemEvent;
+use agent_runtime_protocol::domain::schema::v0::{AcpMessage, SystemEvent, ToServerMessage};
 use bots::domain::models::BotId;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use model_owner::Owner;
+
+use super::error::AgentSessionError;
 
 // The log vocabulary - the session id, the log entry, and the frame it
 // carries - is owned by `agent_fold`, the bottom of the agent session stack,
@@ -162,8 +165,8 @@ pub use bots::domain::models::{AgentMcpServer, AgentMcpServers};
 pub struct CreateAgentSessionParams {
     /// Caller-minted session id, available before persistence.
     pub id: AgentSessionId,
-    /// User who created and owns the session.
-    pub owner_id: MacroUserIdStr<'static>,
+    /// Who created and owns the session.
+    pub owner_id: Owner,
     /// Bot running the agent.
     pub bot_id: BotId,
     /// Root message identifying the originating thread, if any.
@@ -208,8 +211,8 @@ pub struct AgentSession {
     pub id: AgentSessionId,
     /// User-facing session name.
     pub name: String,
-    /// The user who created and owns the session. Immutable for its life.
-    pub owner_id: MacroUserIdStr<'static>,
+    /// Who created and owns the session. Immutable for its life.
+    pub owner_id: Owner,
     /// The root message where the bot was originally invoked, if any.
     pub thread_id: Option<Uuid>,
     /// Entity owning the originating thread, derived from its root message.
@@ -251,6 +254,21 @@ pub struct AgentSession {
     pub status: SessionStatus,
     pub created_at: DateTime<Utc>,
     pub modified_at: DateTime<Utc>,
+}
+
+impl AgentSession {
+    /// The user this session runs as.
+    ///
+    /// For every path that acts as the owner - spends their credentials,
+    /// bills them, grants them access - rather than merely names them. The
+    /// owner is a user for every session today, but the type no longer says
+    /// so; asking here fails typed for any other kind instead of treating a
+    /// bot or team as a person.
+    pub fn owner_user(&self) -> Result<&MacroUserIdStr<'static>, AgentSessionError> {
+        self.owner_id
+            .as_user()
+            .ok_or_else(|| AgentSessionError::OwnerNotUser(self.owner_id.owner_type()))
+    }
 }
 
 /// A persisted agent-session name changed and should be shown to live viewers.
@@ -336,6 +354,10 @@ pub struct QueuedActionDto {
     /// replaces.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub prompt: Option<String>,
+    /// Files the prompt refers to, for prompts only. Kept through an edit,
+    /// which replaces the text alone.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<agent_runtime_protocol::domain::action::PromptAttachment>,
     /// The user who queued it, absent when a bot acted on nobody's behalf.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub actor_user_id: Option<String>,
@@ -346,36 +368,74 @@ pub struct QueuedActionDto {
 impl From<super::ports::QueuedControl> for QueuedActionDto {
     fn from(queued: super::ports::QueuedControl) -> Self {
         use agent_runtime_protocol::domain::action::AgentAction;
-        let prompt = match &queued.action {
-            AgentAction::Prompt(action) => Some(action.prompt.clone()),
-            _ => None,
+        let (prompt, attachments) = match &queued.action {
+            AgentAction::Prompt(action) => {
+                (Some(action.prompt.clone()), action.attachments.clone())
+            }
+            _ => (None, Vec::new()),
         };
         Self {
             action_id: queued.action_id,
             kind: queued.action.as_ref().to_owned(),
             prompt,
+            attachments,
             actor_user_id: queued.actor.map(|actor| actor.to_string()),
             created_at: queued.created_at,
         }
     }
 }
 
-/// One frame appended to a live session's log, for anyone watching.
+/// The Cursor run a frame checkpoints, if it is the adapter's empty
+/// `agent_message_chunk` carrying `_meta.macroCursorRunCheckpoint`.
+///
+/// A domain fact rather than a persistence detail: the store projects it
+/// onto `external_agent_session.last_run_id`, and the live writer must know
+/// it to keep such a frame out of a plain batch, so both read one function.
+#[must_use]
+pub fn cursor_run_checkpoint(message: &Message) -> Option<String> {
+    let Message::ToServer(ToServerMessage::Acp(AcpMessage(frame))) = message else {
+        return None;
+    };
+    let value = serde_json::to_value(frame).ok()?;
+    if value.get("method")?.as_str()? != "session/update" {
+        return None;
+    }
+    let params = value.get("params")?;
+    let update = params.get("update")?;
+    if update.get("sessionUpdate")?.as_str()? != "agent_message_chunk"
+        || !update.get("content")?.get("text")?.as_str()?.is_empty()
+    {
+        return None;
+    }
+    params
+        .get("_meta")?
+        .get("macroCursorRunCheckpoint")?
+        .as_str()
+        .map(str::to_owned)
+}
+
+/// A run of frames appended to a live session's log, for anyone watching.
 ///
 /// The streaming counterpart of [`SessionLog`]: that is the selected history window
-/// for a reader arriving late, this is one frame for a reader already here.
-/// Both carry the same entry shape, so a client folds them the same way -
-/// catching up on the log and then following it is one fold, not two.
+/// for a reader arriving late, this is the frames a reader already here has
+/// not seen yet. Both carry the same entry shape, so a client folds them the
+/// same way - catching up on the log and then following it is one fold, not
+/// two.
+///
+/// A batch rather than a frame because the writer flushes frames in runs
+/// (see `LiveSessionLogWriter`), and every run costs one publish however
+/// many frames it holds. `entries` are in log order and never empty.
 ///
 /// Addressed by session: it is the only thing a frame belongs to now that a
 /// session does not own a channel.
 #[derive(Debug, Clone)]
 pub struct LogAppended {
-    /// The session the entry belongs to. The fold keys its messages on this,
+    /// The session the entries belong to. The fold keys its messages on this,
     /// so a client must pass it through unchanged.
     pub agent_session_id: AgentSessionId,
-    /// The frame and the timestamp assigned when it was stored.
-    pub entry: StoredAgentSessionLog,
+    /// The frames and the timestamps assigned when they were stored, in the
+    /// order the log holds them.
+    pub entries: Vec<StoredAgentSessionLog>,
 }
 
 /// One entry of a session's log as it was stored, with the time the log
@@ -493,8 +553,8 @@ pub struct AgentSessionPreviewData {
     pub id: AgentSessionId,
     /// User-facing session name.
     pub name: String,
-    /// The user who owns the session.
-    pub owner_id: MacroUserIdStr<'static>,
+    /// Who owns the session.
+    pub owner_id: Owner,
     /// The bot running the agent, for its avatar.
     pub bot_id: BotId,
     /// Minimal bot identity, hydrated by the service after checking session access.

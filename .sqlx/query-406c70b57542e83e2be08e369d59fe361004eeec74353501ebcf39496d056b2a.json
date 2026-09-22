@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT \n                channel_id, \n                access_level::text as \"access_level!\"\n            FROM \"ChannelSharePermission\"\n            WHERE \"share_permission_id\" = 'sp-p1'\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "access_level!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "406c70b57542e83e2be08e369d59fe361004eeec74353501ebcf39496d056b2a"
+}

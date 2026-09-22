@@ -21,6 +21,7 @@ import type {
   FoldedMessage,
   FoldedStreamEvent,
   SessionMetadata,
+  TurnState,
 } from '@service-agent-fold/generated/types';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type {
@@ -63,6 +64,13 @@ export type AgentSessionHandle = {
   expect: (actionId: string, action: AgentAction) => void;
   /** Take a speculation back. See {@link AgentSession.retract}. */
   retract: (actionId: string) => void;
+  /**
+   * The session's own turn state, read at call time - not reactive. It is
+   * ahead of `metadata().turn` by the worker round trip: a prompt just
+   * issued or expected reads `starting` here before the fold has reported
+   * it. See {@link AgentSession.currentTurn}.
+   */
+  currentTurn: () => TurnState;
   /**
    * Adopt a newer snapshot of this session (the bounded external-url poll).
    * No-op when the payload is for a different session.
@@ -287,6 +295,7 @@ export function createAgentSession(
     expect: (actionId, action) =>
       live()?.expect(actionId, action, { userId: options.userId() }),
     retract: (actionId) => live()?.retract(actionId),
+    currentTurn: () => untrack(live)?.currentTurn() ?? 'idle',
     applySnapshot: (snapshot) => {
       if (sessionId() !== snapshot.id) return;
       mutate(snapshot);

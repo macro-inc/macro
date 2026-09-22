@@ -1,5 +1,19 @@
 # AI Chat (Agents)
 
+## Uploading files with AI
+
+`UploadFile` accepts a filename and standard padded base64 contents, up to 25 MiB
+decoded. An optional project ID places the file in a folder the caller can edit.
+Use `CreateDocument` for generated text and native Macro spreadsheets. Agents with
+code execution should construct the base64 argument from the original bytes;
+the tool cannot access an agent's local path or download a URL.
+
+The tool row displays the filename and, on success, **Uploaded**. Expand it to
+open the created document and see the uploaded byte count. Success means the
+bytes reached storage; previews, DOCX conversion, Markdown initialization, and
+indexing may finish asynchronously. Invalid contents, oversized files, and folder
+permission failures should display a failed tool call without a successful result.
+
 ## Where chats live
 
 - If session creation fails, the session view shows **Unable to start this agent**
@@ -11,26 +25,40 @@
 
 - Open **Go to Agents** → `/app/component/agents`. With AI agents enabled
   (`enable-chat-v3-agents`), the workspace uses one sidebar for Chat and Code.
+  Below **New conversation**, **Agents** opens the same roster as the composer’s
+  **Create agent** action. **Connections** manages MCP integrations (including
+  app authentication and disconnection); this section has moved out of Settings.
+  Home’s **Connect your tools** and agent replies’ **Connect app** chips open this
+  Connections page. Personal Gmail/GitHub account links remain under Settings →
+  Integrations.
   **New conversation** opens the composer. **Conversations** is a mixed list
   of chats and coding sessions, newest first, with one search across both.
   Chat rows use a chat icon; coding rows use `</>` (the PR status icon when a
   pull request is linked). Home and the Agents sidebar share these agent rows.
-  Rows have no agent or runtime-status subtext. Sessions with a linked PR show
-  **View PR #<number> in GitHub** beneath the title; clicking it opens GitHub in
-  a new tab without opening the session. The leading icon reflects the PR status. Changing the composer mode does not filter the sidebar.
+  Rows have no agent or runtime-status subtext. A session that is starting or
+  whose turn is still running (the agent is working, writing code, or stopping)
+  shows the same three-dot working wave as the transcript in place of the
+  leading icon; the row's accessible name appends `Starting` or `Working`.
+  Sessions with a linked PR show
+  **View PR #<number> in GitHub** beneath the title; clicking it opens the synced
+  GitHub PR entity in a split (the same destination as the session header chip
+  and Magic Chip). Until GitHub has synced the entity it opens GitHub in a new
+  tab. Either click leaves the session unopened. The leading icon reflects the PR status. Changing the composer mode does not filter the sidebar.
   Selecting a row opens its own mode; Shift-click opens it in a new split.
+  Right-click (or long-press on mobile) opens the same entity menu as Home:
+  Rename, Favorite, Copy link, Share, Delete, and the other session actions.
 - The starting page has a compact composer that starts at one line and grows
   with longer prompts or Shift+Enter. Lists, quotes, headings, and other
   non-paragraph blocks expand immediately, even with short text. This also applies
   to session composers. The editor takes the full width and controls move below;
   returning to a short paragraph restores the compact row. Height changes animate
-  over 150ms, with reduced-motion preferences respected. **Agent** and **Send**
+  over 200ms, with reduced-motion preferences respected. **Agent** and **Send**
   sit inside the input on the right.
   Direct model selections show only the model name and provider icon in the input.
   Saved and coding agents show their identity beside the current model. There is
   no Chat/Code switch or separate model button.
 - The agent dropdown includes every saved agent regardless of runtime, plus Cursor,
-  grouped in **Coding agents** and **Agents** sections. A **Models** section lists
+  grouped in **Models**, **Agents**, and **Coding agents** sections. **Models** lists
   Macro’s available models with readable names (for example, **Sonnet 5**) and
   provider icons aligned with the agent icons. The chat catalog offers Sonnet 5,
   Opus 5, and Haiku 4.5; older Sonnet and Opus versions are not offered.
@@ -55,26 +83,39 @@
   when changing agents. **Create agent** stays pinned at the bottom of the dropdown
   while the agent and model lists scroll. It opens the roster on the selected kind's
   tab, where either kind can be created.
-- Selecting a coding agent reveals a repository drawer directly under the input
-  with a short slide and fade; it extends 32px behind the rounded input and stays
-  behind it throughout the transition, keeping its existing edge-muted border.
-  Selecting a chat agent retracts it. Reduced-motion
+- On Home and New conversation, selecting a coding agent expands the input even
+  with an empty or short draft. Both pages place the composer above the viewport's
+  vertical center. The heading and first input line stay anchored while the composer
+  expands downward. The plus attachment button stays at the far left: before the
+  text in the compact row, and on the bottom control row when expanded. The editor sits above the controls, with attachments
+  on the left and the agent/model and Send on the right. A full-width repository bar
+  slides and fades in below the rounded input over 200ms, with rounded bottom corners
+  and a subtle border along its sides and bottom, with a darker surface in dark mode.
+  Selecting a chat agent retracts the bar and
+  restores the compact input when the draft fits on one line, without remounting
+  the editor or losing the draft. Reduced-motion
   preferences disable the animation. The hidden drawer is inert. **Repository**
   (**Choose repository** until one is picked) opens a searchable list:
   **Choose automatically**, then the repositories the signed-in user reaches
   through Macro's GitHub App (`GET /agent-repositories` on the agent harness),
-  recently used ones first. Typing filters the list; an unlisted GitHub
-  `owner/repo` or URL adds a **Use owner/repo** row. Arrow keys move the
-  highlight and Enter or a click picks it; there is no separate confirm
-  button. Someone who reaches no repository sees a hint with **Connect
-  GitHub**, which opens Settings → Connected. The last repository picked is
-  remembered per user in local storage and preselected next time. Once
-  selected, **Branch** shows the repository's default branch (`main` when it
-  has none) and opens a starting-branch field confirmed with **Use branch**;
-  picking a different repository resets the branch to that repository's
-  default. Omitting the branch on the create-session API likewise starts on
-  the repository's default branch.
-  Both controls open above the drawer without clipping. The selections survive
+  recently used ones first. A new conversation always starts on **Choose
+  repository** (Automatic); the last used repository is not preselected.
+  Typing filters the list to those reachable repositories. Unlisted GitHub
+  URLs and recents the listing no longer carries are not offered. Arrow keys
+  move the highlight and Enter or a click picks it; there is no separate
+  confirm button. Someone who reaches no repository sees a hint with **Connect
+  GitHub**, which opens Settings → Connected. Listed recents are remembered
+  per user in local storage and offered first, without changing the Automatic
+  default. Once selected, **Branch** shows the repository's default branch (`main` when it
+  has none) and opens a searchable list of that repository's branches
+  (`GET /agent-repositories/branches?repoUrl=…` on the agent harness),
+  default first. Typing filters the list; an unlisted valid name adds a
+  **Use name** row. Arrow keys move the highlight and Enter or a click picks
+  it; there is no separate confirm button. Someone whose listing fails sees
+  **Retry**. Picking a different repository resets the branch to that
+  repository's default. Omitting the branch on the create-session API
+  likewise starts on the repository's default branch.
+  Both controls open above the footer without clipping. The selections survive
   agent changes and are sent only to coding agents. Cursor honors the explicit
   repository and branch instead of choosing a repository from the prompt;
   the owner must have access through the connected GitHub App.
@@ -105,8 +146,9 @@
   saved-title precedence, and title menu as `/app/agent/<id>`; click the caret
   beside the title for shared block actions such as Rename, Copy link, Favorite,
   and Delete
-  (Rename, Copy link, Delete). A metadata strip lists the agent, runtime,
-  model, repository, and status. Chat and Code session inputs
+  (Rename, Copy link, Delete). A metadata strip lists the agent, model,
+  repository, and status. Coding sessions also list the harness; in-memory
+  chat agents omit that row. Chat and Code session inputs
   use the same growing, initially single-line input with the model selector on
   the right.
   Existing sessions retain their agent and kind; use **New conversation** to
@@ -354,6 +396,26 @@ latest turn.
 access and get an `agent_session_mentioned` notification that opens the session; a viewer's
 mention only notifies people who could already open it.
 
+In Home, a new Agents conversation, and an existing agent session, files can be
+attached to a prompt three ways: drop them anywhere on the composer (a
+"Drop files here to send them to the agent" overlay appears), paste them from the
+clipboard, or use the paperclip **`Attach files`** button. Every file uploads to the
+static file service and shows as a chip above the text (media thumbnails, document
+pills with a remove `×`); **Send** is disabled while an upload is pending. The agent
+receives each file as an ACP `resource_link` (a URL it can fetch) after the prompt text,
+and the sent prompt renders its files in the transcript (image thumbnails and
+video previews that open the same lightbox as channel media; file chips that
+open the file). A prompt may be files only, including the
+first message in a new conversation. Uploading attachments survive switching the
+agent or opening repository settings; sending clears the attachment previews.
+Queued prompts
+list their attached file names under the text; editing a queued prompt keeps them.
+
+Cursor walkthrough files the run re-hosts appear in the transcript after the
+answer: screenshots as images, recordings as video players, and `.txt` / `.log`
+files as an inline `txt` code block (not a download link). Larger or non-UTF-8
+text stays a link.
+
 On mobile the composer (and any queued prompts above it) floats in the bottom
 accessory region above the dock — same placement as channel and AI chat — so it
 stays tappable and clear of the home indicator. The box is full width; the text
@@ -396,6 +458,8 @@ There is no breadcrumb because Agents has no subspaces. Unknown model providers
 fall back to the chat icon. The toggle (or `]`) opens the session's Details, Plan,
 Changes, and Activity sections when available, beside the transcript in wide
 layouts or over it in narrow layouts; it does not open another split.
+Details lists Status, Agent, Model, and dates for every session; the Harness
+row appears only for coding runtimes, never for in-memory chat agents.
 New conversation pages have no disabled session action buttons. Older chats
 also have one header row, and empty chats show a simple conversation prompt
 instead of the standalone recent-sessions and tips surface.
@@ -406,13 +470,15 @@ select people or channels and send the session with an optional message using
 the same Share dialog and mobile drawer as documents. Sessions also support
 **Share** from entity list menus and the entity sharing shortcut. People receive it through a direct or
 group message. Recipients can view and control the session; there is no access
-level selector. Cancel closes the composer without sending.
+level selector. The owner sees the standard recipient-and-message form without
+an extra session notice or Copy Link footer; **Copy Share Link** remains in
+the header. Cancel closes the composer without sending.
 
 Other participants can copy a link for people who already have access, but
 cannot grant access. Copying a link alone never changes permissions. New,
 unsaved session drafts do not offer sharing.
 
-Agent sessions in the `@` menu use the shared Quick Access feed, loaded when the app opens. Search matches session titles and persona names. The initial feed covers the 500 most recently updated accessible sessions; it does not load transcripts.
+Agent sessions in the `@` menu use the shared Quick Access feed, loaded when the app opens. Search matches session titles and agent names. The initial feed covers the 500 most recently updated accessible sessions; it does not load transcripts.
 
 ### Expanded session mentions
 
@@ -424,12 +490,69 @@ The display choice survives reload and copying; expansion still references the
 same session and does not invoke a bot. Compact mentions do not load transcripts.
 Existing announcement chips remain locked to the turn they announced.
 
+### Reviewing a linked GitHub pull request
+
+Sessions with a linked GitHub pull request capture that PR's diff when each
+turn ends, regardless of the coding runtime. Unpushed workspace changes and
+branches without a PR are not included. The session header gains a **Changes**
+toggle (`aria-pressed`) with green additions and red deletions (`+N −M`); it opens a resizable
+**Changes** pane beside the transcript (drag the 1px divider between them).
+Chat sessions on Macro's in-memory harness have no repository, so they show
+none of this: no **Changes** toggle, pane, hand-off card, or review-notes chip,
+and the title menu offers **Open repository** only when the session has one.
+The URL's `diff` query parameter stores each session's pane state and diff
+layout (`session-id:split:unified`, or `changes-only` / `agent-only` and
+`split` for side-by-side diffs). Copying the URL preserves that view; reload
+and Back/Forward restore it. A plain session URL starts with Changes closed.
+Divider width, collapsed files, and review notes stay local.
+The pane header shows a `head → base` branch pill, a **Unified / Split**
+segmented control (`aria-label="Diff layout"`), a refresh button, the
+**View pull request** button (opens GitHub), and **Expand changes to the full width**
+(spotlight; **Bring the session back** returns to the split) and **Close the
+changes pane**. Below it is a **Collapse all / Expand all** button.
+The body is a file tree (`nav[aria-label="Changed files"]`, directories
+compressed along single-child chains, status letters A/M/D/R and +/− counts)
+next to a scrollable stack of file cards. Expanded cards keep their full height;
+**Collapse all / Expand all** hides or restores their bodies. Each card's header has a disclosure
+caret, the path, `+adds −dels`, and **Copy path**. Diffs render with Pierre; hover a
+line and click the accent **+** in the gutter (drag for a range) to leave a
+review note for the agent (`aria-label="Review note"`; `Cmd/Ctrl+Enter` adds,
+`Escape` cancels). Notes hang under their line as "queued for the agent" and a
+**N review notes queued · Send to agent** chip appears above the composer.
+The chip's count row expands (`aria-expanded`) to show each queued note's
+file, line, and text so the reviewer can read or edit them before sending;
+**Send to agent** then posts one prompt listing every non-empty note by file
+and line and marks them "sent to agent". Sending a typed composer message
+while notes are queued includes those notes in the same prompt and marks them
+sent — a second Enter does not post them again. Clicking a note's path opens
+that file in the Changes pane. Notes never go to GitHub. Collapsed files and
+unsent notes persist per session in localStorage; a new capture expands all
+files.
+
+The session header's **Changes** pill and sidebar totals display the linked
+PR's `additions` and `deletions` returned by the GitHub API, without summing
+transcript edits. The sidebar lists files from the captured PR diff. Counts
+refresh when a capture changes and every 30 seconds while the session is open.
+Zero-valued counts and unavailable GitHub statistics are hidden; a missing PR
+or failed GitHub request never falls back to estimated transcript totals.
+
+While the pane is closed and a capture has files, a **Changes ready to
+review** card sits above the composer with **Review changes**, **Pull request
+#N** (opens GitHub), and **Dismiss**. With no linked PR, the pane explains
+that a GitHub PR is required. Ask the agent to open one and register its URL
+with `set_pull_request`, then use **Refresh changes**. An unavailable or
+oversized PR is explained in the pane; there is no branch or container fallback.
+Refresh request failures show a retry banner while keeping the last diff visible.
+The pane does not create PRs or generate their descriptions.
+
 ### Transcript navigation
 
 Agent sessions reuse the channel's TanStack `ThreadList`. Opening a session lands
 at the latest message, including when history arrives after the empty view. Short
-transcripts sit at the bottom, above the composer. Only the visible rows and an
-overscan buffer are mounted: scroll to older turns before searching their DOM text.
+transcripts start with 16px of top padding, with the user prompt followed by the
+agent response; streaming output grows downward into the available space. Only
+the visible rows and an overscan buffer are mounted: scroll to older turns before
+searching their DOM text.
 
 Search links add `agent_message_turn=<zero-based turn>&agent_message_author=user|agent`.
 They wait for history to load, then scroll to and highlight the matching folded
@@ -489,11 +612,45 @@ must stay hidden; subsequent live messages must still appear.
   walks back and past the bottom row returns to the input. When the composer is empty
   and a prompt is queued, its action becomes `Send next queued message` (an Enter
   symbol); pressing Enter or clicking that button cancels the current turn so the next
-  queued prompt starts immediately. Typed composer text still takes priority and Enter
+  queued prompt starts immediately. The advance is held — the control reads `Stop` and
+  Enter is inert — while a stop is already in flight or while the prompt the last
+  advance sent is still unconfirmed (it shows as a pending bubble); once the server
+  confirms that prompt as the running turn, Enter advances the queue again. Two rapid
+  Enters therefore advance one entry, not two: each advance ends the turn the server is
+  actually running. Typed composer text still takes priority and Enter
   queues that new prompt normally.
 - The stop button cancels only the **current** turn. The queue keeps draining: the next
   queued prompt starts a new turn. To fully quiesce a session, remove the queued
   entries, then stop.
+- **Permission prompts.** Everyone with **Edit** access to a session may approve or
+  reject its ACP permission requests, even when they did not create the session.
+  A pending request shows one `Approval needed` card above the composer, with
+  the command or affected file separate from the actions. The transcript does
+  not repeat the pending request.
+  `Allow once` and `Deny` answer immediately; `More options` contains remembered
+  choices with the agent's full rule text. Channel Magic Chips expose the same
+  approval card in place of their loading state, alongside existing questions.
+  Only authenticated users with **Edit** or **Owner** session access may answer;
+  bot, harness, and internal-service credentials cannot approve on their behalf.
+  Viewers and commenters see a waiting notice without
+  action buttons. Stopping a turn cancels open requests; answered requests show
+  a compact outcome such as `Allowed once` or `Denied` in the transcript.
+  Permission requests and questions both put the agent in a waiting state.
+  Several permissions may be pending alongside one question; answering one leaves
+  the others available. Controls disappear when their turn ends, is stopped, or
+  disconnects, and old transcript requests cannot answer a later turn's request.
+- **Harness bypass consent.** Settings → Harnesses → Connect a harness offers
+  `Allow bypassing permission requests`, off by default. Enabling it warns that
+  agents may run commands and edit files on the machine without approval.
+  Macrod Quickstart and Config also offer `Full Access`, off by
+  default. The choice applies at the next pairing: off disables bypass in the
+  approval dialog; on preselects bypass with a warning, and the approving user
+  can turn it off. Older daemons leave this choice to the approval dialog.
+- **Agent permission policy.** Settings → Agents → Runtime shows `Always prompt`
+  and `Always bypass` only for local macrod harnesses. Macrod defaults to prompts;
+  bypass requires both harness consent and the agent's explicit choice. Built-in
+  Macro, in-memory, Cursor, Codex, and Claude runtimes always bypass and have no
+  permission policy selector. The backend enforces these policies.
 
 Locally sent user messages in both AI implementations enter with a short upward
 slide and fade. History and remounted messages stay

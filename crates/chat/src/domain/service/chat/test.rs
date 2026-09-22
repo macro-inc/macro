@@ -8,6 +8,7 @@ use attachment::FormattedParts;
 use entity_access_management::domain::models::EntityAccessManagementError;
 use macro_event_broker::{EventBrokerError, MacroEvent};
 use model::chat::Chat;
+use model_owner::Owner;
 
 use super::*;
 use crate::domain::models::{ChatResponse, PatchChatMessageArgs};
@@ -136,7 +137,7 @@ impl ChatRepo for StubChatRepo {
         Ok(Chat {
             id: chat_id.to_string(),
             name: "Source Chat".to_string(),
-            user_id: OWNER.to_string(),
+            user_id: Owner::from_principal_str(OWNER).unwrap(),
             model: None,
             project_id: self.metadata_project_id.clone(),
             created_at: None,

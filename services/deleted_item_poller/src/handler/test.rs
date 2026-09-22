@@ -254,17 +254,63 @@ async fn publish_project_purge_events_returns_publication_failures() {
 #[tokio::test]
 async fn publish_project_purge_events_rejects_malformed_owners() {
     let event_broker = FakeEventBroker::default();
-    let projects = vec![ProjectToDelete {
-        project_id: "project-one".to_string(),
-        user_id: "not-a-macro-user".to_string(),
-    }];
+    let projects = vec![
+        ProjectToDelete {
+            project_id: "project-one".to_string(),
+            user_id: "not-a-macro-user".to_string(),
+        },
+        ProjectToDelete {
+            project_id: "project-two".to_string(),
+            user_id: "macro|owner@example.com".to_string(),
+        },
+    ];
 
     let error = publish_project_purge_events(&event_broker, &projects)
         .await
-        .expect_err("malformed owners should be returned");
+        .expect_err("malformed owners should fail the whole batch");
 
     assert!(format!("{error:#}").contains("invalid owner for project project-one"));
     assert!(event_broker.published().is_empty());
+}
+
+#[tokio::test]
+async fn publish_project_purge_events_accepts_bot_owners() {
+    let event_broker = FakeEventBroker::default();
+    let projects = vec![ProjectToDelete {
+        project_id: "project-bot".to_string(),
+        user_id: "bot|00000000-0000-0000-0000-00000000a1a1".to_string(),
+    }];
+
+    publish_project_purge_events(&event_broker, &projects)
+        .await
+        .unwrap();
+
+    let published = event_broker.published();
+    assert_eq!(published.len(), 1);
+    assert_eq!(
+        published[0].envelope["metadata"]["owner"],
+        json!("bot|00000000-0000-0000-0000-00000000a1a1")
+    );
+}
+
+#[tokio::test]
+async fn publish_project_purge_events_accepts_team_owners() {
+    let event_broker = FakeEventBroker::default();
+    let projects = vec![ProjectToDelete {
+        project_id: "project-team".to_string(),
+        user_id: "01234567-89ab-cdef-0123-456789abcdef".to_string(),
+    }];
+
+    publish_project_purge_events(&event_broker, &projects)
+        .await
+        .unwrap();
+
+    let published = event_broker.published();
+    assert_eq!(published.len(), 1);
+    assert_eq!(
+        published[0].envelope["metadata"]["owner"],
+        json!("01234567-89ab-cdef-0123-456789abcdef")
+    );
 }
 
 #[tokio::test]

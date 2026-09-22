@@ -116,6 +116,7 @@ fn searchable_text_includes_folded_json_and_visible_failure() {
 #[test]
 fn searchable_text_omits_non_semantic_permission_boilerplate() {
     let message = message(vec![MessagePart::Permission {
+        request_id: crate::domain::model::AgentRequestId::Number(7),
         tool_call: ToolUseId("tool-1".to_owned()),
         options: Vec::new(),
         outcome: PermissionOutcome::Pending,

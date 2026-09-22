@@ -18,6 +18,15 @@ import { Message } from './AgentMessage';
 vi.mock('@core/util/message-send-motion', () => ({
   messageSendMotion: () => {},
 }));
+const viewerId = vi.hoisted(() => ({
+  current: 'macro|me@macro.com' as string | undefined,
+}));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => viewerId.current,
+}));
+vi.mock('@core/user/util', () => ({
+  idToDisplayName: (id: string) => id.replace(/^macro\|/, ''),
+}));
 vi.mock('@ui', () => ({
   UserMessageBubble: (props: { children: JSX.Element }) => (
     <div data-testid="bubble">{props.children}</div>
@@ -40,6 +49,11 @@ vi.mock('./parts/PermissionPart', () => ({
   PermissionPart: () => <div data-testid="permission" />,
 }));
 vi.mock('./parts/PlanPart', () => ({ PlanPart: () => null }));
+vi.mock('./parts/AttachmentPart', () => ({
+  AttachmentPart: (props: { part: { name: string } }) => (
+    <div data-testid="attachment">{props.part.name}</div>
+  ),
+}));
 vi.mock('./parts/ControlPart', () => ({ ControlPart: () => null }));
 vi.mock('./parts/ElicitationPart', () => ({ ElicitationPart: () => null }));
 vi.mock('../ui', () => ({
@@ -71,7 +85,10 @@ vi.mock('../ui', () => ({
   ),
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  viewerId.current = 'macro|me@macro.com';
+  cleanup();
+});
 
 const text = (value: string): MessagePart => ({ kind: 'text', text: value });
 const tool = (
@@ -87,6 +104,7 @@ const tool = (
 });
 const permission = (toolCall: string): MessagePart => ({
   kind: 'permission',
+  requestId: 'permission-test',
   toolCall,
   options: [],
   outcome: { kind: 'pending' },
@@ -355,5 +373,47 @@ describe('Message thought shimmer', () => {
       <Message message={message([thought('done thinking')])} inFlight={false} />
     ));
     expect(view.getByTestId('thought').dataset.active).toBe('false');
+  });
+});
+
+describe('Message prompt attribution', () => {
+  const prompt = (userId: string | null): FoldedMessage => ({
+    ...message([text('Do the thing.')]),
+    author: { kind: 'user', userId },
+  });
+
+  it("names the sender above another participant's prompt", () => {
+    const view = render(() => (
+      <Message message={prompt('macro|wolf@macro.com')} inFlight={false} />
+    ));
+    expect(view.getByTestId('prompt-author').textContent).toBe(
+      'wolf@macro.com'
+    );
+    expect(view.getByTestId('bubble').textContent).toBe('Do the thing.');
+  });
+
+  it("leaves the viewer's own prompt unlabelled", () => {
+    const view = render(() => (
+      <Message message={prompt('macro|me@macro.com')} inFlight={false} />
+    ));
+    expect(view.queryByTestId('prompt-author')).toBeNull();
+    expect(view.getByTestId('bubble')).toBeTruthy();
+  });
+
+  it('leaves an unattributed prompt unlabelled', () => {
+    const view = render(() => (
+      <Message message={prompt(null)} inFlight={false} />
+    ));
+    expect(view.queryByTestId('prompt-author')).toBeNull();
+    expect(view.getByTestId('bubble')).toBeTruthy();
+  });
+
+  it('leaves a prompt unlabelled while the viewer id is still loading', () => {
+    viewerId.current = undefined;
+    const view = render(() => (
+      <Message message={prompt('macro|me@macro.com')} inFlight={false} />
+    ));
+    expect(view.queryByTestId('prompt-author')).toBeNull();
+    expect(view.getByTestId('bubble')).toBeTruthy();
   });
 });

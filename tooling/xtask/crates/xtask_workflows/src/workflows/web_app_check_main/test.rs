@@ -21,3 +21,25 @@ fn nix_dev_shell_does_not_start_typecheck() {
         "web setup action still belongs in should_run: {should_run}"
     );
 }
+
+#[test]
+fn typecheck_runs_lexical_service_check_and_tests() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    let typescript = yaml
+        .split("name: Typecheck")
+        .nth(1)
+        .and_then(|rest| rest.split("name: Biome Check").next())
+        .expect("Typecheck job");
+    assert!(
+        typescript.contains("bun run check"),
+        "Typecheck must type-check lexical-service: {typescript}"
+    );
+    assert!(
+        typescript.contains("bun test src"),
+        "Typecheck must run lexical-service endpoint tests: {typescript}"
+    );
+    assert!(
+        typescript.contains("services/lexical-service"),
+        "lexical-service steps must run in the service directory: {typescript}"
+    );
+}

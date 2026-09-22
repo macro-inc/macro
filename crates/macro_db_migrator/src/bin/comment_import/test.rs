@@ -504,7 +504,7 @@ async fn rejects_concurrent_runner_ambiguous_anchors_and_duplicate_marks(pool: P
             .to_string()
             .contains("Another comment import")
     );
-    release_lock(&mut other).await;
+    release_import_lock(&mut other).await;
     other.close().await.unwrap();
 
     sqlx::query!(r#"UPDATE "PdfHighlightAnchor" SET "threadId" = 3"#)
@@ -545,7 +545,7 @@ async fn rejects_concurrent_runner_ambiguous_anchors_and_duplicate_marks(pool: P
             .await
             .unwrap();
     assert!(acquired);
-    release_lock(&mut probe).await;
+    release_import_lock(&mut probe).await;
     probe.close().await.unwrap();
 
     sqlx::query!(r#"UPDATE "Thread" SET metadata = '{"markId":"not-a-mark"}' WHERE id = 5"#)
@@ -565,9 +565,9 @@ async fn other_connection(pool: &PgPool) -> PgConnection {
     pool.acquire().await.unwrap().detach()
 }
 
-// Closing a client connection does not wait for PostgreSQL to process its
-// termination. Confirm unlock before another connection tries to acquire it.
-async fn release_lock(connection: &mut PgConnection) {
+async fn release_import_lock(connection: &mut PgConnection) {
+    // Closing the client does not wait for PostgreSQL to release session locks.
+    // Await an explicit unlock before another connection tries to acquire it.
     assert!(
         sqlx::query_scalar!(r#"SELECT pg_advisory_unlock($1) AS "released!""#, LOCK_ID)
             .fetch_one(connection)

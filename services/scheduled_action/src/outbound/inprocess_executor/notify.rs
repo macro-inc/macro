@@ -1,4 +1,4 @@
-use crate::domain::models::ScheduledAction;
+use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use model_notifications::AiResponseMetadata;
 use notification::domain::models::SendNotificationRequestBuilder;
@@ -13,12 +13,12 @@ use std::sync::Arc;
 pub fn notify_completion(
     notification_ingress: &Arc<SqsNotificationIngress<SqsQueue>>,
     chat_id: &str,
-    action: &ScheduledAction,
+    owner: &MacroUserIdStr<'static>,
     assistant_text: &str,
 ) {
     let ingress = Arc::clone(notification_ingress);
     let chat_id = chat_id.to_string();
-    let owner = action.owner.clone();
+    let owner = owner.clone();
     let message_id = chat_id.clone();
     let assistant_text = assistant_text.to_string();
 

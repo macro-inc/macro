@@ -14397,6 +14397,10 @@
           "mcp"
         ],
         "properties": {
+          "auto_accept_permissions": {
+            "type": ["boolean", "null"],
+            "description": "Whether the agent's sessions approve ACP permission requests without\nasking. `None` means always prompt. Bypass also requires the harness's opt-in."
+          },
           "bot": {
             "$ref": "#/components/schemas/Bot",
             "description": "The bot identity used for mentions and channel participation."
@@ -14521,7 +14525,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Filter by session owner. Examples: ['macro|user1@user.com']. Empty to\ninclude every owner."
+            "description": "Filter by session owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
           }
         }
       },
@@ -15971,6 +15975,10 @@
         "type": "object",
         "description": "Request to approve a pairing and register the harness.",
         "properties": {
+          "allow_permission_bypass": {
+            "type": "boolean",
+            "description": "Whether agents may bypass ACP permission requests on this harness."
+          },
           "name": {
             "type": ["string", "null"],
             "description": "Display name override. Defaults to the daemon's requested name."
@@ -18491,7 +18499,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Filter by chat owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+            "description": "Filter by chat owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
           },
           "project_ids": {
             "type": "array",
@@ -18738,6 +18746,10 @@
           "channel_scope"
         ],
         "properties": {
+          "auto_accept_permissions": {
+            "type": ["boolean", "null"],
+            "description": "Whether the agent's sessions approve ACP permission requests without\nasking. Omit to always prompt."
+          },
           "avatar_url": {
             "type": ["string", "null"],
             "description": "Optional avatar URL or data URL."
@@ -19345,6 +19357,10 @@
         "description": "Request to open a pairing: the daemon asks for a code the user approves.\n\nThe daemon serializes this, so both derives are used.",
         "required": ["name"],
         "properties": {
+          "allow_permission_bypass": {
+            "type": ["boolean", "null"],
+            "description": "Daemon operator consent ceiling. Omitted by older clients; web approval decides."
+          },
           "host": {
             "type": ["string", "null"],
             "description": "Display-only description of the machine, e.g. `eric@macbook / darwin`."
@@ -20556,7 +20572,7 @@
             "description": "File type of the uploaded object (may differ from the document's own\ntype, e.g. `pdf` for the converted rendition of a docx)."
           },
           "owner": {
-            "$ref": "#/components/schemas/MacroUserIdStr",
+            "type": "string",
             "description": "The owner of the document (used by the extractor to resolve S3 keys)."
           }
         }
@@ -20591,7 +20607,7 @@
             ]
           },
           "owner": {
-            "$ref": "#/components/schemas/MacroUserIdStr",
+            "type": "string",
             "description": "The owner of the new copy (the copier)."
           },
           "project_id": {
@@ -20665,7 +20681,7 @@
             ]
           },
           "owner": {
-            "$ref": "#/components/schemas/MacroUserIdStr",
+            "type": "string",
             "description": "The owner (creator) of the document."
           },
           "project_id": {
@@ -20761,7 +20777,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Filter by document owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+            "description": "Filter by document owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
           },
           "project_ids": {
             "type": "array",
@@ -21289,7 +21305,7 @@
           },
           "file_type": {
             "$ref": "#/components/schemas/FileType",
-            "description": "File type of the sync document (markdown today)."
+            "description": "File type of the sync document, resolved by the document backend."
           },
           "on_behalf_of": {
             "oneOf": [
@@ -21496,7 +21512,7 @@
             ]
           },
           "owner": {
-            "$ref": "#/components/schemas/MacroUserIdStr",
+            "type": "string",
             "description": "The owner of the document."
           },
           "previous_project_id": {
@@ -23939,6 +23955,10 @@
           "connected"
         ],
         "properties": {
+          "allow_permission_bypass": {
+            "type": "boolean",
+            "description": "Whether agents may bypass ACP permission requests on this harness."
+          },
           "connected": {
             "type": "boolean",
             "description": "Whether the daemon currently holds a runtime connection."
@@ -25260,6 +25280,10 @@
             "type": ["string", "null"],
             "description": "Display-only description of the machine."
           },
+          "requested_allow_permission_bypass": {
+            "type": ["boolean", "null"],
+            "description": "Daemon operator consent ceiling; false forbids bypass at approval."
+          },
           "requested_name": {
             "type": "string",
             "description": "Harness display name the daemon asked for."
@@ -26420,7 +26444,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Filter by project owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+            "description": "Filter by project owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
           },
           "project_ids": {
             "type": "array",
@@ -29206,7 +29230,7 @@
               },
               "ownerId": {
                 "type": "string",
-                "description": "The user id of who created the project"
+                "description": "The owner of the project"
               },
               "parentId": {
                 "type": ["string", "null"],
@@ -30158,6 +30182,10 @@
           "channel_scope"
         ],
         "properties": {
+          "auto_accept_permissions": {
+            "type": ["boolean", "null"],
+            "description": "Whether the agent's sessions approve ACP permission requests without\nasking. Omit to always prompt."
+          },
           "avatar_url": {
             "type": ["string", "null"],
             "description": "Optional avatar URL or data URL."

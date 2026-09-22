@@ -1,5 +1,9 @@
 import { type Accessor, createSignal } from 'solid-js';
-import type { EmailAttachmentStorage } from '../context/compose-capabilities';
+import type {
+  EmailAttachmentStorage,
+  EmailComposeFeedback,
+  EmailConnectivity,
+} from '../context/compose-capabilities';
 import type { DraftFormAttachment } from './email-form-state';
 import type { EmailFormContextValue } from './email-form-types';
 
@@ -12,6 +16,23 @@ type AttachmentState = Pick<
   | 'removeById'
   | 'removeForwarded'
 >;
+
+/**
+ * A queued save carries only text; file bytes live in the composer's memory
+ * until a save commits, so adding attachments offline is refused rather than
+ * silently missed. Resolves true when the add must not proceed.
+ */
+export async function refuseAttachmentsOffline(
+  connectivity: EmailConnectivity,
+  notices: Pick<EmailComposeFeedback, 'blockingNotice'>
+): Promise<boolean> {
+  if (!connectivity.looksOffline()) return false;
+  await notices.blockingNotice({
+    title: "You're offline",
+    body: "Attachments can't be added while you're offline. Reconnect and try again.",
+  });
+  return true;
+}
 
 /** Attachment transport and completion, independent of draft/send orchestration. */
 export function createAttachmentPersistence(options: {

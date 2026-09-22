@@ -1,12 +1,20 @@
+import {
+  AgentChangesProvider,
+  AgentChangesSplit,
+  ChangesHandoff,
+  ChangesToggle,
+  ReviewNotesDock,
+} from '@app/features/agent-changes/agent-changes';
+import { AgentSessionProvider } from '@app/features/block-agent/agent-session-provider';
 import { AgentComposer } from '@app/features/block-agent/component/AgentComposer';
 import { AgentPullRequestChip } from '@app/features/block-agent/component/AgentPullRequestChip';
-import { agentSessionTitle } from '@app/features/block-agent/component/AgentSplitHeader';
+import {
+  agentSessionTitle,
+  sessionRepositoryUrl,
+} from '@app/features/block-agent/component/AgentSplitHeader';
 import { AgentSidePanelSections } from '@app/features/block-agent/component/sidepanel/AgentSidePanelSections';
 import { Transcript } from '@app/features/block-agent/component/Transcript';
-import {
-  AgentSessionProvider,
-  useAgentSession,
-} from '@app/features/block-agent/context/AgentSessionContext';
+import { useAgentSession } from '@app/features/block-agent/context/AgentSessionContext';
 import {
   forgetPendingSession,
   pendingSession,
@@ -138,14 +146,18 @@ function SessionContent(props: { onDeleted: () => void }) {
                         ops={[
                           { op: 'rename' },
                           { op: 'delete' },
-                          {
-                            label: 'Open repository',
-                            icon: GitBranch,
-                            action: () => {
-                              const url = session()?.repoUrl;
-                              if (url) openExternalUrl(url);
-                            },
-                          },
+                          ...(sessionRepositoryUrl(session())
+                            ? [
+                                {
+                                  label: 'Open repository',
+                                  icon: GitBranch,
+                                  action: () => {
+                                    const url = sessionRepositoryUrl(session());
+                                    if (url) openExternalUrl(url);
+                                  },
+                                },
+                              ]
+                            : []),
                         ]}
                         tools={[
                           {
@@ -190,6 +202,7 @@ function SessionContent(props: { onDeleted: () => void }) {
               />
             )}
           </Show>
+          <ChangesToggle />
           <SidePanel.Toggle />
         </Topbar>
         <div class="relative min-h-0 min-w-0 flex-1">
@@ -213,7 +226,9 @@ function SessionContent(props: { onDeleted: () => void }) {
                   <Transcript />
                 </div>
                 <div class="dock">
-                  <div class="composer-anchor">
+                  <div class="composer-anchor flex flex-col gap-2">
+                    <ChangesHandoff />
+                    <ReviewNotesDock />
                     <AgentComposer
                       autofocus
                       input={ChatSessionInput}
@@ -262,7 +277,11 @@ export function AgentSessionPane(props: {
 
   return (
     <AgentSessionProvider blockId={props.id} onSessionId={props.onSessionId}>
-      <SessionContent onDeleted={props.onDeleted} />
+      <AgentChangesProvider>
+        <AgentChangesSplit>
+          <SessionContent onDeleted={props.onDeleted} />
+        </AgentChangesSplit>
+      </AgentChangesProvider>
     </AgentSessionProvider>
   );
 }

@@ -112,8 +112,7 @@ impl LifecycleFold {
 
     fn observe_metadata(&mut self, metadata: &SessionMetadata, signals: &mut Vec<TurnSignal>) {
         let now = metadata
-            .pending_elicitation
-            .as_ref()
+            .pending_elicitation()
             .map(|pending| (pending.request_id.clone(), TurnId(pending.turn)));
         if now == self.pending {
             return;
@@ -122,7 +121,7 @@ impl LifecycleFold {
         if let Some((request_id, turn)) = before {
             signals.push(TurnSignal::ElicitationCleared { turn, request_id });
         }
-        if let (Some((request_id, turn)), Some(pending)) = (now, &metadata.pending_elicitation) {
+        if let (Some((request_id, turn)), Some(pending)) = (now, metadata.pending_elicitation()) {
             signals.push(TurnSignal::ElicitationRaised {
                 turn,
                 request_id,

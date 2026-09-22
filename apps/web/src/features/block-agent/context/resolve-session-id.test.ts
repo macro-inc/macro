@@ -172,3 +172,28 @@ describe('a placeholder', () => {
     });
   });
 });
+
+it.each(['Describe this', ''])(
+  'delivers first-prompt attachments with text %j',
+  async (prompt) => {
+    create.control.mockResolvedValue({
+      isErr: () => false,
+      value: { actionId: 'image-action', status: 'accepted' },
+    });
+    const attachments = [
+      {
+        uri: 'https://static.macro.com/file/image-id',
+        name: 'pasted.png',
+        mimeType: 'image/png',
+      },
+    ];
+    startPendingSession({ prompt, attachments });
+    create.resolve?.('session-image');
+    await flush();
+    expect(create.control).toHaveBeenCalledWith('session-image', {
+      type: 'prompt',
+      prompt,
+      attachments,
+    });
+  }
+);

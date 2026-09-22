@@ -17,9 +17,9 @@ use super::{
     },
     ports::{
         CalendarBackfillRepository, CalendarEventChange, CalendarEventWrite,
-        CalendarEventWriteOutcome, CalendarOccurrenceService, CalendarRepository,
-        GoogleCalendarProvider, GoogleCalendarSyncRepository, GoogleEventSyncContext,
-        GoogleProviderError, GoogleProviderErrorKind, RetiredCalendarEvent,
+        CalendarEventWriteOutcome, CalendarOccurrenceService, CalendarReauthNotifier,
+        CalendarRepository, GoogleCalendarProvider, GoogleCalendarSyncRepository,
+        GoogleEventSyncContext, GoogleProviderError, GoogleProviderErrorKind, RetiredCalendarEvent,
     },
 };
 
@@ -539,6 +539,78 @@ where
             .fail_google_backfill(key, lease_token, disposition, message)
             .await
             .map_err(|_| GoogleCalendarBackfillRunError::LeaseLost)
+    }
+}
+
+/// Fires the reauth-required notification on exactly the healthy-to-reauth edge
+/// a backfill failure consumed, and never on any other failure.
+///
+/// The edge is decided in the failure transaction, not here:
+/// `link_reauth_transitioned` is `true` only when this failure was the one that
+/// first flipped the inbox into needs-reauth, which only the `ReauthRequired`
+/// disposition does — a `CalendarPermissionRequired` failure never sets it, so
+/// a missing calendar scope on an otherwise healthy Gmail grant stays quiet.
+/// This service owns only the policy that such a consumed edge is what warrants
+/// a notification, forwarding it to the notifier port and leaving the single
+/// notification implementation to email_service's link-manager consumer.
+///
+/// Best effort: a notifier failure is logged and swallowed. The failure the
+/// notification describes is already durably recorded, so the caller's delivery
+/// must still ack; a lost enqueue means that link never notifies, matching
+/// email_service's own calendar branch rather than diverging from it.
+pub struct CalendarReauthAnnouncer<N> {
+    notifier: N,
+}
+
+impl<N> CalendarReauthAnnouncer<N>
+where
+    N: CalendarReauthNotifier,
+{
+    /// Construct the announcer over its notifier port.
+    pub fn new(notifier: N) -> Self {
+        Self { notifier }
+    }
+
+    /// Announce after an unclaimed job's terminal failure, iff that failure
+    /// newly transitioned the inbox into needs-reauth.
+    pub async fn announce_unclaimed(
+        &self,
+        email_link_id: Uuid,
+        outcome: &CalendarBackfillFailureOutcome,
+    ) {
+        if outcome.link_reauth_transitioned {
+            self.fire(email_link_id).await;
+        }
+    }
+
+    /// Announce after a fenced run failed, iff the failure was a grant
+    /// reauthorization failure that newly transitioned the inbox into
+    /// needs-reauth. Every other run error — including a `ReauthRequired`
+    /// carrying `link_reauth_transitioned: false`, which a
+    /// `CalendarPermissionRequired` disposition or a lost race produces — stays
+    /// quiet.
+    pub async fn announce_run_error(
+        &self,
+        email_link_id: Uuid,
+        error: &GoogleCalendarBackfillRunError,
+    ) {
+        if let GoogleCalendarBackfillRunError::ReauthRequired {
+            link_reauth_transitioned: true,
+            ..
+        } = error
+        {
+            self.fire(email_link_id).await;
+        }
+    }
+
+    async fn fire(&self, email_link_id: Uuid) {
+        if let Err(error) = self.notifier.notify_reauth_required(email_link_id).await {
+            tracing::warn!(
+                ?error,
+                %email_link_id,
+                "failed to enqueue calendar reauth-required notification"
+            );
+        }
     }
 }
 

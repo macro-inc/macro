@@ -5671,6 +5671,18 @@ export const UpdateThreadLabelsResponse = z.object({
   summary: z.string(),
 });
 
+export const UploadFile = z.object({
+  fileName: z.string(),
+  contentBase64: z.string(),
+  projectId: z.union([z.string().uuid(), z.null()]).optional(),
+});
+
+export const UploadFileResponse = z.object({
+  documentId: z.string(),
+  fileName: z.string(),
+  sizeBytes: z.number().int().gte(0),
+});
+
 export const WebFetch = z.object({ input: z.string() });
 
 export const WebFetchResponse = z.object({

@@ -1,10 +1,11 @@
 use crate::domain::{
     models::{
-        Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, EmailErr,
-        EmailFilter, EmailInboxDetails, EmailThreadMailProjection, EmailThreadMetadata,
+        Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, DraftDeletion,
+        EmailErr, EmailFilter, EmailInboxDetails, EmailThreadMailProjection, EmailThreadMetadata,
         EmailThreadPreview, Label, Link, LinkLabel, MessageAttachment, MessageLabel, MessageRow,
-        ParsedAddresses, PreviewCursorQuery, ResolvedDraftInput, SimpleMessage, SimpleMessageInfo,
-        ThreadRow, UpsertEmailFilterInput, UpsertedContacts, UserProvider,
+        MessageTimestamps, ParsedAddresses, PreviewCursorQuery, ResolvedDraftInput,
+        SettledDraftIds, SimpleMessage, SimpleMessageInfo, ThreadRow, UpsertEmailFilterInput,
+        UpsertedContacts, UserProvider,
     },
     ports::{EmailRepo, EmailUserRepo, LinkEmailSettings, RecipientsByMessageId},
 };
@@ -14,6 +15,7 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use uuid::Uuid;
 
+mod client_id_mapping;
 mod contact;
 mod db_types;
 mod draft;
@@ -220,6 +222,14 @@ impl EmailRepo for EmailPgRepo {
         message::attachments_by_message_ids(&self.pool, message_ids).await
     }
 
+    async fn message_timestamps(
+        &self,
+        message_id: Uuid,
+        link_id: Uuid,
+    ) -> Result<Option<MessageTimestamps>, Self::Err> {
+        message::message_timestamps(&self.pool, message_id, link_id).await
+    }
+
     async fn draft_attachments_by_message_ids(
         &self,
         message_ids: &[Uuid],
@@ -249,6 +259,22 @@ impl EmailRepo for EmailPgRepo {
         message::get_simple_message(&self.pool, message_id, link_ids).await
     }
 
+    async fn message_id_for_client_draft_id(
+        &self,
+        client_id: Uuid,
+        link_ids: &[Uuid],
+    ) -> Result<Option<Uuid>, Self::Err> {
+        client_id_mapping::message_id_for_client_draft_id(&self.pool, client_id, link_ids).await
+    }
+
+    async fn thread_id_for_client_thread_id(
+        &self,
+        client_id: Uuid,
+        link_ids: &[Uuid],
+    ) -> Result<Option<Uuid>, Self::Err> {
+        client_id_mapping::thread_id_for_client_thread_id(&self.pool, client_id, link_ids).await
+    }
+
     async fn get_draft_replying_to(
         &self,
         link_id: Uuid,
@@ -261,8 +287,9 @@ impl EmailRepo for EmailPgRepo {
         &self,
         message_id: Uuid,
         thread_db_id: Uuid,
-    ) -> Result<(), Self::Err> {
-        message::delete_draft_message(&self.pool, message_id, thread_db_id).await
+        link_ids: &[Uuid],
+    ) -> Result<Option<DraftDeletion>, Self::Err> {
+        message::delete_draft_message(&self.pool, message_id, thread_db_id, link_ids).await
     }
 
     async fn upsert_contacts(
@@ -280,7 +307,7 @@ impl EmailRepo for EmailPgRepo {
         link_id: Uuid,
         new_thread: Option<ThreadRow>,
         is_draft: bool,
-    ) -> Result<(), Self::Err> {
+    ) -> Result<Option<SettledDraftIds>, Self::Err> {
         draft::insert_message(&self.pool, input, contacts, link_id, new_thread, is_draft).await
     }
 
