@@ -419,6 +419,12 @@ useful as a guaranteed-existing channel in tests.
 Locally sent channel messages and thread replies enter with a brief upward slide
 and fade, without bubble scaling. Opening history or remounting a row does not
 replay the effect. Reduced-motion preferences disable it.
+Consecutive messages from the same sender should enter in their grouped layout,
+without briefly showing an avatar/header and collapsing after acknowledgement.
+Check this with a delayed send response in both the channel and a thread, sending
+each follow-up within five minutes of a confirmed message with no replies.
+Messages from different senders, including bot messages triggered by different
+users, should retain separate headers.
 
 For mobile send regressions, keep the software keyboard open and send several
 short and multiline messages consecutively. The keyboard should remain open,
