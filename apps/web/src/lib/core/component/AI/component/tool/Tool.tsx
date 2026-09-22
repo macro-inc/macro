@@ -1,4 +1,4 @@
-import CaretLeft from '@phosphor/caret-left.svg?component-solid';
+import CaretRight from '@phosphor/caret-right.svg?component-solid';
 import { Button, Layer } from '@ui';
 import type { Component, JSX } from 'solid-js';
 import { Show } from 'solid-js';
@@ -120,10 +120,10 @@ function ResultToggle(props: ToolResultToggleProps) {
         <Show when={props.status}>
           <span>{props.status}</span>
         </Show>
-        <CaretLeft
+        <CaretRight
           aria-hidden="true"
           classList={{
-            '-rotate-90': props.expanded,
+            'rotate-90': props.expanded,
           }}
         />
       </Button>

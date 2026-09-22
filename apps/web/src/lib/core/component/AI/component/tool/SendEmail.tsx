@@ -1,7 +1,7 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { ItemPreview } from '@core/component/ItemPreview';
-import CaretLeft from '@phosphor/caret-left.svg';
+import CaretRight from '@phosphor/caret-right.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import type { SendEmail } from '@service-cognition/generated/tools/types';
 import { cn } from '@ui';
@@ -143,7 +143,7 @@ function SentEmailResponse(props: {
               </Suspense>
             </div>
             <span class="shrink-0 text-ink-muted">
-              <CaretLeft class={cn('size-4', 'group-open:-rotate-90')} />
+              <CaretRight class={cn('size-4', 'group-open:rotate-90')} />
             </span>
           </div>
         </BaseTool>

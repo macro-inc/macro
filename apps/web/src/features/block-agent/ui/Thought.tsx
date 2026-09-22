@@ -7,7 +7,7 @@
  * the same rule production chat uses for `ThinkingBlock`.
  */
 
-import CaretLeft from '@phosphor/caret-left.svg';
+import CaretRight from '@phosphor/caret-right.svg';
 import { createSignal, Show } from 'solid-js';
 import { TextShimmer } from './TextShimmer';
 
@@ -29,9 +29,9 @@ export function Thought(props: ThoughtProps) {
         class="flex min-h-7 items-center gap-1 py-1 text-left text-ink-extra-muted hover:text-ink-muted"
         onClick={() => setExpanded((prev) => !prev)}
       >
-        <CaretLeft
+        <CaretRight
           class="size-4 shrink-0"
-          classList={{ '-rotate-90': expanded() }}
+          classList={{ 'rotate-90': expanded() }}
         />
         <TextShimmer
           text={props.active ? 'Thinking' : 'Thought'}

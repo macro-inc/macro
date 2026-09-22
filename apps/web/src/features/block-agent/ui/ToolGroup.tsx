@@ -1,7 +1,7 @@
 /** Consecutive calls collect in an open group while live, then fold to one row. */
 
 import { Collapsible } from '@kobalte/core/collapsible';
-import CaretLeft from '@phosphor/caret-left.svg';
+import CaretRight from '@phosphor/caret-right.svg';
 import { createWritableMemo } from '@solid-primitives/memo';
 import { createScheduled, debounce } from '@solid-primitives/scheduled';
 import { createMemo, type JSX, on, Show } from 'solid-js';
@@ -46,9 +46,9 @@ export function ToolGroup(props: ToolGroupProps) {
       class="min-w-0 text-sm leading-6 text-ink-extra-muted"
     >
       <Collapsible.Trigger class="group flex min-h-8 items-center gap-2 py-1 text-left text-ink-extra-muted hover:text-ink-muted">
-        <CaretLeft
+        <CaretRight
           aria-hidden="true"
-          class="size-4 shrink-0 group-data-expanded:-rotate-90"
+          class="size-4 shrink-0 group-data-expanded:rotate-90"
         />
         <TextShimmer text={title()} active={props.active} />
       </Collapsible.Trigger>

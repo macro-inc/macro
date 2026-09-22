@@ -5,7 +5,7 @@ import { createSignal, Index } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ToolGroup } from './ToolGroup';
 
-vi.mock('@phosphor/caret-left.svg', () => ({
+vi.mock('@phosphor/caret-right.svg', () => ({
   default: () => <svg data-testid="caret" />,
 }));
 
