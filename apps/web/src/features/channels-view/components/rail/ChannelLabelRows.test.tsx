@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChannelLabelMenuItems, ChannelsCreateMenu } from './ChannelLabelRows';
 
 const rail = vi.hoisted(() => ({
-  channelTagsEnabled: () => false,
+  channelTagsEnabled: (): boolean => false,
   labelsAvailable: () => true,
   labels: () => [
     { id: 'label', name: 'Cached label', channelIds: ['channel'] },
