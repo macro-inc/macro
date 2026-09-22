@@ -126,3 +126,20 @@ impl ExcludedDefaultViewStorage for PgViewStorage {
         .await
     }
 }
+
+impl crate::TransactionalViewStorage for PgViewStorage {
+    type Transaction = sqlx::Transaction<'static, sqlx::Postgres>;
+    type Err = sqlx::Error;
+
+    async fn create_view_in(
+        &self,
+        transaction: &mut Self::Transaction,
+        view: &View,
+    ) -> Result<(), Self::Err> {
+        sqlx::query!(
+            "INSERT INTO saved_view (id, user_id, name, config, created_at, updated_at) \n             VALUES ($1, $2, $3, $4, $5, $6)",
+            view.id, view.user_id, view.name, view.config, view.created_at, view.updated_at,
+        ).execute(&mut **transaction).await?;
+        Ok(())
+    }
+}

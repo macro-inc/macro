@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE database_tables SET version = version + 1\n            WHERE id = $1 AND database_id = $2 AND version = $3\n              AND EXISTS (SELECT 1 FROM database_columns WHERE id = $4 AND table_id = $1\n                          AND display_name IS NOT DISTINCT FROM $5)\n              AND EXISTS (SELECT 1 FROM databases WHERE id = $2 AND trashed_at IS NULL)\n            RETURNING version",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "version",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6d0e096bfd6d38d9c1086433c121070e71e174e1223adc5013836be9c6dc0131"
+}

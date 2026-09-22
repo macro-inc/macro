@@ -146,6 +146,26 @@ impl PropertiesRepo for PropertiesPgRepo {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn create_database_property_definition(
+        &self,
+        database_id: Uuid,
+        display_name: &str,
+        data_type: DataType,
+        is_multi_select: bool,
+        specific_entity_type: Option<EntityType>,
+    ) -> Result<PropertyDefinition, Self::Err> {
+        property_definition_queries::create_database_property_definition(
+            &self.pool,
+            database_id,
+            display_name,
+            data_type,
+            is_multi_select,
+            specific_entity_type,
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn delete_property_definition(
         &self,
         property_definition_id: Uuid,

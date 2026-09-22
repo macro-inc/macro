@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, ServerSentEventsResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddFavoriteData, AddFavoriteErrors, AddFavoriteResponses, AddParticipantsData, AddParticipantsErrors, AddParticipantsResponses, AddPinHandlerData, AddPinHandlerErrors, AddPinHandlerResponses, ApproveHarnessPairingData, ApproveHarnessPairingErrors, ApproveHarnessPairingResponses, AssignInitiativeTasksData, AssignInitiativeTasksErrors, AssignInitiativeTasksResponses, BulkWakeupSyncServiceDocumentsData, BulkWakeupSyncServiceDocumentsErrors, BulkWakeupSyncServiceDocumentsResponses, CallWebhookData, CallWebhookErrors, CallWebhookResponses, CheckActiveCallData, CheckActiveCallErrors, CheckActiveCallResponses, ClaimHarnessPairingData, ClaimHarnessPairingErrors, ClaimHarnessPairingResponses, CopyDocumentData, CopyDocumentErrors, CopyDocumentResponses, CreateAgentData, CreateAgentErrors, CreateAgentResponses, CreateAnchorData, CreateAnchorErrors, CreateAnchorResponses, CreateChannelData, CreateChannelErrors, CreateChannelResponses, CreateChannelScopedBotData, CreateChannelScopedBotErrors, CreateChannelScopedBotResponses, CreateCollabSurfaceTokenData, CreateCollabSurfaceTokenErrors, CreateCollabSurfaceTokenResponses, CreateCommentData, CreateCommentErrors, CreateCommentResponses, CreateCrmCommentData, CreateCrmCommentErrors, CreateCrmCommentResponses, CreateCrmCompanyData, CreateCrmCompanyErrors, CreateCrmCompanyResponses, CreateCrmContactData, CreateCrmContactErrors, CreateCrmContactResponses, CreateDocumentData, CreateDocumentErrors, CreateDocumentResponses, CreateEntityMentionData, CreateEntityMentionErrors, CreateEntityMentionResponses, CreateHarnessPairingData, CreateHarnessPairingErrors, CreateHarnessPairingResponses, CreateInitiativeData, CreateInitiativeErrors, CreateInitiativeResponses, CreateInstructionsHandlerData, CreateInstructionsHandlerErrors, CreateInstructionsHandlerResponses, CreateMarkdownHandlerData, CreateMarkdownHandlerErrors, CreateMarkdownHandlerResponses, CreateProjectHandlerData, CreateProjectHandlerErrors, CreateProjectHandlerResponses, CreateReminderData, CreateReminderErrors, CreateReminderResponses, CreateSkillHandlerData, CreateSkillHandlerErrors, CreateSkillHandlerResponses, CreateSnippetHandlerData, CreateSnippetHandlerErrors, CreateSnippetHandlerResponses, CreateTaskHandlerData, CreateTaskHandlerErrors, CreateTaskHandlerResponses, CreateUserApiKeyData, CreateUserApiKeyErrors, CreateUserApiKeyResponses, CreateViewHandlerData, CreateViewHandlerErrors, CreateViewHandlerResponses, CreateWebhookData, CreateWebhookErrors, CreateWebhookResponses, DeleteAnchorData, DeleteAnchorErrors, DeleteAnchorResponses, DeleteCallRecordData, DeleteCallRecordErrors, DeleteCallRecordResponses, DeleteChannelData, DeleteChannelErrors, DeleteChannelResponses, DeleteCollabSurfaceData, DeleteCollabSurfaceErrors, DeleteCollabSurfaceResponses, DeleteCommentData, DeleteCommentErrors, DeleteCommentResponses, DeleteCrmCommentData, DeleteCrmCommentErrors, DeleteCrmCommentResponses, DeleteDocumentData, DeleteDocumentErrors, DeleteDocumentResponses, DeleteEntityMentionData, DeleteEntityMentionErrors, DeleteEntityMentionResponses, DeleteHarnessData, DeleteHarnessErrors, DeleteHarnessResponses, DeleteHistoryHandlerData, DeleteHistoryHandlerErrors, DeleteHistoryHandlerResponses, DeleteInitiativeData, DeleteInitiativeErrors, DeleteInitiativeResponses, DeleteMessageData, DeleteMessageErrors, DeleteMessageResponses, DeleteProjectHandlerData, DeleteProjectHandlerErrors, DeleteProjectHandlerResponses, DeleteReminderData, DeleteReminderErrors, DeleteReminderResponses, DeleteSelfHarnessData, DeleteSelfHarnessErrors, DeleteSelfHarnessResponses, DeleteUserApiKeyData, DeleteUserApiKeyErrors, DeleteUserApiKeyResponses, DeleteUserDocumentViewLocationData, DeleteUserDocumentViewLocationErrors, DeleteUserDocumentViewLocationResponses, DeleteViewHandlerData, DeleteViewHandlerErrors, DeleteViewHandlerResponses, DeleteWebhookData, DeleteWebhookErrors, DeleteWebhookResponses, EditAnchorData, EditAnchorErrors, EditAnchorResponses, EditCallRecordData, EditCallRecordErrors, EditCallRecordResponses, EditCallTranscriptData, EditCallTranscriptErrors, EditCallTranscriptResponses, EditCommentData, EditCommentErrors, EditCommentResponses, EditCrmCommentData, EditCrmCommentErrors, EditCrmCommentResponses, EditDocumentData, EditDocumentErrors, EditDocumentResponses, EditProjectV2Data, EditProjectV2Errors, EditProjectV2Responses, EditThreadV2Data, EditThreadV2Errors, EditThreadV2Responses, EnsureCollabSurfaceData, EnsureCollabSurfaceErrors, EnsureCollabSurfaceResponses, EntityMessageCreateData, EntityMessageCreateResponses, EntityMessageDeleteMessageData, EntityMessageDeleteMessageResponses, EntityMessageDeleteThreadData, EntityMessageDeleteThreadResponses, EntityMessageEditData, EntityMessageEditResponses, EntityMessageGetMessageData, EntityMessageGetMessageResponses, EntityMessageGetThreadData, EntityMessageGetThreadResponses, EntityMessageLegacyData, EntityMessageLegacyResponses, EntityMessagePatchThreadData, EntityMessagePatchThreadResponses, EntityMessageReactData, EntityMessageReactResponses, EntityMessageReferencesData, EntityMessageReferencesResponses, EntityMessageTypingData, EntityMessageTypingResponses, ExcludeDefaultViewHandlerData, ExcludeDefaultViewHandlerErrors, ExcludeDefaultViewHandlerResponses, ExportDocumentData, ExportDocumentErrors, ExportDocumentResponses, GetActiveCallsData, GetActiveCallsErrors, GetActiveCallsResponses, GetActivityData, GetActivityErrors, GetActivityResponses, GetAttachmentReferencesData, GetAttachmentReferencesErrors, GetAttachmentReferencesResponses, GetBatchCallRecordPreviewData, GetBatchCallRecordPreviewErrors, GetBatchCallRecordPreviewResponses, GetBatchChannelPreviewData, GetBatchChannelPreviewErrors, GetBatchChannelPreviewResponses, GetBatchPreviewHandlerData, GetBatchPreviewHandlerErrors, GetBatchPreviewHandlerResponses, GetBatchProjectPreviewData, GetBatchProjectPreviewErrors, GetBatchProjectPreviewResponses, GetCallRecordData, GetCallRecordErrors, GetCallRecordResponses, GetChannelAttachmentsData, GetChannelAttachmentsErrors, GetChannelAttachmentsResponses, GetChannelData, GetChannelErrors, GetChannelJoinLinkData, GetChannelJoinLinkErrors, GetChannelJoinLinkResponses, GetChannelMessagesCatchUpData, GetChannelMessagesCatchUpErrors, GetChannelMessagesCatchUpResponses, GetChannelMessagesData, GetChannelMessagesErrors, GetChannelMessagesResponses, GetChannelParticipantsData, GetChannelParticipantsErrors, GetChannelParticipantsResponses, GetChannelResponses, GetChannelsData, GetChannelsErrors, GetChannelsResponses, GetCollabSurfaceData, GetCollabSurfaceErrors, GetCollabSurfaceResponses, GetCompanyData, GetCompanyErrors, GetCompanyResponses, GetContactByEmailData, GetContactByEmailErrors, GetContactByEmailResponses, GetContactData, GetContactErrors, GetContactResponses, GetCrmTeamSettingsData, GetCrmTeamSettingsErrors, GetCrmTeamSettingsResponses, GetDocumentAnchorsData, GetDocumentAnchorsErrors, GetDocumentAnchorsResponses, GetDocumentBranchNameData, GetDocumentBranchNameErrors, GetDocumentBranchNameResponses, GetDocumentByTeamSlugData, GetDocumentByTeamSlugErrors, GetDocumentByTeamSlugResponses, GetDocumentCommentsData, GetDocumentCommentsErrors, GetDocumentCommentsResponses, GetDocumentData, GetDocumentErrors, GetDocumentGithubPullRequestsData, GetDocumentGithubPullRequestsErrors, GetDocumentGithubPullRequestsResponses, GetDocumentListHandlerData, GetDocumentListHandlerErrors, GetDocumentListHandlerResponses, GetDocumentLocationV3Data, GetDocumentLocationV3Errors, GetDocumentLocationV3Responses, GetDocumentPermissionsTokenData, GetDocumentPermissionsTokenErrors, GetDocumentPermissionsTokenResponses, GetDocumentPermissionsV2Data, GetDocumentPermissionsV2Errors, GetDocumentPermissionsV2Responses, GetDocumentProcessingResultData, GetDocumentProcessingResultErrors, GetDocumentProcessingResultResponses, GetDocumentResponses, GetDocumentShortIdData, GetDocumentShortIdErrors, GetDocumentShortIdResponses, GetDocumentTeamShareData, GetDocumentTeamShareErrors, GetDocumentTeamShareResponses, GetDocumentVersionData, GetDocumentVersionErrors, GetDocumentVersionResponses, GetDocumentViewsHandlerData, GetDocumentViewsHandlerErrors, GetDocumentViewsHandlerResponses, GetEntityPermissionData, GetEntityPermissionErrors, GetEntityPermissionResponses, GetForeignEntityBySourceData, GetForeignEntityBySourceErrors, GetForeignEntityBySourceResponses, GetForeignEntityData, GetForeignEntityErrors, GetForeignEntityResponses, GetHarnessPairingData, GetHarnessPairingErrors, GetHarnessPairingResponses, GetHistoryHandlerData, GetHistoryHandlerErrors, GetHistoryHandlerResponses, GetInitiativeData, GetInitiativeErrors, GetInitiativeResponses, GetInstructionsHandlerData, GetInstructionsHandlerErrors, GetInstructionsHandlerResponses, GetItemsSoupData, GetItemsSoupErrors, GetItemsSoupResponses, GetLocationHandlerData, GetLocationHandlerErrors, GetLocationHandlerResponses, GetMessageWithContextData, GetMessageWithContextErrors, GetMessageWithContextResponses, GetOrCreateCallData, GetOrCreateCallErrors, GetOrCreateCallResponses, GetOrCreateDmData, GetOrCreateDmErrors, GetOrCreateDmResponses, GetOrCreatePrivateData, GetOrCreatePrivateErrors, GetOrCreatePrivateResponses, GetPendingProjectsHandlerData, GetPendingProjectsHandlerErrors, GetPendingProjectsHandlerResponses, GetPinsHandlerData, GetPinsHandlerErrors, GetPinsHandlerResponses, GetProjectContentHandlerData, GetProjectContentHandlerErrors, GetProjectContentHandlerResponses, GetProjectHandlerData, GetProjectHandlerErrors, GetProjectHandlerResponses, GetProjectPermissionsV2Data, GetProjectPermissionsV2Errors, GetProjectPermissionsV2Responses, GetProjectsHandlerData, GetProjectsHandlerErrors, GetProjectsHandlerResponses, GetProjectUserAccessLevelData, GetProjectUserAccessLevelErrors, GetProjectUserAccessLevelResponses, GetReminderData, GetReminderErrors, GetReminderResponses, GetRingStatusData, GetRingStatusErrors, GetRingStatusResponses, GetSelfBotData, GetSelfBotErrors, GetSelfBotResponses, GetSelfHarnessData, GetSelfHarnessErrors, GetSelfHarnessResponses, GetSystemSkillsHandlerData, GetSystemSkillsHandlerErrors, GetSystemSkillsHandlerResponses, GetThreadRepliesData, GetThreadRepliesErrors, GetThreadRepliesResponses, GetUserDocumentsHandlerData, GetUserDocumentsHandlerErrors, GetUserDocumentsHandlerResponses, GetUserDocumentViewLocationData, GetUserDocumentViewLocationErrors, GetUserDocumentViewLocationResponses, GetViewsHandlerData, GetViewsHandlerErrors, GetViewsHandlerResponses, GetWebhookData, GetWebhookErrors, GetWebhookResponses, HandlerData, HandlerErrors, HandlerResponses, HealthHandlerData, HealthHandlerResponses, IngestTranscriptData, IngestTranscriptErrors, IngestTranscriptResponses, InitializeUserDocumentsData, InitializeUserDocumentsErrors, InitializeUserDocumentsResponses, InstallSyncData, InstallSyncErrors, JobProcessingResultHandlerData, JobProcessingResultHandlerErrors, JobProcessingResultHandlerResponses, JoinChannelByCodeData, JoinChannelByCodeErrors, JoinChannelByCodeResponses, JoinChannelData, JoinChannelErrors, JoinChannelResponses, LeaveChannelData, LeaveChannelErrors, LeaveChannelResponses, LeaveOrEndCallData, LeaveOrEndCallErrors, LeaveOrEndCallResponses, ListAgentsData, ListAgentsErrors, ListAgentsResponses, ListBotChannelsData, ListBotChannelsErrors, ListBotChannelsResponses, ListCompanyContactsData, ListCompanyContactsErrors, ListCompanyContactsResponses, ListCrmCommentsData, ListCrmCommentsErrors, ListCrmCommentsResponses, ListFavoritesData, ListFavoritesErrors, ListFavoritesResponses, ListHarnessAgentsData, ListHarnessAgentsErrors, ListHarnessAgentsResponses, ListHarnessesData, ListHarnessesErrors, ListHarnessesResponses, ListHarnessSessionsData, ListHarnessSessionsErrors, ListHarnessSessionsResponses, ListInitiativesData, ListInitiativesErrors, ListInitiativesResponses, ListOccurrencesData, ListOccurrencesErrors, ListOccurrencesResponses, ListRemindersData, ListRemindersErrors, ListRemindersResponses, ListTeamOutOfOfficeData, ListTeamOutOfOfficeErrors, ListTeamOutOfOfficeResponses, ListUserApiKeysData, ListUserApiKeysErrors, ListUserApiKeysResponses, ListWebhooksData, ListWebhooksErrors, ListWebhooksResponses, MentionPreviewsData, MentionPreviewsErrors, MentionPreviewsResponses, MessageTimelineData, MessageTimelineResponses, PatchChannelData, PatchChannelErrors, PatchChannelResponses, PatchMessageData, PatchMessageErrors, PatchMessageResponses, PatchViewHandlerData, PatchViewHandlerErrors, PatchViewHandlerResponses, PatchWebhookData, PatchWebhookErrors, PatchWebhookResponses, PermanentlyDeleteDocumentData, PermanentlyDeleteDocumentErrors, PermanentlyDeleteDocumentResponses, PermanentlyDeleteProjectData, PermanentlyDeleteProjectErrors, PermanentlyDeleteProjectResponses, PostActivityData, PostActivityErrors, PostActivityResponses, PostChannelBotWebhookData, PostChannelBotWebhookErrors, PostChannelBotWebhookResponses, PostChannelMessagesData, PostChannelMessagesErrors, PostChannelMessagesResponses, PostItemsSoupAstData, PostItemsSoupAstErrors, PostItemsSoupAstGroupedData, PostItemsSoupAstGroupedErrors, PostItemsSoupAstGroupedResponses, PostItemsSoupAstResponses, PostItemsSoupData, PostItemsSoupErrors, PostItemsSoupResponses, PostMessageData, PostMessageErrors, PostMessageResponses, PostReactionData, PostReactionErrors, PostReactionResponses, PostTypingData, PostTypingErrors, PostTypingResponses, PresaveDocumentHandlerData, PresaveDocumentHandlerErrors, PresaveDocumentHandlerResponses, PutCrmTeamSettingsData, PutCrmTeamSettingsErrors, PutCrmTeamSettingsResponses, PutCrmTeamStagesData, PutCrmTeamStagesErrors, PutCrmTeamStagesResponses, RecentlyDeletedData, RecentlyDeletedErrors, RecentlyDeletedResponses, RemoveBotFromChannelByBotData, RemoveBotFromChannelByBotErrors, RemoveBotFromChannelByBotResponses, RemoveFavoriteByEntityData, RemoveFavoriteByEntityErrors, RemoveFavoriteByEntityResponses, RemoveParticipantsData, RemoveParticipantsErrors, RemoveParticipantsResponses, RemovePinHandlerData, RemovePinHandlerErrors, RemovePinHandlerResponses, ReorderFavoritesData, ReorderFavoritesErrors, ReorderFavoritesResponses, ReorderPinsHandlerData, ReorderPinsHandlerErrors, ReorderPinsHandlerResponses, ResetCrmTeamStagesData, ResetCrmTeamStagesErrors, ResetCrmTeamStagesResponses, ResolveChannelMessageData, ResolveChannelMessageErrors, ResolveChannelMessageResponses, RevertDeleteDocumentData, RevertDeleteDocumentErrors, RevertDeleteDocumentResponses, RevertDeleteProjectData, RevertDeleteProjectErrors, RevertDeleteProjectResponses, SaveDocumentHandlerData, SaveDocumentHandlerErrors, SaveDocumentHandlerResponses, SetChannelPictureData, SetChannelPictureErrors, SetChannelPictureResponses, SetCompanyHiddenData, SetCompanyHiddenErrors, SetCompanyHiddenResponses, SetContactHiddenData, SetContactHiddenErrors, SetContactHiddenResponses, SetCrmCompanyNameData, SetCrmCompanyNameErrors, SetCrmCompanyNameResponses, SetCrmContactNameData, SetCrmContactNameErrors, SetCrmContactNameResponses, SetDocumentTeamShareData, SetDocumentTeamShareErrors, SetDocumentTeamShareResponses, SetEmailSyncData, SetEmailSyncErrors, SetEmailSyncResponses, SimpleSaveData, SimpleSaveErrors, SimpleSaveResponses, StreamEventsData, StreamEventsErrors, StreamEventsResponse, StreamEventsResponses, ToggleShareWithTeamData, ToggleShareWithTeamErrors, ToggleShareWithTeamResponses, UnassignInitiativeTaskData, UnassignInitiativeTaskErrors, UnassignInitiativeTaskResponses, UpdateAgentData, UpdateAgentErrors, UpdateAgentResponses, UpdateInitiativeData, UpdateInitiativeErrors, UpdateInitiativeResponses, UpdateReminderData, UpdateReminderErrors, UpdateReminderResponses, UploadExtractFolderHandlerData, UploadExtractFolderHandlerErrors, UploadExtractFolderHandlerResponses, UploadFolderHandlerData, UploadFolderHandlerErrors, UploadFolderHandlerResponses, UpsertHistoryHandlerData, UpsertHistoryHandlerErrors, UpsertHistoryHandlerResponses, UpsertUserDocumentViewLocationData, UpsertUserDocumentViewLocationErrors, UpsertUserDocumentViewLocationResponses, ValidateDocumentPermissionsTokenData, ValidateDocumentPermissionsTokenErrors, ValidateDocumentPermissionsTokenResponses, ValidateWebhookData, ValidateWebhookErrors, ValidateWebhookResponses } from './types.gen';
+import type { AddDatabaseColumnOptionsData, AddDatabaseColumnOptionsErrors, AddDatabaseColumnOptionsResponses, AddFavoriteData, AddFavoriteErrors, AddFavoriteResponses, AddParticipantsData, AddParticipantsErrors, AddParticipantsResponses, AddPinHandlerData, AddPinHandlerErrors, AddPinHandlerResponses, ApproveHarnessPairingData, ApproveHarnessPairingErrors, ApproveHarnessPairingResponses, AssignInitiativeTasksData, AssignInitiativeTasksErrors, AssignInitiativeTasksResponses, BulkWakeupSyncServiceDocumentsData, BulkWakeupSyncServiceDocumentsErrors, BulkWakeupSyncServiceDocumentsResponses, CallWebhookData, CallWebhookErrors, CallWebhookResponses, ChangeDatabaseColumnTypeData, ChangeDatabaseColumnTypeErrors, ChangeDatabaseColumnTypeResponses, CheckActiveCallData, CheckActiveCallErrors, CheckActiveCallResponses, ClaimHarnessPairingData, ClaimHarnessPairingErrors, ClaimHarnessPairingResponses, CopyDocumentData, CopyDocumentErrors, CopyDocumentResponses, CreateAgentData, CreateAgentErrors, CreateAgentResponses, CreateAnchorData, CreateAnchorErrors, CreateAnchorResponses, CreateChannelData, CreateChannelErrors, CreateChannelResponses, CreateChannelScopedBotData, CreateChannelScopedBotErrors, CreateChannelScopedBotResponses, CreateCollabSurfaceTokenData, CreateCollabSurfaceTokenErrors, CreateCollabSurfaceTokenResponses, CreateCommentData, CreateCommentErrors, CreateCommentResponses, CreateCrmCommentData, CreateCrmCommentErrors, CreateCrmCommentResponses, CreateCrmCompanyData, CreateCrmCompanyErrors, CreateCrmCompanyResponses, CreateCrmContactData, CreateCrmContactErrors, CreateCrmContactResponses, CreateDatabaseColumnData, CreateDatabaseColumnErrors, CreateDatabaseColumnResponses, CreateDatabaseData, CreateDatabaseErrors, CreateDatabaseResponses, CreateDatabaseTableData, CreateDatabaseTableErrors, CreateDatabaseTableResponses, CreateDocumentData, CreateDocumentErrors, CreateDocumentResponses, CreateEntityMentionData, CreateEntityMentionErrors, CreateEntityMentionResponses, CreateHarnessPairingData, CreateHarnessPairingErrors, CreateHarnessPairingResponses, CreateInitiativeData, CreateInitiativeErrors, CreateInitiativeResponses, CreateInstructionsHandlerData, CreateInstructionsHandlerErrors, CreateInstructionsHandlerResponses, CreateMarkdownHandlerData, CreateMarkdownHandlerErrors, CreateMarkdownHandlerResponses, CreateProjectHandlerData, CreateProjectHandlerErrors, CreateProjectHandlerResponses, CreateReminderData, CreateReminderErrors, CreateReminderResponses, CreateSkillHandlerData, CreateSkillHandlerErrors, CreateSkillHandlerResponses, CreateSnippetHandlerData, CreateSnippetHandlerErrors, CreateSnippetHandlerResponses, CreateTaskHandlerData, CreateTaskHandlerErrors, CreateTaskHandlerResponses, CreateUserApiKeyData, CreateUserApiKeyErrors, CreateUserApiKeyResponses, CreateViewHandlerData, CreateViewHandlerErrors, CreateViewHandlerResponses, CreateWebhookData, CreateWebhookErrors, CreateWebhookResponses, DeleteAnchorData, DeleteAnchorErrors, DeleteAnchorResponses, DeleteCallRecordData, DeleteCallRecordErrors, DeleteCallRecordResponses, DeleteChannelData, DeleteChannelErrors, DeleteChannelResponses, DeleteCollabSurfaceData, DeleteCollabSurfaceErrors, DeleteCollabSurfaceResponses, DeleteCommentData, DeleteCommentErrors, DeleteCommentResponses, DeleteCrmCommentData, DeleteCrmCommentErrors, DeleteCrmCommentResponses, DeleteDatabaseColumnData, DeleteDatabaseColumnErrors, DeleteDatabaseColumnResponses, DeleteDocumentData, DeleteDocumentErrors, DeleteDocumentResponses, DeleteEntityMentionData, DeleteEntityMentionErrors, DeleteEntityMentionResponses, DeleteHarnessData, DeleteHarnessErrors, DeleteHarnessResponses, DeleteHistoryHandlerData, DeleteHistoryHandlerErrors, DeleteHistoryHandlerResponses, DeleteInitiativeData, DeleteInitiativeErrors, DeleteInitiativeResponses, DeleteMessageData, DeleteMessageErrors, DeleteMessageResponses, DeleteProjectHandlerData, DeleteProjectHandlerErrors, DeleteProjectHandlerResponses, DeleteReminderData, DeleteReminderErrors, DeleteReminderResponses, DeleteSelfHarnessData, DeleteSelfHarnessErrors, DeleteSelfHarnessResponses, DeleteUserApiKeyData, DeleteUserApiKeyErrors, DeleteUserApiKeyResponses, DeleteUserDocumentViewLocationData, DeleteUserDocumentViewLocationErrors, DeleteUserDocumentViewLocationResponses, DeleteViewHandlerData, DeleteViewHandlerErrors, DeleteViewHandlerResponses, DeleteWebhookData, DeleteWebhookErrors, DeleteWebhookResponses, DownloadDatabaseSqliteData, DownloadDatabaseSqliteErrors, DownloadDatabaseSqliteResponses, EditAnchorData, EditAnchorErrors, EditAnchorResponses, EditCallRecordData, EditCallRecordErrors, EditCallRecordResponses, EditCallTranscriptData, EditCallTranscriptErrors, EditCallTranscriptResponses, EditCommentData, EditCommentErrors, EditCommentResponses, EditCrmCommentData, EditCrmCommentErrors, EditCrmCommentResponses, EditDocumentData, EditDocumentErrors, EditDocumentResponses, EditProjectV2Data, EditProjectV2Errors, EditProjectV2Responses, EditThreadV2Data, EditThreadV2Errors, EditThreadV2Responses, EnsureCollabSurfaceData, EnsureCollabSurfaceErrors, EnsureCollabSurfaceResponses, EnsureStarterHandlerData, EnsureStarterHandlerErrors, EnsureStarterHandlerResponses, EntityMessageCreateData, EntityMessageCreateResponses, EntityMessageDeleteMessageData, EntityMessageDeleteMessageResponses, EntityMessageDeleteThreadData, EntityMessageDeleteThreadResponses, EntityMessageEditData, EntityMessageEditResponses, EntityMessageGetMessageData, EntityMessageGetMessageResponses, EntityMessageGetThreadData, EntityMessageGetThreadResponses, EntityMessageLegacyData, EntityMessageLegacyResponses, EntityMessagePatchThreadData, EntityMessagePatchThreadResponses, EntityMessageReactData, EntityMessageReactResponses, EntityMessageReferencesData, EntityMessageReferencesResponses, EntityMessageTypingData, EntityMessageTypingResponses, ExcludeDefaultViewHandlerData, ExcludeDefaultViewHandlerErrors, ExcludeDefaultViewHandlerResponses, ExecDatabaseSqlData, ExecDatabaseSqlErrors, ExecDatabaseSqlResponses, ExportDocumentData, ExportDocumentErrors, ExportDocumentResponses, GetActiveCallsData, GetActiveCallsErrors, GetActiveCallsResponses, GetActivityData, GetActivityErrors, GetActivityResponses, GetAttachmentReferencesData, GetAttachmentReferencesErrors, GetAttachmentReferencesResponses, GetBatchCallRecordPreviewData, GetBatchCallRecordPreviewErrors, GetBatchCallRecordPreviewResponses, GetBatchChannelPreviewData, GetBatchChannelPreviewErrors, GetBatchChannelPreviewResponses, GetBatchPreviewHandlerData, GetBatchPreviewHandlerErrors, GetBatchPreviewHandlerResponses, GetBatchProjectPreviewData, GetBatchProjectPreviewErrors, GetBatchProjectPreviewResponses, GetCallRecordData, GetCallRecordErrors, GetCallRecordResponses, GetChannelAttachmentsData, GetChannelAttachmentsErrors, GetChannelAttachmentsResponses, GetChannelData, GetChannelErrors, GetChannelJoinLinkData, GetChannelJoinLinkErrors, GetChannelJoinLinkResponses, GetChannelMessagesCatchUpData, GetChannelMessagesCatchUpErrors, GetChannelMessagesCatchUpResponses, GetChannelMessagesData, GetChannelMessagesErrors, GetChannelMessagesResponses, GetChannelParticipantsData, GetChannelParticipantsErrors, GetChannelParticipantsResponses, GetChannelResponses, GetChannelsData, GetChannelsErrors, GetChannelsResponses, GetCollabSurfaceData, GetCollabSurfaceErrors, GetCollabSurfaceResponses, GetCompanyData, GetCompanyErrors, GetCompanyResponses, GetContactByEmailData, GetContactByEmailErrors, GetContactByEmailResponses, GetContactData, GetContactErrors, GetContactResponses, GetCrmTeamSettingsData, GetCrmTeamSettingsErrors, GetCrmTeamSettingsResponses, GetDatabaseData, GetDatabaseErrors, GetDatabasePermissionsData, GetDatabasePermissionsErrors, GetDatabasePermissionsResponses, GetDatabaseResponses, GetDocumentAnchorsData, GetDocumentAnchorsErrors, GetDocumentAnchorsResponses, GetDocumentBranchNameData, GetDocumentBranchNameErrors, GetDocumentBranchNameResponses, GetDocumentByTeamSlugData, GetDocumentByTeamSlugErrors, GetDocumentByTeamSlugResponses, GetDocumentCommentsData, GetDocumentCommentsErrors, GetDocumentCommentsResponses, GetDocumentData, GetDocumentErrors, GetDocumentGithubPullRequestsData, GetDocumentGithubPullRequestsErrors, GetDocumentGithubPullRequestsResponses, GetDocumentListHandlerData, GetDocumentListHandlerErrors, GetDocumentListHandlerResponses, GetDocumentLocationV3Data, GetDocumentLocationV3Errors, GetDocumentLocationV3Responses, GetDocumentPermissionsTokenData, GetDocumentPermissionsTokenErrors, GetDocumentPermissionsTokenResponses, GetDocumentPermissionsV2Data, GetDocumentPermissionsV2Errors, GetDocumentPermissionsV2Responses, GetDocumentProcessingResultData, GetDocumentProcessingResultErrors, GetDocumentProcessingResultResponses, GetDocumentResponses, GetDocumentShortIdData, GetDocumentShortIdErrors, GetDocumentShortIdResponses, GetDocumentTeamShareData, GetDocumentTeamShareErrors, GetDocumentTeamShareResponses, GetDocumentVersionData, GetDocumentVersionErrors, GetDocumentVersionResponses, GetDocumentViewsHandlerData, GetDocumentViewsHandlerErrors, GetDocumentViewsHandlerResponses, GetEntityPermissionData, GetEntityPermissionErrors, GetEntityPermissionResponses, GetForeignEntityBySourceData, GetForeignEntityBySourceErrors, GetForeignEntityBySourceResponses, GetForeignEntityData, GetForeignEntityErrors, GetForeignEntityResponses, GetHarnessPairingData, GetHarnessPairingErrors, GetHarnessPairingResponses, GetHistoryHandlerData, GetHistoryHandlerErrors, GetHistoryHandlerResponses, GetInitiativeData, GetInitiativeErrors, GetInitiativeResponses, GetInstructionsHandlerData, GetInstructionsHandlerErrors, GetInstructionsHandlerResponses, GetItemsSoupData, GetItemsSoupErrors, GetItemsSoupResponses, GetLocationHandlerData, GetLocationHandlerErrors, GetLocationHandlerResponses, GetMessageWithContextData, GetMessageWithContextErrors, GetMessageWithContextResponses, GetOrCreateCallData, GetOrCreateCallErrors, GetOrCreateCallResponses, GetOrCreateDmData, GetOrCreateDmErrors, GetOrCreateDmResponses, GetOrCreatePrivateData, GetOrCreatePrivateErrors, GetOrCreatePrivateResponses, GetPendingProjectsHandlerData, GetPendingProjectsHandlerErrors, GetPendingProjectsHandlerResponses, GetPinsHandlerData, GetPinsHandlerErrors, GetPinsHandlerResponses, GetProjectContentHandlerData, GetProjectContentHandlerErrors, GetProjectContentHandlerResponses, GetProjectHandlerData, GetProjectHandlerErrors, GetProjectHandlerResponses, GetProjectPermissionsV2Data, GetProjectPermissionsV2Errors, GetProjectPermissionsV2Responses, GetProjectsHandlerData, GetProjectsHandlerErrors, GetProjectsHandlerResponses, GetProjectUserAccessLevelData, GetProjectUserAccessLevelErrors, GetProjectUserAccessLevelResponses, GetReminderData, GetReminderErrors, GetReminderResponses, GetRingStatusData, GetRingStatusErrors, GetRingStatusResponses, GetSelfBotData, GetSelfBotErrors, GetSelfBotResponses, GetSelfHarnessData, GetSelfHarnessErrors, GetSelfHarnessResponses, GetSystemSkillsHandlerData, GetSystemSkillsHandlerErrors, GetSystemSkillsHandlerResponses, GetThreadRepliesData, GetThreadRepliesErrors, GetThreadRepliesResponses, GetUserDocumentsHandlerData, GetUserDocumentsHandlerErrors, GetUserDocumentsHandlerResponses, GetUserDocumentViewLocationData, GetUserDocumentViewLocationErrors, GetUserDocumentViewLocationResponses, GetViewsHandlerData, GetViewsHandlerErrors, GetViewsHandlerResponses, GetWebhookData, GetWebhookErrors, GetWebhookResponses, HandlerData, HandlerErrors, HandlerResponses, HealthHandlerData, HealthHandlerResponses, ImportDatabaseTableData, ImportDatabaseTableErrors, ImportDatabaseTableResponses, InferDatabaseColumnTypeData, InferDatabaseColumnTypeErrors, InferDatabaseColumnTypeResponses, IngestTranscriptData, IngestTranscriptErrors, IngestTranscriptResponses, InitializeUserDocumentsData, InitializeUserDocumentsErrors, InitializeUserDocumentsResponses, InstallSyncData, InstallSyncErrors, JobProcessingResultHandlerData, JobProcessingResultHandlerErrors, JobProcessingResultHandlerResponses, JoinChannelByCodeData, JoinChannelByCodeErrors, JoinChannelByCodeResponses, JoinChannelData, JoinChannelErrors, JoinChannelResponses, LeaveChannelData, LeaveChannelErrors, LeaveChannelResponses, LeaveOrEndCallData, LeaveOrEndCallErrors, LeaveOrEndCallResponses, ListAgentsData, ListAgentsErrors, ListAgentsResponses, ListBotChannelsData, ListBotChannelsErrors, ListBotChannelsResponses, ListCompanyContactsData, ListCompanyContactsErrors, ListCompanyContactsResponses, ListCrmCommentsData, ListCrmCommentsErrors, ListCrmCommentsResponses, ListDatabasesData, ListDatabasesErrors, ListDatabasesResponses, ListFavoritesData, ListFavoritesErrors, ListFavoritesResponses, ListHarnessAgentsData, ListHarnessAgentsErrors, ListHarnessAgentsResponses, ListHarnessesData, ListHarnessesErrors, ListHarnessesResponses, ListHarnessSessionsData, ListHarnessSessionsErrors, ListHarnessSessionsResponses, ListInitiativesData, ListInitiativesErrors, ListInitiativesResponses, ListOccurrencesData, ListOccurrencesErrors, ListOccurrencesResponses, ListRemindersData, ListRemindersErrors, ListRemindersResponses, ListTeamOutOfOfficeData, ListTeamOutOfOfficeErrors, ListTeamOutOfOfficeResponses, ListUserApiKeysData, ListUserApiKeysErrors, ListUserApiKeysResponses, ListWebhooksData, ListWebhooksErrors, ListWebhooksResponses, MentionPreviewsData, MentionPreviewsErrors, MentionPreviewsResponses, MessageTimelineData, MessageTimelineResponses, PatchChannelData, PatchChannelErrors, PatchChannelResponses, PatchMessageData, PatchMessageErrors, PatchMessageResponses, PatchViewHandlerData, PatchViewHandlerErrors, PatchViewHandlerResponses, PatchWebhookData, PatchWebhookErrors, PatchWebhookResponses, PermanentlyDeleteDocumentData, PermanentlyDeleteDocumentErrors, PermanentlyDeleteDocumentResponses, PermanentlyDeleteProjectData, PermanentlyDeleteProjectErrors, PermanentlyDeleteProjectResponses, PostActivityData, PostActivityErrors, PostActivityResponses, PostChannelBotWebhookData, PostChannelBotWebhookErrors, PostChannelBotWebhookResponses, PostChannelMessagesData, PostChannelMessagesErrors, PostChannelMessagesResponses, PostItemsSoupAstData, PostItemsSoupAstErrors, PostItemsSoupAstGroupedData, PostItemsSoupAstGroupedErrors, PostItemsSoupAstGroupedResponses, PostItemsSoupAstResponses, PostItemsSoupData, PostItemsSoupErrors, PostItemsSoupResponses, PostMessageData, PostMessageErrors, PostMessageResponses, PostReactionData, PostReactionErrors, PostReactionResponses, PostTypingData, PostTypingErrors, PostTypingResponses, PresaveDocumentHandlerData, PresaveDocumentHandlerErrors, PresaveDocumentHandlerResponses, PutCrmTeamSettingsData, PutCrmTeamSettingsErrors, PutCrmTeamSettingsResponses, PutCrmTeamStagesData, PutCrmTeamStagesErrors, PutCrmTeamStagesResponses, QueryDatabaseSqlData, QueryDatabaseSqlErrors, QueryDatabaseSqlResponses, RecentlyDeletedData, RecentlyDeletedErrors, RecentlyDeletedResponses, RemoveBotFromChannelByBotData, RemoveBotFromChannelByBotErrors, RemoveBotFromChannelByBotResponses, RemoveFavoriteByEntityData, RemoveFavoriteByEntityErrors, RemoveFavoriteByEntityResponses, RemoveParticipantsData, RemoveParticipantsErrors, RemoveParticipantsResponses, RemovePinHandlerData, RemovePinHandlerErrors, RemovePinHandlerResponses, RenameDatabaseColumnData, RenameDatabaseColumnErrors, RenameDatabaseColumnResponses, RenameDatabaseTableData, RenameDatabaseTableErrors, RenameDatabaseTableResponses, ReorderDatabaseColumnsData, ReorderDatabaseColumnsErrors, ReorderDatabaseColumnsResponses, ReorderFavoritesData, ReorderFavoritesErrors, ReorderFavoritesResponses, ReorderPinsHandlerData, ReorderPinsHandlerErrors, ReorderPinsHandlerResponses, ResetCrmTeamStagesData, ResetCrmTeamStagesErrors, ResetCrmTeamStagesResponses, ResolveChannelMessageData, ResolveChannelMessageErrors, ResolveChannelMessageResponses, RevertDeleteDocumentData, RevertDeleteDocumentErrors, RevertDeleteDocumentResponses, RevertDeleteProjectData, RevertDeleteProjectErrors, RevertDeleteProjectResponses, SaveDocumentHandlerData, SaveDocumentHandlerErrors, SaveDocumentHandlerResponses, SetChannelPictureData, SetChannelPictureErrors, SetChannelPictureResponses, SetCompanyHiddenData, SetCompanyHiddenErrors, SetCompanyHiddenResponses, SetContactHiddenData, SetContactHiddenErrors, SetContactHiddenResponses, SetCrmCompanyNameData, SetCrmCompanyNameErrors, SetCrmCompanyNameResponses, SetCrmContactNameData, SetCrmContactNameErrors, SetCrmContactNameResponses, SetDocumentTeamShareData, SetDocumentTeamShareErrors, SetDocumentTeamShareResponses, SetEmailSyncData, SetEmailSyncErrors, SetEmailSyncResponses, SimpleSaveData, SimpleSaveErrors, SimpleSaveResponses, StreamEventsData, StreamEventsErrors, StreamEventsResponse, StreamEventsResponses, ToggleShareWithTeamData, ToggleShareWithTeamErrors, ToggleShareWithTeamResponses, UnassignInitiativeTaskData, UnassignInitiativeTaskErrors, UnassignInitiativeTaskResponses, UpdateAgentData, UpdateAgentErrors, UpdateAgentResponses, UpdateDatabasePermissionsData, UpdateDatabasePermissionsErrors, UpdateDatabasePermissionsResponses, UpdateInitiativeData, UpdateInitiativeErrors, UpdateInitiativeResponses, UpdateReminderData, UpdateReminderErrors, UpdateReminderResponses, UploadExtractFolderHandlerData, UploadExtractFolderHandlerErrors, UploadExtractFolderHandlerResponses, UploadFolderHandlerData, UploadFolderHandlerErrors, UploadFolderHandlerResponses, UpsertHistoryHandlerData, UpsertHistoryHandlerErrors, UpsertHistoryHandlerResponses, UpsertUserDocumentViewLocationData, UpsertUserDocumentViewLocationErrors, UpsertUserDocumentViewLocationResponses, ValidateDocumentPermissionsTokenData, ValidateDocumentPermissionsTokenErrors, ValidateDocumentPermissionsTokenResponses, ValidateWebhookData, ValidateWebhookErrors, ValidateWebhookResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -1077,6 +1077,237 @@ export class Sdk extends HeyApiClient {
     public putCrmTeamStages<ThrowOnError extends boolean = false>(options: Options<PutCrmTeamStagesData, ThrowOnError>): RequestResult<PutCrmTeamStagesResponses, PutCrmTeamStagesErrors, ThrowOnError> {
         return (options.client ?? this.client).put<PutCrmTeamStagesResponses, PutCrmTeamStagesErrors, ThrowOnError>({
             url: '/crm/stages',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * List the caller's databases.
+     */
+    public listDatabases<ThrowOnError extends boolean = false>(options?: Options<ListDatabasesData, ThrowOnError>): RequestResult<ListDatabasesResponses, ListDatabasesErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListDatabasesResponses, ListDatabasesErrors, ThrowOnError>({ url: '/databases', ...options });
+    }
+    
+    /**
+     * Create a database owned by the caller.
+     */
+    public createDatabase<ThrowOnError extends boolean = false>(options: Options<CreateDatabaseData, ThrowOnError>): RequestResult<CreateDatabaseResponses, CreateDatabaseErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CreateDatabaseResponses, CreateDatabaseErrors, ThrowOnError>({
+            url: '/databases',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Execute SQL as the caller. The whole read/write surface.
+     */
+    public execDatabaseSql<ThrowOnError extends boolean = false>(options: Options<ExecDatabaseSqlData, ThrowOnError>): RequestResult<ExecDatabaseSqlResponses, ExecDatabaseSqlErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<ExecDatabaseSqlResponses, ExecDatabaseSqlErrors, ThrowOnError>({
+            url: '/databases/exec',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Run read-only SQL with the caller's current visibility.
+     */
+    public queryDatabaseSql<ThrowOnError extends boolean = false>(options: Options<QueryDatabaseSqlData, ThrowOnError>): RequestResult<QueryDatabaseSqlResponses, QueryDatabaseSqlErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<QueryDatabaseSqlResponses, QueryDatabaseSqlErrors, ThrowOnError>({
+            url: '/databases/query',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Create a small example once for the authenticated user, if they have no databases.
+     */
+    public ensureStarterHandler<ThrowOnError extends boolean = false>(options?: Options<EnsureStarterHandlerData, ThrowOnError>): RequestResult<EnsureStarterHandlerResponses, EnsureStarterHandlerErrors, ThrowOnError> {
+        return (options?.client ?? this.client).post<EnsureStarterHandlerResponses, EnsureStarterHandlerErrors, ThrowOnError>({ url: '/databases/starter', ...options });
+    }
+    
+    /**
+     * Schema detail of one database.
+     */
+    public getDatabase<ThrowOnError extends boolean = false>(options: Options<GetDatabaseData, ThrowOnError>): RequestResult<GetDatabaseResponses, GetDatabaseErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetDatabaseResponses, GetDatabaseErrors, ThrowOnError>({ url: '/databases/{id}', ...options });
+    }
+    
+    /**
+     * Import a new table and every row atomically; retries carry the same request ID.
+     */
+    public importDatabaseTable<ThrowOnError extends boolean = false>(options: Options<ImportDatabaseTableData, ThrowOnError>): RequestResult<ImportDatabaseTableResponses, ImportDatabaseTableErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<ImportDatabaseTableResponses, ImportDatabaseTableErrors, ThrowOnError>({
+            url: '/databases/{id}/import',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Read recipients for a database owned by the caller.
+     */
+    public getDatabasePermissions<ThrowOnError extends boolean = false>(options: Options<GetDatabasePermissionsData, ThrowOnError>): RequestResult<GetDatabasePermissionsResponses, GetDatabasePermissionsErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetDatabasePermissionsResponses, GetDatabasePermissionsErrors, ThrowOnError>({ url: '/databases/{id}/permissions', ...options });
+    }
+    
+    /**
+     * Update recipients after proving database ownership.
+     */
+    public updateDatabasePermissions<ThrowOnError extends boolean = false>(options: Options<UpdateDatabasePermissionsData, ThrowOnError>): RequestResult<UpdateDatabasePermissionsResponses, UpdateDatabasePermissionsErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<UpdateDatabasePermissionsResponses, UpdateDatabasePermissionsErrors, ThrowOnError>({
+            url: '/databases/{id}/permissions',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Download a database as a SQLite file.
+     */
+    public downloadDatabaseSqlite<ThrowOnError extends boolean = false>(options: Options<DownloadDatabaseSqliteData, ThrowOnError>): RequestResult<DownloadDatabaseSqliteResponses, DownloadDatabaseSqliteErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<DownloadDatabaseSqliteResponses, DownloadDatabaseSqliteErrors, ThrowOnError>({ url: '/databases/{id}/sqlite', ...options });
+    }
+    
+    /**
+     * Create a table in a database.
+     */
+    public createDatabaseTable<ThrowOnError extends boolean = false>(options: Options<CreateDatabaseTableData, ThrowOnError>): RequestResult<CreateDatabaseTableResponses, CreateDatabaseTableErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CreateDatabaseTableResponses, CreateDatabaseTableErrors, ThrowOnError>({
+            url: '/databases/{id}/tables',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Rename a table in a database.
+     */
+    public renameDatabaseTable<ThrowOnError extends boolean = false>(options: Options<RenameDatabaseTableData, ThrowOnError>): RequestResult<RenameDatabaseTableResponses, RenameDatabaseTableErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<RenameDatabaseTableResponses, RenameDatabaseTableErrors, ThrowOnError>({
+            url: '/databases/{id}/tables/{table_id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Add a column to a table.
+     */
+    public createDatabaseColumn<ThrowOnError extends boolean = false>(options: Options<CreateDatabaseColumnData, ThrowOnError>): RequestResult<CreateDatabaseColumnResponses, CreateDatabaseColumnErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CreateDatabaseColumnResponses, CreateDatabaseColumnErrors, ThrowOnError>({
+            url: '/databases/{id}/tables/{table_id}/columns',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Persist the order of every column in a table.
+     */
+    public reorderDatabaseColumns<ThrowOnError extends boolean = false>(options: Options<ReorderDatabaseColumnsData, ThrowOnError>): RequestResult<ReorderDatabaseColumnsResponses, ReorderDatabaseColumnsErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<ReorderDatabaseColumnsResponses, ReorderDatabaseColumnsErrors, ThrowOnError>({
+            url: '/databases/{id}/tables/{table_id}/columns/order',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Delete one placement and its cells, preserving shared definitions.
+     */
+    public deleteDatabaseColumn<ThrowOnError extends boolean = false>(options: Options<DeleteDatabaseColumnData, ThrowOnError>): RequestResult<DeleteDatabaseColumnResponses, DeleteDatabaseColumnErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeleteDatabaseColumnResponses, DeleteDatabaseColumnErrors, ThrowOnError>({
+            url: '/databases/{id}/tables/{table_id}/columns/{column_id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Rename a column's label in this table.
+     */
+    public renameDatabaseColumn<ThrowOnError extends boolean = false>(options: Options<RenameDatabaseColumnData, ThrowOnError>): RequestResult<RenameDatabaseColumnResponses, RenameDatabaseColumnErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<RenameDatabaseColumnResponses, RenameDatabaseColumnErrors, ThrowOnError>({
+            url: '/databases/{id}/tables/{table_id}/columns/{column_id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Settle a new empty text column's type.
+     */
+    public inferDatabaseColumnType<ThrowOnError extends boolean = false>(options: Options<InferDatabaseColumnTypeData, ThrowOnError>): RequestResult<InferDatabaseColumnTypeResponses, InferDatabaseColumnTypeErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<InferDatabaseColumnTypeResponses, InferDatabaseColumnTypeErrors, ThrowOnError>({
+            url: '/databases/{id}/tables/{table_id}/columns/{column_id}/infer-type',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Add options to a select column.
+     */
+    public addDatabaseColumnOptions<ThrowOnError extends boolean = false>(options: Options<AddDatabaseColumnOptionsData, ThrowOnError>): RequestResult<AddDatabaseColumnOptionsResponses, AddDatabaseColumnOptionsErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<AddDatabaseColumnOptionsResponses, AddDatabaseColumnOptionsErrors, ThrowOnError>({
+            url: '/databases/{id}/tables/{table_id}/columns/{column_id}/options',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Change one column's type with all-or-nothing conversion.
+     */
+    public changeDatabaseColumnType<ThrowOnError extends boolean = false>(options: Options<ChangeDatabaseColumnTypeData, ThrowOnError>): RequestResult<ChangeDatabaseColumnTypeResponses, ChangeDatabaseColumnTypeErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<ChangeDatabaseColumnTypeResponses, ChangeDatabaseColumnTypeErrors, ThrowOnError>({
+            url: '/databases/{id}/tables/{table_id}/columns/{column_id}/type',
             ...options,
             headers: {
                 'Content-Type': 'application/json',

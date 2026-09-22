@@ -940,7 +940,8 @@ function notificationEntityTypeToSoupTag(
         'crm_contact',
         'skill',
         'scheduled_action',
-        'initiative'
+        'initiative',
+        'database'
       ),
       () => null
     )

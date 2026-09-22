@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO databases (id, name, owner_id) VALUES ($1, 'Property definition test', 'macro|user1@test.com')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6b9a8a5b523f52de39d36898d8eabcca74980932e9d94a089a0e56a52fe6f76f"
+}

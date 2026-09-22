@@ -75,6 +75,13 @@ describe('decodeActivityEvent', () => {
     });
   });
 
+  it('keeps database activity unsupported until its editor is available', () => {
+    expect(
+      decodeActivityEvent({ ...createdEvent, entityType: 'DATABASE' })
+        .entityType
+    ).toEqual({ kind: 'unsupported', raw: 'DATABASE' });
+  });
+
   it('never drops a row when the action typename is unrecognized', () => {
     const fragment = {
       ...createdEvent,

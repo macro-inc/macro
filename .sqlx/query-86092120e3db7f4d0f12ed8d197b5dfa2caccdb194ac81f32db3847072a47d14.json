@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, table_id, property_definition_id, position, config, display_name, infer_type\n            FROM database_columns\n            WHERE table_id = ANY($1)\n            ORDER BY table_id, position\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "table_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "property_definition_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "position",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "config",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "display_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "infer_type",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "86092120e3db7f4d0f12ed8d197b5dfa2caccdb194ac81f32db3847072a47d14"
+}

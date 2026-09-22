@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH accessible AS (\n                SELECT DISTINCT entity_id\n                FROM entity_access\n                WHERE entity_type = 'document'\n                  AND source_id = ANY($3)\n            )\n            SELECT\n                d.id AS \"id!\",\n                d.name AS \"title!\",\n                d.owner AS \"owner_id!\",\n                d.\"createdAt\"::timestamptz AS \"created_at!\",\n                d.\"updatedAt\"::timestamptz AS \"updated_at!\"\n            FROM \"Document\" d\n            WHERE d.\"deletedAt\" IS NULL\n              AND (d.owner = $1 OR d.id::uuid IN (SELECT entity_id FROM accessible))\n            ORDER BY d.\"updatedAt\" DESC\n            LIMIT $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "title!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "owner_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "c3dbb2e46b26b506dee863ace19eea340c27ab2cbb6fa8eb99520e924cfe07c9"
+}

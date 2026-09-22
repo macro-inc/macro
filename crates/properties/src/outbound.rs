@@ -22,3 +22,6 @@ mod tag_promotion_test;
 pub mod task_property_queries;
 #[cfg(test)]
 pub mod test;
+
+/// Transactional database-owned definition writer.
+pub mod database_definition_writer;
