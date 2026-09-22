@@ -12061,12 +12061,12 @@ export type IngestTranscriptData = {
     body: TranscriptSegmentRequest;
     path: {
         /**
-         * Channel ID
+         * RTC room name; the transcription agent passes its LiveKit room verbatim
          */
-        channel_id: string;
+        room_name: string;
     };
     query?: never;
-    url: '/call/{channel_id}/transcript';
+    url: '/call/{room_name}/transcript';
 };
 
 export type IngestTranscriptErrors = {

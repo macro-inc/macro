@@ -69,6 +69,7 @@ function record(overrides: Partial<CallRecord>): CallRecord {
     createdBy: 'owner',
     isActive: false,
     participants: [],
+    guests: [],
     roomName: 'room-1',
     shareWithTeam: true,
     startedAt: '2026-09-18T12:00:00Z',

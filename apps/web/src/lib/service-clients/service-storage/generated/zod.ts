@@ -2662,7 +2662,11 @@ Duplicate segments (same `segment_id`) are ignored.
  * @summary Handler for `POST /call/{channel_id}/transcript`.
  */
 export const ingestTranscriptParams = zod.object({
-  channel_id: zod.uuid().describe('Channel ID'),
+  room_name: zod
+    .uuid()
+    .describe(
+      'RTC room name; the transcription agent passes its LiveKit room verbatim'
+    ),
 });
 
 export const ingestTranscriptBody = zod

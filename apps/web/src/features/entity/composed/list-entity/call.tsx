@@ -203,7 +203,7 @@ export function CallWideContent(props: {
                   <Show when={callHit().senderId}>
                     {(id) => (
                       <Show
-                        when={!isCallGuest(id())}
+                        when={isMacroId(id())}
                         fallback={
                           <UserCircleIcon class="size-4 text-ink-muted" />
                         }

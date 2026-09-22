@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@channel/Call/call-link', () => ({
   getMeetingUrl: (token: string) => `https://macro.com/app/meet/${token}`,
+  getMeetingShareToken: (url: string) =>
+    new URL(url).pathname.match(/^\/app\/meet\/([^/]+)\/?$/)?.[1],
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: mocks.failure, alert: mocks.alert },

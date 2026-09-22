@@ -502,7 +502,7 @@ export class Sdk extends HeyApiClient {
      */
     public ingestTranscript<ThrowOnError extends boolean = false>(options: Options<IngestTranscriptData, ThrowOnError>): RequestResult<IngestTranscriptResponses, IngestTranscriptErrors, ThrowOnError> {
         return (options.client ?? this.client).post<IngestTranscriptResponses, IngestTranscriptErrors, ThrowOnError>({
-            url: '/call/{channel_id}/transcript',
+            url: '/call/{room_name}/transcript',
             ...options,
             headers: {
                 'Content-Type': 'application/json',

@@ -2449,7 +2449,7 @@
         }
       }
     },
-    "/call/{channel_id}/transcript": {
+    "/call/{room_name}/transcript": {
       "post": {
         "tags": ["call::inbound::axum_router"],
         "summary": "Handler for `POST /call/{channel_id}/transcript`.",
@@ -2457,9 +2457,9 @@
         "operationId": "ingest_transcript",
         "parameters": [
           {
-            "name": "channel_id",
+            "name": "room_name",
             "in": "path",
-            "description": "Channel ID",
+            "description": "RTC room name; the transcription agent passes its LiveKit room verbatim",
             "required": true,
             "schema": {
               "type": "string",
