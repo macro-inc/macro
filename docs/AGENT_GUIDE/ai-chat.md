@@ -144,6 +144,9 @@ permission failures should display a failed tool call without a successful resul
   use **New conversation** in the sidebar to return to the composer. The animated
   **Bring your own agent** card sits above the lists in both sections and links
   directly to runtime pairing and its setup guide.
+  The device-code entry page shows an example macrod terminal below the form;
+  enter the code from your own terminal, not the example. Click the image to
+  open it at full size. It disappears once a code is submitted for review.
   The agent form retains sharing, name, `@tag`, runtime, default model, connections,
   channels, instructions, and permission policy.
 - **Session**: the header has the sidebar reopen control, a linked PR status chip,

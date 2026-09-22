@@ -8,6 +8,7 @@ import {
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { Button, Checkbox } from '@ui';
 import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
+import { MacrodPairingExample } from './components/macrod-pairing-example';
 import { ChoiceRow, SettingsPage } from './primitives';
 
 const PAIRING_ERROR_FALLBACK =
@@ -309,7 +310,8 @@ export function RuntimePairingPage(props: {
                 />
               </div>
               <p class="text-xs text-ink-extra-muted">
-                Run macrod on your computer and enter the code it prints.
+                Run macrod on your computer, press p to pair, and enter your
+                device code.
               </p>
             </div>
           </Match>
@@ -388,6 +390,9 @@ export function RuntimePairingPage(props: {
           </Switch>
         </div>
       </section>
+      <Show when={!committedCode() && !approved()}>
+        <MacrodPairingExample />
+      </Show>
     </SettingsPage>
   );
 }

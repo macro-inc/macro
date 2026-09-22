@@ -81,10 +81,22 @@ describe('RuntimePairingPage', () => {
 
     const dialog = screen.getByRole('region', { name: 'New runtime' });
     const codeInput = within(dialog).getByLabelText('Pairing code');
+    expect(codeInput).toHaveProperty('value', '');
+    expect(
+      screen.getByRole('img', { name: /Example macrod terminal/ })
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Example only—enter the code from your own macrod terminal.'
+      )
+    ).toBeTruthy();
     fireEvent.input(codeInput, { target: { value: 'kx7m-4qhd' } });
     expect(codeInput).toHaveProperty('value', 'KX7M-4QHD');
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Look up' }));
+    expect(
+      screen.queryByRole('img', { name: /Example macrod terminal/ })
+    ).toBeNull();
 
     expect(within(dialog).getByText('KX7M-4QHD')).toBeTruthy();
     expect(
