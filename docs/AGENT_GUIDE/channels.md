@@ -360,6 +360,14 @@ and return to the list: its top-level notifications should be read, including
 ones older than the global notification feed's loaded page. Notifications for
 separate thread stacks remain unread until that thread is opened.
 
+GraphQL channel lists use a smaller notification projection while keeping every
+notification's lifecycle and message/thread identifiers. Recent cards still show
+the channel's latest message, not historical notification content. When checking
+cached navigation, toggle Home → Chat repeatedly, then test All, Recent, and
+search: unread indicators, message destinations, and latest-message previews
+should agree. Cache reads remain asynchronous, so a brief list spinner can still
+appear; cached rows should not wait for the background network refresh.
+
 ## Call lifecycle
 
 The channel's call tab and floating call controls share one session. Repeated
