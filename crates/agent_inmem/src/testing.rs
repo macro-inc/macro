@@ -89,6 +89,28 @@ impl TurnEngine for ScriptedEngine {
     }
 }
 
+/// An engine that never produces anything and never watches its
+/// cancellation, like a model turn that has gone quiet inside a provider
+/// call. Only the turn awaiting the token itself can stop this one.
+pub(crate) struct UnresponsiveEngine;
+
+impl TurnEngine for UnresponsiveEngine {
+    fn supported_models(&self) -> &[&str] {
+        TEST_MODELS
+    }
+
+    fn run_turn(&self, _request: TurnRequest) -> mpsc::Receiver<Result<StreamPart, AgentError>> {
+        let (parts, receiver) = mpsc::channel(1);
+        // Held forever: dropping the sender would end the turn on its own and
+        // prove nothing.
+        tokio::spawn(async move {
+            std::future::pending::<()>().await;
+            drop(parts);
+        });
+        receiver
+    }
+}
+
 /// An engine that never produces anything until cancelled.
 pub(crate) struct HangingEngine;
 

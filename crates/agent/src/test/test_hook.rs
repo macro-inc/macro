@@ -1,7 +1,9 @@
 use crate::hook::*;
 use crate::stream::{StreamPart, ToolResponse};
 use ai_toolset::SearchableTool;
-use rig_agent::agent::{InvalidToolCallAction, ToolCallAction, ToolResultAction};
+use rig_agent::agent::{
+    InvalidToolCallAction, ObservationAction, ToolCallAction, ToolResultAction,
+};
 use rig_agent::tool::ToolOutput;
 use schemars::Schema;
 use std::pin::Pin;
@@ -152,6 +154,33 @@ fn finishing_bridge(
         Arc::new(vec![]),
         CancellationToken::new(),
     )
+}
+
+/// A model can stream one tool call's arguments for tens of seconds while
+/// emitting no text at all. That stretch is the longest a cancellation can go
+/// unobserved, so the delta hook has to see it: rig ends the run as soon as a
+/// delta hook stops it, and nothing else fires meanwhile.
+#[tokio::test]
+async fn a_cancelled_turn_stops_while_tool_call_arguments_are_still_streaming() {
+    let (register, _registered) = recording_register();
+    let cancel = CancellationToken::new();
+    let (bridge, _rx) = StreamBridge::channel(
+        inputs(Arc::new(Mutex::new(Vec::new())), register, None),
+        Arc::new(vec![]),
+        cancel.clone(),
+    );
+
+    assert!(matches!(
+        bridge.handle_tool_call_delta(),
+        ObservationAction::Continue
+    ));
+
+    cancel.cancel();
+
+    assert!(matches!(
+        bridge.handle_tool_call_delta(),
+        ObservationAction::Stop(_)
+    ));
 }
 
 #[tokio::test]

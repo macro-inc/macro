@@ -219,7 +219,18 @@ async fn drive_turn(
     let rig_messages = agent::to_rig_messages(&messages);
     let result = async {
         let mut stream = session.send_message(rig_messages).await?;
-        while let Some(part) = stream.next().await {
+        loop {
+            // Awaited, not polled between parts: the loop's own hooks only see
+            // a cancellation when the model emits something, so a provider
+            // that goes quiet - thinking, or streaming one long tool call -
+            // would keep the turn running until it chose to stop. Dropping the
+            // stream here ends the provider request with it.
+            let part = tokio::select! {
+                biased;
+                () = cancel.cancelled() => break,
+                part = stream.next() => part,
+            };
+            let Some(part) = part else { break };
             if parts.send(part).await.is_err() {
                 // The consumer is gone; stop the loop rather than keep
                 // spending tokens into the void.

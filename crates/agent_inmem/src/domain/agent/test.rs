@@ -12,7 +12,7 @@ use rig_agent::completion::PromptError;
 
 use super::*;
 use crate::domain::engine::TurnEngine;
-use crate::testing::{HangingEngine, ScriptedEngine};
+use crate::testing::{HangingEngine, ScriptedEngine, UnresponsiveEngine};
 use macro_user_id::user_id::MacroUserIdStr;
 
 struct Harness {
@@ -484,6 +484,33 @@ async fn cancel_stops_the_turn_with_the_cancelled_stop_reason() {
                 .expect("a cancelled prompt still completes")
         })
         .await;
+
+    assert_eq!(response.stop_reason, StopReason::Cancelled);
+}
+
+/// The turn awaits its cancellation rather than checking between the
+/// engine's parts. An engine that has gone quiet - a provider call mid-flight
+/// with nothing to emit - must not hold the stop until it decides to speak;
+/// before this, one such turn ignored a stop for 17 seconds in production.
+#[tokio::test]
+async fn cancel_stops_a_turn_whose_engine_has_gone_quiet() {
+    let (_notifications, _config_options, response) = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        with_agent(Arc::new(UnresponsiveEngine), async |connection, session| {
+            let pending = connection.send_request(text_prompt(&session, "hang"));
+            let cancel =
+                agent_client_protocol::schema::v1::CancelNotification::new(session.clone());
+            connection
+                .send_notification(cancel)
+                .expect("the cancel notification should send");
+            pending
+                .block_task()
+                .await
+                .expect("a cancelled prompt still completes")
+        }),
+    )
+    .await
+    .expect("the turn stops on the cancellation, not on the engine");
 
     assert_eq!(response.stop_reason, StopReason::Cancelled);
 }

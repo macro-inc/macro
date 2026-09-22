@@ -10,8 +10,8 @@
 
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 use agent::types::{AssistantMessagePart, ChatMessage};
 use agent::{StreamAccumulator, StreamPart, ToolResponse};
@@ -38,7 +38,7 @@ use ai_tools::user_tool_review::{
 };
 use async_trait::async_trait;
 use model_owner::Owner;
-use tokio_util::sync::CancellationToken;
+use tokio_util::sync::{CancellationToken, WaitForCancellationFutureOwned};
 use tracing::Instrument as _;
 
 use crate::domain::engine::{AgentIdentity, TurnEngine, TurnRequest};
@@ -99,6 +99,52 @@ struct TurnInput {
     instructions: Option<String>,
 }
 
+/// One outstanding turn's cancellation, and when it was asked for.
+///
+/// The instant is the whole point of the wrapper: a token only says that a
+/// stop was requested, never how long the turn kept running afterwards - and
+/// that gap is the thing a person feels when they press stop. Recorded on the
+/// turn's span as `agent.turn.cancel_lag_ms` when the turn finally ends.
+#[derive(Clone, Debug)]
+pub struct TurnCancellation {
+    token: CancellationToken,
+    /// Set once, by whoever asks first; later askers do not move it.
+    requested_at: Arc<OnceLock<Instant>>,
+}
+
+impl TurnCancellation {
+    fn new() -> Self {
+        Self {
+            token: CancellationToken::new(),
+            requested_at: Arc::default(),
+        }
+    }
+
+    /// Ask this turn to stop.
+    fn request(&self) {
+        let _ = self.requested_at.set(Instant::now());
+        self.token.cancel();
+    }
+
+    /// The token the engine and the tools watch.
+    fn token(&self) -> CancellationToken {
+        self.token.clone()
+    }
+
+    fn cancelled(&self) -> WaitForCancellationFutureOwned {
+        self.token.clone().cancelled_owned()
+    }
+
+    fn is_cancelled(&self) -> bool {
+        self.token.is_cancelled()
+    }
+
+    /// How long ago the stop was asked for, if it was.
+    fn since_requested(&self) -> Option<Duration> {
+        self.requested_at.get().map(Instant::elapsed)
+    }
+}
+
 /// Everything one agent task serves its session from.
 pub struct AgentState {
     /// The Macro session this agent runs.
@@ -109,9 +155,9 @@ pub struct AgentState {
     pub engine: Arc<dyn TurnEngine>,
     /// Conversation state, shared with the manager so it survives reattach.
     pub store: Arc<SessionStore>,
-    /// Every outstanding turn's cancellation token - the running turn and any
+    /// Every outstanding turn's cancellation - the running turn and any
     /// queued behind it. `session/cancel` stops them all.
-    pub active_cancel: Mutex<Vec<CancellationToken>>,
+    pub active_cancel: Mutex<Vec<TurnCancellation>>,
     /// Serializes turns: the client may queue prompts, the engine runs one at
     /// a time.
     pub turn_lock: tokio::sync::Mutex<()>,
@@ -223,13 +269,13 @@ impl AgentState {
         }
     }
 
-    fn begin_turn(&self) -> CancellationToken {
-        let cancel = CancellationToken::new();
+    fn begin_turn(&self) -> TurnCancellation {
+        let cancel = TurnCancellation::new();
         let mut outstanding = self
             .active_cancel
             .lock()
             .expect("active turn lock should not be poisoned");
-        outstanding.retain(|token| !token.is_cancelled());
+        outstanding.retain(|turn| !turn.is_cancelled());
         outstanding.push(cancel.clone());
         cancel
     }
@@ -241,7 +287,7 @@ impl AgentState {
             .expect("active turn lock should not be poisoned")
             .iter()
         {
-            cancel.cancel();
+            cancel.request();
         }
     }
 }
@@ -565,6 +611,9 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                         "agent.acp.prompt",
                         agent.session.id = %state.session_id,
                         gen_ai.conversation.id = %state.session_id,
+                        // Recorded by the turn when it ends; see `run_turn`.
+                        agent.turn.stop_reason = tracing::field::Empty,
+                        agent.turn.cancel_lag_ms = tracing::field::Empty,
                     );
                     genai_telemetry::propagation::set_parent(&span, request.meta.as_ref());
                     let prompt = UserPrompt::from_request(&request);
@@ -670,12 +719,18 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
 }
 
 /// Run one turn to completion, streaming updates as they arrive.
+///
+/// Ends by recording how it stopped on the `agent.acp.prompt` span it runs
+/// in, including `agent.turn.cancel_lag_ms`: how long the turn kept going
+/// after a stop was asked for. That is the number to watch — everything that
+/// observes a cancellation does so between the model's own events, so a
+/// regression there shows up here and nowhere else.
 async fn run_turn(
     state: &AgentState,
     connection: &ConnectionTo<Client>,
     acp_session_id: SessionId,
     prompt: UserPrompt,
-    cancel: CancellationToken,
+    cancel: TurnCancellation,
 ) -> StopReason {
     let _turn = state.turn_lock.lock().await;
     let TurnInput {
@@ -693,7 +748,7 @@ async fn run_turn(
         instructions,
         messages,
         mcp_tools: state.current_mcp_tools(),
-        cancel: cancel.clone(),
+        cancel: cancel.token(),
         user_input: requester
             .clone()
             .map(|requester| requester as SharedUserInputRequester),
@@ -704,13 +759,24 @@ async fn run_turn(
     let mut failure = None;
     let mut was_cancelled = false;
     loop {
-        match tokio::time::timeout(TURN_IDLE_TIMEOUT, parts.recv()).await {
+        // The cancellation is awaited alongside the stream, not checked
+        // between parts: an engine that goes quiet mid-turn would otherwise
+        // hold the turn open until it produced something of its own accord.
+        let received = tokio::select! {
+            biased;
+            () = cancel.cancelled() => {
+                was_cancelled = true;
+                break;
+            }
+            received = tokio::time::timeout(TURN_IDLE_TIMEOUT, parts.recv()) => received,
+        };
+        match received {
             Ok(Some(Ok(part))) => {
                 if let Some(update) = update_for_part(&part) {
                     let notification = SessionNotification::new(acp_session_id.clone(), update);
                     if connection.send_notification(notification).is_err() {
                         // Nobody is listening; stop spending tokens.
-                        cancel.cancel();
+                        cancel.request();
                         break;
                     }
                 }
@@ -734,7 +800,7 @@ async fn run_turn(
                     "the turn produced nothing for {} seconds and was stopped",
                     TURN_IDLE_TIMEOUT.as_secs()
                 ));
-                cancel.cancel();
+                cancel.request();
                 break;
             }
         }
@@ -760,11 +826,17 @@ async fn run_turn(
     }
     state.push_turn(prompt, turn_parts);
 
-    if was_cancelled || cancel.is_cancelled() {
+    let stop = if was_cancelled || cancel.is_cancelled() {
         StopReason::Cancelled
     } else {
         StopReason::EndTurn
+    };
+    let span = tracing::Span::current();
+    span.record("agent.turn.stop_reason", tracing::field::debug(&stop));
+    if let Some(lag) = cancel.since_requested() {
+        span.record("agent.turn.cancel_lag_ms", lag.as_millis() as u64);
     }
+    stop
 }
 
 /// Run an `/ask` turn: send the question as a form elicitation, wait for the
@@ -780,7 +852,7 @@ async fn run_ask(
     acp_session_id: SessionId,
     prompt: UserPrompt,
     question: String,
-    cancel: CancellationToken,
+    cancel: TurnCancellation,
 ) -> StopReason {
     let _turn = state.turn_lock.lock().await;
 

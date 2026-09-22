@@ -5,7 +5,8 @@ use crate::stream::{McpInfo, StreamPart, ToolCall, ToolResponse, Usage};
 use ai_toolset::{SearchableTool, ToolInfo};
 use rig_agent::agent::hook::{
     AgentHook, HookContext, InvalidToolCallAction, InvalidToolCallContext, ObservationAction,
-    StreamResponseFinish, TextDelta, ToolCallAction, ToolResultAction, ToolResultEvent,
+    StreamResponseFinish, TextDelta, ToolCallAction, ToolCallDelta, ToolResultAction,
+    ToolResultEvent,
 };
 use rig_agent::tool::ToolOutput;
 use std::future::Future;
@@ -195,6 +196,22 @@ impl StreamBridge {
         }
     }
 
+    /// A stop is honoured while the model streams a tool call's arguments,
+    /// not only when the finished call arrives.
+    ///
+    /// These deltas are the one thing a model can emit for a long stretch
+    /// without producing any text, and a large payload (a document edit, say)
+    /// streams for tens of seconds. Without this check the turn ignores a
+    /// cancellation for exactly as long as that takes: rig ends the run the
+    /// moment a delta hook stops it, and no other hook fires meanwhile.
+    pub(crate) fn handle_tool_call_delta(&self) -> ObservationAction {
+        if self.cancel.is_cancelled() {
+            ObservationAction::stop(CANCELLED_REASON)
+        } else {
+            ObservationAction::Continue
+        }
+    }
+
     /// Recover a tool call the model emitted for a tool that is not advertised
     /// this turn, instead of rig's default fail-fast (which killed the whole
     /// stream and surfaced to the user as a turn that announced a tool call and
@@ -360,6 +377,14 @@ impl StreamBridge {
 impl AgentHook for StreamBridge {
     async fn on_text_delta(&self, _ctx: &HookContext, event: TextDelta<'_>) -> ObservationAction {
         self.handle_text_delta(event.delta)
+    }
+
+    async fn on_tool_call_delta(
+        &self,
+        _ctx: &HookContext,
+        _event: ToolCallDelta<'_>,
+    ) -> ObservationAction {
+        self.handle_tool_call_delta()
     }
 
     async fn on_invalid_tool_call(
