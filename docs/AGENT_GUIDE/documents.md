@@ -296,6 +296,10 @@ nodes — use the snapshot itself to verify content. For formatting checks, run
 Body placeholder advertises: `/` for block commands, `@` to reference files, `;` for snippets.
 Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote).
 
+`@` opens the mention menu wherever the caret starts a word, including directly
+in front of existing text — the menu opens empty there instead of searching for
+the word ahead of the caret. Typed inside a word (`he@llo`) it stays literal text.
+
 `Ctrl+F` / `Cmd+F` opens the in-document find bar. Matches include paragraph
 text and inline mention chips (tasks, docs, channels, skills, …) by the title
 shown on the chip.
