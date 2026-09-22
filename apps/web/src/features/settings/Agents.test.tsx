@@ -23,6 +23,7 @@ import { Suspense } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Agents } from './Agents';
+import { chooseSelectOption, selectOptions } from './tests/select-helpers';
 
 const claudeFlag = vi.hoisted(() => ({ enabled: true }));
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -360,7 +361,9 @@ describe('Agents', () => {
       try {
         render(() => <Agents />);
         fireEvent.click(screen.getByRole('button', { name: 'New agent' }));
-        const option = screen.queryByRole('option', {
+        const option = selectOptions(
+          screen.getByLabelText('Runtime')
+        ).queryByRole('option', {
           name: 'Claude Cloud',
         });
         expect(Boolean(option)).toBe(enabled);
@@ -423,17 +426,11 @@ describe('Agents', () => {
         </QueryClientProvider>
       ));
       fireEvent.click(screen.getByRole('button', { name: 'New agent' }));
-      fireEvent.change(screen.getByRole('combobox', { name: 'Runtime' }), {
-        target: { value: 'cursor' },
-      });
+      chooseSelectOption(screen.getByLabelText('Runtime'), 'Cursor');
       expect(screen.queryByText('Settings suspended')).toBeNull();
       expect(screen.getByText('Loading models…')).toBeTruthy();
       expect(
-        (
-          screen.getByRole('combobox', {
-            name: 'Default model',
-          }) as HTMLSelectElement
-        ).disabled
+        (screen.getByLabelText('Default model') as HTMLButtonElement).disabled
       ).toBe(true);
 
       if (outcome === 'error') {
@@ -460,17 +457,11 @@ describe('Agents', () => {
           ],
         });
         await waitFor(() =>
-          expect(
-            screen.getByRole('option', { name: 'Loaded Model' })
-          ).toBeTruthy()
+          expect(screen.getByText('Loaded Model')).toBeTruthy()
         );
         expect(screen.queryByText('Settings suspended')).toBeNull();
         expect(
-          (
-            screen.getByRole('combobox', {
-              name: 'Default model',
-            }) as HTMLSelectElement
-          ).disabled
+          (screen.getByLabelText('Default model') as HTMLButtonElement).disabled
         ).toBe(false);
       }
       view.unmount();
@@ -525,25 +516,29 @@ describe('Agents', () => {
     ));
     try {
       fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
-      const harness = screen.getByRole('combobox', { name: 'Runtime' });
-      expect(harness).toHaveProperty('value', 'claude-cloud');
+      const harness = screen.getByLabelText('Runtime');
+      expect(harness).toHaveProperty('textContent', 'Claude Cloud');
       expect(screen.getByText('Loading models…')).toBeTruthy();
       resolveModels({
         status: 'available',
         currentModel: 'claude-fable-5-1',
         models: [{ id: 'claude-fable-5-1', name: 'Fable 5.1' }],
       });
+      await waitFor(() => expect(screen.getByText('Fable 5.1')).toBeTruthy());
+      expect(harness).toHaveProperty('textContent', 'Claude Cloud');
+      chooseSelectOption(harness, 'Macro Agent');
       await waitFor(() =>
-        expect(screen.getByRole('option', { name: 'Fable 5.1' })).toBeTruthy()
+        expect(screen.getByLabelText('Default model')).toHaveProperty(
+          'textContent',
+          'Claude Sonnet 4.5'
+        )
       );
-      expect(harness).toHaveProperty('value', 'claude-cloud');
-      fireEvent.change(harness, { target: { value: 'in-memory' } });
-      await waitFor(() =>
-        expect(
-          screen.getByRole('combobox', { name: 'Default model' })
-        ).toHaveProperty('value', Model.sonnet5)
-      );
-      expect(screen.queryByRole('option', { name: /Fable/i })).toBeNull();
+      expect(
+        selectOptions(screen.getByLabelText('Default model')).queryByRole(
+          'option',
+          { name: /Fable/i }
+        )
+      ).toBeNull();
       fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
       await waitFor(() =>
         expect(agentMocks.update).toHaveBeenCalledWith(
@@ -926,8 +921,8 @@ describe('Agents', () => {
     expect(within(dialog).getByLabelText('@tag')).toBeTruthy();
     expect(within(dialog).queryByLabelText('Description')).toBeNull();
     expect(within(dialog).getByLabelText('System prompt')).toBeTruthy();
-    expect(harness).toHaveProperty('value', 'in-memory');
-    expect(within(harness).getAllByRole('option')).toHaveLength(1);
+    expect(harness).toHaveProperty('textContent', 'Macro Agent');
+    expect(selectOptions(harness).getAllByRole('option')).toHaveLength(1);
     expect(within(dialog).getByLabelText('Default model')).toBeTruthy();
     expect(
       within(dialog).getByRole('group', { name: 'Channels' })
@@ -995,7 +990,7 @@ describe('Agents', () => {
     });
   });
 
-  it('offers Cursor and its models when Cursor is connected', () => {
+  it('offers Cursor and saves the model chosen from its dropdown', async () => {
     cursorMocks.status.data = {
       registered: true,
       updatedAt: '2026-08-27T12:00:00Z',
@@ -1010,16 +1005,34 @@ describe('Agents', () => {
 
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     const harness = within(dialog).getByLabelText('Runtime');
-    expect(within(harness).getAllByRole('option')).toHaveLength(2);
+    expect(selectOptions(harness).getAllByRole('option')).toHaveLength(2);
 
-    fireEvent.change(harness, { target: { value: 'cursor' } });
-    expect(harness).toHaveProperty('value', 'cursor');
+    chooseSelectOption(harness, 'Cursor');
+    expect(harness).toHaveProperty('textContent', 'Cursor');
 
     const defaultModel = within(dialog).getByLabelText('Default model');
-    expect(within(defaultModel).getAllByRole('option')).toHaveLength(2);
+    expect(selectOptions(defaultModel).getAllByRole('option')).toHaveLength(2);
     expect(
-      within(defaultModel).getByRole('option', { name: 'Cursor Small' })
-    ).toHaveProperty('selected', true);
+      selectOptions(defaultModel)
+        .getByRole('option', { name: 'Cursor Small' })
+        .getAttribute('aria-selected')
+    ).toBe('true');
+    chooseSelectOption(defaultModel, 'Cursor Large');
+    expect(defaultModel.textContent).toBe('Cursor Large');
+    fireEvent.input(within(dialog).getByLabelText('Name'), {
+      target: { value: 'Coding agent' },
+    });
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Create agent' })
+    );
+    await waitFor(() =>
+      expect(agentMocks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          harness: 'cursor',
+          defaultModel: 'cursor-large',
+        })
+      )
+    );
   });
 
   it('offers registered macrod harnesses in the harness picker', () => {
@@ -1030,9 +1043,9 @@ describe('Agents', () => {
 
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     const harness = within(dialog).getByLabelText('Runtime');
-    expect(within(harness).getAllByRole('option')).toHaveLength(2);
+    expect(selectOptions(harness).getAllByRole('option')).toHaveLength(2);
     expect(
-      within(harness).getByRole('option', { name: 'Dev box' })
+      selectOptions(harness).getByRole('option', { name: 'Dev box' })
     ).toBeTruthy();
   });
 
@@ -1064,23 +1077,22 @@ describe('Agents', () => {
     await waitFor(() => expect(fetchHarnesses).toHaveBeenCalledOnce());
     fireEvent.click(screen.getByRole('button', { name: 'New agent' }));
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
-    const harness = within(dialog).getByRole('combobox', { name: 'Runtime' });
-    await waitFor(() =>
-      expect(
-        within(harness).getByRole('option', { name: 'Dev box' })
-      ).toBeTruthy()
-    );
-    fireEvent.change(harness, { target: { value: MACROD_HARNESS.id } });
+    const harness = within(dialog).getByLabelText('Runtime');
+    expect(
+      selectOptions(harness).getByRole('option', { name: 'Dev box' })
+    ).toBeTruthy();
+    chooseSelectOption(harness, 'Dev box');
     fireEvent.input(within(dialog).getByLabelText('Name'), {
       target: { value: 'Coding agent' },
     });
 
     for (let refresh = 0; refresh < 2; refresh++) {
       await client.refetchQueries({ queryKey });
-      expect(harness).toHaveProperty('value', MACROD_HARNESS.id);
-      expect(
-        within(dialog).getByRole('combobox', { name: 'Default model' })
-      ).toHaveProperty('value', 'codex-model');
+      expect(harness).toHaveProperty('textContent', 'Dev box');
+      expect(within(dialog).getByLabelText('Default model')).toHaveProperty(
+        'textContent',
+        'Codex model'
+      );
     }
     expect(fetchHarnesses).toHaveBeenCalledTimes(3);
     fireEvent.click(
@@ -1136,11 +1148,9 @@ describe('Agents', () => {
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     const harness = within(dialog).getByLabelText('Runtime');
 
-    expect(
-      within(dialog).getByRole('option', { name: 'Claude Sonnet 4.5' })
-    ).toBeTruthy();
+    expect(within(dialog).getByText('Claude Sonnet 4.5')).toBeTruthy();
 
-    fireEvent.change(harness, { target: { value: 'cursor' } });
+    chooseSelectOption(harness, 'Cursor');
     expect(
       within(dialog).getByText(/Could not load models for Cursor/)
     ).toBeTruthy();
@@ -1149,14 +1159,14 @@ describe('Agents', () => {
     );
     expect(retry).toHaveBeenCalledOnce();
 
-    fireEvent.change(harness, { target: { value: MACROD_HARNESS.id } });
+    chooseSelectOption(harness, 'Dev box');
     expect(
       within(dialog).getByText(
         'Model selection is unsupported by this runtime.'
       )
     ).toBeTruthy();
 
-    fireEvent.change(harness, { target: { value: loadingHarness.id } });
+    chooseSelectOption(harness, 'Loading box');
     expect(within(dialog).getByText('Loading models…')).toBeTruthy();
   });
 
@@ -1175,12 +1185,12 @@ describe('Agents', () => {
 
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     const harness = within(dialog).getByLabelText('Runtime');
-    fireEvent.change(harness, { target: { value: MACROD_HARNESS.id } });
+    chooseSelectOption(harness, 'Dev box');
 
     const defaultModel = within(dialog).getByLabelText('Default model');
-    expect(defaultModel.tagName).toBe('SELECT');
-    expect(defaultModel).toHaveProperty('value', 'codex');
-    expect(within(defaultModel).getAllByRole('option')).toHaveLength(2);
+    expect(defaultModel.tagName).toBe('BUTTON');
+    expect(defaultModel).toHaveProperty('textContent', 'Codex');
+    expect(selectOptions(defaultModel).getAllByRole('option')).toHaveLength(2);
   });
 
   it('falls back to the first advertised model when current is absent', () => {
@@ -1196,13 +1206,11 @@ describe('Agents', () => {
     render(() => <Agents />);
     fireEvent.click(screen.getByRole('button', { name: 'New agent' }));
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
-    fireEvent.change(within(dialog).getByLabelText('Runtime'), {
-      target: { value: MACROD_HARNESS.id },
-    });
+    chooseSelectOption(within(dialog).getByLabelText('Runtime'), 'Dev box');
 
     expect(within(dialog).getByLabelText('Default model')).toHaveProperty(
-      'value',
-      'claude-code'
+      'textContent',
+      'Claude Code'
     );
   });
 
@@ -1216,14 +1224,15 @@ describe('Agents', () => {
     render(() => <Agents />);
     fireEvent.click(screen.getByRole('button', { name: 'New agent' }));
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
-    fireEvent.change(within(dialog).getByLabelText('Runtime'), {
-      target: { value: MACROD_HARNESS.id },
-    });
+    chooseSelectOption(within(dialog).getByLabelText('Runtime'), 'Dev box');
 
     const defaultModel = within(dialog).getByLabelText('Default model');
-    expect(defaultModel).toHaveProperty('value', 'provider-default');
+    expect(defaultModel).toHaveProperty(
+      'textContent',
+      'provider-default (unavailable)'
+    );
     expect(
-      within(defaultModel).getByRole('option', {
+      selectOptions(defaultModel).getByRole('option', {
         name: 'provider-default (unavailable)',
       })
     ).toBeTruthy();
@@ -1243,9 +1252,7 @@ describe('Agents', () => {
     fireEvent.input(within(dialog).getByLabelText('Name'), {
       target: { value: 'Bug fixer' },
     });
-    fireEvent.change(within(dialog).getByLabelText('Runtime'), {
-      target: { value: MACROD_HARNESS.id },
-    });
+    chooseSelectOption(within(dialog).getByLabelText('Runtime'), 'Dev box');
     fireEvent.click(
       within(dialog).getByRole('button', { name: 'Create agent' })
     );
@@ -1295,9 +1302,12 @@ describe('Agents', () => {
     const defaultModel = within(
       screen.getByRole('region', { name: /^(New|Edit) agent$/ })
     ).getByLabelText('Default model');
-    expect(defaultModel).toHaveProperty('value', 'retired-model');
+    expect(defaultModel).toHaveProperty(
+      'textContent',
+      'retired-model (saved, unavailable)'
+    );
     expect(
-      within(defaultModel).getByRole('option', {
+      selectOptions(defaultModel).getByRole('option', {
         name: 'retired-model (saved, unavailable)',
       })
     ).toBeTruthy();
@@ -1335,8 +1345,8 @@ describe('Agents', () => {
 
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     expect(within(dialog).getByLabelText('Runtime')).toHaveProperty(
-      'value',
-      'claude-cloud'
+      'textContent',
+      'Claude Cloud'
     );
     fireEvent.click(
       within(dialog).getByRole('button', { name: 'Save changes' })
@@ -1383,12 +1393,12 @@ describe('Agents', () => {
 
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     expect(within(dialog).getByLabelText('Runtime')).toHaveProperty(
-      'value',
-      MACROD_HARNESS.id
+      'textContent',
+      'Dev box'
     );
     const defaultModel = within(dialog).getByLabelText('Default model');
-    expect(defaultModel.tagName).toBe('SELECT');
-    expect(defaultModel).toHaveProperty('value', 'default');
+    expect(defaultModel.tagName).toBe('BUTTON');
+    expect(defaultModel).toHaveProperty('textContent', 'Harness default');
   });
 
   const linearAgent = {
@@ -1563,9 +1573,7 @@ it('requires prompts unless the harness operator permits bypass', async () => {
   render(() => <Agents />);
   fireEvent.click(screen.getByRole('button', { name: 'New agent' }));
   const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
-  fireEvent.change(within(dialog).getByLabelText('Runtime'), {
-    target: { value: MACROD_HARNESS.id },
-  });
+  chooseSelectOption(within(dialog).getByLabelText('Runtime'), 'Dev box');
   expect(within(dialog).getByLabelText('Always prompt')).toHaveProperty(
     'checked',
     true
@@ -1584,9 +1592,7 @@ it('offers bypass only after harness consent and resets the choice on harness ch
   render(() => <Agents />);
   fireEvent.click(screen.getByRole('button', { name: 'New agent' }));
   const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
-  fireEvent.change(within(dialog).getByLabelText('Runtime'), {
-    target: { value: MACROD_HARNESS.id },
-  });
+  chooseSelectOption(within(dialog).getByLabelText('Runtime'), 'Dev box');
   expect(within(dialog).getByLabelText('Always prompt')).toHaveProperty(
     'checked',
     true
@@ -1596,9 +1602,7 @@ it('offers bypass only after harness consent and resets the choice on harness ch
     'checked',
     true
   );
-  fireEvent.change(within(dialog).getByLabelText('Runtime'), {
-    target: { value: 'prompt-only' },
-  });
+  chooseSelectOption(within(dialog).getByLabelText('Runtime'), 'Prompt only');
   expect(within(dialog).getByLabelText('Always prompt')).toHaveProperty(
     'checked',
     true
@@ -1620,9 +1624,14 @@ it.each(['in-memory', 'cursor', 'claude-cloud'])(
     fireEvent.input(within(dialog).getByLabelText('Name'), {
       target: { value: 'Built-in agent' },
     });
-    fireEvent.change(within(dialog).getByLabelText('Runtime'), {
-      target: { value: harness },
-    });
+    chooseSelectOption(
+      within(dialog).getByLabelText('Runtime'),
+      {
+        'in-memory': 'Macro Agent',
+        cursor: 'Cursor',
+        'claude-cloud': 'Claude Cloud',
+      }[harness]!
+    );
     expect(within(dialog).queryByText('Permission requests')).toBeNull();
     expect(within(dialog).queryByLabelText('Always prompt')).toBeNull();
     expect(within(dialog).queryByLabelText('Always bypass')).toBeNull();

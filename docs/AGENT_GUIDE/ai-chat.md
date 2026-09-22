@@ -148,6 +148,9 @@ permission failures should display a failed tool call without a successful resul
   entry page contains only the form. Enter the code from your own terminal.
   The agent form retains sharing, name, `@tag`, runtime, default model, connections,
   channels, instructions, and permission policy.
+  Runtime and short model lists use styled dropdown buttons: open the field and
+  choose an option (or use arrow keys and Enter). Escape dismisses the menu.
+  Large model lists retain the searchable model picker.
 - **Session**: the header has the sidebar reopen control, a linked PR status chip,
   favorite, Share, and Side panel. The top-left title uses the same provider icon,
   saved-title precedence, and title menu as `/app/agent/<id>`; click the caret

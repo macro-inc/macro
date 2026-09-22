@@ -24,6 +24,7 @@ import {
 import { Suspense } from 'solid-js';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Harness } from './Harness';
+import { chooseSelectOption } from './tests/select-helpers';
 
 vi.mock('./codex/views/CodexHarness', () => ({
   CodexHarness: () => <div data-testid="codex-harness" />,
@@ -308,11 +309,7 @@ describe('Harness', () => {
       expect(screen.queryByText('Settings suspended')).toBeNull();
       expect(screen.getByText('Loading models…')).toBeTruthy();
       expect(
-        (
-          screen.getByRole('combobox', {
-            name: 'Default model',
-          }) as HTMLSelectElement
-        ).disabled
+        (screen.getByLabelText('Default model') as HTMLButtonElement).disabled
       ).toBe(true);
 
       if (outcome === 'error') {
@@ -335,17 +332,11 @@ describe('Harness', () => {
           ],
         });
         await waitFor(() =>
-          expect(
-            screen.getByRole('option', { name: 'Loaded Model' })
-          ).toBeTruthy()
+          expect(screen.getByText('Loaded Model')).toBeTruthy()
         );
         expect(screen.queryByText('Settings suspended')).toBeNull();
         expect(
-          (
-            screen.getByRole('combobox', {
-              name: 'Default model',
-            }) as HTMLSelectElement
-          ).disabled
+          (screen.getByLabelText('Default model') as HTMLButtonElement).disabled
         ).toBe(false);
       }
       view.unmount();
@@ -405,6 +396,10 @@ describe('Harness', () => {
       defaultModelId: null,
       updatedAt: '2026-08-27T12:00:00Z',
     };
+    mocks.models.data.models.push({
+      id: 'another-model',
+      name: 'Another Model',
+    });
 
     render(() => <Harness />);
 
@@ -412,11 +407,9 @@ describe('Harness', () => {
     expect(screen.queryByLabelText('API key')).toBeNull();
     expect(screen.getByText(/does not revoke it in Cursor/)).toBeTruthy();
 
-    fireEvent.change(screen.getByLabelText('Default model'), {
-      target: { value: 'default-model' },
-    });
+    chooseSelectOption(screen.getByLabelText('Default model'), 'Another Model');
     await waitFor(() => {
-      expect(mocks.setDefaultModel).toHaveBeenCalledWith('default-model');
+      expect(mocks.setDefaultModel).toHaveBeenCalledWith('another-model');
       expect(mocks.toastSuccess).toHaveBeenCalledWith('Default model updated');
     });
 

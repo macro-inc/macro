@@ -44,6 +44,7 @@ import { botAssignableChannelOptions } from '../channel/Bots/botChannelOptions';
 import { canDeleteBot, canManageAgent } from '../channel/Bots/botPermissions';
 import { ChannelMultiSelect } from '../channel/Bots/ChannelMultiSelect';
 import { AgentSettingsDescription } from './components/agent-settings-description';
+import { SettingsSelect } from './components/settings-select';
 import { PipedreamAppPicker } from './PipedreamAppPicker';
 import {
   ChoiceRow,
@@ -887,34 +888,21 @@ function AgentEditorPage(props: {
             description="Choose a connected runtime, then the model this agent uses."
           >
             <div class="grid grid-cols-1 gap-3 @min-[440px]:grid-cols-2">
-              <label class="flex flex-col gap-1.5">
+              <div class="flex min-w-0 flex-col gap-1.5">
                 <span class="text-xs font-medium text-ink">Runtime</span>
-                <select
-                  class="settings-input w-full"
-                  onChange={(event) =>
-                    handleHarnessChange(event.currentTarget.value)
-                  }
-                >
-                  <For
-                    each={props.connectedHarnesses.filter(
-                      (harness) =>
-                        harness.id !== 'claude-cloud' ||
-                        harness.id === harnessId() ||
-                        modelDataForHarness(harness.id)?.status === 'available'
-                    )}
-                  >
-                    {(harness) => (
-                      <option
-                        value={harness.id}
-                        selected={harness.id === harnessId()}
-                      >
-                        {harness.name}
-                      </option>
-                    )}
-                  </For>
-                </select>
-              </label>
-              <label class="flex flex-col gap-1.5">
+                <SettingsSelect
+                  label="Runtime"
+                  options={props.connectedHarnesses.filter(
+                    (harness) =>
+                      harness.id !== 'claude-cloud' ||
+                      harness.id === harnessId() ||
+                      modelDataForHarness(harness.id)?.status === 'available'
+                  )}
+                  value={harnessId()}
+                  onChange={handleHarnessChange}
+                />
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5">
                 <span class="text-xs font-medium text-ink">Default model</span>
                 <Show
                   when={selectedModelQuery()}
@@ -929,13 +917,13 @@ function AgentEditorPage(props: {
                     <Show
                       when={!query.isPending}
                       fallback={
-                        <select
-                          aria-label="Default model"
-                          class="settings-input w-full"
+                        <SettingsSelect
+                          label="Default model"
+                          options={[]}
+                          placeholder="Loading models…"
+                          onChange={setDefaultModelId}
                           disabled
-                        >
-                          <option>Loading models…</option>
-                        </select>
+                        />
                       }
                     >
                       <Show
@@ -977,22 +965,12 @@ function AgentEditorPage(props: {
                             <Show
                               when={selectedHarnessUsesCatalog()}
                               fallback={
-                                <select
-                                  aria-label="Default model"
-                                  class="settings-input w-full"
+                                <SettingsSelect
+                                  label="Default model"
+                                  options={selectedModelOptions()}
                                   value={selectedDefaultModelId()}
-                                  onChange={(event) =>
-                                    setDefaultModelId(event.currentTarget.value)
-                                  }
-                                >
-                                  <For each={selectedModelOptions()}>
-                                    {(model) => (
-                                      <option value={model.id}>
-                                        {model.name}
-                                      </option>
-                                    )}
-                                  </For>
-                                </select>
+                                  onChange={setDefaultModelId}
+                                />
                               }
                             >
                               <ModelCatalogPicker
@@ -1010,7 +988,7 @@ function AgentEditorPage(props: {
                     </Show>
                   )}
                 </Show>
-              </label>
+              </div>
             </div>
             <Show when={selectedHarness()?.kind === 'macrod'}>
               <fieldset class="mt-4 grid gap-2 border-t border-ink/[0.06] pt-4">

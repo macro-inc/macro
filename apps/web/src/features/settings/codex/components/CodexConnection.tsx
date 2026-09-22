@@ -1,7 +1,8 @@
 import OpenAiIcon from '@core/component/AI/assets/openai.svg';
 import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
 import { Button } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
+import { SettingsSelect } from '../../components/settings-select';
 import { HarnessIcon } from '../../integration-ui';
 import type { CodexConnectionDisplay, CodexLoginDisplay } from '../core/types';
 
@@ -142,38 +143,25 @@ export function CodexConnection(props: {
               </p>
             </Show>
             <div class="mt-4 flex flex-col gap-3">
-              <label
-                class="flex flex-col gap-1.5 text-xs text-ink"
-                for="codex-environment"
-              >
-                Cloud environment
-                <select
-                  id="codex-environment"
-                  class="settings-input w-full max-w-sm"
+              <div class="flex flex-col gap-1.5 text-xs text-ink">
+                <span>Cloud environment</span>
+                <SettingsSelect
+                  label="Cloud environment"
+                  class="min-w-0 w-full max-w-sm"
+                  placeholder="Choose an environment"
+                  options={props.environments.map((item) => ({
+                    id: item.id,
+                    name: `${item.label ?? item.id}${
+                      item.repositories.length
+                        ? ` — ${item.repositories.map((repo) => repo.fullName).join(', ')}`
+                        : ''
+                    }`,
+                  }))}
                   value={selectedEnvironment()}
                   disabled={props.environmentsLoading || props.pending}
-                  onChange={(event) => {
-                    setEnvironment(event.currentTarget.value);
-                  }}
-                >
-                  <option value="" disabled selected={!selectedEnvironment()}>
-                    Choose an environment
-                  </option>
-                  <For each={props.environments}>
-                    {(item) => (
-                      <option
-                        value={item.id}
-                        selected={selectedEnvironment() === item.id}
-                      >
-                        {item.label ?? item.id}
-                        {item.repositories.length
-                          ? ` — ${item.repositories.map((repo) => repo.fullName).join(', ')}`
-                          : ''}
-                      </option>
-                    )}
-                  </For>
-                </select>
-              </label>
+                  onChange={setEnvironment}
+                />
+              </div>
               <p class="text-xs text-ink-extra-muted">
                 Choose and save an environment before using @codex. New sessions
                 always start from the main branch.

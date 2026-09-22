@@ -25,6 +25,7 @@ import { ClaudeConnection } from '../claude-connection/claude-connection';
 import { CodexHarness } from './codex/views/CodexHarness';
 import { AgentSettingsDescription } from './components/agent-settings-description';
 import { BringYourOwnAgent } from './components/bring-your-own-agent';
+import { SettingsSelect } from './components/settings-select';
 import { ConnectAction, HarnessIcon, StatusDot } from './integration-ui';
 import { SettingsCard, SettingsPage } from './primitives';
 import { RuntimePairingPage } from './RuntimePairingPage';
@@ -125,6 +126,7 @@ export function Harness(
     }));
   const selectedCursorModelId = () =>
     (cursorStatus.isSuccess ? cursorStatus.data.defaultModelId : null) ??
+    cursorModelData()?.currentModel ??
     cursorModelOptions()[0]?.id ??
     null;
 
@@ -291,22 +293,20 @@ export function Harness(
                       }
                     >
                       <div class="mt-4 flex flex-col gap-1.5">
-                        <label
-                          for="cursor-default-model"
-                          class="text-xs text-ink"
-                        >
-                          Default model
-                        </label>
+                        <span class="text-xs text-ink">Default model</span>
                         <Show
                           when={!cursorModels.isPending}
                           fallback={
-                            <select
-                              id="cursor-default-model"
-                              class="settings-input w-56"
+                            <SettingsSelect
+                              label="Default model"
+                              class="w-56 max-w-full"
+                              options={[]}
+                              placeholder="Loading models…"
+                              onChange={(id) =>
+                                void handleCursorModelChange(id)
+                              }
                               disabled
-                            >
-                              <option>Loading models…</option>
-                            </select>
+                            />
                           }
                         >
                           <Show
@@ -340,30 +340,16 @@ export function Harness(
                                   cursorCatalogOptions()
                                 )}
                                 fallback={
-                                  <select
-                                    id="cursor-default-model"
-                                    class="settings-input w-56"
-                                    value={
-                                      cursorStatus.data?.defaultModelId ??
-                                      cursorModelData()?.currentModel ??
-                                      cursorModelOptions()[0]?.id ??
-                                      ''
-                                    }
+                                  <SettingsSelect
+                                    label="Default model"
+                                    class="w-56 max-w-full"
+                                    options={cursorModelOptions()}
+                                    value={selectedCursorModelId()}
                                     disabled={setCursorDefaultModel.isPending}
-                                    onChange={(event) =>
-                                      void handleCursorModelChange(
-                                        event.currentTarget.value
-                                      )
+                                    onChange={(id) =>
+                                      void handleCursorModelChange(id)
                                     }
-                                  >
-                                    <For each={cursorModelOptions()}>
-                                      {(model) => (
-                                        <option value={model.id}>
-                                          {model.name}
-                                        </option>
-                                      )}
-                                    </For>
-                                  </select>
+                                  />
                                 }
                               >
                                 <ModelCatalogPicker
