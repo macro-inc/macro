@@ -1,6 +1,7 @@
 //! Convert authorized tool output into MCP text, images, and media links.
 
 use crate::markdown_images::{MarkdownImageResolver, tool_result_with_images};
+use futures::future::join_all;
 use macro_user_id::user_id::MacroUserIdStr;
 use rmcp::model::{CallToolResult, Content, RawResource};
 use serde_json::Value;
@@ -52,25 +53,20 @@ pub(crate) async fn tool_result_with_media<R: MarkdownImageResolver>(
     // Build both JSON representations after enrichment so text-only clients
     // also receive the URLs, including images beyond the inline image budget.
     let mut result = CallToolResult::structured(value);
-    let mut attempted_images = 0;
+    let mut image_resolutions = Vec::new();
     for attachment in media {
         match attachment.kind {
-            MediaKind::Image if attempted_images < MAX_CHANNEL_IMAGES => {
-                attempted_images += 1;
-                if let Ok(Some(image)) = tokio::time::timeout(
-                    CHANNEL_IMAGE_TIMEOUT,
-                    resolver.resolve_channel_image(&attachment.url),
-                )
-                .await
-                {
-                    result.content.push(Content::text(format!(
-                        "Channel image attachment {} ({})",
-                        attachment.entity_id, attachment.url,
-                    )));
-                    result
-                        .content
-                        .push(Content::image(image.data, image.mime_type));
-                }
+            MediaKind::Image if image_resolutions.len() < MAX_CHANNEL_IMAGES => {
+                image_resolutions.push(async move {
+                    let image = tokio::time::timeout(
+                        CHANNEL_IMAGE_TIMEOUT,
+                        resolver.resolve_channel_image(&attachment.url),
+                    )
+                    .await
+                    .ok()
+                    .flatten()?;
+                    Some((attachment, image))
+                });
             }
             MediaKind::Image => {}
             MediaKind::Video => {
@@ -85,6 +81,18 @@ pub(crate) async fn tool_result_with_media<R: MarkdownImageResolver>(
                 ));
             }
         }
+    }
+
+    // Video links are ready before any image fetch is awaited. Resolve the
+    // bounded image batch concurrently, retaining attachment order in the output.
+    for (attachment, image) in join_all(image_resolutions).await.into_iter().flatten() {
+        result.content.push(Content::text(format!(
+            "Channel image attachment {} ({})",
+            attachment.entity_id, attachment.url,
+        )));
+        result
+            .content
+            .push(Content::image(image.data, image.mime_type));
     }
     result
 }

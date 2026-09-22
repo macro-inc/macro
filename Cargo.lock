@@ -10702,6 +10702,7 @@ dependencies = [
  "foreign_entity",
  "frecency",
  "fusionauth",
+ "futures",
  "http 1.4.0",
  "lexical_client",
  "macro_auth",

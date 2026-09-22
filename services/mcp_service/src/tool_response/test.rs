@@ -8,12 +8,16 @@ use std::sync::Mutex;
 struct RecordingResolver {
     urls: Mutex<Vec<String>>,
     missing: bool,
+    gate: Option<tokio::sync::Notify>,
 }
 
 #[async_trait]
 impl MarkdownImageResolver for RecordingResolver {
     async fn resolve_static(&self, url: &str) -> Option<ResolvedImage> {
         self.urls.lock().unwrap().push(url.to_owned());
+        if let Some(gate) = &self.gate {
+            gate.notified().await;
+        }
         (!self.missing).then(|| ResolvedImage {
             data: "image-data".into(),
             mime_type: "image/webp".into(),
@@ -96,16 +100,16 @@ async fn timeline_returns_image_bytes_and_video_urls_including_previews() {
         ["https://static.example/file/image-1"]
     );
     assert!(
-        result.content[1]
+        result.content[2]
             .as_text()
             .unwrap()
             .text
             .contains("image-1")
     );
-    let image = result.content[2].as_image().unwrap();
+    let image = result.content[3].as_image().unwrap();
     assert_eq!(image.data, "image-data");
     assert_eq!(image.mime_type, "image/webp");
-    let video = result.content[3].as_resource_link().unwrap();
+    let video = result.content[1].as_resource_link().unwrap();
     assert_eq!(video.uri, "https://static.example/file/video-1");
     assert!(video.name.contains("video-1"));
     // static/video does not identify a container MIME type.
@@ -245,7 +249,54 @@ async fn image_limit_retains_every_download_url_and_video_link() {
             .count(),
         MAX_CHANNEL_IMAGES
     );
-    assert!(result.content.last().unwrap().as_resource_link().is_some());
+    assert!(result.content[1].as_resource_link().is_some());
+}
+
+#[tokio::test]
+async fn image_fetches_start_concurrently_and_keep_the_cap_and_output_order() {
+    let resolver = RecordingResolver {
+        gate: Some(tokio::sync::Notify::new()),
+        ..Default::default()
+    };
+    let mut messages = vec![message("static/image", "image-0")];
+    messages.extend(
+        (0..MAX_CHANNEL_IMAGES + 2).map(|i| message("static/image", &format!("image-{i}"))),
+    );
+    messages.push(message("static/video", "video"));
+    let response = render(
+        &resolver,
+        "ReadChannelMessages",
+        json!({"messages": messages}),
+    );
+    tokio::pin!(response);
+
+    // Every selected fetch must start while the first one is still blocked.
+    // A sequential implementation starts only one and fails without a timer.
+    assert!(futures::poll!(&mut response).is_pending());
+    let expected_urls = (0..MAX_CHANNEL_IMAGES)
+        .map(|i| format!("https://static.example/file/image-{i}"))
+        .collect::<Vec<_>>();
+    assert_eq!(*resolver.urls.lock().unwrap(), expected_urls);
+
+    resolver.gate.as_ref().unwrap().notify_waiters();
+    let result = response.await;
+
+    assert_matching_json(&result);
+    assert_eq!(
+        result.content[1].as_resource_link().unwrap().uri,
+        "https://static.example/file/video"
+    );
+    assert_eq!(result.content.len(), 2 + MAX_CHANNEL_IMAGES * 2);
+    for (i, pair) in result.content[2..].chunks_exact(2).enumerate() {
+        assert!(
+            pair[0]
+                .as_text()
+                .unwrap()
+                .text
+                .contains(&format!("image-{i}"))
+        );
+        assert!(pair[1].as_image().is_some());
+    }
 }
 
 #[tokio::test]
