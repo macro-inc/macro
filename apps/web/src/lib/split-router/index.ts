@@ -65,6 +65,7 @@ export {
 } from './solid';
 export type {
   BrowserHistoryIntent,
+  DefinedSplitRoute,
   DefinedSplitRoutes,
   InferSplitRouteBranchParams,
   InferSplitRouteNavigationParams,

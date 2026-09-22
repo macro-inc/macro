@@ -10,8 +10,8 @@ stay outside this library.
   `SplitRoutesManifest`. A router compiles its own manifest once and exposes it as
   `router.routes`; there is no global runtime cache.
 - `defineRoute()` infers node-local callback and synchronous Standard Schema
-  output types, including `remountKey`. `defineRoutes()` preserves the static
-  tree and adds ancestor types to references taken from that tree.
+  output types, including `remountKey`, and types descendant references relative
+  to that root. `defineRoutes()` assembles the static tree and rebinds ancestry.
 - `useRouteParams(route)` reads only that node's params. `useParams(route)` reads
   the merged branch through that node; `useParams()` still reads the entire
   active branch.
@@ -26,21 +26,19 @@ stay outside this library.
 ## Typed nested routes
 
 ```ts
-const routes = defineRoutes({
-  definitions: [defineRoute({
-    id: 'folder',
-    path: 'drive/folder/:folderId',
-    params: z.object({ folderId: z.string() }),
-    children: [defineRoute({
-      id: 'document',
-      path: 'document/:documentId',
-      params: z.object({ documentId: z.string() }),
-      remountKey: ({ documentId }) => documentId,
-    })],
+export const folder = defineRoute({
+  id: 'folder',
+  path: 'drive/folder/:folderId',
+  params: z.object({ folderId: z.string() }),
+  children: [defineRoute({
+    id: 'document',
+    path: 'document/:documentId',
+    params: z.object({ documentId: z.string() }),
+    remountKey: ({ documentId }) => documentId,
   })],
 });
-const folder = routes.definitions[0];
-const document = folder.children[0];
+export const document = folder.children[0];
+export const routes = defineRoutes({ definitions: [folder] });
 
 navigate({
   route: document,
@@ -50,15 +48,16 @@ const branch = useParams(document);       // folderId + documentId
 const local = useRouteParams(document);  // documentId only
 ```
 
-`defineRoutes` returns the same objects: it does not clone, mutate, compile, or
-cache the tree. Its ancestry metadata exists only in TypeScript. Take references
-from its returned tree to get inherited types; previously declared child variables
-retain their original local-only types. Use `defineRoute` at nodes with callbacks
-so their schema outputs provide contextual parameter types.
+Both helpers return the same objects: they do not clone, mutate, compile, or
+cache the tree. Ancestry metadata exists only in TypeScript. Export root definitions
+directly and take descendant references through their named parent; positional
+aliases from `routes.definitions` are unnecessary. A separately declared child
+variable cannot acquire knowledge of a parent that later adopts it. Use `defineRoute`
+at nodes with callbacks so schema outputs provide contextual parameter types.
 
-Tree-bound destinations require the complete branch params, including when opening
-another pane. Standalone `defineRoute` references remain local-only and may inherit
-matching ancestor values from the current pane. Explicit destination params override
+Parent-bound destinations require the complete branch params, including when opening
+another pane. A separately declared child reference knows only its own subtree and
+may inherit matching ancestor values from the current pane. Explicit destination params override
 those inherited values before each node's serializer runs. Serializers can therefore
 receive additional branch fields; serialize the fields owned by that node. Transformed
 outputs such as `Date` still require `serializeParams` and are not revalidated as inputs.

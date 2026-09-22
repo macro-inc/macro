@@ -148,6 +148,36 @@ describe('typed route trees', () => {
     }>();
   });
 
+  it('types descendants directly from a named definition before assembly', () => {
+    const detail = driveRoute.children[0].children[0];
+    expectTypeOf<InferSplitRouteParams<typeof detail>>().toEqualTypeOf<{
+      documentId: string;
+    }>();
+    expectTypeOf<
+      InferSplitRouteNavigationParams<typeof detail>
+    >().toEqualTypeOf<{
+      folderId: string;
+      documentId: string;
+    }>();
+    expectTypeOf<InferSplitRouteBranchParams<typeof detail>>().toEqualTypeOf<{
+      folderId: string;
+      documentId: string;
+    }>();
+    const definition = {
+      id: 'named',
+      path: 'named/:id',
+      children: [{ id: 'child', path: ':childId' }],
+    } as const;
+    const named = defineRoute(definition);
+    expect(named).toBe(definition);
+    expect(named.children[0]).toBe(definition.children[0]);
+    expectTypeOf<
+      InferSplitRouteNavigationParams<(typeof named.children)[0]>
+    >().toEqualTypeOf<{ id: string; childId: string }>();
+    const tree = defineRoutes({ definitions: [named] });
+    expect(tree.definitions[0]).toBe(named);
+  });
+
   it('rebinds ancestry when an existing reference is composed into another tree', () => {
     const tree = defineRoutes({ definitions: [driveRoute] });
     const detail = tree.definitions[0].children[0].children[0];

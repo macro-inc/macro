@@ -2,6 +2,7 @@ import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { compileRoutePattern, type RoutePattern } from './path';
 import { assertSafeSearchName } from './search';
 import type {
+  DefinedSplitRoute,
   DefinedSplitRoutes,
   InferSplitRouteParams,
   SplitRouteClaim,
@@ -44,9 +45,11 @@ export function defineRoute<
   definition: TDefinition & { params: TParamsSchema } & RouteParamCallbacks<
       StandardSchemaV1.InferOutput<TParamsSchema>
     >
-): TDefinition & { params: TParamsSchema } & RouteParamCallbacks<
-    StandardSchemaV1.InferOutput<TParamsSchema>
-  >;
+): DefinedSplitRoute<
+  TDefinition & { params: TParamsSchema } & RouteParamCallbacks<
+      StandardSchemaV1.InferOutput<TParamsSchema>
+    >
+>;
 export function defineRoute<
   const TPath extends string,
   const TAliases extends readonly string[] | undefined,
@@ -59,7 +62,15 @@ export function defineRoute<
   } & RouteParamCallbacks<
       InferSplitRouteParams<{ path: TPath; aliases: TAliases }>
     >
-): TDefinition & { path: TPath; aliases: TAliases };
+): DefinedSplitRoute<
+  TDefinition & {
+    path: TPath;
+    aliases: TAliases;
+    params?: undefined;
+  } & RouteParamCallbacks<
+      InferSplitRouteParams<{ path: TPath; aliases: TAliases }>
+    >
+>;
 export function defineRoute<
   const TPath extends string,
   const TDefinition extends SplitRouteDefinitionConstraint,
@@ -69,7 +80,13 @@ export function defineRoute<
     aliases?: undefined;
     params?: undefined;
   } & RouteParamCallbacks<InferSplitRouteParams<{ path: TPath }>>
-): TDefinition & { path: TPath };
+): DefinedSplitRoute<
+  TDefinition & {
+    path: TPath;
+    aliases?: undefined;
+    params?: undefined;
+  } & RouteParamCallbacks<InferSplitRouteParams<{ path: TPath }>>
+>;
 export function defineRoute(
   definition: SplitRouteDefinitionConstraint
 ): SplitRouteDefinitionConstraint {

@@ -245,7 +245,7 @@ type LocalNavigationParams<TRoute> = TRoute extends { params: StandardSchemaV1 }
     ? MergeRouteParams<{}, PathParams<TPath>>
     : SplitRouteParams;
 
-// Type-only ancestry. defineRoutes never adds properties to the supplied objects.
+// Type-only ancestry. Declaration helpers never add properties to supplied objects.
 declare const branchParams: unique symbol;
 
 /** Params accumulated through this node, with child fields overriding ancestors. */
@@ -312,6 +312,9 @@ type DefinedRouteList<
     TParentNavigation
   >;
 };
+
+/** One original definition with descendant ancestry inferred from this root. */
+export type DefinedSplitRoute<TRoute> = DefinedRoute<TRoute, {}, {}>;
 
 /** The original static tree, with ancestry available on references from that tree. */
 export type DefinedSplitRoutes<
