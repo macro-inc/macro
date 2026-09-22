@@ -22,7 +22,7 @@ export function BringYourOwnAgent(props: { onAddRuntime: () => void }) {
           class="flex flex-wrap items-baseline gap-x-1.5"
         >
           Bring
-          <span class="byoa-word text-accent">
+          <span class="byoa-word text-center text-accent">
             <For each={AGENTS}>
               {(agent, index) => (
                 <span style={{ '--word-index': index() }}>{agent}</span>
