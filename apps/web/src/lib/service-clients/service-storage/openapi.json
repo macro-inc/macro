@@ -20632,6 +20632,28 @@
           }
         }
       },
+      "DocumentEditor": {
+        "type": "object",
+        "description": "One principal whose accepted edits a sync publish carries.\n\nA collab session batches every peer's edits into one snapshot, so a\npublish is attributed to as many principals as edited since the last one.",
+        "required": ["actor"],
+        "properties": {
+          "actor": {
+            "type": "string",
+            "description": "Who mechanically changed the content: the editing user, or the bot\nediting for one."
+          },
+          "on_behalf_of": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The user whose feed this edit belongs on, when different from\n[`Self::actor`]."
+              }
+            ]
+          }
+        }
+      },
       "DocumentFilters": {
         "type": "object",
         "description": "The document filters used to filter down what documents you search over.",
@@ -21183,7 +21205,7 @@
         "properties": {
           "actor": {
             "type": ["string", "null"],
-            "description": "Who mechanically changed the content. Absent on events published\nbefore attribution, and on human-only collab sessions."
+            "description": "Superseded by [`Self::editors`]: the single editor events carried\nbefore a publish could name several. Still read so a rollout doesn't\ndrop attribution for events already in flight."
           },
           "document_id": {
             "type": "string",
@@ -21192,6 +21214,13 @@
           "document_version_id": {
             "type": ["string", "null"],
             "description": "Version marker for the sync snapshot, when the caller supplies one."
+          },
+          "editors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentEditor"
+            },
+            "description": "Everyone whose accepted edits this publish carries. Empty when the\nsession could attribute none of them, e.g. an anonymous link-share\neditor."
           },
           "file_type": {
             "$ref": "#/components/schemas/FileType",
@@ -21204,7 +21233,7 @@
               },
               {
                 "$ref": "#/components/schemas/MacroUserIdStr",
-                "description": "The user whose feed this edit belongs on, when different from\n[`Self::actor`]."
+                "description": "The user whose feed [`Self::actor`]'s edit belongs on, when different\nfrom the actor. Superseded by [`Self::editors`]."
               }
             ]
           }

@@ -4,6 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { DocumentEditor } from './documentEditor';
 import type { DocumentSyncContentUpdatedMetadataActor } from './documentSyncContentUpdatedMetadataActor';
 import type { DocumentSyncContentUpdatedMetadataDocumentVersionId } from './documentSyncContentUpdatedMetadataDocumentVersionId';
 import type { DocumentSyncContentUpdatedMetadataOnBehalfOf } from './documentSyncContentUpdatedMetadataOnBehalfOf';
@@ -13,13 +15,18 @@ import type { FileType } from './fileType';
  * Metadata for [`DocumentTopicEvent::SyncContentUpdated`].
  */
 export interface DocumentSyncContentUpdatedMetadata {
-  /** Who mechanically changed the content. Absent on events published
-before attribution, and on human-only collab sessions. */
+  /** Superseded by [`Self::editors`]: the single editor events carried
+before a publish could name several. Still read so a rollout doesn't
+drop attribution for events already in flight. */
   actor?: DocumentSyncContentUpdatedMetadataActor;
   /** The id of the live-collab document whose content changed. */
   document_id: string;
   /** Version marker for the sync snapshot, when the caller supplies one. */
   document_version_id?: DocumentSyncContentUpdatedMetadataDocumentVersionId;
+  /** Everyone whose accepted edits this publish carries. Empty when the
+session could attribute none of them, e.g. an anonymous link-share
+editor. */
+  editors?: DocumentEditor[];
   /** File type of the sync document, resolved by the document backend. */
   file_type: FileType;
   on_behalf_of?: DocumentSyncContentUpdatedMetadataOnBehalfOf;

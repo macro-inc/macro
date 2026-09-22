@@ -40,7 +40,10 @@ impl DocumentUpdateEffects for WorkerDocumentEffects<'_> {
     }
 
     fn publish_changed_document(&self) -> Result<(), DocumentError> {
-        let attribution = self.attribution.cloned();
+        // An atomic update is one writer's, so the request's own token is the
+        // whole attribution. Pending websocket editors keep waiting for the
+        // alarm that publishes their edits.
+        let editors = self.attribution.cloned().into_iter().collect();
         let snapshot = self
             .document_state
             .export_shallow_snapshot()
@@ -48,7 +51,7 @@ impl DocumentUpdateEffects for WorkerDocumentEffects<'_> {
         let env = self.session.env.clone();
         let document_id = self.document_id.to_owned();
         self.session.state.wait_until(async move {
-            report_new_doc_state(&document_id, &snapshot, &env, attribution).await;
+            report_new_doc_state(&document_id, &snapshot, &env, editors).await;
             report_interaction(&document_id, &env, InteractionReason::Edited).await;
         });
         Ok(())

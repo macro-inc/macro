@@ -5,9 +5,9 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 use super::{
-    DocumentContentUploadedMetadata, DocumentInteractionMetadata, DocumentMacroEvent,
-    DocumentPurgedMetadata, DocumentSyncContentUpdatedMetadata, DocumentTopicEvent,
-    InteractionReason,
+    DocumentContentUploadedMetadata, DocumentEditor, DocumentInteractionMetadata,
+    DocumentMacroEvent, DocumentPurgedMetadata, DocumentSyncContentUpdatedMetadata,
+    DocumentTopicEvent, InteractionReason,
 };
 
 const DOCUMENT_ID: &str = "11111111-1111-1111-1111-111111111111";
@@ -63,6 +63,7 @@ fn sync_content_updated_serializes_to_the_exact_envelope() {
             document_id: DOCUMENT_ID.to_string(),
             file_type: FileType::Md,
             document_version_id: None,
+            editors: Vec::new(),
             actor: None,
             on_behalf_of: None,
         }),
@@ -80,6 +81,66 @@ fn sync_content_updated_serializes_to_the_exact_envelope() {
                 "document_version_id": null,
             },
         }),
+    );
+}
+
+#[test]
+fn sync_content_editors_serialize_as_a_list_of_principals() {
+    let event = Event::with_event_id(
+        Uuid::from_u128(4),
+        DocumentTopicEvent::SyncContentUpdated(DocumentSyncContentUpdatedMetadata::from_editors(
+            DOCUMENT_ID.to_string(),
+            FileType::Md,
+            None,
+            vec![
+                DocumentEditor::from_reported(
+                    "bot|00000000-0000-0000-0000-00000000a1a1".to_string(),
+                    Some("macro|owner@example.com".to_string()),
+                )
+                .expect("valid bot actor"),
+                DocumentEditor::from_reported("macro|editor@example.com".to_string(), None)
+                    .expect("valid user actor"),
+            ],
+        )),
+    );
+
+    assert_wire_round_trip(
+        event,
+        json!({
+            "event_id": "00000000-0000-0000-0000-000000000004",
+            "schema_version": 1,
+            "event_type": "document.sync_content_updated",
+            "metadata": {
+                "document_id": DOCUMENT_ID,
+                "file_type": "md",
+                "document_version_id": null,
+                "editors": [
+                    {
+                        "actor": "bot|00000000-0000-0000-0000-00000000a1a1",
+                        "on_behalf_of": "macro|owner@example.com",
+                    },
+                    { "actor": "macro|editor@example.com" },
+                ],
+            },
+        }),
+    );
+}
+
+#[test]
+fn an_unparseable_editor_actor_is_dropped() {
+    assert_eq!(
+        DocumentEditor::from_reported("not a principal".to_string(), None),
+        None
+    );
+    assert_eq!(
+        DocumentEditor::from_reported(
+            "macro|editor@example.com".to_string(),
+            Some("not a user".to_string()),
+        )
+        .expect("valid actor id")
+        .on_behalf_of,
+        None,
+        "an unparseable subject degrades to direct attribution"
     );
 }
 
@@ -118,6 +179,7 @@ fn optional_document_versions_support_present_and_absent_values() {
             document_id: DOCUMENT_ID.to_string(),
             file_type: FileType::Md,
             document_version_id: Some("snapshot-7".to_string()),
+            editors: Vec::new(),
             actor: None,
             on_behalf_of: None,
         }),
@@ -166,6 +228,7 @@ fn search_event_constructors_use_the_document_key_and_schema_v1() {
         document_id: DOCUMENT_ID.to_string(),
         file_type: FileType::Md,
         document_version_id: None,
+        editors: Vec::new(),
         actor: None,
         on_behalf_of: None,
     };

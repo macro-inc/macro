@@ -6,7 +6,8 @@
  */
 
 /**
- * Who mechanically changed the content. Absent on events published
-before attribution, and on human-only collab sessions.
+ * Superseded by [`Self::editors`]: the single editor events carried
+before a publish could name several. Still read so a rollout doesn't
+drop attribution for events already in flight.
  */
 export type DocumentSyncContentUpdatedMetadataActor = string | null;

@@ -153,4 +153,12 @@ lets search choose its supported extractor. Sync no longer infers Markdown from
 CRDT roots or labels updates as Markdown. The `search-service` feature continues
 to control these notifications for compatibility with existing build commands.
 
+The notification body carries `editors`: every principal whose accepted edits the
+published snapshot contains, in first-edit order. A collab session batches peers,
+so a websocket publish can name several; an atomic `/update` names only its own
+token. Humans are their own actor, bots carry the user they edit for, and
+anonymous link-share sockets contribute nobody. Activity turns each entry into an
+`Edited` activity, which is what puts a document back at the top of the editor's
+Home.
+
 Deploy DSS first, then roll out Sync and the AI editing worker together.

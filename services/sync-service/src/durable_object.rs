@@ -113,20 +113,31 @@ pub struct WebSocketMetadata {
 
 pub type WsMetaMap = BTreeMap<String, WebSocketMetadata>;
 
-/// Attribution from currently-connected websocket metadata only.
+/// Who a socket's accepted edits belong to.
 ///
-/// Closed sockets must not contribute an `actor`: the isolate stays warm while
-/// anyone is connected, so a disconnected AI peer would otherwise keep
-/// attributing later human edits.
-fn edit_attribution_from_meta<'a>(
-    metas: impl IntoIterator<Item = &'a WebSocketMetadata>,
-) -> Option<DocumentAttribution> {
-    metas.into_iter().find_map(|meta| {
-        meta.actor.clone().map(|actor| DocumentAttribution {
-            actor,
-            on_behalf_of: meta.user_id.clone(),
-        })
-    })
+/// A bot peer signs an `actor` and carries the user it edits for; a human peer
+/// signs only its own id and is its own actor. Anonymous link-share sockets
+/// have neither and stay unattributed.
+fn edit_attribution_from_meta(meta: &WebSocketMetadata) -> Option<DocumentAttribution> {
+    match (&meta.actor, &meta.user_id) {
+        (Some(actor), on_behalf_of) => Some(DocumentAttribution {
+            actor: actor.clone(),
+            on_behalf_of: on_behalf_of.clone(),
+        }),
+        (None, Some(user_id)) => Some(DocumentAttribution {
+            actor: user_id.clone(),
+            on_behalf_of: None,
+        }),
+        (None, None) => None,
+    }
+}
+
+/// Add `attribution` to the editors the next publish carries, keeping
+/// first-edit order and listing each principal once.
+fn record_editor(editors: &mut Vec<DocumentAttribution>, attribution: DocumentAttribution) {
+    if !editors.contains(&attribution) {
+        editors.push(attribution);
+    }
 }
 
 /// Why a snapshot is published from `websocket_close`.
@@ -134,16 +145,16 @@ fn edit_attribution_from_meta<'a>(
 enum CloseFlush {
     /// The last peer left; the pre-attribution snapshot-on-idle behaviour.
     LastLeave,
-    /// The attributed peer left while humans stay. Its pending edits must
-    /// publish now, while its metadata still supplies the actor; the next
-    /// alarm would publish them unattributed.
+    /// A bot peer left while humans stay, so its pending edits publish now
+    /// rather than on the next alarm tick — the AI editing worker's callers
+    /// read the published result as soon as it disconnects.
     ActorLeft,
 }
 
 impl CloseFlush {
-    /// A human leaving while the actor stays never flushes: the next alarm
-    /// still has the actor, and flushing here would `mark_exported` and then
-    /// republish the same content on last-leave.
+    /// A human leaving while a bot peer stays never flushes: the next alarm
+    /// publishes those edits anyway, and flushing here would `mark_exported`
+    /// and then republish the same content on last-leave.
     fn decide(
         is_last_leave: bool,
         leaving_socket_has_actor: bool,
@@ -182,6 +193,10 @@ pub struct DocumentSyncSession {
     msg_buffer: Arc<Mutex<Vec<u8>>>,
     /// Buffered blame events. Flushed via D1 batch on each alarm tick.
     pending_blame: Arc<Mutex<Vec<crate::d1::BlameEvent>>>,
+    /// Who has had an update accepted since the last publish, in first-edit
+    /// order. Drained into the publish so every editor — human or bot — is
+    /// attributed for the snapshot their edits are part of.
+    pending_editors: Arc<Mutex<Vec<DocumentAttribution>>>,
 }
 
 mod u64_serde_strings {
@@ -228,7 +243,8 @@ mod u64_serde_strings {
 #[cfg(test)]
 mod actor_attribution_test {
     use super::{
-        AccessLevel, CloseFlush, DocumentAttribution, WebSocketMetadata, edit_attribution_from_meta,
+        AccessLevel, CloseFlush, DocumentAttribution, WebSocketMetadata,
+        edit_attribution_from_meta, record_editor,
     };
 
     fn meta(actor: Option<&str>, user_id: Option<&str>) -> WebSocketMetadata {
@@ -241,27 +257,51 @@ mod actor_attribution_test {
     }
 
     #[test]
-    fn ignores_sockets_without_an_actor() {
+    fn a_human_socket_is_its_own_actor() {
         let human = meta(None, Some("macro|user@example.com"));
-        assert_eq!(edit_attribution_from_meta([&human]), None);
+        assert_eq!(
+            edit_attribution_from_meta(&human),
+            Some(DocumentAttribution {
+                actor: "macro|user@example.com".to_string(),
+                on_behalf_of: None,
+            })
+        );
     }
 
     #[test]
-    fn uses_the_connected_actor_and_its_user() {
-        let stale = meta(Some("bot|stale"), Some("macro|first@example.com"));
-        let human = meta(None, Some("macro|user@example.com"));
+    fn a_bot_socket_edits_for_its_user() {
+        let bot = meta(Some("bot|ai"), Some("macro|first@example.com"));
         assert_eq!(
-            edit_attribution_from_meta([&human]),
-            None,
-            "closed AI metadata must not be consulted"
-        );
-        assert_eq!(
-            edit_attribution_from_meta([&stale, &human]),
+            edit_attribution_from_meta(&bot),
             Some(DocumentAttribution {
-                actor: "bot|stale".to_string(),
+                actor: "bot|ai".to_string(),
                 on_behalf_of: Some("macro|first@example.com".to_string()),
             })
         );
+    }
+
+    #[test]
+    fn an_anonymous_socket_stays_unattributed() {
+        assert_eq!(edit_attribution_from_meta(&meta(None, None)), None);
+    }
+
+    #[test]
+    fn pending_editors_keep_first_edit_order_without_repeats() {
+        let first = DocumentAttribution {
+            actor: "macro|first@example.com".to_string(),
+            on_behalf_of: None,
+        };
+        let second = DocumentAttribution {
+            actor: "macro|second@example.com".to_string(),
+            on_behalf_of: None,
+        };
+
+        let mut editors = Vec::new();
+        record_editor(&mut editors, first.clone());
+        record_editor(&mut editors, second.clone());
+        record_editor(&mut editors, first.clone());
+
+        assert_eq!(editors, vec![first, second]);
     }
 
     #[test]
@@ -403,7 +443,7 @@ async fn report_new_doc_state(
     document_id: &str,
     snapshot: &[u8],
     env: &Env,
-    attribution: Option<DocumentAttribution>,
+    editors: Vec<DocumentAttribution>,
 ) {
     if let Err(err) = DssInternalClient::new(env)
         .publish_shallow_snapshot(document_id, snapshot)
@@ -413,7 +453,7 @@ async fn report_new_doc_state(
     }
     #[cfg(feature = "search-service")]
     if let Err(err) = DssInternalClient::new(env)
-        .publish_sync_content_updated(document_id, attribution)
+        .publish_sync_content_updated(document_id, &editors)
         .await
     {
         warn!(error=?err, "failed to publish document content change");
@@ -450,17 +490,37 @@ impl DocumentSyncSession {
         self.state.get_websockets()
     }
 
-    fn edit_attribution(&self) -> Option<DocumentAttribution> {
-        let connected: BTreeSet<String> = self
-            .state
-            .get_websockets()
-            .iter()
-            .filter_map(|ws| get_ws_id(&self.state, ws).ok())
-            .collect();
-        let map = self
+    /// Remember that `ws`'s principal edited, so the publish carrying those
+    /// edits is attributed to them. Repeat edits between publishes keep the
+    /// first entry; the same principal is never listed twice.
+    pub(crate) fn record_pending_editor(&self, ws: &WebSocket) {
+        let Ok(ws_id) = get_ws_id(&self.state, ws) else {
+            return;
+        };
+        let Some(attribution) = self
             .ws_meta_map
-            .lock("DocumentSyncSession::edit_attribution");
-        edit_attribution_from_meta(connected.iter().filter_map(|ws_id| map.get(ws_id)))
+            .lock("DocumentSyncSession::record_pending_editor meta")
+            .get(&ws_id)
+            .and_then(edit_attribution_from_meta)
+        else {
+            return;
+        };
+        record_editor(
+            &mut self
+                .pending_editors
+                .lock("DocumentSyncSession::record_pending_editor push"),
+            attribution,
+        );
+    }
+
+    /// Take the editors a publish should be attributed to. Draining means a
+    /// republish of already-exported content doesn't re-attribute them.
+    fn drain_pending_editors(&self) -> Vec<DocumentAttribution> {
+        std::mem::take(
+            &mut *self
+                .pending_editors
+                .lock("DocumentSyncSession::drain_pending_editors"),
+        )
     }
 
     fn websocket_has_actor(&self, ws: &WebSocket) -> bool {
@@ -650,9 +710,11 @@ impl DocumentSyncSession {
             }
             let document_id_owned = document_id.to_string();
             let env = self.env.clone();
-            let attribution = self.edit_attribution();
+            // Seeded content is nobody's edit, but this publish still carries
+            // any edits made since the last one.
+            let editors = self.drain_pending_editors();
             self.state.wait_until(async move {
-                report_new_doc_state(&document_id_owned, &snapshot, &env, attribution).await;
+                report_new_doc_state(&document_id_owned, &snapshot, &env, editors).await;
             });
         }
 
@@ -1095,6 +1157,7 @@ impl DurableObject for DocumentSyncSession {
             ws_meta_map: Arc::new(Mutex::new(Default::default())),
             msg_buffer: Arc::new(Mutex::new(vec![])),
             pending_blame: Arc::new(Mutex::new(Vec::new())),
+            pending_editors: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -1262,12 +1325,12 @@ impl DurableObject for DocumentSyncSession {
 
             let document_id = self.document_id().await.ok();
             let env = self.env.clone();
-            let attribution = self.edit_attribution();
+            let editors = self.drain_pending_editors();
             self.state.wait_until(async move {
                 if let Some(document_id) = document_id
                     && let Ok(snapshot) = doc_state.export_shallow_snapshot()
                 {
-                    report_new_doc_state(&document_id, &snapshot, &env, attribution).await;
+                    report_new_doc_state(&document_id, &snapshot, &env, editors).await;
                     report_interaction(&document_id, &env, InteractionReason::Edited).await;
                 }
             });
@@ -1317,8 +1380,6 @@ impl DurableObject for DocumentSyncSession {
                 .context("failed to broadcast awareness")?;
             }
 
-            // The closing socket still counts as connected here, so its actor
-            // is still part of the attribution.
             let state = self.document_state().await.ok();
             let flush = CloseFlush::decide(
                 self.state.get_websockets().len() == 1,
@@ -1333,10 +1394,10 @@ impl DurableObject for DocumentSyncSession {
                 if flush == CloseFlush::ActorLeft {
                     state.mark_exported();
                 }
-                let attribution = self.edit_attribution();
+                let editors = self.drain_pending_editors();
                 let env = self.env.clone();
                 self.state.wait_until(async move {
-                    report_new_doc_state(&document_id, &snapshot, &env, attribution).await;
+                    report_new_doc_state(&document_id, &snapshot, &env, editors).await;
                     report_interaction(&document_id, &env, flush.interaction_reason()).await;
                 });
             }

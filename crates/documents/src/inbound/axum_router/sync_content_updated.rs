@@ -10,16 +10,55 @@ use macro_authorization::{InternalOnly, MacroAuthorizationExtractor, MacroAuthor
 use serde::Deserialize;
 
 use super::{DocumentRouterState, Params};
-use crate::domain::{models::DocumentError, ports::DocumentContentEventService};
+use crate::domain::{
+    events::DocumentEditor, models::DocumentError, ports::DocumentContentEventService,
+};
 
-/// Attribution from the sync service's verified document token.
+/// One editor's attribution, from the sync service's verified document tokens.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReportedEditor {
+    /// Actor that performed the edit.
+    pub actor: String,
+    /// User represented by the actor, if any.
+    pub on_behalf_of: Option<String>,
+}
+
+/// Attribution for one sync publish: every editor whose accepted edits it
+/// carries.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SyncContentUpdatedRequest {
-    /// Actor that performed the edit, if any.
+    /// The editors this publish is attributed to.
+    #[serde(default)]
+    pub editors: Vec<ReportedEditor>,
+    /// Superseded by [`Self::editors`]: the single actor sync reported before
+    /// a publish could name several. Read while a sync deployment that
+    /// predates `editors` is still calling.
+    #[serde(default)]
     pub actor: Option<String>,
-    /// User represented by the actor, if any.
+    /// User represented by [`Self::actor`], if any.
+    #[serde(default)]
     pub on_behalf_of: Option<String>,
+}
+
+impl SyncContentUpdatedRequest {
+    /// The reported editors as domain attributions, dropping entries whose
+    /// actor id doesn't parse.
+    fn editors(self) -> Vec<DocumentEditor> {
+        let legacy = self
+            .actor
+            .map(|actor| ReportedEditor {
+                actor,
+                on_behalf_of: self.on_behalf_of,
+            })
+            .into_iter();
+        self.editors
+            .into_iter()
+            .chain(legacy)
+            .filter_map(|editor| DocumentEditor::from_reported(editor.actor, editor.on_behalf_of))
+            .collect()
+    }
 }
 
 /// Publish an event using the document's stored metadata.
@@ -36,7 +75,7 @@ pub async fn sync_content_updated_handler<
 ) -> Result<StatusCode, DocumentError> {
     state
         .service
-        .publish_sync_content_updated(&document_id, request.actor, request.on_behalf_of)
+        .publish_sync_content_updated(&document_id, request.editors())
         .await?;
     Ok(StatusCode::OK)
 }

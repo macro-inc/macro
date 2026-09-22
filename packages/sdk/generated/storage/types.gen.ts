@@ -4505,6 +4505,21 @@ export type DocumentDeletedMetadata = {
 };
 
 /**
+ * One principal whose accepted edits a sync publish carries.
+ *
+ * A collab session batches every peer's edits into one snapshot, so a
+ * publish is attributed to as many principals as edited since the last one.
+ */
+export type DocumentEditor = {
+    /**
+     * Who mechanically changed the content: the editing user, or the bot
+     * editing for one.
+     */
+    actor: string;
+    on_behalf_of?: null | MacroUserIdStr;
+};
+
+/**
  * The document filters used to filter down what documents you search over.
  */
 export type DocumentFilters = {
@@ -4863,8 +4878,9 @@ export type DocumentSubType = 'task' | 'snippet' | 'skill' | 'initiative_descrip
  */
 export type DocumentSyncContentUpdatedMetadata = {
     /**
-     * Who mechanically changed the content. Absent on events published
-     * before attribution, and on human-only collab sessions.
+     * Superseded by [`Self::editors`]: the single editor events carried
+     * before a publish could name several. Still read so a rollout doesn't
+     * drop attribution for events already in flight.
      */
     actor?: string | null;
     /**
@@ -4875,6 +4891,12 @@ export type DocumentSyncContentUpdatedMetadata = {
      * Version marker for the sync snapshot, when the caller supplies one.
      */
     document_version_id?: string | null;
+    /**
+     * Everyone whose accepted edits this publish carries. Empty when the
+     * session could attribute none of them, e.g. an anonymous link-share
+     * editor.
+     */
+    editors?: Array<DocumentEditor>;
     /**
      * File type of the sync document, resolved by the document backend.
      */

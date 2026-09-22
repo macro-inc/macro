@@ -24,7 +24,7 @@ use models_permissions::share_permission::team_share::{
 use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
 
 use super::content::DocumentContent;
-use super::events::InteractionReason;
+use super::events::{DocumentEditor, InteractionReason};
 use super::response::{
     CreateDocumentResponseData, DocumentResponse, GetDocumentResponseData, LocationResponseV3,
 };
@@ -415,12 +415,12 @@ pub trait DocumentContentEventService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 
     /// Resolve the stored file type and publish a sync-content event. Sync callers
-    /// supply document identity and attribution without interpreting the content.
+    /// supply document identity and the editors the publish carries, without
+    /// interpreting the content.
     fn publish_sync_content_updated(
         &self,
         document_id: &str,
-        actor: Option<String>,
-        on_behalf_of: Option<String>,
+        editors: Vec<DocumentEditor>,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 }
 

@@ -1,4 +1,10 @@
 use super::*;
+use crate::domain::events::DocumentEditor;
+
+fn editor(actor: &str, on_behalf_of: Option<&str>) -> DocumentEditor {
+    DocumentEditor::from_reported(actor.to_string(), on_behalf_of.map(str::to_string))
+        .expect("valid actor id")
+}
 
 #[tokio::test]
 async fn notifications_resolve_the_stored_type_and_preserve_attribution() {
@@ -12,11 +18,14 @@ async fn notifications_resolve_the_stored_type_and_preserve_attribution() {
                 Box::pin(std::future::ready(Ok(document)))
             });
         let (service, broker) = make_test_service_with_event_broker(repo);
-        let actor = "bot|00000000-0000-0000-0000-00000000a1a1";
+        let bot = "bot|00000000-0000-0000-0000-00000000a1a1";
         let user = "macro|owner@example.com";
 
         service
-            .publish_sync_content_updated("doc-1", Some(actor.into()), Some(user.into()))
+            .publish_sync_content_updated(
+                "doc-1",
+                vec![editor(bot, Some(user)), editor(user, None)],
+            )
             .await
             .unwrap();
 
@@ -29,8 +38,13 @@ async fn notifications_resolve_the_stored_type_and_preserve_attribution() {
             "document.sync_content_updated"
         );
         assert_eq!(events[0].payload["metadata"]["file_type"], file_type);
-        assert_eq!(events[0].payload["metadata"]["actor"], actor);
-        assert_eq!(events[0].payload["metadata"]["on_behalf_of"], user);
+        assert_eq!(
+            events[0].payload["metadata"]["editors"],
+            serde_json::json!([
+                { "actor": bot, "on_behalf_of": user },
+                { "actor": user },
+            ])
+        );
     }
 }
 
@@ -44,7 +58,7 @@ async fn missing_documents_do_not_publish_events() {
     });
     let (service, broker) = make_test_service_with_event_broker(repo);
     let result = service
-        .publish_sync_content_updated("missing", None, None)
+        .publish_sync_content_updated("missing", Vec::new())
         .await;
     assert!(matches!(result, Err(DocumentError::NotFound(_))));
     assert!(broker.published().lock().unwrap().is_empty());
@@ -58,7 +72,7 @@ async fn notifications_surface_broker_failures() {
     let (service, broker) =
         make_test_service_with_configured_event_broker(repo, TestEventBroker::failing());
     let result = service
-        .publish_sync_content_updated("doc-1", None, None)
+        .publish_sync_content_updated("doc-1", Vec::new())
         .await;
     assert!(matches!(result, Err(DocumentError::Internal(_))));
     assert!(broker.published().lock().unwrap().is_empty());

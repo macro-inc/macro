@@ -124,6 +124,35 @@ pub struct DocumentContentUploadedMetadata {
     pub document_version_id: Option<String>,
 }
 
+/// One principal whose accepted edits a sync publish carries.
+///
+/// A collab session batches every peer's edits into one snapshot, so a
+/// publish is attributed to as many principals as edited since the last one.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct DocumentEditor {
+    /// Who mechanically changed the content: the editing user, or the bot
+    /// editing for one.
+    #[cfg_attr(feature = "schema", schema(value_type = String))]
+    pub actor: Actor<'static>,
+    /// The user whose feed this edit belongs on, when different from
+    /// [`Self::actor`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_behalf_of: Option<MacroUserIdStr<'static>>,
+}
+
+impl DocumentEditor {
+    /// Build an editor from transport strings, dropping it when the actor id
+    /// is invalid so one bad entry can't cost the rest of the publish. An
+    /// invalid subject id degrades to direct attribution.
+    pub fn from_reported(actor: String, on_behalf_of: Option<String>) -> Option<Self> {
+        Some(Self {
+            actor: Actor::try_from(actor).ok()?,
+            on_behalf_of: on_behalf_of.and_then(|id| MacroUserIdStr::try_from(id).ok()),
+        })
+    }
+}
+
 /// Metadata for [`DocumentTopicEvent::SyncContentUpdated`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -134,13 +163,19 @@ pub struct DocumentSyncContentUpdatedMetadata {
     pub file_type: FileType,
     /// Version marker for the sync snapshot, when the caller supplies one.
     pub document_version_id: Option<String>,
-    /// Who mechanically changed the content. Absent on events published
-    /// before attribution, and on human-only collab sessions.
+    /// Everyone whose accepted edits this publish carries. Empty when the
+    /// session could attribute none of them, e.g. an anonymous link-share
+    /// editor.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub editors: Vec<DocumentEditor>,
+    /// Superseded by [`Self::editors`]: the single editor events carried
+    /// before a publish could name several. Still read so a rollout doesn't
+    /// drop attribution for events already in flight.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "schema", schema(value_type = Option<String>))]
     pub actor: Option<Actor<'static>>,
-    /// The user whose feed this edit belongs on, when different from
-    /// [`Self::actor`].
+    /// The user whose feed [`Self::actor`]'s edit belongs on, when different
+    /// from the actor. Superseded by [`Self::editors`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub on_behalf_of: Option<MacroUserIdStr<'static>>,
 }
@@ -159,8 +194,27 @@ impl DocumentSyncContentUpdatedMetadata {
             document_id,
             file_type,
             document_version_id,
+            editors: Vec::new(),
             actor: actor.and_then(|id| Actor::try_from(id).ok()),
             on_behalf_of: on_behalf_of.and_then(|id| MacroUserIdStr::try_from(id).ok()),
+        }
+    }
+
+    /// Build metadata for a collab-session publish from the editors it is
+    /// attributed to.
+    pub fn from_editors(
+        document_id: String,
+        file_type: FileType,
+        document_version_id: Option<String>,
+        editors: Vec<DocumentEditor>,
+    ) -> Self {
+        Self {
+            document_id,
+            file_type,
+            document_version_id,
+            editors,
+            actor: None,
+            on_behalf_of: None,
         }
     }
 }

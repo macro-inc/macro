@@ -1,7 +1,9 @@
 //! Resolve document metadata before publishing content-change events.
 
 use super::*;
-use crate::domain::events::{DocumentContentUploadedMetadata, DocumentSyncContentUpdatedMetadata};
+use crate::domain::events::{
+    DocumentContentUploadedMetadata, DocumentEditor, DocumentSyncContentUpdatedMetadata,
+};
 
 impl<
     R: DocumentRepo,
@@ -45,8 +47,7 @@ impl<
     async fn publish_sync_content_updated(
         &self,
         document_id: &str,
-        actor: Option<String>,
-        on_behalf_of: Option<String>,
+        editors: Vec<DocumentEditor>,
     ) -> Result<(), DocumentError> {
         let document = self
             .repo
@@ -62,12 +63,11 @@ impl<
         self.macro_event_broker
             .send_event(&DocumentMacroEvent::sync_content_updated(
                 document_id,
-                DocumentSyncContentUpdatedMetadata::from_extract(
+                DocumentSyncContentUpdatedMetadata::from_editors(
                     document_id.to_string(),
                     file_type,
                     None,
-                    actor,
-                    on_behalf_of,
+                    editors,
                 ),
             ))
             .map(|_| ())

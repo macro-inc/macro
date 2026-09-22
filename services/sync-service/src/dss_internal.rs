@@ -37,11 +37,12 @@ pub trait DssInternal {
         reason: InteractionReason,
     ) -> worker::Result<()>;
 
-    /// Let the document backend resolve content type and notify its consumers.
+    /// Let the document backend resolve content type and notify its consumers,
+    /// attributing the published content to every editor it carries.
     async fn publish_sync_content_updated(
         &self,
         document_id: &str,
-        attribution: Option<DocumentAttribution>,
+        editors: &[DocumentAttribution],
     ) -> worker::Result<()>;
 }
 
@@ -74,16 +75,13 @@ impl DssInternal for DssInternalClient<'_> {
     async fn publish_sync_content_updated(
         &self,
         document_id: &str,
-        attribution: Option<DocumentAttribution>,
+        editors: &[DocumentAttribution],
     ) -> worker::Result<()> {
         let url = format!(
             "{}/internal/documents/{document_id}/sync-content-updated",
             self.dss_url()?,
         );
-        let body = serde_json::json!({
-            "actor": attribution.as_ref().map(|value| &value.actor),
-            "on_behalf_of": attribution.as_ref().and_then(|value| value.on_behalf_of.as_ref()),
-        });
+        let body = serde_json::json!({ "editors": editors });
         let mut request = Request::new_with_init(
             &url,
             RequestInit::new()

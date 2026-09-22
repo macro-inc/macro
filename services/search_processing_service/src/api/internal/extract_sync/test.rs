@@ -31,6 +31,7 @@ fn documents_map_to_events_with_matching_keys_and_exact_metadata() {
             document_id: "document-a".to_string(),
             file_type: FileType::Md,
             document_version_id: Some("version-42".to_string()),
+            editors: Vec::new(),
             actor: None,
             on_behalf_of: None,
         })
@@ -42,6 +43,7 @@ fn documents_map_to_events_with_matching_keys_and_exact_metadata() {
             document_id: "document-b".to_string(),
             file_type: FileType::Pdf,
             document_version_id: None,
+            editors: Vec::new(),
             actor: None,
             on_behalf_of: None,
         })

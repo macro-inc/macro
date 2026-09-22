@@ -248,6 +248,11 @@ pub async fn process_message(
                 }
             }
 
+            // These edits are stored, so the publish that exports them must
+            // be attributed to this peer. `can_edit` above already loaded the
+            // socket metadata that attribution comes from.
+            dss.record_pending_editor(ws);
+
             {
                 // ACK the sender before broadcasting: the batch is durably
                 // stored at this point, and a failed broadcast to some other

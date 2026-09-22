@@ -9,7 +9,7 @@ use macro_event_broker::Event;
 
 use super::*;
 use crate::domain::events::{
-    DocumentCopiedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata,
+    DocumentCopiedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata, DocumentEditor,
     DocumentInteractionMetadata, DocumentPurgedMetadata, DocumentSyncContentUpdatedMetadata,
     DocumentUpdatedMetadata, InteractionReason,
 };
@@ -219,13 +219,12 @@ fn purge_requests_entity_deletion() {
 #[test]
 fn pipeline_and_session_events_are_ignored() {
     let sync = envelope(DocumentTopicEvent::SyncContentUpdated(
-        DocumentSyncContentUpdatedMetadata {
-            document_id: DOCUMENT_ID.to_string(),
-            file_type: FileType::Md,
-            document_version_id: None,
-            actor: None,
-            on_behalf_of: None,
-        },
+        DocumentSyncContentUpdatedMetadata::from_editors(
+            DOCUMENT_ID.to_string(),
+            FileType::Md,
+            None,
+            Vec::new(),
+        ),
     ));
     assert_eq!(sync.event.ingest(sync.event_id), Ingest::Ignore);
 
@@ -241,13 +240,71 @@ fn pipeline_and_session_events_are_ignored() {
     );
 }
 
+fn editor(actor: &str, on_behalf_of: Option<&str>) -> DocumentEditor {
+    DocumentEditor::from_reported(actor.to_string(), on_behalf_of.map(str::to_string))
+        .expect("valid actor id")
+}
+
+fn sync_content(editors: Vec<DocumentEditor>) -> Event<DocumentTopicEvent> {
+    envelope(DocumentTopicEvent::SyncContentUpdated(
+        DocumentSyncContentUpdatedMetadata::from_editors(
+            DOCUMENT_ID.to_string(),
+            FileType::Md,
+            None,
+            editors,
+        ),
+    ))
+}
+
 #[test]
-fn attributed_sync_content_is_an_edited_activity() {
+fn every_sync_content_editor_gets_their_own_edited_activity() {
+    let ai = bot_id::MACRO_AI_BOT_ID
+        .into_storage_id()
+        .as_ref()
+        .to_string();
+    let event = sync_content(vec![
+        editor("macro|first@example.com", None),
+        editor(&ai, Some("macro|owner@example.com")),
+    ]);
+
+    let Ingest::Insert(activities) = event.event.ingest(event.event_id) else {
+        panic!("expected activities for an attributed publish");
+    };
+    assert_eq!(activities.len(), 2);
+    assert!(
+        activities
+            .iter()
+            .all(|activity| activity.action == Action::Edited
+                && activity.entity_type == EntityType::Document
+                && activity.entity_id == DOCUMENT_ID)
+    );
+    assert_eq!(activities[0].actor.as_ref(), "macro|first@example.com");
+    assert_eq!(activities[0].subject_id, "macro|first@example.com");
+    assert_eq!(activities[1].actor.as_ref(), ai);
+    assert_eq!(activities[1].subject_id, "macro|owner@example.com");
+    assert_eq!(activities[0].id, activity_id(event.event_id, 0));
+    assert_eq!(activities[1].id, activity_id(event.event_id, 1));
+}
+
+#[test]
+fn a_repeated_sync_content_editor_is_recorded_once() {
+    let event = sync_content(vec![
+        editor("macro|first@example.com", None),
+        editor("macro|first@example.com", None),
+    ]);
+
+    let activity = single_activity(event.event.ingest(event.event_id));
+    assert_eq!(activity.subject_id, "macro|first@example.com");
+}
+
+#[test]
+fn the_superseded_single_sync_content_actor_is_still_attributed() {
     let event = envelope(DocumentTopicEvent::SyncContentUpdated(
         DocumentSyncContentUpdatedMetadata {
             document_id: DOCUMENT_ID.to_string(),
             file_type: FileType::Md,
             document_version_id: None,
+            editors: Vec::new(),
             actor: Some(Actor::new_from_bot(bot_id::MACRO_AI_BOT_ID)),
             on_behalf_of: Some(user("macro|owner@example.com")),
         },

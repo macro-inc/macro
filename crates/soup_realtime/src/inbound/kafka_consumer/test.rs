@@ -208,6 +208,7 @@ fn search_only_document_events_do_not_emit_patches() {
             document_id: DOCUMENT_ID.to_string(),
             file_type: "md".parse().expect("valid file type"),
             document_version_id: None,
+            editors: Vec::new(),
             actor: None,
             on_behalf_of: None,
         }),
