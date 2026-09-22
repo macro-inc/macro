@@ -19,6 +19,9 @@ use std::time::Duration;
 /// Named worker registered independently from call transcription workers.
 pub const VOICE_AGENT_NAME: &str = "macro-agent-voice";
 const MEDIA_TIMEOUT: Duration = Duration::from_secs(20);
+// The browser and worker both allow two minutes for a transient connection
+// loss. Keep the room alive for that recovery window as well.
+const RECONNECT_GRACE_SECONDS: u32 = 120;
 
 /// LiveKit provisioning adapter. Credentials never cross the domain port.
 pub struct LivekitVoiceMedia {
@@ -79,7 +82,7 @@ impl VoiceMedia for LivekitVoiceMedia {
                     &lease.room_name(),
                     CreateRoomOptions {
                         empty_timeout: 60,
-                        departure_timeout: 20,
+                        departure_timeout: RECONNECT_GRACE_SECONDS,
                         max_participants: 2,
                         metadata: metadata.clone(),
                         ..Default::default()

@@ -6,7 +6,7 @@ import json
 import logging
 import os
 import sys
-import time
+from time import monotonic
 
 from dotenv import load_dotenv
 from openai.types import realtime
@@ -30,6 +30,7 @@ from protocol import AGENT_NAME, EVENT_TOPIC, VOICE_TOPIC, TaskEvent, VoiceJob, 
 
 logger = logging.getLogger("macro-agent-voice")
 load_dotenv()
+CALLER_RECONNECT_GRACE_SECONDS = 120
 
 
 async def request_job(request: JobRequest) -> None:
@@ -77,7 +78,8 @@ async def entrypoint(ctx: JobContext) -> None:
     background: set[asyncio.Task] = set()
     session: AgentSession | None = None
     bridge: MacroBridge | None = None
-    last_activity = time.monotonic()
+    termination: tuple[str, str] | None = None
+    room_connected = False
     stage = "job_started"
 
     def advance(next_stage: str) -> None:
@@ -89,13 +91,32 @@ async def entrypoint(ctx: JobContext) -> None:
         payload = {"version": 1, "type": kind}
         if message:
             payload["message"] = message
+        if kind in {"ended", "error"}:
+            try:
+                await asyncio.wait_for(ctx.room.local_participant.set_attributes({
+                    "macro.voice.ready": "",
+                    "macro.voice.status": json.dumps({
+                        **payload, "voiceSessionId": job.voice_session_id,
+                    }),
+                }), timeout=5)
+            except Exception as error:
+                logger.warning("Voice terminal status could not be persisted", extra={"voice_session_id": job.voice_session_id, "stage": stage, "error_type": type(error).__name__})
         try:
-            await ctx.room.local_participant.publish_data(
+            await asyncio.wait_for(ctx.room.local_participant.publish_data(
                 json.dumps(payload), reliable=True,
                 destination_identities=[job.participant_identity], topic=VOICE_TOPIC,
-            )
+            ), timeout=5)
         except Exception as error:
             logger.warning("Voice status could not reach caller", extra={"voice_session_id": job.voice_session_id, "stage": stage, "error_type": type(error).__name__})
+
+    def stop(kind: str, message: str) -> None:
+        nonlocal termination
+        # Error and close arrive together. Preserve the first explanation and
+        # publish it in cleanup, outside the background tasks being cancelled.
+        if termination is None:
+            termination = (kind, message)
+            logger.info("Voice session stopping", extra={"voice_session_id": job.voice_session_id, "stage": stage, "status": kind, "reason": message})
+        shutdown.set()
 
     def spawn(coro) -> None:
         task = asyncio.create_task(coro)
@@ -104,7 +125,7 @@ async def entrypoint(ctx: JobContext) -> None:
             background.discard(done)
             if not done.cancelled() and done.exception() is not None:
                 logger.error("Voice background task failed", extra={"voice_session_id": job.voice_session_id, "stage": stage, "error_type": type(done.exception()).__name__})
-                shutdown.set()
+                stop("error", "Voice could not present the agent's response. Its work is still available in text.")
         task.add_done_callback(complete)
 
     async def rpc(method: str, payload: str) -> str:
@@ -113,22 +134,16 @@ async def entrypoint(ctx: JobContext) -> None:
             method=method, payload=payload, response_timeout=10.0,
         )
 
-    async def fail(message: str) -> None:
-        # Deliver the explanation before cleanup cancels background work.
-        try:
-            await publish("error", message)
-        finally:
-            shutdown.set()
-
     try:
         advance("connecting_room")
         await asyncio.wait_for(ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY), timeout=25)
+        room_connected = True
         advance("waiting_for_caller")
         await asyncio.wait_for(ctx.wait_for_participant(identity=job.participant_identity), timeout=25)
         api_key = os.environ.get("OPENAI_API_KEY", "")
         if not credential_present(api_key):
             logger.error("Voice provider is not configured", extra={"voice_session_id": job.voice_session_id, "stage": "provider_configuration"})
-            await publish("error", "Voice is not configured yet. You can continue in text.")
+            stop("error", "Voice is not configured yet. You can continue in text.")
             return
         bridge = MacroBridge(job, rpc)
         # Context reads may be retried; side-effecting task submissions are not.
@@ -143,7 +158,7 @@ async def entrypoint(ctx: JobContext) -> None:
                 if attempt == 0:
                     await asyncio.sleep(0.5)
         if context is None:
-            await publish("error", "Could not load this agent's conversation. Reopen voice to try again.")
+            stop("error", "Could not load this agent's conversation. Reopen voice to try again.")
             return
 
         # Realtime owns semantic endpointing and audio response cancellation.
@@ -171,19 +186,15 @@ async def entrypoint(ctx: JobContext) -> None:
             except asyncio.QueueFull:
                 # Fail visibly instead of losing a completion while continuing
                 # to speak as though the task's state were known.
-                spawn(fail("Voice fell behind the agent. Please check its written response."))
-
-        @session.on("user_state_changed")
-        def user_activity(event) -> None:
-            nonlocal last_activity
-            if event.new_state == "speaking":
-                last_activity = time.monotonic()
+                stop("error", "Voice fell behind the agent. Please check its written response.")
 
         @session.on("error")
         def provider_error(event) -> None:
-            if not getattr(event.error, "recoverable", False):
+            if getattr(event.error, "recoverable", False):
+                logger.warning("Voice provider is recovering", extra={"voice_session_id": job.voice_session_id, "stage": stage, "error_type": type(event.error).__name__})
+            else:
                 logger.error("Voice provider failed", extra={"voice_session_id": job.voice_session_id, "stage": stage, "error_type": type(event.error).__name__})
-                spawn(fail("The voice connection failed. Your agent's work is still available in text."))
+                stop("error", "The voice connection failed. Your agent's work is still available in text.")
 
         @session.on("session_usage_updated")
         def usage_updated(event) -> None:
@@ -194,8 +205,11 @@ async def entrypoint(ctx: JobContext) -> None:
             })
 
         @session.on("close")
-        def closed(_event) -> None:
-            shutdown.set()
+        def closed(event) -> None:
+            if getattr(event, "error", None) is not None:
+                stop("error", "The voice connection failed. Your agent's work is still available in text.")
+            else:
+                stop("ended", "The voice connection ended. Start another whenever you're ready.")
 
         advance("starting_session")
         await asyncio.wait_for(session.start(
@@ -204,7 +218,9 @@ async def entrypoint(ctx: JobContext) -> None:
                 participant_identity=job.participant_identity,
                 audio_input=True, audio_output=True, video_input=False,
                 text_input=False, text_output=True,
-                close_on_disconnect=False, delete_room_on_close=True,
+                # Cleanup owns deletion so terminal attributes and data can
+                # reach the caller before SDK close removes the room.
+                close_on_disconnect=False, delete_room_on_close=False,
             ),
             record=False,
         ), timeout=30)
@@ -222,16 +238,20 @@ async def entrypoint(ctx: JobContext) -> None:
 
         missing_since: float | None = None
         while not shutdown.is_set():
-            now = time.monotonic()
+            now = monotonic()
             if datetime.now(timezone.utc) >= job.expires_at:
-                await publish("ended", "This voice session reached its time limit. Start another whenever you're ready.")
+                stop("ended", "This voice session reached its time limit. Start another whenever you're ready.")
                 break
-            if now - last_activity >= 300:
-                await publish("ended", "Voice ended after five minutes without speech.")
-                break
-            if job.participant_identity not in ctx.room.remote_participants:
-                missing_since = missing_since or now
-                if now - missing_since >= 20:
+            # Muting, listening, and waiting for work are valid connected
+            # states. Only an actually absent caller starts the grace period;
+            # our own reconnect has no authoritative participant roster.
+            if ctx.room.connection_state != rtc.ConnectionState.CONN_CONNECTED:
+                missing_since = None
+            elif job.participant_identity not in ctx.room.remote_participants:
+                if missing_since is None:
+                    missing_since = now
+                if now - missing_since >= CALLER_RECONNECT_GRACE_SECONDS:
+                    stop("ended", "Voice ended because the caller did not reconnect. Start another whenever you're ready.")
                     break
             else:
                 missing_since = None
@@ -241,9 +261,11 @@ async def entrypoint(ctx: JobContext) -> None:
                 pass
     except Exception as error:
         logger.error("Voice session failed", extra={"voice_session_id": job.voice_session_id, "stage": stage, "error_type": type(error).__name__})
-        await publish("error", "Voice could not connect. Please try again or continue in text.")
+        stop("error", "Voice could not connect. Please try again or continue in text.")
     finally:
         advance("closing")
+        if termination:
+            await publish(*termination)
         for task in list(background):
             task.cancel()
         await asyncio.gather(*list(background), return_exceptions=True)
@@ -253,6 +275,11 @@ async def entrypoint(ctx: JobContext) -> None:
             if session:
                 await session.aclose()
         finally:
+            if room_connected:
+                try:
+                    await asyncio.wait_for(ctx.delete_room(), timeout=5)
+                except Exception as error:
+                    logger.warning("Voice room cleanup failed", extra={"voice_session_id": job.voice_session_id, "stage": stage, "error_type": type(error).__name__})
             ctx.shutdown(reason="voice session ended")
 
 

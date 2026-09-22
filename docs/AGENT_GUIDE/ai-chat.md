@@ -39,19 +39,22 @@ to choose a Macro agent. Connection failures show an error with **Try again**.
   tab releases voice.
 - Questions and permission requests still use the conversation's visual review
   controls. A spoken “yes” does not grant permission.
-- Reconnecting media does not replay task submissions. If delivery is uncertain,
+- A brief media interruption shows **Reconnecting** and keeps the microphone
+  session open for up to two minutes. A recovered connection resumes the same
+  conversation. Reconnecting media does not replay task submissions. If delivery is uncertain,
   inspect the written transcript before asking again. Reopen voice after a failed
   connection; existing agent work remains available.
 
-Voice closes after 30 minutes, five minutes without speech, or a prolonged
-disconnect. Audio is not recorded. Live voice captions and conversational filler
+Voice closes after 30 minutes or a disconnect lasting two minutes. Silence,
+listening, and muting do not end a connected call. Audio is not recorded. Live voice captions and conversational filler
 are ephemeral; delegated requests and agent responses remain in the normal agent
 transcript. Closing/reloading the tab ends voice rather than resuming microphone
 capture automatically.
 
 Browser regression checks: open the panel, choose another voice, dismiss/reopen,
 start with microphone allowed and denied, mute/unmute, minimize/navigate/reopen,
-and end while connecting. Verify missing-worker startup fails visibly and playback
+and end while connecting. Interrupt the network briefly and verify the same
+session reconnects with its microphone still live. Verify missing-worker startup fails visibly and playback
 permission cannot leave Connecting stuck. Verify a second tab and a human call cannot acquire the
 microphone simultaneously. Real-microphone checks additionally need a configured
 worker/provider and must cover interruption during speech, correction during a

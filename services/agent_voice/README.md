@@ -77,7 +77,7 @@ error instead of remaining on Connecting.
 - Permission requests and structured questions use the existing on-screen controls.
 - No raw audio recording. Live captions and conversational filler are ephemeral;
   delegated requests and task results remain in the canonical agent transcript.
-- The worker stops at 30 minutes, after five idle minutes, or after a 20-second
+- The worker stops at 30 minutes or after a 120-second
   caller disconnect grace. Ending media never cancels durable harness work.
 
 ## Protocol and failure handling

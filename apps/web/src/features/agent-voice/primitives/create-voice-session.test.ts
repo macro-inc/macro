@@ -176,6 +176,23 @@ describe('agent voice lifetime', () => {
     expect(deps.acquireMicrophone).not.toHaveBeenCalled();
     expect(controller.state().error).toContain('Leave your call');
   });
+  it('keeps media and microphone ownership through reconnect and minimize', async () => {
+    const { controller, deps, media, microphone, release, events } = setup();
+    await controller.open({ sessionId: 'a', title: 'A' });
+    await controller.start();
+    events().connection('reconnecting');
+    controller.hide();
+    await controller.open({ sessionId: 'b', title: 'B' });
+    expect(controller.state().phase).toBe('reconnecting');
+    expect(controller.state().target?.sessionId).toBe('a');
+    expect(media.disconnect).not.toHaveBeenCalled();
+    expect(microphone.stop).not.toHaveBeenCalled();
+    expect(release).not.toHaveBeenCalled();
+    expect(deps.end).not.toHaveBeenCalled();
+    events().connection('connected');
+    expect(controller.state().phase).toBe('connected');
+    expect(deps.start).toHaveBeenCalledOnce();
+  });
   it('ends a late-created backend room after the user cancels connecting', async () => {
     const pending = deferred<VoiceCredentials>();
     const { controller, deps, release } = setup({

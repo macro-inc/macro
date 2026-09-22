@@ -38,17 +38,27 @@ export async function createLivekitVoiceMedia(
   });
   let disposed = false;
   let workerReady = false;
+  let connectedOnce = false;
+  let recovering = false;
+  let recoveryVersion = 0;
+  let networkReconnecting = false;
   let workerFailure: string | undefined;
   let resolveReady: (() => void) | undefined;
   let cancelStartup: (() => void) | undefined;
   let rejectStartup: ((error: Error) => void) | undefined;
   let sequence = 0;
   let interval: ReturnType<typeof setInterval> | undefined;
+  let participantInterval: ReturnType<typeof setInterval> | undefined;
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  let workerLeaveTimer: ReturnType<typeof setTimeout> | undefined;
   let workerTimer: ReturnType<typeof setTimeout> | undefined;
   let startupTimer: ReturnType<typeof setTimeout> | undefined;
   const audioElements = new Map<RemoteAudioTrack, HTMLMediaElement>();
   const streams = new Set<AbortController>();
+  const waitingPublishes = new Set<{
+    resolve: () => void;
+    reject: (error: Error) => void;
+  }>();
   let audioContext: AudioContext | undefined;
   let inputMeter:
     | { analyser: AnalyserNode; source: MediaStreamAudioSourceNode }
@@ -57,26 +67,51 @@ export async function createLivekitVoiceMedia(
     | { analyser: AnalyserNode; source: MediaStreamAudioSourceNode }
     | undefined;
   const fail = (message: string) => {
-    if (disposed) return;
+    if (disposed || workerFailure) return;
     microphone.stop();
     workerFailure = message;
+    for (const waiting of waitingPublishes) waiting.reject(new Error(message));
+    waitingPublishes.clear();
     rejectStartup?.(new Error(message));
     resolveReady?.();
     events.failure(message);
   };
   const markReady = () => {
-    if (disposed || workerFailure || workerReady) return;
+    if (disposed || workerFailure) return;
+    const newlyReady = !workerReady;
     workerReady = true;
     clearTimeout(workerTimer);
+    clearTimeout(workerLeaveTimer);
+    workerLeaveTimer = undefined;
     resolveReady?.();
-    events.agentState('listening');
+    if (newlyReady) events.agentState('listening');
+    finishRecovery();
   };
-  const participantReady = (participant: {
+  const participantState = (participant: {
     identity: string;
     attributes: Record<string, string>;
   }) => {
+    if (participant.identity !== credentials.agentIdentity) return;
+    const status = participant.attributes['macro.voice.status'];
+    if (status) {
+      const event = parseWorkerEvent(new TextEncoder().encode(status));
+      if (event && event.type !== 'ready') {
+        // parseWorkerEvent already checked that this is a bounded JSON object.
+        const generation: unknown = JSON.parse(status);
+        if (
+          typeof generation === 'object' &&
+          generation !== null &&
+          'voiceSessionId' in generation &&
+          generation.voiceSessionId === credentials.voiceSessionId
+        ) {
+          fail(
+            event.message ?? 'The voice agent disconnected. Please try again.'
+          );
+          return;
+        }
+      }
+    }
     if (
-      participant.identity === credentials.agentIdentity &&
       participant.attributes['macro.voice.ready'] === credentials.voiceSessionId
     )
       markReady();
@@ -98,6 +133,31 @@ export async function createLivekitVoiceMedia(
     } catch {
       if (!disposed) events.playbackBlocked(true);
     }
+  };
+  const beginRecovery = () => {
+    if (recovering) return;
+    recovering = true;
+    recoveryVersion++;
+    for (const element of audioElements.values()) element.muted = true;
+    events.levels(0, 0);
+    events.connection('reconnecting');
+  };
+  const finishRecovery = () => {
+    if (
+      disposed ||
+      workerFailure ||
+      !recovering ||
+      networkReconnecting ||
+      !workerReady ||
+      !connectedOnce
+    )
+      return;
+    recovering = false;
+    for (const element of audioElements.values()) element.muted = false;
+    for (const waiting of waitingPublishes) waiting.resolve();
+    waitingPublishes.clear();
+    void startPlayback();
+    events.connection('connected');
   };
   const level = (meter: typeof inputMeter) => {
     if (!meter) return 0;
@@ -176,23 +236,25 @@ export async function createLivekitVoiceMedia(
     }
   );
   room.on(RoomEvent.Reconnecting, () => {
-    if (disposed) return;
-    events.connection('reconnecting');
-    for (const element of audioElements.values()) element.muted = true;
-    clearTimeout(reconnectTimer);
+    if (disposed || networkReconnecting) return;
+    networkReconnecting = true;
+    beginRecovery();
     reconnectTimer = setTimeout(
       () =>
         fail(
           'Voice could not reconnect. Start again when your connection is stable.'
         ),
-      20_000
+      120_000
     );
   });
   room.on(RoomEvent.Reconnected, () => {
+    if (disposed || workerFailure) return;
+    networkReconnecting = false;
     clearTimeout(reconnectTimer);
-    // End instead of resuming potentially stale speech/context after signal loss.
-    if (!disposed)
-      fail('Your connection changed. Start voice again to continue safely.');
+    reconnectTimer = undefined;
+    const worker = room.remoteParticipants.get(credentials.agentIdentity);
+    if (worker) participantState(worker);
+    finishRecovery();
   });
   room.on(RoomEvent.Disconnected, () => {
     microphone.stop();
@@ -203,10 +265,16 @@ export async function createLivekitVoiceMedia(
     events.playbackBlocked(!room.canPlaybackAudio)
   );
   room.on(RoomEvent.ParticipantDisconnected, (participant) => {
-    if (!disposed && participant.identity === credentials.agentIdentity)
-      fail('The voice agent disconnected. Start again to continue.');
+    if (disposed || participant.identity !== credentials.agentIdentity) return;
+    workerReady = false;
+    beginRecovery();
+    if (!workerLeaveTimer)
+      workerLeaveTimer = setTimeout(
+        () => fail('The voice agent could not reconnect. Please try again.'),
+        120_000
+      );
   });
-  room.on(RoomEvent.ParticipantConnected, participantReady);
+  room.on(RoomEvent.ParticipantConnected, participantState);
   room.on(RoomEvent.TrackSubscribed, (track, _publication, participant) => {
     if (
       disposed ||
@@ -216,6 +284,7 @@ export async function createLivekitVoiceMedia(
       return;
     const audio = track as RemoteAudioTrack;
     const element = audio.attach();
+    element.muted = recovering;
     element.style.display = 'none';
     document.body.append(element);
     audioElements.set(audio, element);
@@ -247,7 +316,7 @@ export async function createLivekitVoiceMedia(
   });
   room.on(RoomEvent.ParticipantAttributesChanged, (attributes, participant) => {
     if (disposed || participant.identity !== credentials.agentIdentity) return;
-    participantReady(participant);
+    participantState(participant);
     const state = attributes['lk.agent.state'];
     if (state === 'listening' || state === 'thinking' || state === 'speaking')
       events.agentState(state);
@@ -283,9 +352,6 @@ export async function createLivekitVoiceMedia(
   });
   const connect = async () => {
     if (disposed) return;
-    const ready = new Promise<void>((resolve) => {
-      resolveReady = resolve;
-    });
     await room.connect(credentials.url, credentials.token, {
       autoSubscribe: true,
       websocketTimeout: 15_000,
@@ -298,8 +364,17 @@ export async function createLivekitVoiceMedia(
     // The worker may already be ready in the initial room snapshot; its
     // one-shot data packet can arrive before the browser joins the room.
     const worker = room.remoteParticipants.get(credentials.agentIdentity);
-    if (worker) participantReady(worker);
+    if (worker) participantState(worker);
     if (workerFailure) throw new Error(workerFailure);
+    // SDK join/attribute notifications can remain buffered across a reconnect.
+    // Reconcile durable state from its already-updated participant snapshot.
+    participantInterval = setInterval(() => {
+      if (disposed || networkReconnecting) return;
+      const participant = room.remoteParticipants.get(
+        credentials.agentIdentity
+      );
+      if (participant) participantState(participant);
+    }, 1000);
     await room.localParticipant.publishTrack(microphone.track, {
       source: Track.Source.Microphone,
       stopMicTrackOnMute: false,
@@ -327,8 +402,10 @@ export async function createLivekitVoiceMedia(
     interval = setInterval(
       () =>
         events.levels(
-          room.localParticipant.isMicrophoneEnabled ? level(inputMeter) : 0,
-          level(outputMeter)
+          !recovering && room.localParticipant.isMicrophoneEnabled
+            ? level(inputMeter)
+            : 0,
+          recovering ? 0 : level(outputMeter)
         ),
       50
     );
@@ -337,12 +414,22 @@ export async function createLivekitVoiceMedia(
         () => fail('The voice agent did not connect. Please try again.'),
         30_000
       );
-    if (!workerReady) await ready;
+    while (!workerReady && !disposed && !workerFailure)
+      await new Promise<void>((resolve) => {
+        resolveReady = resolve;
+      });
     if (disposed) return;
     if (workerFailure) throw new Error(workerFailure);
     if (!workerReady)
       throw new Error('The voice agent disconnected before it was ready.');
-    events.connection('connected');
+    connectedOnce = true;
+    if (recovering) {
+      finishRecovery();
+      if (recovering)
+        await new Promise<void>((resolve, reject) =>
+          waitingPublishes.add({ resolve, reject })
+        );
+    } else events.connection('connected');
   };
   const disconnect = async () => {
     disposed = true;
@@ -350,9 +437,14 @@ export async function createLivekitVoiceMedia(
     cancelStartup?.();
     resolveReady?.();
     clearInterval(interval);
+    clearInterval(participantInterval);
     clearTimeout(reconnectTimer);
+    clearTimeout(workerLeaveTimer);
     clearTimeout(workerTimer);
     clearTimeout(startupTimer);
+    for (const waiting of waitingPublishes)
+      waiting.reject(new Error('Voice has ended.'));
+    waitingPublishes.clear();
     room.localParticipant.unregisterRpcMethod('macro.agent.request');
     room.localParticipant.unregisterRpcMethod('macro.agent.cancel');
     room.localParticipant.unregisterRpcMethod('macro.voice.context');
@@ -423,20 +515,45 @@ export async function createLivekitVoiceMedia(
       await room.startAudio();
       events.playbackBlocked(!room.canPlaybackAudio);
     },
-    publish: async (event) =>
-      room.localParticipant.publishData(
-        new TextEncoder().encode(
-          serializeVoicePayload({
-            ...event,
-            voiceSessionId: credentials.voiceSessionId,
-            seq: ++sequence,
-          })
-        ),
-        {
-          reliable: true,
-          topic: 'macro.agent.event',
-          destinationIdentities: [credentials.agentIdentity],
+    publish: async (event) => {
+      const payload = new TextEncoder().encode(
+        serializeVoicePayload({
+          ...event,
+          voiceSessionId: credentials.voiceSessionId,
+          seq: ++sequence,
+        })
+      );
+      while (true) {
+        if (disposed || workerFailure)
+          throw new Error(workerFailure ?? 'Voice has ended.');
+        if (recovering) {
+          if (waitingPublishes.size >= 128)
+            throw new Error('Voice could not keep up while reconnecting.');
+          await new Promise<void>((resolve, reject) =>
+            waitingPublishes.add({ resolve, reject })
+          );
         }
-      ),
+        if (disposed || workerFailure)
+          throw new Error(workerFailure ?? 'Voice has ended.');
+        const sendingVersion = recoveryVersion;
+        try {
+          await room.localParticipant.publishData(payload, {
+            reliable: true,
+            topic: 'macro.agent.event',
+            destinationIdentities: [credentials.agentIdentity],
+          });
+          return;
+        } catch (error) {
+          // Replaying the same sequence is safe: the worker deduplicates it.
+          // Only retry a send interrupted by an actual SDK recovery cycle.
+          if (
+            disposed ||
+            workerFailure ||
+            (!recovering && sendingVersion === recoveryVersion)
+          )
+            throw error;
+        }
+      }
+    },
   };
 }

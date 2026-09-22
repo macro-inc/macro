@@ -473,4 +473,276 @@ describe('LiveKit voice boundary', () => {
     expect(callbacks.connection).toHaveBeenCalledWith('connected');
     await media.disconnect();
   });
+  it('resumes the existing conversation after a transient network reconnect', async () => {
+    vi.useFakeTimers();
+    const callbacks = events();
+    const capture = microphone();
+    const media = await createLivekitVoiceMedia(
+      credentials,
+      callbacks,
+      bridges(),
+      capture
+    );
+    workerEvent(credentials.agentIdentity, 'ready');
+    await media.connect();
+    fake.handlers.get('reconnecting')?.();
+    await vi.advanceTimersByTimeAsync(40_000);
+    expect(callbacks.failure).not.toHaveBeenCalled();
+    expect(capture.stop).not.toHaveBeenCalled();
+    fake.handlers.get('reconnected')?.();
+    expect(callbacks.connection.mock.calls).toEqual([
+      ['connected'],
+      ['reconnecting'],
+      ['connected'],
+    ]);
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(callbacks.failure).not.toHaveBeenCalled();
+    expect(fake.connect).toHaveBeenCalledOnce();
+    await media.disconnect();
+  });
+  it('waits for the expected worker to rejoin and confirm the same voice session', async () => {
+    vi.useFakeTimers();
+    const callbacks = events();
+    const capture = microphone();
+    const media = await createLivekitVoiceMedia(
+      credentials,
+      callbacks,
+      bridges(),
+      capture
+    );
+    workerEvent(credentials.agentIdentity, 'ready');
+    await media.connect();
+    fake.handlers.get('left')?.({ identity: 'unrelated' });
+    expect(callbacks.connection).toHaveBeenCalledOnce();
+    fake.handlers.get('left')?.({ identity: credentials.agentIdentity });
+    await vi.advanceTimersByTimeAsync(40_000);
+    fake.handlers.get('joined')?.({
+      identity: credentials.agentIdentity,
+      attributes: { 'macro.voice.ready': 'wrong-session' },
+    });
+    expect(callbacks.connection).toHaveBeenLastCalledWith('reconnecting');
+    fake.handlers.get('joined')?.({
+      identity: credentials.agentIdentity,
+      attributes: { 'macro.voice.ready': credentials.voiceSessionId },
+    });
+    expect(callbacks.connection).toHaveBeenLastCalledWith('connected');
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(callbacks.failure).not.toHaveBeenCalled();
+    expect(capture.stop).not.toHaveBeenCalled();
+    await media.disconnect();
+  });
+  it.each(['reconnecting', 'left'])(
+    'ends only after the recovery grace expires for %s',
+    async (event) => {
+      vi.useFakeTimers();
+      const callbacks = events();
+      const capture = microphone();
+      const media = await createLivekitVoiceMedia(
+        credentials,
+        callbacks,
+        bridges(),
+        capture
+      );
+      workerEvent(credentials.agentIdentity, 'ready');
+      await media.connect();
+      fake.handlers.get(event)?.({ identity: credentials.agentIdentity });
+      await vi.advanceTimersByTimeAsync(119_999);
+      expect(callbacks.failure).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(callbacks.failure).toHaveBeenCalledOnce();
+      expect(capture.stop).toHaveBeenCalled();
+      await media.disconnect();
+    }
+  );
+  it('holds task results during reconnect and sends them after recovery', async () => {
+    const media = await createLivekitVoiceMedia(
+      credentials,
+      events(),
+      bridges(),
+      microphone()
+    );
+    workerEvent(credentials.agentIdentity, 'ready');
+    await media.connect();
+    fake.handlers.get('reconnecting')?.();
+    const result = media.publish({
+      version: 1,
+      taskId,
+      type: 'completed',
+      text: 'Done',
+    });
+    expect(fake.publish).not.toHaveBeenCalled();
+    fake.handlers.get('reconnected')?.();
+    await result;
+    expect(fake.publish).toHaveBeenCalledOnce();
+    await media.disconnect();
+  });
+  it('retries an interrupted result with its original deduplication sequence', async () => {
+    let reject!: (error: Error) => void;
+    fake.publish.mockImplementationOnce(
+      () =>
+        new Promise<void>((_resolve, fail) => {
+          reject = fail;
+        })
+    );
+    const media = await createLivekitVoiceMedia(
+      credentials,
+      events(),
+      bridges(),
+      microphone()
+    );
+    workerEvent(credentials.agentIdentity, 'ready');
+    await media.connect();
+    const result = media.publish({
+      version: 1,
+      taskId,
+      type: 'completed',
+      text: 'Done',
+    });
+    fake.handlers.get('reconnecting')?.();
+    reject(new Error('Data channel interrupted'));
+    await Promise.resolve();
+    fake.handlers.get('reconnected')?.();
+    await result;
+    expect(fake.publish).toHaveBeenCalledTimes(2);
+    expect(fake.publish.mock.calls[0]).toEqual(fake.publish.mock.calls[1]);
+    await media.disconnect();
+  });
+  it('recovers a send failure reported after the connection has already resumed', async () => {
+    let reject!: (error: Error) => void;
+    fake.publish.mockImplementationOnce(
+      () =>
+        new Promise<void>((_resolve, fail) => {
+          reject = fail;
+        })
+    );
+    const media = await createLivekitVoiceMedia(
+      credentials,
+      events(),
+      bridges(),
+      microphone()
+    );
+    workerEvent(credentials.agentIdentity, 'ready');
+    await media.connect();
+    const result = media.publish({
+      version: 1,
+      taskId,
+      type: 'completed',
+      text: 'Done',
+    });
+    fake.handlers.get('reconnecting')?.();
+    fake.handlers.get('reconnected')?.();
+    reject(new Error('Old data channel closed'));
+    await result;
+    expect(fake.publish).toHaveBeenCalledTimes(2);
+    expect(fake.publish.mock.calls[0]).toEqual(fake.publish.mock.calls[1]);
+    await media.disconnect();
+  });
+  it('surfaces a durable terminal reason from the initial room snapshot', async () => {
+    fake.participants.set(credentials.agentIdentity, {
+      identity: credentials.agentIdentity,
+      attributes: {
+        'macro.voice.status': JSON.stringify({
+          version: 1,
+          voiceSessionId: credentials.voiceSessionId,
+          type: 'error',
+          message: 'Provider session expired.',
+        }),
+      },
+    });
+    const callbacks = events();
+    const media = await createLivekitVoiceMedia(
+      credentials,
+      callbacks,
+      bridges(),
+      microphone()
+    );
+    await expect(media.connect()).rejects.toThrow('Provider session expired.');
+    expect(callbacks.failure).toHaveBeenCalledExactlyOnceWith(
+      'Provider session expired.'
+    );
+    expect(fake.publishTrack).not.toHaveBeenCalled();
+  });
+  it.each(['attributes', 'joined'])(
+    'handles terminal worker status from %s without waiting for recovery timeout',
+    async (event) => {
+      const callbacks = events();
+      const media = await createLivekitVoiceMedia(
+        credentials,
+        callbacks,
+        bridges(),
+        microphone()
+      );
+      workerEvent(credentials.agentIdentity, 'ready');
+      await media.connect();
+      const participant = {
+        identity: credentials.agentIdentity,
+        attributes: {
+          'macro.voice.status': JSON.stringify({
+            version: 1,
+            voiceSessionId: credentials.voiceSessionId,
+            type: 'ended',
+            message: 'The conversation ended.',
+          }),
+        },
+      };
+      if (event === 'attributes')
+        fake.handlers.get(event)?.(participant.attributes, participant);
+      else fake.handlers.get(event)?.(participant);
+      expect(callbacks.failure).toHaveBeenCalledExactlyOnceWith(
+        'The conversation ended.'
+      );
+      await media.disconnect();
+    }
+  );
+  it('ignores durable terminal status from another worker or voice generation', async () => {
+    const callbacks = events();
+    const media = await createLivekitVoiceMedia(
+      credentials,
+      callbacks,
+      bridges(),
+      microphone()
+    );
+    workerEvent(credentials.agentIdentity, 'ready');
+    await media.connect();
+    for (const [identity, voiceSessionId] of [
+      ['untrusted', credentials.voiceSessionId],
+      [credentials.agentIdentity, 'old-session'],
+    ]) {
+      const participant = {
+        identity,
+        attributes: {
+          'macro.voice.status': JSON.stringify({
+            version: 1,
+            voiceSessionId,
+            type: 'error',
+            message: 'Stale failure',
+          }),
+        },
+      };
+      fake.handlers.get('attributes')?.(participant.attributes, participant);
+    }
+    expect(callbacks.failure).not.toHaveBeenCalled();
+    await media.disconnect();
+  });
+  it('reconciles worker readiness when the SDK updates its snapshot without emitting the join event', async () => {
+    vi.useFakeTimers();
+    const callbacks = events();
+    const media = await createLivekitVoiceMedia(
+      credentials,
+      callbacks,
+      bridges(),
+      microphone()
+    );
+    workerEvent(credentials.agentIdentity, 'ready');
+    await media.connect();
+    fake.handlers.get('left')?.({ identity: credentials.agentIdentity });
+    fake.participants.set(credentials.agentIdentity, {
+      identity: credentials.agentIdentity,
+      attributes: { 'macro.voice.ready': credentials.voiceSessionId },
+    });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(callbacks.connection).toHaveBeenLastCalledWith('connected');
+    expect(callbacks.failure).not.toHaveBeenCalled();
+    await media.disconnect();
+  });
 });
