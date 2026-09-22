@@ -1,5 +1,6 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { itemToSafeName } from '@core/constant/allBlocks';
-import { enableCrm, isFeatureEnabled } from '@core/constant/featureFlags';
+import { enableCrm } from '@core/constant/featureFlags';
 import {
   useChannelsContext,
   useDmActivityByUserId,
@@ -309,6 +310,7 @@ function sortIndexEntries(entries: IndexEntry[]): IndexEntry[] {
 
 /** Builds Quick Access from history and its supporting entity sources. */
 export function createQuickAccessValue(): QuickAccessContextValue {
+  const crmFlag = useFeatureFlag(enableCrm);
   // queries
   const historyQuery = useHistoryQuery();
   const { channels, isLoading: channelsLoading } = useChannelsContext();
@@ -869,28 +871,29 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const first = args[0];
     const options = typeof first === 'object' ? first : undefined;
     const buckets = options ? [...options.buckets] : (args as Bucket[]);
-    const projectedBuckets = (
-      buckets.length ? buckets : BUCKET_COMBINATIONS.all
-    ).filter(
-      (bucket) => bucket !== 'crm_company' || isFeatureEnabled(enableCrm)
+    const projectedBuckets = createMemo(() =>
+      (buckets.length ? buckets : BUCKET_COMBINATIONS.all).filter(
+        (bucket) => bucket !== 'crm_company' || crmFlag().enabled
+      )
     );
     const baseList = createLazyMemo(() => {
-      if (options?.enabled?.() === false || projectedBuckets.length === 0)
+      const activeBuckets = projectedBuckets();
+      if (options?.enabled?.() === false || activeBuckets.length === 0)
         return [];
       let indices: IndexEntry[];
 
-      if (projectedBuckets.length === 1) {
+      if (activeBuckets.length === 1) {
         // Single bucket = return pre-computed bucket list
-        indices = bucketIndices().get(projectedBuckets[0]) ?? [];
+        indices = bucketIndices().get(activeBuckets[0]) ?? [];
       } else {
         // Check for pre-baked combination
-        const preBaked = getPreBakedIndices(projectedBuckets);
+        const preBaked = getPreBakedIndices(activeBuckets);
         if (preBaked) {
           indices = preBaked;
         } else {
           // Fallback: merge-sort the requested bucket index lists
           const allIndices = bucketIndices();
-          const indicesToMerge = projectedBuckets
+          const indicesToMerge = activeBuckets
             .map((b) => allIndices.get(b) ?? [])
             .filter((arr) => arr.length > 0);
           indices = mergeMultipleSortedIndices(indicesToMerge);
@@ -909,12 +912,14 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       options && cacheHost
         ? createProjectedList<QuickAccessItem>({
             host: cacheHost,
-            buckets: projectedBuckets,
+            get buckets() {
+              return projectedBuckets();
+            },
             revision: cacheRevision,
             searchTerm: options.searchTerm,
             // An empty bucket list means "all" to the cache, not "none".
             enabled: () =>
-              projectedBuckets.length > 0 && options.enabled?.() !== false,
+              projectedBuckets().length > 0 && options.enabled?.() !== false,
             existingItems: localItems,
             materialize: async (documents) => {
               const idOf = (recordKey: string) =>

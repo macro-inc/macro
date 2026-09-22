@@ -7,11 +7,15 @@ import type {
 } from '@graphql-cache/index';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/index';
 import type { HistoryItem } from '@queries/history/types';
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAX_BROWSE_PAGES_PER_LOAD } from './projected-list';
 import { createQuickAccessValue } from './QuickAccessSource';
-import { BUCKET_COMBINATIONS, type QuickAccessContextValue } from './types';
+import {
+  BUCKET_COMBINATIONS,
+  type Bucket,
+  type QuickAccessContextValue,
+} from './types';
 
 const mocks = vi.hoisted(() => ({
   search: vi.fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>(),
@@ -22,12 +26,15 @@ const mocks = vi.hoisted(() => ({
   onCacheChanged: vi.fn(),
   readRecordsByKeys: vi.fn(),
   companies: [] as CrmCompanyEntity[],
-  crmEnabled: true,
+  crmEnabled: (): boolean => true,
   cacheEnabled: true,
 }));
 vi.mock('@core/constant/featureFlags', () => ({
   enableCrm: {},
-  isFeatureEnabled: () => mocks.crmEnabled,
+  isFeatureEnabled: () => mocks.crmEnabled(),
+}));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: mocks.crmEnabled() }),
 }));
 vi.mock('@core/constant/allBlocks', () => ({
   itemToSafeName: (item: { name: string }) => item.name,
@@ -139,7 +146,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.history = [];
   mocks.companies = [];
-  mocks.crmEnabled = true;
+  mocks.crmEnabled = () => true;
   mocks.cacheEnabled = true;
   mocks.readRecordsByKeys.mockReset().mockResolvedValue({
     revision: INITIAL_CACHE_REVISION,
@@ -257,7 +264,7 @@ describe('Quick Access source integration', () => {
   });
 
   it('does not search cached companies when CRM is disabled', () => {
-    mocks.crmEnabled = false;
+    mocks.crmEnabled = () => false;
     mocks.companies = [restCompany];
     const list = setup((source) =>
       source.useList({ buckets: ['crm_company'] })
@@ -267,7 +274,7 @@ describe('Quick Access source integration', () => {
   });
 
   it('excludes CRM from mixed lists when the feature is disabled', async () => {
-    mocks.crmEnabled = false;
+    mocks.crmEnabled = () => false;
     mocks.companies = [restCompany];
     const list = setup((source) =>
       source.useList({ buckets: ['note', 'crm_company'] })
@@ -283,7 +290,7 @@ describe('Quick Access source integration', () => {
     'filters retained local CRM companies across list selections (GraphQL %s)',
     async (cacheEnabled) => {
       mocks.cacheEnabled = cacheEnabled;
-      mocks.crmEnabled = false;
+      mocks.crmEnabled = () => false;
       mocks.companies = [restCompany];
       mocks.history = [
         {
@@ -337,6 +344,62 @@ describe('Quick Access source integration', () => {
         ).toEqual(ids);
         expect(list.totalCount()).toBe(ids.length);
       }
+    }
+  );
+
+  it.each([true, false])(
+    'updates long-lived local lists when CRM flags load or turn off (GraphQL %s)',
+    async (cacheEnabled) => {
+      const [crmEnabled, setCrmEnabled] = createSignal(false);
+      mocks.crmEnabled = crmEnabled;
+      mocks.cacheEnabled = cacheEnabled;
+      mocks.companies = [restCompany];
+      const lists = setup((source) => [
+        source.useList(),
+        source.useList({ buckets: [] }),
+        source.useList({ buckets: ['crm_company'] }),
+        source.useList({ buckets: ['note', 'crm_company'] }),
+      ]);
+      await vi.waitFor(() =>
+        expect(lists.every((list) => !list.isLoading())).toBe(true)
+      );
+      for (const list of lists) expect(list.items()).toEqual([]);
+
+      setCrmEnabled(true);
+      await vi.waitFor(() => {
+        for (const list of lists)
+          expect(list.items().map((item) => item.id)).toEqual(['company-1']);
+      });
+      setCrmEnabled(false);
+      await vi.waitFor(() => {
+        for (const list of lists) expect(list.items()).toEqual([]);
+      });
+    }
+  );
+
+  it.each([
+    { buckets: ['crm_company'] },
+    { buckets: ['note', 'crm_company'] },
+  ] satisfies { buckets: Bucket[] }[])(
+    'updates cached-only companies when flags change for $buckets',
+    async ({ buckets }) => {
+      const [crmEnabled, setCrmEnabled] = createSignal(false);
+      mocks.crmEnabled = crmEnabled;
+      mocks.search.mockImplementation(async (args) => ({
+        documents: args.buckets?.includes('crm_company') ? [companyHit] : [],
+        nextCursor: null,
+      }));
+      const list = setup((source) => source.useList({ buckets }));
+      await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+      expect(list.items()).toEqual([]);
+      setCrmEnabled(true);
+      await vi.waitFor(() => expect(list.items()).toHaveLength(1));
+      expect(mocks.search).toHaveBeenLastCalledWith(
+        expect.objectContaining({ buckets })
+      );
+      setCrmEnabled(false);
+      await vi.waitFor(() => expect(list.items()).toEqual([]));
+      expect(list.hasMore()).toBe(false);
     }
   );
 
