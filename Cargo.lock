@@ -3118,7 +3118,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.17"
+version = "0.6.18"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -3259,6 +3259,7 @@ dependencies = [
  "models_email",
  "redis",
  "reqwest 0.13.4",
+ "rootcause",
  "secretsmanager_client",
  "serde",
  "serde_json",
@@ -7557,6 +7558,7 @@ dependencies = [
  "async-graphql",
  "chrono",
  "email",
+ "email_utils",
  "entity_access",
  "futures",
  "graphql_common",

@@ -2,6 +2,7 @@ import {
   harnessDisplayName,
   harnessTitle,
   modelDisplayName,
+  sessionHarnessSlug,
 } from '@app/features/block-agent/component/compose-agent-session-options';
 import {
   toolCallDetail,
@@ -47,14 +48,19 @@ type SessionIdentity = {
 };
 
 /**
- * The persona as the header names it: the runtime's product name followed
- * by "Agent" (`Macro Agent`, `Cursor Agent`), a titled slug for a runtime
- * the composer does not name.
+ * The persona as the header names it: the runtime's product name, with
+ * "Agent" appended when that name does not already end in it (`Macro Agent`,
+ * `Cursor Agent`). A titled slug for a runtime the composer does not name.
  */
-function agentName(harness: string | undefined): string | undefined {
+function agentName(session: {
+  harness?: string;
+  botId?: string;
+}): string | undefined {
+  const harness = sessionHarnessSlug(session);
   if (!harness) return undefined;
   const known = harnessDisplayName(harness);
-  return `${known === harness ? harnessTitle(harness) : known} Agent`;
+  const base = known === harness ? harnessTitle(harness) : known;
+  return base.endsWith(' Agent') ? base : `${base} Agent`;
 }
 
 /**
@@ -206,7 +212,8 @@ export function createMagicChipModel(props: MagicChipData): {
   });
 
   const header = createMemo((): MagicChipHeader | undefined => {
-    const agent = agentName(session()?.harness);
+    const current = session();
+    const agent = current ? agentName(current) : undefined;
     const model = modelName(metadata(), session());
     const pullRequestUrl = session()?.pullRequestUrl ?? undefined;
     return agent || model || pullRequestUrl

@@ -139,10 +139,8 @@ async function fetchSharePermissions(id: string, itemType: ItemType) {
   }
 }
 
-const agentSessionShareDescription = (canShare: boolean) =>
-  canShare
-    ? 'Recipients can view and control this agent session.'
-    : 'Only the owner can share access to this session. You can copy a link for people who already have access.';
+const agentSessionShareDescription =
+  'Only the owner can share access to this session. You can copy a link for people who already have access.';
 
 interface IShareDialogContext {
   isOpen: Accessor<boolean>;
@@ -551,9 +549,9 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
               display: effectiveActiveTab() === 'share' ? undefined : 'none',
             }}
           >
-            <Show when={props.itemType === 'agent_session'}>
+            <Show when={!props.canForward}>
               <p class="px-4 py-3 text-sm text-ink-muted">
-                {agentSessionShareDescription(props.canForward)}
+                {agentSessionShareDescription}
               </p>
             </Show>
             <Show when={props.canForward}>
@@ -581,7 +579,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                 blockName={props.blockAlias}
               />
             </Show>
-            <Show when={props.itemType === 'agent_session'}>
+            <Show when={!props.canForward}>
               <div class="px-4 py-3">
                 <Button variant="outline" onClick={props.copyLink}>
                   <CopyIcon class="size-4" />
@@ -1224,9 +1222,9 @@ export function ShareModal(props: ShareModalProps) {
                   </Dialog.Title>
                 </Panel.Header>
                 <Panel.Body>
-                  <Show when={props.itemType === 'agent_session'}>
+                  <Show when={!canForward()}>
                     <p class="px-4 py-3 text-sm text-ink-muted">
-                      {agentSessionShareDescription(canForward())}
+                      {agentSessionShareDescription}
                     </p>
                   </Show>
                   <Show when={canForward()}>
@@ -1256,7 +1254,7 @@ export function ShareModal(props: ShareModalProps) {
                       blockName={props.blockAlias}
                     />
                   </Show>
-                  <Show when={props.itemType === 'agent_session'}>
+                  <Show when={!canForward()}>
                     <div class="flex justify-end px-4 py-3">
                       <Button variant="outline" onClick={copyLink}>
                         <CopyIcon class="size-4" />

@@ -6,6 +6,7 @@ mod read_content;
 mod read_metadata;
 mod rename_document;
 mod spreadsheet;
+mod upload_file;
 
 #[cfg(test)]
 mod test;
@@ -23,6 +24,7 @@ use crate::{
         read_metadata::ReadMetadata,
         rename_document::RenameDocument,
         spreadsheet::{CalculateSpreadsheet, EditSpreadsheet, ReadSpreadsheet},
+        upload_file::UploadFile,
     },
     outbound::{
         document_bytes_upload::ReqwestDocumentBytesUploader,
@@ -184,6 +186,7 @@ where
         .add_tool::<ReadMetadata, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<ReadContent, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<CreateDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<UploadFile, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<RenameDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<EditDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<ReadSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()

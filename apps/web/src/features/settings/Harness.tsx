@@ -1,6 +1,7 @@
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
 import { isLargeModelCatalog } from '@core/component/AI/component/input/modelCatalog';
 import { toast } from '@core/component/Toast/Toast';
+import { MACRO_HARNESS_NAME } from '@core/constant/macroAgent';
 import { ThrownResultError } from '@core/util/result';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
 import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
@@ -163,15 +164,15 @@ export function Harness() {
           </HarnessIcon>
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2">
-              <h2 class="text-sm font-medium text-ink">In-memory</h2>
+              <h2 class="text-sm font-medium text-ink">{MACRO_HARNESS_NAME}</h2>
               <span class="rounded-full bg-success-bg px-2 py-0.5 text-[11px] font-medium text-success">
                 Built in
               </span>
             </div>
             <p class="mt-1 text-sm text-ink-muted">
-              Macro's in-memory harness runs agents directly in your workspace.
-              It is ready to use and does not require any configuration. This is
-              not a coding harness.
+              Macro Agent runs directly in your workspace. It is ready to use
+              and does not require any configuration. This is not a coding
+              harness.
             </p>
           </div>
         </section>

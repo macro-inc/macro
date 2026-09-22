@@ -5,11 +5,12 @@
  * `<SidePanel.Section>` elements that self-register into the enclosing
  * `<SidePanel.Layout>`.
  *
- * Everything rendered here is derived from state the block already holds —
- * the session record, the fold's metadata, and pure summaries over the
- * folded transcript (`state/session-summary.ts`).
+ * Session details and activity use the live fold; changed files and totals
+ * use the shared PR changes controller.
  */
 
+import { DiffCounts } from '@app/features/agent-changes/components/DiffCounts';
+import { useOptionalAgentChanges } from '@app/features/agent-changes/context/agent-changes-controller';
 import { SidePanel } from '@components/app/side-panel';
 import { formatDate } from '@core/util/date';
 import { openExternalUrl } from '@core/util/url';
@@ -17,30 +18,23 @@ import GitBranch from '@phosphor/git-branch.svg';
 import { createMemo, For, Show } from 'solid-js';
 import { useAgentSession } from '../../context/AgentSessionContext';
 import { sessionStatus } from '../../state/session-status';
-import {
-  activityCounts,
-  changedFiles,
-  latestPlan,
-} from '../../state/session-summary';
-import {
-  CountSummary,
-  DiffChanges,
-  SessionStatusPill,
-  TodoList,
-} from '../../ui';
+import { activityCounts, latestPlan } from '../../state/session-summary';
+import { CountSummary, SessionStatusPill, TodoList } from '../../ui';
 import { AgentPullRequestChip } from '../AgentPullRequestChip';
-import { harnessTitle } from '../AgentSplitHeader';
+import {
+  sessionHarnessTitle,
+  sessionRepositoryUrl,
+  showsSessionHarness,
+} from '../compose-agent-session-options';
 
 export function AgentSidePanelSections() {
   const { session, bot, metadata, messages } = useAgentSession();
 
   const plan = createMemo(() => latestPlan(messages()));
-  const files = createMemo(() => changedFiles(messages()));
+  const changes = useOptionalAgentChanges();
+  const files = () => changes?.model.files() ?? [];
   const activity = createMemo(() => activityCounts(messages()));
-  const totals = createMemo(() => ({
-    additions: files().reduce((sum, file) => sum + file.additions, 0),
-    deletions: files().reduce((sum, file) => sum + file.deletions, 0),
-  }));
+  const totals = () => changes?.changeCounts();
 
   return (
     <>
@@ -58,11 +52,15 @@ export function AgentSidePanelSections() {
               </SidePanel.Row>
             )}
           </Show>
-          <SidePanel.Row label="Harness">
-            <SidePanel.Pill>
-              <span class="truncate">{harnessTitle(session()?.harness)}</span>
-            </SidePanel.Pill>
-          </SidePanel.Row>
+          <Show when={showsSessionHarness(session() ?? {})}>
+            <SidePanel.Row label="Harness">
+              <SidePanel.Pill>
+                <span class="truncate">
+                  {sessionHarnessTitle(session() ?? {})}
+                </span>
+              </SidePanel.Pill>
+            </SidePanel.Row>
+          </Show>
           <Show when={metadata()?.model ?? session()?.model}>
             {(model) => (
               <SidePanel.Row label="Model">
@@ -72,7 +70,7 @@ export function AgentSidePanelSections() {
               </SidePanel.Row>
             )}
           </Show>
-          <Show when={session()?.repoUrl}>
+          <Show when={sessionRepositoryUrl(session())}>
             {(url) => (
               <SidePanel.Row label="Repository">
                 <button
@@ -142,7 +140,11 @@ export function AgentSidePanelSections() {
           }
           defaultOpen
           order={20}
-          actions={<DiffChanges variant="bars" {...totals()} />}
+          actions={
+            <Show when={totals()}>
+              {(counts) => <DiffCounts {...counts()} />}
+            </Show>
+          }
         >
           <div class="flex flex-col gap-1">
             <For each={files()}>
@@ -154,7 +156,7 @@ export function AgentSidePanelSections() {
                   >
                     {file.path}
                   </span>
-                  <DiffChanges
+                  <DiffCounts
                     additions={file.additions}
                     deletions={file.deletions}
                   />

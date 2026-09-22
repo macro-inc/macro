@@ -12,6 +12,7 @@ import {
 } from '@service-storage/graphql-soup';
 
 type SimpleNotificationEntityType =
+  | 'agent_session'
   | 'calendar_event'
   | 'call'
   | 'channel'
@@ -49,6 +50,7 @@ export function toNotificationEntityRef(
   entity: FrontendNotificationEntity
 ): NotificationEntityRef | undefined {
   switch (entity.type) {
+    case 'agent_session':
     case 'calendar_event':
     case 'call':
     case 'channel':
@@ -79,6 +81,7 @@ export type NotificationEntityUpdateOperation = Exclude<
 >;
 
 const ENTITY_TYPE_TO_GRAPHQL = {
+  agent_session: 'AGENT_SESSION',
   calendar_event: 'CALENDAR_EVENT',
   call: 'CALL',
   channel: 'CHANNEL',

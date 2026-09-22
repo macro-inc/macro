@@ -147,3 +147,28 @@ export function defaultBranchFor(
       ?.defaultBranch ?? FALLBACK_BRANCH
   );
 }
+
+/**
+ * Branches to offer: the repository's default first when it is in the list,
+ * then the rest as GitHub returned them.
+ */
+export function orderBranches(
+  branches: readonly string[],
+  defaultBranch?: string
+): string[] {
+  if (!defaultBranch) return [...branches];
+  const rest = branches.filter((branch) => branch !== defaultBranch);
+  return branches.includes(defaultBranch)
+    ? [defaultBranch, ...rest]
+    : [...branches];
+}
+
+/** Branches whose names contain `search`, ignoring case; every branch for blank text. */
+export function filterBranches(
+  branches: readonly string[],
+  search: string
+): string[] {
+  const needle = search.trim().toLowerCase();
+  if (!needle) return [...branches];
+  return branches.filter((branch) => branch.toLowerCase().includes(needle));
+}

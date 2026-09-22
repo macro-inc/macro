@@ -44,9 +44,13 @@ async function browserTelemetryEnabled(hasExporter: boolean): Promise<boolean> {
 
 /** Initialize browser telemetry and its application-level lifecycle hooks. */
 export async function initializeBrowserObservability(): Promise<void> {
-  const tracesUrl =
+  const configuredTracesUrl =
     import.meta.env.VITE_OTEL_EXPORTER_URL ??
     (import.meta.hot ? 'http://localhost:8098/i/otlp/v1/traces' : undefined);
+  // Local stacks use a same-origin path; exporters expect an absolute URL.
+  const tracesUrl = configuredTracesUrl
+    ? new URL(configuredTracesUrl, window.location.origin).href
+    : undefined;
   const telemetryConfig = {
     serviceName: 'web-app',
     environment:

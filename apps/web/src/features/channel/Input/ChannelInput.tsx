@@ -24,7 +24,7 @@ import {
 } from '@core/util/upload';
 import type { EntityData } from '@entity';
 import type { MessageParent } from '@service-storage/messages';
-import { CollapsedInput, ComposerSurface } from '@ui';
+import { CollapsedInput, ComposerSurface, cn } from '@ui';
 import { $getRoot } from 'lexical';
 import {
   type Accessor,
@@ -34,6 +34,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { useAgentMentionUsers } from '../use-agent-mention-users';
 import { useMessageBotMentionUsers } from '../use-channel-bot-mention-users';
 import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
@@ -77,6 +78,13 @@ export type ChannelInputProps = InputCallbacks & {
    * Defaults to `false`.
    */
   collapsible?: boolean;
+  /**
+   * Drop the composer's own card chrome (rounding, background, shadow) and sit
+   * flat on whatever surface hosts it. For composers that already live inside a
+   * card, such as a document margin thread, where the composer's card would
+   * read as a second box inside the first.
+   */
+  flat?: boolean;
 };
 
 function WebDefaultActions(props: { input: InputData }) {
@@ -474,17 +482,20 @@ export function ChannelInput(props: ChannelInputProps) {
           onSend={() => void inputState.commands.send()}
         />
       </Show>
-      <ComposerSurface
-        onFocusOut={(e) => {
+      <Dynamic
+        component={props.flat ? 'div' : ComposerSurface}
+        onFocusOut={(e: FocusEvent & { currentTarget: HTMLElement }) => {
           const next = e.relatedTarget as Node | null;
           if (next && e.currentTarget.contains(next)) return;
           if (isInternalRefocus) return;
           collapsedInput.collapse();
         }}
-        class={isCollapsed() ? 'hidden' : undefined}
+        // `ComposerSurface` stretches itself; a bare div would take its
+        // content width inside a centering flex host, such as the margin card.
+        class={cn(props.flat && 'w-full', isCollapsed() && 'hidden')}
       >
         {renderSurfaceContent()}
-      </ComposerSurface>
+      </Dynamic>
     </Input.Root>
   );
 }

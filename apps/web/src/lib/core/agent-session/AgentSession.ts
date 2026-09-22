@@ -262,6 +262,18 @@ export class AgentSession {
   }
 
   /**
+   * Where the turn stands as this class knows it right now: the fold's last
+   * report, or `starting` from the moment {@link issue} or {@link expect}
+   * folded a prompt - ahead of the fold's own answer by the worker round
+   * trip. What a caller reads to decide whether an action posted now would
+   * reach a turn the server has opened; the listener-fed metadata lags by
+   * that round trip, and two actions inside it would both read the old state.
+   */
+  currentTurn(): TurnState {
+    return this.turn;
+  }
+
+  /**
    * Whether this action reaches the runtime now, rather than waiting in the
    * server's queue.
    *

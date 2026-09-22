@@ -88,7 +88,10 @@ describe('buildAgentRoster', () => {
       'coder',
       'coder',
     ]);
-    expect(saved[0]?.runtime).toEqual({ label: 'Macro', connected: true });
+    expect(saved[0]?.runtime).toEqual({
+      label: 'Macro Agent',
+      connected: true,
+    });
     expect(saved[0]?.unavailableReason).toBeUndefined();
     expect(saved[1]?.share).toBe('team');
     expect(saved[1]?.runtime).toEqual({ label: 'Cursor', connected: true });

@@ -133,6 +133,13 @@ type ThreadBodyProps = {
    * instead of hover-revealed buttons (the touch drawer has no hover).
    */
   actionsDropdown?: boolean;
+  /**
+   * The host already draws a card — the floating margin thread. A draft's
+   * composer drops its own card chrome so it does not read as a box inside a
+   * box. The touch drawer leaves this off: there the composer sits on the
+   * drawer body and its card is the only one.
+   */
+  flatComposer?: boolean;
 };
 
 /**
@@ -171,6 +178,7 @@ function MessageThreadBody(props: ThreadBodyProps) {
           <ChannelInput
             parent={parent()}
             participants={participants}
+            flat={props.flatComposer}
             input={{ mode: 'reply', placeholder: 'Leave a comment...' }}
             onClose={() => context.setActiveThread(null)}
             onSend={async (snapshot) => {
@@ -191,7 +199,6 @@ function MessageThreadBody(props: ThreadBodyProps) {
           parent={parent()}
           rootId={String(props.comment.threadId)}
           canWrite={context.canComment()}
-          canManage={context.isDocumentOwner()}
           hideReplyInput={props.hideReplyInput}
           onEditingChange={context.setMessageEditing}
           targetId={targetId()}
@@ -438,6 +445,7 @@ export function Thread(props: {
             comment={props.comment}
             isActive={props.isActive}
             theme={props.theme}
+            flatComposer
           />
         </div>
       </Layer>

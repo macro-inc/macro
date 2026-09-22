@@ -355,6 +355,11 @@
           binaries = [ "authentication_service" ];
         }
         {
+          serviceName = "calendar-service";
+          packageName = "calendar_service";
+          binaries = [ "calendar_service" ];
+        }
+        {
           serviceName = "connection-gateway";
           packageName = "connection_gateway";
           binaries = [ "connection_gateway_service" ];

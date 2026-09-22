@@ -14,6 +14,7 @@ import { exclude } from './types';
 const cleanups: (() => void)[] = [];
 afterEach(() => {
   for (const cleanup of cleanups.splice(0)) cleanup();
+  vi.restoreAllMocks();
 });
 
 function root<T>(fn: () => T): T {
@@ -105,6 +106,116 @@ describe('Quick Access local projection', () => {
     refresh.resolve(page(['one'], true));
     await vi.waitFor(() => expect(list.items()).toHaveLength(3));
     expect(search).toHaveBeenCalledTimes(4);
+  });
+
+  it.each([
+    { stage: 'search', failurePage: 1 },
+    { stage: 'search', failurePage: 2 },
+    { stage: 'materialize', failurePage: 1 },
+    { stage: 'materialize', failurePage: 2 },
+  ])(
+    'retains the committed window after $stage fails on replay page $failurePage',
+    async ({ stage, failurePage }) => {
+      const [revision, setRevision] = createSignal(0);
+      let replaying = false;
+      let replayPage = 0;
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const search = vi.fn(
+        async (args: SearchCacheArgs): Promise<SearchCachePage> => {
+          if (replaying) {
+            replayPage += 1;
+            if (stage === 'search' && replayPage === failurePage)
+              throw new Error('cache search unavailable');
+            return page([`refreshed-${replayPage}`], true);
+          }
+          if (!args.cursor) return page(['one'], true);
+          if (args.cursor.recordKey === 'GraphqlSoupDocument:one')
+            return page(['two'], true);
+          if (args.cursor.recordKey === 'GraphqlSoupDocument:two')
+            return page(['three']);
+          throw new Error('pagination used an uncommitted cursor');
+        }
+      );
+      const list = root(() =>
+        createProjectedList({
+          host: { search },
+          buckets: ['note'],
+          revision,
+          materialize: async (documents) => {
+            if (
+              replaying &&
+              stage === 'materialize' &&
+              replayPage === failurePage
+            )
+              throw new Error('cache materialization unavailable');
+            return materialize(documents);
+          },
+        })
+      );
+      await vi.waitFor(() => expect(list.hasMore()).toBe(true));
+      await list.loadMore();
+      const committedRows = list.items();
+      expect(committedRows).toEqual([
+        { id: 'GraphqlSoupDocument:one' },
+        { id: 'GraphqlSoupDocument:two' },
+      ]);
+
+      // Repeated failures must retain the same committed cursor, including when
+      // part of a multi-page replay already succeeded before the error.
+      replaying = true;
+      for (const revision of [1, 2]) {
+        replayPage = 0;
+        setRevision(revision);
+        await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+        expect(replayPage).toBe(failurePage);
+        expect(list.items()).toBe(committedRows);
+        expect(list.hasMore()).toBe(true);
+        expect(list.isLoadingMore()).toBe(false);
+      }
+
+      replaying = false;
+      await list.loadMore();
+      expect(search.mock.calls.at(-1)?.[0].cursor).toEqual({
+        recordKey: 'GraphqlSoupDocument:two',
+        timestampMs: 1,
+      });
+      expect(list.items()).toEqual([
+        ...committedRows,
+        { id: 'GraphqlSoupDocument:three' },
+      ]);
+      expect(list.hasMore()).toBe(false);
+    }
+  );
+
+  it('does not carry a failed replay cursor into a different query', async () => {
+    const [revision, setRevision] = createSignal(0);
+    const [query, setQuery] = createSignal('');
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const search = vi
+      .fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>()
+      .mockResolvedValueOnce(page(['old'], true))
+      .mockRejectedValueOnce(new Error('replay failed'))
+      .mockResolvedValueOnce(page(['new']));
+    const list = root(() =>
+      createProjectedList({
+        host: { search },
+        buckets: ['note'],
+        revision,
+        searchTerm: query,
+        materialize,
+      })
+    );
+    await vi.waitFor(() => expect(list.hasMore()).toBe(true));
+    setRevision(1);
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(list.hasMore()).toBe(true);
+    setQuery('new');
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(search.mock.calls[2][0].cursor).toBeUndefined();
+    expect(list.items()).toEqual([{ id: 'GraphqlSoupDocument:new' }]);
+    expect(list.hasMore()).toBe(false);
+    await list.loadMore();
+    expect(search).toHaveBeenCalledTimes(3);
   });
 
   it('searches only materializable buckets before applying the limit', async () => {
@@ -278,7 +389,7 @@ describe('Quick Access local projection', () => {
     await list.loadMore();
     expect(list.items()).toHaveLength(2);
     expect(list.isLoadingMore()).toBe(false);
-    expect(list.hasMore()).toBe(false);
+    expect(list.hasMore()).toBe(true);
     await list.loadMore();
     expect(list.items()).toHaveLength(3);
     warning.mockRestore();

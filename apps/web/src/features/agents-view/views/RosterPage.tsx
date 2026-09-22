@@ -17,6 +17,7 @@ import {
   MACRO_AGENT_BOT_ID,
   MACRO_AGENT_HANDLE,
   MACRO_AGENT_NAME,
+  MACRO_HARNESS_NAME,
 } from '@core/constant/macroAgent';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useChannelsContext } from '@core/context/channels';
@@ -91,7 +92,7 @@ const MACRO_ROW: Row = {
   handle: MACRO_AGENT_HANDLE,
   kind: 'agent',
   share: 'system',
-  runtime: 'Macro Harness',
+  runtime: MACRO_HARNESS_NAME,
   model: 'Default model',
   channels: 'All channels',
   canEdit: false,
@@ -321,7 +322,7 @@ export function RosterPage(props: {
                 <div id="runtimeList">
                   <RuntimeRow
                     icon={<MacroLogo class="ph" />}
-                    name="Macro Harness"
+                    name={MACRO_HARNESS_NAME}
                     badge="system"
                     sub="Built in · runs in Macro's cloud"
                     connected
@@ -330,7 +331,7 @@ export function RosterPage(props: {
                     <button
                       type="button"
                       class="icon-btn"
-                      aria-label="Configure Macro Harness"
+                      aria-label={`Configure ${MACRO_HARNESS_NAME}`}
                       onClick={() => openSettings('Harness')}
                     >
                       <GearIcon class="ph" />

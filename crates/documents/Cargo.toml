@@ -182,6 +182,6 @@ macro_event_broker = { path = "../macro_event_broker" }
 mockall = { workspace = true }
 rdkafka = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "test-util"] }
 tower = { workspace = true }
 tracing-subscriber = { workspace = true }

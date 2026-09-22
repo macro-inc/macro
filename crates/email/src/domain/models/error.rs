@@ -17,6 +17,10 @@ pub enum EmailErr {
     /// The referenced message was not found.
     #[error("Message with id {0} not found")]
     MessageNotFound(Uuid),
+    /// No sending inbox could be resolved: the requested link is not
+    /// accessible to the caller, or the caller has no primary inbox.
+    #[error("Email inbox not found")]
+    InboxNotFound,
     /// The referenced message has already been sent and cannot be modified.
     #[error("Message with id {0} has already been sent")]
     MessageAlreadySent(Uuid),
