@@ -16,10 +16,14 @@ use std::sync::{
 use tower::ServiceExt;
 
 const USER_ID: &str = "macro|dictation-test@example.com";
+const OTHER_USER_ID: &str = "macro|other-dictation-test@example.com";
 const INTERNAL_KEY: &str = "valid-internal-key";
 
 /// `(user id, audio bytes, language hint)` as seen by the service.
 type ServiceCall = (String, usize, Option<String>);
+
+/// `(hashed key, max count, window seconds)` as seen by the rate limiter.
+type LimitCheck = (String, u64, u64);
 
 #[derive(Clone, Default)]
 struct FakeService {
@@ -61,8 +65,14 @@ impl DictationService for FakeService {
 #[derive(Clone, Default)]
 struct FakeRateLimiter {
     exceeded: bool,
-    checks: Arc<AtomicUsize>,
+    checks: Arc<Mutex<Vec<LimitCheck>>>,
     rollbacks: Arc<AtomicUsize>,
+}
+
+impl FakeRateLimiter {
+    fn checks(&self) -> Vec<LimitCheck> {
+        self.checks.lock().unwrap().clone()
+    }
 }
 
 impl RateLimitService for FakeRateLimiter {
@@ -71,7 +81,11 @@ impl RateLimitService for FakeRateLimiter {
         key: RateLimitKey,
         config: RateLimitConfig,
     ) -> Result<RateLimitResult, Report> {
-        self.checks.fetch_add(1, Ordering::SeqCst);
+        self.checks.lock().unwrap().push((
+            key.to_hex_string(),
+            config.max_count,
+            config.window.as_secs(),
+        ));
         if self.exceeded {
             return Ok(Err(rate_limit::RateLimitExceeded {
                 current_count: config.max_count,
@@ -93,11 +107,13 @@ struct FakeAuthorizationService;
 
 impl MacroAuthorizationService for FakeAuthorizationService {
     async fn authorize(&self, jwt: &str) -> Result<UserContext, Report<MacroAuthorizationError>> {
-        if jwt != "valid" {
-            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
-        }
+        let user_id = match jwt {
+            "valid" => USER_ID,
+            "valid-other" => OTHER_USER_ID,
+            _ => return Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
+        };
         Ok(UserContext {
-            user_id: USER_ID.to_owned(),
+            user_id: user_id.to_owned(),
             ..UserContext::default()
         })
     }
@@ -192,7 +208,7 @@ async fn transcribes_for_an_authenticated_user_and_forwards_language() {
         harness.service.calls(),
         [(USER_ID.to_owned(), 10, Some("en".to_owned()))]
     );
-    assert_eq!(harness.limiter.checks.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.limiter.checks().len(), 1);
     assert_eq!(harness.limiter.rollbacks.load(Ordering::SeqCst), 0);
 }
 
@@ -204,7 +220,7 @@ async fn rejects_missing_and_invalid_credentials_before_any_work() {
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
     assert!(harness.service.calls().is_empty());
-    assert_eq!(harness.limiter.checks.load(Ordering::SeqCst), 0);
+    assert!(harness.limiter.checks().is_empty());
 }
 
 #[tokio::test]
@@ -231,8 +247,34 @@ async fn rejects_internal_callers_because_dictation_is_user_only() {
     assert!(harness.service.calls().is_empty());
 }
 
+/// The limiter itself is faked: counting, windows, and rollback are the
+/// `rate_limit` crate's own tests. What this adapter owns is the key it asks
+/// about, the configured allowance, and rejecting before any billable work.
 #[tokio::test]
-async fn enforces_the_per_user_rate_limit() {
+async fn buckets_the_hourly_allowance_per_user() {
+    let harness = Harness::new();
+    for credential in ["Bearer valid", "Bearer valid-other", "Bearer valid"] {
+        harness
+            .post(
+                "/transcribe",
+                &[(header::AUTHORIZATION, credential)],
+                "audio",
+            )
+            .await;
+    }
+
+    let checks = harness.limiter.checks();
+    let [(user, max_count, window), (other, ..), (user_again, ..)] = checks.as_slice() else {
+        panic!("expected one rate limit check per request, got {checks:?}");
+    };
+    assert_eq!(*max_count, PER_USER_TRANSCRIPTIONS_PER_HOUR);
+    assert_eq!(*window, 3600);
+    assert_eq!(user, user_again, "one user must share a single bucket");
+    assert_ne!(user, other, "each user must get their own bucket");
+}
+
+#[tokio::test]
+async fn rejects_an_over_quota_request_before_transcribing() {
     let harness = Harness::rate_limited();
     let response = harness
         .post(
@@ -259,7 +301,7 @@ async fn failed_provider_attempts_still_consume_the_rate_limit() {
         .await;
 
     assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
-    assert_eq!(harness.limiter.checks.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.limiter.checks().len(), 1);
     assert_eq!(harness.limiter.rollbacks.load(Ordering::SeqCst), 0);
 }
 
