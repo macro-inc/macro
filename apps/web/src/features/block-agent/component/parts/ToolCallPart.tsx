@@ -9,8 +9,7 @@
  * tool from its title.
  */
 
-import type { JSX } from 'solid-js';
-import { match } from 'ts-pattern';
+import { type JSX, Match, Switch } from 'solid-js';
 import { settledToolStatus } from '../../ui';
 import { EditToolCall } from './EditToolCall';
 import { ExchangeToolCall } from './ExchangeToolCall';
@@ -48,44 +47,76 @@ export function ToolCallPart(props: {
     server: toolServer(props.part.name),
     status: status(),
     muted: failed(),
-    trailing: failed() ? <span class="text-ink">Failed</span> : undefined,
+    trailing: failed()
+      ? 'Failed'
+      : (props.part.status === 'pending' || props.part.status === 'running') &&
+          status() === 'completed'
+        ? 'Stopped'
+        : undefined,
   });
 
-  return match(props.part.detail)
-    .with({ kind: 'terminal' }, (detail) => (
-      <TerminalToolCall detail={detail} common={common()} />
-    ))
-    .with({ kind: 'edit' }, (detail) => (
-      <EditToolCall detail={detail} common={common()} />
-    ))
-    .with({ kind: 'read' }, { kind: 'delete' }, { kind: 'move' }, (detail) => (
-      <PathsToolCall detail={detail} common={common()} />
-    ))
-    .with({ kind: 'search' }, (detail) => (
-      <SearchToolCall detail={detail} common={common()} />
-    ))
-    .with({ kind: 'fetch' }, { kind: 'think' }, (detail) => (
-      <OutputToolCall detail={detail} common={common()} />
-    ))
-    .with({ kind: 'other' }, (detail) => (
-      <ExchangeToolCall detail={detail} common={common()} />
-    ))
-    .with({ kind: 'macro' }, (detail) => (
-      <MacroToolCall
-        detail={detail}
-        common={common()}
-        context={props.context}
-      />
-    ))
-    .with({ kind: 'user_tool' }, (detail) => (
-      <UserToolCall detail={detail} common={common()} context={props.context} />
-    ))
-    .with({ kind: 'subagent' }, (detail) => (
-      <SubagentToolCall
-        detail={detail}
-        common={common()}
-        context={props.context}
-      />
-    ))
-    .exhaustive();
+  // Non-keyed matches preserve the disclosure when a streamed update replaces
+  // its detail object; each child receives the current detail through an accessor.
+  return (
+    <Switch>
+      <Match when={props.part.detail.kind === 'terminal' && props.part.detail}>
+        {(detail) => <TerminalToolCall detail={detail()} common={common()} />}
+      </Match>
+      <Match when={props.part.detail.kind === 'edit' && props.part.detail}>
+        {(detail) => <EditToolCall detail={detail()} common={common()} />}
+      </Match>
+      <Match
+        when={
+          (props.part.detail.kind === 'read' ||
+            props.part.detail.kind === 'delete' ||
+            props.part.detail.kind === 'move') &&
+          props.part.detail
+        }
+      >
+        {(detail) => <PathsToolCall detail={detail()} common={common()} />}
+      </Match>
+      <Match when={props.part.detail.kind === 'search' && props.part.detail}>
+        {(detail) => <SearchToolCall detail={detail()} common={common()} />}
+      </Match>
+      <Match
+        when={
+          (props.part.detail.kind === 'fetch' ||
+            props.part.detail.kind === 'think') &&
+          props.part.detail
+        }
+      >
+        {(detail) => <OutputToolCall detail={detail()} common={common()} />}
+      </Match>
+      <Match when={props.part.detail.kind === 'other' && props.part.detail}>
+        {(detail) => <ExchangeToolCall detail={detail()} common={common()} />}
+      </Match>
+      <Match when={props.part.detail.kind === 'macro' && props.part.detail}>
+        {(detail) => (
+          <MacroToolCall
+            detail={detail()}
+            common={common()}
+            context={props.context}
+          />
+        )}
+      </Match>
+      <Match when={props.part.detail.kind === 'user_tool' && props.part.detail}>
+        {(detail) => (
+          <UserToolCall
+            detail={detail()}
+            common={common()}
+            context={props.context}
+          />
+        )}
+      </Match>
+      <Match when={props.part.detail.kind === 'subagent' && props.part.detail}>
+        {(detail) => (
+          <SubagentToolCall
+            detail={detail()}
+            common={common()}
+            context={props.context}
+          />
+        )}
+      </Match>
+    </Switch>
+  );
 }

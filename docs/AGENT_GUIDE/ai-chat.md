@@ -396,11 +396,25 @@ to open the PR entity in a split; until GitHub has synced the entity the
 chip is a GitHub link instead. The icon and status word follow open /
 merged / closed.
 
-Tool groups and individual tool cards start collapsed. Expand a group to see
-its calls, then expand an edit card to view its file diffs. Diff bodies load
-only when their card opens; syntax highlighting may appear after the diff text.
-Opening a session or expanding a group should leave the app responsive, even
-when the session contains many file edits.
+Individual tools appear as bare rows with an icon, tool name, optional detail,
+and a right-aligned result summary. The caret on the right opens the results;
+individual results start collapsed. Counts come from structured responses,
+edits show additions/deletions, and other tools show their outcome. A call cut
+off when its turn ends reads **Stopped**.
+
+Consecutive calls collect under an expanded **Calling N tools** group while
+running. Rows appear as calls arrive; after the calls finish, the group briefly
+settles and smoothly collapses to **Called N tools**. Completed groups in
+history start collapsed and can be reopened. Expand an edit row to view its
+diffs. Result bodies load only when their row opens; syntax highlighting may
+appear after the diff text. Opening a session or expanding a group should leave
+the app responsive, even when the session contains many file edits.
+
+The development gallery at `/app/component/agent-ui` includes **Replay tool
+calls** and **Replay fast batch**, both using the message renderer. Check that
+rows accumulate, completed calls stop shimmering, the group collapses after
+completion, and its carets still expand the results. Repeat with reduced motion
+enabled and at a narrow viewport width.
 
 A thought row reads **Thinking** and shimmers only while it is the last part
 of the turn the session is working on. Earlier thoughts settle to **Thought**
@@ -409,7 +423,8 @@ trailing thought stays outside the tool group so the live reasoning row stays
 visible. Only the newest turn can be live: once the composer stops showing the
 agent as working, every Thinking label, **Calling N tools** row, shimmering
 tool title, and working row settles — earlier turns never shimmer, even ones
-the runtime cut off mid-call. At most one shimmering row is ever expected.
+the runtime cut off mid-call. Shimmer identifies current activity: an active
+tool and its containing group can shimmer together; completed rows stay still.
 
 A `displayResults` call is the exception: it renders the dynamic-UI view the
 model composed — the same dashboard (markdown, timelines, entity lists, channel

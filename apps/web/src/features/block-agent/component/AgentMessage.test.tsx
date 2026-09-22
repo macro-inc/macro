@@ -7,7 +7,7 @@ import type {
   MessagePart,
 } from '@service-agent-fold/generated/types';
 import { cleanup, render } from '@solidjs/testing-library';
-import type { JSX } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Message } from './AgentMessage';
@@ -37,10 +37,15 @@ vi.mock('./parts/TextPart', () => ({
 }));
 vi.mock('./parts/ToolCallPart', () => ({
   ToolCallPart: (props: {
-    part: { id: string };
-    context: { partIndex: number };
+    part: { id: string; status: string };
+    context: { partIndex: number; inFlight: boolean };
   }) => (
-    <div data-index={props.context.partIndex} data-testid="tool">
+    <div
+      data-index={props.context.partIndex}
+      data-status={props.part.status}
+      data-live={String(props.context.inFlight)}
+      data-testid="tool"
+    >
       {props.part.id}
     </div>
   ),
@@ -71,13 +76,13 @@ vi.mock('../ui', () => ({
   ToolGroup: (props: {
     count: number;
     active: boolean;
-    latest: { label: string; detail?: string };
+    live: boolean;
     children: JSX.Element;
   }) => (
     <div
       data-active={String(props.active)}
       data-count={props.count}
-      data-latest={`${props.latest.label}${props.latest.detail ? ` · ${props.latest.detail}` : ''}`}
+      data-live={String(props.live)}
       data-testid="group"
     >
       {props.children}
@@ -147,7 +152,7 @@ describe('Message tool grouping', () => {
     const group = view.getByTestId('group');
     expect(group.dataset.count).toBe('3');
     expect(group.dataset.active).toBe('false');
-    expect(group.dataset.latest).toBe('Bash · cargo test');
+    expect(group.dataset.live).toBe('false');
     expect(view.getAllByTestId('tool').map((el) => el.dataset.index)).toEqual([
       '1',
       '2',
@@ -229,7 +234,7 @@ describe('Message tool grouping', () => {
     );
     expect(view.getByTestId('group')).toBe(group);
     expect(group.dataset.count).toBe('3');
-    expect(group.dataset.latest).toBe('Read · c.rs');
+    expect(group.dataset.live).toBe('true');
     expect(view.getAllByTestId('tool').map((el) => el.dataset.index)).toEqual([
       '1',
       '2',
@@ -252,6 +257,50 @@ describe('Message tool grouping', () => {
     expect(view.getByTestId('group').dataset.count).toBe('2');
     expect(view.getByTestId('text')).toBe(prose);
   });
+
+  it('updates immutable streamed calls without remounting their rows', () => {
+    const [reply, setReply] = createSignal(
+      message([tool('a'), tool('b', { status: 'running' })], null)
+    );
+    const view = render(() => <Message message={reply()} inFlight />);
+    const group = view.getByTestId('group');
+    const rows = view.getAllByTestId('tool');
+
+    setReply(
+      message([tool('a'), tool('b'), tool('c', { status: 'running' })], null)
+    );
+    expect(view.getByTestId('group')).toBe(group);
+    expect(view.getAllByTestId('tool')[0]).toBe(rows[0]);
+    expect(view.getAllByTestId('tool')[1]).toBe(rows[1]);
+    expect(rows[1].dataset.status).toBe('completed');
+    expect(view.getAllByTestId('tool')[2].dataset.status).toBe('running');
+  });
+
+  it('marks a completed batch as live so its arrivals can animate', () => {
+    const view = render(() => (
+      <Message message={message([tool('a'), tool('b')], null)} inFlight />
+    ));
+    expect(view.getByTestId('group').dataset.live).toBe('true');
+    expect(view.getByTestId('group').dataset.active).toBe('false');
+  });
+
+  it('preserves unfinished call status when another part follows the group', () => {
+    const view = render(() => (
+      <Message
+        message={message(
+          [tool('a'), tool('b', { status: 'running' }), text('Answer')],
+          null
+        )}
+        inFlight
+      />
+    ));
+    expect(view.getByTestId('group').dataset.active).toBe('true');
+    expect(view.getByTestId('group').dataset.live).toBe('false');
+    expect(view.getAllByTestId('tool').map((row) => row.dataset.live)).toEqual([
+      'true',
+      'true',
+    ]);
+  });
 });
 
 describe('Message working tail', () => {
@@ -263,6 +312,28 @@ describe('Message working tail', () => {
       />
     ));
     expect(view.getByTestId('working').textContent).toBe('Running tools');
+  });
+
+  it('does not duplicate the active tool or group with a working shimmer', () => {
+    const view = render(() => (
+      <Message
+        message={message([tool('a'), tool('b', { status: 'running' })], null)}
+        inFlight
+      />
+    ));
+    expect(view.getByTestId('group').dataset.active).toBe('true');
+    expect(view.queryByTestId('working')).toBeNull();
+  });
+
+  it('does not duplicate an active batch when its final call completes first', () => {
+    const view = render(() => (
+      <Message
+        message={message([tool('a', { status: 'running' }), tool('b')], null)}
+        inFlight
+      />
+    ));
+    expect(view.getByTestId('group').dataset.active).toBe('true');
+    expect(view.queryByTestId('working')).toBeNull();
   });
 });
 
@@ -341,7 +412,7 @@ describe('Message thought shimmer', () => {
     expect(view.getByTestId('thought').dataset.active).toBe('false');
   });
 
-  it('drops the working row when the turn settles with a call still open', () => {
+  it('settles a lone active call without adding another working row', () => {
     const [state, setState] = createStore({ inFlight: true });
     const view = render(() => (
       <Message
@@ -349,9 +420,11 @@ describe('Message thought shimmer', () => {
         inFlight={state.inFlight}
       />
     ));
-    expect(view.getByTestId('working')).toBeTruthy();
+    expect(view.getByTestId('tool').dataset.live).toBe('true');
+    expect(view.queryByTestId('working')).toBeNull();
 
     setState('inFlight', false);
+    expect(view.getByTestId('tool').dataset.live).toBe('false');
     expect(view.queryByTestId('working')).toBeNull();
   });
 

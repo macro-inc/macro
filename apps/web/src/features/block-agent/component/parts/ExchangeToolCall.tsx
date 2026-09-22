@@ -6,8 +6,7 @@
  * labelled, as JSON.
  *
  * An MCP tool shows its server beside its name (`ReadContent · macro`), the
- * way the chat block's MCP row does; a failed call keeps the fold's error
- * text as its subtitle, the chat block's failed-tool treatment.
+ * way the chat block's MCP row does; failures keep their details in the body.
  */
 
 import type { ToolDetail } from '@service-agent-fold/generated/types';
@@ -29,10 +28,13 @@ export function ExchangeToolCall(props: {
   return (
     <ToolCard
       title={props.common.label}
-      subtitle={props.detail.error ?? props.common.server}
+      subtitle={props.common.server}
       status={props.common.status}
-      muted={props.common.muted}
-      trailing={props.common.trailing}
+      muted={props.common.muted || props.detail.error != null}
+      trailing={
+        props.common.trailing ??
+        (props.detail.error != null ? 'Failed' : undefined)
+      }
       hasContent={hasContent()}
     >
       <FoldedExchange
