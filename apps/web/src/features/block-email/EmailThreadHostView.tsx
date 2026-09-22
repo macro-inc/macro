@@ -7,6 +7,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { buildMentionMarkdownString } from '@macro-inc/lexical-core';
 import type { Accessor, JSX } from 'solid-js';
 import { Show } from 'solid-js';
+import { openCalendarEventSplit } from '../block-calendar/open-calendar-event';
 import { EmailTaskButton } from './component/EmailTaskButton';
 import { ModalsProvider } from './component/ModalsProvider';
 import { EmailSidePanelSections } from './component/sidepanel/EmailSidePanelSections';
@@ -55,6 +56,19 @@ export function EmailThreadHostView(props: EmailThreadHostViewProps) {
       title={props.title}
       threadId={props.threadId}
       host={props.host}
+      openCalendar={(target) => {
+        void openCalendarEventSplit({
+          ...target,
+          time:
+            target.time.kind === 'timed'
+              ? target.time
+              : {
+                  kind: 'allDay',
+                  startDate: target.time.startDate,
+                  endDate: target.time.endDate,
+                },
+        });
+      }}
       header={props.topBar?.({ createTask })}
       actions={<ThreadActions title={props.title} onCreateTask={createTask} />}
       frame={(content) => (

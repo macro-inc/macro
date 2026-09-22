@@ -1444,6 +1444,8 @@ async fn occurrence_attendee_override_shadows_the_series_response(pool: PgPool) 
     let recurrence_id = declined_start.to_rfc3339();
     upsert.occurrences[1].recurrence_id = Some(recurrence_id.clone());
     upsert.overrides = vec![CalendarEventOverride {
+        sequence: None,
+        source_updated_at: None,
         recurrence_id: recurrence_id.clone(),
         original_time: EventStart::Timed(declined_start),
         time: EventTime::Timed {
@@ -1524,6 +1526,8 @@ async fn occurrence_content_override_shadows_the_series_content(pool: PgPool) {
     let recurrence_id = edited_start.to_rfc3339();
     upsert.occurrences[1].recurrence_id = Some(recurrence_id.clone());
     upsert.overrides = vec![CalendarEventOverride {
+        sequence: None,
+        source_updated_at: None,
         recurrence_id: recurrence_id.clone(),
         original_time: EventStart::Timed(edited_start),
         time: EventTime::Timed {
@@ -1628,6 +1632,8 @@ async fn explicitly_empty_override_attendees_do_not_inherit_the_series_list(pool
     let recurrence_id = emptied_start.to_rfc3339();
     upsert.occurrences[1].recurrence_id = Some(recurrence_id.clone());
     upsert.overrides = vec![CalendarEventOverride {
+        sequence: None,
+        source_updated_at: None,
         recurrence_id: recurrence_id.clone(),
         original_time: EventStart::Timed(emptied_start),
         time: EventTime::Timed {
@@ -6269,3 +6275,5 @@ async fn retiring_an_unrelated_copy_keeps_a_fresher_schedule_written_through_ano
     assert_eq!(occurrence.time, timed(moved_start));
     assert_primary_content(&entity_content(&pool, event_id).await);
 }
+
+mod invitations;

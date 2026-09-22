@@ -14,6 +14,9 @@ export const RSVP_MUTATION_KEY = ['calendar', 'rsvp'] as const;
 
 export const calendarKeys = createQueryKeys('calendar', {
   visibleCalendars: null,
+  invitations: (threadId: string, offset = 0) => ({
+    queryKey: [threadId, offset],
+  }),
   occurrences: (
     userId: string,
     range: CalendarOccurrenceQueryRange | undefined

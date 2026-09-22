@@ -6041,7 +6041,9 @@ dependencies = [
  "axum",
  "axum-extra",
  "base64 0.22.1",
+ "calendar_events",
  "chrono",
+ "chrono-tz",
  "crm",
  "doppleganger",
  "either",
@@ -6053,6 +6055,7 @@ dependencies = [
  "frecency",
  "futures",
  "google_token",
+ "ical",
  "item_filters",
  "lexical_client",
  "lol_html",
@@ -6075,12 +6078,14 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
+ "sha2 0.10.9",
  "sqlx",
  "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "url",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -8568,6 +8573,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f31827a206f56af32e590ba56d5d2d085f558508192593743f16b2306495269f"
 dependencies = [
  "cc",
+]
+
+[[package]]
+name = "ical"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b7cab7543a8b7729a19e2c04309f902861293dcdae6558dfbeb634454d279f6"
+dependencies = [
+ "serde",
+ "thiserror 1.0.69",
 ]
 
 [[package]]

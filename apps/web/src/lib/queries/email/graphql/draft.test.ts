@@ -53,8 +53,13 @@ describe('optimistic draft saves', () => {
     });
     const first = optimisticContextOf(operations[0])
       ?.optimisticResponse as SaveEmailDraftMutation;
+    expect(first.saveEmailDraft.draft.calendarInvitations).toEqual({
+      status: 'unprocessed',
+      invitations: [],
+    });
     const existing = {
       ...first.saveEmailDraft.draft,
+      calendarInvitations: { status: 'absent', invitations: [] },
       createdAt: '2026-01-01T00:00:00Z',
       scheduledSendTime: '2027-01-01T12:00:00Z',
       hasAttachments: true,
@@ -92,6 +97,7 @@ describe('optimistic draft saves', () => {
           hasAttachments: true,
           createdAt: existing.createdAt,
           scheduledSendTime: existing.scheduledSendTime,
+          calendarInvitations: existing.calendarInvitations,
         },
       },
     });

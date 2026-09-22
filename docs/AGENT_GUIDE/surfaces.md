@@ -911,3 +911,30 @@ default root size. Supporting `text-sm` text is 14px and `text-xs` is 12px.
 Desktop and mobile share this scale, with accessibility text scaling preserved.
 
 Desktop channel and AI composers use an `Attach files` paperclip that opens the file picker directly, without a plus menu. Comment composers open the image picker directly. Channels and DMs always open in message mode; create tasks through the task creation dialog. Shift+Enter, including an empty new line, expands channel and AI inputs so text starts above the toolbar at the left inset. Sent AI message bubbles use the ink fill with a contrasting foreground in each theme.
+
+### Calendar invitations in email
+
+In `/app/component/mail`, open an invitation message; the same card appears in
+`/app/email/:threadId`. Saved details appear below the sender without waiting for calendar
+sync. Expand guests and descriptions with their explicit controls. `View original email`
+is an accessible disclosure and starts open conservatively; attachments remain below it.
+Related recurring components are grouped behind their own disclosure. Cards also appear
+when background extraction finishes while the thread is open. Scheduling updates pause
+RSVP and Join until their current calendar state has been checked.
+
+A connected, resolved invitation shows the responding address and Yes / Maybe / No.
+Local verification requires both email and calendar services: email supplies saved
+snapshots, while calendar service resolves the current event and authorizes RSVP.
+Email's calendar-sync flag is intentionally off after the local service cutover;
+calendar service's flag controls whether responses are available.
+The selected response remains pressed while a save is pending. Recurring invitations ask
+for `This event` or `All events`. Failures keep the card in place and report a retryable
+error; offline responses are not sent. Cancellation and response/proposal notifications
+do not offer RSVP or Join. Disconnected, ambiguous, and syncing states explain why an
+action is unavailable.
+
+`Open in calendar` focuses the current occurrence, even if its date changed.
+`View your day` opens a compact agenda without changing the active split; Close returns
+focus to its trigger. Busy overlapping events are labeled, while cancelled, declined,
+and free events do not count as conflicts. Calendar 12/24-hour preferences apply to
+already-open invitation cards as well as the calendar view.

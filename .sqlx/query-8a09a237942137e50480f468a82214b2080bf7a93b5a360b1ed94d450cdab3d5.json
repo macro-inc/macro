@@ -1,0 +1,66 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT requested.ord AS \"ord!\", candidate.id, candidate.source_link_id, candidate.email_address, candidate.sequence, candidate.status, candidate.updated_at,\n                (SELECT o.occurrence_key FROM calendar_event_occurrences o\n                 WHERE o.event_id = candidate.id AND (requested.occurrence_key IS NULL OR o.occurrence_key = requested.occurrence_key OR o.recurrence_id = requested.occurrence_key)\n                 ORDER BY o.occurrence_key LIMIT 1) AS occurrence_key\n            FROM unnest($2::text[], $3::text[]) WITH ORDINALITY requested(uid, occurrence_key, ord)\n            CROSS JOIN LATERAL (\n                SELECT e.id, e.source_link_id, l.email_address, e.sequence, e.status, e.updated_at\n                FROM calendar_events e JOIN email_links l ON l.id = e.source_link_id\n                WHERE e.ical_uid = requested.uid AND e.owner_id = $1 AND l.macro_id = $1\n                  AND EXISTS (SELECT 1 FROM calendar_event_sources s JOIN calendar_accounts a ON a.id = s.account_id JOIN calendars c ON c.id = s.calendar_id WHERE s.event_id = e.id AND s.source_kind = 'google' AND NOT c.is_deleted AND a.sync_status NOT IN ('disabled', 'reauth_required'))\n                ORDER BY e.id LIMIT 16\n            ) candidate\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ord!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "source_link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "email_address",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "sequence",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "occurrence_key",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "8a09a237942137e50480f468a82214b2080bf7a93b5a360b1ed94d450cdab3d5"
+}

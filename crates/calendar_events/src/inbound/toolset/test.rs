@@ -204,6 +204,7 @@ impl CalendarMutationService for MockMutations {
         _calendar_id: Option<Uuid>,
         response: AttendeeResponseStatus,
         scope: CalendarRsvpScope,
+        _responding_email: Option<String>,
     ) -> Result<crate::domain::models::CalendarEvent, CalendarMutationError> {
         self.answered
             .lock()

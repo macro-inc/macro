@@ -690,6 +690,7 @@ pub trait CalendarMutationService: Send + Sync + 'static {
         calendar_id: Option<Uuid>,
         response: AttendeeResponseStatus,
         scope: CalendarRsvpScope,
+        responding_email: Option<String>,
     ) -> impl Future<Output = Result<CalendarEvent, CalendarMutationError>> + Send;
 
     /// Turn calendar off for one of the requester's own connected inboxes:

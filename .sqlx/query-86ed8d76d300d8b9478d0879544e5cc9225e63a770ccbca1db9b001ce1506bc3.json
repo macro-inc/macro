@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.link_id, i.snapshot AS \"snapshot!: Json<CalendarInvitation>\"\n            FROM email_message_calendar_invites i JOIN email_messages m ON m.id = i.message_id\n            JOIN email_links l ON l.id = m.link_id\n            WHERE (m.thread_id = $2 OR l.macro_id = $1) AND i.snapshot->>'uid' = ANY($3)\n              AND i.snapshot->>'method' IN ('request', 'cancel')\n            ORDER BY (i.snapshot->>'sequence')::bigint DESC,\n                COALESCE(i.snapshot->>'last_modified', i.snapshot->>'dtstamp', '') DESC\n            LIMIT 3200",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "snapshot!: Json<CalendarInvitation>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "86ed8d76d300d8b9478d0879544e5cc9225e63a770ccbca1db9b001ce1506bc3"
+}

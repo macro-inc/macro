@@ -489,6 +489,10 @@ export type RsvpCalendarEventRequest = {
      */
     recurrenceId?: string | null;
     /**
+     * The owned connected address whose attendance is changed. Validated by the domain.
+     */
+    respondingEmail?: string | null;
+    /**
      * The response to record for the connected account.
      */
     response: AttendeeResponseStatus;

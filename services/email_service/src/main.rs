@@ -32,7 +32,8 @@ use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use macro_service_urls::{
-    AuthServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, StaticFileServiceUrl,
+    AuthServiceUrl, CalendarServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl,
+    StaticFileServiceUrl,
 };
 use sqlx::postgres::PgPoolOptions;
 use static_file_service_client::StaticFileServiceClient;
@@ -227,6 +228,13 @@ async fn main() -> anyhow::Result<()> {
         ConnectionGatewayCalendarRefresh::new(connection_gateway_client, db.clone()),
     ));
     let api_result = api::setup_and_serve(ApiContext {
+        invitation_snapshots: email::outbound::invitation_pg::InvitationPgRepository(db.clone()),
+        invitation_resolver: Arc::new(
+            calendar_events::outbound::calendar_service_invitations::CalendarServiceInvitations::new(
+                CalendarServiceUrl::new()?.to_string(),
+                config.internal_api_key.to_string(),
+            ),
+        ),
         db,
         internal_api_key: config.internal_api_key.clone(),
         config: Arc::new(config),

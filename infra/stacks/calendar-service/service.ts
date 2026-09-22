@@ -184,15 +184,8 @@ export class CalendarService extends pulumi.ComponentResource {
         containerPort: serviceContainerPort,
         service: GatewayService.CALENDAR_SERVICE,
         healthCheckPath,
-        // calendar-service claims `/calendar` here ahead of cutover, but this
-        // rule receives no `/calendar` traffic yet: email-service's rule
-        // (GatewayService.EMAIL_SERVICE, priority 110) sits below
-        // calendar-service's (CALENDAR_SERVICE, priority 140) on the shared
-        // gateway listener, and the ALB evaluates lower priority numbers first
-        // — see infra/packages/shared/src/gateway_priorities.ts. Email keeps
-        // winning every `/calendar` match until the cutover PR drops those
-        // patterns from email-service. The `/calendar-service` prefixes stay
-        // for now so the service remains reachable in the meantime.
+        // Calendar owns public mutations and internal invitation resolution.
+        // Keep the legacy service prefix reachable during the transition.
         pathPatterns: [
           '/calendar',
           '/calendar/*',

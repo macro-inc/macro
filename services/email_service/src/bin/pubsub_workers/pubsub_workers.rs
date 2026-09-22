@@ -321,6 +321,15 @@ async fn main() -> anyhow::Result<()> {
         ConnectionGatewayUrl::new()?.to_string(),
     );
 
+    worker_tracker.spawn(email_service::invitation_extraction::run(
+        email_service::invitation_extraction::compose(
+            db.clone(),
+            email_api_backfill.clone(),
+            connection_gateway_client.clone(),
+        ),
+        worker_cancellation_token.clone(),
+    ));
+
     let system_properties_service = Arc::new(SystemPropertiesServiceImpl::new(
         PgSystemPropertiesRepository::new(db.clone()),
     ));

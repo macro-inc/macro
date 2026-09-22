@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM email_message_calendar_invites WHERE message_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "762e8b5a8e9bbb1a8f383a977a3e7060644a2f78bbb1d88834f16e6c96de1fe3"
+}

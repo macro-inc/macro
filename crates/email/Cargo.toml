@@ -5,6 +5,8 @@ publish = false
 version = "0.1.0"
 
 [features]
+calendar_resolution = ["ports", "dep:calendar_events"]
+calendar_parser = ["dep:ical", "dep:chrono-tz", "dep:sha2", "dep:url"]
 all = [
   "ai_tools",
   "gmail_token",
@@ -40,6 +42,11 @@ outbound = ["dep:sqlx", "ports"]
 ports = ["crm/ports", "dep:tokio", "frecency/ports"]
 
 [dependencies]
+calendar_events = { path = "../calendar_events", optional = true, features = ["schema"] }
+ical = { version = "0.11", default-features = false, features = ["ical", "serde-derive"], optional = true }
+chrono-tz = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+url = { workspace = true, optional = true }
 activity = { path = "../activity", default-features = false }
 ai_toolset = { path = "../ai_toolset", optional = true }
 attachment = { path = "../attachment", optional = true }

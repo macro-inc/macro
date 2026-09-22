@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE comms_message_threads SET resolved = true, updated_at = now() WHERE root_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c928bc2f7e9efe111901d791b6ba2a8a21379838df42f204d866abbab45998bf"
+}

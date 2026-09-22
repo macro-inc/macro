@@ -356,6 +356,7 @@ fn saved_draft_message(saved: SavedUserDraft) -> Message {
         body_html_sanitized: draft.body_html,
         body_macro: draft.body_macro,
         body_replyless,
+        calendar_invitations: Default::default(),
         attachments,
         attachments_draft,
         attachments_forwarded,

@@ -1,10 +1,8 @@
 import type { CalendarEvent } from '@app/features/calendar/types';
-import { toast } from '@core/component/Toast/Toast';
-import { useRsvpCalendarEventMutation } from '@queries/calendar/mutations';
-import type { CalendarRsvpScope } from '@service-email/client';
 import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/attendeeResponseStatus';
 import { Button } from '@ui';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createMemo, For, Show } from 'solid-js';
+import { createCalendarRsvpController } from '../../calendar/hooks/create-calendar-rsvp-controller';
 import { EventRsvpScopeDialog } from './EventRsvpScopeDialog';
 
 type RsvpResponse = Exclude<AttendeeResponseStatus, 'needs_action'>;
@@ -42,48 +40,17 @@ export function EventRsvpSection(props: {
     !props.event.isReadOnly &&
     !props.event.isCancelled;
 
-  const [pendingResponse, setPendingResponse] = createSignal<RsvpResponse>();
-  const [scope, setScope] = createSignal<CalendarRsvpScope>('this_event');
-
-  const rsvp = useRsvpCalendarEventMutation({
-    onError: (error) => {
-      toast.failure('Failed to update RSVP', { subtext: error.message });
-    },
-  });
-
-  const submit = (
-    response: RsvpResponse,
-    effectiveScope: CalendarRsvpScope
-  ) => {
-    rsvp.mutate({
-      eventId: props.event.eventId,
-      response,
-      scope: effectiveScope,
-      recurrenceId:
-        effectiveScope === 'all'
-          ? undefined
-          : (props.event.recurrenceId ?? props.event.occurrenceKey),
-      occurrenceKey:
-        effectiveScope === 'all' ? undefined : props.event.occurrenceKey,
-    });
-  };
-
-  const respond = (response: RsvpResponse) => {
-    // A single occurrence is its own series, so there is nothing to scope.
-    if (!isRecurring()) {
-      submit(response, 'all');
-      return;
-    }
-    setScope('this_event');
-    setPendingResponse(response);
-  };
-
-  const confirm = () => {
-    const response = pendingResponse();
-    if (response === undefined) return;
-    submit(response, scope());
-    setPendingResponse(undefined);
-  };
+  const rsvp = createCalendarRsvpController(() =>
+    canRespond()
+      ? {
+          eventId: props.event.eventId,
+          respondingEmail: selfAttendee()?.email,
+          occurrenceKey: props.event.occurrenceKey,
+          recurrenceId: props.event.recurrenceId,
+          recurring: isRecurring(),
+        }
+      : undefined
+  );
 
   return (
     <Show when={canRespond()}>
@@ -100,7 +67,7 @@ export function EventRsvpSection(props: {
                 aria-pressed={
                   selfAttendee()?.responseStatus === option.response
                 }
-                onClick={() => respond(option.response)}
+                onClick={() => rsvp.respond(option.response)}
               >
                 {option.label}
               </Button>
@@ -108,12 +75,15 @@ export function EventRsvpSection(props: {
           </For>
         </div>
       </div>
+      <p role="status" aria-live="polite" class="text-xs text-ink-muted">
+        {rsvp.pending() ? 'Saving response…' : rsvp.error()}
+      </p>
       <EventRsvpScopeDialog
-        open={pendingResponse() !== undefined}
-        scope={scope()}
-        onScopeChange={setScope}
-        onClose={() => setPendingResponse(undefined)}
-        onConfirm={confirm}
+        open={rsvp.scopeOpen()}
+        scope={rsvp.scope()}
+        onScopeChange={rsvp.setScope}
+        onClose={rsvp.closeScope}
+        onConfirm={rsvp.confirmScope}
       />
     </Show>
   );

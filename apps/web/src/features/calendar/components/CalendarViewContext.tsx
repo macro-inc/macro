@@ -1,8 +1,5 @@
 import { createAssertedContextProvider } from '@core/context/createContext';
-import { isMobile } from '@core/mobile/isMobile';
-import { makePersisted } from '@solid-primitives/storage';
 import { batch, createMemo, createSignal } from 'solid-js';
-import { createStore } from 'solid-js/store';
 import { useCalendarSources } from '../hooks/use-calendar-sources';
 import {
   type CalendarEvent,
@@ -11,7 +8,7 @@ import {
   type CalendarWeekStart,
   isCalendarEventVisible,
 } from '../types';
-import { getDefaultCalendarTimeFormat } from '../utils/time-format';
+import { useCalendarPreferences } from '../utils/preferences';
 
 interface CalendarDisplaySettings {
   readonly periodView: CalendarPeriodView;
@@ -20,17 +17,7 @@ interface CalendarDisplaySettings {
   readonly timeFormat: CalendarTimeFormat;
 }
 
-interface CalendarPreferences {
-  periodView: CalendarPeriodView;
-  hiddenSourceIds: string[];
-  showWeekends: boolean;
-  weekStartsOn: CalendarWeekStart;
-  timeFormat: CalendarTimeFormat;
-}
-
-/** Storage key for calendar display preferences (also read at copy time by
- * the availability feature, which runs outside this context). */
-export const CALENDAR_PREFERENCES_KEY = 'macro:pref:calendar:settings';
+export { CALENDAR_PREFERENCES_KEY } from '../utils/preferences';
 
 function createCalendarEventSelection() {
   const [event, setEvent] = createSignal<CalendarEvent>();
@@ -57,23 +44,7 @@ function createCalendarEventSelection() {
 
 export const [CalendarViewContextProvider, useCalendarView] =
   createAssertedContextProvider('CalendarViewContext', () => {
-    const defaultPreferences: CalendarPreferences = {
-      periodView: isMobile() ? 'timeGridDay' : 'timeGridWeek',
-      hiddenSourceIds: [],
-      showWeekends: true,
-      weekStartsOn: 0,
-      timeFormat: getDefaultCalendarTimeFormat(),
-    };
-    const [preferences, setPreferences] = makePersisted(
-      createStore<CalendarPreferences>(defaultPreferences),
-      {
-        name: CALENDAR_PREFERENCES_KEY,
-        deserialize: (value) => ({
-          ...defaultPreferences,
-          ...(JSON.parse(value) as Partial<CalendarPreferences>),
-        }),
-      }
-    );
+    const [preferences, setPreferences] = useCalendarPreferences();
     const { sources, sourceById } = useCalendarSources();
     // Sources default to visible, so calendars discovered after a
     // preference was saved (or events whose calendar is still loading)

@@ -1163,6 +1163,13 @@
             ],
             "description": "Original-start key of the occurrence the response targets."
           },
+          "respondingEmail": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The owned connected address whose attendance is changed. Validated by the domain."
+          },
           "response": {
             "$ref": "#/components/schemas/AttendeeResponseStatus",
             "description": "The response to record for the connected account."

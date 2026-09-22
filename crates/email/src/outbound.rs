@@ -4,6 +4,8 @@ mod email_pg_repo;
 mod email_service_http;
 #[cfg(feature = "gmail_token")]
 mod gmail_token_provider;
+#[cfg(feature = "outbound")]
+pub mod invitation_pg;
 
 #[cfg(feature = "outbound")]
 pub use email_pg_repo::EmailPgRepo;

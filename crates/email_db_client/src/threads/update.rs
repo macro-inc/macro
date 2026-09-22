@@ -163,6 +163,10 @@ pub async fn sync_thread_calendar_flag(
                   AND (a.filename ILIKE '%.ics'
                        OR a.mime_type = 'text/calendar'
                        OR a.mime_type = 'application/ics')
+            ) OR EXISTS (
+                SELECT 1 FROM email_messages m
+                JOIN email_message_calendar_invites i ON i.message_id = m.id
+                WHERE m.thread_id = $1
             ) AS has_cal
         ) calc
         WHERE t.id = $1

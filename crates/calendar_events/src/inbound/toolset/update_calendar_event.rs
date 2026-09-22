@@ -327,6 +327,7 @@ where
                         self.calendar_id,
                         rsvp.into(),
                         rsvp_scope,
+                        None,
                     )
                     .await
                     .map_err(|error| {

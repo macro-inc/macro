@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO frecency_aggregates (entity_id, entity_type, user_id, first_event) VALUES ($1, 'document', 'macro|user-1@test.com', now()) ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e9e07eb22736f0e8855bc323cd978ad9132a45423ffd00ea0af27e6f191dfe95"
+}

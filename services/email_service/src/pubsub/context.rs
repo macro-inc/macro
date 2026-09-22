@@ -130,6 +130,7 @@ pub type CrmServiceType = CrmServiceImpl<CompaniesRepositoryImpl, CrmMetadataRes
 
 #[derive(Clone)]
 pub struct PubSubContext {
+    pub invitation_extractor: crate::invitation_extraction::EmailInvitationExtractor,
     pub db: PgPool,
     pub sqs_worker: sqs_worker::SQSWorker,
     pub sqs_client: sqs_client::SQS,

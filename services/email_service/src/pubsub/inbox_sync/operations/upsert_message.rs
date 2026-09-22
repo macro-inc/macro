@@ -244,6 +244,15 @@ pub async fn upsert_message(
             })
         })?;
 
+    if !message.is_draft {
+        crate::pubsub::invitation_extraction::save_discovered(
+            ctx,
+            message_db_id,
+            &fetched.calendar_parts,
+        )
+        .await;
+    }
+
     // Publish to the macro.email topic immediately after the committed insert.
     // Drafts publish after every sync because their bodies are mutable. Existing
     // immutable messages remain suppressed except when a previously synced provider

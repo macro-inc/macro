@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT pa.\"threadId\" AS \"threadId!\", pa.uuid, pa.page, pa.\"originalPage\", pa.\"originalIndex\"\n            FROM \"PdfPlaceableCommentAnchor\" pa\n            JOIN \"Thread\" t ON pa.\"threadId\" = t.id\n            WHERE t.\"documentId\" = 'document-with-comments'\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "threadId!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "uuid",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "page",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "originalPage",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "originalIndex",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "b4115b34cc894c18f05aeb63e0038f422dab9051b492181753ff6ccc3b54ed95"
+}

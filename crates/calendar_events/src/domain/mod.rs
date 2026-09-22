@@ -1,4 +1,6 @@
 //! Calendar domain layer.
+/// Email invitation identity lookup and action policy.
+pub mod invitations;
 
 /// The clicker's owned inboxes.
 pub mod acting;

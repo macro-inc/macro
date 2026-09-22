@@ -1,4 +1,5 @@
 pub mod attachment;
+pub mod calendar_invitation;
 pub mod contact;
 pub mod draft;
 pub mod email_filter;

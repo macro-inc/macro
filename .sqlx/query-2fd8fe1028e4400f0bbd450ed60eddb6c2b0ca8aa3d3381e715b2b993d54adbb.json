@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT access_level::text FROM entity_access\n           WHERE entity_id = $1 AND entity_type = 'document' AND source_type = 'team'\n             AND granted_from_project_id IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2fd8fe1028e4400f0bbd450ed60eddb6c2b0ca8aa3d3381e715b2b993d54adbb"
+}

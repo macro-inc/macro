@@ -8,10 +8,16 @@ import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
 import { VideoPreview } from '@core/component/VideoPreview';
 import type { JSX } from 'solid-js';
 import { createMemo, createSignal, For, Show } from 'solid-js';
+import { CalendarInviteCard } from '../components/calendar-invite-card';
 import type { EmailMessageAction } from '../components/message-actions';
+import {
+  type CalendarInvitation,
+  groupCalendarInvitations,
+} from '../core/calendar-invitation';
 import type { EmailAttachment } from '../core/email-message';
 export interface EmailMessageViewProps {
   message: EmailMessage;
+  renderInvitation?: (invitation: CalendarInvitation) => JSX.Element;
   renderAvatar?: (message: EmailMessage) => JSX.Element;
   viewerEmail?: string;
   isTouch: boolean;
@@ -34,6 +40,30 @@ export interface EmailMessageViewProps {
 export function EmailMessageView(props: EmailMessageViewProps) {
   const [expandedHeader, setExpandedHeader] = createSignal(false);
   const isBodyExpanded = () => props.isExpanded;
+  const invitationGroups = createMemo(() =>
+    groupCalendarInvitations(
+      props.message.calendar_invitations?.invitations ?? []
+    )
+  );
+  const renderInvitation = (invitation: CalendarInvitation) =>
+    props.renderInvitation ? (
+      props.renderInvitation(invitation)
+    ) : (
+      <CalendarInviteCard invitation={invitation} />
+    );
+  const body = () => (
+    <div class="ph-no-capture text-base text-ink pr-4 mobile:pr-0">
+      <EmailMessageBody
+        message={props.message}
+        isPersonal={props.isPersonal}
+        isBodyExpanded={isBodyExpanded}
+        setExpandedMessageBody={() => props.onExpandedChange?.(true)}
+        setFocusedMessageId={() => props.onSelect?.()}
+        showFullContent={props.showFullContent}
+        isFocused={props.isSelected}
+      />
+    </div>
+  );
 
   // Hide attachments that are referenced in inline images
   const inlineContentIds = createMemo(() => {
@@ -122,17 +152,30 @@ export function EmailMessageView(props: EmailMessageViewProps) {
               </div>
             }
           />
-          <div class="ph-no-capture text-base text-ink pr-4 mobile:pr-0">
-            <EmailMessageBody
-              message={props.message}
-              isPersonal={props.isPersonal}
-              isBodyExpanded={isBodyExpanded}
-              setExpandedMessageBody={() => props.onExpandedChange?.(true)}
-              setFocusedMessageId={() => props.onSelect?.()}
-              showFullContent={props.showFullContent}
-              isFocused={props.isSelected}
-            />
-          </div>
+          <For each={invitationGroups()}>
+            {(group) => (
+              <div>
+                {renderInvitation(group.primary)}
+                <Show when={group.related.length > 0}>
+                  <details class="mb-3">
+                    <summary class="min-h-11 py-3 text-sm text-accent">
+                      View {group.related.length} related occurrences or updates
+                    </summary>
+                    <For each={group.related}>{renderInvitation}</For>
+                  </details>
+                </Show>
+              </div>
+            )}
+          </For>
+          <Show when={invitationGroups().length > 0} fallback={body()}>
+            {/* Conservative policy: keep notes and uncertain provider bodies visible initially. */}
+            <details open>
+              <summary class="min-h-11 py-3 text-sm text-accent">
+                View original email
+              </summary>
+              {body()}
+            </details>
+          </Show>
           {/* Image attachments */}
           <Show when={imageAttachmentsWithSfs().length > 0}>
             <div class="flex flex-wrap gap-2 mt-2">

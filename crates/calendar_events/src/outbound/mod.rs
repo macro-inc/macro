@@ -1,5 +1,9 @@
 //! Outbound calendar adapters.
 
+/// Calendar-service HTTP adapter for invitation resolution.
+#[cfg(feature = "invitation-client")]
+pub mod calendar_service_invitations;
+
 /// Calendar-service HTTP adapter for the mutation port.
 #[cfg(feature = "mutation-client")]
 pub mod calendar_service_mutations;

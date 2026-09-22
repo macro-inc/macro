@@ -84,6 +84,11 @@ pub async fn run_worker_with_cancellation(
     let calendar_backfills =
         CalendarBackfillServices::new(db.clone(), redis_client.clone(), macro_event_broker.clone());
     let ctx = PubSubContext {
+        invitation_extractor: crate::invitation_extraction::compose(
+            db.clone(),
+            email_api.clone(),
+            connection_gateway_client.clone(),
+        ),
         db,
         sqs_worker: worker.clone(),
         sqs_client,

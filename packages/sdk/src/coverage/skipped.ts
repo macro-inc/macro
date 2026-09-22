@@ -217,6 +217,7 @@ export const emailBacklog = [
   'deleteEmailFilter',
   'deleteScheduledDraft',
   'getScheduledMessages',
+  'getThreadCalendarInvitations',
   'listCalendars',
   'listContacts',
   'listEmailFilters',

@@ -61,6 +61,7 @@ use utoipa::OpenApi;
         terms_of_service = "https://macro.com/terms",
     ),
     paths(
+        crate::api::calendar_invitations::handler,
         health::health_handler,
         email::attachments::get::handler,
         email::attachments::get_document_id::handler,
