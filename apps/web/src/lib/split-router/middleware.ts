@@ -19,6 +19,7 @@ type BatchRequest = {
   from?: readonly SplitRouterEntry[];
   to: SplitRouterEntry[];
   cause: SplitRouterMiddlewareRequest['cause'];
+  externalSearch?: string;
   signal: AbortSignal;
 };
 
@@ -102,6 +103,7 @@ export function runSplitRouterMiddleware(
         from: request.from,
         to: current,
         path,
+        externalSearch: request.externalSearch,
         cause: request.cause,
         signal: request.signal,
         redirect: (to) => ({ type: 'redirect', to }),
@@ -156,6 +158,7 @@ export function prepareEntries(
       from: request.from?.[index],
       to: entry,
       cause: request.cause,
+      externalSearch: request.externalSearch,
       signal: request.signal,
     })
   );

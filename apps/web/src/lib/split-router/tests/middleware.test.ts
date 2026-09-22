@@ -76,10 +76,12 @@ describe('split router middleware', () => {
 
   it('awaits middleware and restarts the pipeline after a redirect', async () => {
     const visits: string[] = [];
+    const searches: (string | undefined)[] = [];
     const middleware: SplitRouterMiddleware[] = [
-      async ({ path }) => {
+      async ({ path, externalSearch }) => {
         await Promise.resolve();
         visits.push(`preload:${path}`);
+        searches.push(externalSearch);
       },
       ({ to, redirect }) => {
         const routeId = rootRouteMatch(to.location.route)?.id;
@@ -94,7 +96,8 @@ describe('split router middleware', () => {
       { routes, handlers: middleware },
       {
         to: legacyEntry,
-        cause: 'navigate',
+        externalSearch: '?legacy=first&legacy=last',
+        cause: 'external',
         signal: new AbortController().signal,
       }
     );
@@ -104,6 +107,10 @@ describe('split router middleware', () => {
       'redirect:legacy',
       'preload:/drive/md/document-1',
       'redirect:drive',
+    ]);
+    expect(searches).toEqual([
+      '?legacy=first&legacy=last',
+      '?legacy=first&legacy=last',
     ]);
     expect(result).toEqual({
       location: {

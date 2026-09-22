@@ -121,6 +121,49 @@ const settle = () => new Promise<void>((resolve) => queueMicrotask(resolve));
 afterEach(() => vi.restoreAllMocks());
 
 describe('split router', () => {
+  it('observes initial canonicalization echoes without swallowing browser Back', async () => {
+    const layout = createLayout();
+    const location = createMemorySplitRouterLocation(
+      '/legacy/one?referral_code=code'
+    );
+    const requests: { cause: string; externalSearch?: string }[] = [];
+    const router = createSplitRouter({
+      layout,
+      routes,
+      location,
+      middleware: [
+        ({ to, cause, externalSearch, redirect }) => {
+          requests.push({ cause, externalSearch });
+          if (rootRouteMatch(to.location.route)?.id === 'legacy') {
+            return redirect(
+              `/drive/folder/${routeParams(to.location.route).id}`
+            );
+          }
+        },
+      ],
+    });
+    await router.settled();
+    const splitId = layout.snapshot().entries[0].splitId;
+    expect(location.read().pathname).toBe('/drive/folder/one');
+    expect(requests).toEqual([
+      { cause: 'initial', externalSearch: '?referral_code=code' },
+      { cause: 'initial', externalSearch: '?referral_code=code' },
+    ]);
+
+    router.navigate(splitId, '/drive/folder/two');
+    await router.settled();
+    expect(requests.at(-1)).toEqual({
+      cause: 'navigate',
+      externalSearch: undefined,
+    });
+    expect(location.history()).toHaveLength(2);
+    expect(location.back()).toBe(true);
+    await router.settled();
+    expect(routeParams(router.route(splitId)!)).toEqual({ folderId: 'one' });
+    expect(location.read().pathname).toBe('/drive/folder/one');
+    router.dispose();
+  });
+
   it('owns one manifest per router and only shares explicitly supplied state', async () => {
     const compile = vi.spyOn(path, 'compileRoutePattern');
     const layout = createLayout();

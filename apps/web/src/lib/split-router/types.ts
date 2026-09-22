@@ -37,6 +37,8 @@ export type SplitRouterMiddlewareContext = {
   to: Readonly<SplitRouterEntry>;
   /** Canonical single-split pathname for `to`. */
   path: string;
+  /** Raw incoming URL search on initial/external navigation, retained across redirects. */
+  externalSearch?: string;
   cause: SplitRouterNavigationCause;
   signal: AbortSignal;
   redirect: (to: string) => SplitRouterMiddlewareRedirect;
@@ -59,6 +61,7 @@ export type SplitRouterMiddlewareConfig = {
 export type SplitRouterMiddlewareRequest = {
   from?: SplitRouterEntry;
   to: SplitRouterEntry;
+  externalSearch?: string;
   cause: SplitRouterNavigationCause;
   signal: AbortSignal;
 };

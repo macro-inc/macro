@@ -137,7 +137,10 @@ ignored.
 Middleware runs for proposed entries and may redirect synchronously or
 asynchronously. Synchronous navigation stays synchronous when no reservation wait
 is necessary. Signals cancel superseded work; middleware should honor them when
-possible.
+possible. For initial and external navigation, `externalSearch` contains the raw
+incoming URL query snapshot, unchanged across redirects. Use it for application
+compatibility normalization; `to.location.search` remains the proposed pane's
+namespaced search. Local navigation does not inherit stale external query data.
 
 Ordinary middleware errors are logged and fall back to the original valid
 proposal, which still passes claim arbitration. Abort errors do not fall back.

@@ -35,6 +35,7 @@ type CommitOptions = {
 type LayoutTransition = {
   entries: SplitRouterEntry[];
   cause: 'initial' | 'external' | 'layout';
+  externalSearch?: string;
   apply: (entries: SplitRouterEntry[]) => void;
 };
 
@@ -214,6 +215,7 @@ export function createSplitRouter<TSplitId>(
       from: transition.cause === 'initial' ? undefined : accepted,
       to: transition.entries,
       cause: transition.cause,
+      externalSearch: transition.externalSearch,
       signal: controller.signal,
     });
 
@@ -246,12 +248,12 @@ export function createSplitRouter<TSplitId>(
     transitionLayout({
       entries: decoded.entries,
       cause,
+      externalSearch: decoded.externalLocation.search,
       apply: applyDecoded,
     });
   };
 
   accepted = layout.entries();
-  applyInbound(options.location.read(), 'initial');
 
   const applyPrepared = (
     original: SplitRouterEntry[],
@@ -674,5 +676,8 @@ export function createSplitRouter<TSplitId>(
     },
   };
 
+  // Observe synchronous canonicalization writes during initialization, so their
+  // echoes cannot later be mistaken for a browser Back navigation.
+  applyInbound(options.location.read(), 'initial');
   return router;
 }
