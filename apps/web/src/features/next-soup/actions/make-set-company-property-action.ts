@@ -19,7 +19,7 @@ export const makeSetCompanyPropertyAction = () => {
   const dealStages = useDealStages();
 
   const canExecute = (entity: EntityData): boolean =>
-    entity.type === 'crm_company';
+    entity.type === 'crm_company' && !dealStages.isLoading();
 
   const propertyFor = (field: CompanyCrmField): Property | undefined => {
     // Stage resolves through the active deal-stage set (the team's own
@@ -35,6 +35,9 @@ export const makeSetCompanyPropertyAction = () => {
   };
 
   const execute = (entities: EntityData[], field: CompanyCrmField) => {
+    // Stages are lazy: don't open an editor against system defaults before
+    // the team's active definition has resolved.
+    if (dealStages.isLoading()) return;
     const property = propertyFor(field);
     if (property) openPropertyEditor(entities, 'direct', property);
   };

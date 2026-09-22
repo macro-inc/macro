@@ -341,6 +341,10 @@ online first, then restart with API traffic blocked: verify the existing body,
 make a disposable edit, and restart offline again to check local recovery.
 Restoring connectivity must reauthorize synchronization before queued edits reach
 the server; verify the server copy, not just the still-cached editor text.
+The body should not wait for unrelated CRM metadata, references, duplicate-task
+suggestions, closed sharing/tag menus, or disabled mention queries. With those
+requests pending, the cached editor remains visible; optional information can
+appear when its own request finishes.
 
 Cached open context is scoped to the signed-in user and invalidated at logout;
 permission tokens are never persisted. A missing body snapshot still requires an

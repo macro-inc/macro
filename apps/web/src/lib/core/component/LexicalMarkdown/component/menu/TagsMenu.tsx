@@ -3,6 +3,7 @@ import clickOutside from '@core/directive/clickOutside';
 import PlusIcon from '@phosphor/plus.svg';
 import { TagDot } from '@property/tags/TagDot';
 import { DEFAULT_TAG_COLOR, type TAG_COLORS } from '@property/tags/tagColors';
+import { queryReadyGate } from '@queries/gate';
 import { useAddPropertyOptionMutation } from '@queries/properties/options';
 import {
   invalidateTags,
@@ -176,7 +177,10 @@ export function TagsMenu(props: {
     createLabel().length >= 2 && !exactTagMatchExists();
   const createRowIndex = () => items().length;
   const itemCount = () => items().length + (showCreateRow() ? 1 : 0);
-  const teamName = () => currentTeamQuery.data?.team.name?.trim() || 'Team';
+  const teamName = () =>
+    (queryReadyGate(currentTeamQuery) &&
+      currentTeamQuery.data?.team.name?.trim()) ||
+    'Team';
   const scopeOptions = createMemo<{ scope: TagScope; label: string }[]>(() => [
     { scope: 'team', label: `Shared with ${teamName()}` },
     { scope: 'user', label: 'Personal' },
