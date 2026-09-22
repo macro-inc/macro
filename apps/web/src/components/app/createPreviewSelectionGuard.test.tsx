@@ -31,20 +31,23 @@ beforeEach(() => {
 
 function setup() {
   let stack!: ReturnType<typeof useNavigationStack<PreviewPanelSelection>>;
+  let selectionGuard!: ReturnType<typeof createPreviewSelectionGuard>;
   function Capture() {
     stack = useNavigationStack<PreviewPanelSelection>();
     return null;
   }
   function App() {
-    const guard = createPreviewSelectionGuard();
+    selectionGuard = createPreviewSelectionGuard();
     return (
-      <NavigationStack.Root<PreviewPanelSelection> beforeChange={guard}>
+      <NavigationStack.Root<PreviewPanelSelection>
+        beforeChange={selectionGuard}
+      >
         <Capture />
       </NavigationStack.Root>
     );
   }
   const view = render(App);
-  return { stack, ...view };
+  return { stack, selectionGuard, ...view };
 }
 
 it('rejects a second detail selection without changing its current entry and releases on close', () => {
@@ -75,6 +78,23 @@ it('blocks breadcrumbs back to content opened elsewhere without changing history
   first.stack.pop();
   expect(first.stack.active()?.data.id).toBe('one');
   first.unmount();
+});
+
+it('preflights without claiming the requested selection', () => {
+  const first = setup();
+  const second = setup();
+  const third = setup();
+  const one = { type: 'email', id: 'one' } as const;
+  const two = { type: 'email', id: 'two' } as const;
+
+  first.stack.reset(one);
+  expect(second.selectionGuard.canSelect(one)).toBe(false);
+  expect(second.selectionGuard.canSelect(two)).toBe(true);
+  expect(third.stack.reset(two)).toBeDefined();
+
+  first.unmount();
+  second.unmount();
+  third.unmount();
 });
 
 it('treats Markdown as single-instance and allows revisiting the owning preview', () => {

@@ -7,8 +7,15 @@ import {
   previewBlockTarget,
 } from './previewTarget';
 
-/** Call before changing selection. A rejected selection leaves the current preview intact. */
-export function createPreviewSelectionGuard() {
+export type PreviewSelectionGuard = ((
+  selection: PreviewPanelSelection | undefined
+) => boolean) & {
+  /** Checks a requested selection without claiming it before navigation commits. */
+  canSelect: (selection: PreviewPanelSelection | undefined) => boolean;
+};
+
+/** Call after changing selection. Use canSelect before cancellable navigation. */
+export function createPreviewSelectionGuard(): PreviewSelectionGuard {
   const registry = useGlobalBlockOrchestrator().contentInstances;
   const owner = Symbol('inline-preview');
   let current: ContentIdentity | undefined;
@@ -17,14 +24,23 @@ export function createPreviewSelectionGuard() {
   );
   onCleanup(unregister);
 
-  return (selection: PreviewPanelSelection | undefined) => {
+  const identity = (selection: PreviewPanelSelection | undefined) => {
     const target = selection && previewBlockTarget(selection);
-    const next = target && { type: target.blockType, id: target.blockId };
+    return target && { type: target.blockType, id: target.blockId };
+  };
+  const canSelect = (selection: PreviewPanelSelection | undefined) => {
+    const next = identity(selection);
     if (next && registry.isOpenElsewhere(next, owner)) {
       toast.alert('Content already open');
       return false;
     }
-    current = next;
     return true;
   };
+  const select = (selection: PreviewPanelSelection | undefined) => {
+    if (!canSelect(selection)) return false;
+    current = identity(selection);
+    return true;
+  };
+
+  return Object.assign(select, { canSelect });
 }
