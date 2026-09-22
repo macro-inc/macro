@@ -28,7 +28,7 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
-import type { FileDetailContext } from '../core/file-detail-context';
+import type { FileDetailContext } from '../util/file-detail-context';
 
 export type MarkdownDetailContext = FileDetailContext<MarkdownDocumentData>;
 

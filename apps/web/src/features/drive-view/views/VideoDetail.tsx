@@ -6,14 +6,14 @@ import {
   type FileDetailShareProps,
 } from '../components/FileDetail';
 import { downloadFileOperation } from '../components/file-detail-operations';
-import { documentDownloadName } from '../core/document-download-name';
-import { downloadWithProgress } from '../core/download-with-progress';
-import type { FileDetailContext } from '../core/file-detail-context';
 import { getFileDocumentBlob } from '../queries/file-document';
 import {
   loadVideoDocument,
   type VideoDocumentData,
 } from '../queries/video-document';
+import { documentDownloadName } from '../util/document-download-name';
+import { downloadWithProgress } from '../util/download-with-progress';
+import type { FileDetailContext } from '../util/file-detail-context';
 
 export type VideoDetailContext = FileDetailContext<VideoDocumentData>;
 

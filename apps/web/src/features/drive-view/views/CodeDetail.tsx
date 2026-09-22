@@ -20,13 +20,13 @@ import {
   type FileDetailShareProps,
 } from '../components/FileDetail';
 import { downloadFileOperation } from '../components/file-detail-operations';
-import { documentDownloadName } from '../core/document-download-name';
-import type { FileDetailContext } from '../core/file-detail-context';
 import {
   type CodeDocumentData,
   loadCodeDocument,
   saveCodeDocument,
 } from '../queries/code-document';
+import { documentDownloadName } from '../util/document-download-name';
+import type { FileDetailContext } from '../util/file-detail-context';
 
 export type CodeDetailContext = FileDetailContext<CodeDocumentData>;
 

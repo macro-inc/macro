@@ -36,7 +36,7 @@ import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import DownloadIcon from '@phosphor/download-simple.svg';
 import Printer from '@phosphor/printer.svg';
 import IconShared from '@phosphor/share.svg';
-import { blockNameToItemType } from '@service-storage/client';
+import { blockNameToItemType } from '@service-storage/itemType';
 import { createCallback } from '@solid-primitives/rootless';
 import { usePdfDocument } from '../context/pdf-document-context';
 import { LocationType, useCreateShareUrl } from '../signal/location';

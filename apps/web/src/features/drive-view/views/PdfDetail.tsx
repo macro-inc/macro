@@ -37,8 +37,8 @@ import {
   FileDetailLoadGate,
   type FileDetailShareProps,
 } from '../components/FileDetail';
-import type { FileDetailContext } from '../core/file-detail-context';
 import { loadPdfDocument, type PdfDocumentData } from '../queries/pdf-document';
+import type { FileDetailContext } from '../util/file-detail-context';
 
 export type PdfDetailContext = FileDetailContext<PdfDocumentData>;
 

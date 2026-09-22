@@ -1,8 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
-import { platformFetch } from '@core/util/platformFetch';
 import { downloadFile } from '@filesystem/download';
-import { storageServiceClient } from '@service-storage/client';
 import type { PDFDocumentProxy } from 'pdfjs-dist/types/src/display/api';
+import { fetchExportedDocx } from '../queries/export-docx';
 import { exportPdf } from '../websocket/export';
 import { doPrint } from './printUtil';
 
@@ -73,26 +72,10 @@ export async function downloadDocxDocument(
 ) {
   if (!requireAuth(auth)) return;
 
-  const data = await storageServiceClient.exportDocument({
-    documentId: auth.documentId,
-  });
-  if (data.isErr()) {
-    return toast.failure('Unable to download file');
-  }
-
   const fileNameWithExtension = `${auth.fileName}.docx`;
 
   try {
-    const response = await platformFetch(data.value.presigned_url);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const arrayBuffer = await response.arrayBuffer();
-    const blob = new Blob([arrayBuffer], {
-      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    });
-
+    const blob = await fetchExportedDocx(auth.documentId);
     downloadFile(blob, fileNameWithExtension);
     toast.success('File downloaded successfully');
   } catch (error) {
