@@ -17,6 +17,7 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
+use std::time::{Duration, Instant};
 
 use ai_toolset::RequestContext;
 use ai_usage::{UsageContext, UsageRecorder};
@@ -501,6 +502,67 @@ where
             self.telemetry.finish_run();
         }
     }
+    /// Liveness of the provider stream, recorded on the run's span by `Drop` so
+    /// it lands however the driver ends - including the abort a cancelled turn
+    /// causes, which is the case most worth seeing.
+    ///
+    /// These answer what a parked stream cannot: the task is idle whether the
+    /// provider is dribbling tokens or has gone silent, and only the timing of
+    /// the items tells those apart. Read `trailing_silence_ms` first - near
+    /// zero means the model was still producing when the run ended, a long tail
+    /// means it had stopped talking to us well before.
+    struct StreamLiveness {
+        span: tracing::Span,
+        started_at: Instant,
+        items: i64,
+        first_item: Option<Duration>,
+        last_item: Option<Duration>,
+    }
+
+    impl StreamLiveness {
+        fn new(span: tracing::Span) -> Self {
+            Self {
+                span,
+                started_at: Instant::now(),
+                items: 0,
+                first_item: None,
+                last_item: None,
+            }
+        }
+
+        fn observed(&mut self) {
+            let at = self.started_at.elapsed();
+            self.items += 1;
+            self.first_item.get_or_insert(at);
+            self.last_item = Some(at);
+        }
+    }
+
+    impl Drop for StreamLiveness {
+        // Recorded as `i64`: a `u64` reaches OpenTelemetry as a *string*
+        // attribute, which every numeric query would then silently miss.
+        fn drop(&mut self) {
+            self.span.record("agent.stream.items", self.items);
+            if let Some(first) = self.first_item {
+                self.span
+                    .record("agent.stream.first_item_ms", millis(first));
+            }
+            // With nothing ever received the silence is the whole run, which is
+            // what `unwrap_or_default` says here.
+            let silent_since = self.last_item.unwrap_or_default();
+            self.span.record(
+                "agent.stream.trailing_silence_ms",
+                millis(self.started_at.elapsed().saturating_sub(silent_since)),
+            );
+        }
+    }
+
+    /// Whole milliseconds, saturating: a duration longer than `i64::MAX`
+    /// milliseconds is not a number anybody needs exactly.
+    fn millis(duration: Duration) -> i64 {
+        i64::try_from(duration.as_millis()).unwrap_or(i64::MAX)
+    }
+
     let mut finish_run = FinishRun {
         telemetry: telemetry.clone(),
         agent_span: agent_span.clone(),
@@ -509,20 +571,22 @@ where
     let driver_span = agent_span.clone();
     let driver = tokio::spawn(
         async move {
-            let mut thinking_buf = String::new();
+            let mut liveness = StreamLiveness::new(agent_span.clone());
 
             while let Some(item) = rig_stream.next().await {
+                liveness.observed();
                 match item {
                     Ok(MultiTurnStreamItem::StreamAssistantItem(
                         StreamedAssistantContent::ReasoningDelta { reasoning, .. },
                     )) => {
-                        thinking_buf.push_str(&reasoning);
+                        // Forwarded as it arrives, like a text delta. Held back
+                        // until the model says something else, a turn that
+                        // thinks for half a minute before its first tool call
+                        // shows the reader nothing for that whole time and then
+                        // the entire thought at once.
+                        let _ = driver_tx.send(Ok(StreamPart::Thinking(reasoning)));
                     }
                     other => {
-                        if !thinking_buf.is_empty() {
-                            let _ = driver_tx
-                                .send(Ok(StreamPart::Thinking(std::mem::take(&mut thinking_buf))));
-                        }
                         match other {
                             Ok(MultiTurnStreamItem::FinalResponse(final_resp)) => {
                                 let usage = final_resp.usage;
@@ -572,9 +636,6 @@ where
                         }
                     }
                 }
-            }
-            if !thinking_buf.is_empty() {
-                let _ = driver_tx.send(Ok(StreamPart::Thinking(std::mem::take(&mut thinking_buf))));
             }
             // Dropping `rig_stream` (and with it the hook's sender) plus `driver_tx`
             // here closes the channel, ending the consumer stream below.
