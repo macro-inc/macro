@@ -163,6 +163,7 @@ A `--no-doppler` stack boots with deterministic stubs for every value the servic
 | GitHub login | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_IDP_ID` | Login with GitHub is unavailable |
 | Stripe billing | `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID` | Checkout and subscription endpoints fail. Signup still works: the create-user webhook detects the stub key and skips the real Stripe call. It stores a placeholder customer id instead. |
 | CloudFront signed URLs | `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL`, `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID`, `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY` | Document download URLs are unsigned (fine against local S3) |
+| Agent voice | `LIVEKIT_SERVER_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `OPENAI_API_KEY` | The voice worker reports missing credentials and cannot join conversations. Real credentials must point to the same LiveKit project as the agent backend. |
 
 The other stubbed keys (`REDIS_HOST`, `MACRO_DB_URL`, `INTERNAL_API_KEY`, `AUTHENTICATION_SERVICE_SECRET_KEY`, `OPENSEARCH_USERNAME`, `OPENSEARCH_PASSWORD`) are internal plumbing with correct local values — you never need to override them.
 
@@ -323,6 +324,12 @@ The seeded persona login links embed the frontend port. If you switch ports, run
 The Rust services are built on the host with `cargo zigbuild`. The binaries are mounted into a shared runtime image. Docker does not compile these services during a normal `run_local`.
 
 Press `r` to rebuild the binaries. Only the services whose binaries changed restart.
+
+The Python `agent_voice` worker is also built and started during normal local/dev
+startup, `r` rebuilds, and stack updates. Docker reuses unchanged layers and keeps
+the running worker when its image and settings have not changed. It receives only
+the speech/media credentials listed above. Its startup logs and health check show
+whether it has registered with LiveKit.
 
 Three services have Docker-built images. They are not rebuilt by default:
 

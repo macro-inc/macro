@@ -4,6 +4,8 @@ import asyncio
 import json
 import unittest
 from unittest.mock import patch
+from unittest.mock import AsyncMock, Mock
+from types import SimpleNamespace
 
 from livekit.agents import AgentSession, room_io
 
@@ -11,7 +13,8 @@ from agent import MacroVoiceAgent
 from bridge import MacroBridge
 from protocol import TaskEvent, VoiceJob
 from test_protocol import job_data
-from worker import create_model
+from test_config import configured_environment
+from worker import create_model, entrypoint, worker_options
 
 
 class FakeSpeech:
@@ -42,6 +45,13 @@ class PresentationAgent(MacroVoiceAgent):
 
 
 class SdkTests(unittest.IsolatedAsyncioTestCase):
+    async def test_worker_options_use_the_existing_backend_url(self):
+        with patch.dict("os.environ", configured_environment(), clear=True):
+            options = worker_options(validate=True)
+        self.assertEqual(options.ws_url, "wss://macro.invalid/")
+        self.assertEqual(options.agent_name, "macro-agent-voice")
+        self.assertEqual(options.drain_timeout, 110)
+
     async def test_provider_configuration_and_session_construct_without_network(self):
         with patch.dict("os.environ", {}, clear=True):
             model = create_model("offline-placeholder-not-a-credential", "marin")
@@ -69,6 +79,79 @@ class SdkTests(unittest.IsolatedAsyncioTestCase):
             await session.aclose()
         finally:
             await model.aclose()
+
+
+class StartupTests(unittest.IsolatedAsyncioTestCase):
+    async def exercise_startup(self, *, startup_error=None):
+        metadata = job_data()
+        calls = []
+
+        async def mark_attributes(attributes):
+            calls.append(("attributes", attributes))
+
+        async def publish(payload, **_options):
+            calls.append(("data", json.loads(payload)))
+
+        participant = SimpleNamespace(
+            set_attributes=AsyncMock(side_effect=mark_attributes),
+            publish_data=AsyncMock(side_effect=publish),
+            perform_rpc=AsyncMock(return_value=json.dumps({
+                "version": 1, "sessionId": metadata["sessionId"], "messages": [],
+            })),
+        )
+        room = SimpleNamespace(
+            local_participant=participant,
+            remote_participants={metadata["participantIdentity"]: object()},
+            on=lambda _event: lambda callback: callback,
+        )
+        context = SimpleNamespace(
+            job=SimpleNamespace(metadata=json.dumps(metadata)), room=room,
+            proc=SimpleNamespace(userdata={"vad": None}),
+            connect=AsyncMock(), wait_for_participant=AsyncMock(), shutdown=Mock(),
+        )
+        callbacks = {}
+
+        def subscribe(event):
+            def register(callback):
+                callbacks[event] = callback
+                return callback
+            return register
+
+        async def start(**_options):
+            calls.append(("start", None))
+            if startup_error:
+                raise startup_error
+
+        session = SimpleNamespace(
+            on=subscribe, start=AsyncMock(side_effect=start), aclose=AsyncMock(),
+            generate_reply=lambda **_options: callbacks["close"](None),
+        )
+        with patch.dict("os.environ", configured_environment(), clear=True), \
+             patch("worker.AgentSession", return_value=session), \
+             patch("worker.create_model", return_value=object()):
+            with self.assertLogs("macro-agent-voice", level="INFO") as logs:
+                await asyncio.wait_for(entrypoint(context), timeout=1)
+        context.shutdown.assert_called_once()
+        session.aclose.assert_awaited_once()
+        return metadata, calls, logs
+
+    async def test_durable_ready_is_published_after_start_and_before_data_ready(self):
+        metadata, calls, _logs = await self.exercise_startup()
+        self.assertEqual(calls[:3], [
+            ("start", None),
+            ("attributes", {"macro.voice.ready": metadata["voiceSessionId"]}),
+            ("data", {"version": 1, "type": "ready"}),
+        ])
+
+    async def test_failed_start_never_marks_ready_and_logs_only_safe_error_type(self):
+        _metadata, calls, logs = await self.exercise_startup(startup_error=RuntimeError("sensitive-provider-value"))
+        self.assertFalse(any(kind == "attributes" for kind, _ in calls))
+        self.assertFalse(any(kind == "data" and value["type"] == "ready" for kind, value in calls))
+        self.assertTrue(any(kind == "data" and value["type"] == "error" for kind, value in calls))
+        failed = next(record for record in logs.records if record.getMessage() == "Voice session failed")
+        self.assertEqual(failed.error_type, "RuntimeError")
+        self.assertEqual(failed.stage, "starting_session")
+        self.assertNotIn("sensitive-provider-value", str(failed.__dict__))
 
 
 class PresentationTests(unittest.IsolatedAsyncioTestCase):

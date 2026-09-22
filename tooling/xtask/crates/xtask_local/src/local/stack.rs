@@ -386,9 +386,9 @@ fn update_running(args: &UpdateArgs) -> Result<()> {
         false
     };
 
-    if args.binaries_dir.is_some() && args.build_aux_services {
-        super::build_aux_service_images(&stage, &instance, &env)?;
-        super::recreate_aux_service_containers(&stage, &instance, &env)?;
+    if args.binaries_dir.is_some() {
+        super::build_app_service_images(&stage, &instance, &env, args.build_aux_services)?;
+        super::reload_app_service_containers(&stage, &instance, &env, args.build_aux_services)?;
     }
 
     if args.frontend {

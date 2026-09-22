@@ -15,10 +15,18 @@ const fake = vi.hoisted(() => {
   return {
     handlers,
     rpc,
+    participants: new Map<
+      string,
+      { identity: string; attributes: Record<string, string> }
+    >(),
     connect: vi.fn(async () => {}),
     disconnect: vi.fn(async () => {}),
     microphone: vi.fn(async () => {}),
     publishTrack: vi.fn(async () => {}),
+    publication: vi.fn<
+      () => { track: { mediaStreamTrack: MediaStreamTrack } } | undefined
+    >(() => undefined),
+    startAudio: vi.fn(async () => {}),
     publish: vi.fn(async () => {}),
   };
 });
@@ -30,6 +38,7 @@ vi.mock('livekit-client', () => ({
     Disconnected: 'disconnected',
     AudioPlaybackStatusChanged: 'playback',
     ParticipantDisconnected: 'left',
+    ParticipantConnected: 'joined',
     TrackSubscribed: 'track',
     TrackUnsubscribed: 'untrack',
     ParticipantAttributesChanged: 'attributes',
@@ -44,6 +53,7 @@ vi.mock('livekit-client', () => ({
   },
   Room: class {
     canPlaybackAudio = true;
+    remoteParticipants = fake.participants;
     localParticipant = {
       registerRpcMethod: (
         name: string,
@@ -52,12 +62,13 @@ vi.mock('livekit-client', () => ({
       unregisterRpcMethod: (name: string) => fake.rpc.delete(name),
       setMicrophoneEnabled: fake.microphone,
       publishTrack: fake.publishTrack,
-      getTrackPublication: () => undefined,
+      getTrackPublication: fake.publication,
+      isMicrophoneEnabled: true,
       publishData: fake.publish,
     };
     connect = fake.connect;
     disconnect = fake.disconnect;
-    startAudio = async () => {};
+    startAudio = fake.startAudio;
     registerTextStreamHandler() {}
     unregisterTextStreamHandler() {}
     removeAllListeners() {
@@ -112,10 +123,39 @@ function microphone(): VoiceMicrophone {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  fake.publication.mockReturnValue(undefined);
   fake.handlers.clear();
   fake.rpc.clear();
+  fake.participants.clear();
 });
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
+
+function mockMeter(resume: () => Promise<void> = async () => {}) {
+  vi.stubGlobal('MediaStream', class {});
+  vi.stubGlobal(
+    'AudioContext',
+    class {
+      state = 'suspended';
+      resume = resume;
+      close = async () => {};
+      createMediaStreamSource() {
+        return { connect: vi.fn(), disconnect: vi.fn() };
+      }
+      createAnalyser() {
+        return {
+          fftSize: 256,
+          getFloatTimeDomainData: (samples: Float32Array) => samples.fill(0.2),
+        };
+      }
+    }
+  );
+  fake.publication.mockReturnValue({
+    track: { mediaStreamTrack: {} as MediaStreamTrack },
+  });
+}
 
 describe('LiveKit voice boundary', () => {
   it('accepts agent RPCs only from the dispatched worker identity', async () => {
@@ -295,5 +335,142 @@ describe('LiveKit voice boundary', () => {
     await connected;
     expect(callbacks.connection).not.toHaveBeenCalled();
     expect(fake.microphone).not.toHaveBeenCalled();
+  });
+  it('becomes ready while the browser leaves audio resume pending', async () => {
+    mockMeter(() => new Promise<void>(() => {}));
+    const callbacks = events();
+    const media = await createLivekitVoiceMedia(
+      credentials,
+      callbacks,
+      bridges(),
+      microphone()
+    );
+    const connected = media.connect();
+    await vi.waitFor(() => expect(fake.startAudio).toHaveBeenCalled());
+    expect(callbacks.playbackBlocked).toHaveBeenCalledWith(true);
+    workerEvent(credentials.agentIdentity, 'ready');
+    await connected;
+    expect(callbacks.connection).toHaveBeenCalledWith('connected');
+    await media.disconnect();
+  });
+  it('fails visibly when the microphone works but no worker becomes ready', async () => {
+    vi.useFakeTimers();
+    mockMeter(() => new Promise<void>(() => {}));
+    const callbacks = events();
+    const capture = microphone();
+    const media = await createLivekitVoiceMedia(
+      credentials,
+      callbacks,
+      bridges(),
+      capture
+    );
+    const connected = media.connect();
+    const rejected = expect(connected).rejects.toThrow(
+      'voice agent did not connect'
+    );
+    await vi.advanceTimersByTimeAsync(100);
+    expect(callbacks.levels).toHaveBeenCalled();
+    expect(callbacks.levels.mock.calls[0][0]).toBeGreaterThan(0);
+    await vi.advanceTimersByTimeAsync(30_000);
+    await rejected;
+    expect(callbacks.failure).toHaveBeenCalledExactlyOnceWith(
+      'The voice agent did not connect. Please try again.'
+    );
+    expect(capture.stop).toHaveBeenCalled();
+    expect(callbacks.connection).not.toHaveBeenCalled();
+  });
+  it('bounds a stalled transport and ignores its eventual connection', async () => {
+    vi.useFakeTimers();
+    let resolve!: () => void;
+    fake.connect.mockImplementationOnce(
+      () =>
+        new Promise<void>((done) => {
+          resolve = done;
+        })
+    );
+    const capture = microphone();
+    const callbacks = events();
+    const media = await createLivekitVoiceMedia(
+      credentials,
+      callbacks,
+      bridges(),
+      capture
+    );
+    const connected = media.connect();
+    const rejected = expect(connected).rejects.toThrow('too long to connect');
+    await vi.advanceTimersByTimeAsync(45_000);
+    await rejected;
+    expect(capture.stop).toHaveBeenCalled();
+    resolve();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fake.publishTrack).not.toHaveBeenCalled();
+    expect(callbacks.connection).not.toHaveBeenCalled();
+  });
+  it('reads durable readiness from the initial room snapshot', async () => {
+    fake.participants.set(credentials.agentIdentity, {
+      identity: credentials.agentIdentity,
+      attributes: { 'macro.voice.ready': credentials.voiceSessionId },
+    });
+    const callbacks = events();
+    const media = await createLivekitVoiceMedia(
+      credentials,
+      callbacks,
+      bridges(),
+      microphone()
+    );
+    await media.connect();
+    expect(callbacks.connection).toHaveBeenCalledWith('connected');
+    await media.disconnect();
+  });
+  it('accepts durable readiness only from the expected worker and voice session', async () => {
+    const callbacks = events();
+    const media = await createLivekitVoiceMedia(
+      credentials,
+      callbacks,
+      bridges(),
+      microphone()
+    );
+    const connected = media.connect();
+    await vi.waitFor(() => expect(fake.publishTrack).toHaveBeenCalled());
+    fake.handlers.get('joined')?.({
+      identity: 'untrusted',
+      attributes: { 'macro.voice.ready': credentials.voiceSessionId },
+    });
+    fake.handlers.get('attributes')?.(
+      { 'macro.voice.ready': 'another-session' },
+      {
+        identity: credentials.agentIdentity,
+        attributes: { 'macro.voice.ready': 'another-session' },
+      }
+    );
+    expect(callbacks.connection).not.toHaveBeenCalled();
+    fake.handlers.get('attributes')?.(
+      { 'macro.voice.ready': credentials.voiceSessionId },
+      {
+        identity: credentials.agentIdentity,
+        attributes: { 'macro.voice.ready': credentials.voiceSessionId },
+      }
+    );
+    await connected;
+    expect(callbacks.connection).toHaveBeenCalledExactlyOnceWith('connected');
+    await media.disconnect();
+  });
+  it('accepts a worker that joins with its readiness attribute set', async () => {
+    const callbacks = events();
+    const media = await createLivekitVoiceMedia(
+      credentials,
+      callbacks,
+      bridges(),
+      microphone()
+    );
+    const connected = media.connect();
+    await vi.waitFor(() => expect(fake.publishTrack).toHaveBeenCalled());
+    fake.handlers.get('joined')?.({
+      identity: credentials.agentIdentity,
+      attributes: { 'macro.voice.ready': credentials.voiceSessionId },
+    });
+    await connected;
+    expect(callbacks.connection).toHaveBeenCalledWith('connected');
+    await media.disconnect();
   });
 });

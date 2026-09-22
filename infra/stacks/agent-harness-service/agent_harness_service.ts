@@ -20,6 +20,7 @@ import {
   ServiceUrl,
   stack,
 } from '../../packages/shared';
+import { createAgentVoiceWorker } from './agent_voice_worker';
 
 const gatewayLoadBalancer = getGatewayAlb();
 
@@ -65,6 +66,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
   public targetGroup: aws.lb.TargetGroup;
   public egressTargetGroup: aws.lb.TargetGroup;
   public service: awsx.ecs.FargateService;
+  public voiceService: awsx.ecs.FargateService;
   public cloudStorageClusterName: pulumi.Output<string> | string;
   public tags: { [key: string]: string };
 
@@ -316,6 +318,22 @@ export class AgentHarnessService extends pulumi.ComponentResource {
       BASE_NAME,
       { tags: this.tags },
       { parent: this }
+    );
+
+    const secretsArn = dopplerEcsEnvironment.containerSecrets.find(
+      (secret) => secret.name === 'APP_SECRETS_JSON'
+    )?.valueFrom;
+    if (!secretsArn) throw new Error('Missing harness deployment secret');
+    this.voiceService = createAgentVoiceWorker(
+      {
+        clusterArn: ecsClusterArn,
+        subnetIds: vpc.privateSubnetIds,
+        securityGroupId: serviceSg.id,
+        executionRoleArn: dopplerEcsEnvironment.executionRole.arn,
+        secretsArn,
+        tags,
+      },
+      this
     );
 
     this.service = new awsx.ecs.FargateService(

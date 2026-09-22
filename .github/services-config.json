@@ -3,6 +3,8 @@
     "agent-harness-service": {
       "source_paths": [
         "services/agent_harness_service/**",
+        "services/agent_voice/**",
+        "crates/agent_voice/**",
         "crates/agent_harness/**",
         "crates/agent_fold/**",
         "crates/agent_session/**",

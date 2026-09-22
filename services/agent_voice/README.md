@@ -9,10 +9,18 @@ token or its own set of product tools.
 
 ## Run
 
+The worker starts with the normal local/dev stack and deploys as a separate ECS
+service in the existing agent-harness-service stack. It must connect to the same
+LiveKit project as `agent_harness_service`; creating a room without this worker
+does not create an AI participant.
+
 Use Python 3.13 and provision secrets through the approved environment/secret manager.
-The worker requires `OPENAI_API_KEY`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and
-`LIVEKIT_API_SECRET`. `AGENT_VOICE_MODEL` optionally overrides `gpt-realtime-2.1`.
-It must connect to the same LiveKit project as `agent_harness_service`.
+The worker requires `OPENAI_API_KEY`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, and
+either `LIVEKIT_URL` or the harness's existing `LIVEKIT_SERVER_URL`.
+`AGENT_VOICE_MODEL` optionally overrides `gpt-realtime-2.1` when running directly.
+Missing credentials and local placeholder credentials fail worker startup clearly.
+
+For direct development outside the app stack:
 
 ```sh
 python -m venv .venv
@@ -29,12 +37,33 @@ docker build -t macro-agent-voice .
 
 The image runs `worker.py start` as a non-root user. The dispatch name is
 `macro-agent-voice`; do not reuse the channel transcription worker's deployment ID.
-Deploy this as a separate LiveKit worker in the same project as
-`agent_harness_service`. Voice is always enabled for Macro agents; there is no
-enable switch. The harness service requires `LIVEKIT_SERVER_URL`, `LIVEKIT_API_KEY`
-and `LIVEKIT_API_SECRET` and validates them at startup. Use the existing LiveKit
-settings in the deployment's Doppler config, and register `AGENT_VOICE_MODEL`
-there if overriding the default model. No deployment is performed by this change.
+Voice is always enabled for Macro agents; there is no enable switch. The harness
+service requires `LIVEKIT_SERVER_URL`, `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET`
+and validates them at startup. Local Compose and ECS pass only the voice worker's
+LiveKit and OpenAI settings, without Macro backend credentials. ECS uses the
+same Doppler-synced secret as the harness, selecting just those four keys, and a
+separate task role without Macro permissions. Its health check verifies LiveKit
+registration at `http://127.0.0.1:8081/`.
+
+Updating only the browser or Rust binary does not start a missing worker. Run the
+normal stack startup/rebuild locally, or deploy the agent-harness-service stack in
+hosted environments. Worker source changes trigger that stack's deployment.
+
+## Troubleshooting connection startup
+
+A moving microphone waveform means the browser has captured and published audio;
+it does not mean the agent has joined. The browser reports connected only after
+the expected worker announces readiness for the current voice session. Readiness
+is also stored in participant attributes, so a missed data message cannot leave
+the panel waiting forever. Browser autoplay permission is independent of worker
+readiness and never blocks the connection deadline.
+
+Check the `agent_voice` container locally or `/ecs/agent-voice-<stack>` logs in
+CloudWatch. Startup logs identify the failing stage and exception type without
+printing credentials or conversation content. The worker must register as
+`macro-agent-voice` in the same LiveKit project used to create the voice room.
+If no worker becomes ready, the browser stops capture and reports a connection
+error instead of remaining on Connecting.
 
 ## Conversation behavior
 

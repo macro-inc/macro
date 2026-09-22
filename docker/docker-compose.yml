@@ -355,6 +355,9 @@ services:
       - kafka
       - connection_gateway
       - lexical_service
+      # Start the voice worker with its owning harness. Provider credentials can
+      # be stubs locally, so worker health must not block other agent features.
+      - agent_voice
     networks:
       databases:
       services:
@@ -365,6 +368,32 @@ services:
           # scoped helper silently never fires and the clone prompts for a
           # password it has no terminal to read.
           - agent-harness-service
+
+  # Private voice conversations for Macro agents. The worker only needs media
+  # and speech credentials; do not inherit the shared product service env file.
+  agent_voice:
+    build:
+      context: services/agent_voice
+    restart: on-failure
+    stop_grace_period: 2m
+    environment:
+      LIVEKIT_URL: ${LIVEKIT_SERVER_URL:-}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      AGENT_VOICE_MODEL: ${AGENT_VOICE_MODEL:-gpt-realtime-2.1}
+    networks:
+      - services
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/', timeout=5)"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   # ============================================================================
   # mcp_service

@@ -164,6 +164,7 @@ use stage::Stage;
 /// Build must materialize all of them so a fresh agent never discovers one at
 /// stack-start time.
 const LOCAL_BUILD_SERVICE_IMAGES: &[&str] = &[
+    "agent_voice",
     "websocket_service",
     "sync_service",
     "lexical_service",
@@ -178,6 +179,7 @@ const LOCAL_BUILD_SERVICE_IMAGES: &[&str] = &[
 /// OpenSearch is built for cold-stack correctness but remains under the infra
 /// lifecycle, which waits for health before Rust services can reconnect.
 const LOCAL_RECREATE_SERVICE_IMAGES: &[&str] = &[
+    "agent_voice",
     "websocket_service",
     "sync_service",
     "lexical_service",
@@ -500,46 +502,34 @@ fn run_rebuild(
     let before: Vec<Option<std::time::SystemTime>> = inventory::services_for_mode(mode)
         .map(|svc| binary_mtime(target, svc))
         .collect();
-    if build_aux_services {
-        std::thread::scope(|scope| {
-            let rust_build = scope.spawn(|| {
-                build::resolve(
-                    stage,
-                    target,
-                    &build::BuildOptions {
-                        no_build: false,
-                        binaries_dir: None,
-                    },
-                )
-            });
-            let aux_build = scope.spawn(|| build_aux_service_images(stage, instance, env));
-            let binaries = rust_build
-                .join()
-                .map_err(|_| anyhow::anyhow!("Rust service build panicked"))?;
-            let aux = aux_build
-                .join()
-                .map_err(|_| anyhow::anyhow!("auxiliary service build panicked"))?;
-            binaries?;
-            aux
-        })?;
-    } else {
-        build::resolve(
-            stage,
-            target,
-            &build::BuildOptions {
-                no_build: false,
-                binaries_dir: None,
-            },
-        )?;
-    }
+    std::thread::scope(|scope| {
+        let rust_build = scope.spawn(|| {
+            build::resolve(
+                stage,
+                target,
+                &build::BuildOptions {
+                    no_build: false,
+                    binaries_dir: None,
+                },
+            )
+        });
+        let image_build =
+            scope.spawn(|| build_app_service_images(stage, instance, env, build_aux_services));
+        let binaries = rust_build
+            .join()
+            .map_err(|_| anyhow::anyhow!("Rust service build panicked"))?;
+        let images = image_build
+            .join()
+            .map_err(|_| anyhow::anyhow!("app service image build panicked"))?;
+        binaries?;
+        images
+    })?;
     let changed: Vec<&inventory::RustService> = inventory::services_for_mode(mode)
         .zip(before)
         .filter(|(svc, was)| binary_mtime(target, svc) != *was)
         .map(|(svc, _)| svc)
         .collect();
-    if build_aux_services {
-        recreate_aux_service_containers(stage, instance, env)?;
-    }
+    reload_app_service_containers(stage, instance, env, build_aux_services)?;
     if !changed.is_empty() {
         reload_services(stage, instance, &changed)?;
     }
@@ -696,8 +686,8 @@ fn prepare(
         let github = kickstart::GithubIdp::from_env(&env.merged);
         fusionauth::write_kickstart(instance, google.as_ref(), github.as_ref())?;
     }
-    if args.build.build_aux_services {
-        build_aux_service_images(stage, instance, &env)?;
+    if args.build.build_aux_services || !args.build.no_build {
+        build_app_service_images(stage, instance, &env, args.build.build_aux_services)?;
     }
     if pull_app_images {
         pull_app_service_images(stage, instance, &env)?;
@@ -712,14 +702,30 @@ fn compose_cmd(instance: &Instance, env: &env_layer::ResolvedEnv) -> Command {
     gen_compose::docker_compose(instance, &files, &env.generated_path)
 }
 
-fn build_aux_service_images(
+/// Voice is part of the ordinary agent runtime, so its image follows normal
+/// builds. The other Docker images retain their explicit auxiliary rebuild.
+fn app_image_build_command(
+    instance: &Instance,
+    env: &env_layer::ResolvedEnv,
+    build_aux_services: bool,
+) -> Command {
+    let mut build = compose_cmd(instance, env);
+    build.arg("build").args(if build_aux_services {
+        LOCAL_BUILD_SERVICE_IMAGES
+    } else {
+        &["agent_voice"]
+    });
+    build
+}
+
+fn build_app_service_images(
     stage: &Stage,
     instance: &Instance,
     env: &env_layer::ResolvedEnv,
+    build_aux_services: bool,
 ) -> Result<()> {
-    let mut build = compose_cmd(instance, env);
-    build.arg("build").args(LOCAL_BUILD_SERVICE_IMAGES);
-    stage.run("Building auxiliary service images", &mut build)
+    let mut build = app_image_build_command(instance, env, build_aux_services);
+    stage.run("Building app service images", &mut build)
 }
 
 fn pull_app_service_images(
@@ -732,15 +738,31 @@ fn pull_app_service_images(
     stage.run("Pulling image-only app services", &mut pull)
 }
 
-fn recreate_aux_service_containers(
+fn app_image_reload_command(
+    instance: &Instance,
+    env: &env_layer::ResolvedEnv,
+    build_aux_services: bool,
+) -> Command {
+    let mut up = compose_cmd(instance, env);
+    up.args(["up", "-d", "--no-deps"]);
+    if build_aux_services {
+        up.arg("--force-recreate")
+            .args(LOCAL_RECREATE_SERVICE_IMAGES);
+    } else {
+        // Compose keeps the existing worker when its image and env are unchanged.
+        up.arg("agent_voice");
+    }
+    up
+}
+
+fn reload_app_service_containers(
     stage: &Stage,
     instance: &Instance,
     env: &env_layer::ResolvedEnv,
+    build_aux_services: bool,
 ) -> Result<()> {
-    let mut up = compose_cmd(instance, env);
-    up.args(["up", "-d", "--force-recreate", "--no-deps"])
-        .args(LOCAL_RECREATE_SERVICE_IMAGES);
-    stage.run("Recreating auxiliary service containers", &mut up)
+    let mut up = app_image_reload_command(instance, env, build_aux_services);
+    stage.run("Reloading app service containers", &mut up)
 }
 
 /// How the local infra reaches its initialized state on bring-up.
@@ -840,24 +862,31 @@ fn bring_up_infra(
 /// with no service args starts everything — the app services plus the auxiliary
 /// containers (sync/websocket/lexical/mailpit/proxy/…) — with the already-running
 /// infra a no-op, so inter-service start order is unchanged from before. Dev
-/// starts only the binaries + proxy (its local infra is already up).
+/// starts the binaries, voice worker and proxy (its local infra is already up).
 fn bring_up_app(
     stage: &Stage,
     mode: Mode,
     instance: &Instance,
     env: &env_layer::ResolvedEnv,
 ) -> Result<()> {
+    let mut up = app_start_command(mode, instance, env);
+    stage.run("Starting services (docker compose up -d)", &mut up)?;
+    connect_tracing_network(instance);
+    Ok(())
+}
+
+fn app_start_command(mode: Mode, instance: &Instance, env: &env_layer::ResolvedEnv) -> Command {
     let mut up = compose_cmd(instance, env);
     up.arg("up").arg("-d").arg("--remove-orphans");
     if !mode.spec().runs_local_infra {
         for svc in inventory::services_for_mode(mode) {
             up.arg(svc.compose_name);
         }
-        up.arg("proxy");
+        // Dev overrides drop Rust service dependencies to avoid starting local
+        // equivalents of hosted infra. Voice must therefore be named explicitly.
+        up.args(["agent_voice", "proxy"]);
     }
-    stage.run("Starting services (docker compose up -d)", &mut up)?;
-    connect_tracing_network(instance);
-    Ok(())
+    up
 }
 
 /// Start the requested trace collector (`--traces`) under its own compose

@@ -31,6 +31,10 @@ separately; account-level voice billing aggregation remains to be wired.
 See [worker operations and verification](../../services/agent_voice/README.md).
 Voice is always enabled for supported Macro agents. The harness service requires
 valid LiveKit settings at startup, and the voice worker needs provider credentials.
+The worker runs as part of local/dev startup and the harness's hosted deployment.
+It has its own ECS service and task role; only its LiveKit/OpenAI credentials are
+injected. Browser connection readiness is scoped to the expected worker and voice
+session, with a deadline independent of browser autoplay.
 
 **Recommendation: attach a LiveKit voice conversation to an existing agent
 session.** A responsive speech model handles the conversation and delegates work

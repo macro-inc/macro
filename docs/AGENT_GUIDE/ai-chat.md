@@ -19,6 +19,10 @@ the prompt cancels startup and releases any microphone granted afterward.
 Connecting remains visible until the worker is ready; listening, thinking and
 speaking are separate from the agent's background work. The waveform responds to
 microphone and playback levels. Recent live captions identify **You** and **Macro**.
+Microphone activity while connecting only shows local audio capture. A missing
+voice worker must produce a connection error within 45 seconds and release the
+microphone. A blocked audio playback prompt must not prevent the session becoming
+connected; use **Enable audio playback** to hear the agent.
 Voice is always available for supported Macro agents; there is no deployment
 enable switch. An unsupported agent shows **Voice unavailable** and directs you
 to choose a Macro agent. Connection failures show an error with **Try again**.
@@ -47,7 +51,8 @@ capture automatically.
 
 Browser regression checks: open the panel, choose another voice, dismiss/reopen,
 start with microphone allowed and denied, mute/unmute, minimize/navigate/reopen,
-and end while connecting. Verify a second tab and a human call cannot acquire the
+and end while connecting. Verify missing-worker startup fails visibly and playback
+permission cannot leave Connecting stuck. Verify a second tab and a human call cannot acquire the
 microphone simultaneously. Real-microphone checks additionally need a configured
 worker/provider and must cover interruption during speech, correction during a
 running task, pending review and network loss.

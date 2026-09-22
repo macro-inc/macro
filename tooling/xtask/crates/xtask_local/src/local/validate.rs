@@ -21,6 +21,7 @@ const REQUIRED_NON_RUST: &[&str] = &[
     "fusionauth",
     "localstack",
     "mailpit",
+    "agent_voice",
 ];
 
 /// Render the merged compose config and assert every Rust service is a

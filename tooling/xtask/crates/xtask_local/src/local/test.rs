@@ -68,3 +68,94 @@ fn durable_bake_covers_every_repository_built_local_image() {
         ["proxy", "mailpit", "static_file_cdn"]
     );
 }
+
+#[test]
+fn voice_worker_starts_without_a_profile_or_provider_health_gate() {
+    let raw = std::fs::read_to_string(repo_root().join("docker/docker-compose.yml")).unwrap();
+    let compose: serde_yaml::Value = serde_yaml::from_str(&raw).unwrap();
+    let worker = &compose["services"]["agent_voice"];
+    assert!(worker.is_mapping());
+    assert!(worker["profiles"].is_null());
+    assert!(worker["ports"].is_null());
+    assert_eq!(
+        worker["build"]["context"].as_str(),
+        Some("services/agent_voice")
+    );
+    // A short-form dependency waits only for startup. A worker using local
+    // stub credentials must not prevent unrelated harness features starting.
+    assert!(
+        compose["services"]["agent_harness_service"]["depends_on"]
+            .as_sequence()
+            .unwrap()
+            .iter()
+            .any(|service| service.as_str() == Some("agent_voice"))
+    );
+}
+
+#[test]
+fn voice_worker_receives_only_speech_and_media_configuration() {
+    let raw = std::fs::read_to_string(repo_root().join("docker/docker-compose.yml")).unwrap();
+    let compose: serde_yaml::Value = serde_yaml::from_str(&raw).unwrap();
+    let worker = &compose["services"]["agent_voice"];
+    assert!(
+        worker["<<"].is_null(),
+        "must not inherit the shared env file"
+    );
+    assert!(worker["env_file"].is_null());
+    let env = worker["environment"].as_mapping().unwrap();
+    let expected = [
+        ("LIVEKIT_URL", "${LIVEKIT_SERVER_URL:-}"),
+        ("LIVEKIT_API_KEY", "${LIVEKIT_API_KEY:-}"),
+        ("LIVEKIT_API_SECRET", "${LIVEKIT_API_SECRET:-}"),
+        ("OPENAI_API_KEY", "${OPENAI_API_KEY:-}"),
+        (
+            "AGENT_VOICE_MODEL",
+            "${AGENT_VOICE_MODEL:-gpt-realtime-2.1}",
+        ),
+    ];
+    assert_eq!(env.len(), expected.len());
+    for (key, value) in expected {
+        assert_eq!(env[key].as_str(), Some(value));
+    }
+}
+
+fn voice_command_fixture() -> (Instance, env_layer::ResolvedEnv) {
+    let instance = Instance::derive(Some("voice-command-test"), None).unwrap();
+    let env = env_layer::ResolvedEnv {
+        merged: Default::default(),
+        doppler_used: false,
+        env_file: None,
+        generated_path: instance.artifact_dir().join("local.generated.env"),
+    };
+    (instance, env)
+}
+
+#[test]
+fn dev_explicit_start_keeps_the_voice_worker_after_dependencies_are_removed() {
+    let (instance, env) = voice_command_fixture();
+    let command = app_start_command(Mode::Dev, &instance, &env);
+    let args: Vec<_> = command.get_args().collect();
+    assert!(args.contains(&std::ffi::OsStr::new("agent_voice")));
+    assert!(args.contains(&std::ffi::OsStr::new("proxy")));
+    let env_index = args.iter().position(|arg| *arg == "--env-file").unwrap();
+    assert_eq!(args[env_index + 1], env.generated_path);
+}
+
+#[test]
+fn normal_and_auxiliary_rebuilds_both_refresh_the_voice_worker() {
+    let (instance, env) = voice_command_fixture();
+    for build_aux_services in [false, true] {
+        let build = app_image_build_command(&instance, &env, build_aux_services);
+        let build_args: Vec<_> = build.get_args().collect();
+        assert!(build_args.contains(&std::ffi::OsStr::new("agent_voice")));
+        let reload = app_image_reload_command(&instance, &env, build_aux_services);
+        let reload_args: Vec<_> = reload.get_args().collect();
+        assert!(reload_args.contains(&std::ffi::OsStr::new("agent_voice")));
+        assert!(reload_args.contains(&std::ffi::OsStr::new("--no-deps")));
+        if !build_aux_services {
+            assert!(!reload_args.contains(&std::ffi::OsStr::new("--force-recreate")));
+            assert!(!reload_args.contains(&std::ffi::OsStr::new("postgres")));
+            assert!(!reload_args.contains(&std::ffi::OsStr::new("agent_harness_service")));
+        }
+    }
+}

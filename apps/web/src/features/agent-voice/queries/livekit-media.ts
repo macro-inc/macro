@@ -40,10 +40,13 @@ export async function createLivekitVoiceMedia(
   let workerReady = false;
   let workerFailure: string | undefined;
   let resolveReady: (() => void) | undefined;
+  let cancelStartup: (() => void) | undefined;
+  let rejectStartup: ((error: Error) => void) | undefined;
   let sequence = 0;
   let interval: ReturnType<typeof setInterval> | undefined;
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
   let workerTimer: ReturnType<typeof setTimeout> | undefined;
+  let startupTimer: ReturnType<typeof setTimeout> | undefined;
   const audioElements = new Map<RemoteAudioTrack, HTMLMediaElement>();
   const streams = new Set<AbortController>();
   let audioContext: AudioContext | undefined;
@@ -57,8 +60,26 @@ export async function createLivekitVoiceMedia(
     if (disposed) return;
     microphone.stop();
     workerFailure = message;
+    rejectStartup?.(new Error(message));
     resolveReady?.();
     events.failure(message);
+  };
+  const markReady = () => {
+    if (disposed || workerFailure || workerReady) return;
+    workerReady = true;
+    clearTimeout(workerTimer);
+    resolveReady?.();
+    events.agentState('listening');
+  };
+  const participantReady = (participant: {
+    identity: string;
+    attributes: Record<string, string>;
+  }) => {
+    if (
+      participant.identity === credentials.agentIdentity &&
+      participant.attributes['macro.voice.ready'] === credentials.voiceSessionId
+    )
+      markReady();
   };
   const createMeter = (track: MediaStreamTrack) => {
     audioContext ??= new AudioContext();
@@ -69,6 +90,14 @@ export async function createLivekitVoiceMedia(
     analyser.fftSize = 256;
     source.connect(analyser);
     return { source, analyser };
+  };
+  const startPlayback = async () => {
+    try {
+      await Promise.all([audioContext?.resume(), room.startAudio()]);
+      if (!disposed) events.playbackBlocked(!room.canPlaybackAudio);
+    } catch {
+      if (!disposed) events.playbackBlocked(true);
+    }
   };
   const level = (meter: typeof inputMeter) => {
     if (!meter) return 0;
@@ -177,6 +206,7 @@ export async function createLivekitVoiceMedia(
     if (!disposed && participant.identity === credentials.agentIdentity)
       fail('The voice agent disconnected. Start again to continue.');
   });
+  room.on(RoomEvent.ParticipantConnected, participantReady);
   room.on(RoomEvent.TrackSubscribed, (track, _publication, participant) => {
     if (
       disposed ||
@@ -217,6 +247,7 @@ export async function createLivekitVoiceMedia(
   });
   room.on(RoomEvent.ParticipantAttributesChanged, (attributes, participant) => {
     if (disposed || participant.identity !== credentials.agentIdentity) return;
+    participantReady(participant);
     const state = attributes['lk.agent.state'];
     if (state === 'listening' || state === 'thinking' || state === 'speaking')
       events.agentState(state);
@@ -246,12 +277,7 @@ export async function createLivekitVoiceMedia(
     )
       return;
     const event = parseWorkerEvent(payload);
-    if (event?.type === 'ready') {
-      workerReady = true;
-      clearTimeout(workerTimer);
-      resolveReady?.();
-      events.agentState('listening');
-    }
+    if (event?.type === 'ready') markReady();
     if (event?.type === 'error' || event?.type === 'ended')
       fail(event.message ?? 'The voice agent disconnected. Please try again.');
   });
@@ -269,6 +295,10 @@ export async function createLivekitVoiceMedia(
       await room.disconnect();
       return;
     }
+    // The worker may already be ready in the initial room snapshot; its
+    // one-shot data packet can arrive before the browser joins the room.
+    const worker = room.remoteParticipants.get(credentials.agentIdentity);
+    if (worker) participantReady(worker);
     if (workerFailure) throw new Error(workerFailure);
     await room.localParticipant.publishTrack(microphone.track, {
       source: Track.Source.Microphone,
@@ -288,16 +318,12 @@ export async function createLivekitVoiceMedia(
         /* Mic still works without a meter. */
       }
     }
-    try {
-      await audioContext?.resume();
-      await room.startAudio();
-    } catch {
-      if (!disposed) events.playbackBlocked(true);
-    }
-    if (disposed) {
-      await room.disconnect();
-      return;
-    }
+    // Autoplay can leave resume()/play() pending until a later user gesture.
+    // It must not prevent readiness or the worker timeout from progressing.
+    events.playbackBlocked(
+      audioContext?.state === 'suspended' || !room.canPlaybackAudio
+    );
+    void startPlayback();
     interval = setInterval(
       () =>
         events.levels(
@@ -321,10 +347,12 @@ export async function createLivekitVoiceMedia(
   const disconnect = async () => {
     disposed = true;
     microphone.stop();
+    cancelStartup?.();
     resolveReady?.();
     clearInterval(interval);
     clearTimeout(reconnectTimer);
     clearTimeout(workerTimer);
+    clearTimeout(startupTimer);
     room.localParticipant.unregisterRpcMethod('macro.agent.request');
     room.localParticipant.unregisterRpcMethod('macro.agent.cancel');
     room.localParticipant.unregisterRpcMethod('macro.voice.context');
@@ -351,11 +379,25 @@ export async function createLivekitVoiceMedia(
   };
   return {
     connect: async () => {
+      if (disposed) return;
+      const interrupted = new Promise<void>((resolve, reject) => {
+        cancelStartup = resolve;
+        rejectStartup = reject;
+      });
+      // Also cover SDK connection/publication stalls before the worker timer.
+      startupTimer = setTimeout(
+        () => fail('Voice took too long to connect. Please try again.'),
+        45_000
+      );
       try {
-        await connect();
+        await Promise.race([connect(), interrupted]);
       } catch (error) {
         await disconnect();
         throw error;
+      } finally {
+        clearTimeout(startupTimer);
+        cancelStartup = undefined;
+        rejectStartup = undefined;
       }
     },
     disconnect,
