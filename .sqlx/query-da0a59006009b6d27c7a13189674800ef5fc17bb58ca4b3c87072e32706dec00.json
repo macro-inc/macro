@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.id, (c.channel_type = 'direct_message') as \"is_direct_message!\"\n           FROM comms_channels c\n           JOIN comms_channel_participants p ON p.channel_id = c.id\n           WHERE c.id = ANY($1) AND p.user_id = $2 AND p.left_at IS NULL\n           ORDER BY c.id FOR SHARE OF c, p",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "is_direct_message!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "da0a59006009b6d27c7a13189674800ef5fc17bb58ca4b3c87072e32706dec00"
+}

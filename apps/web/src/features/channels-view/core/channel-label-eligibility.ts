@@ -1,13 +1,13 @@
 import type { ChannelEntity } from '@entity';
 
-/** Only team channels participate in manual or smart labels. */
+/** All known channels except direct messages participate in manual or smart labels. */
 export function canLabelChannel(
   channel: Pick<ChannelEntity, 'channelType'> | undefined
 ): boolean {
-  return channel?.channelType === 'team';
+  return channel !== undefined && channel.channelType !== 'direct_message';
 }
 
-/** Trust server memberships for unloaded channels; exclude known non-team channels. */
+/** Trust server memberships for unloaded channels; exclude known direct messages. */
 export function filterChannelLabelMembers(
   channelIds: readonly string[],
   channelsById: ReadonlyMap<string, Pick<ChannelEntity, 'channelType'>>

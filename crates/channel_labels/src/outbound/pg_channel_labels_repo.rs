@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::domain::models::{
     ChannelLabel, ChannelLabelRule, ChannelLabelsScope, LabelWriteOutcome, SetChannelLabelOutcome,
-    SmartTagChannelMatch, SmartTagPreview,
+    SmartTagChannelMatch, SmartTagPreview, can_label_channel,
 };
 use crate::domain::ports::ChannelLabelsRepo;
 
@@ -97,8 +97,7 @@ impl PgChannelLabelsRepo {
                     FROM comms_channels c
                     JOIN comms_channel_participants p
                         ON p.channel_id = c.id AND p.user_id = $3 AND p.left_at IS NULL
-                    WHERE c.channel_type = 'team'
-                    AND (l.team_id IS NULL OR c.team_id = l.team_id)
+                    WHERE c.channel_type != 'direct_message'
                     AND ((
                         l.name_contains IS NULL AND EXISTS (
                             SELECT 1 FROM channel_label_channel lc
@@ -125,8 +124,7 @@ impl PgChannelLabelsRepo {
                 CASE WHEN l.name_contains IS NULL THEN
                     (SELECT COUNT(*) FROM channel_label_channel lc
                      JOIN comms_channels c ON c.id = lc.channel_id
-                     WHERE lc.label_id = l.id AND c.channel_type = 'team'
-                         AND (l.team_id IS NULL OR c.team_id = l.team_id))
+                     WHERE lc.label_id = l.id AND c.channel_type != 'direct_message')
                     ELSE cardinality(l.visible_ids)::bigint END as "channel_count!"
             FROM labels l
             ORDER BY l.sort_order, l.created_at, l.id
@@ -177,7 +175,7 @@ impl ChannelLabelsRepo for PgChannelLabelsRepo {
         let user_id = scope.owner_id();
         let name_contains = rule.map(ChannelLabelRule::name_contains);
         let mut tx = self.pool.begin().await?;
-        let validity = validate_channels(&mut tx, channel_ids, viewer, Some(scope)).await?;
+        let validity = validate_channels(&mut tx, channel_ids, viewer, true).await?;
         if validity != SetChannelLabelOutcome::Updated {
             return Ok(LabelWriteOutcome::InvalidChannel(validity));
         }
@@ -300,8 +298,7 @@ impl ChannelLabelsRepo for PgChannelLabelsRepo {
                 return Ok(SetChannelLabelOutcome::SmartTagReadOnly);
             }
         }
-        let validity =
-            validate_channels(&mut tx, &[channel_id], actor, label_id.map(|_| scope)).await?;
+        let validity = validate_channels(&mut tx, &[channel_id], actor, label_id.is_some()).await?;
         if validity != SetChannelLabelOutcome::Updated {
             return Ok(validity);
         }
@@ -332,27 +329,23 @@ impl ChannelLabelsRepo for PgChannelLabelsRepo {
     #[tracing::instrument(err, skip(self))]
     async fn preview_smart_tag(
         &self,
-        scope: &ChannelLabelsScope,
         viewer: &MacroUserIdStr<'_>,
         rule: &ChannelLabelRule,
         limit: u16,
     ) -> Result<SmartTagPreview, Self::Err> {
         let name_contains = rule.name_contains();
-        let team_id = scope.team_id();
         let rows = sqlx::query!(
             r#"SELECT c.id, c.name as "name!", COUNT(*) OVER () as "total_count!"
                FROM comms_channels c
                JOIN comms_channel_participants p ON p.channel_id = c.id
                WHERE p.user_id = $1 AND p.left_at IS NULL
-                   AND c.channel_type = 'team'
-                   AND ($4::uuid IS NULL OR c.team_id = $4)
+                   AND c.channel_type != 'direct_message'
                    AND strpos(lower(c.name), lower($2)) > 0
                ORDER BY lower(c.name), c.id
                LIMIT $3"#,
             viewer.as_ref(),
             name_contains,
             i64::from(limit),
-            team_id,
         )
         .fetch_all(&self.pool)
         .await?;
@@ -371,17 +364,15 @@ impl ChannelLabelsRepo for PgChannelLabelsRepo {
 
 /// Lock active memberships and channel attributes until assignments commit.
 /// Apply the domain's eligibility policy for additions, while allowing removals
-/// to clear historical assignments regardless of the channel's current team.
+/// to clear historical direct-message assignments.
 async fn validate_channels(
     tx: &mut Transaction<'_, Postgres>,
     channel_ids: &[Uuid],
     actor: &MacroUserIdStr<'_>,
-    assignment_scope: Option<&ChannelLabelsScope>,
+    assigning_label: bool,
 ) -> Result<SetChannelLabelOutcome, ChannelLabelsRepoErr> {
-    // The valid_team_channel constraint makes team_id present exactly when the
-    // channel type is 'team', so it supplies the domain's eligibility fact.
     let channels = sqlx::query!(
-        r#"SELECT c.id, c.team_id
+        r#"SELECT c.id, (c.channel_type = 'direct_message') as "is_direct_message!"
            FROM comms_channels c
            JOIN comms_channel_participants p ON p.channel_id = c.id
            WHERE c.id = ANY($1) AND p.user_id = $2 AND p.left_at IS NULL
@@ -394,8 +385,10 @@ async fn validate_channels(
     if channels.len() != channel_ids.len() {
         return Ok(SetChannelLabelOutcome::ChannelNotFound);
     }
-    if assignment_scope
-        .is_some_and(|scope| channels.iter().any(|c| !scope.can_label_channel(c.team_id)))
+    if assigning_label
+        && channels
+            .iter()
+            .any(|c| !can_label_channel(c.is_direct_message))
     {
         return Ok(SetChannelLabelOutcome::ChannelNotLabelable);
     }

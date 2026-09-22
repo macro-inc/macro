@@ -3,12 +3,13 @@ use crate::domain::models::ChannelLabelRule;
 use cowlike::CowLike;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn only_eligible_team_channels_can_be_assigned_or_moved_during_creation(pool: PgPool) {
+async fn all_non_dm_channels_can_be_assigned_without_partial_moves_on_invalid_creation(
+    pool: PgPool,
+) {
     insert_user(&pool, USER_A).await;
     insert_user(&pool, USER_B).await;
     let team_id = insert_team(&pool, USER_A).await;
     let other_team_id = insert_team(&pool, USER_B).await;
-    let scope = ChannelLabelsScope::Team(team_id);
     let channel = insert_team_channel(&pool, "Support", team_id, USER_A, &[USER_A]).await;
     let other_team =
         insert_team_channel(&pool, "Other support", other_team_id, USER_B, &[USER_A]).await;
@@ -17,62 +18,62 @@ async fn only_eligible_team_channels_can_be_assigned_or_moved_during_creation(po
         insert_channel(&pool, Some("Private support"), "private", USER_A, &[USER_A]).await;
     let dm = insert_channel(&pool, None, "direct_message", USER_A, &[USER_A]).await;
     let repo = PgChannelLabelsRepo::new(pool);
-    let original = written(
-        repo.create_label(&scope, "Original", &[channel], &user(USER_A), None)
-            .await
-            .unwrap(),
-    );
-
-    for invalid in [public, private, dm, other_team] {
+    let eligible = [channel, public, private, other_team];
+    for scope in [
+        ChannelLabelsScope::Team(team_id),
+        ChannelLabelsScope::User(user(USER_A).into_owned()),
+    ] {
+        let original = written(
+            repo.create_label(&scope, "Original", &eligible, &user(USER_A), None)
+                .await
+                .unwrap(),
+        );
+        assert_eq!(original.channel_count, 4);
         assert_eq!(
-            repo.set_channel_label(&scope, invalid, Some(original.id), &user(USER_A))
+            repo.set_channel_label(&scope, dm, Some(original.id), &user(USER_A))
                 .await
                 .unwrap(),
             SetChannelLabelOutcome::ChannelNotLabelable
         );
         assert_eq!(
-            repo.create_label(&scope, "New", &[channel, invalid], &user(USER_A), None)
+            repo.create_label(&scope, "New", &[channel, dm], &user(USER_A), None)
                 .await
                 .unwrap(),
             LabelWriteOutcome::InvalidChannel(SetChannelLabelOutcome::ChannelNotLabelable)
         );
         assert_eq!(
             repo.list_labels(&scope, &user(USER_A)).await.unwrap(),
-            vec![original.clone()],
+            vec![original],
             "invalid creation must not create a label or move the eligible channel"
         );
-    }
-
-    let private_scope = ChannelLabelsScope::User(user(USER_A).into_owned());
-    let private_label = written(
-        repo.create_label(
-            &private_scope,
-            "Private",
-            &[channel, other_team],
-            &user(USER_A),
-            None,
-        )
-        .await
-        .unwrap(),
-    );
-    assert_eq!(private_label.channel_count, 2);
-    for invalid in [public, private, dm] {
-        assert_eq!(
-            repo.set_channel_label(
-                &private_scope,
-                invalid,
-                Some(private_label.id),
-                &user(USER_A)
-            )
+        let destination = written(
+            repo.create_label(&scope, "Destination", &[], &user(USER_A), None)
+                .await
+                .unwrap(),
+        );
+        for channel in eligible {
+            assert_eq!(
+                repo.set_channel_label(&scope, channel, Some(destination.id), &user(USER_A))
+                    .await
+                    .unwrap(),
+                SetChannelLabelOutcome::Updated
+            );
+        }
+        let moved = repo
+            .get_label(&scope, destination.id, &user(USER_A))
             .await
-            .unwrap(),
-            SetChannelLabelOutcome::ChannelNotLabelable
+            .unwrap()
+            .unwrap();
+        assert_eq!(moved.channel_count, 4);
+        assert_eq!(
+            moved.channel_ids,
+            vec![other_team, private, public, channel]
         );
     }
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn legacy_assignments_are_hidden_and_not_counted_but_can_be_removed(pool: PgPool) {
+async fn historical_dms_are_hidden_and_not_counted_but_can_be_removed(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     insert_user(&pool, USER_B).await;
     let team_id = insert_team(&pool, USER_A).await;
@@ -106,9 +107,12 @@ async fn legacy_assignments_are_hidden_and_not_counted_but_can_be_removed(pool: 
     .unwrap();
 
     let listed = repo.list_labels(&scope, &user(USER_A)).await.unwrap();
-    assert_eq!(listed[0].channel_ids, vec![visible]);
     assert_eq!(
-        listed[0].channel_count, 2,
+        listed[0].channel_ids,
+        vec![other_team, private, public, visible]
+    );
+    assert_eq!(
+        listed[0].channel_count, 5,
         "count includes eligible hidden channels"
     );
     assert_eq!(
@@ -119,14 +123,12 @@ async fn legacy_assignments_are_hidden_and_not_counted_but_can_be_removed(pool: 
         listed[0]
     );
 
-    for invalid in [public, private, dm, other_team] {
-        assert_eq!(
-            repo.set_channel_label(&scope, invalid, None, &user(USER_A))
-                .await
-                .unwrap(),
-            SetChannelLabelOutcome::Updated
-        );
-    }
+    assert_eq!(
+        repo.set_channel_label(&scope, dm, None, &user(USER_A))
+            .await
+            .unwrap(),
+        SetChannelLabelOutcome::Updated
+    );
     let remaining = sqlx::query_scalar!(
         r#"SELECT COUNT(*) AS "count!" FROM channel_label_channel WHERE label_id = $1"#,
         manual.id,
@@ -135,8 +137,8 @@ async fn legacy_assignments_are_hidden_and_not_counted_but_can_be_removed(pool: 
     .await
     .unwrap();
     assert_eq!(
-        remaining, 2,
-        "historical ineligible assignments were removed"
+        remaining, 5,
+        "the historical DM assignment was removed without affecting eligible channels"
     );
 
     sqlx::query!(
@@ -151,12 +153,12 @@ async fn legacy_assignments_are_hidden_and_not_counted_but_can_be_removed(pool: 
         .await
         .unwrap()
         .unwrap();
-    assert!(changed.channel_ids.is_empty());
-    assert_eq!(changed.channel_count, 1);
+    assert_eq!(changed.channel_ids, listed[0].channel_ids);
+    assert_eq!(changed.channel_count, 5);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn smart_preview_and_membership_include_only_eligible_team_channels(pool: PgPool) {
+async fn smart_preview_and_membership_include_all_visible_non_dm_channel_types(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     insert_user(&pool, USER_B).await;
     let team_id = insert_team(&pool, USER_A).await;
@@ -165,23 +167,22 @@ async fn smart_preview_and_membership_include_only_eligible_team_channels(pool: 
     let channel = insert_team_channel(&pool, "Support", team_id, USER_A, &[USER_A]).await;
     let other_team =
         insert_team_channel(&pool, "Other support", other_team_id, USER_B, &[USER_A]).await;
-    insert_channel(&pool, Some("Public support"), "public", USER_A, &[USER_A]).await;
-    insert_channel(&pool, Some("Private support"), "private", USER_A, &[USER_A]).await;
+    let public = insert_channel(&pool, Some("Public support"), "public", USER_A, &[USER_A]).await;
+    let private =
+        insert_channel(&pool, Some("Private support"), "private", USER_A, &[USER_A]).await;
     insert_channel(&pool, None, "direct_message", USER_A, &[USER_A]).await;
     let repo = PgChannelLabelsRepo::new(pool.clone());
     let rule = ChannelLabelRule::Name {
         contains: "support".into(),
     };
 
-    for (scope, expected) in [
-        (scope.clone(), vec![channel]),
-        (
-            ChannelLabelsScope::User(user(USER_A).into_owned()),
-            vec![other_team, channel],
-        ),
+    let expected = vec![other_team, private, public, channel];
+    for scope in [
+        scope.clone(),
+        ChannelLabelsScope::User(user(USER_A).into_owned()),
     ] {
         let preview = repo
-            .preview_smart_tag(&scope, &user(USER_A), &rule, 5)
+            .preview_smart_tag(&user(USER_A), &rule, 5)
             .await
             .unwrap();
         let smart = written(
@@ -211,12 +212,11 @@ async fn smart_preview_and_membership_include_only_eligible_team_channels(pool: 
     .await
     .unwrap();
     let preview = repo
-        .preview_smart_tag(&scope, &user(USER_A), &rule, 5)
+        .preview_smart_tag(&user(USER_A), &rule, 5)
         .await
         .unwrap();
     let listed = repo.list_labels(&scope, &user(USER_A)).await.unwrap();
-    assert!(preview.channels.is_empty());
-    assert_eq!(preview.total_count, 0);
-    assert!(listed[0].channel_ids.is_empty());
-    assert_eq!(listed[0].channel_count, 0);
+    assert_eq!(preview.total_count, 4);
+    assert_eq!(listed[0].channel_ids, expected);
+    assert_eq!(listed[0].channel_count, 4);
 }

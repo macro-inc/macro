@@ -138,47 +138,47 @@ describe('channel tag flag in rail menus', () => {
     expect(rail.createSmartTag).not.toHaveBeenCalled();
   });
 
-  it('hides cached label actions when the flag changes without remounting', () => {
-    const channel = {
-      id: 'channel',
-      channelType: 'team',
-    } as ChannelEntity;
-    render(() => <ChannelLabelMenuItems channel={channel} />);
-
-    expect(screen.queryByText('Move to label')).toBeNull();
-    expect(screen.queryByText('Cached label')).toBeNull();
-
-    setEnabled(true);
-    expect(screen.getByText('Move to label')).toBeTruthy();
-    expect(screen.getByText('Cached label')).toBeTruthy();
-    expect(screen.getByText('Ungroup from “Cached label”')).toBeTruthy();
-
-    setEnabled(false);
-    expect(screen.queryByText('Move to label')).toBeNull();
-    expect(screen.queryByText('Cached label')).toBeNull();
-    expect(screen.queryByText('Ungroup from “Cached label”')).toBeNull();
-    expect(rail.setChannelLabel).not.toHaveBeenCalled();
-  });
-
-  it.each(['public', 'private', 'direct_message'] as const)(
-    'hides all label actions for %s channels even with cached membership and the flag enabled',
+  it.each(['public', 'private', 'team'] as const)(
+    'shows label actions for %s channels and hides them when the flag changes without remounting',
     (channelType) => {
-      setEnabled(true);
-      const channel: ChannelEntity = {
+      const channel = {
         id: 'channel',
-        name: 'Channel',
-        ownerId: 'alice',
-        type: 'channel',
         channelType,
-      };
-      const view = render(() => <ChannelLabelMenuItems channel={channel} />);
+      } as ChannelEntity;
+      render(() => <ChannelLabelMenuItems channel={channel} />);
 
-      expect(view.container.textContent).toBe('');
       expect(screen.queryByText('Move to label')).toBeNull();
-      expect(screen.queryByText('Add to label')).toBeNull();
-      expect(screen.queryByText('New label…')).toBeNull();
+      expect(screen.queryByText('Cached label')).toBeNull();
+
+      setEnabled(true);
+      expect(screen.getByText('Move to label')).toBeTruthy();
+      expect(screen.getByText('Cached label')).toBeTruthy();
+      expect(screen.getByText('Ungroup from “Cached label”')).toBeTruthy();
+
+      setEnabled(false);
+      expect(screen.queryByText('Move to label')).toBeNull();
+      expect(screen.queryByText('Cached label')).toBeNull();
       expect(screen.queryByText('Ungroup from “Cached label”')).toBeNull();
       expect(rail.setChannelLabel).not.toHaveBeenCalled();
     }
   );
+
+  it('hides all label actions for direct messages even with cached membership and the flag enabled', () => {
+    setEnabled(true);
+    const channel: ChannelEntity = {
+      id: 'channel',
+      name: 'Channel',
+      ownerId: 'alice',
+      type: 'channel',
+      channelType: 'direct_message',
+    };
+    const view = render(() => <ChannelLabelMenuItems channel={channel} />);
+
+    expect(view.container.textContent).toBe('');
+    expect(screen.queryByText('Move to label')).toBeNull();
+    expect(screen.queryByText('Add to label')).toBeNull();
+    expect(screen.queryByText('New label…')).toBeNull();
+    expect(screen.queryByText('Ungroup from “Cached label”')).toBeNull();
+    expect(rail.setChannelLabel).not.toHaveBeenCalled();
+  });
 });

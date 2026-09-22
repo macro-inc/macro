@@ -14,7 +14,7 @@ export function channelMatchesSmartTag(
   );
 }
 
-/** Keep unloaded server matches, exclude non-team channels, and reflect live names. */
+/** Keep unloaded server matches, exclude direct messages, and reflect live names. */
 export function resolveChannelLabelMemberships(
   labels: readonly ChannelLabel[],
   channels: readonly ChannelEntity[]
@@ -41,18 +41,11 @@ export function resolveChannelLabelMemberships(
               (label.channelIds.length - channelIds.length),
           };
     }
-    // Channel entities have no team ID. Shared-label matches must come from
-    // the server so a matching name cannot add another team's channel.
-    const serverIds = new Set(label.channelIds);
     const channelIds = [
       ...new Set([
         ...label.channelIds.filter((id) => !loadedIds.has(id)),
         ...channels
-          .filter(
-            (channel) =>
-              (!label.teamId || serverIds.has(channel.id)) &&
-              channelMatchesSmartTag(channel, rule)
-          )
+          .filter((channel) => channelMatchesSmartTag(channel, rule))
           .map((channel) => channel.id),
       ]),
     ];

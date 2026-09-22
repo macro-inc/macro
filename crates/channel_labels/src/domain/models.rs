@@ -1,8 +1,5 @@
 //! Domain models for channel labels.
 
-#[cfg(test)]
-mod test;
-
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -118,7 +115,7 @@ pub enum LabelWriteOutcome {
     NameTaken,
     /// The label to rename does not exist in the scope.
     NotFound,
-    /// A requested channel is missing, inaccessible, or ineligible for this scope.
+    /// A requested channel is missing, inaccessible, or a direct message.
     InvalidChannel(SetChannelLabelOutcome),
 }
 
@@ -131,7 +128,7 @@ pub enum SetChannelLabelOutcome {
     ChannelNotFound,
     /// The target label does not exist in the scope.
     LabelNotFound,
-    /// Only team channels belonging to the label's scope can be labelled.
+    /// Direct messages cannot be labelled.
     ChannelNotLabelable,
     /// Smart tag membership is determined by its rule, not manual assignments.
     SmartTagReadOnly,
@@ -146,19 +143,12 @@ pub enum ChannelLabelsScope {
     User(MacroUserIdStr<'static>),
 }
 
-impl ChannelLabelsScope {
-    /// Whether a channel's owning team permits grouping it in this namespace.
-    /// Non-team channels have no owning team and cannot be labelled. Shared
-    /// labels accept only their own team's channels; private labels accept any
-    /// team channel the viewer participates in.
-    pub fn can_label_channel(&self, channel_team_id: Option<Uuid>) -> bool {
-        match (self, channel_team_id) {
-            (Self::Team(team_id), Some(channel_team_id)) => *team_id == channel_team_id,
-            (Self::User(_), Some(_)) => true,
-            (_, None) => false,
-        }
-    }
+/// Direct messages cannot be grouped; all other channel types are eligible.
+pub fn can_label_channel(is_direct_message: bool) -> bool {
+    !is_direct_message
+}
 
+impl ChannelLabelsScope {
     /// Stable persistence key for this namespace.
     pub fn key(&self) -> String {
         match self {

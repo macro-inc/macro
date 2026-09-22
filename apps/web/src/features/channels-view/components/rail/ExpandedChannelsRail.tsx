@@ -261,7 +261,7 @@ function ChannelOption(props: {
   labelId?: string;
   /** Keep the timestamp visible instead of revealing it on hover. */
   alwaysShowTimestamp?: boolean;
-  /** Make a team-channel row draggable between labels (Channels section only). */
+  /** Make a channel row draggable between labels (Channels section only). */
   draggable?: boolean;
 }) {
   const rail = useChannelsRail();

@@ -7,7 +7,7 @@ use super::PgChannelLabelsRepo;
 use crate::domain::models::{ChannelLabelsScope, LabelWriteOutcome, SetChannelLabelOutcome};
 use crate::domain::ports::ChannelLabelsRepo;
 
-mod team_channels;
+mod channel_types;
 
 const USER_A: &str = "macro|labels-a@macro.com";
 const USER_B: &str = "macro|labels-b@macro.com";
@@ -681,7 +681,7 @@ async fn smart_preview_is_bounded_literal_and_respects_membership(pool: PgPool) 
     .await
     .unwrap();
     let preview = repo
-        .preview_smart_tag(&ChannelLabelsScope::Team(team_id), &user(USER_A), &rule, 5)
+        .preview_smart_tag(&user(USER_A), &rule, 5)
         .await
         .unwrap();
     assert_eq!(preview.total_count, 8);
@@ -705,23 +705,13 @@ async fn smart_preview_is_bounded_literal_and_respects_membership(pool: PgPool) 
         contains: "%_".into(),
     };
     let literal_preview = repo
-        .preview_smart_tag(
-            &ChannelLabelsScope::Team(team_id),
-            &user(USER_A),
-            &literal_rule,
-            5,
-        )
+        .preview_smart_tag(&user(USER_A), &literal_rule, 5)
         .await
         .unwrap();
     assert_eq!(literal_preview.total_count, 1);
     assert_eq!(literal_preview.channels[0].id, literal);
     let empty = repo
-        .preview_smart_tag(
-            &ChannelLabelsScope::Team(team_id),
-            &user(USER_B),
-            &literal_rule,
-            5,
-        )
+        .preview_smart_tag(&user(USER_B), &literal_rule, 5)
         .await
         .unwrap();
     assert_eq!(empty.total_count, 0);

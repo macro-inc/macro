@@ -33,7 +33,7 @@ enum RepoCall {
         label_id: Option<Uuid>,
     },
     Preview {
-        scope: ChannelLabelsScope,
+        viewer: String,
     },
 }
 
@@ -170,13 +170,12 @@ impl ChannelLabelsRepo for FakeRepo {
     }
     async fn preview_smart_tag(
         &self,
-        scope: &ChannelLabelsScope,
-        _viewer: &MacroUserIdStr<'_>,
+        viewer: &MacroUserIdStr<'_>,
         _rule: &ChannelLabelRule,
         _limit: u16,
     ) -> Result<SmartTagPreview, Self::Err> {
         self.record(RepoCall::Preview {
-            scope: scope.clone(),
+            viewer: viewer.to_string(),
         });
         Ok(SmartTagPreview {
             channels: vec![],
@@ -186,10 +185,10 @@ impl ChannelLabelsRepo for FakeRepo {
 }
 
 #[tokio::test]
-async fn preview_uses_the_same_authorized_scope_as_saved_labels() {
+async fn preview_uses_the_authenticated_viewer() {
     let repo = FakeRepo::default();
     let service = ChannelLabelsServiceImpl::new(repo.clone());
-    let (team_id, receipt) = receipt();
+    let (_, receipt) = receipt();
 
     service
         .preview_smart_tag(
@@ -204,7 +203,7 @@ async fn preview_uses_the_same_authorized_scope_as_saved_labels() {
     assert_eq!(
         repo.calls(),
         vec![RepoCall::Preview {
-            scope: ChannelLabelsScope::Team(team_id),
+            viewer: USER_ID.into(),
         }]
     );
 }
@@ -239,7 +238,7 @@ async fn creation_and_assignment_report_ineligible_channels() {
     for result in [created.map(|_| ()), assigned] {
         assert!(matches!(
             result,
-            Err(ChannelLabelsError::BadRequest(message)) if message.contains("only team channels")
+            Err(ChannelLabelsError::BadRequest(message)) if message.contains("direct messages cannot")
         ));
     }
 }

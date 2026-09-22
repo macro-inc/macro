@@ -6,15 +6,15 @@ import {
 } from './channel-label-eligibility';
 
 describe('channel label eligibility', () => {
-  it('requires a known team channel', () => {
+  it('accepts public, private, and team channels while rejecting direct messages and unknown IDs', () => {
     expect(canLabelChannel({ channelType: 'team' })).toBe(true);
-    expect(canLabelChannel({ channelType: 'public' })).toBe(false);
-    expect(canLabelChannel({ channelType: 'private' })).toBe(false);
+    expect(canLabelChannel({ channelType: 'public' })).toBe(true);
+    expect(canLabelChannel({ channelType: 'private' })).toBe(true);
     expect(canLabelChannel({ channelType: 'direct_message' })).toBe(false);
     expect(canLabelChannel(undefined)).toBe(false);
   });
 
-  it('retains unloaded server memberships for unread activity while removing known non-team channels', () => {
+  it('retains unloaded and non-DM server memberships for unread activity while removing known direct messages', () => {
     const members = filterChannelLabelMembers(
       ['unloaded', 'public', 'team', 'private', 'dm'],
       new Map<string, Pick<ChannelEntity, 'channelType'>>([
@@ -25,6 +25,6 @@ describe('channel label eligibility', () => {
       ])
     );
 
-    expect(members).toEqual(['unloaded', 'team']);
+    expect(members).toEqual(['unloaded', 'public', 'team', 'private']);
   });
 });

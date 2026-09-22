@@ -794,7 +794,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
           if (!channelTagsEnabled())
             throw new Error('Channel tags are disabled.');
           if (!channelIds.every(canLabelChannelId))
-            throw new Error('Only team channels can be added to labels.');
+            throw new Error('One or more channels cannot be added to labels.');
           const created = await createLabelMutation.mutateAsync({
             name,
             channelIds,

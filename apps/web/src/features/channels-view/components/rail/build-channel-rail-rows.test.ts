@@ -123,11 +123,12 @@ describe('buildChannelSectionRows', () => {
   });
 
   it.each([true, false])(
-    'keeps non-team channels in the plain list when labels are open=%s, ignoring cached memberships',
+    'groups public, private, and team channels but excludes DMs when labels are open=%s',
     (isOpen) => {
       const publicChannel = channel('public', 'Public', 'public');
       const privateChannel = channel('private', 'Private', 'private');
-      const channels = [publicChannel, privateChannel, acme];
+      const dm = channel('dm', 'DM', 'direct_message');
+      const channels = [publicChannel, privateChannel, acme, dm];
       const rows = buildChannelSectionRows({
         labels: [
           label(
@@ -151,17 +152,34 @@ describe('buildChannelSectionRows', () => {
 
       expect(
         rows.filter((row) => row.kind === 'conversation' && !row.labelId)
-      ).toEqual([
-        { kind: 'conversation', channel: publicChannel },
-        { kind: 'conversation', channel: privateChannel },
-      ]);
+      ).toEqual([{ kind: 'conversation', channel: dm }]);
       expect(
         rows.filter((row) => row.kind === 'conversation' && row.labelId)
       ).toEqual(
         isOpen
           ? [
               { kind: 'conversation', channel: acme, labelId: 'manual' },
+              {
+                kind: 'conversation',
+                channel: privateChannel,
+                labelId: 'manual',
+              },
+              {
+                kind: 'conversation',
+                channel: publicChannel,
+                labelId: 'manual',
+              },
               { kind: 'conversation', channel: acme, labelId: 'smart' },
+              {
+                kind: 'conversation',
+                channel: privateChannel,
+                labelId: 'smart',
+              },
+              {
+                kind: 'conversation',
+                channel: publicChannel,
+                labelId: 'smart',
+              },
             ]
           : []
       );

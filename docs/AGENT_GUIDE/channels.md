@@ -355,13 +355,12 @@ Labels group channels inside the `Channels` section. Team members share the
 same labels and can create, rename, delete, or move their channels between them.
 Users without a team have labels private to their account. The naming and delete
 dialogs explain which scope applies. Collapse/expand state is per user.
-Every label remains visible, including empty labels; only team channels the
-viewer actively participates in are shown inside it. Shared labels accept only
-channels belonging to the label's team. Private account labels also accept only
-team channels. Public channels, private channels, and direct messages cannot be
-labelled. They keep their normal navigation, have no label menu actions, and
-cannot be dragged into labels. Existing ineligible assignments no longer group
-channels, including non-team channels and other teams' channels in shared labels.
+Every label remains visible, including empty labels; only channels the viewer
+actively participates in are shown inside it. Public, private, and team channels
+can be labelled. Channel team identity does not affect eligibility for shared
+or private labels. Direct messages keep their normal navigation, have no label
+menu actions, and cannot be dragged into labels. Existing direct-message
+assignments no longer group them.
 Names are unique within the team or account, case-insensitively.
 
 Layout: labels come first in creation order, each showing its visible channels
@@ -380,11 +379,11 @@ reload. Rename uses the same dialog prefilled. Delete asks for confirmation;
 its button says `Delete for everyone` for shared labels and `Delete label` for
 private ones. Channels remain accessible after deleting their label.
 
-Moving: right-click a team channel for `Add to label` / `Move to label`, including a
+Moving: right-click a channel for `Add to label` / `Move to label`, including a
 `New label…` option, or use `Ungroup from “<label>”`. Drag a channel onto a label
 heading or one of its channels to move in. Drag a grouped channel onto a plain
-team channel, the Channels heading, or empty space below the list to ungroup it.
-Dragging one ungrouped team channel onto another opens a name dialog; saving creates
+channel, the Channels heading, or empty space below the list to ungroup it.
+Dragging one ungrouped channel onto another opens a name dialog; saving creates
 the label with both channels atomically. A failed save changes neither channel.
 Dropping on the source channel or its current label does nothing; Escape from
 the naming dialog leaves both channels unchanged.
@@ -403,27 +402,25 @@ Smart labels: use `Channels` → `+` → `New smart label`. Enter a label name a
 literally; it does not use wildcards or regular expressions. The creation dialog
 shows up to five matching channels as you type, followed by `+N more channels
 matched` for overflow. Empty patterns cannot be saved; a valid pattern with no
-current matches can be saved for future channels. Only team channels you
-participate in are matched; shared labels match channels from their own team.
-Public channels, private channels, and direct messages are excluded from both
-the preview and saved results.
+current matches can be saved for future channels. Public, private, and team
+channels you participate in are matched, regardless of team identity. Direct
+messages are excluded from both the preview and saved results.
 
 Group headings have no icon in the sidebar; smart label creation uses a filter
 icon. Channels appear in every matching smart label and keep any manual label
 assignment. A channel in any smart label is excluded
 from the ungrouped list, even when its matching labels are collapsed. Membership
-follows channel names automatically. Existing matches update with live name
-changes; new shared-label matches and unloaded channels refresh periodically.
-Use the heading's `···` →
+follows channel names automatically. Loaded channels update with live name
+changes; other matches refresh periodically. Use the heading's `···` →
 `Edit smart label` to change the name or pattern and preview the new matches.
 Smart labels cannot be drag targets or manually assigned through `Move to label`.
 Deleting a smart label preserves channels, other labels, and manual assignments.
 
 Verify overlapping rules, collapsed labels, no matches, overflow, and quickly
 changing patterns (an older response must not replace the latest preview).
-Check public and private channels with matching names: they stay in the normal
-list, have no label actions, and cannot be dragged into labels or used as a
-second channel when grouping by drop. Team channels still support these actions.
+Check public, private, and team channels with matching names: each supports
+label menus, grouping by drag and drop, and smart matching. Direct messages
+remain outside labels and have no label menu or drag actions.
 Open the same matched channel from two labels and verify keyboard focus remains
 on the chosen row. Check rule edits and persistence after reload.
 

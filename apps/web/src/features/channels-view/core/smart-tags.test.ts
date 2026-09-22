@@ -30,7 +30,7 @@ const label = (id: string, channelIds: string[]): ChannelLabel => ({
 });
 
 describe('smart tag matching', () => {
-  it('matches literal substrings ignoring case for team channels, excluding empty patterns', () => {
+  it('matches literal substrings ignoring case, excluding empty patterns', () => {
     expect(channelMatchesSmartTag(channel('a', 'Acme SUPPORT'), rule)).toBe(
       true
     );
@@ -68,35 +68,51 @@ describe('smart tag matching', () => {
     expect(result[1]).toBe(manual);
   });
 
-  it.each(['public', 'private', 'direct_message'] as const)(
-    'excludes %s channels from smart matching and cached manual or smart memberships',
+  it.each(['public', 'private', 'team'] as const)(
+    'includes %s channels in smart matching and cached manual or smart memberships',
     (channelType) => {
-      const nonTeam = channel('non-team', 'Support', channelType);
-      expect(channelMatchesSmartTag(nonTeam, rule)).toBe(false);
+      const matchingChannel = channel('matching', 'Support', channelType);
+      expect(channelMatchesSmartTag(matchingChannel, rule)).toBe(true);
       const result = resolveChannelLabelMemberships(
         [
-          { ...label('manual', ['unloaded', 'non-team', 'team']), rule: null },
-          label('smart', ['unloaded', 'non-team', 'team']),
+          { ...label('manual', ['unloaded', 'matching']), rule: null },
+          label('smart', ['unloaded', 'matching']),
         ],
-        [nonTeam, channel('team', 'Support')]
+        [matchingChannel]
       );
       for (const resolved of result) {
-        expect(resolved.channelIds).toEqual(['unloaded', 'team']);
+        expect(resolved.channelIds).toEqual(['unloaded', 'matching']);
         expect(resolved.channelCount).toBe(2);
       }
     }
   );
 
+  it('excludes direct messages from smart matching and cached manual or smart memberships', () => {
+    const dm = channel('dm', 'Support', 'direct_message');
+    expect(channelMatchesSmartTag(dm, rule)).toBe(false);
+    const result = resolveChannelLabelMemberships(
+      [
+        { ...label('manual', ['unloaded', 'dm']), rule: null },
+        label('smart', ['unloaded', 'dm']),
+      ],
+      [dm]
+    );
+    for (const resolved of result) {
+      expect(resolved.channelIds).toEqual(['unloaded']);
+      expect(resolved.channelCount).toBe(1);
+    }
+  });
+
   it('preserves the manual count of assignments outside the loaded viewer-relative IDs', () => {
     const result = resolveChannelLabelMemberships(
-      [{ ...label('manual', ['public', 'team']), rule: null, channelCount: 8 }],
-      [channel('public', 'Public', 'public'), channel('team', 'Support')]
+      [{ ...label('manual', ['dm', 'team']), rule: null, channelCount: 8 }],
+      [channel('dm', 'DM', 'direct_message'), channel('team', 'Support')]
     );
     expect(result[0].channelIds).toEqual(['team']);
     expect(result[0].channelCount).toBe(7);
   });
 
-  it('keeps new shared smart-label matches server-authoritative when channel team IDs are unavailable', () => {
+  it('adds new shared smart-label matches regardless of channel type or team identity, except DMs', () => {
     const result = resolveChannelLabelMemberships(
       [
         {
@@ -108,10 +124,18 @@ describe('smart tag matching', () => {
         channel('renamed', 'Sales'),
         channel('member', 'Support'),
         channel('another-team', 'Support'),
-        channel('new', 'Support'),
+        channel('public', 'Support', 'public'),
+        channel('private', 'Support', 'private'),
+        channel('dm', 'Support', 'direct_message'),
       ]
     );
-    expect(result[0].channelIds).toEqual(['unloaded', 'member']);
-    expect(result[0].channelCount).toBe(2);
+    expect(result[0].channelIds).toEqual([
+      'unloaded',
+      'member',
+      'another-team',
+      'public',
+      'private',
+    ]);
+    expect(result[0].channelCount).toBe(5);
   });
 });
