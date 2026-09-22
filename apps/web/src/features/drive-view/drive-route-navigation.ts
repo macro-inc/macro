@@ -1,4 +1,3 @@
-import type { SplitRouteNavigationTarget } from '@app/split-router';
 import {
   driveFolderDocumentRoute,
   driveFolderRoute,
@@ -7,46 +6,36 @@ import {
   driveTabDocumentRoute,
   driveTabRoute,
 } from '@components/app/split-layout/split-router/app-routes';
+import { match } from 'ts-pattern';
 import type { DriveLocation } from './core/types';
 import type { DriveDocumentRoute } from './primitives/drive-route';
 
-type DriveDestination = SplitRouteNavigationTarget<
-  | typeof driveSplitRoute
-  | typeof driveFolderRoute
-  | typeof driveFolderDocumentRoute
-  | typeof driveTabRoute
-  | typeof driveTabDocumentRoute
-  | typeof driveRootDocumentRoute
->;
-
-/** Maps Drive domain selection to its ancestry-aware application route. */
+/** Maps Drive domain selection to a route, including its folder/tab params. */
 export function driveDestination(
   location: DriveLocation,
   document?: DriveDocumentRoute
-): DriveDestination {
-  const detail = document && {
-    documentId: document.id,
-    documentType: document.type,
+) {
+  const list = match(location)
+    .with({ kind: 'folder' }, ({ id }) => ({
+      route: driveFolderRoute,
+      params: { view: 'folder' as const, folderId: id ?? undefined },
+    }))
+    .with({ kind: 'tab', tab: 'owned' }, () => ({
+      route: driveSplitRoute,
+      params: {},
+    }))
+    .otherwise(({ tab }) => ({ route: driveTabRoute, params: { tab } }));
+  if (!document) return list;
+
+  return {
+    route: match(location)
+      .with({ kind: 'folder' }, () => driveFolderDocumentRoute)
+      .with({ kind: 'tab', tab: 'owned' }, () => driveRootDocumentRoute)
+      .otherwise(() => driveTabDocumentRoute),
+    params: {
+      ...list.params,
+      documentId: document.id,
+      documentType: document.type,
+    },
   };
-  if (location.kind === 'folder') {
-    const params = {
-      view: 'folder' as const,
-      folderId: location.id ?? undefined,
-    };
-    return detail
-      ? {
-          route: driveFolderDocumentRoute,
-          params: { ...params, ...detail },
-        }
-      : { route: driveFolderRoute, params };
-  }
-  if (location.tab !== 'owned') {
-    const params = { tab: location.tab };
-    return detail
-      ? { route: driveTabDocumentRoute, params: { ...params, ...detail } }
-      : { route: driveTabRoute, params };
-  }
-  return detail
-    ? { route: driveRootDocumentRoute, params: detail }
-    : { route: driveSplitRoute, params: {} };
 }

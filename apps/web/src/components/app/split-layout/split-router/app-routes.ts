@@ -48,7 +48,7 @@ const driveDocumentParams = z.object({
   documentType: z.enum(DRIVE_DOCUMENT_TYPES),
   documentId: z.string().min(1),
 });
-const driveRootDocumentDefinition = defineRoute({
+export const driveRootDocumentRoute = defineRoute({
   id: 'drive-document',
   path: ':documentType/:documentId',
   params: driveDocumentParams,
@@ -58,7 +58,7 @@ const driveRootDocumentDefinition = defineRoute({
     id: `${driveDocumentBlockType(documentType)}:${documentId}`,
   }),
 });
-const driveFolderDocumentDefinition = defineRoute({
+export const driveFolderDocumentRoute = defineRoute({
   id: 'drive-folder-document',
   path: ':documentType/:documentId',
   params: driveDocumentParams,
@@ -68,7 +68,7 @@ const driveFolderDocumentDefinition = defineRoute({
     id: `${driveDocumentBlockType(documentType)}:${documentId}`,
   }),
 });
-const driveTabDocumentDefinition = defineRoute({
+export const driveTabDocumentRoute = defineRoute({
   id: 'drive-tab-document',
   path: ':documentType/:documentId',
   params: driveDocumentParams,
@@ -78,20 +78,20 @@ const driveTabDocumentDefinition = defineRoute({
     id: `${driveDocumentBlockType(documentType)}:${documentId}`,
   }),
 });
-const driveFolderDefinition = defineRoute({
+export const driveFolderRoute = defineRoute({
   id: 'drive-folder',
   path: 'folder/:folderId?',
   params: z
     .object({ folderId: z.string().min(1).optional() })
     .transform(({ folderId }) => ({ view: 'folder' as const, folderId })),
-  children: [driveFolderDocumentDefinition],
+  children: [driveFolderDocumentRoute],
 });
-const driveTabDefinition = defineRoute({
+export const driveTabRoute = defineRoute({
   id: 'drive-tab',
   path: ':tab',
   aliases: ['tab/:tab'],
   params: z.object({ tab: z.enum(['recent', 'shared']) }),
-  children: [driveTabDocumentDefinition],
+  children: [driveTabDocumentRoute],
 });
 export const driveSplitRoute = defineRoute({
   id: 'drive',
@@ -114,11 +114,7 @@ export const driveSplitRoute = defineRoute({
     }
     return type === 'pdf' ? Object.values(PDF_URL_PARAMS) : [];
   },
-  children: [
-    driveFolderDefinition,
-    driveTabDefinition,
-    driveRootDocumentDefinition,
-  ],
+  children: [driveFolderRoute, driveTabRoute, driveRootDocumentRoute],
 });
 
 export const settingsRoute = defineRoute({
@@ -167,7 +163,7 @@ export const gettingStartedRoute = viewDefinition(
   'getting-started'
 );
 
-const inboxPreviewDefinition = defineRoute({
+export const inboxPreviewRoute = defineRoute({
   id: 'inbox-preview',
   path: ':blockType/:previewId',
   params: inboxPreviewRouteParams,
@@ -184,7 +180,7 @@ export const inboxSplitRoute = defineRoute({
   params: z.object({}),
   component: appView('inbox'),
   search: '*' as const,
-  children: [inboxPreviewDefinition],
+  children: [inboxPreviewRoute],
 });
 
 export const recentRoute = viewDefinition('recent', 'recent');
@@ -194,7 +190,7 @@ export const agentsViewRoute = viewDefinition('agents', 'agents', [
   'createAgent',
 ]);
 
-const mailThreadDefinition = defineRoute({
+export const emailThreadRoute = defineRoute({
   id: 'mail-thread',
   path: ':threadId',
   params: z.object({ threadId: z.string().min(1) }),
@@ -212,10 +208,10 @@ export const emailSplitRoute = defineRoute({
   params: z.object({}),
   component: appView('mail'),
   search: '*' as const,
-  children: [mailThreadDefinition],
+  children: [emailThreadRoute],
 });
 
-const taskDetailDefinition = defineRoute({
+export const taskDetailRoute = defineRoute({
   id: 'tasks-task',
   path: ':taskId',
   params: z.object({ taskId: z.string().min(1) }),
@@ -232,10 +228,10 @@ export const tasksSplitRoute = defineRoute({
   params: z.object({}),
   component: appView('tasks'),
   search: '*' as const,
-  children: [taskDetailDefinition],
+  children: [taskDetailRoute],
 });
 
-const channelDetailDefinition = defineRoute({
+export const channelDetailRoute = defineRoute({
   id: 'channels-channel',
   path: 'channel/:channelId',
   params: z.object({ channelId: z.string().min(1) }),
@@ -253,7 +249,7 @@ export const channelsSplitRoute = defineRoute({
   params: z.object({}),
   component: appView('channels'),
   search: '*' as const,
-  children: [channelDetailDefinition],
+  children: [channelDetailRoute],
 });
 
 export const callsRoute = viewDefinition('calls', 'calls');
@@ -262,17 +258,6 @@ export const companiesRoute = viewDefinition('companies', 'companies', [
 ]);
 export const foldersRoute = viewDefinition('folders', 'folders');
 export const searchRoute = viewDefinition('search', 'search');
-
-// Descendant references come from their original, ancestry-aware root trees.
-export const driveFolderRoute = driveSplitRoute.children[0];
-export const driveFolderDocumentRoute = driveFolderRoute.children[0];
-export const driveTabRoute = driveSplitRoute.children[1];
-export const driveTabDocumentRoute = driveTabRoute.children[0];
-export const driveRootDocumentRoute = driveSplitRoute.children[2];
-export const inboxPreviewRoute = inboxSplitRoute.children[0];
-export const emailThreadRoute = emailSplitRoute.children[0];
-export const taskDetailRoute = tasksSplitRoute.children[0];
-export const channelDetailRoute = channelsSplitRoute.children[0];
 
 export const appSplitRoutes = defineRoutes({
   definitions: [

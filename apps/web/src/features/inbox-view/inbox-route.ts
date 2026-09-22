@@ -9,11 +9,6 @@ import { match } from 'ts-pattern';
 import { z } from 'zod';
 import type { InboxPreviewRouteParams } from './inbox-route-schema';
 
-export {
-  type InboxPreviewRouteParams,
-  inboxPreviewRouteParams,
-} from './inbox-route-schema';
-
 export const INBOX_PREVIEW_SEARCH_NAMESPACE = 'inbox-preview';
 
 const previewSelectionTypes = [

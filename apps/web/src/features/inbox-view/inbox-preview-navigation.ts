@@ -5,10 +5,10 @@ import {
   previewBlockTarget,
 } from '@components/app/previewTarget';
 import {
-  type InboxPreviewRouteParams,
   type InboxPreviewSearchParams,
   inboxPreviewSearch,
 } from './inbox-route';
+import type { InboxPreviewRouteParams } from './inbox-route-schema';
 
 function calendarSearch(
   params: CalendarBlockProps | undefined

@@ -17,8 +17,6 @@ import {
   driveDocumentBlockType,
 } from './drive-route-schema';
 
-export type { DriveDocumentType };
-export { DRIVE_DOCUMENT_TYPES };
 export type DriveDocumentRoute = { id: string; type: DriveDocumentType };
 export type DriveRouteParams = SplitRouteParams & {
   tab?: DriveTab;
