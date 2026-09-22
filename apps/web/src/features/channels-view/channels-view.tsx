@@ -1,7 +1,5 @@
 import { ViewShell } from '@app/components/view-shell';
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
-import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
-import { PreviewPanel } from '@components/app/PreviewPanel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -9,6 +7,7 @@ import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { createMemo, createSignal, onMount, Show, Suspense } from 'solid-js';
 import { ChannelsViewProvider, useChannelsView } from './channels-view-context';
+import { ChannelDetailView } from './components/ChannelDetailView';
 import { ChannelsMobileView } from './components/ChannelsMobileView';
 import { ChannelsRail } from './components/rail/ChannelsRail';
 import {
@@ -26,7 +25,6 @@ export type ChannelsViewProps = {
 
 function ChannelsViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const orchestrator = useGlobalBlockOrchestrator();
   const { state, mobileLayout, previewChannelId, setAsideWidth, setMobileTab } =
     useChannelsView();
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
@@ -125,11 +123,7 @@ function ChannelsViewRoot() {
                       >
                         {(channel) => (
                           <Suspense>
-                            <PreviewPanel
-                              selectedEntity={channel()}
-                              orchestrator={orchestrator}
-                              splitPanelContext={panel}
-                            />
+                            <ChannelDetailView channel={channel()} />
                           </Suspense>
                         )}
                       </Show>
