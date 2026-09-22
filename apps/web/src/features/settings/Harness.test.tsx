@@ -234,6 +234,7 @@ describe('Harness', () => {
   });
 
   it('places bring-your-own below navigation and above the runtime lists', () => {
+    harnessMocks.query.data = [REGISTERED_HARNESS];
     render(() => (
       <Harness navigation={<nav aria-label="Agent management" />} />
     ));
@@ -430,17 +431,23 @@ describe('Harness', () => {
     expect(screen.queryByLabelText('API key')).toBeNull();
   });
 
-  it('links the empty BYOA list to the setup documentation', () => {
+  it('hides the empty paired runtimes section and keeps the setup guide', () => {
     render(() => <Harness />);
 
-    expect(screen.getByText('No paired runtimes yet')).toBeTruthy();
+    expect(screen.queryByText('No paired runtimes yet')).toBeNull();
+    expect(
+      screen.queryByRole('heading', { name: 'Paired runtimes' })
+    ).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Enter pairing code' })
+    ).toBeNull();
     expect(screen.getByRole('link', { name: /Setup guide/ })).toHaveProperty(
       'href',
       'https://docs.macro.com/AI/bring-your-own'
     );
   });
 
-  it('offers new runtime actions and an empty-state pairing shortcut', () => {
+  it('opens pairing from the bring-your-own card', () => {
     render(() => <Harness />);
 
     expect(screen.getAllByRole('button', { name: 'New runtime' })).toHaveLength(

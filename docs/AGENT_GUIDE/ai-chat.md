@@ -144,6 +144,8 @@ permission failures should display a failed tool call without a successful resul
   use **New conversation** in the sidebar to return to the composer. The animated
   **Bring your own agent** card appears only in **Runtimes**, below the tabs and
   above the runtime lists. It links directly to runtime pairing and its setup guide.
+  The **Paired runtimes** section appears once you have a paired runtime; an empty
+  list does not repeat the pairing action from **Bring your own agent**.
   **New runtime** shows three steps: install macrod from the linked release,
   run `./macrod` and configure your agent in Quickstart, then enter your pairing
   code and click **Look up**. Review the request and click **Approve** to connect.

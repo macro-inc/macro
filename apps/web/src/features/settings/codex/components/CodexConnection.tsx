@@ -143,7 +143,7 @@ export function CodexConnection(props: {
               </p>
             </Show>
             <div class="mt-4 flex flex-col gap-3">
-              <div class="flex w-full max-w-sm flex-col gap-2">
+              <div class="flex w-full max-w-60 flex-col gap-1.5">
                 <span class="text-xs font-medium text-ink">
                   Cloud environment
                 </span>

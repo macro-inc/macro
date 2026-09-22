@@ -288,7 +288,7 @@ export function Harness(props: { navigation?: JSX.Element } = {}) {
                       }
                     >
                       <div class="mt-4 flex flex-col gap-3">
-                        <div class="flex w-full max-w-sm flex-col gap-2">
+                        <div class="flex w-full max-w-60 flex-col gap-1.5">
                           <span class="text-xs font-medium text-ink">
                             Default model
                           </span>
@@ -397,78 +397,67 @@ export function Harness(props: { navigation?: JSX.Element } = {}) {
             </SettingsCard>
           </div>
 
-          <div>
-            <h2 class="mb-3 px-6 text-sm font-semibold text-ink">
-              Paired runtimes
-            </h2>
-            <SettingsCard>
-              <For
-                each={harnessesQuery.isSuccess ? harnessesQuery.data : []}
-                fallback={
-                  <div class="flex flex-col items-center py-6 text-center">
-                    <p class="text-sm text-ink">
-                      {harnessesQuery.isPending
-                        ? 'Loading runtimes…'
-                        : harnessesQuery.isError
+          <Show
+            when={!harnessesQuery.isSuccess || harnessesQuery.data.length > 0}
+          >
+            <div>
+              <h2 class="mb-3 px-6 text-sm font-semibold text-ink">
+                Paired runtimes
+              </h2>
+              <SettingsCard>
+                <For
+                  each={harnessesQuery.isSuccess ? harnessesQuery.data : []}
+                  fallback={
+                    <div class="flex flex-col items-center py-6 text-center">
+                      <p class="text-sm text-ink">
+                        {harnessesQuery.isError
                           ? 'Could not load runtimes.'
-                          : 'No paired runtimes yet'}
-                    </p>
-                    <p class="mt-1 text-xs text-ink-extra-muted">
-                      Runtimes connected through macrod will appear here.
-                    </p>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      depth={3}
-                      class="mt-3"
-                      onClick={() => setPairingDialog({})}
-                    >
-                      Enter pairing code
-                    </Button>
-                  </div>
-                }
-              >
-                {(harness) => (
-                  <div class="flex items-center justify-between gap-4 px-4 py-3">
-                    <div class="min-w-0 flex-1">
-                      <div class="flex min-w-0 items-center gap-2">
-                        <p class="min-w-0 flex-1 truncate text-sm text-ink">
-                          {harness.name}
-                        </p>
-                        <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-md border border-edge-muted px-2 text-xxs/none font-medium uppercase text-ink-extra-muted">
-                          {harness.owner.type === 'team' ? 'Team' : 'Private'}
-                        </span>
-                        <StatusDot
-                          state={
-                            harness.connected ? 'connected' : 'disconnected'
-                          }
-                          label={
-                            harness.connected ? 'Connected' : 'Disconnected'
-                          }
-                        />
-                      </div>
-                      <p class="mt-0.5 truncate text-xs text-ink-extra-muted">
-                        {lastConnectedText(harness)}
+                          : 'Loading runtimes…'}
                       </p>
                     </div>
-                    <div class="shrink-0">
-                      <ConnectAction
-                        label="Remove"
-                        variant="danger"
-                        onClick={() => setRemovingHarness(harness)}
-                      />
+                  }
+                >
+                  {(harness) => (
+                    <div class="flex items-center justify-between gap-4 px-4 py-3">
+                      <div class="min-w-0 flex-1">
+                        <div class="flex min-w-0 items-center gap-2">
+                          <p class="min-w-0 flex-1 truncate text-sm text-ink">
+                            {harness.name}
+                          </p>
+                          <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-md border border-edge-muted px-2 text-xxs/none font-medium uppercase text-ink-extra-muted">
+                            {harness.owner.type === 'team' ? 'Team' : 'Private'}
+                          </span>
+                          <StatusDot
+                            state={
+                              harness.connected ? 'connected' : 'disconnected'
+                            }
+                            label={
+                              harness.connected ? 'Connected' : 'Disconnected'
+                            }
+                          />
+                        </div>
+                        <p class="mt-0.5 truncate text-xs text-ink-extra-muted">
+                          {lastConnectedText(harness)}
+                        </p>
+                      </div>
+                      <div class="shrink-0">
+                        <ConnectAction
+                          label="Remove"
+                          variant="danger"
+                          onClick={() => setRemovingHarness(harness)}
+                        />
+                      </div>
                     </div>
-                  </div>
-                )}
-              </For>
-              <Show when={harnessesQuery.isError}>
-                <p class="px-4 py-3 text-xs text-negative">
-                  Could not load your runtimes. Try refreshing this page.
-                </p>
-              </Show>
-            </SettingsCard>
-          </div>
+                  )}
+                </For>
+                <Show when={harnessesQuery.isError}>
+                  <p class="px-4 py-3 text-xs text-negative">
+                    Could not load your runtimes. Try refreshing this page.
+                  </p>
+                </Show>
+              </SettingsCard>
+            </div>
+          </Show>
         </SettingsPage>
       </Show>
 
