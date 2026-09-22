@@ -4,19 +4,16 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { CallRecordParticipantDisplayName } from './callRecordParticipantDisplayName';
 import type { CallRecordParticipantLeftAt } from './callRecordParticipantLeftAt';
 
 /**
  * A participant as returned in a [`CallRecord`] (historic — includes `left_at`).
  */
 export interface CallRecordParticipant {
-  /** Guest-provided display name, retained after archival. */
-  displayName?: CallRecordParticipantDisplayName;
   /** When the user joined the call. */
   joinedAt: string;
   /** When the user left (None if still in an active call). */
   leftAt?: CallRecordParticipantLeftAt;
-  /** The user id. */
+  /** The Macro user id. */
   userId: string;
 }

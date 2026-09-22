@@ -29,16 +29,6 @@ export function CallRecordingBody(props: {
   transcriptTarget?: Accessor<CallTranscriptTarget | undefined>;
 }) {
   const record = props.data;
-  const speakerNames = createMemo(
-    () =>
-      new Map(
-        record().participants.flatMap((participant) =>
-          participant.displayName
-            ? [[participant.userId, participant.displayName] as const]
-            : []
-        )
-      )
-  );
   const blockId = useBlockId();
   const hasTranscripts = createMemo(() => record().transcript.length > 0);
   const [playbackSeconds, setPlaybackSeconds] = createSignal(0);
@@ -224,7 +214,7 @@ export function CallRecordingBody(props: {
                     <CallTranscript
                       transcript={record().transcript}
                       channelId={record().channelId}
-                      speakerNames={speakerNames()}
+                      record={record()}
                       timelineStartMs={timelineStartMs()}
                       activeSequenceNum={activeSequenceNum()}
                       videoSeekGeneration={videoSeekGeneration()}

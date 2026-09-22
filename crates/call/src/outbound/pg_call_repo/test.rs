@@ -2997,6 +2997,34 @@ async fn standalone_meeting_archives_guest_names_and_preserves_invitation(
     fixtures(path = "../../../fixtures", scripts("call_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
+async fn guest_join_racing_archival_fails_instead_of_stranding_a_guest(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    insert_user_mapping(&pool, USER_B.deref(), MACRO_USER_B).await?;
+    let repo = repo(pool);
+    let meeting = repo.create_meeting(standalone_meeting()).await?;
+    let (call, _) = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
+        .await?;
+    repo.archive_call(&call.id).await?;
+    // The calls row is gone; the guest insert must fail loudly rather than
+    // write a row for a room that no longer exists.
+    assert!(
+        repo.add_guest(&call.id, GuestId::generate(), "Ada")
+            .await
+            .is_err()
+    );
+    let record = repo.get_call_record_by_call_id(&call.id).await?.unwrap();
+    assert!(record.guests.is_empty());
+    // Late webhook reconciles for unknown guests are harmless no-ops on the
+    // live table (the webhook path never reaches here once the call is gone).
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
 async fn concurrent_meeting_joins_allocate_exactly_one_session(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {

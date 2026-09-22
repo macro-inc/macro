@@ -11,7 +11,6 @@ export type CallRecordingParticipantRow = {
   userId: string;
   joinedAt: string;
   role: 'organizer' | 'participant';
-  displayName?: string | null;
 };
 
 /**
@@ -30,7 +29,6 @@ export function dedupeCallRecordingParticipants(
         userId: participant.userId,
         joinedAt: participant.joinedAt,
         role: participant.userId === createdBy ? 'organizer' : 'participant',
-        displayName: participant.displayName,
       });
     }
   }

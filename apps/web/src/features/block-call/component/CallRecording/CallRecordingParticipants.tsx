@@ -1,4 +1,3 @@
-import { isCallGuest } from '@channel/Call/call-identity';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { UserIcon } from '@core/component/UserIcon';
 import { idToEmail } from '@core/user';
@@ -20,6 +19,7 @@ export function CallRecordingParticipantsSection(props: {
       props.record().createdBy
     )
   );
+  const guests = () => props.record().guests;
 
   const openDirectMessage = (participantId: string, event: MouseEvent) => {
     getOrCreateDmMutation.mutate(
@@ -40,7 +40,7 @@ export function CallRecordingParticipantsSection(props: {
       <h3 class="text-sm font-semibold text-ink">
         Participants
         <span class="ml-1.5 text-ink-muted font-normal tabular-nums">
-          {participants().length}
+          {participants().length + guests().length}
         </span>
       </h3>
       <div class="flex flex-wrap gap-2" role="list">
@@ -49,32 +49,29 @@ export function CallRecordingParticipantsSection(props: {
             <button
               type="button"
               role="listitem"
-              disabled={isCallGuest(participant.userId)}
               class="inline-flex items-center gap-1.5 rounded-full border border-edge-muted/50 py-1 pr-2.5 pl-1 text-sm text-ink transition-colors hover:bg-hover"
               onClick={(event) => openDirectMessage(participant.userId, event)}
             >
-              <Show
-                when={!isCallGuest(participant.userId)}
-                fallback={
-                  <span class="flex size-6 items-center justify-center rounded-full bg-hover text-xs">
-                    {(participant.displayName?.trim() || 'Guest')
-                      .charAt(0)
-                      .toUpperCase()}
-                  </span>
-                }
-              >
-                <UserIcon id={participant.userId} size="sm" isDeleted={false} />
-              </Show>
+              <UserIcon id={participant.userId} size="sm" isDeleted={false} />
               <span class="truncate max-w-48">
-                {participant.displayName?.trim() ||
-                  (isCallGuest(participant.userId)
-                    ? 'Guest'
-                    : idToEmail(participant.userId))}
+                {idToEmail(participant.userId)}
               </span>
-              <Show when={isCallGuest(participant.userId)}>
-                <span class="text-xs text-ink-extra-muted">Guest</span>
-              </Show>
             </button>
+          )}
+        </For>
+        <For each={guests()}>
+          {(guest) => (
+            <span
+              role="listitem"
+              class="inline-flex items-center gap-1.5 rounded-full border border-edge-muted/50 py-1 pr-2.5 pl-1 text-sm text-ink"
+            >
+              <span class="flex size-6 items-center justify-center rounded-full bg-hover text-xs">
+                {(guest.displayName.trim() || 'Guest').charAt(0).toUpperCase()}
+              </span>
+              <span class="truncate max-w-48">
+                {`${guest.displayName.trim() || 'Guest'} (guest)`}
+              </span>
+            </span>
           )}
         </For>
       </div>

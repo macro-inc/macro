@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT call_id AS \"id!\", user_id AS \"user_id!\", joined_at AS \"joined_at!\", left_at\n            FROM call_participants\n            WHERE call_id = ANY($1)\n            UNION ALL\n            SELECT call_record_id AS \"id!\", user_id AS \"user_id!\", joined_at AS \"joined_at!\", left_at\n            FROM call_record_participants\n            WHERE call_record_id = ANY($2)\n            ORDER BY 3 ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "joined_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "left_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "435f8b35060d08ba47b4676c968b0543e406adc48edfd2a72ed715164c4a093b"
+}

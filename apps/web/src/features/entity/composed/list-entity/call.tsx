@@ -1,6 +1,6 @@
 import { formatCallDuration } from '@block-call/utils';
-import { isCallGuest } from '@channel/Call/call-identity';
 import { UserIcon } from '@core/component/UserIcon';
+import { isMacroId } from '@core/user/macroId';
 import { matches } from '@core/util/match';
 import UserCircleIcon from '@phosphor/user-circle.svg';
 import { UserGroup } from '@property/component/propertyValue/UserGroup';
@@ -14,7 +14,7 @@ import { CallRecordName } from '../../components/CallRecordName';
 import { Entity } from '../../entity';
 import { HitSnippet } from '../../extractors-search/HitSnippet';
 import { SearchSender } from '../../extractors-search/search-sender';
-import type { CallEntity } from '../../types/entity';
+import type { CallEntity, CallGuest } from '../../types/entity';
 import { isCallRecordHit } from '../../types/search';
 import { firstContentHit } from './shared';
 
@@ -36,7 +36,7 @@ function ParticipantItem(props: { userId: string }) {
 
 function ParticipantsTooltip(props: {
   participantIds: string[];
-  participantNames?: Record<string, string>;
+  guests: CallGuest[];
 }) {
   return (
     <div class="min-w-48 max-w-72">
@@ -46,19 +46,15 @@ function ParticipantsTooltip(props: {
       </div>
       <div class="flex flex-col gap-1.5 max-h-64 overflow-y-auto">
         <For each={props.participantIds}>
-          {(userId) => (
-            <Show
-              when={!isCallGuest(userId)}
-              fallback={
-                <div class="inline-flex items-center gap-1.5 px-2 py-1 text-xs text-ink-muted">
-                  <UserCircleIcon class="size-4" />
-                  <span>{props.participantNames?.[userId] || 'Guest'}</span>
-                  <span class="text-ink-extra-muted">Guest</span>
-                </div>
-              }
-            >
-              <ParticipantItem userId={userId} />
-            </Show>
+          {(userId) => <ParticipantItem userId={userId} />}
+        </For>
+        <For each={props.guests}>
+          {(guest) => (
+            <div class="inline-flex items-center gap-1.5 px-2 py-1 text-xs text-ink-muted">
+              <UserCircleIcon class="size-4" />
+              <span>{guest.displayName.trim() || 'Guest'}</span>
+              <span class="text-ink-extra-muted">Guest</span>
+            </div>
           )}
         </For>
       </div>
@@ -68,22 +64,21 @@ function ParticipantsTooltip(props: {
 
 export function CallParticipants(props: {
   participantIds: string[];
-  participantNames?: Record<string, string>;
+  guests?: CallGuest[];
 }) {
+  const guests = () => props.guests ?? [];
   const entities = (): EntityReference[] =>
-    props.participantIds
-      .filter((id) => !isCallGuest(id))
-      .map((id) => ({
-        entity_id: id,
-        entity_type: EntityType.USER,
-      }));
+    props.participantIds.map((id) => ({
+      entity_id: id,
+      entity_type: EntityType.USER,
+    }));
   return (
-    <Show when={props.participantIds.length > 0}>
+    <Show when={props.participantIds.length + guests().length > 0}>
       <HoverCard
         content={
           <ParticipantsTooltip
             participantIds={props.participantIds}
-            participantNames={props.participantNames}
+            guests={guests()}
           />
         }
       >
@@ -91,7 +86,7 @@ export function CallParticipants(props: {
           <Show when={entities().length > 0}>
             <UserGroup entities={entities()} maxUsers={2} />
           </Show>
-          <Show when={props.participantIds.filter(isCallGuest).length}>
+          <Show when={guests().length}>
             {(count) => (
               <span class="text-xs text-ink-muted">
                 {count()} {count() === 1 ? 'guest' : 'guests'}
@@ -128,7 +123,7 @@ export function CallNarrowBody(props: {
                 <Show when={callHit().senderId}>
                   {(id) => (
                     <Show
-                      when={!isCallGuest(id())}
+                      when={isMacroId(id())}
                       fallback={
                         <UserCircleIcon class="size-4 text-ink-muted" />
                       }

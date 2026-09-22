@@ -6,6 +6,7 @@
  */
 
 import type { CallStatus } from './callStatus';
+import type { SoupCallRecordGuest } from './soupCallRecordGuest';
 import type { SoupCallRecordParticipant } from './soupCallRecordParticipant';
 import type { SoupCallRecordSoupPropertiesFieldAllOfTwoChannelId } from './soupCallRecordSoupPropertiesFieldAllOfTwoChannelId';
 import type { SoupCallRecordSoupPropertiesFieldAllOfTwoChannelName } from './soupCallRecordSoupPropertiesFieldAllOfTwoChannelName';
@@ -32,9 +33,11 @@ and derived from `status == ATTENDED`. */
   durationMs?: SoupCallRecordSoupPropertiesFieldAllOfTwoDurationMs;
   /** When the call ended (None if still active). */
   endedAt?: SoupCallRecordSoupPropertiesFieldAllOfTwoEndedAt;
+  /** Non-account guests in the call. */
+  guests: SoupCallRecordGuest[];
   /** Whether the call is currently active. */
   isActive: boolean;
-  /** Participants in the call. */
+  /** Macro-account participants in the call. */
   participants: SoupCallRecordParticipant[];
   /** When the call started. */
   startedAt: string;

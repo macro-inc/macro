@@ -148,6 +148,7 @@ impl GuestJoinRequest {
 /// so an RTC identity classifies as exactly one of the two.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "inbound", schema(value_type = Uuid))]
 #[serde(transparent)]
 pub struct GuestId(Uuid);
 

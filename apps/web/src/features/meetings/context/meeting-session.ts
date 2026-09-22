@@ -37,4 +37,6 @@ export type MeetingPageState =
       title: string;
       scheduledStart: string | null;
       scheduledEnd: string | null;
+      /** Channel-linked meetings are members-only; guests cannot join them. */
+      channelId: string | null;
     };

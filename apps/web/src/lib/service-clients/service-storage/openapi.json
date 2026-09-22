@@ -18137,6 +18137,7 @@
           "shareWithTeam",
           "isActive",
           "participants",
+          "guests",
           "transcript"
         ],
         "properties": {
@@ -18176,6 +18177,13 @@
             "format": "date-time",
             "description": "When the call ended (None if still active)."
           },
+          "guests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CallRecordGuest"
+            },
+            "description": "Non-account guests (both active and historic). Guests only ever exist\non standalone meeting calls, never on channel calls."
+          },
           "isActive": {
             "type": "boolean",
             "description": "Whether the call is currently active (from `calls` table)."
@@ -18185,7 +18193,7 @@
             "items": {
               "$ref": "#/components/schemas/CallRecordParticipant"
             },
-            "description": "Participants (both active and historic)."
+            "description": "Macro-account participants (both active and historic)."
           },
           "recordingPreviewUrl": {
             "type": ["string", "null"],
@@ -18259,15 +18267,36 @@
           }
         }
       },
+      "CallRecordGuest": {
+        "type": "object",
+        "description": "A non-account guest as returned in a [`CallRecord`].",
+        "required": ["id", "displayName", "joinedAt"],
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "description": "Guest-provided display name."
+          },
+          "id": {
+            "$ref": "#/components/schemas/GuestId",
+            "description": "Opaque guest identity; matches the guest's transcript `speaker_id`."
+          },
+          "joinedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the guest joined the call."
+          },
+          "leftAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the guest left (None if still in an active call)."
+          }
+        }
+      },
       "CallRecordParticipant": {
         "type": "object",
         "description": "A participant as returned in a [`CallRecord`] (historic — includes `left_at`).",
         "required": ["userId", "joinedAt"],
         "properties": {
-          "displayName": {
-            "type": ["string", "null"],
-            "description": "Guest-provided display name, retained after archival."
-          },
           "joinedAt": {
             "type": "string",
             "format": "date-time",
@@ -18280,7 +18309,7 @@
           },
           "userId": {
             "type": "string",
-            "description": "The user id."
+            "description": "The Macro user id."
           }
         }
       },
@@ -25199,6 +25228,11 @@
         "description": "Sort method for grouped queries (frecency not supported).",
         "enum": ["viewed_at", "created_at", "updated_at", "viewed_updated"]
       },
+      "GuestId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "A non-account guest of a single call session.\n\nThe id doubles as the guest's RTC participant identity, so identities are\nopaque UUIDs and never share a namespace (or a column) with Macro user\nids. Only the server mints them; Macro users keep `macro|…` identities,\nso an RTC identity classifies as exactly one of the two."
+      },
       "GuestJoinRequest": {
         "type": "object",
         "description": "Public guest join inputs. The server generates the participant identity.",
@@ -29455,15 +29489,37 @@
           }
         }
       },
-      "SoupCallRecordParticipant": {
+      "SoupCallRecordGuest": {
         "type": "object",
-        "description": "A participant in a call record, as displayed in Soup.",
-        "required": ["userId", "joinedAt"],
+        "description": "A non-account guest of a call record, as displayed in Soup.",
+        "required": ["id", "displayName", "joinedAt"],
         "properties": {
           "displayName": {
-            "type": ["string", "null"],
-            "description": "Guest display name, when the participant has no Macro profile."
+            "type": "string",
+            "description": "Guest-provided display name."
           },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Opaque guest identity; matches the guest's transcript speaker id."
+          },
+          "joinedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the guest joined the call."
+          },
+          "leftAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the guest left (None if still in an active call)."
+          }
+        }
+      },
+      "SoupCallRecordParticipant": {
+        "type": "object",
+        "description": "A Macro-account participant in a call record, as displayed in Soup.",
+        "required": ["userId", "joinedAt"],
+        "properties": {
           "joinedAt": {
             "type": "string",
             "format": "date-time",
@@ -29476,7 +29532,7 @@
           },
           "userId": {
             "type": "string",
-            "description": "The user id."
+            "description": "The Macro user id."
           }
         }
       },
@@ -29505,7 +29561,8 @@
               "isActive",
               "status",
               "attended",
-              "participants"
+              "participants",
+              "guests"
             ],
             "properties": {
               "attended": {
@@ -29544,6 +29601,13 @@
                 "format": "date-time",
                 "description": "When the call ended (None if still active)."
               },
+              "guests": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SoupCallRecordGuest"
+                },
+                "description": "Non-account guests in the call."
+              },
               "isActive": {
                 "type": "boolean",
                 "description": "Whether the call is currently active."
@@ -29553,7 +29617,7 @@
                 "items": {
                   "$ref": "#/components/schemas/SoupCallRecordParticipant"
                 },
-                "description": "Participants in the call."
+                "description": "Macro-account participants in the call."
               },
               "startedAt": {
                 "type": "string",

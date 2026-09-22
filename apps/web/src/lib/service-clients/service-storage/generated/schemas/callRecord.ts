@@ -10,6 +10,7 @@ import type { CallRecordCustomName } from './callRecordCustomName';
 import type { CallRecordDurationMs } from './callRecordDurationMs';
 import type { CallRecordEgressId } from './callRecordEgressId';
 import type { CallRecordEndedAt } from './callRecordEndedAt';
+import type { CallRecordGuest } from './callRecordGuest';
 import type { CallRecordParticipant } from './callRecordParticipant';
 import type { CallRecordRecordingPreviewUrl } from './callRecordRecordingPreviewUrl';
 import type { CallRecordRecordingStartedAt } from './callRecordRecordingStartedAt';
@@ -42,9 +43,12 @@ archived `call_records`; active calls always return `None`. */
   egressId?: CallRecordEgressId;
   /** When the call ended (None if still active). */
   endedAt?: CallRecordEndedAt;
+  /** Non-account guests (both active and historic). Guests only ever exist
+on standalone meeting calls, never on channel calls. */
+  guests: CallRecordGuest[];
   /** Whether the call is currently active (from `calls` table). */
   isActive: boolean;
-  /** Participants (both active and historic). */
+  /** Macro-account participants (both active and historic). */
   participants: CallRecordParticipant[];
   /** Presigned URL for the call recording preview image, if available. */
   recordingPreviewUrl?: CallRecordRecordingPreviewUrl;

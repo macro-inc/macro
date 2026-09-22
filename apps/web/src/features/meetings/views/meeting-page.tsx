@@ -36,6 +36,8 @@ export function MeetingPage(props: {
   url: string;
   onCopy: () => Promise<void>;
   onRename?: (title: string) => Promise<void>;
+  /** Login redirect for channel-linked calls, which are members-only. */
+  onSignIn?: () => void;
   renderCall: (onLeave: () => void, name: Accessor<string>) => JSX.Element;
 }) {
   const avatar = children(() => props.avatar);
@@ -46,6 +48,9 @@ export function MeetingPage(props: {
     const state = props.source();
     return state.kind === 'ready' ? state : undefined;
   };
+  /** Guests cannot join channel-linked meetings; they must sign in first. */
+  const membersOnly = () =>
+    ready()?.channelId != null && props.authenticated() === false;
   const displayName = () =>
     props.authenticated() ? props.author() : name().trim();
   const inCall = () =>
@@ -55,7 +60,8 @@ export function MeetingPage(props: {
 
   createEffect(
     on(
-      () => Boolean(ready()) && !inCall() && !session.joining(),
+      () =>
+        Boolean(ready()) && !membersOnly() && !inCall() && !session.joining(),
       (setup) => {
         if (setup) void media.prepare();
         else media.release();

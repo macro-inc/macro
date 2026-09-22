@@ -82,6 +82,11 @@ export function useCancelMeetingMutation() {
       throwOnErr(() => callServiceClient.cancelMeeting(meetingId)),
     onSuccess: () => {
       void queryClient.invalidateQueries(callKeys.meetings);
+      // A revoked link must stop rendering as live everywhere: the meeting
+      // page holds callKeys.meeting(token) and the copy-link affordances
+      // cache callKeys.link(callId) with staleTime: Infinity.
+      void queryClient.invalidateQueries({ queryKey: callKeys.meeting._def });
+      void queryClient.invalidateQueries({ queryKey: callKeys.link._def });
     },
   }));
 }

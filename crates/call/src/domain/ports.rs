@@ -671,37 +671,38 @@ pub trait CallRtcClient: Send + Sync + 'static {
 }
 
 /// Service interface for call operations.
+#[cfg_attr(test, mockall::automock)]
 pub trait CallService: Send + Sync + 'static {
     /// Create an invitation without starting media.
-    fn create_meeting(
+    fn create_meeting<'a>(
         &self,
-        actor: MacroUserIdStr<'_>,
+        actor: MacroUserIdStr<'a>,
         request: CreateMeetingRequest,
     ) -> impl Future<Output = Result<Meeting, CallError>> + Send;
     /// Send a direct call invitation, restricted to the meeting owner.
-    fn invite_to_meeting(
+    fn invite_to_meeting<'a>(
         &self,
-        actor: MacroUserIdStr<'_>,
+        actor: MacroUserIdStr<'a>,
         token: MeetingToken,
         email: String,
     ) -> impl Future<Output = Result<(), CallError>> + Send;
 
     /// List the actor's uncancelled meetings.
-    fn list_meetings(
+    fn list_meetings<'a>(
         &self,
-        actor: MacroUserIdStr<'_>,
+        actor: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<Vec<Meeting>, CallError>> + Send;
     /// Update a meeting owned by the actor.
-    fn update_meeting(
+    fn update_meeting<'a>(
         &self,
-        actor: MacroUserIdStr<'_>,
+        actor: MacroUserIdStr<'a>,
         meeting_id: &Uuid,
         request: UpdateMeetingRequest,
     ) -> impl Future<Output = Result<Meeting, CallError>> + Send;
     /// Cancel an invitation owned by the actor.
-    fn cancel_meeting(
+    fn cancel_meeting<'a>(
         &self,
-        actor: MacroUserIdStr<'_>,
+        actor: MacroUserIdStr<'a>,
         meeting_id: &Uuid,
     ) -> impl Future<Output = Result<(), CallError>> + Send;
     /// Create or retrieve a live call's invitation from an authorized receipt.
@@ -715,10 +716,10 @@ pub trait CallService: Send + Sync + 'static {
         token: MeetingToken,
     ) -> impl Future<Output = Result<Meeting, CallError>> + Send;
     /// Join using an authenticated Macro identity.
-    fn join_meeting(
+    fn join_meeting<'a>(
         &self,
         token: MeetingToken,
-        actor: MacroUserIdStr<'_>,
+        actor: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<CallTokenResponse, CallError>> + Send;
     /// Join as a non-account guest with a server-generated identity.
     fn join_meeting_guest(
@@ -745,17 +746,17 @@ pub trait CallService: Send + Sync + 'static {
 
     /// List all active calls in channels the user is an active member of,
     /// newest first. Calls with no active participants are excluded.
-    fn get_active_calls(
+    fn get_active_calls<'a>(
         &self,
-        user_id: MacroUserIdStr<'_>,
+        user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<ActiveCallsResponse, CallError>> + Send;
 
     /// Get or create a call in a channel. If a call already exists, joins it;
     /// otherwise creates a new one. Always returns a join token.
-    fn get_or_create_call(
+    fn get_or_create_call<'a>(
         &self,
         channel_id: &Uuid,
-        user_id: MacroUserIdStr<'_>,
+        user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<CallTokenResponse, CallError>> + Send;
 
     /// Leave or end a call. Removes the user; if last participant, also deletes the room and call.

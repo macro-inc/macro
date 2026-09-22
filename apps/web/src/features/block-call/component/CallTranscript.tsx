@@ -1,4 +1,4 @@
-import { isCallGuest } from '@channel/Call/call-identity';
+import { guestDisplayName, isCallGuestId } from '@channel/Call/call-identity';
 import { Message } from '@channel/Message';
 import { Thread } from '@channel/Thread/Thread';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
@@ -163,13 +163,14 @@ function GroupedTranscriptSegmentRow(props: {
 /** Standalone calls and external speakers have no channel sender entity. */
 function MeetingTranscriptSegmentRow(props: {
   segment: CallRecordTranscriptSegment;
+  guest: boolean;
   speakerName?: string;
   grouped: boolean;
   isActive: boolean;
   timelineStartMs: number | null;
   onSeekToSeconds?: (seconds: number) => void;
 }) {
-  const guest = () => isCallGuest(props.segment.speakerId);
+  const guest = () => props.guest;
   const name = () =>
     props.speakerName?.trim() ||
     (guest() ? 'Guest' : idToEmail(props.segment.speakerId));
@@ -224,7 +225,8 @@ function MeetingTranscriptSegmentRow(props: {
 export function CallTranscript(props: {
   transcript: CallRecordTranscriptSegment[];
   channelId?: string | null;
-  speakerNames?: ReadonlyMap<string, string>;
+  /** Call record carrying the session's guests; guest speakers resolve names from it. */
+  record?: { guests: Array<{ id: string; displayName: string }> };
   timelineStartMs: number | null;
   activeSequenceNum?: number | null;
   /** Bumps when the user seeks via the native video controls (deduped in CallBlockAdapter). */
@@ -415,12 +417,18 @@ export function CallTranscript(props: {
                 <div ref={(el) => rowRefs.set(item.segment.sequenceNum, el)}>
                   <Show
                     when={
-                      !isCallGuest(item.segment.speakerId) && props.channelId
+                      !isCallGuestId(props.record, item.segment.speakerId) &&
+                      props.channelId
                     }
                     fallback={
                       <MeetingTranscriptSegmentRow
                         segment={item.segment}
-                        speakerName={props.speakerNames?.get(
+                        guest={isCallGuestId(
+                          props.record,
+                          item.segment.speakerId
+                        )}
+                        speakerName={guestDisplayName(
+                          props.record,
                           item.segment.speakerId
                         )}
                         grouped={item.groupedWithPrevious}
