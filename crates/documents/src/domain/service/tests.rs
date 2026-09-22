@@ -1512,9 +1512,7 @@ fn owner_receipt(document_id: &str) -> EntityAccessReceipt<OwnerAccessLevel> {
 }
 
 fn team_share_facts() -> models_permissions::share_permission::team_share::TeamShareFacts {
-    let Owner::User(owner) = task_document_context("doc-1").owner else {
-        panic!("test document owner is a user");
-    };
+    let owner = task_document_context("doc-1").owner;
     models_permissions::share_permission::team_share::TeamShareFacts {
         entity: EntityType::Document.with_entity_str("doc-1"),
         owner,
@@ -1644,7 +1642,7 @@ fn owner_bot_edit_receipt() -> EntityAccessReceipt<EditAccessLevel> {
     EntityAccessReceipt::try_new_bot(
         bot_id().into_storage_id(),
         BotReceiptScope::User {
-            acting_user: team_share_facts().owner,
+            acting_user: team_share_facts().owner.as_user().unwrap().clone(),
         },
         Entity {
             entity_id: "doc-1".to_string(),
