@@ -5,6 +5,11 @@ import tsconfigPaths from 'vite-tsconfig-paths';
 import { configDefaults, defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  // Feature-flagged surfaces are exercised enabled; a flag's own off-state is
+  // the rollout switch, not something every composer suite should assert.
+  define: {
+    'import.meta.env.VITE_ENABLE_DICTATION': JSON.stringify('false'),
+  },
   plugins: [
     tsconfigPaths(),
     solidPlugin(),

@@ -1,3 +1,4 @@
+import { enableDictation, isFeatureEnabled } from '@core/constant/featureFlags';
 import CheckIcon from '@phosphor-icons/core/regular/check.svg?component-solid';
 import MicrophoneIcon from '@phosphor-icons/core/regular/microphone.svg?component-solid';
 import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
@@ -12,17 +13,19 @@ export function DictationButton(props: {
   disabled?: boolean;
 }) {
   return (
-    <Button
-      variant="ghost"
-      size="icon-composer"
-      class="rounded-full text-ink not-touch:text-composer-ink"
-      label={props.dictation.label()}
-      tooltip={props.dictation.label()}
-      disabled={props.disabled || props.dictation.disabled()}
-      onClick={() => void props.dictation.start()}
-    >
-      <MicrophoneIcon />
-    </Button>
+    <Show when={isFeatureEnabled(enableDictation)}>
+      <Button
+        variant="ghost"
+        size="icon-composer"
+        class="rounded-full text-ink not-touch:text-composer-ink"
+        label={props.dictation.label()}
+        tooltip={props.dictation.label()}
+        disabled={props.disabled || props.dictation.disabled()}
+        onClick={() => void props.dictation.start()}
+      >
+        <MicrophoneIcon />
+      </Button>
+    </Show>
   );
 }
 

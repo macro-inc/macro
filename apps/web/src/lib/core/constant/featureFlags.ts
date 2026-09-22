@@ -708,6 +708,19 @@ export const enableSpreadsheets = defineFlag({
 });
 
 /**
+ * Speech-to-text in the channel, agent, and AI chat composers. Recordings go
+ * to OpenAI Whisper through DSS and are billed per audio minute, so this
+ * carries a remote kill switch rather than an env-only one. Off hides the
+ * microphone everywhere and never opens the recorder, so no audio is captured
+ * and no request is made. On in dev; production follows PostHog.
+ */
+export const enableDictation = defineFlag({
+  key: 'enable-dictation',
+  env: 'ENABLE_DICTATION',
+  default: onInDev,
+});
+
+/**
  * Document comments read and write through the shared message API and render
  * with the channel message components; the legacy annotation comment stores
  * stay in place while this is off. Channels are not gated. On in dev, where the
