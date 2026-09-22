@@ -51,6 +51,7 @@ const DOCUMENT_ID_KEY: &str = "DOCUMENT_ID";
 mod document_api;
 mod document_effects;
 mod surface_api;
+pub(crate) mod surface_migration;
 
 use document_effects::{CloseFlush, report_interaction, report_new_doc_state};
 use surface_api::{SurfaceLifecycle, session_kind_from_storage_key};
@@ -155,6 +156,10 @@ pub struct DocumentSyncSession {
     /// Buffered blame events. Flushed via D1 batch on each alarm tick.
     pending_blame: Arc<Mutex<Vec<crate::d1::BlameEvent>>>,
     surface_lifecycle: Mutex<Option<SurfaceLifecycle>>,
+    source_migration: Mutex<Option<surface_migration::SourceState>>,
+    // Serialize whole callbacks, including persistence awaits. A freeze must
+    // drain every in-flight mutation before it exports or closes writers.
+    mutation_barrier: futures::lock::Mutex<()>,
 }
 
 mod u64_serde_strings {
@@ -455,6 +460,13 @@ impl DocumentSyncSession {
         let url = req.url()?;
         if url.path().starts_with("/surface/") {
             return self.surface_handler(req).await;
+        }
+        let segments: Vec<_> = url.path().split('/').collect();
+        if let ["", "document", id, "migration", operation] = segments.as_slice() {
+            return self.source_migration_handler(req, id, operation).await;
+        }
+        if self.source_blocked().await? {
+            return Ok(response(status_codes::FORBIDDEN));
         }
         let matched = ROUTER
             .at(url.path())
@@ -1064,12 +1076,15 @@ impl DurableObject for DocumentSyncSession {
             msg_buffer: Arc::new(Mutex::new(vec![])),
             pending_blame: Arc::new(Mutex::new(Vec::new())),
             surface_lifecycle: Mutex::new(None),
+            source_migration: Mutex::new(None),
+            mutation_barrier: futures::lock::Mutex::new(()),
         }
     }
 
     /// Fetch the durable object
     /// Upgrades the request to a websocket request connected to the document session
     async fn fetch(&self, req: Request) -> Result<Response> {
+        let _barrier = self.mutation_barrier.lock().await;
         let set_allow_origin = if let Some(origin) = req
             .headers()
             .get("Origin")
@@ -1113,6 +1128,11 @@ impl DurableObject for DocumentSyncSession {
     }
 
     async fn websocket_message(&self, ws: WebSocket, msg: WebSocketIncomingMessage) -> Result<()> {
+        let _barrier = self.mutation_barrier.lock().await;
+        if self.source_blocked().await? {
+            ws.close(Some(1008), Some("session frozen or retired"))?;
+            return Ok(());
+        }
         if !self.validate_surface_sockets(Some(&ws)).await? {
             return Ok(());
         }
@@ -1193,6 +1213,10 @@ impl DurableObject for DocumentSyncSession {
 
     /// Save document if needed
     async fn alarm(&self) -> Result<Response> {
+        let _barrier = self.mutation_barrier.lock().await;
+        if self.source_blocked().await? {
+            return Response::empty();
+        }
         self.validate_surface_sockets(None).await?;
         let span = tracing::info_span!("do.alarm");
         worker_rs_otel::scope(&self.env, &self.state, async {
@@ -1274,6 +1298,11 @@ impl DurableObject for DocumentSyncSession {
         _reason: String,
         _was_clean: bool,
     ) -> Result<()> {
+        let _barrier = self.mutation_barrier.lock().await;
+        if self.source_blocked().await? {
+            self.forget_websocket_metadata(&ws).await;
+            return Ok(());
+        }
         worker_rs_otel::scope(&self.env, &self.state, async {
             self.validate_surface_sockets(None).await?;
             let peer_ids = Wsm::new(self, &ws).get_peer_ids().await?;

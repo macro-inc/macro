@@ -17,7 +17,7 @@ use crate::{
 #[cfg(test)]
 mod test;
 
-const LIFECYCLE_KEY: &str = "SURFACE_LIFECYCLE";
+pub(super) const LIFECYCLE_KEY: &str = "SURFACE_LIFECYCLE";
 
 /// The discriminant is part of the persisted DOCUMENT_ID key, not the current
 /// request URL. Legacy document keys are unchanged and cannot use this prefix.
@@ -91,13 +91,25 @@ impl DocumentSyncSession {
         // Explicit allowlist: no document copy, raw, debug, CAS, or wakeup API.
         let allowed_method = match (*operation, rest) {
             ("connect" | "exists" | "active_peers", []) | ("peer", [_]) => Method::Get,
-            ("initialize" | "revoke" | "snapshot", []) => Method::Post,
+            (
+                "initialize"
+                | "revoke"
+                | "snapshot"
+                | "initialize_verified"
+                | "import"
+                | "verify"
+                | "activate",
+                [],
+            ) => Method::Post,
             _ => return Ok(response(status_codes::NOT_FOUND)),
         };
         if req.method() != allowed_method {
             return Ok(response(405));
         }
-        if matches!(*operation, "initialize" | "revoke") {
+        if matches!(
+            *operation,
+            "initialize" | "revoke" | "initialize_verified" | "import" | "verify" | "activate"
+        ) {
             if !is_internal(&req, &self.env)? {
                 return Ok(response(status_codes::UNAUTH));
             }
@@ -124,7 +136,16 @@ impl DocumentSyncSession {
         if lifecycle == SurfaceLifecycle::Revoked {
             return Ok(response(status_codes::FORBIDDEN));
         }
+        if matches!(
+            *operation,
+            "initialize_verified" | "import" | "verify" | "activate"
+        ) {
+            return self.target_migration_handler(req, &key, operation).await;
+        }
         if *operation == "initialize" {
+            if self.has_target_migration().await? {
+                return Ok(response(409));
+            }
             return self.initialize_surface(req, &key).await;
         }
         if lifecycle != SurfaceLifecycle::Ready {

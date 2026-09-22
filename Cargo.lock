@@ -16670,6 +16670,7 @@ dependencies = [
  "matchit 0.8.4",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "subtle",
  "sync_service_bebop_schema",
  "thiserror 2.0.18",
@@ -16699,9 +16700,11 @@ dependencies = [
  "model",
  "reqwest 0.13.4",
  "serde",
+ "serde_json",
  "sync_service_hex",
  "tokio",
  "tracing",
+ "uuid",
  "workspace-hack",
 ]
 
