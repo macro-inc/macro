@@ -114,7 +114,6 @@ import {
   onMount,
   type ParentProps,
   Show,
-  Suspense,
 } from 'solid-js';
 import { BasePathComponent } from './BasePath';
 import { TaskRoute } from './TaskRoute';
@@ -614,20 +613,20 @@ export function Root() {
                                 <ChatAttachmentsInit />
                                 <ReactiveFavicon />
                                 <Title>{tabTitle()}</Title>
-                                <Suspense>
-                                  <IsomorphicRouter
-                                    transformUrl={transformShortIdInUrlPathname}
-                                    root={Layout}
-                                    rootPreload={rootPreload}
-                                    base={ROUTER_BASE}
-                                  >
-                                    {{
-                                      path: '/',
-                                      component: TauriRouteListener,
-                                      children: ROUTES,
-                                    }}
-                                  </IsomorphicRouter>
-                                </Suspense>
+                                {/* Loading boundaries belong inside Layout so
+                                    a pending resource cannot detach the app shell. */}
+                                <IsomorphicRouter
+                                  transformUrl={transformShortIdInUrlPathname}
+                                  root={Layout}
+                                  rootPreload={rootPreload}
+                                  base={ROUTER_BASE}
+                                >
+                                  {{
+                                    path: '/',
+                                    component: TauriRouteListener,
+                                    children: ROUTES,
+                                  }}
+                                </IsomorphicRouter>
                                 <InitialInteractiveOnboardingModal />
                                 <ToastRegion />
                               </SearchProvider>
