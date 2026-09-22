@@ -402,7 +402,7 @@ impl AgentHarnessEnv {
         // runtime connection must reach the harness, not its own localhost.
         env.insert(
             "OVERRIDE_AGENT_HARNESS_SERVICE_URL".into(),
-            "http://agent-harness-service:8101".into(),
+            "http://agent-harness-service:8080".into(),
         );
         env.insert(
             "OVERRIDE_MCP_SERVICE_URL".into(),

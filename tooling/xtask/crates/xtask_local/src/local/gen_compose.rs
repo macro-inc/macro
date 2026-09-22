@@ -26,6 +26,9 @@ use super::instance::{Instance, Port};
 use super::inventory::services_for_mode;
 use super::{Mode, repo_root};
 
+#[cfg(test)]
+mod test;
+
 /// The one Rust service with a second listener: the agent egress proxy inside
 /// `agent_harness_service`, on the container port `EGRESS_PORT` defaults to.
 const EGRESS_SERVICE: &str = "agent_harness_service";
@@ -70,43 +73,8 @@ pub fn generate(
     static_frontend: bool,
     gmail_forwarder: bool,
 ) -> Result<PathBuf> {
-    let mut services: IndexMap<String, Option<dct::Service>> = IndexMap::new();
+    let mut services = rust_service_overrides(mode, instance, binaries);
     let mounts = binaries.compose_mounts();
-
-    // 1. Rust services → runtime image + mounted binaries.
-    for svc in services_for_mode(mode) {
-        let mut s = dct::Service {
-            image: Some(RUNTIME_IMAGE_TAG.to_string()),
-            volumes: mounts.iter().cloned().map(dct::Volumes::Simple).collect(),
-            environment: kv(&[("PORT", "8080")]),
-            ..Default::default()
-        };
-        // Named instances need their own host ports (replacing the base ports —
-        // emitted as `!override` in apply_tags). Only the self-contained local
-        // stacks remap; dev inherits the base-compose ports.
-        let mut ports = Vec::new();
-        if mode.spec().runs_local_infra
-            && !instance.is_default()
-            && let Some(port) = svc.host_port
-        {
-            ports.push(format!("{}:8080", instance.port(port)));
-        }
-        // The agent egress proxy is the harness's second listener, and the one
-        // service port a party outside the compose network has to reach: the
-        // egress tunnel forwards Cursor's cloud to this host port. Published on
-        // every local instance, default included - the base compose publishes
-        // nothing for the harness.
-        if mode.spec().runs_local_infra && svc.compose_name == EGRESS_SERVICE {
-            ports.push(format!(
-                "{}:{EGRESS_CONTAINER_PORT}",
-                instance.port(Port::AgentHarnessEgress)
-            ));
-        }
-        if !ports.is_empty() {
-            s.ports = dct::Ports::Short(ports);
-        }
-        services.insert(svc.compose_name.to_string(), Some(s));
-    }
 
     // The reverse proxy is the frontend's single origin in every mode, and
     // LocalStack runs in every mode (dev's `dev_personal` notification queue
@@ -181,6 +149,45 @@ pub fn generate(
     )
     .with_context(|| format!("writing {}", path.display()))?;
     Ok(path)
+}
+
+fn rust_service_overrides(
+    mode: Mode,
+    instance: &Instance,
+    binaries: &BinariesDir,
+) -> IndexMap<String, Option<dct::Service>> {
+    let mut services = IndexMap::new();
+    let mounts = binaries.compose_mounts();
+    for svc in services_for_mode(mode) {
+        let mut service = dct::Service {
+            image: Some(RUNTIME_IMAGE_TAG.to_string()),
+            volumes: mounts.iter().cloned().map(dct::Volumes::Simple).collect(),
+            environment: kv(&[("PORT", "8080")]),
+            ..Default::default()
+        };
+        // Named instances remap host ports. Every Rust service still listens
+        // on the same internal port; dev inherits base-compose host ports.
+        let mut ports = Vec::new();
+        if mode.spec().runs_local_infra
+            && !instance.is_default()
+            && let Some(port) = svc.host_port
+        {
+            ports.push(format!("{}:8080", instance.port(port)));
+        }
+        // The harness's second listener must also be reachable by the egress
+        // tunnel. Publish it for default and named local instances alike.
+        if mode.spec().runs_local_infra && svc.compose_name == EGRESS_SERVICE {
+            ports.push(format!(
+                "{}:{EGRESS_CONTAINER_PORT}",
+                instance.port(Port::AgentHarnessEgress)
+            ));
+        }
+        if !ports.is_empty() {
+            service.ports = dct::Ports::Short(ports);
+        }
+        services.insert(svc.compose_name.to_string(), Some(service));
+    }
+    services
 }
 
 fn add_sdk_webhook_relay(
