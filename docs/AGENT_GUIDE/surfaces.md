@@ -907,6 +907,23 @@ saving; each teammate connects their own account. An agent session that calls a 
 but unconnected app gets a tool result saying so, and the agent's reply renders a
 `Connect <app>` chip that opens Agents → Connections for that app. MCP integrations
 are managed on that page, rather than in Settings.
+
+With `pipedream-mcp` enabled, Agents → Connections has `Connected` and `Discover`
+tabs. Connected groups GitHub, Linear, Notion, and Slack tool grants by provider,
+lists other catalog connections alongside them, and puts custom MCP servers in
+a separate section. Discover offers featured providers, a searchable catalog,
+and `Add custom MCP`. Slack discovery retains its development-only gate.
+Provider Back returns to the tab that opened it; navigation is local to each
+Agents workspace and starts at Connected on a fresh visit.
+Provider and custom-server More menus contain Disable, Reconnect, and Disconnect;
+custom servers also offer Rename. Disabled grants show Enable. Unauthenticated
+custom servers show Connect and Remove. Disconnect/Remove require confirmation.
+Adding a custom MCP saves its name and URL; Connect on its row starts OAuth.
+An agent reply's `Connect <app>` chip still starts that app's connection flow.
+Cursor stays in Harness with its API key and default model controls; it is not
+featured or offered in the Connections catalog. Personal Gmail and GitHub account
+links remain in Settings → Integrations. The native-only Connections page remains
+available when `pipedream-mcp` is disabled.
 `Back to app` returns to the previous surface. Open via user-email button menu or `Ctrl+;`.
 
 `Agents` → `Create agent` (or edit an existing agent) opens runtime selectors.
