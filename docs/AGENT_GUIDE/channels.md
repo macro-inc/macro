@@ -388,11 +388,12 @@ already @mentioned as context (see ai-chat.md). On mobile it lives in the channe
 `...` drawer instead. Clicking the radio input can time out — click the adjacent label text
 instead.
 
-In the Chat workspace, the selected conversation renders an inline detail whose
-top bar holds the channel avatar and name, the same tab strip, live viewer
-avatars, and the `Call` and `Ask Macro` buttons. The title `...` menu (rename,
-channel picture) is not offered there; open the channel as a split (shift-click
-a rail row) to use it.
+In the Chat workspace — and wherever a channel opens inline inside another
+view's detail stack (a channel mention followed from the email view, say) — the
+conversation renders an inline detail whose top bar holds the channel avatar
+and name, the same tab strip, live viewer avatars, and the `Call` and
+`Ask Macro` buttons. The title `...` menu (rename, channel picture) is not
+offered there; open the channel as a split (shift-click a rail row) to use it.
 
 `Calls` tab: recordings, transcriptions, and summaries for this channel. Click a
 row to open the call. The search field above the list matches call names and

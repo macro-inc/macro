@@ -5,7 +5,10 @@ import { MarkdownDetail } from '@app/features/drive-view/views/MarkdownDetail';
 import { PdfDetail } from '@app/features/drive-view/views/PdfDetail';
 import { UnknownDetail } from '@app/features/drive-view/views/UnknownDetail';
 import { VideoDetail } from '@app/features/drive-view/views/VideoDetail';
+import { getChannelEntityTarget } from '@app/features/next-soup/utils';
 import type { MarkdownDocumentKind } from '@block-md/types';
+import { ChannelDetail } from '@channel/Channel/ChannelDetail';
+import type { ChannelTargetRequest } from '@channel/Channel/ChannelSurface';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -76,6 +79,37 @@ export function entityDetailBlockType(
   ) {
     return blockType;
   }
+}
+
+type ChannelDetailTarget = {
+  channelId: string;
+  target: ChannelTargetRequest | undefined;
+  fallbackName?: string;
+};
+
+function channelDetailTarget(
+  target: EntityDetailTarget
+): ChannelDetailTarget | undefined {
+  if (
+    target.type !== 'channel' &&
+    target.type !== 'channel_message' &&
+    target.type !== 'channel_thread'
+  ) {
+    return undefined;
+  }
+  const clickTarget = getChannelEntityTarget(target);
+  return {
+    channelId: target.type === 'channel' ? target.id : target.channelId,
+    target:
+      clickTarget?.kind === 'message'
+        ? {
+            kind: 'message',
+            messageId: clickTarget.messageId,
+            threadId: clickTarget.threadId,
+          }
+        : clickTarget,
+    fallbackName: target.fallbackName,
+  };
 }
 
 export function EntityDetail(props: EntityDetailProps) {
@@ -204,6 +238,15 @@ export function EntityDetail(props: EntityDetailProps) {
             )
           }
         </UnknownDetail>
+      </Match>
+      <Match when={channelDetailTarget(props.target)}>
+        {(channel) => (
+          <ChannelDetail
+            channelId={channel().channelId}
+            target={channel().target}
+            fallbackName={channel().fallbackName}
+          />
+        )}
       </Match>
       <Match when={true}>
         <PreviewPanelEntityDetail
