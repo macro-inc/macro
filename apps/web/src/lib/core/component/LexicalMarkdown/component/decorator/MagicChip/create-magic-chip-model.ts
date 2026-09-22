@@ -64,16 +64,16 @@ function agentName(session: {
 }
 
 /**
- * The model's display name from the fold, its id when the runtime lists no
- * name, or the slug the session was created with before the fold reports.
+ * The model's display name from the fold, or the one the session was created
+ * with before the fold reports.
  */
 function modelName(
   metadata: SessionMetadata | undefined,
   session: SessionIdentity | undefined
 ): string | undefined {
-  const model = metadata?.model;
-  if (!model) return session?.model || undefined;
-  return modelDisplayName(model, metadata.supportedModels);
+  const model = metadata?.model || session?.model;
+  if (!model) return undefined;
+  return modelDisplayName(model, metadata?.supportedModels ?? []);
 }
 
 /** Replace the message under the same turn and author, or append it. */
