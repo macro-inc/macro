@@ -774,6 +774,15 @@ week and with no visible scrollbar. Under ~672px the four stats read as a two-co
 value, and chips shorten. Rows stay on one line at every width. On touch devices the list rests
 below the floating page title and above the bottom toolbar.
 
+## Getting Started — `/app/component/getting-started`
+
+The buttons under **Put Macro's agent to work** create a chat and send their
+example prompt on first use. Later clicks reopen that button's saved chat without
+sending the prompt again, including after leaving the page or refreshing. Each
+button has its own chat, saved per account in this browser's local storage.
+Repeated clicks while the same button is creating its chat are ignored; a failed
+creation can be retried.
+
 ## Home — `/app/component/home`
 
 Greeting, getting-started checklist, example prompt buttons (`Draft a document`,
