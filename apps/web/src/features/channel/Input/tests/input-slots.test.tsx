@@ -243,6 +243,9 @@ vi.mock('../FormatButtons', () => ({
   FormatButtons: () => <div data-testid="format-buttons" />,
 }));
 
+const peopleMocks = vi.hoisted(() => ({
+  contactsEnabled: undefined as boolean | undefined,
+}));
 const CONTACT = {
   id: 'macro|ann@macro.test',
   name: 'Ann',
@@ -251,7 +254,10 @@ const CONTACT = {
 const CHANNEL_MEMBER = { user_id: 'macro|bo@macro.test' };
 
 vi.mock('@queries/contacts/contacts', () => ({
-  useContacts: () => () => [CONTACT],
+  useContacts: (enabled?: () => boolean) => {
+    peopleMocks.contactsEnabled = enabled?.() ?? true;
+    return () => [CONTACT];
+  },
 }));
 vi.mock('@queries/channel/channel-participants', () => ({
   useChannelParticipantsQuery: (channelId: () => string) => ({
@@ -544,6 +550,7 @@ describe('mention people', () => {
 
   beforeEach(() => {
     editorMocks.mentionUsers = undefined;
+    peopleMocks.contactsEnabled = undefined;
   });
 
   it('offers a document composer the workspace contacts', () => {
@@ -557,6 +564,8 @@ describe('mention people', () => {
 
     expect(mentionIds()).toContain(CHANNEL_MEMBER.user_id);
     expect(mentionIds()).not.toContain(CONTACT.id);
+    // A channel never shows them, so it should not fetch them either.
+    expect(peopleMocks.contactsEnabled).toBe(false);
   });
 
   it('keeps an explicitly supplied participants list', () => {

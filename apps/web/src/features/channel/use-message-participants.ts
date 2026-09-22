@@ -14,12 +14,13 @@ import { useChannelParticipants } from './use-channel-participants';
 export function useMessageParticipants(
   parent: Accessor<MessageParent>
 ): Accessor<IUser[]> {
+  const isChannel = () => parent().type === 'channel';
   const channelParticipants = useChannelParticipants(() =>
-    parent().type === 'channel' ? parent().id : ''
+    isChannel() ? parent().id : ''
   );
-  const contacts = useContacts();
+  const contacts = useContacts(() => !isChannel());
 
   return createMemo(() =>
-    parent().type === 'channel' ? channelParticipants.users() : contacts()
+    isChannel() ? channelParticipants.users() : contacts()
   );
 }
