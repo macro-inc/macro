@@ -33,7 +33,7 @@ use agent_client_protocol::schema::v1::{
     RequestId, Response, SessionId, SetSessionConfigOptionResponse,
 };
 use agent_fold::domain::lifecycle::LifecycleFold;
-use agent_fold::domain::model::TurnState;
+use agent_fold::domain::model::{Author, FoldedMessage, MessagePart, TurnState};
 use agent_fold::domain::model_selection::model_selection;
 use agent_fold::domain::ports::FoldedMessageRepo;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, AgentSetModelAction};
@@ -937,8 +937,11 @@ where
     let AgentAction::Prompt(prompt) = action else {
         return None;
     };
+    // Whether anyone has *spoken* here yet, rather than whether the log has
+    // opened a turn: controls take turns of their own, so a session whose
+    // model was set before its first prompt would otherwise never be named.
     folds
-        .next_turn_id(id)
+        .messages(id)
         .await
         .inspect_err(|error| {
             tracing::warn!(
@@ -948,8 +951,19 @@ where
             );
         })
         .ok()
-        .filter(|turn| *turn == MessageId::first(AuthorKind::User).turn)
+        .filter(|messages| !messages.iter().any(is_user_prompt))
         .map(|_| prompt.name_source().to_owned())
+}
+
+/// A message a user wrote, as opposed to a control they issued.
+fn is_user_prompt(message: &FoldedMessage) -> bool {
+    matches!(message.author, Author::User { .. })
+        && message.parts.iter().any(|part| {
+            matches!(
+                part,
+                MessagePart::Text { .. } | MessagePart::Attachment { .. }
+            )
+        })
 }
 
 fn spawn_initial_agent_session_rename<R, Rt, Namer>(

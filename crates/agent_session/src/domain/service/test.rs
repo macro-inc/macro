@@ -166,6 +166,27 @@ async fn only_the_first_prompt_is_selected_for_automatic_naming() {
         Some("fix the flaky tests".to_owned())
     );
 
+    // A control opens a turn of its own, so turn numbering cannot stand in for
+    // "nobody has spoken yet" - a model picked before the first prompt used to
+    // leave the session unnamed for life.
+    repo.extend_log(vec![AgentSessionLog {
+        agent_session_id: session,
+        user_id: None,
+        content: Message::ToRuntime(
+            AgentAction::set_model("gpt-5.5")
+                .to_runtime(
+                    &agent_client_protocol::schema::v1::SessionId::new("acp-1"),
+                    RequestId::Number(1),
+                )
+                .expect("a set-model frame builds"),
+        ),
+    }]);
+    assert_eq!(
+        initial_prompt_for_rename(&folds, session, &prompt).await,
+        Some("fix the flaky tests".to_owned()),
+        "a model chosen before the first prompt must not cost the session its name"
+    );
+
     repo.extend_log(parse_log_as(session, TURN));
     assert_eq!(
         initial_prompt_for_rename(&folds, session, &prompt).await,

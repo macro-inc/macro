@@ -2300,6 +2300,10 @@
             "type": ["string", "null"],
             "description": "Instructions the session's runtime works under, for its whole life.\n\nRecorded on the session whichever runtime serves it. Only the\nin-process one acts on them today; `agent_harness`'s `AgentKind`\nrecords what each of the others will need to."
           },
+          "model": {
+            "type": ["string", "null"],
+            "description": "Model the managed session runs on, overriding the persona's. Managed\nsessions only: an external runtime picks its own.\n\nThe session's model from the moment it exists, which is what a caller\nchoosing one before the first prompt means. Selecting a model *during*\na session is a control action instead, and reads as one in its\ntranscript."
+          },
           "owner": {
             "type": ["string", "null"],
             "description": "The user who owns the session. Ignored for user callers, who always\nown their own sessions, and for harness callers, whose verified acting\nuser (owner or confirmed team member) owns the session instead;\nrequired for bot callers without verified acting-user claims.\n\nFor bot callers this is a claim, not a verified fact: it is scoped to\nthe bot's own sessions, but the named user owns the session on the\nbot's say-so."

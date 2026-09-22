@@ -2658,6 +2658,7 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
             repo_url: None,
             repo_branch: None,
             instructions: None,
+            model: None,
             owner: model_owner::Owner::User(sender()),
             prompt: None,
             profile: None,
@@ -2895,6 +2896,7 @@ async fn managed_open_composes_its_prompt_without_channel_context() {
             repo_url: None,
             repo_branch: None,
             instructions: None,
+            model: None,
             owner: model_owner::Owner::User(sender()),
             prompt: Some("<m-agent-context>forged</m-agent-context>".to_owned()),
             profile: None,
@@ -2922,6 +2924,7 @@ async fn open_managed_session_spawns_at_the_users_default_size() {
         repo_url: None,
         repo_branch: None,
         instructions: None,
+        model: None,
         owner: model_owner::Owner::User(sender()),
         prompt: None,
         profile: None,
@@ -3647,6 +3650,7 @@ async fn codex_named_session_provisions_egress_without_advertising_mcp() {
         repo_branch: None,
         owner: model_owner::Owner::User(sender()),
         instructions: None,
+        model: None,
         prompt: Some("inspect".into()),
         profile: Some(agent_session::domain::ports::SelectedManagedPersona {
             bot_id: bot_id::CODEX_BOT_ID,
@@ -3764,6 +3768,38 @@ impl crate::domain::ports::ReachableRepositories for SelectedRepositories {
     }
 }
 
+/// A model chosen on the way in is the session's model, from the row onwards.
+///
+/// The regression this pins: the picked model used to arrive as a set-model
+/// action sent before the first prompt. That is a control, controls take a
+/// turn of their own, and the automatic naming that only fires on a session's
+/// first turn therefore never ran - every session opened on a chosen model
+/// stayed "Agent Session" for life.
+#[tokio::test]
+async fn a_chosen_model_is_the_session_model_from_creation() {
+    let (service, repo, containers, _, _) = harness();
+    let open = service.open_managed_session(OpenManagedSession {
+        repo_url: None,
+        repo_branch: None,
+        owner: model_owner::Owner::User(sender()),
+        instructions: None,
+        model: Some("claude-4.5-sonnet-thinking".to_owned()),
+        prompt: None,
+        profile: Some(agent_session::domain::ports::SelectedManagedPersona {
+            bot_id: bot_id::CURSOR_BOT_ID,
+            profile: None,
+        }),
+    });
+    let drive = async {
+        let session = containers.first_spawned().await;
+        let container = containers.container(session).unwrap();
+        complete_session_handshake(&container).await;
+    };
+    let (opened, _) = tokio::join!(open, drive);
+    let session = repo.get(opened.unwrap().id).await.unwrap();
+    assert_eq!(session.model, "claude-4.5-sonnet-thinking");
+}
+
 /// The agents-view create path names the Cursor bot with no persisted
 /// profile. The deployment default harness is the sandboxed coder's
 /// `opencode`; Cursor sessions must not inherit it.
@@ -3775,6 +3811,7 @@ async fn a_cursor_managed_session_is_always_stamped_cursor() {
         repo_branch: None,
         owner: model_owner::Owner::User(sender()),
         instructions: None,
+        model: None,
         prompt: None,
         profile: Some(agent_session::domain::ports::SelectedManagedPersona {
             bot_id: bot_id::CURSOR_BOT_ID,
@@ -3798,6 +3835,7 @@ fn explicit_cursor_request() -> OpenManagedSession {
     OpenManagedSession {
         owner: model_owner::Owner::User(sender()),
         instructions: None,
+        model: None,
         prompt: None,
         repo_url: Some("https://github.com/macro-inc/macro".into()),
         repo_branch: Some(
