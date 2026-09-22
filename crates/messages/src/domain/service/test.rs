@@ -6,10 +6,20 @@ use std::sync::{Arc, Mutex};
 #[derive(Clone)]
 struct Repo {
     message: Message,
+    replies: Vec<Message>,
     state: ThreadState,
     deletes: Arc<Mutex<Vec<Uuid>>>,
+    thread_deletes: Arc<Mutex<Vec<Uuid>>>,
     creates: Arc<Mutex<Vec<CreateMessage>>>,
     edits: Arc<Mutex<Vec<EditMessage>>>,
+}
+
+impl Repo {
+    /// A committed teardown tombstones the root and every reply in one
+    /// statement, so reads that follow it see the whole discussion gone.
+    fn torn_down(&self, root: Uuid) -> bool {
+        self.thread_deletes.lock().unwrap().contains(&root)
+    }
 }
 
 impl MessageRepository for Repo {
@@ -21,24 +31,50 @@ impl MessageRepository for Repo {
     ) -> Result<Vec<Message>, MessageError> {
         unimplemented!()
     }
-    async fn replies(&self, _: &MessageParent, _: Uuid) -> Result<Vec<Message>, MessageError> {
-        Ok(vec![])
+    async fn replies(
+        &self,
+        parent: &MessageParent,
+        root: Uuid,
+    ) -> Result<Vec<Message>, MessageError> {
+        if self.torn_down(root) {
+            return Ok(vec![]);
+        }
+        Ok(self
+            .replies
+            .iter()
+            .filter(|reply| reply.parent == *parent && reply.thread_id == Some(root))
+            .cloned()
+            .collect())
     }
     async fn parent_exists(&self, _: &MessageParent) -> Result<bool, MessageError> {
         Ok(true)
     }
     async fn get(&self, parent: &MessageParent, id: Uuid) -> Result<Option<Message>, MessageError> {
-        Ok((self.message.parent == *parent && self.message.id == id).then(|| self.message.clone()))
+        let mut message = std::iter::once(&self.message)
+            .chain(&self.replies)
+            .find(|message| message.parent == *parent && message.id == id)
+            .cloned();
+        if let Some(message) = message.as_mut()
+            && self.torn_down(message.root_id())
+        {
+            message.deleted_at.get_or_insert_with(Utc::now);
+            message.content.clear();
+        }
+        Ok(message)
     }
     async fn thread(
         &self,
         parent: &MessageParent,
         root: Uuid,
     ) -> Result<Option<ThreadState>, MessageError> {
-        Ok(
-            (self.message.parent == *parent && self.state.root_id == root)
-                .then(|| self.state.clone()),
-        )
+        let mut state = (self.message.parent == *parent && self.state.root_id == root)
+            .then(|| self.state.clone());
+        if let Some(state) = state.as_mut()
+            && self.torn_down(root)
+        {
+            state.deleted_at.get_or_insert_with(Utc::now);
+        }
+        Ok(state)
     }
     async fn timeline(
         &self,
@@ -88,9 +124,9 @@ impl MessageRepository for Repo {
         self.edits.lock().unwrap().push(command);
         Ok(message)
     }
-    async fn delete(&self, _: &MessageParent, id: Uuid) -> Result<Message, MessageError> {
+    async fn delete(&self, parent: &MessageParent, id: Uuid) -> Result<Message, MessageError> {
         self.deletes.lock().unwrap().push(id);
-        let mut message = self.message.clone();
+        let mut message = self.get(parent, id).await?.ok_or(MessageError::NotFound)?;
         message.deleted_at = Some(Utc::now());
         message.content.clear();
         Ok(message)
@@ -120,8 +156,20 @@ impl MessageRepository for Repo {
         }
         Ok(state)
     }
-    async fn delete_thread(&self, _: &MessageParent, _: Uuid) -> Result<ThreadState, MessageError> {
-        panic!("single-message deletion must never delete the thread")
+    async fn delete_thread(
+        &self,
+        _: &MessageParent,
+        root: Uuid,
+    ) -> Result<ThreadState, MessageError> {
+        self.thread_deletes.lock().unwrap().push(root);
+        let mut state = self.state.clone();
+        state.deleted_at = Some(Utc::now());
+        // A dead thread keeps its Markdown identity so a closed document can
+        // still clear the mark; every other anchor is released with the thread.
+        if !matches!(state.anchor, Some(ThreadAnchor::Markdown { .. })) {
+            state.anchor = None;
+        }
+        Ok(state)
     }
     async fn resolve_legacy(
         &self,
@@ -176,9 +224,23 @@ fn fixture() -> Repo {
             updated_at: Utc::now(),
             deleted_at: None,
         },
+        replies: vec![],
         deletes: Arc::default(),
+        thread_deletes: Arc::default(),
         creates: Arc::default(),
         edits: Arc::default(),
+    }
+}
+
+/// A reply written by someone other than the discussion's author.
+fn reply_from(root: &Message, id: u128, sender: &str) -> Message {
+    Message {
+        id: Uuid::from_u128(id),
+        thread_id: Some(root.id),
+        sender_id: ChannelSender::try_from(sender.to_owned()).unwrap(),
+        imported_author: None,
+        content: "reply".into(),
+        ..root.clone()
     }
 }
 
@@ -280,8 +342,9 @@ async fn thread_patch_cannot_detach_pdf_annotations() {
 }
 
 #[tokio::test]
-async fn root_deletion_tombstones_only_the_message_and_emits_shared_update() {
-    let repo = fixture();
+async fn deleting_a_document_root_deletes_the_whole_discussion() {
+    let mut repo = fixture();
+    repo.replies = vec![reply_from(&repo.message, 7, "macro|other@example.com")];
     let events = Events::default();
     let service = MessageService::new(repo.clone(), events.clone());
     let message = service
@@ -293,17 +356,68 @@ async fn root_deletion_tombstones_only_the_message_and_emits_shared_update() {
         .await
         .unwrap();
     assert!(message.deleted_at.is_some());
-    assert_eq!(*repo.deletes.lock().unwrap(), vec![repo.message.id]);
-    assert!(repo.state.deleted_at.is_none());
-    assert!(repo.state.anchor.is_some());
-    let events = events.0.lock().unwrap();
-    assert_eq!(events.len(), 1);
+    assert!(message.content.is_empty());
+    assert_eq!(*repo.thread_deletes.lock().unwrap(), vec![repo.message.id]);
+    // The teardown covers the root, so no second single-message delete runs.
+    assert!(repo.deletes.lock().unwrap().is_empty());
+    let published = events.0.lock().unwrap();
+    assert_eq!(published.len(), 1);
+    assert_eq!(published[0].nonce.as_deref(), Some("nonce"));
     assert!(
-        matches!(&events[0].change, MessageChange::MessageDeleted { message } if message.root_id() == repo.message.id)
+        matches!(&published[0].change, MessageChange::ThreadUpdated { state } if state.deleted_at.is_some())
     );
-    assert_eq!(events[0].nonce.as_deref(), Some("nonce"));
+    drop(published);
+    // Another author's replies go with the discussion instead of outliving it.
+    let view = access("macro|other@example.com", "doc", AccessLevel::Comment)
+        .try_into_requirement()
+        .unwrap();
     assert!(matches!(
-        events[0].change,
+        service.get_thread(view, repo.message.id).await,
+        Err(MessageError::NotFound)
+    ));
+    let mut input = post_input();
+    input.thread_id = Some(repo.message.id);
+    assert!(matches!(
+        service
+            .post(
+                access("macro|other@example.com", "doc", AccessLevel::Comment),
+                input
+            )
+            .await,
+        Err(MessageError::NotFound)
+    ));
+}
+
+#[tokio::test]
+async fn a_reply_author_can_delete_their_reply_but_not_the_root_above_it() {
+    let mut repo = fixture();
+    repo.replies = vec![reply_from(&repo.message, 7, "macro|other@example.com")];
+    let events = Events::default();
+    let service = MessageService::new(repo.clone(), events.clone());
+    let denied = service
+        .delete(
+            access("macro|other@example.com", "doc", AccessLevel::Comment),
+            repo.message.id,
+            None,
+        )
+        .await;
+    assert!(matches!(denied, Err(MessageError::Forbidden)));
+    assert!(repo.thread_deletes.lock().unwrap().is_empty());
+    assert!(events.0.lock().unwrap().is_empty());
+    let tombstone = service
+        .delete(
+            access("macro|other@example.com", "doc", AccessLevel::Comment),
+            repo.replies[0].id,
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(tombstone.deleted_at.is_some());
+    assert_eq!(*repo.deletes.lock().unwrap(), vec![repo.replies[0].id]);
+    assert!(repo.thread_deletes.lock().unwrap().is_empty());
+    let published = events.0.lock().unwrap();
+    assert!(matches!(
+        published[0].change,
         MessageChange::MessageDeleted { .. }
     ));
 }
@@ -321,6 +435,7 @@ async fn other_commenter_cannot_delete_but_parent_owner_can_moderate() {
         .await;
     assert!(matches!(denied, Err(MessageError::Forbidden)));
     assert!(repo.deletes.lock().unwrap().is_empty());
+    assert!(repo.thread_deletes.lock().unwrap().is_empty());
     service
         .delete(
             access("macro|owner@example.com", "doc", AccessLevel::Owner),
@@ -329,6 +444,35 @@ async fn other_commenter_cannot_delete_but_parent_owner_can_moderate() {
         )
         .await
         .unwrap();
+    assert_eq!(*repo.thread_deletes.lock().unwrap(), vec![repo.message.id]);
+}
+
+#[tokio::test]
+async fn a_channel_root_keeps_its_thread_and_its_tombstone() {
+    let mut repo = fixture();
+    // The fixture's author is the principal `channel_access` authenticates.
+    repo.message.parent = MessageParent::Channel(Uuid::from_u128(20));
+    repo.replies = vec![reply_from(&repo.message, 7, "macro|other@example.com")];
+    let events = Events::default();
+    let service = MessageService::new(repo.clone(), events.clone());
+    let message = service
+        .delete(channel_access(), repo.message.id, None)
+        .await
+        .unwrap();
+    assert!(message.deleted_at.is_some());
+    assert_eq!(*repo.deletes.lock().unwrap(), vec![repo.message.id]);
+    assert!(repo.thread_deletes.lock().unwrap().is_empty());
+    let published = events.0.lock().unwrap();
+    assert_eq!(published.len(), 1);
+    assert!(matches!(
+        published[0].change,
+        MessageChange::MessageDeleted { .. }
+    ));
+    drop(published);
+    // The conversation under it continues: the replies stay live and repliable.
+    let mut input = post_input();
+    input.thread_id = Some(repo.message.id);
+    service.post(channel_access(), input).await.unwrap();
 }
 
 #[tokio::test]

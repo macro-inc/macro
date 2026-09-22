@@ -406,7 +406,10 @@ Touch keeps separate `Attach images` and
 composer, `type_text`, then click `Send comment` (Enter also submits). The comment renders
 above the composer with author + timestamp. `@`-mentions in comments notify the mentioned
 user. Editing a discussion comment keeps the attachment and send controls, with no
-trash button. On mobile, the new-comment composer is docked above the navigation bar,
+trash button. Deleting a comment's first message deletes the whole discussion —
+the confirmation reads `Delete comment`, the replies under it go too, and an
+anchored comment's highlight clears from the document. Deleting a reply removes
+only that reply. On mobile, the new-comment composer is docked above the navigation bar,
 replacing Ask AI and New when commenting is available in documents and tasks.
 When the comment composer is unavailable, the default Ask AI row appears instead.
 Tap `Leave a comment...`

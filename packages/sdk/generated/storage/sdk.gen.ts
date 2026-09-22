@@ -1817,7 +1817,7 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * Tombstone one message while preserving replies.
+     * Tombstone one message; deleting a discussion's root deletes the discussion.
      */
     public entityMessageDeleteMessage<ThrowOnError extends boolean = false>(options: Options<EntityMessageDeleteMessageData, ThrowOnError>): RequestResult<EntityMessageDeleteMessageResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).delete<EntityMessageDeleteMessageResponses, unknown, ThrowOnError>({ url: '/messages/{parent_type}/{parent_id}/items/{id}', ...options });

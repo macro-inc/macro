@@ -166,6 +166,27 @@ async fn thread_identity_tombstones_and_parent_isolation(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_deleted_discussion_reads_back_as_a_root_tombstone_without_replies(pool: PgPool) {
+    setup(&pool).await;
+    let repo = PgMessageRepository::new(pool.clone());
+    let parent = MessageParent::parse("document", "message-doc-a").unwrap();
+    let root = repo
+        .create(command("message-doc-a", None, "root"))
+        .await
+        .unwrap();
+    repo.create(command("message-doc-a", Some(root.id), "reply"))
+        .await
+        .unwrap();
+    repo.delete_thread(&parent, root.id).await.unwrap();
+    // Deleting a root reads the message back after the teardown to answer the
+    // caller; that read is the tombstone, not the live root it started from.
+    let tombstone = repo.get(&parent, root.id).await.unwrap().unwrap();
+    assert!(tombstone.deleted_at.is_some());
+    assert!(tombstone.content.is_empty());
+    assert!(repo.replies(&parent, root.id).await.unwrap().is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn deleted_markdown_threads_keep_paged_cleanup_identity(pool: PgPool) {
     setup(&pool).await;
     let repo = PgMessageRepository::new(pool.clone());

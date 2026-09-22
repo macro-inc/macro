@@ -11000,7 +11000,7 @@
       },
       "delete": {
         "tags": ["messages::inbound::axum_router"],
-        "summary": "Tombstone one message while preserving replies.",
+        "summary": "Tombstone one message; deleting a discussion's root deletes the discussion.",
         "operationId": "entity_message_delete_message",
         "parameters": [
           {

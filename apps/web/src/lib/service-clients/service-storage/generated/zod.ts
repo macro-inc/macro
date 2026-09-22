@@ -28680,7 +28680,7 @@ export const entityMessageGetMessageResponse = zod
   );
 
 /**
- * @summary Tombstone one message while preserving replies.
+ * @summary Tombstone one message; deleting a discussion's root deletes the discussion.
  */
 export const entityMessageDeleteMessageParams = zod.object({
   parent_type: zod.string(),
