@@ -10,19 +10,21 @@ use macro_authorization::{InternalOnly, MacroAuthorizationExtractor, MacroAuthor
 use serde::Deserialize;
 
 use super::{DocumentRouterState, Params};
-use crate::domain::{models::DocumentError, ports::DocumentContentEventService};
+use crate::domain::{
+    events::DocumentSyncEditor, models::DocumentError, ports::DocumentContentEventService,
+};
 
 /// Attribution from the sync service's verified document token.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SyncContentUpdatedRequest {
-    /// Actor that performed the edit, if any.
+    /// Legacy single agent actor from older Sync releases.
     pub actor: Option<String>,
-    /// User represented by the actor, if any.
+    /// User represented by the legacy actor, if any.
     pub on_behalf_of: Option<String>,
     /// Editors accumulated by Sync since its last snapshot notification.
     #[serde(default)]
-    pub editors: Vec<crate::domain::events::DocumentSyncEditor>,
+    pub editors: Vec<DocumentSyncEditor>,
 }
 
 /// Publish an event using the document's stored metadata.
@@ -37,14 +39,17 @@ pub async fn sync_content_updated_handler<
     Path(Params { document_id }): Path<Params>,
     Json(request): Json<SyncContentUpdatedRequest>,
 ) -> Result<StatusCode, DocumentError> {
+    let mut editors = request.editors;
+    // Sync releases before batched editors sent a single agent actor.
+    if let Some(actor) = request.actor {
+        editors.push(DocumentSyncEditor {
+            actor,
+            on_behalf_of: request.on_behalf_of,
+        });
+    }
     state
         .service
-        .publish_sync_content_updated(
-            &document_id,
-            request.actor,
-            request.on_behalf_of,
-            request.editors,
-        )
+        .publish_sync_content_updated(&document_id, editors)
         .await?;
     Ok(StatusCode::OK)
 }

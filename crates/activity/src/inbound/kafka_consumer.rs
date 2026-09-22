@@ -1,7 +1,8 @@
 //! Generic Kafka consumer that materializes activities from domain events.
 //!
 //! This machinery knows **zero domains**: it is generic over a declared
-//! event collection `C` and a host-supplied dispatcher asynchronous dispatcher.
+//! event collection `C` and a host-supplied asynchronous dispatcher
+//! `Fn(C) -> impl Future<Output = Ingest>`.
 //! The composition root (the hosting service) declares the topics and maps
 //! each decoded event to the owning domain's ingest function.
 //!

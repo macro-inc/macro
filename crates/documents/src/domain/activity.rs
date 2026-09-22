@@ -180,29 +180,18 @@ pub async fn ingest_with_editing_sessions(
     const EDITING_IDLE: std::time::Duration = std::time::Duration::from_secs(5 * 60);
     const STORE_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(100);
 
-    let ingest = event.ingest(event_id);
-    if !matches!(event, DocumentTopicEvent::SyncContentUpdated(_)) {
-        return ingest;
-    }
-    let Ingest::Insert(rows) = ingest else {
-        return ingest;
+    let rows = match (event, event.ingest(event_id)) {
+        (DocumentTopicEvent::SyncContentUpdated(_), Ingest::Insert(rows)) => rows,
+        (_, ingest) => return ingest,
     };
     // Redis may apply a refresh before its response times out. Losing that
     // session's Activity is acceptable here: delivery is best effort, and
     // emitting on uncertainty would turn cache failures into noisy edit feeds.
-    let admitted = match tokio::time::timeout(
-        STORE_TIMEOUT,
-        store.refresh_editing_sessions(&rows, event_id, EDITING_IDLE),
-    )
-    .await
-    {
+    let refresh = store.refresh_editing_sessions(&rows, event_id, EDITING_IDLE);
+    let admitted = match tokio::time::timeout(STORE_TIMEOUT, refresh).await {
         Ok(Ok(admitted)) => admitted,
-        Ok(Err(error)) => {
-            tracing::warn!(error = ?error, "skipping best-effort editing activity");
-            return Ingest::Ignore;
-        }
-        Err(error) => {
-            tracing::warn!(error = ?error, "editing activity debounce timed out");
+        result => {
+            tracing::warn!(?result, "skipping best-effort editing activity");
             return Ingest::Ignore;
         }
     };

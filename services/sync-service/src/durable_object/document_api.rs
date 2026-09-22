@@ -112,24 +112,26 @@ impl DocumentSyncSession {
         };
         let state = self.document_state().await?;
         let storage = self.session_storage().await?;
-        let has_explicit_actor = claims.actor.is_some();
-        let attribution = match document::DocumentAttribution::from_session_claims(
+        // Only agent actors are stored with the operation; humans are still editors.
+        let is_agent = claims.actor.is_some();
+        let editor = match document::DocumentAttribution::from_session_claims(
             claims.actor,
             claims.user_id,
         ) {
-            Ok(attribution) => attribution,
+            Ok(editor) => editor,
             Err(error) => return error_response(error),
         };
+        let stored_attribution = if is_agent { editor.as_ref() } else { None };
         let port = DocumentUpdateStorage {
             document_state: &state,
             storage: &storage,
-            attribution: attribution.as_ref().filter(|_| has_explicit_actor),
+            attribution: stored_attribution,
         };
         let effects = WorkerDocumentEffects {
             session: self,
             document_state: &state,
             document_id,
-            attribution: attribution.as_ref(),
+            attribution: editor.as_ref(),
         };
         // The service synchronously compares + validates + imports before its
         // first storage await, just like a websocket update in this isolate.

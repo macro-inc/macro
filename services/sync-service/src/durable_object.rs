@@ -47,7 +47,6 @@ pub mod status_codes {
 
 const DOCUMENT_ID_KEY: &str = "DOCUMENT_ID";
 
-mod activity;
 mod document_api;
 mod document_effects;
 
@@ -130,8 +129,8 @@ pub struct DocumentSyncSession {
     msg_buffer: Arc<Mutex<Vec<u8>>>,
     /// Buffered blame events. Flushed via D1 batch on each alarm tick.
     pending_blame: Arc<Mutex<Vec<crate::d1::BlameEvent>>>,
-    /// Editors collected for the next existing document notification.
-    pending_editors: Arc<Mutex<crate::domain::activity::PendingEditors>>,
+    /// Distinct editors since the last snapshot notification.
+    pending_editors: Arc<Mutex<BTreeSet<DocumentAttribution>>>,
 }
 
 mod u64_serde_strings {
@@ -340,9 +339,23 @@ async fn bump_alarm(state: &State) -> Result<()> {
     Ok(())
 }
 
+fn take_editors(editors: &Mutex<BTreeSet<DocumentAttribution>>) -> Vec<DocumentAttribution> {
+    std::mem::take(&mut *editors.lock("take document editors"))
+        .into_iter()
+        .collect()
+}
+
 impl DocumentSyncSession {
     pub fn get_websockets(&self) -> Vec<WebSocket> {
         self.state.get_websockets()
+    }
+
+    pub(crate) fn record_editor(&self, attribution: Option<&DocumentAttribution>) {
+        if let Some(attribution) = attribution {
+            self.pending_editors
+                .lock("record document editor")
+                .insert(attribution.clone());
+        }
     }
 
     async fn forget_websocket_metadata(&self, ws: &WebSocket) {
@@ -1139,7 +1152,7 @@ impl DurableObject for DocumentSyncSession {
                 if let Some(document_id) = document_id
                     && let Ok(snapshot) = doc_state.export_shallow_snapshot()
                 {
-                    let editors = pending_editors.lock("take document editors").take();
+                    let editors = take_editors(&pending_editors);
                     report_new_doc_state(&document_id, &snapshot, &env, editors).await;
                     report_interaction(&document_id, &env, InteractionReason::Edited).await;
                 }
@@ -1195,7 +1208,7 @@ impl DurableObject for DocumentSyncSession {
                 && let Ok(document_id) = self.document_id().await
                 && let Ok(snapshot) = state.export_shallow_snapshot()
             {
-                let editors = self.take_editors();
+                let editors = take_editors(&self.pending_editors);
                 let env = self.env.clone();
                 self.state.wait_until(async move {
                     report_new_doc_state(&document_id, &snapshot, &env, editors).await;

@@ -63,7 +63,7 @@ pub struct PreparedUpdate {
 }
 
 /// Signed-token attribution stored alongside the existing operation log.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
 pub struct DocumentAttribution {
     pub actor: String,
     pub on_behalf_of: Option<String>,

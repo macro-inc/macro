@@ -3,7 +3,9 @@
 use bebop::{Record, SubRecord};
 use tracing::{error, warn};
 
-use super::{DocumentSyncSession, bump_alarm, report_interaction, report_new_doc_state};
+use super::{
+    DocumentSyncSession, bump_alarm, report_interaction, report_new_doc_state, take_editors,
+};
 use crate::{
     domain::document::{DocumentAttribution, DocumentError, DocumentUpdateEffects},
     dss_internal::InteractionReason,
@@ -40,12 +42,12 @@ impl DocumentUpdateEffects for WorkerDocumentEffects<'_> {
     }
 
     fn publish_changed_document(&self) -> Result<(), DocumentError> {
-        self.session.record_edit_activity(self.attribution);
+        self.session.record_editor(self.attribution);
         let snapshot = self
             .document_state
             .export_shallow_snapshot()
             .map_err(notification_error)?;
-        let editors = self.session.take_editors();
+        let editors = take_editors(&self.session.pending_editors);
         let env = self.session.env.clone();
         let document_id = self.document_id.to_owned();
         self.session.state.wait_until(async move {

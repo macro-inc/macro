@@ -107,8 +107,6 @@ struct ContentUploadedCall {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct SyncContentCall {
     document_id: String,
-    actor: Option<String>,
-    on_behalf_of: Option<String>,
     editors: Vec<crate::domain::events::DocumentSyncEditor>,
 }
 
@@ -453,8 +451,6 @@ impl DocumentContentEventService for FakeDocumentService {
     async fn publish_sync_content_updated(
         &self,
         document_id: &str,
-        actor: Option<String>,
-        on_behalf_of: Option<String>,
         editors: Vec<crate::domain::events::DocumentSyncEditor>,
     ) -> Result<(), DocumentError> {
         self.sync_content_calls
@@ -462,8 +458,6 @@ impl DocumentContentEventService for FakeDocumentService {
             .unwrap()
             .push(SyncContentCall {
                 document_id: document_id.to_string(),
-                actor,
-                on_behalf_of,
                 editors,
             });
         Ok(())

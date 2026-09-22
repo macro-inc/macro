@@ -45,8 +45,6 @@ impl<
     async fn publish_sync_content_updated(
         &self,
         document_id: &str,
-        actor: Option<String>,
-        on_behalf_of: Option<String>,
         editors: Vec<crate::domain::events::DocumentSyncEditor>,
     ) -> Result<(), DocumentError> {
         let document = self
@@ -64,8 +62,8 @@ impl<
             document_id.to_string(),
             file_type,
             None,
-            actor,
-            on_behalf_of,
+            None,
+            None,
         );
         metadata.editors = editors;
         self.macro_event_broker

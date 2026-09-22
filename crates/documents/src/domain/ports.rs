@@ -415,12 +415,10 @@ pub trait DocumentContentEventService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 
     /// Resolve the stored file type and publish a sync-content event. Sync callers
-    /// supply document identity and attribution without interpreting the content.
+    /// supply document identity and editors without interpreting the content.
     fn publish_sync_content_updated(
         &self,
         document_id: &str,
-        actor: Option<String>,
-        on_behalf_of: Option<String>,
         editors: Vec<crate::domain::events::DocumentSyncEditor>,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 }

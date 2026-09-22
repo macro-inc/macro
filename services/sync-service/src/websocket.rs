@@ -239,7 +239,7 @@ pub async fn process_message(
                     .append_pending_operation(update, document_state)
                     .await?;
                 if imported.changed {
-                    dss.record_edit_activity(attribution.as_ref());
+                    dss.record_editor(attribution.as_ref());
                 }
                 if !imported.touched_nodes.is_empty()
                     && let Some(peer_id) = peer_id
