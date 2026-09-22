@@ -10,6 +10,9 @@ use serde_json::Value;
 use std::str::FromStr;
 use utoipa::ToSchema;
 
+use super::event_runs::ConfigurationRevision;
+use super::event_trigger::ActionTrigger;
+
 #[cfg(test)]
 mod test;
 
@@ -106,19 +109,21 @@ pub struct ScheduledAction {
     #[schema(value_type = String)]
     pub owner: Owner,
     pub name: String,
-    pub schedule: Schedule,
+    pub trigger: ActionTrigger,
     pub kind: ActionKind,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
-    #[schema(value_type = String)]
-    pub timezone: Tz,
+    /// Independent of execution bookkeeping in `updated_at`.
+    #[schema(value_type = i64)]
+    pub configuration_revision: ConfigurationRevision,
+    /// Event publication boundary; absent for cron actions.
+    pub event_activated_at: Option<DateTime<Utc>>,
     #[schema(value_type = Object)]
     pub task: Value,
     pub claimed: Option<DateTime<Utc>>,
-    /// Time of the next scheduled firing (derived from the cron on write). UI
-    /// uses this to render "next run" without having to parse the cron itself.
-    pub next_run_at: DateTime<Utc>,
-    /// When false, the cron dispatcher skips this schedule. `run_now` remains
+    /// Next cron firing, absent for event-triggered actions.
+    pub next_run_at: Option<DateTime<Utc>>,
+    /// When false, automatic dispatch skips this action. `run_now` remains
     /// available regardless.
     pub enabled: bool,
 }

@@ -13,6 +13,8 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
 use super::{PgPollingDispatcher, PgPollingDispatcherLifecycle};
+use crate::domain::event_runs::ConfigurationRevision;
+use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
     ActionExecutionRecord, ActionKind, InProgressExecution, Schedule, ScheduledAction,
 };
@@ -62,6 +64,14 @@ impl ScheduledActionRepo for FakeRepository {
 
     async fn get_actions(&self, _user_id: MacroUserIdStr<'static>) -> Result<Vec<ScheduledAction>> {
         Ok(Vec::new())
+    }
+
+    async fn get_action(
+        &self,
+        _id: &Uuid,
+        _user_id: MacroUserIdStr<'static>,
+    ) -> Result<Option<ScheduledAction>> {
+        Ok(None)
     }
 
     async fn get_next_unclaimed_actions(&self, _limit: i64) -> Result<Vec<ScheduledAction>> {
@@ -157,15 +167,19 @@ fn due_action() -> ScheduledAction {
         owner: Owner::from_principal_str("macro|polling-dispatcher@test.com")
             .expect("test owner should be valid"),
         name: "test action".to_string(),
-        schedule: Schedule::from_cron("0 * * * * *".to_string())
-            .expect("test schedule should be valid"),
+        trigger: ActionTrigger::Cron {
+            schedule: Schedule::from_cron("0 * * * * *".to_string())
+                .expect("test schedule should be valid"),
+            timezone: chrono_tz::UTC,
+        },
         kind: ActionKind::Agent,
         created_at: now,
         updated_at: now,
-        timezone: chrono_tz::UTC,
+        configuration_revision: ConfigurationRevision::INITIAL,
+        event_activated_at: None,
         task: json!({}),
         claimed: None,
-        next_run_at: now - ChronoDuration::seconds(1),
+        next_run_at: Some(now - ChronoDuration::seconds(1)),
         enabled: true,
     }
 }
@@ -257,5 +271,47 @@ async fn cancellation_allows_started_execution_to_finish_without_starting_anothe
     wait.await;
 
     assert!(first_execution_finished.load(Ordering::SeqCst));
+    assert_eq!(execution_count.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn only_enabled_due_cron_candidates_reach_executor() {
+    let mut event = due_action();
+    event.trigger = serde_json::from_value(json!({
+        "type": "events", "filters": [{"events": ["document.created"]}]
+    }))
+    .unwrap();
+    event.next_run_at = None;
+    event.event_activated_at = Some(Utc::now());
+    let mut disabled = due_action();
+    disabled.enabled = false;
+    let mut missing_next_run = due_action();
+    missing_next_run.next_run_at = None;
+    let due = due_action();
+    let due_id = due.id.unwrap();
+    let mut future = due_action();
+    future.next_run_at = Some(Utc::now() + ChronoDuration::hours(1));
+    let repository = Arc::new(FakeRepository::returning(vec![
+        event,
+        disabled,
+        missing_next_run,
+        due,
+        future,
+    ]));
+    let execution_count = Arc::new(AtomicUsize::new(0));
+    let executor = RecordingExecutor {
+        execution_count: Arc::clone(&execution_count),
+    };
+    let (cancellation_token, tracker, lifecycle) = lifecycle();
+    let dispatcher = PgPollingDispatcher::new(repository, executor).with_lifecycle(lifecycle);
+    let (_dispatch_tx, mut execution_rx) = dispatcher.begin_dispatch_loop();
+    let execution = tokio::time::timeout(Duration::from_secs(1), execution_rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(execution.action_id, due_id);
+    cancellation_token.cancel();
+    tracker.close();
+    wait_for_tracker(&tracker).await;
     assert_eq!(execution_count.load(Ordering::SeqCst), 1);
 }

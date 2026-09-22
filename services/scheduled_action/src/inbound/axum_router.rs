@@ -13,6 +13,8 @@ use macro_uuid::Uuid;
 use model::response::EmptyResponse;
 use model_owner::Owner;
 
+use crate::domain::event_runs::ConfigurationRevision;
+use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
     ActionExecutionRecord, AlreadyRunningError, CreateScheduledAction, InProgressExecution,
     OwnerNotUserError, ScheduledAction, UpdateScheduledAction,
@@ -109,14 +111,18 @@ pub async fn create_action<
         id: None,
         owner: Owner::User(user.authorization.user.macro_user_id.clone()),
         name: req.name,
-        schedule: req.schedule,
+        trigger: ActionTrigger::Cron {
+            schedule: req.schedule,
+            timezone: req.timezone,
+        },
         kind: req.kind,
         created_at: now,
         updated_at: now,
-        timezone: req.timezone,
+        configuration_revision: ConfigurationRevision::INITIAL,
+        event_activated_at: None,
         task: req.task,
         claimed: None,
-        next_run_at,
+        next_run_at: Some(next_run_at),
         enabled: req.enabled,
     };
     let created = state.service.create_action(action).await?;
@@ -180,14 +186,18 @@ pub async fn update_action<
         id: Some(id),
         owner: Owner::User(user.authorization.user.macro_user_id.clone()),
         name: req.name,
-        schedule: req.schedule,
+        trigger: ActionTrigger::Cron {
+            schedule: req.schedule,
+            timezone: req.timezone,
+        },
         kind: req.kind,
         created_at: now,
         updated_at: now,
-        timezone: req.timezone,
+        configuration_revision: ConfigurationRevision::INITIAL,
+        event_activated_at: None,
         task: req.task,
         claimed: None,
-        next_run_at,
+        next_run_at: Some(next_run_at),
         enabled: req.enabled,
     };
     let updated = state

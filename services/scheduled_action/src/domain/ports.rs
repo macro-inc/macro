@@ -19,7 +19,14 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
         user_id: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Vec<ScheduledAction>>> + Send;
 
-    /// Return the next `limit` enabled actions ordered by `next_run_at` ASC,
+    /// Look up one action owned by the caller, independently of list filtering.
+    fn get_action(
+        &self,
+        id: &Uuid,
+        user_id: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Option<ScheduledAction>>> + Send;
+
+    /// Return the next `limit` enabled cron actions ordered by `next_run_at` ASC,
     /// filtering out those currently claimed by another worker (i.e. claimed
     /// within `MAX_ACTION_TIME`). Used by the polling dispatcher to find work.
     fn get_next_unclaimed_actions(
@@ -52,6 +59,7 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
         action_id: &Uuid,
     ) -> impl Future<Output = Result<Vec<ActionExecutionRecord>>> + Send;
 
+    /// Advance the cron firing time; event actions are left unchanged.
     fn update_next_run_at(&self, id: &Uuid) -> impl Future<Output = Result<()>> + Send;
 
     fn update_last_executed(
