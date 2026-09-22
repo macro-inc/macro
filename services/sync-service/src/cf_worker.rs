@@ -1,4 +1,5 @@
 use bebop::{Record, SubRecord};
+use macro_sync_service_jwt::session::{SessionIdentity, SessionKind};
 use tracing::{Instrument, error};
 use wasm_bindgen::JsValue;
 use worker::{Env, Error, Headers, Method, Request, RequestInit, Response, Result, Stub};
@@ -20,6 +21,7 @@ mod markers {
     pub const SCHEMA: &str = "schema";
     pub const COPY: &str = "copy";
     pub const REST: &str = "rest";
+    pub const SURFACE: &str = "surface";
 }
 
 pub async fn router(env: Env, req: Request) -> Result<Response> {
@@ -31,6 +33,15 @@ pub async fn router(env: Env, req: Request) -> Result<Response> {
         markers::ROOT => Response::builder().ok("Hello Sync Service!"),
         markers::HEALTH => Response::builder().ok("healthy"),
         markers::SCHEMA => Response::builder().ok(include_str!("../bebop/schema.bop")),
+        markers::SURFACE => {
+            let Some(id) = matched.params.get("surface_id") else {
+                return Ok(response(status_codes::NOT_FOUND));
+            };
+            let Ok(identity) = SessionIdentity::new(SessionKind::Surface, id) else {
+                return Ok(response(400));
+            };
+            pass_to_session(&env, req, &identity.storage_key()).await
+        }
         needs_document_id => {
             let document_id = matched.params.get("document_id").with_context(|| {
                 Error::from(format!(
@@ -133,6 +144,9 @@ pub static ROUTER: LazyLock<matchit::Router<&str>> = LazyLock::new(|| {
         .insert("/document/{document_id}/{*rest}", markers::REST)
         .unwrap_context("Router.insert failed");
     router
+        .insert("/surface/{surface_id}/{*rest}", markers::SURFACE)
+        .unwrap_context("Router.insert failed");
+    router
 });
 
 pub async fn pass_to_durable_object(
@@ -140,6 +154,14 @@ pub async fn pass_to_durable_object(
     req: Request,
     document_id: &str,
 ) -> Result<Response> {
+    // Legacy document names remain valid, but cannot address the reserved namespace.
+    if document_id.starts_with("surface:") {
+        return Ok(response(400));
+    }
+    pass_to_session(env, req, document_id).await
+}
+
+async fn pass_to_session(env: &Env, req: Request, document_id: &str) -> Result<Response> {
     let stub = get_durable_object(env, document_id)?;
     let span = tracing::info_span!("do.fetch", document.id = %document_id);
     let req = match worker_rs_otel::traceparent_for_span(&span) {
