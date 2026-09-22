@@ -500,9 +500,15 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
             }}
           >
             <Popover.Arrow class="fill-surface" />
-            <div class="w-fit min-w-[min(20rem,calc(100vw-2rem))] max-w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-xl glass bg-menu-glass text-ink">
+            {/*
+              Kobalte measures the space left between the popover and the
+              viewport edge; capping the shell to it and scrolling the body
+              keeps long descriptions and guest lists reachable instead of
+              running off-screen.
+            */}
+            <div class="flex max-h-[var(--kb-popper-content-available-height,100vh)] w-fit min-w-[min(20rem,calc(100vw-2rem))] max-w-[min(24rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl glass bg-menu-glass text-ink">
               <Popover.Title class="sr-only">{props.event.title}</Popover.Title>
-              <div class="flex items-center justify-end gap-1 px-2 pt-2">
+              <div class="flex shrink-0 items-center justify-end gap-1 px-2 pt-2">
                 <Button
                   aria-label="Copy event"
                   variant="ghost"
@@ -546,13 +552,13 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
                   <CloseIcon />
                 </Popover.CloseButton>
               </div>
-              <EveryoneElseDeclinedNotice
-                event={props.event}
-                canModify={canModify()}
-                onDelete={deleteDialog.open}
-                onReschedule={openEditor}
-              />
-              <div>
+              <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+                <EveryoneElseDeclinedNotice
+                  event={props.event}
+                  canModify={canModify()}
+                  onDelete={deleteDialog.open}
+                  onReschedule={openEditor}
+                />
                 <div class="px-3 pb-3">
                   <EventDetails
                     event={props.event}
