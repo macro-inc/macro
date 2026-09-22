@@ -48,7 +48,10 @@ import {
 } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import { useChannelsView } from '../../channels-view-context';
-import { canLabelChannel } from '../../core/channel-label-eligibility';
+import {
+  canLabelChannel,
+  filterChannelLabelMembers,
+} from '../../core/channel-label-eligibility';
 import { resolveChannelLabelMemberships } from '../../core/smart-tags';
 import {
   type ChannelsSourceScope,
@@ -339,8 +342,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const labelUnreadCount = (label: ChannelLabel) => {
     const unread = channelActivity.unreadChannelIds();
-    return label.channelIds.filter(
-      (id) => unread.has(id) && canLabelChannel(channelsById().get(id))
+    return filterChannelLabelMembers(label.channelIds, channelsById()).filter(
+      (id) => unread.has(id)
     ).length;
   };
 
@@ -935,7 +938,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const markLabelRead = (label: ChannelLabel) => {
     if (!channelTagsEnabled()) return;
-    const channelIds = new Set(label.channelIds.filter(canLabelChannelId));
+    const channelIds = new Set(
+      filterChannelLabelMembers(label.channelIds, channelsById())
+    );
     const unread = notificationSource
       .notifications()
       .filter(

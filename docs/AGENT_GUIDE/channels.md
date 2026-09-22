@@ -360,7 +360,8 @@ viewer actively participates in are shown inside it. Shared labels accept only
 channels belonging to the label's team. Private account labels also accept only
 team channels. Public channels, private channels, and direct messages cannot be
 labelled. They keep their normal navigation, have no label menu actions, and
-cannot be dragged into labels. Existing non-team assignments no longer group them.
+cannot be dragged into labels. Existing ineligible assignments no longer group
+channels, including non-team channels and other teams' channels in shared labels.
 Names are unique within the team or account, case-insensitively.
 
 Layout: labels come first in creation order, each showing its visible channels
