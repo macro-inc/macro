@@ -23,6 +23,7 @@ import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-prese
 import { SoupView } from '@app/features/next-soup/soup-view/soup-view';
 import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
 import { ReminderEditorSplit } from '@app/features/reminders/ReminderEditorSplit';
+import { reminderIdFromDetailComponent } from '@app/features/reminders/reminder-navigation';
 import { McpConnections } from '@app/features/settings/McpConnections';
 import { SettingsPanelComponentWrapper } from '@app/features/settings/Settings';
 import { TasksView } from '@app/features/tasks-view/tasks-view';
@@ -188,13 +189,6 @@ function RedirectSplit(props: { to: SplitContent }) {
   return null;
 }
 
-/**
- * A reminder view carries its reminder id in the id slot — `reminder-view~<id>`
- * — because component params are dropped on URL restore (see `contentUrlSegments`)
- * and split identity is keyed on the id, so each reminder needs a distinct one.
- */
-const REMINDER_VIEW_PREFIX = 'reminder-view~';
-
 export function resolveComponent(
   name: string,
   params?: ComponentParams
@@ -210,10 +204,10 @@ export function resolveComponent(
         };
       }
     }
-    if (name.startsWith(REMINDER_VIEW_PREFIX)) {
+    const reminderId = reminderIdFromDetailComponent(name);
+    if (reminderId) {
       const base = REGISTRY.get('reminder-view');
       if (base) {
-        const reminderId = name.slice(REMINDER_VIEW_PREFIX.length);
         return {
           element: () => base.factory({ ...(params ?? {}), reminderId }),
           initialMeta: base.initialMeta,
@@ -354,27 +348,38 @@ function MyActivityViewWrapper() {
 
 registerComponent('activity', withAuth(MyActivityViewWrapper));
 
-registerComponent(
-  'reminders',
-  withAuth(() => {
-    // Registered even when the flag is closed so a bookmarked /reminders or a
-    // restored split recovers to the inbox instead of an empty split.
-    if (!isFeatureEnabled(enableReminders)) {
-      return <RedirectSplit to={{ type: 'component', id: 'inbox' }} />;
-    }
-    usePageViewTracking('reminders');
-    const preset = getViewPreset('reminders');
-    return (
-      <SoupView
-        viewName="Reminders"
-        initialFilters={preset?.filters}
-        initialClientFilters={preset?.clientFilters}
-        initialGroupBy={preset?.groupBy}
-        disableLocalSearch
-      />
-    );
-  })
-);
+function TrackedRemindersView() {
+  usePageViewTracking('reminders');
+  const preset = getViewPreset('reminders');
+  return (
+    <SoupView
+      viewName="Reminders"
+      initialFilters={preset?.filters}
+      initialClientFilters={preset?.clientFilters}
+      initialGroupBy={preset?.groupBy}
+      disableLocalSearch
+    />
+  );
+}
+
+function RemindersViewWrapper() {
+  const remindersFlag = useFeatureFlag(enableReminders);
+  const posthog = usePosthog();
+  return (
+    <Show
+      when={remindersFlag().enabled}
+      fallback={
+        <Show when={posthog.flagsLoaded()}>
+          <RedirectSplit to={{ type: 'component', id: 'inbox' }} />
+        </Show>
+      }
+    >
+      <TrackedRemindersView />
+    </Show>
+  );
+}
+
+registerComponent('reminders', withAuth(RemindersViewWrapper));
 
 // The Activity tab briefly shipped as two separate views; restored splits
 // may still reference their ids.
@@ -753,9 +758,31 @@ registerComponent('skill-compose', (params) => {
   usePageViewTracking('skill-compose');
   return <ComposeSkill {...params} />;
 });
-registerComponent('reminder-view', (params) => {
+
+function TrackedReminderEditorSplit(props: { reminderId: string | undefined }) {
   usePageViewTracking('reminder-view');
-  return <ReminderEditorSplit reminderId={params.reminderId as string} />;
+  return <ReminderEditorSplit reminderId={props.reminderId} />;
+}
+
+registerComponent('reminder-view', (params) => {
+  const remindersFlag = useFeatureFlag(enableReminders);
+  const posthog = usePosthog();
+  return (
+    <Show
+      when={remindersFlag().enabled}
+      fallback={
+        <Show when={posthog.flagsLoaded()}>
+          <RedirectSplit to={{ type: 'component', id: 'inbox' }} />
+        </Show>
+      }
+    >
+      <TrackedReminderEditorSplit
+        reminderId={
+          typeof params.reminderId === 'string' ? params.reminderId : undefined
+        }
+      />
+    </Show>
+  );
 });
 registerComponent(
   'import-linear',

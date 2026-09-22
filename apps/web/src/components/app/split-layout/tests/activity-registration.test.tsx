@@ -11,6 +11,7 @@ const state = vi.hoisted(() => ({
   pageView: vi.fn(),
   track: vi.fn(),
   mountActivity: vi.fn(),
+  mountReminder: vi.fn(),
 }));
 
 vi.mock('@core/auth', () => ({
@@ -53,7 +54,12 @@ vi.mock('@app/features/next-soup/filters/filter-store/query-store', () => ({}));
 vi.mock('@app/features/next-soup/sidebar/soup-filter-presets', () => ({}));
 vi.mock('@app/features/next-soup/soup-view/soup-view', () => ({}));
 vi.mock('@app/features/next-soup/use-recent-view-flag', () => ({}));
-vi.mock('@app/features/reminders/ReminderEditorSplit', () => ({}));
+vi.mock('@app/features/reminders/ReminderEditorSplit', () => ({
+  ReminderEditorSplit: (props: { reminderId: string }) => {
+    state.mountReminder(props.reminderId);
+    return <div>Reminder details</div>;
+  },
+}));
 vi.mock('@app/features/settings/Settings', () => ({}));
 vi.mock('@app/features/tasks-view/tasks-view', () => ({}));
 vi.mock('@app/signal/splitLayout', () => ({}));
@@ -138,5 +144,36 @@ describe('activity registration', () => {
     expect(state.mountActivity).toHaveBeenCalledOnce();
     expect(state.pageView).toHaveBeenCalledExactlyOnceWith('activity');
     expect(state.replace).not.toHaveBeenCalled();
+  });
+});
+
+describe('reminder detail registration', () => {
+  function renderReminder() {
+    const reminder = resolveComponent('reminder-view~reminder-1');
+    return render(() => <Suspense>{reminder.element()}</Suspense>);
+  }
+
+  it('restores a canonical reminder detail component when enabled', async () => {
+    state.enabled = () => true;
+
+    renderReminder();
+
+    expect(await screen.findByText('Reminder details')).toBeTruthy();
+    expect(state.mountReminder).toHaveBeenCalledExactlyOnceWith('reminder-1');
+    expect(state.pageView).toHaveBeenCalledExactlyOnceWith('reminder-view');
+    expect(state.replace).not.toHaveBeenCalled();
+  });
+
+  it('redirects a restored reminder detail after the flag resolves disabled', () => {
+    state.enabled = () => false;
+    state.flagsLoaded = () => true;
+
+    renderReminder();
+
+    expect(state.replace).toHaveBeenCalledExactlyOnceWith({
+      next: { type: 'component', id: 'inbox' },
+    });
+    expect(state.mountReminder).not.toHaveBeenCalled();
+    expect(state.pageView).not.toHaveBeenCalled();
   });
 });

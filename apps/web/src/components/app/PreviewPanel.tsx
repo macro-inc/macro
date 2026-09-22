@@ -2,23 +2,26 @@ import {
   navigateCalendarEntityToTarget,
   navigateChannelEntityToTarget,
 } from '@app/features/next-soup/utils';
+import { ReminderDetails } from '@app/features/reminders/ReminderEditorSplit';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { enableReminders } from '@core/constant/featureFlags';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { createContextProvider } from '@solid-primitives/context';
 import {
+  createEffect,
   createMemo,
   createRenderEffect,
   createSignal,
   type JSX,
+  Match,
   on,
   Show,
   Suspense,
+  Switch,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import {
-  type PreviewPanelSelection,
-  previewBlockTarget,
-} from './previewTarget';
+import { type PreviewPanelSelection, previewTarget } from './previewTarget';
 
 export type { PreviewPanelSelection } from './previewTarget';
 
@@ -48,6 +51,8 @@ export type PreviewPanelProps = {
   orchestrator: BlockOrchestrator;
   splitPanelContext: SplitPanelContextType;
   onFocusOut?: VoidFunction;
+  /** Close a reminder detail owned by a selection-based host. */
+  onReminderClose?: VoidFunction;
   ref?: (el: HTMLElement) => void;
   headerLeading?: JSX.Element;
 };
@@ -61,13 +66,32 @@ function PreviewPanelContent(
   const [interactedWith, setInteractedWith] = createSignal(false);
   const [attachHotkeys, previewHotkeyScope] =
     useHotkeyDOMScope('preview-panel');
+  const remindersFlag = useFeatureFlag(enableReminders);
+  const target = createMemo(() => previewTarget(props.selectedEntity));
+  const blockTarget = createMemo(() => {
+    const value = target();
+    return value.kind === 'block' ? value : undefined;
+  });
+  const reminderTarget = createMemo(() => {
+    const value = target();
+    return value.kind === 'reminder-detail' ? value : undefined;
+  });
+
+  // A cached Home row can outlive a flag change. Wait for the flag decision,
+  // then release selection ownership rather than leaving a hidden editor or
+  // exposing a disabled reminder surface.
+  createEffect(() => {
+    const flag = remindersFlag();
+    if (!flag.loading && !flag.enabled && reminderTarget()) {
+      props.onReminderClose?.();
+    }
+  });
 
   const blockInstance = createMemo<
     ReturnType<BlockOrchestrator['createBlockInstance']> | undefined
   >((previous) => {
-    const entity = props.selectedEntity;
-
-    const target = previewBlockTarget(entity);
+    const target = blockTarget();
+    if (!target) return undefined;
 
     if (previous?.type === target.blockType && previous.id === target.blockId) {
       return previous;
@@ -213,9 +237,21 @@ function PreviewPanelContent(
             onFocusOut={props.onFocusOut}
           >
             <Suspense>
-              <Show when={blockInstance()}>
-                {(instance) => <Dynamic component={instance().element} />}
-              </Show>
+              <Switch>
+                <Match
+                  when={remindersFlag().enabled ? reminderTarget() : undefined}
+                >
+                  {(reminder) => (
+                    <ReminderDetails
+                      reminderId={reminder().reminderId}
+                      onClose={() => props.onReminderClose?.()}
+                    />
+                  )}
+                </Match>
+                <Match when={blockInstance()}>
+                  {(instance) => <Dynamic component={instance().element} />}
+                </Match>
+              </Switch>
             </Suspense>
           </PreviewPanelContext>
         </SplitPanelContext.Provider>

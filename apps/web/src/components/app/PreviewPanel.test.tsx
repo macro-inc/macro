@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { createSignal, onCleanup, onMount } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   PreviewPanel,
   type PreviewPanelProps,
@@ -14,6 +14,9 @@ const mocks = vi.hoisted(() => ({
   navigateCalendar: vi.fn(),
   mounts: vi.fn(),
   unmounts: vi.fn(),
+  reminderDetails: vi.fn(),
+  remindersEnabled: true,
+  remindersLoading: false,
 }));
 
 // Exercise the real preview without loading unrelated blocks or service clients.
@@ -22,7 +25,25 @@ vi.mock('@app/features/next-soup/utils', () => ({
   navigateChannelEntityToTarget: mocks.navigateChannel,
   navigateCalendarEntityToTarget: mocks.navigateCalendar,
   calendarBlockParamsForEntity: vi.fn(),
-  reminderSplitTarget: vi.fn(),
+}));
+vi.mock('@app/features/reminders/ReminderEditorSplit', () => ({
+  ReminderDetails: (props: { reminderId: string; onClose: VoidFunction }) => {
+    mocks.reminderDetails(props.reminderId);
+    return (
+      <div data-testid="reminder-details">
+        {props.reminderId}
+        <button type="button" onClick={props.onClose}>
+          Close reminder
+        </button>
+      </div>
+    );
+  },
+}));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({
+    enabled: mocks.remindersEnabled,
+    loading: mocks.remindersLoading,
+  }),
 }));
 vi.mock('@block-calendar/types', () => ({ CALENDAR_BLOCK_ID: 'calendar' }));
 vi.mock('@block-channel/utils/link', () => ({ getChannelParams: vi.fn() }));
@@ -30,6 +51,7 @@ vi.mock('@core/constant/allBlocks', () => ({
   fileTypeToResolvedBlockName: (type: string) => type,
 }));
 vi.mock('@core/constant/featureFlags', () => ({
+  enableReminders: { key: 'enable-reminders' },
   USE_MACRO_PR_SUMMARY_BLOCK: false,
 }));
 vi.mock('@core/hotkey/hotkeys', () => ({
@@ -46,6 +68,11 @@ vi.mock('./split-layout/components/PriorityCollapseOverflowSensor', () => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+});
+
+beforeEach(() => {
+  mocks.remindersEnabled = true;
+  mocks.remindersLoading = false;
 });
 
 function setup(initial: PreviewPanelSelection) {
@@ -72,12 +99,14 @@ function setup(initial: PreviewPanelSelection) {
     createBlockInstance,
   } as unknown as PreviewPanelProps['orchestrator'];
   const onFocusOut = vi.fn();
+  const onReminderClose = vi.fn();
   const view = render(() => (
     <PreviewPanel
       selectedEntity={entity()}
       orchestrator={orchestrator}
       splitPanelContext={{} as PreviewPanelProps['splitPanelContext']}
       onFocusOut={onFocusOut}
+      onReminderClose={onReminderClose}
     />
   ));
   return {
@@ -85,6 +114,7 @@ function setup(initial: PreviewPanelSelection) {
     setEntity,
     createBlockInstance,
     onFocusOut,
+    onReminderClose,
     previewEntity: () => preview?.previewEntity(),
   };
 }
@@ -198,5 +228,35 @@ describe('channel preview navigation', () => {
     expect(mocks.navigateCalendar).toHaveBeenCalledTimes(2);
     expect(view.createBlockInstance).toHaveBeenCalledTimes(1);
     expect(mocks.mounts).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('reminder preview navigation', () => {
+  it('mounts reminder details without creating a document block', () => {
+    const view = setup({ type: 'reminder', id: 'reminder-1' });
+
+    expect(view.getByTestId('reminder-details').textContent).toContain(
+      'reminder-1'
+    );
+    expect(mocks.reminderDetails).toHaveBeenCalledWith('reminder-1');
+    expect(view.createBlockInstance).not.toHaveBeenCalled();
+  });
+
+  it('closes through selection ownership without using focus-out semantics', () => {
+    const view = setup({ type: 'reminder', id: 'reminder-1' });
+
+    fireEvent.click(view.getByRole('button', { name: 'Close reminder' }));
+
+    expect(view.onReminderClose).toHaveBeenCalledOnce();
+    expect(view.onFocusOut).not.toHaveBeenCalled();
+  });
+
+  it('releases a stale reminder selection after the feature flag resolves off', () => {
+    mocks.remindersEnabled = false;
+    const view = setup({ type: 'reminder', id: 'reminder-1' });
+
+    expect(view.queryByTestId('reminder-details')).toBeNull();
+    expect(view.onReminderClose).toHaveBeenCalledOnce();
+    expect(view.onFocusOut).not.toHaveBeenCalled();
   });
 });

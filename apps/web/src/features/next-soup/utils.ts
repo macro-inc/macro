@@ -1,5 +1,9 @@
 import { isListViewID } from '@app/constants/list-views';
 import { URL_PARAMS as EMAIL_PARAMS } from '@app/features/email-thread/core/location';
+import {
+  reminderDetailDestination,
+  reminderDetailUrl,
+} from '@app/features/reminders/reminder-navigation';
 import { withListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
 import {
   type EntityWithRawNotifications,
@@ -58,7 +62,6 @@ import {
   isSearchEntity,
   isWithNotification,
   queryKeys,
-  type ReminderEntity,
   type SearchLocation,
   toNotificationEntity,
   type WithNotification,
@@ -237,12 +240,7 @@ export const openEntityInNewTab = ({
   // URL of its own — the same as the split paths, even a standalone one that
   // references nothing.
   if (entity.type === 'reminder') {
-    openExternalUrl(
-      new URL(
-        `/app/component/reminder-view~${entity.id}`,
-        window.location.origin
-      ).href
-    );
+    openExternalUrl(reminderDetailUrl(entity.id));
     return;
   }
 
@@ -806,31 +804,6 @@ export function calendarBlockParamsForEntity(
   };
 }
 
-/**
- * The entity a reminder references, as block content. A reminder itself opens
- * its own `reminder-view` editor (see `getEntitySplitContent`); this is only
- * the reference, used where the reference is shown directly (PreviewPanel).
- * `undefined` for a standalone reminder, which points at nothing.
- *
- * `fileType`/`subType` come resolved from the server, so a referenced document
- * lands on its real block rather than 'unknown'.
- */
-export type ReminderPreviewSelection = Pick<
-  ReminderEntity,
-  'id' | 'type' | 'referencedEntity'
->;
-
-export function reminderSplitTarget(entity: ReminderPreviewSelection) {
-  const referenced = entity.referencedEntity;
-  if (!referenced) return undefined;
-  return {
-    type: fileTypeToBlockName(
-      referenced.subType ?? referenced.fileType ?? referenced.type
-    ),
-    id: referenced.id,
-  };
-}
-
 // TODO(dev-rb/github): Map GitHub PRs to { type: 'pr', id }.
 function getEntitySplitContent(entity: EntityData) {
   return (
@@ -865,10 +838,7 @@ function getEntitySplitContent(entity: EntityData) {
         // component split. The reminder id rides in the content id (component
         // params are dropped on URL restore, and split identity is keyed on the
         // id, so each reminder needs a distinct one) — see `resolveComponent`.
-        return {
-          type: 'component' as const,
-          id: `reminder-view~${entity.id}`,
-        };
+        return reminderDetailDestination(entity.id).content;
       })
       // Calendar events open the singleton calendar block; the open path
       // branches before reaching here, so this only serves duplicate checks.
