@@ -398,23 +398,32 @@ merged / closed.
 
 Individual tools appear as bare rows with an icon, tool name, optional detail,
 and a right-aligned result summary. The caret on the right opens the results;
-individual results start collapsed. Counts come from structured responses,
+it points left when collapsed and down when expanded. Individual results start
+collapsed. Existing rich result views retain their own content and controls;
+when a result view provides its own disclosure, use that control rather than
+adding a second nested disclosure. Counts come from structured responses,
 edits show additions/deletions, and other tools show their outcome. A call cut
 off when its turn ends reads **Stopped**.
 
 Consecutive calls collect under an expanded **Calling N tools** group while
 running. Rows appear as calls arrive; after the calls finish, the group briefly
-settles and smoothly collapses to **Called N tools**. Completed groups in
+settles and collapses to **Called N tools**. Group growth and collapse happen
+immediately, without animation, including fast batches. Completed groups in
 history start collapsed and can be reopened. Expand an edit row to view its
 diffs. Result bodies load only when their row opens; syntax highlighting may
 appear after the diff text. Opening a session or expanding a group should leave
 the app responsive, even when the session contains many file edits.
 
+`DisplayResults` renders its dynamic view directly in the reply and stays visible
+without opening a tool row. It breaks tool groups before and after itself,
+including while pending; later calls start a separate group.
+
 The development gallery at `/app/component/agent-ui` includes **Replay tool
 calls** and **Replay fast batch**, both using the message renderer. Check that
 rows accumulate, completed calls stop shimmering, the group collapses after
-completion, and its carets still expand the results. Repeat with reduced motion
-enabled and at a narrow viewport width.
+completion without height animation, and its carets still expand the results.
+Check that rich result controls still work and `DisplayResults` stays visible
+between surrounding groups. Repeat at a narrow viewport width.
 
 A thought row reads **Thinking** and shimmers only while it is the last part
 of the turn the session is working on. Earlier thoughts settle to **Thought**

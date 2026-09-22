@@ -11,6 +11,7 @@
 
 import { type JSX, Match, Switch } from 'solid-js';
 import { settledToolStatus } from '../../ui';
+import { DisplayResultsToolCall } from './DisplayResultsToolCall';
 import { EditToolCall } from './EditToolCall';
 import { ExchangeToolCall } from './ExchangeToolCall';
 import { MacroToolCall } from './MacroToolCall';
@@ -59,6 +60,14 @@ export function ToolCallPart(props: {
   // its detail object; each child receives the current detail through an accessor.
   return (
     <Switch>
+      <Match when={toolLabel(props.part.name) === 'DisplayResults'}>
+        <DisplayResultsToolCall
+          input={
+            'input' in props.part.detail ? props.part.detail.input : undefined
+          }
+          common={common()}
+        />
+      </Match>
       <Match when={props.part.detail.kind === 'terminal' && props.part.detail}>
         {(detail) => <TerminalToolCall detail={detail()} common={common()} />}
       </Match>

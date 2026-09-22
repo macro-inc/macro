@@ -2,19 +2,21 @@
  * A Macro tool the fold recognized by name — reached over Macro's MCP
  * server, or called natively by Macro's own agent.
  *
- * Schema-validated results supply compact summaries and useful links. The
- * disclosure always shows the actual exchange, including results a dedicated
- * renderer does not recognize, without nesting another tool row or disclosure.
+ * Successful calls reuse their registered result renderer and its disclosure.
+ * Running, stopped, failed, and unsupported calls keep the compact tool row
+ * with a readable exchange, without wrapping a second caret around rich results.
  */
 
-import { ItemPreview } from '@core/component/ItemPreview';
+import {
+  hasToolRenderer,
+  RenderTool,
+} from '@core/component/AI/component/tool/handler';
 import ReadIcon from '@phosphor/file-text.svg';
 import GlobeIcon from '@phosphor/globe.svg';
 import ListIcon from '@phosphor/list-bullets.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
 import PencilIcon from '@phosphor/pencil-simple.svg';
 import WrenchIcon from '@phosphor/wrench.svg';
-import { useSystemSkillsQuery } from '@queries/storage/system-skills';
 import type { ToolDetail } from '@service-agent-fold/generated/types';
 import {
   deserializeToolCall,
@@ -22,21 +24,13 @@ import {
   type NamedTool,
   type ToolName,
 } from '@service-cognition/generated/tools/tool';
-import {
-  createMemo,
-  ErrorBoundary,
-  For,
-  type JSX,
-  Show,
-  Suspense,
-} from 'solid-js';
+import { createMemo, ErrorBoundary, type JSX, Show, Suspense } from 'solid-js';
 import { match } from 'ts-pattern';
 import { FoldedExchange, ToolCard } from '../../ui';
 import type { ToolCallCommon, ToolCallContext } from './shared';
 
 type MacroDetail = Extract<ToolDetail, { kind: 'macro' }>;
 type ToolResponse = NamedTool<ToolName, 'response'>;
-type ToolCall = NamedTool<ToolName, 'call'>;
 
 export function MacroToolCall(props: {
   detail: MacroDetail;
@@ -88,7 +82,7 @@ export function MacroToolCall(props: {
   const error = () => props.detail.error ?? responseError(response());
   const failure = () => error() != null;
 
-  return (
+  const fallback = () => (
     <ToolCard
       icon={<MacroToolIcon name={props.common.label} />}
       title={props.common.label}
@@ -109,17 +103,42 @@ export function MacroToolCall(props: {
         Boolean(props.detail.error)
       }
     >
-      <div class="flex min-w-0 flex-col gap-2">
-        <ErrorBoundary fallback={null}>
-          <MacroResultLinks call={call()} response={response()} />
-        </ErrorBoundary>
-        <FoldedExchange
-          request={props.detail.input}
-          response={props.detail.output}
-          error={error()}
-        />
-      </div>
+      <FoldedExchange
+        request={props.detail.input}
+        response={props.detail.output}
+        error={error()}
+      />
     </ToolCard>
+  );
+  const canRenderResults = () =>
+    props.common.status === 'completed' &&
+    !props.common.muted &&
+    props.common.trailing == null &&
+    !failure() &&
+    call() !== undefined &&
+    response() !== undefined &&
+    hasToolRenderer(props.common.label);
+
+  return (
+    <Show when={canRenderResults()} fallback={fallback()}>
+      <ErrorBoundary fallback={fallback()}>
+        <Suspense fallback={fallback()}>
+          <RenderTool
+            tool_id={props.common.id}
+            name={props.common.label}
+            json={props.detail.input}
+            response={{ json: props.detail.output, name: props.common.label }}
+            chat_id={props.context?.sessionId ?? ''}
+            message_id={props.context?.messageId ?? ''}
+            part_index={props.context?.partIndex ?? 0}
+            isComplete={true}
+            renderContext={{
+              renderContext: { isStreaming: false, grouped: true },
+            }}
+          />
+        </Suspense>
+      </ErrorBoundary>
+    </Show>
   );
 }
 
@@ -179,152 +198,6 @@ function responseError(response: ToolResponse | undefined): string | undefined {
     return response.data.content.error_code;
   }
   return undefined;
-}
-
-type ResultLink =
-  | {
-      kind: 'entity';
-      id: string;
-      type: 'document' | 'chat' | 'project';
-      label: string;
-    }
-  | { kind: 'web'; url: string; label: string };
-
-function resultLinks(
-  call: ToolCall | undefined,
-  response: ToolResponse | undefined
-): ResultLink[] {
-  if (
-    isResponse(response, 'WebSearch') &&
-    Array.isArray(response.data.content)
-  ) {
-    return response.data.content.map((result) => ({
-      kind: 'web',
-      url: result.url,
-      label: result.title,
-    }));
-  }
-  if (
-    isResponse(response, 'WebFetch') &&
-    response.data.content.type === 'web_fetch_result'
-  ) {
-    const result = response.data.content;
-    return [
-      {
-        kind: 'web',
-        url: result.url,
-        label: result.content.title ?? result.url,
-      },
-    ];
-  }
-  if (
-    isResponse(response, 'SearchSkills') ||
-    isResponse(response, 'ListSkills')
-  ) {
-    return response.data.results.map((result) => ({
-      kind: 'entity',
-      id: result.documentId,
-      type: 'document',
-      label: result.name,
-    }));
-  }
-  if (!call) return [];
-  const data = call.data;
-  if (
-    (call.name === 'ReadContent' || call.name === 'ReadMetadata') &&
-    'documentId' in data &&
-    typeof data.documentId === 'string'
-  ) {
-    return [
-      {
-        kind: 'entity',
-        id: data.documentId,
-        type: 'document',
-        label: 'Document',
-      },
-    ];
-  }
-  if (
-    call.name === 'ReadChat' &&
-    'chatId' in data &&
-    typeof data.chatId === 'string'
-  ) {
-    return [{ kind: 'entity', id: data.chatId, type: 'chat', label: 'Chat' }];
-  }
-  if (
-    call.name === 'ReadProject' &&
-    'projectId' in data &&
-    typeof data.projectId === 'string'
-  ) {
-    return [
-      { kind: 'entity', id: data.projectId, type: 'project', label: 'Project' },
-    ];
-  }
-  return [];
-}
-
-function MacroResultLinks(props: {
-  call: ToolCall | undefined;
-  response: ToolResponse | undefined;
-}) {
-  const links = createMemo(() => resultLinks(props.call, props.response));
-  return (
-    <Show when={links().length > 0}>
-      <ul
-        class="flex max-h-64 flex-col gap-1 overflow-y-auto"
-        aria-label="Tool results"
-      >
-        <For each={links()}>
-          {(link) => (
-            <li class="min-w-0">
-              {link.kind === 'entity' ? (
-                <Suspense fallback={<span>{link.label}</span>}>
-                  {link.type === 'document' ? (
-                    <DocumentResultLink id={link.id} />
-                  ) : (
-                    <ItemPreview
-                      id={link.id}
-                      type={link.type}
-                      class="max-w-full ring-0"
-                    />
-                  )}
-                </Suspense>
-              ) : (
-                <Show
-                  when={/^https?:\/\//i.test(link.url)}
-                  fallback={<span>{link.label}</span>}
-                >
-                  <a
-                    href={link.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="text-link hover:underline wrap-break-word"
-                  >
-                    {link.label}
-                  </a>
-                </Show>
-              )}
-            </li>
-          )}
-        </For>
-      </ul>
-    </Show>
-  );
-}
-
-/** Built-in skills have readable contents but no document to navigate to. */
-function DocumentResultLink(props: { id: string }) {
-  const systemSkills = useSystemSkillsQuery();
-  return (
-    <Show
-      when={systemSkills.getSystemSkill(props.id)}
-      fallback={
-        <ItemPreview id={props.id} type="document" class="max-w-full ring-0" />
-      }
-    >
-      {(skill) => <span class="text-ink">{skill().name}</span>}
-    </Show>
-  );
 }
 
 function MacroToolIcon(props: { name: string }): JSX.Element {

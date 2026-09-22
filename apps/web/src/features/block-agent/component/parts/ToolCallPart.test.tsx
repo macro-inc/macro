@@ -9,6 +9,36 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ToolCallContext } from './shared';
 import { ToolCallPart } from './ToolCallPart';
 
+// Rich renderers own their result controls; this test verifies dispatch and
+// context without mounting their split-layout and query dependencies.
+vi.mock('@core/component/AI/component/tool/handler', () => ({
+  hasToolRenderer: (name: string) => name !== 'ListSkills',
+  RenderTool: (props: {
+    name: string;
+    json: unknown;
+    response?: { json: unknown };
+    isComplete: boolean;
+    renderContext: {
+      renderContext: { grouped?: boolean; isStreaming: boolean };
+    };
+  }) => (
+    <div
+      data-testid="macro-tool"
+      data-response={JSON.stringify(props.response?.json)}
+      data-grouped={String(props.renderContext.renderContext.grouped)}
+      data-streaming={String(props.renderContext.renderContext.isStreaming)}
+    >
+      {props.name}
+    </div>
+  ),
+}));
+
+vi.mock('@app/features/dynamic-ui/DashboardToolView.lazy', () => ({
+  DashboardToolView: (props: { view: unknown }) => (
+    <div data-testid="dashboard-view">{JSON.stringify(props.view)}</div>
+  ),
+}));
+
 // The entity link a finished email's outcome carries needs the query client
 // and the split layout; a marker carrying the id is enough here.
 vi.mock('@core/component/ItemPreview', () => ({
@@ -285,7 +315,7 @@ describe('ToolCallPart Macro tools', () => {
       { name: 'ReadContent', status: 'running', ...overrides }
     );
 
-  it('keeps a known Macro tool inside a tool row with rich result details', () => {
+  it('keeps a running Macro tool on the compact active row', () => {
     const rendered = render(() => (
       <ToolCallPart part={readContent()} context={context(true)} />
     ));
@@ -305,7 +335,25 @@ describe('ToolCallPart Macro tools', () => {
     expect(rendered.getByTestId('tool-card').dataset.status).toBe('completed');
   });
 
-  it('exposes the unwrapped output once complete', () => {
+  it('keeps a stopped call labelled even when it already has renderable output', () => {
+    const rendered = render(() => (
+      <ToolCallPart
+        part={readContent({
+          detail: {
+            kind: 'macro',
+            input: { documentId: '4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e46' },
+            output: { content: { text: 'partial' }, comments: [] },
+            error: null,
+          },
+        })}
+        context={context(false)}
+      />
+    ));
+    expect(rendered.getByTestId('trailing').textContent).toBe('Stopped');
+    expect(rendered.queryByTestId('macro-tool')).toBeNull();
+  });
+
+  it('reuses the registered result renderer without an outer tool disclosure', () => {
     const rendered = render(() => (
       <ToolCallPart
         part={readContent({
@@ -319,9 +367,14 @@ describe('ToolCallPart Macro tools', () => {
         })}
       />
     ));
-    expect(rendered.getByTestId('response').textContent).toContain(
-      '\"text\": \"hi\"'
-    );
+    const richTool = rendered.getByTestId('macro-tool');
+    expect(JSON.parse(richTool.dataset.response ?? '')).toEqual({
+      content: { text: 'hi' },
+      comments: [],
+    });
+    expect(richTool.dataset.grouped).toBe('true');
+    expect(richTool.dataset.streaming).toBe('false');
+    expect(rendered.queryByTestId('tool-card')).toBeNull();
   });
 
   it('keeps an unknown Macro tool on a labelled card', () => {
@@ -570,6 +623,84 @@ describe('ToolCallPart user tools', () => {
     expect(rendered.getByTestId('body').textContent).toContain(
       '"subject": "no recipients or body"'
     );
+  });
+});
+
+describe('ToolCallPart inline results', () => {
+  it.each(['macro', 'other'] as const)(
+    'renders %s DisplayResults from call arguments before any response',
+    (kind) => {
+      const input = { view: { kind: 'text', text: 'Launch checklist' } };
+      const part = toolUse(
+        kind === 'macro'
+          ? { kind, input, output: null, error: null }
+          : {
+              kind,
+              input,
+              result: null,
+              output: null,
+              error: null,
+              acpKind: 'other',
+            },
+        { name: 'DisplayResults', status: 'running' }
+      );
+      if (kind === 'other')
+        part.name = { kind: 'mcp', server: 'macro', tool: 'DisplayResults' };
+      const rendered = render(() => (
+        <ToolCallPart part={part} context={context(true)} />
+      ));
+      expect(rendered.getByTestId('dashboard-view').textContent).toBe(
+        JSON.stringify(input.view)
+      );
+      expect(rendered.queryByTestId('tool-card')).toBeNull();
+      expect(rendered.queryByTestId('macro-tool')).toBeNull();
+    }
+  );
+
+  it('updates inline results as the call arguments change', () => {
+    const [part, setPart] = createSignal(
+      toolUse(
+        {
+          kind: 'macro',
+          input: { view: { text: 'First' } },
+          output: null,
+          error: null,
+        },
+        { name: 'DisplayResults', status: 'running' }
+      )
+    );
+    const rendered = render(() => (
+      <ToolCallPart part={part()} context={context(true)} />
+    ));
+    const dashboard = rendered.getByTestId('dashboard-view');
+    setPart(
+      toolUse(
+        {
+          kind: 'macro',
+          input: { view: { text: 'Updated' } },
+          output: null,
+          error: null,
+        },
+        { name: 'DisplayResults', status: 'running' }
+      )
+    );
+    expect(rendered.getByTestId('dashboard-view')).toBe(dashboard);
+    expect(dashboard.textContent).toBe('{"text":"Updated"}');
+  });
+
+  it('shows malformed settled DisplayResults visibly without a tool disclosure', () => {
+    const rendered = render(() => (
+      <ToolCallPart
+        part={toolUse(
+          { kind: 'macro', input: null, output: null, error: null },
+          { name: 'DisplayResults' }
+        )}
+      />
+    ));
+    expect(rendered.getByRole('status').textContent).toBe(
+      'Unable to display these results.'
+    );
+    expect(rendered.queryByTestId('tool-card')).toBeNull();
   });
 });
 
@@ -885,6 +1016,7 @@ describe('ToolCallPart result summaries', () => {
       ));
       expect(rendered.getByTestId('trailing').textContent).toBe('Failed');
       expect(rendered.getByTestId('tool-card').dataset.muted).toBe('true');
+      expect(rendered.queryByTestId('macro-tool')).toBeNull();
     }
   );
 
@@ -963,32 +1095,33 @@ describe('ToolCallPart result summaries', () => {
     expect(rendered.queryByTestId('diff-changes')).toBeNull();
   });
 
-  it.each([0, 1, 3])('counts %i validated Macro search results', (count) => {
-    const rendered = render(() => (
-      <ToolCallPart
-        part={toolUse(
-          {
-            kind: 'macro',
-            input: { name: 'launch checklist' },
-            output: {
-              results: Array.from({ length: count }, () => ({
-                documentId: '4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e46',
-                name: 'Launch checklist',
-              })),
+  it.each([0, 1, 3])(
+    'counts %i validated results when the tool has no registered renderer',
+    (count) => {
+      const rendered = render(() => (
+        <ToolCallPart
+          part={toolUse(
+            {
+              kind: 'macro',
+              input: {},
+              output: {
+                results: Array.from({ length: count }, () => ({
+                  documentId: '4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e46',
+                  name: 'Launch checklist',
+                })),
+              },
+              error: null,
             },
-            error: null,
-          },
-          { name: 'SearchSkills' }
-        )}
-      />
-    ));
-    expect(rendered.getByTestId('subtitle').textContent).toBe(
-      'launch checklist'
-    );
-    expect(rendered.getByTestId('trailing').textContent).toBe(
-      `${count} ${count === 1 ? 'result' : 'results'}`
-    );
-  });
+            { name: 'ListSkills' }
+          )}
+        />
+      ));
+      expect(rendered.queryByTestId('macro-tool')).toBeNull();
+      expect(rendered.getByTestId('trailing').textContent).toBe(
+        `${count} ${count === 1 ? 'result' : 'results'}`
+      );
+    }
+  );
 
   it('does not infer a result count from an invalid Macro response', () => {
     const rendered = render(() => (

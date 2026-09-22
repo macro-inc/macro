@@ -359,6 +359,76 @@ function ToolReplayDemo() {
   );
 }
 
+/** A generated view stays visible between collapsed runs, even before a result. */
+function DisplayResultsDemo() {
+  const [pending, setPending] = createSignal(false);
+  const message = (): FoldedMessage => ({
+    agentSessionId: 'display-results-demo',
+    requestId: null,
+    pending: false,
+    turn: 0,
+    author: { kind: 'agent' },
+    stop: pending() ? null : { kind: 'end_turn' },
+    parts: [
+      ...TOOL_REPLAY_PARTS.slice(0, 2),
+      {
+        kind: 'tool_use',
+        id: 'display-results-demo',
+        name: { kind: 'mcp', server: 'macro', tool: 'DisplayResults' },
+        status: pending() ? 'running' : 'completed',
+        detail: {
+          kind: 'macro',
+          input: {
+            view: {
+              title: 'Launch overview',
+              widgets: [
+                {
+                  type: 'md',
+                  markdown:
+                    'The checklist is ready. **Two steps remain before launch.**',
+                },
+                {
+                  type: 'timeline',
+                  events: [
+                    {
+                      time: 'Today',
+                      title: 'Review launch checklist',
+                      description:
+                        'Confirm the release notes and rollout plan.',
+                    },
+                    {
+                      time: 'Tomorrow',
+                      title: 'Launch',
+                      description: 'Publish the release after checks pass.',
+                      future: true,
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+          output: null,
+          error: null,
+        },
+      },
+      ...(pending() ? [] : TOOL_REPLAY_PARTS.slice(4)),
+    ],
+  });
+  return (
+    <div class="flex flex-col gap-3" data-testid="display-results-demo">
+      <label class="flex items-center gap-2 text-xs text-ink-muted">
+        <input
+          type="checkbox"
+          checked={pending()}
+          onChange={(event) => setPending(event.currentTarget.checked)}
+        />
+        DisplayResults in progress
+      </label>
+      <Message message={message()} inFlight={pending()} />
+    </div>
+  );
+}
+
 const FIXTURE_MESSAGE: FoldedMessage = {
   agentSessionId: 'demo',
   requestId: null,
@@ -900,6 +970,10 @@ export default function AgentUiGallery() {
         <div class="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-8">
           <Item label="Tool calls (live replay)">
             <ToolReplayDemo />
+          </Item>
+
+          <Item label="DisplayResults (inline between groups)">
+            <DisplayResultsDemo />
           </Item>
           <Item label="ElicitationForm (live validation)">
             <ElicitationFormDemo />

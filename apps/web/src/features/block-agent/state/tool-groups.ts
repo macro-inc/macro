@@ -3,6 +3,8 @@
  * tool calls and thinking blocks reads as one collapsed row (`ui/ToolGroup`),
  * everything else as itself. A lone call stays a card of its own — a group of
  * one would hide the call behind a count that says nothing the card did not.
+ * DisplayResults is inline answer content and always breaks the run, including
+ * while its arguments are still arriving.
  *
  * A thought at the tail of a run stays out of the group only when the run
  * closes the message: that row is the current (or last) reasoning, and

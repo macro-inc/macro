@@ -8,7 +8,7 @@
  */
 
 import { Collapsible } from '@kobalte/core/collapsible';
-import CaretUp from '@phosphor/caret-up.svg';
+import CaretLeft from '@phosphor/caret-left.svg';
 import Wrench from '@phosphor/wrench.svg';
 import { Tooltip } from '@ui/components/Tooltip';
 import { createSignal, For, type JSX, Show } from 'solid-js';
@@ -104,9 +104,9 @@ export function ToolCard(props: ToolCardProps) {
         <span class="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap text-xs tabular-nums text-ink-extra-muted">
           {summary()}
           <Show when={expandable}>
-            <CaretUp
+            <CaretLeft
               aria-hidden="true"
-              class="size-3.5 shrink-0 text-ink-extra-muted transition-transform duration-200 group-data-expanded:rotate-180 motion-reduce:transition-none"
+              class="size-3.5 shrink-0 text-ink-extra-muted group-data-expanded:-rotate-90"
             />
           </Show>
         </span>

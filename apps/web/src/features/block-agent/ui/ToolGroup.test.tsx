@@ -5,21 +5,14 @@ import { createSignal, Index } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ToolGroup } from './ToolGroup';
 
-vi.mock('@phosphor/caret-up.svg', () => ({
+vi.mock('@phosphor/caret-left.svg', () => ({
   default: () => <svg data-testid="caret" />,
 }));
-
-class ResizeObserverStub {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-}
 
 let animationDefaults: HTMLStyleElement;
 
 beforeEach(() => {
   vi.useFakeTimers();
-  vi.stubGlobal('ResizeObserver', ResizeObserverStub);
   // jsdom's absent CSS reports an empty animation name. Browser styles report
   // "none" when animation is disabled; Kobalte uses it to finish presence.
   animationDefaults = document.createElement('style');
@@ -31,7 +24,6 @@ afterEach(() => {
   cleanup();
   animationDefaults.remove();
   vi.useRealTimers();
-  vi.unstubAllGlobals();
 });
 
 function mount(overrides?: {

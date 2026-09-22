@@ -1,10 +1,11 @@
-import CaretRight from '@phosphor/caret-right.svg?component-solid';
+import CaretLeft from '@phosphor/caret-left.svg?component-solid';
 import { Button, Layer } from '@ui';
 import type { Component, JSX } from 'solid-js';
 import { Show } from 'solid-js';
 
 type ToolRowProps = {
   align?: 'center' | 'start';
+  grouped?: boolean;
   children: JSX.Element;
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   trailing?: JSX.Element;
@@ -65,8 +66,10 @@ function Row(props: ToolRowProps) {
 
   return (
     <div
-      class="flex min-h-9 w-full gap-2 px-3 py-2"
+      class="flex w-full gap-2"
       classList={{
+        'min-h-8 py-1 text-sm leading-6': props.grouped,
+        'min-h-9 px-3 py-2': !props.grouped,
         'items-center': !alignStart(),
         'items-start': alignStart(),
       }}
@@ -117,10 +120,10 @@ function ResultToggle(props: ToolResultToggleProps) {
         <Show when={props.status}>
           <span>{props.status}</span>
         </Show>
-        <CaretRight
-          class="transition-transform"
+        <CaretLeft
+          aria-hidden="true"
           classList={{
-            'rotate-90': props.expanded,
+            '-rotate-90': props.expanded,
           }}
         />
       </Button>

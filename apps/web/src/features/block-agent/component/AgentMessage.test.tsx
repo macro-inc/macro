@@ -195,6 +195,45 @@ describe('Message tool grouping', () => {
     expect(view.getByTestId('permission')).toBeTruthy();
   });
 
+  it('keeps DisplayResults outside the tool groups before and after it', () => {
+    const [reply, setReply] = createSignal(
+      message(
+        [
+          tool('a'),
+          tool('b'),
+          tool('display', {
+            name: { kind: 'mcp', server: 'macro', tool: 'DisplayResults' },
+            status: 'pending',
+            detail: { kind: 'macro', input: null, output: null, error: null },
+          }),
+          tool('c'),
+          tool('d'),
+        ],
+        null
+      )
+    );
+    const view = render(() => <Message message={reply()} inFlight />);
+    const groups = view.getAllByTestId('group');
+    const display = view.getByText('display');
+    expect(groups.map((group) => group.dataset.count)).toEqual(['2', '2']);
+    expect(display.closest('[data-testid="group"]')).toBeNull();
+    expect(view.getAllByTestId('tool').map((row) => row.dataset.index)).toEqual(
+      ['0', '1', '2', '3', '4']
+    );
+
+    setReply((previous) => ({
+      ...previous,
+      parts: previous.parts.map((part) =>
+        part.kind === 'tool_use' && part.id === 'display'
+          ? { ...part, status: 'completed' }
+          : part
+      ),
+    }));
+    expect(view.getByText('display')).toBe(display);
+    expect(display.closest('[data-testid="group"]')).toBeNull();
+    expect(view.getAllByTestId('group')).toEqual(groups);
+  });
+
   it('reads as active while a call in the run is still running', () => {
     const view = render(() => (
       <Message
@@ -276,7 +315,7 @@ describe('Message tool grouping', () => {
     expect(view.getAllByTestId('tool')[2].dataset.status).toBe('running');
   });
 
-  it('marks a completed batch as live so its arrivals can animate', () => {
+  it('marks a completed batch as live so its arrivals remain visible briefly', () => {
     const view = render(() => (
       <Message message={message([tool('a'), tool('b')], null)} inFlight />
     ));

@@ -1,5 +1,5 @@
 import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
-import CaretRight from '@phosphor-icons/core/regular/caret-right.svg';
+import CaretLeft from '@phosphor-icons/core/regular/caret-left.svg';
 import Terminal from '@phosphor-icons/core/regular/terminal.svg';
 import type { BashCodeExecutionResult } from '@service-cognition/generated/tools/types';
 import { createSignal, Match, Show, Switch } from 'solid-js';
@@ -42,10 +42,12 @@ function CodeFence(props: {
       <Show when={isCollapsible() && needsTruncation()}>
         <button
           type="button"
+          aria-label="Command output"
+          aria-expanded={expanded()}
           class="text-ink-extra-muted hover:text-ink-muted absolute top-1 right-1 p-1"
           onClick={() => setExpanded(!expanded())}
         >
-          <Show when={expanded()} fallback={<CaretRight class="size-4" />}>
+          <Show when={expanded()} fallback={<CaretLeft class="size-4" />}>
             <CaretDown class="size-4" />
           </Show>
         </button>
