@@ -1,4 +1,4 @@
--- Revert 20260918183705_add_database_property_owner first: its
+-- Revert 20260918214929_add_database_property_owner first: its
 -- `property_definitions.database_id` column references `databases`, so this
 -- migration cannot drop that table while it is still in place.
 
