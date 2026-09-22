@@ -1,3 +1,4 @@
+import { useDocumentAgentMentionUsers } from '@channel/use-channel-bot-mention-users';
 import type { IUser } from '@core/user';
 import { idToDisplayName, idToEmail } from '@core/user/util';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
@@ -53,6 +54,12 @@ function EntityEditorBody(props: EntityEditorProps) {
       name: idToDisplayName(member.user_id),
     }));
 
+  // A task can be handed to an agent the same way it is handed to a person,
+  // so the assignee picker lists agents beside people.
+  const isAssignees =
+    property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES;
+  const agents = useDocumentAgentMentionUsers();
+
   const initialRefs: EntityReference[] = property.value ?? [];
   const [selectedRefs, setSelectedRefs] =
     createSignal<EntityReference[]>(initialRefs);
@@ -100,6 +107,7 @@ function EntityEditorBody(props: EntityEditorProps) {
             specificEntityType: property.specificEntityType,
             selfFilter: props.selfFilter,
             users: isCompanyOwner ? teamMembers : undefined,
+            extraUsers: isAssignees ? agents : undefined,
           }}
           selectedOptions={() => entityReferencesToIdSet(selectedRefs())}
           setSelectedOptions={(newOptions, entityInfo) => {

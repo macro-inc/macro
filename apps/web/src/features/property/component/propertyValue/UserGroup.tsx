@@ -1,4 +1,5 @@
 import { UserIcon } from '@core/component/UserIcon';
+import { useBotPrincipalDisplay } from '@queries/bots/bot-principal-display';
 import { AvatarGroup } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import type { EntityReference } from '../../types';
@@ -17,6 +18,8 @@ type UserEntityGroupProps = {
  */
 export const UserGroup = (props: UserEntityGroupProps) => {
   const max = () => props.maxUsers ?? 3;
+  // Assignees are principals, so one of these avatars may be an agent.
+  const botPrincipalDisplay = useBotPrincipalDisplay();
 
   const remaining = createMemo(() =>
     Math.max(0, props.entities.length - max())
@@ -33,6 +36,7 @@ export const UserGroup = (props: UserEntityGroupProps) => {
             size="sm"
             suppressClick
             showTooltip={false}
+            photoUrl={botPrincipalDisplay(entity.entity_id)?.avatarUrl}
           />
         )}
       </For>

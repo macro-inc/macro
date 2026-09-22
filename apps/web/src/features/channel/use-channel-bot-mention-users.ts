@@ -48,6 +48,26 @@ export function availableBotMentionUsers(
 }
 
 /**
+ * The agents that can be addressed on a document, as synthetic [`IUser`]
+ * entries. Documents have no installed-bot list of their own, so this is the
+ * global agent roster under the same rules the `@`-mention typeahead uses
+ * there — which is also who a task may be assigned to.
+ */
+export function useDocumentAgentMentionUsers(): Accessor<IUser[]> {
+  const agents = useAgentsQuery();
+  const canUseCursor = useCursorAgentsAccess();
+
+  return createMemo(() =>
+    availableBotMentionUsers(
+      [],
+      queryReadyGate(agents) ? agents.data : [],
+      canUseCursor(),
+      'document'
+    )
+  );
+}
+
+/**
  * The channel's bots as synthetic [`IUser`] entries for the `@`-mention
  * typeahead. Like `macroAiMentionUser()`, `email` is set to the bot's name so
  * persisted mentions render as "@BotName", and `id` uses the canonical

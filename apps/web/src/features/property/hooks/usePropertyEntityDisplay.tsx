@@ -4,6 +4,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { useChannelName } from '@core/context/channels';
 import { getDisplayName, tryMacroId } from '@core/user';
+import { useBotPrincipalDisplay } from '@queries/bots/bot-principal-display';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { type Accessor, createMemo, type JSX, untrack } from 'solid-js';
@@ -87,10 +88,15 @@ export function usePropertyEntityDisplay(
   });
   const channelName = () => channelNameSource()?.();
 
+  // An assignee is a principal, so a USER reference can name an agent.
+  const botPrincipalDisplay = useBotPrincipalDisplay();
+  const botPrincipal = () => botPrincipalDisplay(entityId());
+
   const userNameWrapper = () => {
     const eType = entityType();
     if (eType === 'USER') {
-      return () => getDisplayName(tryMacroId(entityId()));
+      return () =>
+        botPrincipal()?.name ?? getDisplayName(tryMacroId(entityId()));
     }
   };
   const userName = createMemo(() => userNameWrapper()?.() ?? '');
@@ -118,7 +124,13 @@ export function usePropertyEntityDisplay(
 
   const icon = createMemo(() =>
     match(entityType())
-      .with('USER', () => <UserIcon id={entityId()} size="sm" />)
+      .with('USER', () => (
+        <UserIcon
+          id={entityId()}
+          size="sm"
+          photoUrl={botPrincipal()?.avatarUrl}
+        />
+      ))
       .with('CHANNEL', () => <CoreEntityIcon targetType="channel" size="xs" />)
       .with('TASK', () => <CoreEntityIcon targetType="task" size="xs" />)
       .with('DOCUMENT', () => {

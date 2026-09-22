@@ -91,6 +91,18 @@ including properties that do not have a value yet. Click a preview pill to edit 
 opening the task; the property picker keeps the preview open while you make a selection.
 Users with view or comment access see the same pills read-only.
 
+## Assign a task to an agent
+
+The Assignees picker lists agents below people, under the same availability rules as
+the `@`-mention typeahead on a document. Pick one the way you pick a person; a task
+can carry agents and people at once.
+
+Assigning an agent that was not already assigned posts a mention of it in the task's
+own discussion, as you, so the agent starts on the task there. Its magic chip appears
+in that thread. Re-saving an assignee list that already contains the agent does not
+summon it again; removing it does not stop a session that is already running. This
+replaces summoning the agent in a channel and pointing it at the task.
+
 ## Messages as tasks
 
 In any channel composer, toggle the `Task` switch before sending to create a task from the

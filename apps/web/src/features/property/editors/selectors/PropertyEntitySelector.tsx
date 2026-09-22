@@ -198,15 +198,23 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     return isQuickAccessLoading();
   });
 
+  const extraUserEntities = (): CombinedEntity[] =>
+    props.config.specificEntityType === 'USER'
+      ? (props.config.extraUsers?.() ?? []).map(userToEntity)
+      : [];
+
   // Convert quickAccess items to CombinedEntity format
   const entities = createMemo((): CombinedEntity[] => {
     const specificEntityType = props.config.specificEntityType;
 
     // An explicit user pool replaces the quick-access people list.
     if (specificEntityType === 'USER' && props.config.users) {
-      return props.config
-        .users()
-        .map((user) => userToEntity(augmentUserWithDmActivity(user)));
+      return [
+        ...props.config
+          .users()
+          .map((user) => userToEntity(augmentUserWithDmActivity(user))),
+        ...extraUserEntities(),
+      ];
     }
 
     // For THREAD type, use email data (not in quickAccess yet)
@@ -246,6 +254,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     if (!specificEntityType) {
       converted.push(...emails().map(threadMapper));
     }
+
+    converted.push(...extraUserEntities());
 
     return converted;
   });
