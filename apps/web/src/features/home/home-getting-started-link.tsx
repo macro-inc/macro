@@ -3,19 +3,18 @@ import { A } from '@solidjs/router';
 import { Tooltip } from '@ui';
 import { Show } from 'solid-js';
 import { useGettingStartedEnabled } from '../getting-started/account-gate';
-import { createHomePreferences, type HomePreferences } from './home-prefs';
+import type { HomePreferences } from './home-prefs';
 
 export function HomeGettingStartedLink(props: {
-  preferences?: HomePreferences;
+  preferences: HomePreferences;
 }) {
   const enabled = useGettingStartedEnabled();
-  const preferences = props.preferences ?? createHomePreferences();
 
   return (
     <Show
       when={
         (import.meta.env.DEV || enabled()) &&
-        !preferences.isDismissed('getting-started-link')
+        !props.preferences.isDismissed('getting-started-link')
       }
     >
       <div class="mt-2 flex items-center justify-between gap-3 pl-[53.75px] pr-[7.5px] text-xs text-ink-extra-muted">
@@ -34,7 +33,7 @@ export function HomeGettingStartedLink(props: {
             type="button"
             class="flex size-[33.75px] shrink-0 items-center justify-center rounded-full transition-colors hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             aria-label="Dismiss Getting Started link"
-            onClick={() => preferences.dismiss('getting-started-link')}
+            onClick={() => props.preferences.dismiss('getting-started-link')}
           >
             <XIcon class="size-3.5" aria-hidden="true" />
           </button>

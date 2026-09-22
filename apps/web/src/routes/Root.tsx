@@ -9,6 +9,7 @@ import { ChannelInviteAcceptance } from '@app/features/channel-invitations/Chann
 import { InviteLinksPortal } from '@app/features/gtm-invite/InviteLinksPortal';
 import { InviteWelcome } from '@app/features/gtm-invite/InviteWelcome';
 import { usePendingInviteRedemption } from '@app/features/gtm-invite/usePendingInviteRedemption';
+import { HomePreferencesProvider } from '@app/features/home/home-prefs';
 import { GlobalShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflictDialog';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
 import { InteractiveOnboardingModal } from '@app/features/onboarding/InteractiveOnboardingModal';
@@ -384,6 +385,7 @@ const ROUTES: RouteDefinition[] = [
 ];
 
 function ConfiguredGlobalAppStateProvider(props: ParentProps) {
+  const userId = useUserId();
   // Initialize global notification helpers
   const notifInterface = usePlatformNotificationState();
   useChatRenameWebsocketSync();
@@ -417,7 +419,9 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
       notificationSource={notificationSource}
       blockOrchestrator={blockOrchestrator}
     >
-      {props.children}
+      <HomePreferencesProvider userId={userId}>
+        {props.children}
+      </HomePreferencesProvider>
     </GlobalAppStateProvider>
   );
 }

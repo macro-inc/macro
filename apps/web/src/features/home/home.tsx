@@ -13,7 +13,7 @@ import { HomeChatInput } from './home-chat-input';
 import { HomeExamples } from './home-examples';
 import { HomeGettingStartedLink } from './home-getting-started-link';
 import { GettingStartedSection, RecommendedSection } from './home-hub';
-import { createHomePreferences } from './home-prefs';
+import { useHomePreferences } from './home-prefs';
 import { HomeSectionBoundary } from './home-section-boundary';
 
 const MACRO_LOGO_PATH =
@@ -69,7 +69,7 @@ export function Home() {
 
 function HomeContent() {
   const user = useUserContext();
-  const preferences = createHomePreferences();
+  const preferences = useHomePreferences();
 
   const firstName = () => {
     const name = user.author();

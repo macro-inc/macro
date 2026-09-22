@@ -154,8 +154,9 @@ still load below it without moving the input. Eligible newer accounts (all
 accounts in development) see “New to Macro? See the **Getting Started** page.” directly
 below the composer, above suggestions. The link opens
 `/app/component/getting-started`; **Dismiss Getting Started link** hides it and
-remembers the dismissal per user in this browser across reloads. This dismissal
-is independent of the Getting Started sidebar link. Up to three cached AI
+remembers the dismissal per user in this browser across reloads. Dismissals update
+all open Home panes immediately and stay isolated when switching accounts. This
+dismissal is independent of the Getting Started sidebar link. Up to three cached AI
 suggestions appear below the
 composer, using the existing fast/smart recommendation projections. Compact rows
 use one line: reason — Phosphor icon and item name, followed by Open, all at the same font size. Clicking a
