@@ -131,7 +131,7 @@ pub struct DocumentSyncSession {
     /// Buffered blame events. Flushed via D1 batch on each alarm tick.
     pending_blame: Arc<Mutex<Vec<crate::d1::BlameEvent>>>,
     /// Editors collected for the next existing document notification.
-    pending_editors: Mutex<crate::domain::activity::PendingEditors>,
+    pending_editors: Arc<Mutex<crate::domain::activity::PendingEditors>>,
 }
 
 mod u64_serde_strings {
@@ -966,7 +966,7 @@ impl DurableObject for DocumentSyncSession {
             ws_meta_map: Arc::new(Mutex::new(Default::default())),
             msg_buffer: Arc::new(Mutex::new(vec![])),
             pending_blame: Arc::new(Mutex::new(Vec::new())),
-            pending_editors: Mutex::new(Default::default()),
+            pending_editors: Arc::new(Mutex::new(Default::default())),
         }
     }
 
@@ -1133,12 +1133,13 @@ impl DurableObject for DocumentSyncSession {
             state.mark_exported();
 
             let document_id = self.document_id().await.ok();
-            let editors = self.take_editors();
+            let pending_editors = self.pending_editors.clone();
             let env = self.env.clone();
             self.state.wait_until(async move {
                 if let Some(document_id) = document_id
                     && let Ok(snapshot) = doc_state.export_shallow_snapshot()
                 {
+                    let editors = pending_editors.lock("take document editors").take();
                     report_new_doc_state(&document_id, &snapshot, &env, editors).await;
                     report_interaction(&document_id, &env, InteractionReason::Edited).await;
                 }
