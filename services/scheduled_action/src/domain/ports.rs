@@ -1,3 +1,5 @@
+use super::event_runs::ClaimToken;
+use super::event_trigger::EventReference;
 use super::models::{
     ActionExecutionRecord, CreateScheduledAction, DispatchEvent, InProgressExecution,
     ScheduledAction, ScheduledActionUpdate, UpdateScheduledAction,
@@ -49,9 +51,14 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
         macro_user_id: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    fn claim_action(&self, id: &Uuid) -> impl Future<Output = Result<()>> + Send;
+    fn claim_action(&self, id: &Uuid) -> impl Future<Output = Result<ClaimToken>> + Send;
 
-    fn release_action(&self, id: &Uuid) -> impl Future<Output = Result<()>> + Send;
+    /// Release only this execution's claim; stale tokens must not mutate a newer run.
+    fn release_action(
+        &self,
+        id: &Uuid,
+        token: ClaimToken,
+    ) -> impl Future<Output = Result<()>> + Send;
 
     fn create_execution_record(
         &self,
@@ -123,6 +130,19 @@ pub trait ScheduledActionExecutor {
         &self,
         action: ScheduledAction,
     ) -> impl Future<Output = Result<InProgressExecution>> + Send;
+}
+
+/// Agent execution dependencies, separate from claim/history orchestration.
+/// Dropping `run` must cancel its agent session and tool request context.
+pub trait ScheduledAgentRunner: Send + Sync + 'static {
+    fn create_chat(&self, action: &ScheduledAction) -> impl Future<Output = Result<String>> + Send;
+
+    fn run(
+        &self,
+        action: &ScheduledAction,
+        chat_id: &str,
+        event: Option<&EventReference>,
+    ) -> impl Future<Output = Result<()>> + Send;
 }
 
 pub trait ScheduledActionLiveUpdate: Send + Sync + 'static {

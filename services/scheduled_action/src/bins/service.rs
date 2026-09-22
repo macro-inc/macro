@@ -1,9 +1,10 @@
 #![recursion_limit = "256"]
 use std::{sync::Arc, time::Duration};
 
-use ai_tools::build_tool_service_context_from_env;
+use ai_tools::{AiHost, build_tool_service_context_from_env, tools_for};
 use anyhow::{Context, Result};
 use axum::Router;
+use chat::outbound::postgres::PgChatRepo;
 use connection_gateway_client::client::ConnectionGatewayClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
@@ -12,6 +13,8 @@ use macro_authorization::{
 };
 use macro_entrypoint::MacroEntrypoint;
 use macro_service_urls::ConnectionGatewayUrl;
+use memory::domain::service::MemoryServiceImpl;
+use memory::outbound::pg_memory_repo::PgMemoryRepo;
 use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
 use scheduled_action::config::Config;
@@ -21,7 +24,9 @@ use scheduled_action::inbound::axum_router::{
     ScheduledActionRouterState, health, scheduled_action_router,
 };
 use scheduled_action::outbound::conn_gateway_live_updates::ConnGatewayLiveUpdates;
-use scheduled_action::outbound::inprocess_executor::InProcessExecutor;
+use scheduled_action::outbound::inprocess_executor::{
+    InProcessExecutor, agent_task::AgentTaskRunner,
+};
 use scheduled_action::outbound::pg_polling_dispatcher::{
     PgPollingDispatcher, PgPollingDispatcherLifecycle,
 };
@@ -80,23 +85,28 @@ async fn main() -> Result<()> {
 
     let repo = Arc::new(PgScheduledActionRepo::new(db.clone()));
 
-    // The dispatcher consumes its executor, so build a second executor for the
-    // service to use when handling execute-now requests. Both executors share
-    // the underlying repo/pool/tool-context via cheap Arc/PgPool clones.
-    let dispatcher_executor = InProcessExecutor::new(
-        Arc::clone(&repo),
-        db.clone(),
+    let run_tracker = TaskTracker::new();
+    let run_cancellation = CancellationToken::new();
+    let memory = MemoryServiceImpl::new(
+        PgMemoryRepo::new(db.clone()),
         tool_context.clone(),
-        Arc::clone(&notification_ingress),
-        Arc::clone(&live_updates),
+        tools_for(AiHost::Chat),
     );
-    let service_executor = Arc::new(InProcessExecutor::new(
-        Arc::clone(&repo),
-        db.clone(),
+    let runner = Arc::new(AgentTaskRunner::new(
+        Arc::clone(&tool_context.chat_tool_context.service),
+        PgChatRepo::new(db.clone()),
+        memory,
         tool_context,
         notification_ingress,
-        live_updates,
     ));
+    let dispatcher_executor = InProcessExecutor::new(
+        Arc::clone(&repo),
+        runner,
+        live_updates,
+        run_tracker.clone(),
+        run_cancellation.clone(),
+    );
+    let service_executor = Arc::new(dispatcher_executor.clone());
 
     let dispatcher_cancellation_token = CancellationToken::new();
     let dispatcher_tracker = TaskTracker::new();
@@ -152,8 +162,14 @@ async fn main() -> Result<()> {
 
     tracing::info!("scheduled_action service listening on {addr}");
 
+    let shutdown_runs = run_cancellation.clone();
+    let shutdown_dispatcher = dispatcher_cancellation_token.clone();
     let server_result = axum::serve(listener, router.into_make_service())
-        .with_graceful_shutdown(macro_entrypoint::shutdown_signal())
+        .with_graceful_shutdown(async move {
+            macro_entrypoint::shutdown_signal().await;
+            shutdown_dispatcher.cancel();
+            shutdown_runs.cancel();
+        })
         .await
         .context("server closed");
 
@@ -162,6 +178,16 @@ async fn main() -> Result<()> {
     dispatcher_tracker.close();
     dispatcher_tracker.wait().await;
     tracing::info!("scheduled action dispatcher stopped");
+
+    run_cancellation.cancel();
+    run_tracker.close();
+    // Agent work is cancelled cooperatively; allow bounded bookkeeping time.
+    if tokio::time::timeout(Duration::from_secs(30), run_tracker.wait())
+        .await
+        .is_err()
+    {
+        tracing::warn!("timed out waiting for scheduled action bookkeeping");
+    }
 
     tracing::info!("waiting for event broker publishes to drain");
     event_broker_tracker.close();

@@ -12,7 +12,7 @@ use serde_json::Value;
 use sqlx::PgPool;
 use std::str::FromStr;
 
-use crate::domain::event_runs::ConfigurationRevision;
+use crate::domain::event_runs::{ClaimToken, ConfigurationRevision};
 use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
     ActionExecutionRecord, ActionKind, ActionPolicyError, AlreadyRunningError, MAX_ACTION_TIME,
@@ -332,20 +332,22 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
         Ok(())
     }
 
-    async fn claim_action(&self, id: &Uuid) -> Result<()> {
+    async fn claim_action(&self, id: &Uuid) -> Result<ClaimToken> {
+        let token = ClaimToken::generate();
         let now = Utc::now();
         let stale_threshold = now - MAX_ACTION_TIME;
 
         let result = sqlx::query!(
             r#"
             UPDATE scheduled_action
-            SET claimed = $1, updated_at = now()
+            SET claimed = $1, claim_token = $4, updated_at = now()
             WHERE id = $2
               AND (claimed IS NULL OR claimed < $3)
             "#,
             now,
             *id,
             stale_threshold,
+            token.as_uuid(),
         )
         .execute(&self.pool)
         .await?;
@@ -354,17 +356,18 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
             return Err(anyhow::Error::new(AlreadyRunningError { action_id: *id }));
         }
 
-        Ok(())
+        Ok(token)
     }
 
-    async fn release_action(&self, id: &Uuid) -> Result<()> {
+    async fn release_action(&self, id: &Uuid, token: ClaimToken) -> Result<()> {
         sqlx::query!(
             r#"
             UPDATE scheduled_action
-            SET claimed = NULL, updated_at = now()
-            WHERE id = $1
+            SET claimed = NULL, claim_token = NULL, updated_at = now()
+            WHERE id = $1 AND claim_token = $2
             "#,
             *id,
+            token.as_uuid(),
         )
         .execute(&self.pool)
         .await?;

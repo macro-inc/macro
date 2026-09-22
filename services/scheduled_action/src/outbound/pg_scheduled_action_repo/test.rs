@@ -193,7 +193,7 @@ async fn replacement_is_fenced_against_claims_and_stale_revisions(pool: PgPool) 
     replacement.name = "replacement".into();
 
     // Claim after management read, before its write.
-    repo.claim_action(&id).await.unwrap();
+    let token = repo.claim_action(&id).await.unwrap();
     let error = repo.update_action(replacement.clone()).await.unwrap_err();
     assert!(matches!(
         error.downcast_ref(),
@@ -208,7 +208,7 @@ async fn replacement_is_fenced_against_claims_and_stale_revisions(pool: PgPool) 
         .await
         .unwrap();
     assert!(disabled.claimed.is_some());
-    repo.release_action(&id).await.unwrap();
+    repo.release_action(&id, token).await.unwrap();
 
     // The earlier replacement is stale even after execution has finished.
     let error = repo.update_action(replacement).await.unwrap_err();
@@ -243,6 +243,29 @@ async fn second_claim_returns_already_running(pool: PgPool) {
         .await
         .expect_err("second claim should fail");
     assert!(error.downcast_ref::<AlreadyRunningError>().is_some());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn release_is_fenced_to_its_own_execution(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = PgScheduledActionRepo::new(pool);
+    let action = repo
+        .create_action(sample_action(user_owner(USER_A), "fenced"))
+        .await
+        .unwrap();
+    let id = action.id.unwrap();
+    let old = repo.claim_action(&id).await.unwrap();
+    repo.release_action(&id, crate::domain::event_runs::ClaimToken::generate())
+        .await
+        .unwrap();
+    assert!(repo.claim_action(&id).await.is_err());
+    repo.release_action(&id, old).await.unwrap();
+    let current = repo.claim_action(&id).await.unwrap();
+    assert_ne!(old, current);
+    repo.release_action(&id, old).await.unwrap();
+    assert!(repo.claim_action(&id).await.is_err());
+    repo.release_action(&id, current).await.unwrap();
+    assert!(repo.claim_action(&id).await.is_ok());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -356,8 +379,8 @@ async fn event_round_trip_and_bookkeeping_does_not_advance_configuration(pool: P
     let after = repo.get_action(&id, user(USER_A)).await.unwrap().unwrap();
     assert_eq!(after.updated_at, before.updated_at);
     assert_eq!(after.next_run_at, None);
-    repo.claim_action(&id).await.unwrap();
-    repo.release_action(&id).await.unwrap();
+    let token = repo.claim_action(&id).await.unwrap();
+    repo.release_action(&id, token).await.unwrap();
     repo.update_last_executed(&id, Utc::now()).await.unwrap();
     let after = repo.get_action(&id, user(USER_A)).await.unwrap().unwrap();
     assert_eq!(after.configuration_revision, before.configuration_revision);

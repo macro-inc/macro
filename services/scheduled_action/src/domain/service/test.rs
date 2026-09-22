@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::event_runs::ClaimToken;
 use crate::domain::models::ActionKind;
 use macro_uuid::generate_uuid_v7;
 use serde_json::json;
@@ -60,10 +61,10 @@ impl ScheduledActionRepo for FakeRepo {
     async fn get_next_unclaimed_actions(&self, _limit: i64) -> Result<Vec<ScheduledAction>> {
         unimplemented!()
     }
-    async fn claim_action(&self, _id: &Uuid) -> Result<()> {
+    async fn claim_action(&self, _id: &Uuid) -> Result<ClaimToken> {
         unimplemented!()
     }
-    async fn release_action(&self, _id: &Uuid) -> Result<()> {
+    async fn release_action(&self, _id: &Uuid, _token: ClaimToken) -> Result<()> {
         unimplemented!()
     }
     async fn create_execution_record(&self, _record: ActionExecutionRecord) -> Result<()> {

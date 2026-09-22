@@ -94,11 +94,15 @@ impl ScheduledActionRepo for FakeRepository {
         Ok(())
     }
 
-    async fn claim_action(&self, _id: &Uuid) -> Result<()> {
-        Ok(())
+    async fn claim_action(&self, _id: &Uuid) -> Result<crate::domain::event_runs::ClaimToken> {
+        Ok(crate::domain::event_runs::ClaimToken::generate())
     }
 
-    async fn release_action(&self, _id: &Uuid) -> Result<()> {
+    async fn release_action(
+        &self,
+        _id: &Uuid,
+        _token: crate::domain::event_runs::ClaimToken,
+    ) -> Result<()> {
         Ok(())
     }
 
