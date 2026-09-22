@@ -189,11 +189,11 @@ export function Harness(props: { navigation?: JSX.Element } = {}) {
                   <HardDrivesIcon />
                 </HarnessIcon>
                 <div class="min-w-0 flex-1">
-                  <div class="flex items-center gap-2">
-                    <h2 class="text-sm font-medium text-ink">
+                  <div class="flex min-h-5 items-start justify-between gap-3">
+                    <h2 class="min-w-0 text-sm/5 font-medium text-ink">
                       {MACRO_HARNESS_NAME}
                     </h2>
-                    <span class="rounded-full bg-success-bg px-2 py-0.5 text-[11px] font-medium text-success">
+                    <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-full bg-success-bg px-2 text-[11px]/none font-medium text-success">
                       Built in
                     </span>
                   </div>
@@ -211,10 +211,12 @@ export function Harness(props: { navigation?: JSX.Element } = {}) {
                   <CursorIcon />
                 </HarnessIcon>
                 <div class="min-w-0 flex-1">
-                  <div class="flex items-center gap-2">
-                    <h2 class="text-sm font-medium text-ink">Cursor</h2>
+                  <div class="flex min-h-5 items-start justify-between gap-3">
+                    <h2 class="min-w-0 text-sm/5 font-medium text-ink">
+                      Cursor
+                    </h2>
                     <Show when={cursorRegistered()}>
-                      <span class="rounded-full bg-success-bg px-2 py-0.5 text-[11px] font-medium text-success">
+                      <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-full bg-success-bg px-2 text-[11px]/none font-medium text-success">
                         Connected
                       </span>
                     </Show>
@@ -426,10 +428,12 @@ export function Harness(props: { navigation?: JSX.Element } = {}) {
               >
                 {(harness) => (
                   <div class="flex items-center justify-between gap-4 px-4 py-3">
-                    <div class="min-w-0">
+                    <div class="min-w-0 flex-1">
                       <div class="flex min-w-0 items-center gap-2">
-                        <p class="truncate text-sm text-ink">{harness.name}</p>
-                        <span class="shrink-0 rounded-full border border-edge-muted px-2 py-0.5 text-xxs font-medium uppercase text-ink-extra-muted">
+                        <p class="min-w-0 flex-1 truncate text-sm text-ink">
+                          {harness.name}
+                        </p>
+                        <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-full border border-edge-muted px-2 text-xxs/none font-medium uppercase text-ink-extra-muted">
                           {harness.owner.type === 'team' ? 'Team' : 'Private'}
                         </span>
                         <StatusDot
@@ -445,11 +449,13 @@ export function Harness(props: { navigation?: JSX.Element } = {}) {
                         {lastConnectedText(harness)}
                       </p>
                     </div>
-                    <ConnectAction
-                      label="Remove"
-                      variant="danger"
-                      onClick={() => setRemovingHarness(harness)}
-                    />
+                    <div class="shrink-0">
+                      <ConnectAction
+                        label="Remove"
+                        variant="danger"
+                        onClick={() => setRemovingHarness(harness)}
+                      />
+                    </div>
                   </div>
                 )}
               </For>

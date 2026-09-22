@@ -42,10 +42,10 @@ export function CodexConnection(props: {
         <OpenAiIcon />
       </HarnessIcon>
       <div class="min-w-0 flex-1">
-        <div class="flex items-center gap-2">
-          <h2 class="text-sm font-medium text-ink">Codex</h2>
+        <div class="flex min-h-5 items-start justify-between gap-3">
+          <h2 class="min-w-0 text-sm/5 font-medium text-ink">Codex</h2>
           <Show when={connected()}>
-            <span class="rounded-full bg-success-bg px-2 py-0.5 text-[11px] font-medium text-success">
+            <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-full bg-success-bg px-2 text-[11px]/none font-medium text-success">
               Connected
             </span>
           </Show>
