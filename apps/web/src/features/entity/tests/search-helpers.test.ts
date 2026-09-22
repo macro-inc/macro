@@ -1,3 +1,4 @@
+import FileMarkdownIcon from '@icon/file-markdown.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import FileIcon from '@phosphor/file.svg';
 import FilePdfIcon from '@phosphor/file-pdf.svg';
@@ -63,12 +64,12 @@ describe('search-helpers', () => {
   });
 
   describe('getSearchIcon', () => {
-    it('returns FileIcon for md type', () => {
+    it('returns the markdown file icon for md type', () => {
       const hit: ContentHitData = {
         type: 'md',
       } as ContentHitData;
 
-      expect(getSearchIcon(hit)).toBe(FileIcon);
+      expect(getSearchIcon(hit)).toBe(FileMarkdownIcon);
     });
 
     it('returns FilePdfIcon for pdf type', () => {

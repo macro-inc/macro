@@ -7,11 +7,11 @@ import { openCreateCompanyModal } from '@app/features/companies/CreateCompanyMod
 import { useOpenEventComposer } from '@block-calendar/components/use-open-event-composer';
 import { hapticImpact } from '@core/mobile/haptics';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
+import DocumentIcon from '@icon/file-markdown.svg';
 import CalendarIcon from '@phosphor/calendar-blank.svg';
 import MessageIcon from '@phosphor/chat-circle.svg';
 import MoreIcon from '@phosphor/dots-three.svg';
 import EmailIcon from '@phosphor/envelope-simple.svg';
-import DocumentIcon from '@phosphor/file-text.svg';
 import TaskIcon from '@phosphor/list-checks.svg';
 import CreateIcon from '@phosphor/plus.svg';
 import { Show } from 'solid-js';

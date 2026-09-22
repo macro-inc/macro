@@ -1,3 +1,4 @@
+import FileMarkdownIcon from '@icon/file-markdown.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import FileIcon from '@phosphor/file.svg';
 import FilePdfIcon from '@phosphor/file-pdf.svg';
@@ -20,7 +21,7 @@ export function getSenderId(hit: ContentHitData): string | undefined {
  */
 export function getSearchIcon(hit: ContentHitData) {
   return match(hit)
-    .with({ type: 'md' }, () => FileIcon)
+    .with({ type: 'md' }, () => FileMarkdownIcon)
     .with({ type: 'pdf' }, () => FilePdfIcon)
     .with({ type: 'channel' }, () => HashIcon)
     .with({ type: 'email' }, () => EnvelopeIcon)

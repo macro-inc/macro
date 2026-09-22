@@ -1,4 +1,5 @@
 import { itemToBlockName } from '@core/constant/allBlocks';
+import FileMarkdownIcon from '@icon/file-markdown.svg';
 import SpreadsheetIcon from '@icon/wide-spreadsheet.svg';
 import ContactIcon from '@phosphor/address-book.svg';
 import ReminderIcon from '@phosphor/bell-simple.svg';
@@ -42,7 +43,7 @@ const entityGlyphs: [
   typeof FileIcon,
   ReturnType<typeof itemToBlockName>?,
 ][] = [
-  ['document', { type: 'document', fileType: 'md' }, FileIcon, 'md'],
+  ['document', { type: 'document', fileType: 'md' }, FileMarkdownIcon, 'md'],
   ['unresolved document', { type: 'document' }, FileIcon, 'unknown'],
   [
     'native spreadsheet',

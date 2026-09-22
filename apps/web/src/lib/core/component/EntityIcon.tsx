@@ -14,6 +14,8 @@ import type {
   NamedSubType,
   ReminderEntity,
 } from '@entity';
+import FileMarkdown from '@icon/file-markdown.svg';
+import FileMarkdownBold from '@icon/file-markdown-bold.svg';
 import Spreadsheet from '@icon/wide-spreadsheet.svg';
 import SpreadsheetBold from '@icon/wide-spreadsheet-bold.svg';
 import AddressBook from '@phosphor/address-book.svg';
@@ -239,8 +241,8 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     prettyName: 'PDF',
   },
   md: {
-    icon: File,
-    boldIcon: FileBold,
+    icon: FileMarkdown,
+    boldIcon: FileMarkdownBold,
     foreground: 'text-note',
     background: 'bg-note/20',
     prettyName: 'Note',
