@@ -87,9 +87,7 @@ describe('getting started chats', () => {
   it('clears the pending guard if creation throws', async () => {
     const { startChat, activate } = setup();
     startChat.mockRejectedValueOnce(new Error('Network failure'));
-    await expect(activate('example-weekly-brief', 'Brief')).rejects.toThrow(
-      'Network failure'
-    );
+    expect(await activate('example-weekly-brief', 'Brief')).toBe(false);
     expect(await activate('example-weekly-brief', 'Brief')).toBe(true);
   });
 });

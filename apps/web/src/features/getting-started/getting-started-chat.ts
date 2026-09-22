@@ -19,7 +19,12 @@ export function createGettingStartedChatOpener(options: {
 
     pending.add(actionId);
     try {
-      const chatId = await options.startChat(prompt);
+      let chatId: string | undefined;
+      try {
+        chatId = await options.startChat(prompt);
+      } catch {
+        return false;
+      }
       if (!chatId) return false;
       options.state.rememberChat(actionId, chatId);
       options.openChat(chatId);
