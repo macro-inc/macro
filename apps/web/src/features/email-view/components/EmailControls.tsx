@@ -1,7 +1,5 @@
 import { ListFilterDropdown } from '@app/components/view-shell';
-import { PreviewButton } from '@components/app/split-layout/components/PreviewButton';
 import { Show } from 'solid-js';
-import { useEmailView } from '../email-view-context';
 import { useEmailFilters } from '../filters/use-email-filters';
 
 export type EmailControlsProps = {
@@ -11,8 +9,6 @@ export type EmailControlsProps = {
 };
 
 export function EmailControls(props: EmailControlsProps) {
-  const { setPreviewOpen } = useEmailView();
-
   const filters = useEmailFilters();
 
   return (
@@ -33,11 +29,6 @@ export function EmailControls(props: EmailControlsProps) {
           </span>
         </Show>
       </div>
-      <PreviewButton
-        iconOnly
-        class="rounded-lg"
-        onOpenChange={setPreviewOpen}
-      />
     </div>
   );
 }

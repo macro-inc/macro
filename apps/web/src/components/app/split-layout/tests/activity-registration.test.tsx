@@ -41,7 +41,6 @@ vi.mock('@app/features/activity/open-entity-in-split', () => ({
 
 // Quarantine unrelated registered views and their module-load side effects.
 vi.mock('@app/features/agents-view/views/AgentsView', () => ({}));
-vi.mock('@app/features/block-agent/component/ComposeAgentSession', () => ({}));
 vi.mock('@app/features/channels-view/channels-view', () => ({}));
 vi.mock('@app/features/drive-view/drive-view', () => ({}));
 vi.mock('@app/features/email-compose/email-compose', () => ({}));
@@ -52,10 +51,6 @@ vi.mock('@app/features/inbox-view/inbox-view', () => ({}));
 vi.mock('@app/features/next-soup/filters/filter-store', () => ({}));
 vi.mock('@app/features/next-soup/filters/filter-store/query-store', () => ({}));
 vi.mock('@app/features/next-soup/sidebar/soup-filter-presets', () => ({}));
-vi.mock(
-  '@app/features/next-soup/soup-view/non-member-channel-preview',
-  () => ({})
-);
 vi.mock('@app/features/next-soup/soup-view/soup-view', () => ({}));
 vi.mock('@app/features/next-soup/use-recent-view-flag', () => ({}));
 vi.mock('@app/features/reminders/ReminderEditorSplit', () => ({}));
@@ -71,7 +66,6 @@ vi.mock('@core/context/user', () => ({}));
 vi.mock('@core/mobile/isTouchDevice', () => ({}));
 vi.mock('@queries/agent-schedule/entities', () => ({}));
 vi.mock('@ui', () => ({}));
-vi.mock('../previewController', () => ({}));
 
 beforeEach(() => {
   vi.clearAllMocks();

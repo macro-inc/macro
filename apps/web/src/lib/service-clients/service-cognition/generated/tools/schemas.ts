@@ -811,6 +811,7 @@ export const SearchToolResponse = z.object({
                         z.literal('task'),
                         z.literal('snippet'),
                         z.literal('skill'),
+                        z.literal('initiative_description'),
                       ];
                       const errors = schemas.reduce<z.ZodError[]>(
                         (errors, schema) =>
@@ -4905,6 +4906,7 @@ export const ReadMetadataResponse = z.object({
             z.literal('task'),
             z.literal('snippet'),
             z.literal('skill'),
+            z.literal('initiative_description'),
           ];
           const errors = schemas.reduce<z.ZodError[]>(
             (errors, schema) =>
@@ -5667,6 +5669,18 @@ export const UpdateThreadLabelsResponse = z.object({
   successfulCount: z.number().int().gte(0),
   failedCount: z.number().int().gte(0),
   summary: z.string(),
+});
+
+export const UploadFile = z.object({
+  fileName: z.string(),
+  contentBase64: z.string(),
+  projectId: z.union([z.string().uuid(), z.null()]).optional(),
+});
+
+export const UploadFileResponse = z.object({
+  documentId: z.string(),
+  fileName: z.string(),
+  sizeBytes: z.number().int().gte(0),
 });
 
 export const WebFetch = z.object({ input: z.string() });

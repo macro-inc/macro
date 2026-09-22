@@ -4,10 +4,14 @@ use chrono_tz::Tz;
 use cron::Schedule as CronSchedule;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use model_owner::{Owner, OwnerType};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::str::FromStr;
 use utoipa::ToSchema;
+
+#[cfg(test)]
+mod test;
 
 pub const MAX_ACTION_TIME: Duration = Duration::minutes(20);
 
@@ -95,8 +99,12 @@ pub struct UpdateScheduledAction {
 pub struct ScheduledAction {
     #[schema(value_type = Option<String>, format = Uuid)]
     pub id: Option<Uuid>,
+    /// Who the action belongs to. Every action is user-owned today, but the
+    /// type no longer says so: the principal string on the wire and in the
+    /// `owner` column is the same, and a bot- or team-owned row decodes
+    /// rather than failing to parse.
     #[schema(value_type = String)]
-    pub owner: MacroUserIdStr<'static>,
+    pub owner: Owner,
     pub name: String,
     pub schedule: Schedule,
     pub kind: ActionKind,
@@ -113,6 +121,20 @@ pub struct ScheduledAction {
     /// When false, the cron dispatcher skips this schedule. `run_now` remains
     /// available regardless.
     pub enabled: bool,
+}
+
+impl ScheduledAction {
+    /// The user this action runs as.
+    ///
+    /// For every path that acts as the owner rather than merely naming them:
+    /// creating a chat in their account, reading their memory, spending their
+    /// AI budget, notifying them. Asking here fails typed for a bot or team
+    /// instead of treating one as a person.
+    pub fn owner_user(&self) -> Result<&MacroUserIdStr<'static>, OwnerNotUserError> {
+        self.owner.as_user().ok_or(OwnerNotUserError {
+            owner_type: self.owner.owner_type(),
+        })
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -202,3 +224,23 @@ impl std::fmt::Display for AlreadyRunningError {
 }
 
 impl std::error::Error for AlreadyRunningError {}
+
+/// Returned when a path that must run as a person meets an action owned by a
+/// bot or a team. Callers at the HTTP boundary map this to 400 Bad Request;
+/// the polling dispatcher logs it and leaves the action alone.
+#[derive(Debug)]
+pub struct OwnerNotUserError {
+    pub owner_type: OwnerType,
+}
+
+impl std::fmt::Display for OwnerNotUserError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "this path needs a user-owned scheduled action, but the owner is a {}",
+            self.owner_type
+        )
+    }
+}
+
+impl std::error::Error for OwnerNotUserError {}

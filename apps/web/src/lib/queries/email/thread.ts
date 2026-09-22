@@ -17,6 +17,11 @@ import type {
   UpsertScheduledResponse,
 } from '@service-email/generated/schemas';
 import {
+  markGraphqlEmailThreadSeen,
+  markGraphqlEmailThreadUnread,
+} from '@service-storage/graphql-email-read-state';
+import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import {
   type InfiniteData,
   useInfiniteQuery,
   useMutation,
@@ -25,6 +30,10 @@ import { err, ok } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { optimisticUpdateSoupEntity, refetchSoupEntity } from '../soup/cache';
+import {
+  getActiveGraphqlSoupRevalidations,
+  refreshActiveGraphqlSoupQueries,
+} from '../soup/graphql/active-queries';
 import { invalidateAllSoup } from '../soup/normalized-cache';
 import { type UndoHandle, useUndoableMutation } from '../undo';
 import { type MutationCallbacks, withCallbacks } from '../utils';
@@ -269,6 +278,7 @@ type MarkThreadAsSeenParams = {
  * email view anyway - only the soup/list view needs it.
  */
 function threadSeenOnMutate(params: MarkThreadAsSeenParams): void {
+  if (isFeatureEnabled(enableGraphqlSoup)) return;
   optimisticUpdateSoupEntity({
     tag: 'emailThread',
     data: { id: params.threadId, isRead: true },
@@ -284,6 +294,16 @@ export function useMarkThreadAsSeenMutation(
 ) {
   return useMutation(() => ({
     mutationFn: async (params: MarkThreadAsSeenParams) => {
+      if (isFeatureEnabled(enableGraphqlSoup)) {
+        const disposition = await markGraphqlEmailThreadSeen(
+          getGraphqlSoupClient(),
+          params.threadId,
+          getActiveGraphqlSoupRevalidations()
+        );
+        if (disposition === 'committed')
+          await refreshActiveGraphqlSoupQueries();
+        return;
+      }
       await throwOnErr(() =>
         emailClient.markThreadAsSeen(
           { thread_id: params.threadId },
@@ -340,6 +360,7 @@ async function fetchUnreadLabelId(linkId?: string): Promise<string> {
  * threadSeenOnMutate.
  */
 function threadUnreadOnMutate(params: MarkThreadAsUnreadParams): void {
+  if (isFeatureEnabled(enableGraphqlSoup)) return;
   optimisticUpdateSoupEntity({
     tag: 'emailThread',
     data: { id: params.threadId, isRead: false },
@@ -356,6 +377,16 @@ export function useMarkThreadAsUnreadMutation(
 ) {
   return useMutation(() => ({
     mutationFn: async (params: MarkThreadAsUnreadParams) => {
+      if (isFeatureEnabled(enableGraphqlSoup)) {
+        const disposition = await markGraphqlEmailThreadUnread(
+          getGraphqlSoupClient(),
+          params.threadId,
+          getActiveGraphqlSoupRevalidations()
+        );
+        if (disposition === 'committed')
+          await refreshActiveGraphqlSoupQueries();
+        return;
+      }
       const labelId = await fetchUnreadLabelId(params.linkId);
       await throwOnErr(() =>
         emailClient.updateThreadLabel({

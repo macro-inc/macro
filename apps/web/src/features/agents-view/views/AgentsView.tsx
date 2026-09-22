@@ -1,7 +1,12 @@
 import { ViewShell } from '@app/components/view-shell';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
-import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
+import { McpConnections } from '@app/features/settings/McpConnections';
+import { withEntityNotifications } from '@app/features/soup/entity-notifications';
+import {
+  useGlobalBlockOrchestrator,
+  useGlobalNotificationSource,
+} from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -28,9 +33,11 @@ import { useSoupItemsQuery } from '@queries/soup/items';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { Harness } from '@service-storage/client';
 import {
+  createEffect,
   createMemo,
   createSignal,
   Match,
+  on,
   onMount,
   Show,
   Suspense,
@@ -44,7 +51,7 @@ import { Topbar } from '../components/Topbar';
 import { DataModeProvider, dataModeFor } from '../context/data-mode';
 import { type AgentKind, modeForKind } from '../core/agent-kind';
 import type { AgentsMode } from '../core/mode';
-import type { AgentsPage } from '../core/pages';
+import { type AgentsPage, parseAgentsPage } from '../core/pages';
 import {
   type AgentConversationEntity,
   type AgentConversationTarget,
@@ -84,6 +91,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
   const layout = useSplitLayout();
   const orchestrator = useGlobalBlockOrchestrator();
   const userId = useUserId();
+  const notifications = useGlobalNotificationSource();
   const mode = (): AgentsMode => props.initialRoute?.mode ?? 'chat';
   const dataMode = () => dataModeFor(mode());
   const [page, setPage] = createSignal<AgentsPage>('new');
@@ -141,7 +149,11 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
   );
   const conversations = createMemo(() =>
     selectRecentAgentConversations(
-      query.isSuccess ? query.data : [],
+      query.isSuccess
+        ? query.data.map((entity) =>
+            withEntityNotifications(entity, notifications)
+          )
+        : [],
       userId(),
       search()
     )
@@ -162,6 +174,42 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
     setSelected(undefined);
     setPage('new');
   };
+  // A launcher navigation can target this already-mounted workspace.
+  createEffect(
+    on(
+      () => {
+        const content = panel.handle.content();
+        return content.type === 'component'
+          ? content.params?.focusComposer
+          : undefined;
+      },
+      (request) => {
+        if (request) showComposer();
+      }
+    )
+  );
+  const openPage = (next: AgentsPage) => {
+    setSelected(undefined);
+    setPage(next);
+  };
+  createEffect(
+    on(
+      () => {
+        const content = panel.handle.content();
+        return content.type === 'component'
+          ? content.params?.agentPageRequest
+          : undefined;
+      },
+      () => {
+        const content = panel.handle.content();
+        const next =
+          content.type === 'component'
+            ? parseAgentsPage(content.params?.agentPage)
+            : undefined;
+        if (next) openPage(next);
+      }
+    )
+  );
   const openRoster = (kind: AgentKind) => {
     setSelected(undefined);
     setRosterKind(kind);
@@ -183,13 +231,17 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
       });
       return;
     }
-    if (panel.handle.content().id === next.id) return;
+    if (panel.handle.content().id === next.id) {
+      setSelected({ conversation, activeConversationId: conversation.id });
+      return;
+    }
     panel.handle.replace({ next, referredFrom: 'agents' });
   };
   const startConversation = (start: StartConversation) => {
     const id = startPendingSession({
       botId: start.botId,
       prompt: start.prompt,
+      attachments: start.attachments,
       modelOverride: start.modelOverride,
       repoUrl: start.repoUrl,
       repoBranch: start.repoBranch,
@@ -277,6 +329,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
 
   const pageTitle = () => {
     if (page() === 'agents') return 'Agents';
+    if (page() === 'connections') return 'Connections';
     return 'New conversation';
   };
 
@@ -286,6 +339,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
         <DataModeProvider value={dataMode}>
           <div
             class="agents-view"
+            data-agents-workspace={panel.handle.id}
             data-mode={dataMode()}
             data-session={selected() ? '1' : undefined}
           >
@@ -304,6 +358,10 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
             >
               <ViewShell.Aside>
                 <AgentsSidebar
+                  activePage={selected() ? undefined : page()}
+                  onOpenPage={(next) =>
+                    next === 'agents' ? openRoster('agent') : openPage(next)
+                  }
                   modeForConversation={modeForConversation}
                   activeConversationId={selected()?.activeConversationId}
                   search={search()}
@@ -337,6 +395,9 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                         <div class="body">
                           <Suspense fallback={<LoadingComposer />}>
                             <Switch>
+                              <Match when={page() === 'connections'}>
+                                <McpConnections />
+                              </Match>
                               <Match when={page() === 'agents'}>
                                 <RosterPage
                                   kind={rosterKind()}
@@ -377,6 +438,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                           <Suspense fallback={<LoadingComposer />}>
                             <AgentSessionPane
                               id={conversation.id}
+                              notificationSource={notifications}
                               onSessionId={(sessionId) =>
                                 adoptSessionId(conversation.id, sessionId)
                               }

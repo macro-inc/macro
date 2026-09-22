@@ -239,8 +239,15 @@ export type TaggedSearchResult1 =
 /**
  * The document sub type enum represents all values of document sub types.
  * These values should match the `document_sub_type_value` table in macrodb.
+ *
+ * Wire, database, and `Display` spellings are all `snake_case` so a
+ * multi-word variant serializes identically in every system.
  */
-export type DocumentSubType = 'task' | 'snippet' | 'skill';
+export type DocumentSubType =
+  | 'task'
+  | 'snippet'
+  | 'skill'
+  | 'initiative_description';
 /**
  * Viewer-relative attendance status for a call record.
  * Serializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.
@@ -584,7 +591,7 @@ export type EntityItem =
       fileType?: string | null;
       /**
        * The document's sub type: "task" for Macro tasks, "snippet" for snippets,
-       * "skill" for skills.
+       * "skill" for skills, "initiative_description" for an initiative's description.
        */
       subType?: string | null;
       /**
@@ -5503,7 +5510,7 @@ export interface ReadSpreadsheet {
   includeStyles?: boolean | null;
 }
 /**
- * Rename an existing channel. Requires the current user to be a channel admin or owner. Direct-message channels cannot be renamed. Use only when the user asks to rename a channel.
+ * Rename an existing channel. Requires the current user to be an active channel participant. Direct-message channels cannot be renamed. Use only when the user asks to rename a channel.
  */
 export interface RenameChannel {
   /**
@@ -6073,6 +6080,40 @@ export interface UpdateThreadLabelsResponse {
    * A human-readable summary of the operation.
    */
   summary: string;
+}
+/**
+ * Upload an existing file to Macro from base64-encoded bytes, up to 25 MiB decoded. Use for PDFs, images, Office files, and other files; use CreateDocument for generated text or native Macro spreadsheets. Encode actual file bytes programmatically; never invent or transcribe binary content. Returns a document ID after the bytes are uploaded; preview and indexing may finish asynchronously. Does not read local paths or fetch URLs.
+ */
+export interface UploadFile {
+  /**
+   * Filename including its extension, for example report.pdf. Do not include a directory path.
+   */
+  fileName: string;
+  /**
+   * Standard padded base64 of the exact file bytes (maximum 25 MiB decoded). No data URL prefix or whitespace. Prefer constructing this argument programmatically from the file.
+   */
+  contentBase64: string;
+  /**
+   * Optional destination project (folder) ID. Requires edit access. Omit to upload to the user's top-level files.
+   */
+  projectId?: string | null;
+}
+/**
+ * Metadata for an uploaded file. Does not echo the file contents.
+ */
+export interface UploadFileResponse {
+  /**
+   * ID of the new Macro document.
+   */
+  documentId: string;
+  /**
+   * Uploaded filename, including its extension.
+   */
+  fileName: string;
+  /**
+   * Number of uploaded bytes.
+   */
+  sizeBytes: number;
 }
 /**
  * Fetch the contents of a web page using Claude's built-in web fetch tool.

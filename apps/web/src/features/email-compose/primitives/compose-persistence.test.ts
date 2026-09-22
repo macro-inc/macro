@@ -288,3 +288,44 @@ it('uses the captured inbox for attachment upload when a sender switch queues be
   ).toBe('other');
   root.dispose();
 });
+
+it('retains the thread identity when undo reopens a standalone draft from its snapshot', async () => {
+  const context = createComposeContext();
+  vi.mocked(context.delivery.sendMessage).mockResolvedValue(response);
+  vi.mocked(context.drafts.saveDraft).mockResolvedValue(response);
+  vi.mocked(context.delivery.undoSend).mockImplementation(async (input) => {
+    await input.onUndone();
+  });
+  let reopened: ReturnType<typeof mountEmailComposer> | undefined;
+  const root = mountEmailComposer(context, {
+    showDraft: (draftId) => {
+      reopened = mountEmailComposer(context, undefined, { draftId });
+    },
+  });
+  try {
+    root.edit('Restore this draft');
+    root.state.context.onSend();
+    await vi.advanceTimersByTimeAsync(0);
+    root.dispose();
+    const notice = vi
+      .mocked(context.notices.feedback.success)
+      .mock.calls.find(([message]) => message === 'Email sent');
+    expect(notice?.[1]?.actions).toHaveLength(1);
+    notice?.[1]?.actions?.[0].onClick();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(reopened).toBeDefined();
+    reopened?.edit('Edited after undo');
+    await vi.advanceTimersByTimeAsync(600);
+    expect(context.drafts.saveDraft).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        draft: expect.objectContaining({
+          db_id: 'saved-id',
+          thread_db_id: 'thread',
+        }),
+      })
+    );
+  } finally {
+    root.dispose();
+    reopened?.dispose();
+  }
+});

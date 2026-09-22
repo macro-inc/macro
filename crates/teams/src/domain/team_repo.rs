@@ -49,8 +49,8 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Result<bool, TeamError>> + Send;
 
     /// Creates a new team with the provided normalized slug. `subscription_id` is `None` for
-    /// free teams (capped at [`crate::domain::model::FREE_TEAM_MAX_MEMBERS`] members).
-    /// `owner_plan` is the plan the owner's own seat is already billed at.
+    /// free teams. Membership is not capped by team size. `owner_plan` is the plan the owner's
+    /// own seat is already billed at.
     fn create_team(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -336,8 +336,8 @@ pub trait TeamMembersService: Clone + Send + Sync + 'static {
 
 /// The TeamService defines a set of actions to perform on the teams
 pub trait TeamService: Clone + Send + Sync + 'static {
-    /// Creates a new team. `subscription_id` is `None` for free teams
-    /// (capped at [`crate::domain::model::FREE_TEAM_MAX_MEMBERS`] members).
+    /// Creates a new team. `subscription_id` is `None` for free teams.
+    /// Membership is not capped by team size.
     fn create_team(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -533,8 +533,7 @@ pub trait TeamService: Clone + Send + Sync + 'static {
     /// roles / channel side effects as `join_team`.
     ///
     /// Returns the new team member, or None when no team matched or the
-    /// user could not be joined (already a member, team at its seat cap,
-    /// ...).
+    /// user is already on a team. Membership is not capped by plan or team size.
     fn try_join_team_by_domain(
         &self,
         user_id: &MacroUserIdStr<'_>,

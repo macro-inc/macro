@@ -67,15 +67,30 @@ where
             // Nothing is attached, so get this session onto a transport and
             // retry against it. Same id: the first attempt never reached the
             // wire.
+            Err(error @ AgentSessionError::Disconnected(_))
+                if matches!(action, AgentAction::RespondToPermission(_)) =>
+            {
+                return Err(error.into());
+            }
             Err(AgentSessionError::Disconnected(_)) => {
                 let session = self.sessions.get_session(session_id).await?;
+                let permission_policy = self.permission_policy_for(session.bot_id).await;
                 if AgentKind::for_session(session.bot_id, &session.harness).is_managed() {
                     let container = self.containers.resume(session_id).await?;
                     let mcp_servers = self
-                        .resumed_mcp_servers(session_id, &session.owner_id, &session.mcp_servers)
+                        .resumed_mcp_servers(
+                            session_id,
+                            session.owner_user()?,
+                            &session.mcp_servers,
+                        )
                         .await?;
                     self.sessions
-                        .attach_session(session_id, container.mcp_servers(mcp_servers))
+                        .attach_session(
+                            session_id,
+                            container
+                                .mcp_servers(mcp_servers)
+                                .permission_policy(permission_policy),
+                        )
                         .await?;
                 } else {
                     // An external runtime is not ours to start - only its
@@ -84,7 +99,7 @@ where
                     // yet. That is the ordinary case: sessions bind when they
                     // are prompted, not when the runtime dials, so the first
                     // prompt after a reconnect is what restores the session.
-                    let Some(attachment) = self.runtimes.bind(session.bot_id, session_id).await
+                    let Some(mut attachment) = self.runtimes.bind(session.bot_id, session_id).await
                     else {
                         // Kept in the session vocabulary so transports report
                         // it as a disconnect, not an internal error.
@@ -92,11 +107,14 @@ where
                             session_id,
                         )));
                     };
+                    if session.harness == harness_id::MACROD_HARNESS_SLUG {
+                        attachment = attachment.initial_model(session.model.clone());
+                    }
                     let egress = self
                         .egress
                         .provision(
                             session_id,
-                            &session.owner_id,
+                            session.owner_user()?,
                             &AgentMcpServers::Selected {
                                 servers: Vec::new(),
                             },
@@ -108,7 +126,9 @@ where
                     self.sessions
                         .attach_session(
                             session_id,
-                            attachment.mcp_servers(vec![egress.sandbox.internal_mcp_server()]),
+                            attachment
+                                .permission_policy(permission_policy)
+                                .mcp_servers(vec![egress.sandbox.internal_mcp_server()]),
                         )
                         .await?;
                 }

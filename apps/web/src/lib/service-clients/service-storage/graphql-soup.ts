@@ -21,6 +21,7 @@ import {
 import { registerCacheHost } from '@graphql-cache/lifecycle';
 import { getBrowserTursoCacheRolloutDecision } from '@graphql-cache/rollout';
 import { getOrCreateCacheScope } from '@graphql-cache/scope';
+import { Telemetry } from '@macro-inc/observability';
 import { notificationStateFromGraphql } from '@notifications/notification-state';
 import { getMacroApiToken } from '@service-auth/fetch';
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
@@ -39,6 +40,7 @@ import {
   createClient,
   type DocumentInput,
   fetchExchange,
+  type Operation,
   type RequestPolicy,
   subscriptionExchange,
 } from '@urql/core';
@@ -68,6 +70,7 @@ import {
   type SoupPropertyFieldsFragment,
   type SoupQuery,
 } from './graphql/generated/graphql';
+import { shouldRetryGraphqlMutation } from './graphql-mutation-retry';
 import {
   createGraphqlSoupSubscriptionsLifecycle,
   createGraphqlSoupWebSocketUrlResolver,
@@ -262,7 +265,9 @@ const graphqlSoupClient = createClient({
   preferGetMethod: false,
 });
 
-function createGraphqlSoupWebSocketClient(): GraphqlWsClient {
+function createGraphqlSoupWebSocketClient(
+  onConnected: () => void
+): GraphqlWsClient {
   const resolveWebSocketUrl = createGraphqlSoupWebSocketUrlResolver({
     dssHost,
     bearerTokenAuth: ENABLE_BEARER_TOKEN_AUTH,
@@ -277,6 +282,7 @@ function createGraphqlSoupWebSocketClient(): GraphqlWsClient {
   return createGraphqlWsClient({
     url: resolveWebSocketUrl,
     retryAttempts: SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS,
+    on: { connected: onConnected },
     shouldRetry: shouldRetryGraphqlSoupWebSocket,
   });
 }
@@ -312,8 +318,10 @@ function disposeUncachedRealtimeClient(): void {
 function getUncachedRealtimeClient(): Client {
   if (uncachedRealtimeClient) return uncachedRealtimeClient;
 
-  const websocketClient = createGraphqlSoupWebSocketClient();
   const subscriptionsLifecycle = createGraphqlSoupSubscriptionsLifecycle();
+  const websocketClient = createGraphqlSoupWebSocketClient(
+    subscriptionsLifecycle.connected
+  );
   const client = createClient({
     url: `${dssHost}/items/soup/graphql`,
     preferGetMethod: false,
@@ -395,6 +403,31 @@ export function getGraphqlSoupClient(): Client {
   if (cachedClient) return cachedClient;
   disposeUncachedRealtimeClient();
   cachedClient = (() => {
+    const reportCacheError = (
+      error: unknown,
+      phase: 'initialization' | 'operation',
+      operationKind?: Operation['kind']
+    ) => {
+      try {
+        // Navigation deliberately rejects outstanding reads. Do not turn that
+        // expected shutdown into an error; unexpected disposal still reports.
+        if (
+          error instanceof Error &&
+          error.message === 'cache worker host was disposed for page navigation'
+        )
+          return;
+        // Caught cache failures never reach window.unhandledrejection. Report
+        // them through the Datadog-bound exporter without query/variable data.
+        Telemetry.error(error, {
+          'error.source': 'graphql-cache',
+          'cache.backend': native ? 'native' : 'turso-wasm-opfs',
+          'cache.phase': phase,
+          ...(operationKind ? { 'cache.operation_kind': operationKind } : {}),
+        });
+      } catch {
+        // Observability must not prevent network fallback or cache cleanup.
+      }
+    };
     let host: CacheHost | undefined;
     let websocketClient: GraphqlWsClient | undefined;
     let unregisterHost: () => void = () => undefined;
@@ -409,6 +442,7 @@ export function getGraphqlSoupClient(): Client {
     };
     const onInitializationError = (error: Error) => {
       if (!host || cachedCacheHost !== host) return;
+      reportCacheError(error, 'initialization');
       fallbackAfterInitializationFailure();
       toast.failure('Local cache unavailable', {
         subtext: 'Macro will continue without local caching for this session.',
@@ -427,7 +461,9 @@ export function getGraphqlSoupClient(): Client {
             onInitializationError,
             rolloutCohort: rollout.cohort,
           });
-      const graphqlWsClient = createGraphqlSoupWebSocketClient();
+      const graphqlWsClient = createGraphqlSoupWebSocketClient(
+        subscriptionsLifecycle.connected
+      );
       websocketClient = graphqlWsClient;
       const client = createClient({
         url: `${dssHost}/items/soup/graphql`,
@@ -435,6 +471,12 @@ export function getGraphqlSoupClient(): Client {
         preferGetMethod: false,
         exchanges: [
           normalizedCacheExchange(host, {
+            onCacheError: (error, operation) => {
+              // Initialization failure already reports before retiring the host;
+              // rejected in-flight operations must not report it again.
+              if (!host || cachedCacheHost !== host) return;
+              reportCacheError(error, 'operation', operation.kind);
+            },
             entityResolvers: {
               GraphqlUser: {
                 emailThread: entityFromArgument('GraphqlSoupEmailThread', [
@@ -449,9 +491,9 @@ export function getGraphqlSoupClient(): Client {
             extractIdentity: (data) =>
               (data as Partial<SoupQuery | GroupSoupQuery> | undefined)?.user
                 ?.id,
-            // Transport failures remain queued with their optimistic layer;
-            // GraphQL application errors are permanent and roll back.
-            shouldRetryMutation: (error) => error.networkError != null,
+            // Preserve the optimistic layer on transport failures and on
+            // application failures the server explicitly allows us to retry.
+            shouldRetryMutation: shouldRetryGraphqlMutation,
           }),
           graphqlSoupSubscriptionExchange(graphqlWsClient),
           fetchExchange,
@@ -466,6 +508,7 @@ export function getGraphqlSoupClient(): Client {
       browserCacheClientActivated = !native;
       return client;
     } catch (error) {
+      reportCacheError(error, 'initialization');
       cleanup();
       cachedCacheHost = undefined;
       cachedCacheCleanup = undefined;
@@ -603,6 +646,9 @@ function mapDocumentSubType(subType: GraphqlSoupDocument['subType']) {
     .with({ __typename: 'GraphqlSkillSubType' }, () => ({
       type: 'skill' as const,
     }))
+    .with({ __typename: 'GraphqlInitiativeDescriptionSubType' }, () => {
+      return undefined;
+    })
     .exhaustive();
 }
 
@@ -728,6 +774,8 @@ function mapGraphqlNotificationMetadata(
             text: metadata.mentionedInDocumentCommentText,
             senderProfilePictureUrl:
               metadata.mentionedInDocumentCommentSenderProfilePictureUrl,
+            senderDisplayName:
+              metadata.mentionedInDocumentCommentSenderDisplayName,
           },
         }) satisfies NotifEventMember<'mentioned_in_document_comment'>
     )
@@ -748,6 +796,8 @@ function mapGraphqlNotificationMetadata(
             text: metadata.repliedToDocumentCommentThreadText,
             senderProfilePictureUrl:
               metadata.repliedToDocumentCommentThreadSenderProfilePictureUrl,
+            senderDisplayName:
+              metadata.repliedToDocumentCommentThreadSenderDisplayName,
           },
         }) satisfies NotifEventMember<'replied_to_document_comment_thread'>
     )
@@ -768,6 +818,7 @@ function mapGraphqlNotificationMetadata(
             text: metadata.commentedOnDocumentText,
             senderProfilePictureUrl:
               metadata.commentedOnDocumentSenderProfilePictureUrl,
+            senderDisplayName: metadata.commentedOnDocumentSenderDisplayName,
           },
         }) satisfies NotifEventMember<'commented_on_document'>
     )
@@ -1254,6 +1305,14 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
             name: entity.sessionName,
             ownerId: entity.ownerId,
             botId: entity.botId,
+            harness: entity.harness,
+            repoUrl: entity.repoUrl,
+            repoBranch: entity.repoBranch,
+            pullRequestUrl: entity.pullRequestUrl,
+            workingBranch: entity.workingBranch,
+            pullRequestState: entity.pullRequestState?.toLowerCase() ?? null,
+            pullRequestId: entity.pullRequestId,
+            turnState: entity.turnState,
             bot: entity.bot,
             threadId: entity.threadId,
             status: entity.status,

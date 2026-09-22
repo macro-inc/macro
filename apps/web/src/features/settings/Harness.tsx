@@ -1,9 +1,7 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { useCodexAgentsAccess } from '@core/codex/flag';
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
 import { isLargeModelCatalog } from '@core/component/AI/component/input/modelCatalog';
 import { toast } from '@core/component/Toast/Toast';
-import { claudeCloud } from '@core/constant/featureFlags';
+import { MACRO_HARNESS_NAME } from '@core/constant/macroAgent';
 import { ThrownResultError } from '@core/util/result';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
 import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
@@ -45,8 +43,6 @@ function lastConnectedText(harness: RegisteredHarness): string {
 
 /** Settings UI for choosing and configuring the available agent harnesses. */
 export function Harness() {
-  const canUseCodex = useCodexAgentsAccess();
-  const claudeCloudFlag = useFeatureFlag(claudeCloud);
   const [cursorApiKey, setCursorApiKey] = createSignal('');
   const cursorStatus = useCursorApiKeyStatusQuery();
   const saveCursorApiKey = useSaveCursorApiKey();
@@ -168,22 +164,20 @@ export function Harness() {
           </HarnessIcon>
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2">
-              <h2 class="text-sm font-medium text-ink">In-memory</h2>
+              <h2 class="text-sm font-medium text-ink">{MACRO_HARNESS_NAME}</h2>
               <span class="rounded-full bg-success-bg px-2 py-0.5 text-[11px] font-medium text-success">
                 Built in
               </span>
             </div>
             <p class="mt-1 text-sm text-ink-muted">
-              Macro's in-memory harness runs agents directly in your workspace.
-              It is ready to use and does not require any configuration. This is
-              not a coding harness.
+              Macro Agent runs directly in your workspace. It is ready to use
+              and does not require any configuration. This is not a coding
+              harness.
             </p>
           </div>
         </section>
 
-        <Show when={claudeCloudFlag().enabled}>
-          <ClaudeConnection />
-        </Show>
+        <ClaudeConnection />
 
         <section class="flex gap-4 px-6 py-5">
           <HarnessIcon>
@@ -370,9 +364,7 @@ export function Harness() {
           </div>
         </section>
 
-        <Show when={canUseCodex()}>
-          <CodexHarness />
-        </Show>
+        <CodexHarness />
 
         <section class="flex gap-4 px-6 py-5">
           <HarnessIcon>

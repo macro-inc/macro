@@ -36,7 +36,9 @@ export function EmailThread(props: EmailThreadProps) {
   const contacts = useContacts();
   const viewerEmail = useEmail();
   const user = useUserContext();
-  const compose = createEmailComposeContext();
+  const compose = createEmailComposeContext({
+    threadTransport: () => query.transport,
+  });
   const threadContext: EmailThreadContext = {
     source,
     viewerEmail,

@@ -91,6 +91,11 @@ export type AddPinRequest = {
  */
 export type Agent = {
     /**
+     * Whether the agent's sessions approve ACP permission requests without
+     * asking. `None` means always prompt. Bypass also requires the harness's opt-in.
+     */
+    auto_accept_permissions?: boolean | null;
+    /**
      * The bot identity used for mentions and channel participation.
      */
     bot: Bot;
@@ -127,11 +132,12 @@ export type Agent = {
  * frame, and read back off that frame as `request_id` on the folded message
  * it derives.
  *
- * Minted only by the server at accept time, as a v7 uuid so ids sort by mint
- * time. On the wire and in JSON it is the bare uuid, and a uuid-shaped
- * request id is the whole ownership test: the server is the only writer of
- * runtime-bound frames. The machine's own handshake request ids
- * (`agent_session:{session}:{n}`) are not uuids and stay `None`.
+ * A v7 uuid, so ids sort by mint time. Minted by the server at accept time,
+ * or by a client that speculated the action and named it in the control
+ * request - either way the server is the only writer of runtime-bound
+ * frames, so a uuid-shaped request id remains the whole ownership test. The
+ * machine's own handshake request ids (`agent_session:{session}:{n}`) are
+ * not uuids and stay `None`.
  */
 export type AgentActionId = string;
 
@@ -175,6 +181,11 @@ export type AgentMcpServers = {
 };
 
 /**
+ * Last synchronized state of a session's linked GitHub pull request.
+ */
+export type AgentPullRequestState = 'open' | 'draft' | 'closed' | 'merged';
+
+/**
  * Filters for agent sessions.
  */
 export type AgentSessionFilters = {
@@ -189,8 +200,9 @@ export type AgentSessionFilters = {
      */
     include?: boolean;
     /**
-     * Filter by session owner. Examples: ['macro|user1@user.com']. Empty to
-     * include every owner.
+     * Filter by session owner principal — a user ('macro|user1@user.com'), a bot
+     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
+     * owner.
      */
     owners?: Array<string>;
 };
@@ -1122,6 +1134,10 @@ export type ApiThreadReply = {
  */
 export type ApprovePairingRequest = {
     /**
+     * Whether agents may bypass ACP permission requests on this harness.
+     */
+    allow_permission_bypass?: boolean;
+    /**
      * Display name override. Defaults to the daemon's requested name.
      */
     name?: string | null;
@@ -1283,6 +1299,8 @@ export type BasicDocumentSubType = {
     type: 'snippet';
 } | {
     type: 'skill';
+} | {
+    type: 'initiative_description';
 };
 
 export type BomPart = {
@@ -2913,7 +2931,10 @@ export type ChatFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by chat owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
+     * Filter by chat owner principal — a user ('macro|user1@user.com'), a bot
+     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
+     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * search all owners.
      */
     owners?: Array<string>;
     /**
@@ -3073,6 +3094,11 @@ export type CountedReaction = {
  * Request to create a persisted AI agent.
  */
 export type CreateAgentRequest = {
+    /**
+     * Whether the agent's sessions approve ACP permission requests without
+     * asking. Omit to always prompt.
+     */
+    auto_accept_permissions?: boolean | null;
     /**
      * Optional avatar URL or data URL.
      */
@@ -3469,7 +3495,8 @@ export type CreateEntityMentionResponse = {
  */
 export type CreateInitiativeRequest = {
     /**
-     * Optional description.
+     * Initial markdown for the description document. Not stored on the initiative; later
+     * edits happen in the document editor.
      */
     description?: string | null;
     /**
@@ -3537,6 +3564,10 @@ export type CreateMarkdownDocumentResponse = {
  * The daemon serializes this, so both derives are used.
  */
 export type CreatePairingRequest = {
+    /**
+     * Daemon operator consent ceiling. Omitted by older clients; web approval decides.
+     */
+    allow_permission_bypass?: boolean | null;
     /**
      * Display-only description of the machine, e.g. `eric@macbook / darwin`.
      */
@@ -4329,6 +4360,11 @@ export type DeleteUnthreadedPdfAnchorRequest = {
 };
 
 /**
+ * Id of the markdown document that holds an initiative's description.
+ */
+export type DescriptionDocumentId = string;
+
+/**
  * Returns basic information of a document used for some db queries
  */
 export type DocumentBasic = {
@@ -4386,7 +4422,7 @@ export type DocumentContentUploadedMetadata = {
     /**
      * The owner of the document (used by the extractor to resolve S3 keys).
      */
-    owner: MacroUserIdStr;
+    owner: string;
 };
 
 /**
@@ -4405,7 +4441,7 @@ export type DocumentCopiedMetadata = {
     /**
      * The owner of the new copy (the copier).
      */
-    owner: MacroUserIdStr;
+    owner: string;
     /**
      * Project the copy belongs to, when any.
      */
@@ -4447,7 +4483,7 @@ export type DocumentCreatedMetadata = {
     /**
      * The owner (creator) of the document.
      */
-    owner: MacroUserIdStr;
+    owner: string;
     /**
      * Project the document was created in, when any.
      */
@@ -4502,7 +4538,10 @@ export type DocumentFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by document owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
+     * Filter by document owner principal — a user ('macro|user1@user.com'), a bot
+     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
+     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * search all owners.
      */
     owners?: Array<string>;
     /**
@@ -4712,6 +4751,8 @@ export type DocumentPreviewDataSubType = {
     type: 'snippet';
 } | {
     type: 'skill';
+} | {
+    type: 'initiative_description';
 };
 
 /**
@@ -4823,8 +4864,11 @@ export type DocumentStorageServiceApiVersion = 'v1' | 'v2';
 /**
  * The document sub type enum represents all values of document sub types.
  * These values should match the `document_sub_type_value` table in macrodb.
+ *
+ * Wire, database, and `Display` spellings are all `snake_case` so a
+ * multi-word variant serializes identically in every system.
  */
-export type DocumentSubType = 'task' | 'snippet' | 'skill';
+export type DocumentSubType = 'task' | 'snippet' | 'skill' | 'initiative_description';
 
 /**
  * Metadata for [`DocumentTopicEvent::SyncContentUpdated`].
@@ -4844,7 +4888,7 @@ export type DocumentSyncContentUpdatedMetadata = {
      */
     document_version_id?: string | null;
     /**
-     * File type of the sync document (markdown today).
+     * File type of the sync document, resolved by the document backend.
      */
     file_type: FileType;
     on_behalf_of?: null | MacroUserIdStr;
@@ -4943,7 +4987,7 @@ export type DocumentUpdatedMetadata = {
     /**
      * The owner of the document.
      */
-    owner: MacroUserIdStr;
+    owner: string;
     /**
      * Project id before the update.
      */
@@ -6257,6 +6301,10 @@ export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewe
  */
 export type Harness = {
     /**
+     * Whether agents may bypass ACP permission requests on this harness.
+     */
+    allow_permission_bypass?: boolean;
+    /**
      * Whether the daemon currently holds a runtime connection.
      */
     connected: boolean;
@@ -6428,9 +6476,9 @@ export type InitiativeDetail = {
      */
     createdAt: string;
     /**
-     * Optional description.
+     * The markdown document holding the description; open it in the editor.
      */
-    description?: string | null;
+    descriptionDocumentId: DescriptionDocumentId;
     /**
      * Opaque identifier.
      */
@@ -6485,9 +6533,9 @@ export type InitiativeList = {
  */
 export type InitiativeSummary = {
     /**
-     * Optional description.
+     * The markdown document holding the description; open it in the editor.
      */
-    description?: string | null;
+    descriptionDocumentId: DescriptionDocumentId;
     /**
      * Opaque identifier.
      */
@@ -7095,6 +7143,10 @@ export type PairingDetails = {
      */
     host?: string | null;
     /**
+     * Daemon operator consent ceiling; false forbids bypass at approval.
+     */
+    requested_allow_permission_bypass?: boolean | null;
+    /**
      * Harness display name the daemon asked for.
      */
     requested_name: string;
@@ -7648,7 +7700,10 @@ export type ProjectFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by project owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
+     * Filter by project owner principal — a user ('macro|user1@user.com'), a bot
+     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
+     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * search all owners.
      */
     owners?: Array<string>;
     /**
@@ -7840,39 +7895,6 @@ export type RecentlyDeletedResponseData = {
      * The items returned from the call
      */
     items: Array<Item>;
-};
-
-/**
- * A source channel thread that mentions the requested document.
- */
-export type ReferencedThread = {
-    /**
-     * Whether this viewer currently has permission to reply in the source channel.
-     */
-    can_reply: boolean;
-    /**
-     * Source channel's current display name, returned only after access checks.
-     */
-    channel_name?: string | null;
-    /**
-     * Source parent used by the common message reader and mutations.
-     */
-    parent: MessageParent;
-    /**
-     * Source root identity; discovery does not copy its message content.
-     */
-    root_id: string;
-};
-
-/**
- * Authorized source threads, deduplicated by root.
- */
-export type ReferencedThreadPage = {
-    next_cursor?: null | MessageCursor;
-    /**
-     * Accessible channel discussions mentioning the document.
-     */
-    threads: Array<ReferencedThread>;
 };
 
 /**
@@ -8420,9 +8442,8 @@ export type SimpleMention = {
 /**
  * An agent session as displayed in Soup.
  *
- * Mirrors [`crate::chat::SoupChat`]: an agent session is the coding-agent
- * counterpart of a chat, so it carries the same identity, ownership, and
- * recency fields plus the session's last known status.
+ * Includes the persisted runtime and repository metadata needed to render
+ * coding and non-coding sessions without fetching each session separately.
  */
 export type SoupAgentSessionSoupPropertiesField = {
     /**
@@ -8439,6 +8460,10 @@ export type SoupAgentSessionSoupPropertiesField = {
      */
     createdAt: string;
     /**
+     * The runtime snapshotted when the session was created.
+     */
+    harness: string;
+    /**
      * The agent session uuid
      */
     id: string;
@@ -8450,6 +8475,23 @@ export type SoupAgentSessionSoupPropertiesField = {
      * Who the session belongs to
      */
     ownerId: string;
+    /**
+     * The linked pull request's Macro entity, when visible to the viewer.
+     */
+    pullRequestId?: string | null;
+    pullRequestState?: null | AgentPullRequestState;
+    /**
+     * The persisted pull request associated with the session.
+     */
+    pullRequestUrl?: string | null;
+    /**
+     * The starting branch selected for this session, not its current branch.
+     */
+    repoBranch?: string | null;
+    /**
+     * The repository the session works with, when one was selected.
+     */
+    repoUrl?: string | null;
     /**
      * The session's last known status.
      *
@@ -8463,6 +8505,10 @@ export type SoupAgentSessionSoupPropertiesField = {
      */
     threadId?: string | null;
     /**
+     * Last persisted fold turn state. Absent until an older session next runs.
+     */
+    turnState?: string | null;
+    /**
      * The time the session was last modified
      */
     updatedAt: string;
@@ -8470,6 +8516,10 @@ export type SoupAgentSessionSoupPropertiesField = {
      * The time the session was last viewed by the requesting user
      */
     viewedAt?: string | null;
+    /**
+     * Last captured working branch, when the runtime has reported one.
+     */
+    workingBranch?: string | null;
 };
 
 /**
@@ -9005,6 +9055,8 @@ export type SoupDocumentSubType = {
     type: 'snippet';
 } | {
     type: 'skill';
+} | {
+    type: 'initiative_description';
 };
 
 /**
@@ -9442,7 +9494,7 @@ export type SoupProjectSoupPropertiesField = {
      */
     name: string;
     /**
-     * The user id of who created the project
+     * The owner of the project
      */
     ownerId: string;
     /**
@@ -10076,6 +10128,11 @@ export type UnthreadedPdfUuidRequest = {
  */
 export type UpdateAgentRequest = {
     /**
+     * Whether the agent's sessions approve ACP permission requests without
+     * asking. Omit to always prompt.
+     */
+    auto_accept_permissions?: boolean | null;
+    /**
      * Optional avatar URL or data URL.
      */
     avatar_url?: string | null;
@@ -10161,13 +10218,9 @@ export type UpdateCrmTeamSettingsRequest = {
 
 /**
  * Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`
- * present is a full replace.
+ * present is a full replace. The description is edited in its document, not here.
  */
 export type UpdateInitiativeRequest = {
-    /**
-     * Replacement description. `Some("")` clears it after trim.
-     */
-    description?: string | null;
     /**
      * Full replacement member list when present.
      */
@@ -15138,35 +15191,6 @@ export type EntityMessageLegacyResponses = {
 };
 
 export type EntityMessageLegacyResponse = EntityMessageLegacyResponses[keyof EntityMessageLegacyResponses];
-
-export type EntityMessageReferencesData = {
-    body?: never;
-    path: {
-        parent_type: string;
-        parent_id: string;
-    };
-    query?: {
-        /**
-         * Maximum number of roots.
-         */
-        limit?: number | null;
-        /**
-         * Last root's creation timestamp.
-         */
-        created_at?: string | null;
-        /**
-         * Last root's UUID.
-         */
-        cursor_id?: string | null;
-    };
-    url: '/messages/{parent_type}/{parent_id}/references';
-};
-
-export type EntityMessageReferencesResponses = {
-    200: ReferencedThreadPage;
-};
-
-export type EntityMessageReferencesResponse = EntityMessageReferencesResponses[keyof EntityMessageReferencesResponses];
 
 export type EntityMessageDeleteThreadData = {
     body?: never;

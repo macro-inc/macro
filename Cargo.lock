@@ -14,12 +14,16 @@ version = "0.1.0"
 dependencies = [
  "ai_toolset",
  "async-trait",
+ "bot_id",
+ "broadcast",
  "channel_sender",
  "chrono",
  "chrono-tz",
+ "futures",
  "kafka_util",
  "macro_db_migrator",
  "macro_event_broker",
+ "macro_event_topics",
  "macro_user_id",
  "model-entity",
  "rdkafka",
@@ -31,6 +35,8 @@ dependencies = [
  "sqlx",
  "strum 0.27.2",
  "tokio",
+ "tokio-retry",
+ "tokio-util",
  "tracing",
  "uuid",
  "workspace-hack",
@@ -174,6 +180,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent_changes"
+version = "0.1.0"
+dependencies = [
+ "agent_fold",
+ "agent_session",
+ "anyhow",
+ "aws-sdk-s3",
+ "axum",
+ "bot_id",
+ "chrono",
+ "dashmap",
+ "entity_access",
+ "github",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "macro_uuid",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "url",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "agent_egress"
 version = "0.1.0"
 dependencies = [
@@ -193,6 +232,7 @@ dependencies = [
  "macro_auth",
  "macro_db_client",
  "macro_user_id",
+ "model_owner",
  "pipedream_mcp",
  "rand 0.9.4",
  "reqwest 0.13.4",
@@ -280,6 +320,7 @@ dependencies = [
  "mockall",
  "model-entity",
  "model_notifications",
+ "model_owner",
  "model_user",
  "notification",
  "opentelemetry",
@@ -295,6 +336,7 @@ dependencies = [
  "tokio",
  "tokio-tungstenite 0.28.0",
  "tokio-util",
+ "tower 0.5.3",
  "tracing",
  "tracing-opentelemetry",
  "url",
@@ -308,6 +350,7 @@ name = "agent_harness_service"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
+ "agent_changes",
  "agent_egress",
  "agent_fold",
  "agent_harness",
@@ -396,6 +439,7 @@ dependencies = [
  "ai_usage",
  "anyhow",
  "async-trait",
+ "attachment",
  "axum",
  "bot_id",
  "bytes",
@@ -410,6 +454,9 @@ dependencies = [
  "mcp_select",
  "mcp_toolset",
  "memory",
+ "model-entity",
+ "model_owner",
+ "non_empty",
  "opentelemetry",
  "opentelemetry_sdk",
  "prompt",
@@ -486,6 +533,7 @@ dependencies = [
  "model-entity",
  "model_owner",
  "model_user",
+ "models_permissions",
  "non_empty",
  "opentelemetry",
  "opentelemetry_sdk",
@@ -493,6 +541,7 @@ dependencies = [
  "schemars 1.2.1",
  "serde",
  "serde_json",
+ "share_permission_db_utils",
  "sqlx",
  "strum 0.27.2",
  "thiserror 2.0.18",
@@ -529,6 +578,7 @@ dependencies = [
  "macro_uuid",
  "messages",
  "mockall",
+ "model_owner",
  "serde",
  "serde_json",
  "sqlx",
@@ -2887,7 +2937,6 @@ dependencies = [
  "thiserror 2.0.18",
  "utoipa",
  "uuid",
- "workspace-hack",
 ]
 
 [[package]]
@@ -3099,7 +3148,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.16"
+version = "0.6.18"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -3206,6 +3255,54 @@ dependencies = [
  "tracing",
  "urlencoding",
  "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "calendar_service"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "authentication_service_client",
+ "aws-sdk-secretsmanager",
+ "aws-sdk-sqs",
+ "axum",
+ "calendar_events",
+ "chrono",
+ "connection_gateway_client",
+ "email_db_client",
+ "email_utils",
+ "futures",
+ "google_token",
+ "macro_auth",
+ "macro_authorization",
+ "macro_aws_config",
+ "macro_config",
+ "macro_cors",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_env_var",
+ "macro_event_broker",
+ "macro_queues",
+ "macro_service_urls",
+ "models_email",
+ "redis",
+ "reqwest 0.13.4",
+ "rootcause",
+ "secretsmanager_client",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "sqs_worker",
+ "subtle",
+ "tokio",
+ "tokio-util",
+ "tower 0.5.3",
+ "tower-http",
+ "tracing",
+ "utoipa",
+ "utoipa-swagger-ui",
  "uuid",
  "workspace-hack",
 ]
@@ -3497,6 +3594,7 @@ dependencies = [
  "model-entity",
  "model-error-response",
  "model_notifications",
+ "model_owner",
  "models_pagination",
  "models_permissions",
  "non_empty",
@@ -3965,6 +4063,7 @@ dependencies = [
  "macro_user_id",
  "model-entity",
  "model_notifications",
+ "model_owner",
  "model_user",
  "models_pagination",
  "models_properties",
@@ -5065,9 +5164,9 @@ dependencies = [
  "macro_env_var",
  "macro_event_broker",
  "macro_queues",
- "macro_user_id",
  "macro_uuid",
  "model",
+ "model_owner",
  "projects",
  "serde",
  "serde_json",
@@ -5421,6 +5520,7 @@ name = "document_storage_service"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_changes",
  "agent_session",
  "ai_tools",
  "ai_usage",
@@ -5506,6 +5606,7 @@ dependencies = [
  "model",
  "model-entity",
  "model_notifications",
+ "model_owner",
  "model_user",
  "models_bulk_upload",
  "models_dcs",
@@ -5584,6 +5685,7 @@ version = "0.1.0"
 dependencies = [
  "schemars 1.2.1",
  "serde",
+ "serde_json",
  "sqlx",
  "strum 0.27.2",
  "thiserror 2.0.18",
@@ -5722,7 +5824,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "unicode-segmentation",
- "urlencoding",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -5751,6 +5852,7 @@ dependencies = [
  "macro_sha_count_client",
  "macro_uuid",
  "model",
+ "model_owner",
  "redis",
  "s3_client",
  "s3_key",
@@ -5982,6 +6084,7 @@ dependencies = [
  "filter_ast",
  "frecency",
  "futures",
+ "google_token",
  "item_filters",
  "lexical_client",
  "lol_html",
@@ -6180,6 +6283,7 @@ dependencies = [
  "frecency",
  "futures",
  "gmail_client",
+ "google_token",
  "html-escape",
  "http-body-util",
  "infer 0.19.0",
@@ -6403,6 +6507,7 @@ dependencies = [
  "model",
  "model-entity",
  "model-error-response",
+ "model_owner",
  "model_user",
  "models_entity_access_management",
  "models_permissions",
@@ -7410,11 +7515,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "google_token"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "authentication_service_client",
+ "email_utils",
+ "redis",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "graphql_activity"
 version = "0.1.0"
 dependencies = [
  "activity",
  "async-graphql",
+ "async-stream",
  "chrono",
  "chrono-tz",
  "futures",
@@ -7425,6 +7543,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tokio-stream",
  "tracing",
  "uuid",
  "workspace-hack",
@@ -7457,6 +7576,7 @@ dependencies = [
  "macro_authorization",
  "macro_user_id",
  "model-entity",
+ "model_owner",
  "model_user",
  "models_properties",
  "rootcause",
@@ -7474,6 +7594,7 @@ dependencies = [
  "async-graphql",
  "chrono",
  "email",
+ "email_utils",
  "entity_access",
  "futures",
  "graphql_common",
@@ -7603,6 +7724,7 @@ dependencies = [
  "macro_user_id",
  "model-entity",
  "model_file_type",
+ "model_owner",
  "models_grouping",
  "models_pagination",
  "models_properties",
@@ -7632,6 +7754,7 @@ dependencies = [
  "item_filters",
  "macro_user_id",
  "model_file_type",
+ "model_owner",
  "notification_state",
  "serde",
  "serde_json",
@@ -9107,6 +9230,7 @@ dependencies = [
  "filter_ast",
  "macro_user_id",
  "model_file_type",
+ "model_owner",
  "nom 8.0.0",
  "non_empty",
  "notification_state",
@@ -9811,9 +9935,9 @@ dependencies = [
 
 [[package]]
 name = "loro"
-version = "1.13.7"
+version = "1.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1bec673c3332ede11cc58d5d88de55a01ba17cf28b0bd0feb66ca1c66fb757ad"
+checksum = "8e86dea63b66576db244cbc3a40bdb17517263c93f318e2fbe08aca3be1192cb"
 dependencies = [
  "enum-as-inner 0.6.1",
  "generic-btree",
@@ -9827,9 +9951,9 @@ dependencies = [
 
 [[package]]
 name = "loro-common"
-version = "1.13.1"
+version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b51042936156a1d537df8a38938ec8ed24b45de14530af933c1d02de39c9e056"
+checksum = "2146b353a56b0a743f8643725cb9f42dfe209665939b59db901ecea732a3ab29"
 dependencies = [
  "arbitrary",
  "enum-as-inner 0.6.1",
@@ -9857,9 +9981,9 @@ dependencies = [
 
 [[package]]
 name = "loro-internal"
-version = "1.13.7"
+version = "1.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b635801310e2047f74be15f58988f2f78e7874e77aa08643fe9e6eec356f6848"
+checksum = "8d5806b65ee68c3ae7891959dd968898860dab74fbf6498b312de9b548dce5ec"
 dependencies = [
  "append-only-bytes",
  "arref",
@@ -9904,9 +10028,9 @@ dependencies = [
 
 [[package]]
 name = "loro-kv-store"
-version = "1.13.7"
+version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b42b8d6d2c95abf67d7f50a60171759d693206796d7f8f03f3fe68e531c88794"
+checksum = "841e206d3749fd14f23e64985be230dad2b2199da1d381c44c3dd0d2b9583fcc"
 dependencies = [
  "bytes",
  "ensure-cov",
@@ -10613,6 +10737,7 @@ dependencies = [
  "foreign_entity",
  "frecency",
  "fusionauth",
+ "futures",
  "http 1.4.0",
  "lexical_client",
  "macro_auth",
@@ -10813,6 +10938,7 @@ dependencies = [
  "model",
  "model-entity",
  "model_notifications",
+ "model_owner",
  "models_pagination",
  "notification",
  "rootcause",
@@ -11003,6 +11129,7 @@ dependencies = [
  "model-entity",
  "model-error-response",
  "model_file_type",
+ "model_owner",
  "model_user",
  "models_bulk_upload",
  "models_pagination",
@@ -11064,6 +11191,7 @@ dependencies = [
  "macro_user_id",
  "mention_utils",
  "model-entity",
+ "model_owner",
  "models_pagination",
  "notification",
  "paste",
@@ -11089,7 +11217,6 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.18",
  "uuid",
- "workspace-hack",
 ]
 
 [[package]]
@@ -11292,6 +11419,7 @@ dependencies = [
  "macro_user_id",
  "model",
  "model-entity",
+ "model_owner",
  "models_pagination",
  "models_properties",
  "reminders",
@@ -13275,6 +13403,7 @@ dependencies = [
  "mockall",
  "model-entity",
  "model_notifications",
+ "model_owner",
  "models_permissions",
  "models_properties",
  "notification",
@@ -14599,6 +14728,7 @@ name = "s3_key"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "model_owner",
  "urlencoding",
  "workspace-hack",
 ]
@@ -14841,6 +14971,7 @@ dependencies = [
  "mention_utils",
  "model",
  "model_file_type",
+ "model_owner",
  "models_email",
  "models_opensearch",
  "models_properties",
@@ -15046,6 +15177,7 @@ dependencies = [
  "mockall",
  "model",
  "model-entity",
+ "model_owner",
  "models_email",
  "models_permissions",
  "models_properties",
@@ -15829,6 +15961,7 @@ name = "soup"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_changes",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -15858,6 +15991,7 @@ dependencies = [
  "mockall",
  "model-entity",
  "model-error-response",
+ "model_owner",
  "model_user",
  "models_grouping",
  "models_pagination",
@@ -15911,7 +16045,7 @@ dependencies = [
  "chrono",
  "document_sub_type",
  "item-filter-index",
- "macro_user_id",
+ "model_owner",
  "models_soup",
  "postcard",
  "predicate-index",
@@ -15940,6 +16074,7 @@ dependencies = [
  "macro_user_id",
  "messages",
  "model-entity",
+ "model_owner",
  "models_properties",
  "projects",
  "properties",
@@ -18523,6 +18658,7 @@ dependencies = [
  "macro_uuid",
  "messages",
  "model-error-response",
+ "model_owner",
  "model_user",
  "rate_limit",
  "rdkafka",

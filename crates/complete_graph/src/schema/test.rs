@@ -27,6 +27,7 @@ use macro_user_id::{
     user_id::{MacroUserId, MacroUserIdStr},
 };
 use model_entity::EntityType as ModelEntityType;
+use model_owner::Owner;
 use model_user::UserContext;
 use models_pagination::{Paginated, PaginatedCursor, SimpleSortMethod};
 use models_soup::{
@@ -87,7 +88,7 @@ fn soup_project(id: Uuid) -> SoupItem<()> {
     SoupItem::Project(SoupProject {
         id,
         name: format!("Project {id}"),
-        owner_id: MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
+        owner_id: Owner::from_principal_str(VALID_USER_ID).unwrap(),
         parent_id: None,
         created_at: Default::default(),
         updated_at: Default::default(),
@@ -102,7 +103,7 @@ fn soup_chat(id: Uuid) -> SoupItem<()> {
         id,
         name: format!("Chat {id}"),
         model: Some("openai/gpt-5.6".to_string()),
-        owner_id: MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
+        owner_id: Owner::from_principal_str(VALID_USER_ID).unwrap(),
         project_id: None,
         is_persistent: true,
         created_at: Default::default(),
@@ -117,7 +118,7 @@ fn grouped_document(id: Uuid) -> SoupItem<soup::domain::models::SoupPropertiesFi
     SoupItem::Document(SoupDocument {
         id,
         document_version_id: 1,
-        owner_id: MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
+        owner_id: Owner::from_principal_str(VALID_USER_ID).unwrap(),
         name: format!("Document {id}"),
         file_type: None,
         sha: None,
@@ -294,6 +295,7 @@ struct CountingEmailService {
     user_link_calls: Arc<AtomicUsize>,
     user_catalog_identities: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     seen_mutation_calls: Arc<Mutex<Vec<(MacroUserIdStr<'static>, Uuid)>>>,
+    unread_mutation_calls: Arc<Mutex<Vec<(MacroUserIdStr<'static>, Uuid)>>>,
     label_mutation_calls: Arc<Mutex<Vec<(MacroUserIdStr<'static>, Uuid, Uuid, bool)>>>,
 }
 
@@ -419,6 +421,23 @@ impl EmailService for CountingEmailService {
         Err(test_email_err())
     }
 
+    async fn save_draft_for_user(
+        &self,
+        _macro_id: MacroUserIdStr<'_>,
+        _link_id: Option<Uuid>,
+        _input: CreateDraftInput,
+    ) -> Result<email::domain::models::SavedUserDraft, EmailErr> {
+        Err(test_email_err())
+    }
+
+    async fn delete_draft_for_user(
+        &self,
+        _macro_id: MacroUserIdStr<'_>,
+        _draft_id: Uuid,
+    ) -> Result<email::domain::models::DeletedUserDraft, EmailErr> {
+        Err(test_email_err())
+    }
+
     async fn send_message(
         &self,
         _link: &Link,
@@ -450,6 +469,18 @@ impl EmailService for CountingEmailService {
         self.seen_mutation_calls
             .lock()
             .expect("seen mutation calls lock")
+            .push((macro_id, thread_id));
+        Ok(())
+    }
+
+    async fn mark_thread_unread(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+        thread_id: Uuid,
+    ) -> Result<(), EmailErr> {
+        self.unread_mutation_calls
+            .lock()
+            .expect("unread mutation calls lock")
             .push((macro_id, thread_id));
         Ok(())
     }
@@ -974,6 +1005,7 @@ struct TestHarness {
         CountingSoupService,
         NoOpSoupRealtimeSubscriptionService,
         NoopWebSocketNotificationSubscriptionService,
+        graphql_activity::NoOpActivitySubscriptionService,
         CountingEmailService,
         CountingEntityAccessService,
         FakeAuthorizationService,
@@ -1142,6 +1174,7 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
         CountingSoupService,
         TestRealtimeSubscriptionService,
         NoopWebSocketNotificationSubscriptionService,
+        graphql_activity::NoOpActivitySubscriptionService,
         NoOpEmailService,
         NoOpEntityAccessService,
         SchemaOnlyAuthorizationService,
@@ -1161,6 +1194,7 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
         soup_service,
         realtime,
         NoopWebSocketNotificationSubscriptionService,
+        graphql_activity::NoOpActivitySubscriptionService,
     );
     let request = async_graphql::Request::new(
         "subscription { soupUpdates { __typename ... on SoupUpdated { item { id cacheProjection } } ... on GraphqlCacheDeletion { graphqlTypeName entityId } } }",
@@ -1203,6 +1237,122 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
     assert_eq!(updates[1]["__typename"], "GraphqlCacheDeletion");
     assert_eq!(updates[1]["graphqlTypeName"], "GraphqlSoupDocument");
     assert_eq!(updates[1]["entityId"], deleted_document_id.to_string());
+    assert_eq!(
+        subscribed_user
+            .lock()
+            .expect("subscribed user lock")
+            .as_ref(),
+        Some(&user_id)
+    );
+}
+
+#[tokio::test]
+async fn activity_updates_subscribes_as_the_authenticated_user() {
+    use activity::{
+        ActivitySubscription, ActivitySubscriptionExit, ActivitySubscriptionService,
+        ActivitySubscriptionUpdate,
+    };
+    use async_graphql::futures_util::{StreamExt as _, pin_mut};
+
+    let user_id = MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap();
+    let subscribed_user: Arc<Mutex<Option<MacroUserIdStr<'static>>>> = Arc::default();
+
+    struct TestActivitySubscriptionService {
+        subscribed_user: Arc<Mutex<Option<MacroUserIdStr<'static>>>>,
+        subscription: Mutex<Option<ActivitySubscription>>,
+    }
+
+    impl ActivitySubscriptionService for TestActivitySubscriptionService {
+        fn subscribe(&self, user_id: MacroUserIdStr<'static>) -> ActivitySubscription {
+            *self.subscribed_user.lock().expect("subscribed user lock") = Some(user_id);
+            self.subscription
+                .lock()
+                .expect("subscription lock")
+                .take()
+                .expect("subscription opened once")
+        }
+    }
+
+    let (sender, receiver) = tokio::sync::mpsc::channel(2);
+    let (exit_sender, exit_receiver) = tokio::sync::oneshot::channel();
+    exit_sender
+        .send(ActivitySubscriptionExit::Closed)
+        .expect("exit receiver remains open");
+    let service = TestActivitySubscriptionService {
+        subscribed_user: Arc::clone(&subscribed_user),
+        subscription: Mutex::new(Some(ActivitySubscription::from_parts(
+            receiver,
+            exit_receiver,
+        ))),
+    };
+
+    let schema: SoupSchema<
+        CountingSoupService,
+        NoOpSoupRealtimeSubscriptionService,
+        NoopWebSocketNotificationSubscriptionService,
+        TestActivitySubscriptionService,
+        NoOpEmailService,
+        NoOpEntityAccessService,
+        SchemaOnlyAuthorizationService,
+        SchemaOnlyState,
+        NoOpEntityPropertyWriter,
+        UnavailableEntityMutationService,
+        NoOpFavoriteMutationService,
+        NoOpChannelActivityMutationService,
+        NoOpNotificationMutationService,
+        NoOpSoupNotificationEdgeReader,
+        NoOpEntityPropertyReader,
+        NoOpSoupEmailContentEdgeReader,
+        NoOpEntityFavoriteEdgeReader,
+        NoOpEntityPermissionEdgeReader,
+        NoOpActivityReader,
+    > = build_schema_with_services(
+        CountingSoupService::default(),
+        NoOpSoupRealtimeSubscriptionService,
+        NoopWebSocketNotificationSubscriptionService,
+        service,
+    );
+
+    let request = async_graphql::Request::new(
+        "subscription { activityUpdates { __typename ... on GraphqlActivityEvent { id entityType entityId } } }",
+    )
+    .data(user_id.clone());
+    let responses = schema.execute_stream(request);
+    pin_mut!(responses);
+
+    let record = {
+        let activity = activity::Activity::common(
+            Uuid::from_u128(7),
+            0,
+            activity::Actor::new_from_user(user_id.clone()),
+            None,
+            ModelEntityType::Document,
+            "doc-1",
+            activity::CommonAction::Edited,
+            chrono::Utc::now(),
+        );
+        activity::ActivityRecord {
+            id: activity.id,
+            actor: activity.actor.clone(),
+            subject_id: activity.subject_id.clone(),
+            entity_type: activity.entity_type,
+            entity_id: activity.entity_id.clone(),
+            action: activity::RecordedAction::Known(activity::Action::Edited),
+            occurred_at: activity.occurred_at,
+        }
+    };
+    let record_id = record.id;
+    sender
+        .send(ActivitySubscriptionUpdate::Updated(Arc::new(record)))
+        .await
+        .expect("subscription remains open");
+
+    let response = responses.next().await.expect("subscription response");
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().expect("response data is JSON");
+    assert_eq!(data["activityUpdates"]["id"], record_id.to_string());
+    assert_eq!(data["activityUpdates"]["entityType"], "DOCUMENT");
+    assert_eq!(data["activityUpdates"]["entityId"], "doc-1");
     assert_eq!(
         subscribed_user
             .lock()
@@ -2045,7 +2195,29 @@ async fn email_mutations_return_the_canonical_thread_for_normalized_cache_update
     assert_eq!(label_thread["id"], thread_id.to_string());
     assert_eq!(label_thread["isRead"], true);
 
+    harness
+        .soup_service
+        .set_raw_response(vec![soup_email_thread_with_read_status(thread_id, false)]);
+    let unread_response = harness
+        .execute_authenticated_mutation(&format!(
+            r#"mutation {{ markEmailThreadUnread(input: {{threadId: "{thread_id}"}}) {{ __typename id isRead }} }}"#
+        ))
+        .await;
+    assert!(
+        unread_response.errors.is_empty(),
+        "{:?}",
+        unread_response.errors
+    );
+    let unread_thread = &unread_response.data.into_json().unwrap()["markEmailThreadUnread"];
+    assert_eq!(unread_thread["__typename"], "GraphqlSoupEmailThread");
+    assert_eq!(unread_thread["id"], thread_id.to_string());
+    assert_eq!(unread_thread["isRead"], false);
+
     let expected_user = MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap();
+    assert_eq!(
+        *harness.email_service.unread_mutation_calls.lock().unwrap(),
+        vec![(expected_user.clone(), thread_id)]
+    );
     assert_eq!(
         *harness
             .email_service

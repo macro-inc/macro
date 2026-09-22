@@ -4,18 +4,15 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { UpdateInitiativeRequestDescription } from './updateInitiativeRequestDescription';
 import type { UpdateInitiativeRequestMemberIds } from './updateInitiativeRequestMemberIds';
 import type { UpdateInitiativeRequestName } from './updateInitiativeRequestName';
 import type { UpdateInitiativeRequestSharePermission } from './updateInitiativeRequestSharePermission';
 
 /**
  * Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`
-present is a full replace.
+present is a full replace. The description is edited in its document, not here.
  */
 export interface UpdateInitiativeRequest {
-  /** Replacement description. `Some("")` clears it after trim. */
-  description?: UpdateInitiativeRequestDescription;
   /** Full replacement member list when present. */
   memberIds?: UpdateInitiativeRequestMemberIds;
   /** Replacement name. */

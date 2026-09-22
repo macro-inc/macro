@@ -1,9 +1,11 @@
+import { ChangesToggle } from '@app/features/agent-changes/agent-changes';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions/use-block-entity-commands';
 import {
   type BlockTool,
   ResponsiveBlockToolbar,
   ToolButton,
 } from '@components/app/ResponsiveBlockToolbar';
+import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
@@ -21,15 +23,24 @@ import { isMobile } from '@core/mobile/isMobile';
 import { openExternalUrl } from '@core/util/url';
 import type { AgentSessionEntity } from '@entity';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
+import ChatCircleDots from '@phosphor/chat-circle-dots.svg';
 import GitBranch from '@phosphor/git-branch.svg';
 import ShareIcon from '@phosphor/share.svg';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
 import { createSignal, For, Show, Suspense } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
+import {
+  ORIGIN_THREAD_DRAWER_ID,
+  sessionOriginThread,
+} from '../context/origin-thread';
 import { AgentPullRequestChip } from './AgentPullRequestChip';
-import { harnessTitle } from './compose-agent-session-options';
+import {
+  harnessTitle,
+  sessionHarnessTitle,
+  sessionRepositoryUrl,
+} from './compose-agent-session-options';
 
-export { harnessTitle };
+export { harnessTitle, sessionRepositoryUrl };
 
 /** Shared title precedence for standalone and workspace agent sessions. */
 export function agentSessionTitle(
@@ -38,7 +49,7 @@ export function agentSessionTitle(
 ): string {
   const name = session?.name;
   if (name && name !== 'Agent Session') return name;
-  return transcriptTitle ?? name ?? harnessTitle(session?.harness);
+  return transcriptTitle ?? name ?? sessionHarnessTitle(session ?? {});
 }
 
 /**
@@ -58,8 +69,15 @@ export function AgentSplitHeader(props: {
   // The session, not `useBlockId()`: a block created from the launcher mounts
   // against a placeholder and keeps reporting it (see `Block.tsx`), so the
   // block id is the one thing here that is not a shareable session id.
-  const { sessionId, metadata } = useAgentSession();
+  const { sessionId, metadata, userId } = useAgentSession();
+  const conversation = useDrawerControl(ORIGIN_THREAD_DRAWER_ID);
   const title = () => agentSessionTitle(props.session, props.title);
+  const permissions = () =>
+    userId() && props.session?.ownerId === userId()
+      ? Permissions.OWNER
+      : props.session?.canEdit
+        ? Permissions.CAN_EDIT
+        : Permissions.CAN_VIEW;
 
   const entity = (): AgentSessionEntity | undefined => {
     const session = props.session;
@@ -97,6 +115,12 @@ export function AgentSplitHeader(props: {
 
   const tools: BlockTool[] = [
     {
+      label: 'Open conversation',
+      icon: ChatCircleDots,
+      action: () => conversation.toggle(),
+      condition: () => sessionOriginThread(props.session) !== undefined,
+    },
+    {
       label: () => {
         const provider = props.session?.external?.provider;
         if (provider === 'claude-cloud') return 'Open in Claude';
@@ -112,17 +136,18 @@ export function AgentSplitHeader(props: {
     },
   ];
 
-  const ops: FileOperation[] = [
+  const openRepository: FileOperation = {
+    label: 'Open repository',
+    icon: GitBranch,
+    action: () => {
+      const url = sessionRepositoryUrl(props.session);
+      if (url) openExternalUrl(url);
+    },
+  };
+  const ops = (): FileOperation[] => [
     { op: 'rename' },
     { op: 'delete' },
-    {
-      label: 'Open repository',
-      icon: GitBranch,
-      action: () => {
-        const url = props.session?.repoUrl;
-        if (url) openExternalUrl(url);
-      },
-    },
+    ...(sessionRepositoryUrl(props.session) ? [openRepository] : []),
   ];
 
   return (
@@ -149,6 +174,7 @@ export function AgentSplitHeader(props: {
             {(url) => <AgentPullRequestChip url={url()} />}
           </Show>
           <Show when={!isMobile()}>
+            <ChangesToggle />
             <For each={tools}>
               {(tool) => (
                 <Show when={!tool.condition || tool.condition()}>
@@ -169,7 +195,7 @@ export function AgentSplitHeader(props: {
               owner={session().ownerId}
               itemType="agent_session"
               blockAlias="agent"
-              userPermissions={Permissions.OWNER}
+              userPermissions={permissions()}
               isSharePermOpen={shareOpen()}
               setIsSharePermOpen={setShareOpen}
             />
@@ -180,10 +206,11 @@ export function AgentSplitHeader(props: {
       <ResponsiveBlockToolbar
         tools={shareTools}
         menuTools={tools}
-        ops={entity() ? ops : []}
+        ops={entity() ? ops() : []}
         id={sessionId() ?? ''}
         itemType="agent_session"
         entity={entity()}
+        permissions={permissions()}
         name={title()}
       />
     </ShareDialogContext.Provider>

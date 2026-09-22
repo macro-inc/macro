@@ -1,4 +1,8 @@
 import {
+  CLAUDE_BOT_NAME,
+  CLAUDE_BOT_PRINCIPAL_ID,
+} from '@core/constant/claudeAgent';
+import {
   CODEX_BOT_NAME,
   CODEX_BOT_PRINCIPAL_ID,
 } from '@core/constant/codexAgent';
@@ -34,7 +38,7 @@ export { isMacroNewId } from '@core/constant/macroNew';
 /**
  * A synthetic [`IUser`] entry so Macro appears in the channel `@`-mention
  * typeahead. The mention rides the existing user-mention machinery and is
- * re-tagged as a bot mention at send time (see `expandMentions`). `email` is set
+ * re-tagged as a bot mention at send time (see `authoredMentions`). `email` is set
  * to the display name so the typeahead shows just "Macro". The id uses the
  * canonical `bot|<uuid>` principal form so persisted mention content matches
  * bot sender/participant ids.
@@ -92,5 +96,14 @@ export function codexMentionUser(): IUser {
     id: CODEX_BOT_PRINCIPAL_ID,
     name: CODEX_BOT_NAME,
     email: CODEX_BOT_NAME,
+  };
+}
+
+/** Claude as a bot mention, using the canonical principal identifier. */
+export function claudeMentionUser(): IUser {
+  return {
+    id: CLAUDE_BOT_PRINCIPAL_ID,
+    name: CLAUDE_BOT_NAME,
+    email: CLAUDE_BOT_NAME,
   };
 }

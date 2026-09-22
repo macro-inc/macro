@@ -3,7 +3,7 @@ use async_graphql::{
     OutputType, Scalar, ScalarType, SimpleObject, Union, Value as GraphqlValue,
 };
 use graphql_common::{
-    GraphqlCacheDeletion, GraphqlEntity, GraphqlEntityType, GraphqlSoupEntityType,
+    GraphqlCacheDeletion, GraphqlEntity, GraphqlEntityType, GraphqlOwnerType, GraphqlSoupEntityType,
 };
 use graphql_email::GraphqlEmailLabel;
 use graphql_permission::GraphqlEntityPermission;
@@ -11,7 +11,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use models_pagination::PaginatedOpaqueCursor;
 use models_soup::{
-    agent_session::SoupAgentSession,
+    agent_session::{AgentPullRequestState, SoupAgentSession},
     calendar_event::SoupCalendarEvent,
     call_record::{SoupCallRecord, SoupCallRecordParticipant},
     chat::SoupChat,
@@ -309,8 +309,11 @@ fn graphql_entity(
 /// Metadata shared by every canonical Soup entity.
 #[derive(SimpleObject)]
 pub struct GraphqlEntityMetadata {
-    /// Owning user, when applicable.
+    /// Owning principal, when applicable.
     owner_id: Option<String>,
+    /// The kind of principal `ownerId` names. Null exactly when `ownerId`
+    /// is, for the entities that have no owner of their own.
+    owner_type: Option<GraphqlOwnerType>,
     /// Parent project, channel, or team, when applicable.
     parent: Option<GraphqlEntity<'static>>,
     /// Creation timestamp in RFC 3339 form.
@@ -584,6 +587,7 @@ where
     async fn metadata(&self) -> GraphqlEntityMetadata {
         GraphqlEntityMetadata {
             owner_id: Some(self.0.owner_id.clone()),
+            owner_type: Some(GraphqlOwnerType::User),
             parent: None,
             created_at: Some(self.0.created_at.to_rfc3339()),
             updated_at: Some(self.0.updated_at.to_rfc3339()),
@@ -696,7 +700,8 @@ where
     /// Common document metadata.
     async fn metadata(&self) -> GraphqlEntityMetadata {
         GraphqlEntityMetadata {
-            owner_id: Some(self.0.owner_id.as_ref().to_owned()),
+            owner_id: Some(self.0.owner_id.principal_id()),
+            owner_type: Some(self.0.owner_id.owner_type().into()),
             parent: self
                 .0
                 .project_id
@@ -713,9 +718,14 @@ where
         &self.0.name
     }
 
-    /// The identifier of the owner.
+    /// The principal identifier of the owner.
     async fn owner_id(&self) -> String {
-        self.0.owner_id.as_ref().to_owned()
+        self.0.owner_id.principal_id()
+    }
+
+    /// The kind of principal `ownerId` names.
+    async fn owner_type(&self) -> GraphqlOwnerType {
+        self.0.owner_id.owner_type().into()
     }
 
     /// The file type.
@@ -789,6 +799,13 @@ pub struct GraphqlSkillSubType {
     nothing: bool,
 }
 
+/// represents the initiative description subtype fields
+#[derive(SimpleObject)]
+pub struct GraphqlInitiativeDescriptionSubType {
+    /// this object has nothing as a field but we need at least 1 field
+    nothing: bool,
+}
+
 /// GraphQL representation of the soup document sub type.
 #[derive(Union)]
 pub enum GraphqlSoupDocumentSubType {
@@ -798,6 +815,8 @@ pub enum GraphqlSoupDocumentSubType {
     Snippet(GraphqlSnippetSubType),
     /// the sub type is a skill
     Skill(GraphqlSkillSubType),
+    /// the sub type is an initiative description
+    InitiativeDescription(GraphqlInitiativeDescriptionSubType),
 }
 
 impl GraphqlSoupDocumentSubType {
@@ -811,6 +830,9 @@ impl GraphqlSoupDocumentSubType {
                 Self::Snippet(GraphqlSnippetSubType { nothing: false })
             }
             SoupDocumentSubType::Skill {} => Self::Skill(GraphqlSkillSubType { nothing: false }),
+            SoupDocumentSubType::InitiativeDescription {} => {
+                Self::InitiativeDescription(GraphqlInitiativeDescriptionSubType { nothing: false })
+            }
         }
     }
 }
@@ -847,7 +869,8 @@ where
     /// Common chat metadata.
     async fn metadata(&self) -> GraphqlEntityMetadata {
         GraphqlEntityMetadata {
-            owner_id: Some(self.0.owner_id.as_ref().to_owned()),
+            owner_id: Some(self.0.owner_id.principal_id()),
+            owner_type: Some(self.0.owner_id.owner_type().into()),
             parent: self
                 .0
                 .project_id
@@ -869,9 +892,14 @@ where
         self.0.model.as_deref()
     }
 
-    /// The identifier of the owner.
+    /// The principal identifier of the owner.
     async fn owner_id(&self) -> String {
-        self.0.owner_id.as_ref().to_owned()
+        self.0.owner_id.principal_id()
+    }
+
+    /// The kind of principal `ownerId` names.
+    async fn owner_type(&self) -> GraphqlOwnerType {
+        self.0.owner_id.owner_type().into()
     }
 
     /// The identifier of the project.
@@ -919,6 +947,30 @@ where
 /// GraphQL agent session entity.
 pub struct GraphqlSoupAgentSession<E: SoupEntityEdges>(SoupAgentSession<()>, E, Option<f64>);
 
+/// Last synchronized state of a session's linked GitHub pull request.
+#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq)]
+pub enum GraphqlAgentPullRequestState {
+    /// The pull request accepts changes.
+    Open,
+    /// The pull request is still a draft.
+    Draft,
+    /// The pull request was closed without merging.
+    Closed,
+    /// The pull request was merged.
+    Merged,
+}
+
+impl From<AgentPullRequestState> for GraphqlAgentPullRequestState {
+    fn from(state: AgentPullRequestState) -> Self {
+        match state {
+            AgentPullRequestState::Open => Self::Open,
+            AgentPullRequestState::Draft => Self::Draft,
+            AgentPullRequestState::Closed => Self::Closed,
+            AgentPullRequestState::Merged => Self::Merged,
+        }
+    }
+}
+
 /// GraphQL representation of the soup agent session.
 #[Object(name = "GraphqlSoupAgentSession")]
 impl<E> GraphqlSoupAgentSession<E>
@@ -952,7 +1004,8 @@ where
     /// contained by its project.
     async fn metadata(&self) -> GraphqlEntityMetadata {
         GraphqlEntityMetadata {
-            owner_id: Some(self.0.owner_id.as_ref().to_owned()),
+            owner_id: Some(self.0.owner_id.principal_id()),
+            owner_type: Some(self.0.owner_id.owner_type().into()),
             parent: None,
             created_at: Some(self.0.created_at.to_rfc3339()),
             updated_at: Some(self.0.updated_at.to_rfc3339()),
@@ -966,9 +1019,14 @@ where
         &self.0.name
     }
 
-    /// The identifier of the owner.
+    /// The principal identifier of the owner.
     async fn owner_id(&self) -> String {
-        self.0.owner_id.as_ref().to_owned()
+        self.0.owner_id.principal_id()
+    }
+
+    /// The kind of principal `ownerId` names.
+    async fn owner_type(&self) -> GraphqlOwnerType {
+        self.0.owner_id.owner_type().into()
     }
 
     /// The bot running this session.
@@ -980,6 +1038,46 @@ where
     /// Fields hydrated through the bot domain.
     async fn agent_session_edges(&self) -> E::AgentSessionEdges {
         E::agent_session_edges(self.0.bot_id)
+    }
+
+    /// The runtime snapshotted when the session was created.
+    async fn harness(&self) -> &str {
+        &self.0.harness
+    }
+
+    /// The repository the session works with, when one was selected.
+    async fn repo_url(&self) -> Option<&str> {
+        self.0.repo_url.as_deref()
+    }
+
+    /// The starting branch selected for this session, not its current branch.
+    async fn repo_branch(&self) -> Option<&str> {
+        self.0.repo_branch.as_deref()
+    }
+
+    /// The persisted pull request associated with the session.
+    async fn pull_request_url(&self) -> Option<&str> {
+        self.0.pull_request_url.as_deref()
+    }
+
+    /// Last captured working branch, when the runtime has reported one.
+    async fn working_branch(&self) -> Option<&str> {
+        self.0.working_branch.as_deref()
+    }
+
+    /// Last synchronized state of the linked pull request, when visible.
+    async fn pull_request_state(&self) -> Option<GraphqlAgentPullRequestState> {
+        self.0.pull_request_state.map(Into::into)
+    }
+
+    /// The linked pull request's Macro entity, when visible to the viewer.
+    async fn pull_request_id(&self) -> Option<ID> {
+        self.0.pull_request_id.map(|id| ID(id.to_string()))
+    }
+
+    /// Last persisted fold turn state. Absent until an older session next runs.
+    async fn turn_state(&self) -> Option<&str> {
+        self.0.turn_state.as_deref()
     }
 
     /// The channel thread the session was opened from, when any.
@@ -1052,7 +1150,8 @@ where
     /// Common project metadata.
     async fn metadata(&self) -> GraphqlEntityMetadata {
         GraphqlEntityMetadata {
-            owner_id: Some(self.0.owner_id.as_ref().to_owned()),
+            owner_id: Some(self.0.owner_id.principal_id()),
+            owner_type: Some(self.0.owner_id.owner_type().into()),
             parent: self
                 .0
                 .parent_id
@@ -1069,9 +1168,14 @@ where
         &self.0.name
     }
 
-    /// The identifier of the owner.
+    /// The principal identifier of the owner.
     async fn owner_id(&self) -> String {
-        self.0.owner_id.as_ref().to_owned()
+        self.0.owner_id.principal_id()
+    }
+
+    /// The kind of principal `ownerId` names.
+    async fn owner_type(&self) -> GraphqlOwnerType {
+        self.0.owner_id.owner_type().into()
     }
 
     /// The identifier of the parent.
@@ -1220,6 +1324,7 @@ where
     async fn metadata(&self) -> GraphqlEntityMetadata {
         GraphqlEntityMetadata {
             owner_id: Some(self.0.thread.owner_id.as_ref().to_owned()),
+            owner_type: Some(GraphqlOwnerType::User),
             parent: self
                 .0
                 .thread
@@ -1557,6 +1662,7 @@ where
     async fn metadata(&self) -> GraphqlEntityMetadata {
         GraphqlEntityMetadata {
             owner_id: Some(self.0.channel.channel.owner_id.as_ref().to_owned()),
+            owner_type: Some(GraphqlOwnerType::User),
             parent: self
                 .0
                 .channel
@@ -1722,6 +1828,7 @@ where
     async fn metadata(&self) -> GraphqlEntityMetadata {
         GraphqlEntityMetadata {
             owner_id: Some(self.0.sender_id.clone()),
+            owner_type: Some(GraphqlOwnerType::User),
             parent: Some(graphql_entity(
                 model_entity::EntityType::Channel,
                 self.0.channel_id,
@@ -1833,6 +1940,7 @@ where
     async fn metadata(&self) -> GraphqlEntityMetadata {
         GraphqlEntityMetadata {
             owner_id: Some(self.0.created_by.clone()),
+            owner_type: Some(GraphqlOwnerType::User),
             parent: Some(graphql_entity(
                 model_entity::EntityType::Channel,
                 self.0.channel_id,
@@ -1979,6 +2087,7 @@ where
     async fn metadata(&self) -> GraphqlEntityMetadata {
         GraphqlEntityMetadata {
             owner_id: None,
+            owner_type: None,
             parent: Some(graphql_entity(
                 model_entity::EntityType::Team,
                 self.0.team_id,
@@ -2084,6 +2193,7 @@ where
     async fn metadata(&self) -> GraphqlEntityMetadata {
         GraphqlEntityMetadata {
             owner_id: None,
+            owner_type: None,
             parent: None,
             created_at: Some(self.0.created_at.to_rfc3339()),
             updated_at: Some(self.0.updated_at.to_rfc3339()),
@@ -2202,6 +2312,7 @@ where
     async fn metadata(&self) -> GraphqlEntityMetadata {
         GraphqlEntityMetadata {
             owner_id: None,
+            owner_type: None,
             parent: None,
             created_at: Some(self.0.created_at.to_rfc3339()),
             updated_at: Some(self.0.updated_at.to_rfc3339()),

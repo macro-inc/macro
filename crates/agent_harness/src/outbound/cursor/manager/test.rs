@@ -80,8 +80,10 @@ impl AgentSessionRepo for StubSessions {
         Ok(AgentSession {
             repo_branch: self.repo_branch.clone(),
             id,
-            owner_id: MacroUserIdStr::try_from("macro|owner@macro.com".to_owned())
-                .expect("valid user id"),
+            owner_id: model_owner::Owner::User(
+                MacroUserIdStr::try_from("macro|owner@macro.com".to_owned())
+                    .expect("valid user id"),
+            ),
             thread_id: None,
             thread_parent: None,
             originating_message_id: None,
@@ -405,6 +407,14 @@ impl CursorApiKeys for StubKeys {
     }
 }
 
+struct UnavailableKeys;
+
+impl CursorApiKeys for UnavailableKeys {
+    async fn resolve(&self, _owner: &MacroUserIdStr<'_>) -> Result<ResolvedCursorConfig> {
+        Err(HarnessError::Container("key decryption failed".to_owned()))
+    }
+}
+
 /// A user who reaches no repository through the GitHub App: the chooser
 /// short-circuits on an empty listing, so these tests drive the whole spawn
 /// path without a model call.
@@ -412,7 +422,10 @@ struct NoRepositories;
 
 #[async_trait::async_trait]
 impl ReachableRepositories for NoRepositories {
-    async fn for_user(&self, _user: &MacroUserIdStr<'_>) -> Result<Vec<String>> {
+    async fn for_user(
+        &self,
+        _user: &MacroUserIdStr<'_>,
+    ) -> Result<Vec<crate::domain::model::ReachableRepository>> {
         Ok(Vec::new())
     }
 }
@@ -424,11 +437,11 @@ fn manager(
     manager_with_keys(base_url, sessions, StubKeys::connected())
 }
 
-fn manager_with_keys(
+fn manager_with_keys<Keys: CursorApiKeys>(
     base_url: String,
     sessions: StubSessions,
-    keys: StubKeys,
-) -> CursorContainerManager<StubSessions, StubKeys, NoRepositories, NoArtifactStore> {
+    keys: Keys,
+) -> CursorContainerManager<StubSessions, Keys, NoRepositories, NoArtifactStore> {
     CursorContainerManager::with_memory_journal(
         keys,
         base_url,
@@ -851,6 +864,44 @@ async fn teardown_archives_and_forgets() {
     );
 }
 
+#[tokio::test]
+async fn preflight_only_requests_a_connection_when_no_key_is_saved() {
+    let owner = MacroUserIdStr::try_from_email("asker@example.com").unwrap();
+    for (keys, expected) in [
+        (StubKeys::connected(), None),
+        (StubKeys::absent(), Some(SessionBlocker::CursorNotConnected)),
+    ] {
+        let manager = manager_with_keys(
+            "http://127.0.0.1:1".to_owned(),
+            StubSessions::default(),
+            keys,
+        );
+        assert_eq!(
+            manager.preflight(AgentKind::Cursor, &owner).await.unwrap(),
+            expected
+        );
+    }
+}
+
+#[tokio::test]
+async fn preflight_propagates_key_errors_instead_of_requesting_a_connection() {
+    let manager = manager_with_keys(
+        "http://127.0.0.1:1".to_owned(),
+        StubSessions::default(),
+        UnavailableKeys,
+    );
+    let owner = MacroUserIdStr::try_from_email("asker@example.com").unwrap();
+
+    let error = manager
+        .preflight(AgentKind::Cursor, &owner)
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(error, HarnessError::Container(message) if message == "key decryption failed")
+    );
+}
+
 /// An owner who has not connected Cursor gets a sentence they can act on, not
 /// a generic provisioning failure — this is the first run of `@cursor` for
 /// everyone, so it is the error most users will ever see.
@@ -965,9 +1016,35 @@ fn count(frames: &[serde_json::Value], pointer: &str, value: &str) -> usize {
         .count()
 }
 
+/// Whether this frame is the slash-command catalog, not conversation history.
+fn is_available_commands_update(frame: &serde_json::Value) -> bool {
+    frame
+        .pointer("/params/update/sessionUpdate")
+        .and_then(|found| found.as_str())
+        == Some("available_commands_update")
+}
+
+/// Consume the `available_commands_update` that follows a successful load so
+/// leftover catalog frames do not precede the next initialize or look like
+/// unsolicited history.
+async fn drain_available_commands_update(
+    receiver: &mut tokio::sync::mpsc::UnboundedReceiver<ToServerMessage>,
+) {
+    let frames = collect_until(receiver, is_available_commands_update).await;
+    assert_eq!(
+        frames.len(),
+        1,
+        "session/load is followed by the slash-command catalog and nothing else: {frames:?}"
+    );
+}
+
 /// The recovery handshake as the session actor performs it: `initialize`,
 /// then `session/load`. Returns the history replayed before the load's
 /// response after asserting the load succeeded and only history preceded it.
+///
+/// The catalog notification that follows a successful load is drained, the
+/// same way the Cursor fold helpers do, so a leftover metadata frame cannot
+/// poison the next handshake.
 async fn reload(
     sender: &super::super::pipe::PipeSender,
     receiver: &mut tokio::sync::mpsc::UnboundedReceiver<ToServerMessage>,
@@ -1005,7 +1082,12 @@ async fn reload(
             ),
             "only history travels before a load's response, got {frame}"
         );
+        assert!(
+            !is_available_commands_update(frame),
+            "the catalog is advertised after the load result, not as history: {frame}"
+        );
     }
+    drain_available_commands_update(receiver).await;
     replayed
 }
 

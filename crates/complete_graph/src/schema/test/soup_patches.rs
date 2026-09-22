@@ -17,6 +17,7 @@ type RealtimeSchema = SoupSchema<
     CountingSoupService,
     TestRealtimeSubscriptionService,
     NoopWebSocketNotificationSubscriptionService,
+    graphql_activity::NoOpActivitySubscriptionService,
     NoOpEmailService,
     NoOpEntityAccessService,
     SchemaOnlyAuthorizationService,
@@ -64,6 +65,7 @@ async fn subscription_responses(
             subscribed_user: Arc::new(Mutex::new(None)),
         },
         NoopWebSocketNotificationSubscriptionService,
+        graphql_activity::NoOpActivitySubscriptionService,
     );
     let request = async_graphql::Request::new(format!(
         "subscription {{ soupUpdates {{ {PATCH_SELECTION} }} }}"

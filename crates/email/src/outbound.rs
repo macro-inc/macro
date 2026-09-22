@@ -10,6 +10,4 @@ pub use email_pg_repo::EmailPgRepo;
 #[cfg(feature = "http_client")]
 pub use email_service_http::EmailServiceHttpClient;
 #[cfg(feature = "gmail_token")]
-pub use gmail_token_provider::{
-    GmailTokenProviderImpl, fetch_gmail_access_token, fetch_gmail_access_token_no_cache,
-};
+pub use gmail_token_provider::GmailTokenProviderImpl;

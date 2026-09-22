@@ -236,6 +236,18 @@ fn render_part(part: &MessagePart) -> String {
             MessagePart::Text { text } => {
                 let _ = writeln!(out, "{}", text.trim_end());
             }
+            MessagePart::Attachment {
+                uri,
+                name,
+                mime_type,
+                ..
+            } => {
+                let _ = writeln!(
+                    out,
+                    "[attachment] {name} ({}) {uri}",
+                    mime_type.as_deref().unwrap_or("unknown type")
+                );
+            }
             MessagePart::Thought { text } => {
                 let _ = writeln!(out, "[thought]\n{}", indent(text.trim_end()));
             }
@@ -249,6 +261,7 @@ fn render_part(part: &MessagePart) -> String {
                 tool_call,
                 options,
                 outcome,
+                ..
             } => out.push_str(&render_permission(tool_call, options, outcome)),
             MessagePart::Control { control, outcome } => {
                 let label = match control {
@@ -473,13 +486,20 @@ fn render_tool(label: &str, status: ToolStatus, detail: &ToolDetail) -> String {
             kind,
             output,
             input,
+            result,
+            error,
         } => {
             let _ = writeln!(out, "{}", indent(&format!("kind: {kind}")));
-            if let Some(output) = output {
+            if let Some(input) = input {
+                let _ = writeln!(out, "{}", indent(&format!("input: {}", pretty(input))));
+            }
+            if let Some(result) = result {
+                let _ = writeln!(out, "{}", indent(&format!("result: {}", pretty(result))));
+            } else if let Some(output) = output {
                 let _ = writeln!(out, "{}", indent(output.trim_end()));
             }
-            if let Some(input) = input {
-                let _ = writeln!(out, "{}", indent(&pretty(input)));
+            if let Some(error) = error {
+                let _ = writeln!(out, "{}", indent(&format!("error: {error}")));
             }
         }
         ToolDetail::Macro {

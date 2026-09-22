@@ -38,7 +38,7 @@
 #[cfg(test)]
 mod test;
 
-use crate::domain::artifact::{ArtifactListing, CollectedArtifact, mime_type};
+use crate::domain::artifact::{ArtifactListing, CollectedArtifact, inline_text, mime_type};
 use crate::domain::error::SessionError;
 use crate::domain::event::CursorEvent;
 use crate::domain::journal::{CursorJournal, JournalEntry, JournalInput, ReplayMachine};
@@ -47,8 +47,8 @@ use crate::domain::model::{
     ModelChoice, RepoUrl, RunStatus,
 };
 use crate::domain::ports::{
-    ArtifactStore, CursorAgents, CursorArtifacts, RepositoryChooser, RunStream, SessionNotifier,
-    StreamConnectError,
+    ArtifactStore, CursorAgents, CursorArtifacts, RepositoryChooser, RunStream, SessionIntent,
+    SessionNotifier, StreamConnectError,
 };
 use agent_client_protocol::schema::v1::{
     ContentBlock, SessionId, SessionUpdate, StopReason, TextContent,
@@ -59,12 +59,54 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-/// How often the fallback poll asks after a run's outcome.
+/// How often a wait that is not about the run's outcome asks again: the
+/// busy-agent queue, and a poll retried after a transport error.
 const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
 
-/// Polls before a turn is abandoned — fifteen minutes, comfortably past any
-/// run in the recorded corpus while still an ending.
-const POLL_ATTEMPTS: usize = 450;
+/// The fallback poll's cadence: quick at first, when a run that has just gone
+/// quiet is most likely about to end, then settling at [`POLL_INTERVAL_CEILING`].
+///
+/// Two facts from the journals set the shape. `GET /v1/agents/{id}/runs/{run}`
+/// is limited to 300 requests a minute per API key, shared by every session
+/// this deployment drives, and a two-second poll from a dozen stalled
+/// sessions was enough to draw a 429 (dev, 2026-09-19). And a run's record
+/// carries no liveness signal while it is `RUNNING` — `updatedAt` moves only
+/// on status transitions — so asking more often learns nothing sooner.
+const POLL_DELAYS: [std::time::Duration; 11] = [
+    std::time::Duration::from_secs(2),
+    std::time::Duration::from_secs(2),
+    std::time::Duration::from_secs(2),
+    std::time::Duration::from_secs(2),
+    std::time::Duration::from_secs(2),
+    std::time::Duration::from_secs(3),
+    std::time::Duration::from_secs(5),
+    std::time::Duration::from_secs(8),
+    std::time::Duration::from_secs(12),
+    std::time::Duration::from_secs(20),
+    std::time::Duration::from_secs(30),
+];
+
+/// Where the poll cadence settles: two requests a minute per waiting session.
+const POLL_INTERVAL_CEILING: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Polls before a turn stops waiting — about two hours along [`POLL_DELAYS`].
+///
+/// This is a ceiling for a run that Cursor still calls `RUNNING`, not an
+/// estimate of how long one takes. The old fifteen-minute budget was sized
+/// to a recorded corpus of short runs; live, a run that opened its pull
+/// request at 19:55 had its turn abandoned at 19:54, and every "gave up
+/// waiting" in three days of production logs was a run that was merely
+/// slow. A turn that stops waiting cannot be resumed, so the budget errs
+/// long: the chip shows the session working the whole time.
+const POLL_ATTEMPTS: usize = 250;
+
+/// How long the fallback poll sleeps before its `attempt`-th ask.
+fn poll_delay(attempt: usize) -> std::time::Duration {
+    POLL_DELAYS
+        .get(attempt)
+        .copied()
+        .unwrap_or(POLL_INTERVAL_CEILING)
+}
 
 /// Consecutive poll failures tolerated before the turn takes the error.
 const POLL_ERROR_TOLERANCE: usize = 5;
@@ -73,10 +115,28 @@ const POLL_ERROR_TOLERANCE: usize = 5;
 /// final text arrives and the stream then hangs open, its terminal `result`
 /// minutes behind — and the client shows a turn still "writing" long after
 /// the answer is on screen. Long enough to never fire during ordinary
-/// streaming; short enough that a finished run closes its turn promptly. A
-/// still-running run (quiet tool work) just costs one status read per
-/// interval.
+/// streaming; short enough that a finished run closes its turn promptly.
 const STREAM_QUIET_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// How long a stream that has already been found quiet waits between the
+/// next checks of its run's record. Slower than the first check on purpose:
+/// the record endpoint's rate limit is shared by every session (see
+/// [`POLL_DELAYS`]), and a run that was still going ten seconds ago is most
+/// likely still going now.
+const STREAM_QUIET_RECHECK: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Silence on an open stream before its connection is replaced.
+///
+/// Cursor does not heartbeat an open stream: the journals show runs saying
+/// nothing for many minutes while their record stays `RUNNING` — a tool call
+/// waiting on CI (`await`, `blockUntilMs: 120000`), a long build — and every
+/// reconnect in that window resumed zero records. So silence on a run the
+/// record still calls live is the agent working, and the connection is
+/// kept. Only silence this long buys a fresh connection, as insurance
+/// against a socket that died without saying so, and it costs nothing
+/// from the reconnect budget: that budget is for a transport that is
+/// failing, and this one merely has nothing to say.
+const STREAM_SILENCE_BEFORE_RECONNECT: std::time::Duration = std::time::Duration::from_secs(120);
 
 /// Backoff before each reconnect of an interrupted stream.
 ///
@@ -156,6 +216,25 @@ async fn sleep_unless_cancelled(
     }
 }
 
+/// Why a stream connection ended without the run's outcome.
+struct Interruption {
+    reason: String,
+    /// Whether a fresh connection could still deliver the run.
+    recoverable: bool,
+    /// The connection was replaced for saying nothing, not for failing.
+    quiet: bool,
+}
+
+impl Interruption {
+    fn failed(reason: String) -> Self {
+        Self {
+            reason,
+            recoverable: true,
+            quiet: false,
+        }
+    }
+}
+
 /// The run's content records already durable in this session's journal.
 ///
 /// What a stream read from the beginning is reconciled against: every record
@@ -199,8 +278,9 @@ fn explain_repository_rejection(error: SessionError) -> SessionError {
     };
     tracing::warn!(
         repo = %unavailable.repo,
+        reason = %unavailable.reason,
         detail = %unavailable.detail,
-        "cursor rejected the prompt: the repository is not connected to this cursor account"
+        "cursor rejected the prompt: it could not use the session's repository"
     );
     SessionError::Rejected(unavailable.user_message())
 }
@@ -217,6 +297,45 @@ fn is_prompt_rejection(error: &SessionError) -> bool {
     }
 }
 
+/// A prompt Cursor refused before the session had an agent, and why.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RejectedPrompt {
+    /// What the person asked, as it would have gone to Cursor.
+    text: String,
+    /// The refusal as it was shown to them, when there was a readable one.
+    reason: Option<String>,
+}
+
+/// The prompt that finally mints an agent, carrying the ones Cursor refused
+/// before it so the agent reads the whole conversation the person had.
+///
+/// Plain text rather than structure because that is all `create_agent`
+/// takes; the framing tells the agent which message is current and that the
+/// earlier ones were never acted on, so it neither re-does nor ignores them.
+fn prompt_with_rejected(rejected: &[RejectedPrompt], prompt: &str) -> String {
+    if rejected.is_empty() {
+        return prompt.to_owned();
+    }
+    let mut text = String::from(
+        "The following earlier message(s) in this conversation never reached an agent: \
+         each attempt to start one was refused by Cursor. They are included so nothing the \
+         person asked is lost. The message under \"Latest message\" is the one to respond to.\n",
+    );
+    for earlier in rejected {
+        text.push_str("\n--- Earlier message ---\n");
+        text.push_str(&earlier.text);
+        if let Some(reason) = &earlier.reason {
+            text.push_str("\n(Refused with: ");
+            text.push_str(reason);
+            text.push(')');
+        }
+        text.push('\n');
+    }
+    text.push_str("\n--- Latest message ---\n");
+    text.push_str(prompt);
+    text
+}
+
 /// One session's mutable state. Guarded by a std mutex: every critical
 /// section is a handful of field reads/writes, never an await.
 #[derive(Debug, Default)]
@@ -228,6 +347,23 @@ struct SessionState {
     /// prompt chose. Still needed after the agent exists - Cursor fixed the
     /// repository at creation, and a restore has to hand the same one back.
     repo: Option<RepoUrl>,
+    /// The first prompt's repository decision, kept until an agent exists.
+    ///
+    /// Cursor can reject the create that follows the decision — a branch it
+    /// could not verify, a repository the account has not connected — and the
+    /// next prompt is then usually "what happened?", which is no evidence of
+    /// where the work belongs. So the decision is made once, on the prompt
+    /// that carried the evidence, and reused by every create attempt until
+    /// one succeeds. Cleared with the process: a restored session re-decides.
+    intent: Option<SessionIntent>,
+    /// Prompts Cursor refused before any agent existed, oldest first.
+    ///
+    /// A refused prompt is journaled as aborted and never reaches Cursor; if
+    /// the next one alone minted the agent, the agent would answer a question
+    /// about a message it never saw. So they ride along with the prompt that
+    /// finally creates it. Cancelled prompts are deliberately not here — the
+    /// person withdrew those. Cleared once a prompt is accepted.
+    rejected_prompts: Vec<RejectedPrompt>,
     /// The Cursor agent, once the first prompt has minted it.
     agent: Option<CursorAgentId>,
     /// The run currently streaming, so cancel knows what to cancel.
@@ -706,6 +842,7 @@ where
             return Ok(StopReason::Cancelled);
         }
 
+        let creating_agent = prior_agent.is_none();
         let created = match prior_agent {
             Some(agent) => {
                 // Queue behind any run still going (the same agent advances
@@ -717,20 +854,38 @@ where
             None => {
                 // Snapshotted out of the lock: `create_agent` is a network
                 // call, and the state mutex must never be held across an await.
-                let mcp_servers = session
-                    .state
-                    .lock()
-                    .expect("session state poisoned")
-                    .mcp_servers
-                    .clone();
+                let (mcp_servers, decided, rejected) = {
+                    let state = session.state.lock().expect("session state poisoned");
+                    (
+                        state.mcp_servers.clone(),
+                        state.intent.clone(),
+                        state.rejected_prompts.clone(),
+                    )
+                };
                 // The first prompt is the only evidence there is for which
                 // repository this session belongs to, and Cursor fixes an
                 // agent's repository at creation - so the decision is made
-                // here, before the agent exists, and never revisited.
-                match self.chooser.choose(prompt, &session.cwd).await {
+                // here, before the agent exists, and never revisited: a
+                // create Cursor refused leaves the decision standing for the
+                // next attempt rather than re-reading a prompt that is now
+                // about the refusal.
+                let intent = match decided {
+                    Some(intent) => {
+                        tracing::info!(
+                            repo = ?intent.repository.as_ref().map(RepoUrl::as_str),
+                            "reusing the repository decided by this session's first prompt"
+                        );
+                        Ok(intent)
+                    }
+                    None => self.chooser.choose(prompt, &session.cwd).await,
+                };
+                match intent {
                     Ok(intent) => {
-                        session.state.lock().expect("session state poisoned").repo =
-                            intent.repository.clone();
+                        {
+                            let mut state = session.state.lock().expect("session state poisoned");
+                            state.repo = intent.repository.clone();
+                            state.intent = Some(intent.clone());
+                        }
                         if intent.repository.is_none() {
                             tracing::warn!(
                                 "no repository chosen - this session will not appear in the Cursor sessions list"
@@ -738,7 +893,7 @@ where
                         }
                         self.cursor
                             .create_agent(
-                                prompt,
+                                &prompt_with_rejected(&rejected, prompt),
                                 intent.repository.as_ref(),
                                 intent.open_pull_request,
                                 &mcp_servers,
@@ -776,6 +931,24 @@ where
                     if cancel.is_cancelled() {
                         return Ok(StopReason::Cancelled);
                     }
+                    // Only a create's refusal is carried: a follow-up run
+                    // refused on an existing agent is already in a conversation
+                    // the agent can see.
+                    if creating_agent {
+                        let reason = match &error {
+                            SessionError::Rejected(message) => Some(message.clone()),
+                            _ => None,
+                        };
+                        session
+                            .state
+                            .lock()
+                            .expect("session state poisoned")
+                            .rejected_prompts
+                            .push(RejectedPrompt {
+                                text: prompt.to_owned(),
+                                reason,
+                            });
+                    }
                 }
                 return Err(error);
             }
@@ -788,7 +961,11 @@ where
             false,
         )
         .await?;
-        session.state.lock().expect("session state poisoned").agent = Some(agent.clone());
+        {
+            let mut state = session.state.lock().expect("session state poisoned");
+            state.agent = Some(agent.clone());
+            state.rejected_prompts.clear();
+        }
         // Acceptance is durable even if recovery of an older run fails. Do
         // not observe/project the new run until every older run is reconciled.
         self.backfill_foreign_runs(session_id, &session, &agent, Some(&run))
@@ -1195,8 +1372,12 @@ where
                 }
                 // Past the retention window there is no stream left to resume,
                 // so the run record is the only remaining account of the run.
-                Err(StreamConnectError::Expired(detail)) => Some((detail, false)),
-                Err(error) => Some((error.to_string(), true)),
+                Err(StreamConnectError::Expired(detail)) => Some(Interruption {
+                    reason: detail,
+                    recoverable: false,
+                    quiet: false,
+                }),
+                Err(error) => Some(Interruption::failed(error.to_string())),
                 Ok(connected) => {
                     let resumed = resuming.is_some();
                     ever_connected = true;
@@ -1206,20 +1387,31 @@ where
                     let mut received = 0usize;
                     let mut received_content = 0usize;
                     let mut sticky_status_pending = resumed;
+                    // How long this connection has said nothing, across the
+                    // record checks that found its run still going.
+                    let mut silence = std::time::Duration::ZERO;
                     let interruption = loop {
-                        let record = match tokio::time::timeout(
-                            STREAM_QUIET_TIMEOUT,
-                            records.next(),
-                        )
-                        .await
+                        let quiet_timeout = if silence.is_zero() {
+                            STREAM_QUIET_TIMEOUT
+                        } else {
+                            STREAM_QUIET_RECHECK
+                        };
+                        let record = match tokio::time::timeout(quiet_timeout, records.next()).await
                         {
-                            Ok(Some(Ok(record))) => record,
-                            Ok(Some(Err(error))) => break Some((error.to_string(), true)),
+                            Ok(Some(Ok(record))) => {
+                                silence = std::time::Duration::ZERO;
+                                record
+                            }
+                            Ok(Some(Err(error))) => {
+                                break Some(Interruption::failed(error.to_string()));
+                            }
                             // Cursor closes the stream after `done`, which
                             // breaks below with an outcome. Reaching here
                             // without one is a close mid-run.
                             Ok(None) if terminal.is_some() => break None,
-                            Ok(None) => break Some(("stream closed".to_owned(), true)),
+                            Ok(None) => {
+                                break Some(Interruption::failed("stream closed".to_owned()));
+                            }
                             Err(_) if strict => break None,
                             Err(_) => {
                                 // Quiet streams are checked through the exact same raw
@@ -1234,17 +1426,18 @@ where
                                 if cancel.is_cancelled() {
                                     break None;
                                 }
-                                // Cursor heartbeats an open stream, so a
-                                // gap this long on a run that has not
-                                // ended is a connection that stopped
-                                // delivering rather than an agent thinking.
-                                break Some((
-                                    format!(
-                                        "no records for {} seconds",
-                                        STREAM_QUIET_TIMEOUT.as_secs()
-                                    ),
-                                    true,
-                                ));
+                                silence += quiet_timeout;
+                                if silence < STREAM_SILENCE_BEFORE_RECONNECT {
+                                    // The run is going and the connection is
+                                    // open: an agent at work, not a stream
+                                    // that stopped delivering.
+                                    continue;
+                                }
+                                break Some(Interruption {
+                                    reason: format!("no records for {} seconds", silence.as_secs()),
+                                    recoverable: true,
+                                    quiet: true,
+                                });
                             }
                         };
                         if let Some(id) = &record.id {
@@ -1353,7 +1546,12 @@ where
                     interruption
                 }
             };
-            let Some((reason, recoverable)) = interruption else {
+            let Some(Interruption {
+                reason,
+                recoverable,
+                quiet,
+            }) = interruption
+            else {
                 break;
             };
             fell_back_to_poll = true;
@@ -1390,7 +1588,11 @@ where
             .await?;
             // Hydration verifies the whole captured prefix against a stream it
             // reads from the beginning, which a resumed stream cannot offer.
-            let resumable = recoverable && !strict && attempt <= STREAM_RECONNECT_ATTEMPTS as u32;
+            // A connection replaced for silence alone spends nothing: the
+            // budget rations a transport that is failing, and this one is
+            // still the only thing that can deliver the run live.
+            let resumable =
+                recoverable && !strict && (quiet || attempt <= STREAM_RECONNECT_ATTEMPTS as u32);
             if !resumable {
                 tracing::warn!(
                     cursor.run.id = %run,
@@ -1413,7 +1615,9 @@ where
             if sleep_unless_cancelled(cancel, delay).await {
                 break;
             }
-            reconnects = attempt;
+            if !quiet {
+                reconnects = attempt;
+            }
             resume_from = last_event_id.clone();
             fell_back_to_poll = false;
         }
@@ -1460,7 +1664,7 @@ where
                         return Err(error);
                     }
                 }
-                sleep_unless_cancelled(cancel, POLL_INTERVAL).await;
+                sleep_unless_cancelled(cancel, poll_delay(attempt)).await;
             }
         }
         let Some(status) = terminal else {
@@ -1474,8 +1678,10 @@ where
                 "gave up waiting; Cursor still reports a non-terminal status"
             );
             return Err(SessionError::Rejected(
-                "Cursor has not reported a result for this run, and has stopped saying \
-                 anything about it. Prompting again starts fresh and abandons this run."
+                "Cursor has been working on this for over two hours and Macro stopped \
+                 waiting. Send another message to continue: if Cursor has finished by \
+                 then, that message picks up what it did, and if not, the run is \
+                 cancelled and the conversation starts fresh from there."
                     .into(),
             ));
         };
@@ -1519,7 +1725,7 @@ where
     /// heartbeat a Cursor turn has, and a turn that stops polling is the
     /// first evidence that something took it down.
     ///
-    /// `debug` because the loop runs every [`POLL_INTERVAL`]; the turn span
+    /// `debug` because the loop runs as often as [`POLL_DELAYS`] says; the turn span
     /// above carries the outcome, this carries the liveness.
     #[tracing::instrument(
         name = "cursor.run.poll",
@@ -1908,6 +2114,7 @@ where
                 }
             };
             let mime_type = mime_type(listing.name(), fetched.content_type.as_deref());
+            let text = inline_text(listing.name(), &mime_type, &fetched.bytes);
             match self
                 .artifacts
                 .store(listing.name(), &mime_type, fetched.bytes)
@@ -1919,6 +2126,7 @@ where
                     mime_type,
                     uri,
                     size_bytes: listing.size_bytes,
+                    text,
                 }),
                 Err(error) => tracing::warn!(
                     artifact.path = %listing.path,
@@ -2055,9 +2263,10 @@ where
                 state.ready_for_sync = false;
                 SessionError::Journal(error)
             })?;
-        let (updates, completion, pull_request) = {
+        let (updates, completion, pull_request, working_branches) = {
             let mut state = session.state.lock().expect("session state poisoned");
             let previous_pr = state.machine.pull_request_url().map(str::to_owned);
+            let previous_branches = state.machine.working_branches().clone();
             let before = run.and_then(|run| state.machine.terminal_status(run));
             state.journal_entries.push(entry.clone());
             let SessionState {
@@ -2086,9 +2295,27 @@ where
                 .pull_request_url()
                 .filter(|url| Some(*url) != previous_pr.as_deref())
                 .map(str::to_owned);
-            (updates, completion, pull_request)
+            let working_branches: Vec<_> = state
+                .machine
+                .working_branches()
+                .iter()
+                .filter(|(repository, branch)| previous_branches.get(*repository) != Some(*branch))
+                .map(|(repository, branch)| (repository.clone(), branch.clone()))
+                .collect();
+            (updates, completion, pull_request, working_branches)
         };
         if emit {
+            for (repository, branch) in working_branches {
+                self.notifier
+                    .set_working_branch(id, &repository, &branch)
+                    .await
+                    .map_err(|error| {
+                        let mut state = session.state.lock().expect("session state poisoned");
+                        state.capture_failed = true;
+                        state.ready_for_sync = false;
+                        SessionError::Journal(error)
+                    })?;
+            }
             if let Some(url) = pull_request {
                 self.notifier
                     .set_pull_request(id, &url)
@@ -2301,6 +2528,11 @@ where
         // to a disconnected session by loading it, so a load that refuses is
         // also every future prompt refused as disconnected, with no way back.
         let (machine, updates) = history_projection(&entries, HistoryGap::IsServedAnyway)?;
+        for (repository, branch) in machine.working_branches() {
+            self.notifier
+                .set_working_branch(id, repository, branch)
+                .await?;
+        }
         if let Some(url) = machine.pull_request_url() {
             self.notifier.set_pull_request(id, url).await?;
         }

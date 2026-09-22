@@ -131,7 +131,7 @@ export function createMobileSwipeLayout(
         referredFrom,
       });
 
-      setNewFgSlotId(newFgHandle.id);
+      setNewFgSlotId(newFgHandle?.id);
     });
 
     if (forwardNavigationTrigger) {

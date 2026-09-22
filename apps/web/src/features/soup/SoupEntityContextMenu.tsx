@@ -33,6 +33,8 @@ interface SoupEntityContextMenuProps {
   selectedEntities: Accessor<EntityData[]>;
   viewContext: EntityActionViewContext;
   class?: string;
+  /** Use a div trigger when the row already renders its own button. */
+  as?: 'div';
   onOpenChange?: (open: boolean) => void;
 }
 
@@ -90,7 +92,7 @@ export const SoupEntityContextMenu: FlowComponent<
     <Switch>
       <Match when={isMobile()}>
         <div
-          class={cn('size-full', props.class)}
+          class={cn('h-full w-full', props.class)}
           data-soup-entity
           ref={(el) => {
             touchHandler(el, () => ({
@@ -111,7 +113,8 @@ export const SoupEntityContextMenu: FlowComponent<
       <Match when={true}>
         <ContextMenu onOpenChange={props.onOpenChange}>
           <ContextMenu.Trigger
-            class={cn('size-full group/cm-trigger', props.class)}
+            as={props.as}
+            class={cn('h-full w-full group/cm-trigger', props.class)}
             on:contextmenu={(event: MouseEvent) =>
               setMenuPosition({ x: event.clientX, y: event.clientY })
             }

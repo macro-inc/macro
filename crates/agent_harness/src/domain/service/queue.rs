@@ -289,13 +289,24 @@ where
             // an edited entry is delivered later under its original identity,
             // so rewriting (or dropping) what a Daytona session is about to
             // run is the same privilege as prompting it.
+            HarnessCommand::Deliver(DeliverAction {
+                actor,
+                action: AgentAction::RespondToPermission(_),
+                ..
+            }) => {
+                if actor.is_none() {
+                    return Err(AgentSessionError::Forbidden.into());
+                }
+            }
             HarnessCommand::Deliver(DeliverAction { actor, .. })
             | HarnessCommand::EditQueued { actor, .. }
             | HarnessCommand::RemoveQueued { actor, .. } => {
                 let session = self.sessions.get_session(session_id).await?;
                 if AgentKind::for_session(session.bot_id, &session.harness)
                     == AgentKind::ClaudeCloud
-                    && actor.as_ref() != Some(&session.owner_id)
+                    && !actor
+                        .as_ref()
+                        .is_some_and(|actor| session.owner_id.is_user(actor))
                 {
                     return Err(AgentSessionError::Forbidden.into());
                 }
@@ -496,6 +507,14 @@ where
     /// order holds regardless. The outcome reports what happened to *this*
     /// action - still waiting, or on the wire.
     ///
+    /// An action whose id this session already holds is the same action
+    /// arriving twice - a caller retrying a control request under the id it
+    /// named. It reports what became of the first copy instead of queueing a
+    /// second, so a retry cannot double-prompt. Only what this replica still
+    /// holds is checked: an id whose action has already finished its turn is
+    /// no longer anywhere to be seen, and accepting it again is indistinguishable
+    /// from asking for the same thing twice on purpose.
+    ///
     /// A channel follow-up (`announce` set) that lands on a running turn
     /// steers: it goes to the front of the queue, a stop cancels the current
     /// turn, and the chip is posted on that follow-up immediately - so it
@@ -506,6 +525,16 @@ where
         command: DeliverAction,
     ) -> Result<CommandOutcome> {
         let action_id = command.id;
+        if self.queues.contains(session_id, action_id) {
+            return Ok(CommandOutcome::Queued);
+        }
+        if self
+            .busy
+            .turn(session_id)
+            .is_some_and(|turn| turn.action_id == action_id)
+        {
+            return Ok(CommandOutcome::Completed);
+        }
         let prompt = match &command.action {
             AgentAction::Prompt(prompt) => Some(prompt.prompt.clone()),
             _ => None,

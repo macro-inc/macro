@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE \"Thread\"\n            SET \"deletedAt\" = NOW()\n            WHERE \"id\" = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fea18f68b65b80b18afba85d68044579f79b3236177bf6c513d06a51fa91337d"
+}

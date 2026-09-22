@@ -154,7 +154,10 @@ fn validate_exact_facts(
                 .map_err(|_| ProfileValidationError::InvalidValue("file-type"))?;
         } else if attribute == &vocabulary::document_sub_type() && kind == PartitionKind::Document {
             sub_type += 1;
-            if !matches!(value, b"task" | b"snippet" | b"skill") {
+            if !matches!(
+                value,
+                b"task" | b"snippet" | b"skill" | b"initiative_description"
+            ) {
                 return Err(ProfileValidationError::InvalidValue("document-sub-type"));
             }
         } else if attribute == &vocabulary::email_attachment() && kind == PartitionKind::Document {

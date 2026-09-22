@@ -337,29 +337,29 @@ pub type ToolCalendarReadService = calendar_events::domain::service::CalendarSer
 >;
 
 /// Type alias for the calendar mutation client used by AI tools. Mutations
-/// call the email service — the calendar write authority holding the Google
+/// call the calendar service — the calendar write authority holding the Google
 /// client, token minting, and request gate — with internal auth on behalf
 /// of the requesting user, so tool-driven edits behave identically to
 /// UI-driven ones.
 pub type ToolCalendarMutationService =
-    calendar_events::outbound::email_service_mutations::EmailServiceCalendarMutations;
+    calendar_events::outbound::calendar_service_mutations::CalendarServiceMutations;
 
 /// Type alias for the calendar AI tool context.
 pub type ToolCalendarToolContext =
     CalendarToolContext<ToolCalendarMutationService, ToolCalendarReadService>;
 
 /// Build the calendar AI tool context: reads query the local occurrence
-/// projections from `pool`; mutations call the email service at
-/// `email_service_url` with the shared internal API key.
+/// projections from `pool`; mutations call the calendar service at
+/// `calendar_service_url` with the shared internal API key.
 pub fn build_calendar_tool_context(
     pool: sqlx::PgPool,
-    email_service_url: String,
+    calendar_service_url: String,
     internal_api_key: String,
 ) -> ToolCalendarToolContext {
     CalendarToolContext::new(
         Arc::new(
-            calendar_events::outbound::email_service_mutations::EmailServiceCalendarMutations::new(
-                email_service_url,
+            calendar_events::outbound::calendar_service_mutations::CalendarServiceMutations::new(
+                calendar_service_url,
                 internal_api_key,
             ),
         ),

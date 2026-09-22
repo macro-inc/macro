@@ -127,6 +127,7 @@ messages = { path = "../messages" }
 model-entity = { path = "../model-entity", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 model_notifications = { path = "../model_notifications", optional = true }
+model_owner = { path = "../model_owner" }
 models_pagination = { path = "../models_pagination" }
 models_permissions = { path = "../models_permissions", optional = true }
 non_empty = { path = "../non_empty", optional = true }

@@ -18,6 +18,19 @@ pinned there): `apps/web/tauri/graphql_cache_plugin`, path-depending on
 `cargo test -p graphql_cache_plugin` (on NixOS use the `tauri-linux` dev shell —
 Tauri's Linux desktop stack needs its WebKitGTK/DBus system libraries).
 
+## Startup and integrity checks
+
+Normal opens validate schema, scope/version metadata, and pending mutation/optimistic
+state without running a full-file `PRAGMA quick_check`. Cached records retain their
+checked decoding and runtime corruption handling. This applies to both native
+Tauri and browser OPFS storage.
+
+`TursoStorage::check_integrity()` is an explicit, synchronous diagnostic for callers
+that need a full scan. Keep it off startup and foreground-read paths; it is not
+scheduled automatically in the background. Failures latch the existing storage
+health state without deleting records or pending mutations. Recovery/reset remains
+an explicit caller decision after closing the storage.
+
 ## Tests
 
 Run from the repository root:
@@ -74,6 +87,26 @@ CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER="$runner" \
 CHROMEDRIVER="$chromedriver" \
 WASM_BINDGEN_TEST_ONLY_WEB=1 cargo test --target wasm32-unknown-unknown -p turso-opfs --lib
 ```
+
+## Slow SQL telemetry
+
+The browser WASM driver reports each SQL statement execution **over 200 ms** as
+`graphql_cache.slow_query` through the existing page telemetry relay and OTLP
+pipeline to Datadog. These events bypass cache sampling/aggregation. Exporting
+still requires the existing browser telemetry enablement and exporter config.
+
+Search Datadog logs for `service:web-app "graphql_cache.slow_query"`:
+
+- `cache.duration_ms`: binding, stepping/OPFS I/O, row collection, and cleanup;
+  excludes statement preparation and time queued in the worker.
+- `db.query.fingerprint`: 16-digit lowercase FNV-1a hash of the exact unexpanded
+  SQL template, allowing repeated executions to be grouped without exporting SQL.
+- `cache.outcome`: `success` or `error`; slow failures are reported too.
+- `cache.slow_query_threshold_ms`: `200`.
+
+Parameters, results, raw SQL, and user identity are not exported. Logging uses
+an anonymous span context. A throwing JS telemetry callback cannot change query
+results. Native hosts are unchanged unless they install their own telemetry sink.
 
 ## Key policy
 

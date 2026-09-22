@@ -195,6 +195,10 @@ pub(crate) type DssNotificationRealtimeService =
         model_notifications::NotifEvent,
     >;
 
+/// Realtime activity consumer service used by GraphQL subscriptions.
+pub(crate) type DssActivityRealtimeService =
+    activity::ActivityRealtimeConsumerService<activity::ActivityTopicConsumer>;
+
 /// GraphQL Soup schema wired to the DSS services; the `ApiContext` state
 /// parameter lets GraphQL resolvers run the same axum extractors as the REST
 /// routes, lazily, against the stored request parts.
@@ -202,6 +206,7 @@ pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
     DssSoupService,
     DssSoupRealtimeService,
     DssNotificationRealtimeService,
+    DssActivityRealtimeService,
     DssEmailService,
     EntityAccessService,
     AuthorizationService,
@@ -481,8 +486,18 @@ pub(crate) type RemindersServiceType = RemindersServiceImpl<PgRemindersRepo>;
 pub(crate) type DssRemindersState =
     RemindersRouterState<RemindersServiceType, EntityAccessService, AuthorizationService>;
 
+pub(crate) type InitiativeDescriptionDocumentsType =
+    crate::outbound::initiative_description_documents::InitiativeDescriptionDocumentsAdapter<
+        Arc<DocumentService>,
+        documents_hex::outbound::markdown_init::LexicalSyncMarkdownInitializer,
+        documents_hex::outbound::document_bytes_upload::ReqwestDocumentBytesUploader,
+        documents_hex::outbound::mention_tracker::LexicalCommsMentionTracker,
+        DssEventBroker,
+    >;
+
 /// Type alias for the initiative service.
-pub(crate) type InitiativeServiceType = InitiativeServiceImpl<PgInitiativeRepo>;
+pub(crate) type InitiativeServiceType =
+    InitiativeServiceImpl<PgInitiativeRepo, InitiativeDescriptionDocumentsType>;
 
 /// Type alias for the initiative router state.
 pub(crate) type DssInitiativeState =

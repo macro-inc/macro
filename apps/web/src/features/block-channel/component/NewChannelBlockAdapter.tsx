@@ -19,10 +19,11 @@ import { ChannelCallTab } from '@channel/Call/ChannelCallTab';
 import { getCallJoinTab } from '@channel/Call/call-tabs';
 import { useCall } from '@channel/Call/use-call';
 import { isNativeIosCallKitEnabled } from '@channel/Call/use-callkit';
+import { ChannelCallsTab } from '@channel/Calls/ChannelCallsTab';
 import {
   type ChannelHandle,
-  type ChannelMessagesStateSnapshot,
   type ChannelProps,
+  type MessageTimelineStateSnapshot,
   Channel as NewChannel,
 } from '@channel/Channel/Channel';
 import {
@@ -69,12 +70,12 @@ import PictureIcon from '@phosphor/image.svg';
 import RenameIcon from '@phosphor/pencil-line.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import { useActiveCallQuery } from '@queries/call/call';
+import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import {
   fetchResolvedChannelMessage,
-  findThreadIdInChannelMessages,
-  findTopLevelMessageInChannelMessages,
-} from '@queries/channel/channel-messages';
-import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
+  findThreadIdInMessageTimeline,
+  findTopLevelMessageInMessageTimeline,
+} from '@queries/messages/timeline';
 import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { useSearchParams } from '@solidjs/router';
 import { cn } from '@ui';
@@ -103,7 +104,7 @@ export type BlockChannelProps = ChannelTargetMessageParams;
 
 type ChannelEntryStateSnapshot = {
   activeTab?: ChannelTabId;
-  messages?: ChannelMessagesStateSnapshot;
+  messages?: MessageTimelineStateSnapshot;
 };
 
 type ChannelPropsTargetMessage = Pick<
@@ -178,6 +179,8 @@ function NewTop(props: { channelId: string }) {
     let filtered = [...CHANNEL_TABS];
     if (channelType() === ChannelType.direct_message)
       filtered = filtered.filter((tab) => tab.value !== 'participants');
+    if (!ENABLE_CALLS)
+      filtered = filtered.filter((tab) => tab.value !== 'calls');
     if (!showCallTab())
       filtered = filtered.filter((tab) => tab.value !== 'call');
     return filtered;
@@ -187,10 +190,6 @@ function NewTop(props: { channelId: string }) {
       tab.value === 'call' ? { ...tab, label: <CallTabLabel /> } : tab
     );
 
-  // The generic rename op is gated on the document block-load signals, which
-  // the channel block never sets — so the menu offers a channel-local rename
-  // built from the channels context instead. The action's own gate keeps it
-  // off DMs and channels the user does not own.
   const channelEntity = () => {
     const ch = channel();
     if (!ch) return undefined;
@@ -200,6 +199,11 @@ function NewTop(props: { channelId: string }) {
       blockName: 'channel',
       channelType: ch.channel_type,
       ownerId: ch.owner_id,
+      isParticipant: participantsQuery.isSuccess
+        ? (participantsQuery.data ?? []).some(
+            (participant) => participant.user_id === userId()
+          )
+        : undefined,
     });
   };
 
@@ -484,10 +488,18 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
     // plain send (the common inbox-row click) or a reply in a loaded thread
     // preview resolves synchronously with no roundtrip. Only a genuinely
     // unknown id — an old mention/link opening a cold channel — pays a resolve.
-    if (findTopLevelMessageInChannelMessages(channelId, messageId)) {
+    if (
+      findTopLevelMessageInMessageTimeline(
+        { type: 'channel', id: channelId },
+        messageId
+      )
+    ) {
       return { targetMessageId: messageId, targetMessageReplyId: undefined };
     }
-    const cachedThreadId = findThreadIdInChannelMessages(channelId, messageId);
+    const cachedThreadId = findThreadIdInMessageTimeline(
+      { type: 'channel', id: channelId },
+      messageId
+    );
     if (cachedThreadId) {
       return {
         targetMessageId: cachedThreadId,
@@ -496,10 +508,10 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
     }
 
     const resolved = await fetchResolvedChannelMessage(
-      channelId,
+      { type: 'channel', id: channelId },
       messageId
     ).catch(() => undefined);
-    if (resolved?.kind === 'threadReply') {
+    if (resolved?.kind === 'thread_reply') {
       return {
         targetMessageId: resolved.thread_id,
         targetMessageReplyId: messageId,
@@ -603,6 +615,9 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
             </Match>
             <Match when={activeTab() === 'attachments'}>
               <ChannelAttachmentsTab channelId={channelId} />
+            </Match>
+            <Match when={activeTab() === 'calls' && ENABLE_CALLS}>
+              <ChannelCallsTab channelId={channelId} />
             </Match>
             <Match when={activeTab() === 'participants'}>
               <ChannelParticipantsTab

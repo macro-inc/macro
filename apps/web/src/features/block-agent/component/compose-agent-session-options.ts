@@ -1,55 +1,24 @@
-import { buildModelCatalog } from '@core/component/AI/component/input/modelCatalog';
-
-/** A persona the composer can start a managed session as. */
-export type PersonaOption = {
-  id: string;
-  /** Persisted bot id; absent for the deployment's built-in default persona. */
-  botId?: string;
-  name: string;
-  handle: string;
-  description?: string;
-  avatarUrl?: string;
-  harness: string;
-  defaultModel?: string;
-  ownerId?: string;
-  /** Why this persona cannot be picked right now, when it cannot. */
-  unavailableReason?: string;
-  /** An unavailable agent with a setup action remains clickable. */
-  connectLabel?: string;
-};
-
-/** A model the user can pin the session to instead of the persona default. */
-export type ModelOption = {
-  id: string;
-  name: string;
-  /** The heading the harness lists this model under, when it groups them. */
-  group?: string;
-};
+import { isCoderHarness } from '@app/features/agents-view/core/agent-kind';
+import { isClaudeBotId } from '@core/constant/claudeAgent';
+import { isCodexBotId } from '@core/constant/codexAgent';
+import { isCursorBotId } from '@core/constant/cursorAgent';
+import { MACRO_HARNESS_NAME } from '@core/constant/macroAgent';
 
 /**
- * How many override rows the menu shows up front. Enough to compare the
- * flagship choices at a glance; the rest sits behind "More models".
+ * The repository a session works in, for the header menu and side panel.
+ * The service stamps the deployment's default repository on every session,
+ * including chat-only ones that never touch it, so only a coding harness
+ * gets to show one.
  */
-export const MAX_FEATURED_MODELS = 5;
-
-/**
- * Harness slugs whose runtimes this deployment provisions itself — the only
- * personas the create composer can start. Anything else (a registered macrod
- * daemon, say) opens its own sessions and is refused by the create route.
- */
-export function isManagedHarness(harness: string): boolean {
-  return (
-    harness === 'in-memory' ||
-    harness === 'macro-inmem' ||
-    harness === 'cursor' ||
-    harness === 'codex-cloud' ||
-    harness === 'claude-cloud'
-  );
+export function sessionRepositoryUrl(
+  session: { harness: string; repoUrl?: string | null } | undefined
+): string | undefined {
+  if (!session || !isCoderHarness(session.harness)) return undefined;
+  return session.repoUrl ?? undefined;
 }
 
-/** 'claude-code' → 'Claude Code'; the fallback when nothing names a harness. */
-export function harnessTitle(harness: string | undefined): string {
-  if (!harness) return 'Agent session';
+/** Title-case a harness slug when nothing names it (`claude-code` → `Claude Code`). */
+function titledHarness(harness: string): string {
   return harness
     .split(/[-_]/)
     .filter(Boolean)
@@ -57,47 +26,56 @@ export function harnessTitle(harness: string | undefined): string {
     .join(' ');
 }
 
-/** A model's display name, or its id when the runtime lists no name for it. */
-export function modelDisplayName(
-  id: string,
-  available: readonly Pick<ModelOption, 'id' | 'name'>[]
-): string {
-  return available.find((model) => model.id === id)?.name ?? id;
+/**
+ * Label for a session's harness. Macro slugs would otherwise title-case to
+ * "Macro Inmem" / "In Memory"; everything else stays a titled slug.
+ */
+export function harnessTitle(harness: string | undefined): string {
+  if (!harness) return 'Agent session';
+  if (
+    harness === 'in-memory' ||
+    harness === 'macro-inmem' ||
+    harness === 'sandbox'
+  ) {
+    return MACRO_HARNESS_NAME;
+  }
+  return titledHarness(harness);
 }
 
-/** Explains the selected runtime below the composer, independently of its model. */
-export function agentRuntimeDescription(
-  persona: PersonaOption | undefined,
-  ownerName?: string
-): string {
-  if (!persona) return '';
-  if (persona.harness === 'in-memory' || persona.harness === 'macro-inmem') {
-    return 'Starts quickly and runs in-memory. Great for workspace tasks';
-  }
-  if (persona.harness === 'cursor') {
-    return 'Bring in Cursor for some heavier coding work';
-  }
-  if (persona.harness === 'codex-cloud')
-    return 'Runs in your selected Codex cloud environment';
-  if (persona.harness === 'claude-cloud') {
-    return 'Runs in Claude’s cloud using your subscription';
-  }
-  if (persona.harness === 'macrod') {
-    return `Do work locally using ${persona.name}${ownerName ? ` owned by ${ownerName}` : ''}`;
-  }
-  return `Runs using ${harnessDisplayName(persona.harness)}`;
+/**
+ * The harness slug a session should be labeled with. First-party cloud bots
+ * own a fixed slug (Cursor / Codex / Claude Cloud), even when an older row
+ * was stamped with the sandboxed-coder default (`opencode`).
+ */
+export function sessionHarnessSlug(session: {
+  harness?: string;
+  botId?: string;
+}): string | undefined {
+  const botId = session.botId;
+  if (botId && isCursorBotId(botId)) return 'cursor';
+  if (botId && isCodexBotId(botId)) return 'codex-cloud';
+  if (botId && isClaudeBotId(botId)) return 'claude-cloud';
+  return session.harness;
+}
+
+/** Title-cased harness label for session chrome (side panel, fallback title). */
+export function sessionHarnessTitle(session: {
+  harness?: string;
+  botId?: string;
+}): string {
+  return harnessTitle(sessionHarnessSlug(session));
 }
 
 /**
  * User-facing name for the runtime a persona runs on. Harness ids are
- * plumbing ("in-memory", "sandbox"); the product names are the coders.
+ * plumbing (`in-memory`, `macro-inmem`); the product name is Macro Agent.
  */
 export function harnessDisplayName(harness: string): string {
   switch (harness) {
     case 'in-memory':
     case 'macro-inmem':
     case 'sandbox':
-      return 'Macro';
+      return MACRO_HARNESS_NAME;
     case 'cursor':
       return 'Cursor';
     case 'codex-cloud':
@@ -110,80 +88,22 @@ export function harnessDisplayName(harness: string): string {
 }
 
 /**
- * The models offered as explicit overrides. The persona's own default is
- * already the "Agent default" choice, so listing it again would offer two
- * rows that do the same thing.
+ * Session Details lists a harness only for coding runtimes. In-memory chat
+ * agents have no user-facing harness, so the row stays off. Uses the same
+ * slug as `sessionHarnessTitle` so a first-party coding bot still shows even
+ * when an older row was stamped `opencode`.
  */
-export function overrideModelOptions(
-  persona: PersonaOption | undefined,
-  available: readonly ModelOption[]
-): ModelOption[] {
-  const defaultModel = persona?.defaultModel;
-  return defaultModel
-    ? available.filter((model) => model.id !== defaultModel)
-    : [...available];
+export function showsSessionHarness(session: {
+  harness?: string;
+  botId?: string;
+}): boolean {
+  return isCoderHarness(sessionHarnessSlug(session));
 }
 
-/** The override rows split into the featured shortlist and the overflow. */
-export type ModelShortlist = {
-  featured: ModelOption[];
-  more: ModelOption[];
-};
-
-/**
- * Cap the override list so the user compares a handful of models rather
- * than scrolling a whole catalog. Short lists show in full. Long ones lead
- * with the catalog's recommended picks (the flagship of each family the
- * harness offers) and put everything else behind "More models".
- */
-export function shortlistModelOptions(
-  persona: PersonaOption | undefined,
-  available: readonly ModelOption[],
-  max = MAX_FEATURED_MODELS
-): ModelShortlist {
-  const overrides = overrideModelOptions(persona, available);
-  if (overrides.length <= max) return { featured: overrides, more: [] };
-
-  const catalog = buildModelCatalog(
-    overrides.map((model) => ({
-      id: model.id,
-      label: model.name,
-      group: model.group,
-    }))
-  );
-  const featuredIds = new Set(
-    catalog.recommended.slice(0, max).map((option) => option.id)
-  );
-  // Fill from the harness's own order if curation found fewer than `max`.
-  for (const model of overrides) {
-    if (featuredIds.size >= max) break;
-    featuredIds.add(model.id);
-  }
-  return {
-    featured: overrides.filter((model) => featuredIds.has(model.id)),
-    more: overrides.filter((model) => !featuredIds.has(model.id)),
-  };
-}
-
-/**
- * Label for the "leave the model alone" choice. Names the persona's default
- * when it is known so the user sees what they will get without overriding.
- */
-export function personaDefaultLabel(
-  persona: PersonaOption | undefined,
-  available: readonly ModelOption[]
+/** A model's display name, or its id when the runtime lists no name for it. */
+export function modelDisplayName(
+  id: string,
+  available: readonly { id: string; name: string }[]
 ): string {
-  const defaultModel = persona?.defaultModel;
-  if (!defaultModel) return 'default';
-  return `default (${modelDisplayName(defaultModel, available)})`;
-}
-
-/** Short label for the closed model pill. */
-export function modelPillLabel(
-  override: string,
-  persona: PersonaOption | undefined,
-  available: readonly ModelOption[]
-): string {
-  if (override) return modelDisplayName(override, available);
-  return personaDefaultLabel(persona, available);
+  return available.find((model) => model.id === id)?.name ?? id;
 }

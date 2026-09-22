@@ -5,6 +5,11 @@ export type ClientOptions = {
 };
 
 /**
+ * Ordered from least to most access top -> bottom
+ */
+export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
+
+/**
  * One thing a caller wants an agent to do.
  */
 export type AgentAction = (AgentPromptAction & {
@@ -17,6 +22,8 @@ export type AgentAction = (AgentPromptAction & {
     type: 'stop';
 } | (AgentRespondElicitationAction & {
     type: 'respondElicitation';
+}) | (AgentPermissionAction & {
+    type: 'respondToPermission';
 });
 
 /**
@@ -25,11 +32,12 @@ export type AgentAction = (AgentPromptAction & {
  * frame, and read back off that frame as `request_id` on the folded message
  * it derives.
  *
- * Minted only by the server at accept time, as a v7 uuid so ids sort by mint
- * time. On the wire and in JSON it is the bare uuid, and a uuid-shaped
- * request id is the whole ownership test: the server is the only writer of
- * runtime-bound frames. The machine's own handshake request ids
- * (`agent_session:{session}:{n}`) are not uuids and stay `None`.
+ * A v7 uuid, so ids sort by mint time. Minted by the server at accept time,
+ * or by a client that speculated the action and named it in the control
+ * request - either way the server is the only writer of runtime-bound
+ * frames, so a uuid-shaped request id remains the whole ownership test. The
+ * machine's own handshake request ids (`agent_session:{session}:{n}`) are
+ * not uuids and stay `None`.
  */
 export type AgentActionId = string;
 
@@ -61,13 +69,78 @@ export type AgentModelDto = {
 export type AgentModelsStatusDto = 'available' | 'unsupported';
 
 /**
+ * A user's answer to the agent's `session/request_permission`.
+ *
+ * Unlike every other action this is not a new request but the reply to one
+ * the agent made, so it carries the agent's own request id rather than
+ * receiving a server-minted one.
+ */
+export type AgentPermissionAction = {
+    /**
+     * What the user decided.
+     */
+    answer: PermissionAnswer;
+    /**
+     * The agent's JSON-RPC request id, echoed verbatim from the folded
+     * permission part. A string or a number on the wire; agents mint both,
+     * and `7` does not answer `"7"`.
+     */
+    requestId: unknown;
+};
+
+/**
  * Ask the agent to work on something.
  */
 export type AgentPromptAction = {
     /**
+     * Files the prompt refers to, in the order the user attached them.
+     * Delivered after the text as one `resource_link` block each.
+     */
+    attachments?: Array<PromptAttachment>;
+    /**
      * What to tell the agent.
      */
     prompt: string;
+};
+
+/**
+ * Response body for `GET /agent-repositories`.
+ */
+export type AgentRepositoriesResponse = {
+    /**
+     * Every repository the caller reaches through Macro's GitHub App, sorted
+     * by `owner/name`. Empty when the App is installed nowhere the caller
+     * has a claim to.
+     */
+    repositories: Array<AgentRepositoryDto>;
+};
+
+/**
+ * Response body for `GET /agent-repositories/branches`.
+ */
+export type AgentRepositoryBranchesResponse = {
+    /**
+     * Branch names on the repository, in the order GitHub returned them.
+     * Empty when the repository has no commits yet.
+     */
+    branches: Array<string>;
+};
+
+/**
+ * One repository the caller can select for a coding session.
+ */
+export type AgentRepositoryDto = {
+    /**
+     * The branch a clone checks out, and where a session starts when its
+     * request selects this repository without a `repoBranch`. Absent for a
+     * repository with no commits.
+     */
+    defaultBranch?: string | null;
+    /**
+     * The canonical `https://github.com/owner/name` url, in the form
+     * `POST /agent-sessions` accepts as `repoUrl`.
+     */
+    url: string;
 };
 
 /**
@@ -79,6 +152,32 @@ export type AgentRespondElicitationAction = ElicitationAnswer & {
      * [`AgentActionId`], because the agent minted it.
      */
     requestId: ElicitationRequestId;
+};
+
+/**
+ * Response body for `GET /agent-sessions/{session_id}/changes/patch`.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type AgentSessionChangesPatchResponse = {
+    /**
+     * The git-style unified diff of the current changeset.
+     */
+    patch: string;
+};
+
+/**
+ * Response body for `GET /agent-sessions/{session_id}/changes`.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type AgentSessionChangesResponse = {
+    attempt?: null | CaptureAttemptDto;
+    /**
+     * A capture is running right now.
+     */
+    capturing: boolean;
+    changeset?: null | ChangesetDto;
 };
 
 /**
@@ -315,6 +414,140 @@ export type AgentSetModelAction = {
 export type BotId = string;
 
 /**
+ * The latest capture attempt.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type CaptureAttemptDto = {
+    /**
+     * Why it did not capture, in a sentence the user can read.
+     */
+    error?: string | null;
+    /**
+     * When it ended; absent while it runs.
+     */
+    finishedAt?: string | null;
+    outcome?: null | CaptureOutcomeDto;
+    /**
+     * When it started.
+     */
+    startedAt: string;
+};
+
+/**
+ * How the latest capture attempt ended, on the wire.
+ */
+export type CaptureOutcomeDto = 'captured' | 'not_ready' | 'failed';
+
+/**
+ * One changed file.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type ChangedFileDto = {
+    /**
+     * Lines added.
+     */
+    additions: number;
+    /**
+     * The diff carries no text for this file.
+     */
+    binary: boolean;
+    /**
+     * Lines removed.
+     */
+    deletions: number;
+    /**
+     * What happened to the file.
+     */
+    kind: FileChangeKindDto;
+    /**
+     * The file's hunks were left out of the patch to fit the size budget.
+     */
+    patchOmitted: boolean;
+    /**
+     * The file's path after the change, or before it for a deletion.
+     */
+    path: string;
+    /**
+     * Where a renamed file came from.
+     */
+    previousPath?: string | null;
+};
+
+/**
+ * One capture of a session's changes.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type ChangesetDto = {
+    /**
+     * Lines added across all files.
+     */
+    additions: number;
+    /**
+     * The side the work started from.
+     */
+    base: GitRefDto;
+    /**
+     * When the diff was taken.
+     */
+    capturedAt: string;
+    /**
+     * Lines removed across all files.
+     */
+    deletions: number;
+    /**
+     * Every changed file, in patch order.
+     */
+    files: Array<ChangedFileDto>;
+    /**
+     * The side carrying the work.
+     */
+    head: GitRefDto;
+    /**
+     * The capture's id; changes with every capture.
+     */
+    id: string;
+    /**
+     * Size of the patch `GET .../changes/patch` serves; zero when nothing
+     * changed.
+     */
+    patchBytes: number;
+    /**
+     * `https://github.com/owner/name`, when known.
+     */
+    repository?: string | null;
+    /**
+     * Where the diff was read from.
+     */
+    source: ChangesetSourceDto;
+    /**
+     * Some files' hunks were left out of the patch.
+     */
+    truncated: boolean;
+};
+
+/**
+ * The source of the captured diff, on the wire.
+ */
+export type ChangesetSourceDto = 'github_pull_request';
+
+/**
+ * The channel share permission
+ */
+export type ChannelSharePermission = {
+    /**
+     * The access level for the channel
+     */
+    access_level: AccessLevel;
+    /**
+     * The channel id
+     */
+    channel_id: string;
+};
+
+/**
  * One-time manual code. Deliberately does not implement Debug.
  */
 export type CompleteRequest = {
@@ -329,9 +562,18 @@ export type CompleteRequest = {
 };
 
 /**
- * The operation to perform.
+ * Request body for a control operation on a live session.
+ *
+ * A wrapper around the operation rather than the bare enum so that fields
+ * which are about the request rather than the operation have somewhere to go.
+ * The acting user is deliberately not one of them: it comes from the caller's
+ * credentials, so that a caller cannot attribute an operation to someone else.
+ *
+ * Clients serialize this, so both derives are used.
  */
-export type ControlRequest = AgentAction;
+export type ControlRequest = AgentAction & {
+    actionId?: null | AgentActionId;
+};
 
 /**
  * Response body for a control operation.
@@ -341,7 +583,8 @@ export type ControlRequest = AgentAction;
 export type ControlResponse = {
     /**
      * Matches `requestId` on the folded message this action derives once it
-     * dispatches, and names the queue entry until then.
+     * dispatches, and names the queue entry until then. The caller's own
+     * `actionId` when it supplied one; a freshly minted id otherwise.
      */
     actionId: AgentActionId;
     /**
@@ -406,12 +649,14 @@ export type CreateAgentSessionRequest = {
     prompt?: string | null;
     /**
      * Starting branch for a managed coding session's selected repository.
+     * Omitted, the session starts on the repository's default branch.
      */
     repoBranch?: string | null;
     /**
-     * Explicit GitHub repository for a managed Cursor session. Access is
-     * checked for the session owner. For external sessions this is
-     * informational: cloning it is the runtime operator's job.
+     * Explicit GitHub repository for a managed Cursor session, as one of the
+     * urls `GET /agent-repositories` lists for the caller. Access is checked
+     * for the session owner. For external sessions this is informational:
+     * cloning it is the runtime operator's job.
      */
     repoUrl?: string | null;
     thread?: null | CreateSessionThread;
@@ -545,6 +790,30 @@ export type ExternalSessionResponse = {
 };
 
 /**
+ * What happened to a file, on the wire.
+ */
+export type FileChangeKindDto = 'added' | 'modified' | 'deleted' | 'renamed';
+
+/**
+ * One end of the compared range.
+ */
+export type GitRefDto = {
+    /**
+     * The branch name, when known.
+     */
+    name?: string | null;
+    /**
+     * The commit, when known.
+     */
+    sha?: string | null;
+};
+
+/**
+ * Defines who can access an item through its share link.
+ */
+export type LinkShare = 'PUBLIC' | 'TEAM';
+
+/**
  * HTTP request selecting one provider to probe.
  */
 export type LoadAgentModelsRequest = {
@@ -627,6 +896,19 @@ export type MessageParent = {
 export type ModelHarnessDto = 'in-memory' | 'cursor' | 'claude-cloud' | 'macrod';
 
 /**
+ * The decision carried by an [`AgentPermissionAction`].
+ */
+export type PermissionAnswer = {
+    kind: 'selected';
+    /**
+     * The chosen option's id, as the agent listed it.
+     */
+    optionId: string;
+} | {
+    kind: 'cancelled';
+};
+
+/**
  * Request body for `POST /agent-sessions/preview`.
  *
  * Clients serialize this, so both derives are used.
@@ -654,6 +936,35 @@ export type PreviewAgentSessionsResponse = {
 };
 
 /**
+ * A file the prompt refers to, by where the agent can fetch it.
+ *
+ * Mirrors ACP's `resource_link` content block, which every agent must
+ * accept: bytes never ride the prompt, only a URI (a static file service URL
+ * in practice) with enough metadata for a client to render a chip and for
+ * the agent to decide whether to fetch it. Keeping the wire shape ACP-native
+ * means the harness translates without resolving anything, and the fold
+ * reads the same fields back off the logged frame.
+ */
+export type PromptAttachment = {
+    /**
+     * The file's media type, when known.
+     */
+    mimeType?: string | null;
+    /**
+     * Display name, typically the original file name.
+     */
+    name: string;
+    /**
+     * Size in bytes, when known.
+     */
+    size?: number | null;
+    /**
+     * Where the agent can fetch the file.
+     */
+    uri: string;
+};
+
+/**
  * One action waiting in a session's queue.
  *
  * Clients deserialize this, so both derives are used.
@@ -667,6 +978,11 @@ export type QueuedActionDto = {
      * The user who queued it, absent when a bot acted on nobody's behalf.
      */
     actorUserId?: string | null;
+    /**
+     * Files the prompt refers to, for prompts only. Kept through an edit,
+     * which replaces the text alone.
+     */
+    attachments?: Array<PromptAttachment>;
     /**
      * When it was accepted.
      */
@@ -749,6 +1065,24 @@ export type SessionStatusDto = {
     kind: 'disconnected';
 };
 
+export type SharePermissionV2 = {
+    /**
+     * The channel share permissions for the item
+     */
+    channelSharePermissions?: Array<ChannelSharePermission> | null;
+    /**
+     * The share permission id
+     */
+    id: string;
+    linkShare?: null | LinkShare;
+    linkShareAccessLevel?: null | AccessLevel;
+    /**
+     * The owner of the item
+     */
+    owner: string;
+    teamShareAccessLevel?: null | AccessLevel;
+};
+
 /**
  * Public PKCE challenge and attempt handle; contains no verifier or provider tokens.
  */
@@ -783,6 +1117,31 @@ export type StatusResponse = {
      * Whether reconnecting after service restart is required.
      */
     ephemeral: boolean;
+};
+
+export type UpdateChannelSharePermission = {
+    accessLevel?: null | AccessLevel;
+    /**
+     * The channel id
+     */
+    channelId: string;
+    /**
+     * The type of operation to be performed on the chanel share permission
+     * You can add, remove or replace and existing permission
+     */
+    operation: UpdateOperation;
+};
+
+export type UpdateOperation = 'add' | 'remove' | 'replace';
+
+export type UpdateSharePermissionRequestV2 = {
+    /**
+     * Any channel share permissions to be created/updated/removed
+     */
+    channelSharePermissions?: Array<UpdateChannelSharePermission> | null;
+    linkShare?: null | LinkShare;
+    linkShareAccessLevel?: null | AccessLevel;
+    teamShareAccessLevel?: null | AccessLevel;
 };
 
 /**
@@ -839,6 +1198,73 @@ export type LoadAgentModelsHandlerResponses = {
 };
 
 export type LoadAgentModelsHandlerResponse = LoadAgentModelsHandlerResponses[keyof LoadAgentModelsHandlerResponses];
+
+export type ListAgentRepositoriesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/agent-repositories';
+};
+
+export type ListAgentRepositoriesErrors = {
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+    /**
+     * GitHub could not be asked which repositories the caller reaches
+     */
+    502: unknown;
+};
+
+export type ListAgentRepositoriesResponses = {
+    /**
+     * The caller's reachable repositories
+     */
+    200: AgentRepositoriesResponse;
+};
+
+export type ListAgentRepositoriesResponse = ListAgentRepositoriesResponses[keyof ListAgentRepositoriesResponses];
+
+export type ListAgentRepositoryBranchesData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Canonical https://github.com/owner/name URL
+         */
+        repoUrl: string;
+    };
+    url: '/agent-repositories/branches';
+};
+
+export type ListAgentRepositoryBranchesErrors = {
+    /**
+     * The query did not name a GitHub repository
+     */
+    400: unknown;
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+    /**
+     * The caller cannot reach this repository
+     */
+    403: unknown;
+    /**
+     * GitHub could not be asked which branches the repository has
+     */
+    502: unknown;
+};
+
+export type ListAgentRepositoryBranchesResponses = {
+    /**
+     * The repository's branches
+     */
+    200: AgentRepositoryBranchesResponse;
+};
+
+export type ListAgentRepositoryBranchesResponse = ListAgentRepositoryBranchesResponses[keyof ListAgentRepositoryBranchesResponses];
 
 export type GetAgentSandboxSizeData = {
     body?: never;
@@ -977,6 +1403,85 @@ export type GetAgentSessionResponses = {
 
 export type GetAgentSessionResponse = GetAgentSessionResponses[keyof GetAgentSessionResponses];
 
+export type GetAgentSessionChangesData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/changes';
+};
+
+export type GetAgentSessionChangesErrors = {
+    401: string;
+    403: string;
+    500: string;
+};
+
+export type GetAgentSessionChangesError = GetAgentSessionChangesErrors[keyof GetAgentSessionChangesErrors];
+
+export type GetAgentSessionChangesResponses = {
+    200: AgentSessionChangesResponse;
+};
+
+export type GetAgentSessionChangesResponse = GetAgentSessionChangesResponses[keyof GetAgentSessionChangesResponses];
+
+export type GetAgentSessionChangesPatchData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/changes/patch';
+};
+
+export type GetAgentSessionChangesPatchErrors = {
+    401: string;
+    403: string;
+    404: string;
+    500: string;
+};
+
+export type GetAgentSessionChangesPatchError = GetAgentSessionChangesPatchErrors[keyof GetAgentSessionChangesPatchErrors];
+
+export type GetAgentSessionChangesPatchResponses = {
+    200: AgentSessionChangesPatchResponse;
+};
+
+export type GetAgentSessionChangesPatchResponse = GetAgentSessionChangesPatchResponses[keyof GetAgentSessionChangesPatchResponses];
+
+export type RefreshAgentSessionChangesData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/changes/refresh';
+};
+
+export type RefreshAgentSessionChangesErrors = {
+    401: string;
+    403: string;
+    500: string;
+};
+
+export type RefreshAgentSessionChangesError = RefreshAgentSessionChangesErrors[keyof RefreshAgentSessionChangesErrors];
+
+export type RefreshAgentSessionChangesResponses = {
+    202: AgentSessionChangesResponse;
+};
+
+export type RefreshAgentSessionChangesResponse = RefreshAgentSessionChangesResponses[keyof RefreshAgentSessionChangesResponses];
+
 export type ControlAgentSessionData = {
     body: ControlRequest;
     path: {
@@ -1059,6 +1564,58 @@ export type RenameAgentSessionResponses = {
 };
 
 export type RenameAgentSessionResponse = RenameAgentSessionResponses[keyof RenameAgentSessionResponses];
+
+export type GetAgentSessionPermissionsData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/permissions';
+};
+
+export type GetAgentSessionPermissionsErrors = {
+    403: string;
+    500: string;
+};
+
+export type GetAgentSessionPermissionsError = GetAgentSessionPermissionsErrors[keyof GetAgentSessionPermissionsErrors];
+
+export type GetAgentSessionPermissionsResponses = {
+    200: SharePermissionV2;
+};
+
+export type GetAgentSessionPermissionsResponse = GetAgentSessionPermissionsResponses[keyof GetAgentSessionPermissionsResponses];
+
+export type UpdateAgentSessionPermissionsData = {
+    body: UpdateSharePermissionRequestV2;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/permissions';
+};
+
+export type UpdateAgentSessionPermissionsErrors = {
+    400: string;
+    403: string;
+    409: string;
+    500: string;
+};
+
+export type UpdateAgentSessionPermissionsError = UpdateAgentSessionPermissionsErrors[keyof UpdateAgentSessionPermissionsErrors];
+
+export type UpdateAgentSessionPermissionsResponses = {
+    200: SharePermissionV2;
+};
+
+export type UpdateAgentSessionPermissionsResponse = UpdateAgentSessionPermissionsResponses[keyof UpdateAgentSessionPermissionsResponses];
 
 export type GetAgentSessionQueueData = {
     body?: never;

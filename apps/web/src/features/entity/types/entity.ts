@@ -166,6 +166,15 @@ export type ChatEntity = EntityBase & {
 export type AgentSessionEntity = EntityBase & {
   type: 'agent_session';
   botId: string;
+  harness?: string;
+  repoUrl?: string | null;
+  /** Starting branch selected at creation, not the current working branch. */
+  repoBranch?: string | null;
+  pullRequestUrl?: string | null;
+  workingBranch?: string | null;
+  pullRequestState?: 'open' | 'draft' | 'closed' | 'merged' | null;
+  pullRequestId?: string | null;
+  turnState?: string | null;
   bot?: { id: string; name: string; avatarUrl?: string | null } | null;
   threadId?: string | null;
   status: string;
@@ -180,6 +189,17 @@ export type SubType = {
   type: NamedSubType;
   is_completed?: boolean;
 } | null;
+
+/** Wire subtypes without a dedicated block, including initiative_description, become null. */
+export const toSubType = (
+  wire: { type: string; is_completed?: boolean } | null | undefined
+): SubType => {
+  if (wire == null) return null;
+  const { type } = wire;
+  return type === 'task' || type === 'snippet' || type === 'skill'
+    ? { type, is_completed: wire.is_completed }
+    : null;
+};
 
 export type BaseDocumentEntity = EntityBase & {
   type: 'document';

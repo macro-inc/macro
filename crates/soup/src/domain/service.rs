@@ -67,6 +67,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;
 
+mod agent_metadata;
+
 #[cfg(test)]
 mod tests;
 
@@ -217,6 +219,8 @@ pub struct SoupImpl<T, U, V, C, K, Crm, F, Rem> {
     foreign_entity_service: F,
     /// the interface for interacting with reminders
     reminders_service: Rem,
+    /// Optional captured branch facts supplied by the owning changes domain.
+    agent_branches: Option<Arc<dyn agent_changes::domain::ports::SessionBranchReader>>,
 }
 
 impl<T, U, V, C, K, Crm, F, Rem> SoupImpl<T, U, V, C, K, Crm, F, Rem>
@@ -252,7 +256,17 @@ where
             crm_service,
             foreign_entity_service,
             reminders_service,
+            agent_branches: None,
         }
+    }
+
+    /// Attach persisted working-branch facts for agent rows.
+    pub fn with_agent_branches(
+        mut self,
+        reader: impl agent_changes::domain::ports::SessionBranchReader,
+    ) -> Self {
+        self.agent_branches = Some(Arc::new(reader));
+        self
     }
 
     #[tracing::instrument(err, skip(self, req))]
@@ -1533,6 +1547,8 @@ where
         // Borrow before email's builder consumes team_receipt.
         let crm_company_request = req.build_crm_company_request(&team_receipt);
         let foreign_entity_source_ids = req.build_foreign_entity_source_ids(team_receipt.as_ref());
+        let metadata_source_ids = foreign_entity_source_ids.clone();
+        let metadata_user = req.user.to_string();
         let foreign_entity_query = req.build_foreign_entity_query();
         let email_request = req.build_email_request(team_receipt);
         let comms_request = req.build_comms_request();
@@ -1541,7 +1557,7 @@ where
         let reminder_request = req.build_reminder_request(limit.into());
         let sort_direction = req.sort_direction;
 
-        match req.cursor {
+        let output: Result<SoupOutput<R, SoupCandidate>, SoupErr> = match req.cursor {
             SoupQuery::Simple(SimpleQueryInner(cursor)) => {
                 let sort_method = *cursor.sort_method();
 
@@ -1682,7 +1698,23 @@ where
                     next_cursor,
                 )))
             }
-        }
+        };
+        let mut output = output?;
+        let items = match &mut output {
+            SoupOutput::Simple(page) => &mut page.items,
+            SoupOutput::Frecency(page) => &mut page.items,
+            SoupOutput::Touched(page) => &mut page.items,
+            SoupOutput::Notified(page) => &mut page.items,
+        };
+        agent_metadata::enrich(
+            &self.foreign_entity_service,
+            self.agent_branches.as_deref(),
+            metadata_user,
+            metadata_source_ids,
+            items,
+        )
+        .await?;
+        Ok(output)
     }
 }
 

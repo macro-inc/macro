@@ -225,6 +225,14 @@ impl SoupService for MockSoup {
 struct MockEmail;
 
 impl EmailService for MockEmail {
+    async fn mark_thread_unread(
+        &self,
+        _macro_id: MacroUserIdStr<'static>,
+        _thread_id: uuid::Uuid,
+    ) -> Result<(), EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
     async fn get_email_thread_previews(
         &self,
         _req: email::domain::models::GetEmailsRequest,
@@ -304,6 +312,23 @@ impl EmailService for MockEmail {
         _accessible_inboxes: &[email::domain::models::Link],
         _input: email::domain::models::CreateDraftInput,
     ) -> Result<email::domain::models::CreatedDraft, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn save_draft_for_user(
+        &self,
+        _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+        _link_id: Option<uuid::Uuid>,
+        _input: email::domain::models::CreateDraftInput,
+    ) -> Result<email::domain::models::SavedUserDraft, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn delete_draft_for_user(
+        &self,
+        _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+        _draft_id: uuid::Uuid,
+    ) -> Result<email::domain::models::DeletedUserDraft, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 
@@ -667,6 +692,14 @@ struct MockEmailLinkResult {
 }
 
 impl EmailService for MockEmailLinkResult {
+    async fn mark_thread_unread(
+        &self,
+        _macro_id: MacroUserIdStr<'static>,
+        _thread_id: uuid::Uuid,
+    ) -> Result<(), EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
     async fn get_email_thread_previews(
         &self,
         _req: email::domain::models::GetEmailsRequest,
@@ -736,6 +769,23 @@ impl EmailService for MockEmailLinkResult {
         _accessible_inboxes: &[email::domain::models::Link],
         _input: email::domain::models::CreateDraftInput,
     ) -> Result<email::domain::models::CreatedDraft, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn save_draft_for_user(
+        &self,
+        _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+        _link_id: Option<uuid::Uuid>,
+        _input: email::domain::models::CreateDraftInput,
+    ) -> Result<email::domain::models::SavedUserDraft, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn delete_draft_for_user(
+        &self,
+        _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+        _draft_id: uuid::Uuid,
+    ) -> Result<email::domain::models::DeletedUserDraft, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 

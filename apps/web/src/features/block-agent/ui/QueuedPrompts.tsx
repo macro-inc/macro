@@ -32,6 +32,8 @@ export type QueuedPromptItem = {
   kind: string;
   /** The prompt's raw text, absent for a compact. */
   prompt?: string;
+  /** Files the prompt refers to; an edit keeps them, only the text changes. */
+  attachments?: { name: string; mimeType?: string | null }[];
   /** Who queued it, when it was somebody other than the current user. */
   queuedBy?: string;
 };
@@ -39,6 +41,8 @@ export type QueuedPromptItem = {
 export interface QueuedPromptsProps {
   /** In dispatch order — oldest (next to send) first, as the server reports. */
   items: QueuedPromptItem[];
+  /** Keep queued text visible without allowing changes. */
+  disabled?: boolean;
   /** Autosave a queued prompt's replacement text. The rows debounce. */
   onEdit: (actionId: string, prompt: string) => void;
   /** Remove a queued action before it dispatches. */
@@ -97,6 +101,7 @@ export function QueuedPrompts(props: QueuedPromptsProps) {
             {(item) => (
               <QueuedRow
                 item={item()}
+                disabled={props.disabled}
                 registerFocus={(focus) => {
                   if (focus) focusFns.set(id, focus);
                   else focusFns.delete(id);
@@ -116,6 +121,7 @@ export function QueuedPrompts(props: QueuedPromptsProps) {
 
 type QueuedRowProps = {
   item: QueuedPromptItem;
+  disabled?: boolean;
   /** Ref-style: how navigation focuses this row; `undefined` on unmount. */
   registerFocus: (focus: (() => void) | undefined) => void;
   onMoveUp: () => void;
@@ -150,6 +156,7 @@ function QueuedRow(props: QueuedRowProps) {
           variant="ghost"
           size="icon-sm"
           label="Remove queued message"
+          disabled={props.disabled}
           onClick={() => props.onRemove()}
           class="shrink-0"
         >
@@ -177,6 +184,7 @@ function PromptBody(props: QueuedRowProps) {
       clearTimeout(saveTimer);
       saveTimer = undefined;
     }
+    if (props.disabled) return;
     const text = editor.controls.getMarkdown();
     // An emptied row is not an edit to send — the server refuses empty
     // prompts and "delete the text" has the remove affordance for it.
@@ -186,6 +194,7 @@ function PromptBody(props: QueuedRowProps) {
   };
 
   const scheduleSave = (markdown: string) => {
+    if (props.disabled) return;
     if (markdown === synced) return;
     if (saveTimer !== undefined) clearTimeout(saveTimer);
     saveTimer = setTimeout(flush, AUTOSAVE_DEBOUNCE_MS);
@@ -233,7 +242,27 @@ function PromptBody(props: QueuedRowProps) {
 
   return (
     <div class="text-sm text-ink" onFocusOut={flush}>
-      <MarkdownShell config={editor} initialValue={props.item.prompt} />
+      <MarkdownShell
+        config={editor}
+        initialValue={props.item.prompt}
+        disabled={props.disabled}
+      />
+      {/* Attached files ride the prompt as-is: an edit rewrites the text and
+          keeps them, so they are shown but not editable here. */}
+      <Show when={props.item.attachments?.length}>
+        <div
+          class="flex flex-wrap gap-1 pt-1 text-xs text-ink-muted"
+          data-testid="agent-queued-attachments"
+        >
+          <For each={props.item.attachments}>
+            {(attachment) => (
+              <span class="rounded-xs border border-edge-muted px-1.5 py-0.5">
+                {attachment.name}
+              </span>
+            )}
+          </For>
+        </div>
+      </Show>
     </div>
   );
 }

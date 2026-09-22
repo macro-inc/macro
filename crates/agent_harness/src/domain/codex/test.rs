@@ -10,10 +10,14 @@ use std::{collections::HashMap, sync::Mutex};
 struct Connections(
     Mutex<HashMap<String, (String, String)>>,
     Mutex<Option<Option<String>>>,
+    Mutex<Option<ConnectionError>>,
 );
 #[async_trait::async_trait]
 impl ConnectionService for Connections {
     async fn resolve(&self, owner: &str) -> Result<ResolvedConnection, ConnectionError> {
+        if let Some(error) = self.2.lock().unwrap().take() {
+            return Err(error);
+        }
         let rows = self.0.lock().unwrap();
         let (connection, account) = rows.get(owner).ok_or(ConnectionError::NotConnected)?;
         let environment = self
@@ -327,4 +331,33 @@ async fn pr_publication_passes_the_activated_claim_and_rejects_disconnected_owne
         .unwrap();
     assert!(runtime.report_pull_request(url).await.is_err());
     assert_eq!(reporter.0.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn connection_preflight_distinguishes_missing_account_and_environment() {
+    let connections = Connections::default();
+    let owner = MacroUserIdStr::try_from_email("asker@example.com").unwrap();
+    assert_eq!(
+        connection_preflight(&connections, &owner).await.unwrap(),
+        Some(SessionBlocker::CodexNotConnected)
+    );
+    connections.0.lock().unwrap().insert(
+        owner.as_ref().to_owned(),
+        (uuid::Uuid::new_v4().to_string(), "account".into()),
+    );
+    *connections.1.lock().unwrap() = Some(None);
+    assert_eq!(
+        connection_preflight(&connections, &owner).await.unwrap(),
+        Some(SessionBlocker::CodexEnvironmentNotConfigured)
+    );
+    *connections.1.lock().unwrap() = Some(Some("env_selected".into()));
+    assert_eq!(
+        connection_preflight(&connections, &owner).await.unwrap(),
+        None
+    );
+    *connections.2.lock().unwrap() = Some(ConnectionError::Storage);
+    assert!(matches!(
+        connection_preflight(&connections, &owner).await,
+        Err(HarnessError::Container(_))
+    ));
 }

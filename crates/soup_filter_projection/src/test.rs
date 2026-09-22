@@ -1,6 +1,6 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD_NO_PAD};
 use chrono::{TimeZone, Utc};
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use model_owner::Owner;
 use models_soup::{
     chat::SoupChat,
     document::{SoupDocument, SoupDocumentSubType},
@@ -11,10 +11,8 @@ use uuid::Uuid;
 use super::*;
 use soup::domain::models::SoupDocumentServerFacts;
 
-fn owner() -> MacroUserIdStr<'static> {
-    MacroUserIdStr::parse_from_str("macro|owner@example.com")
-        .unwrap()
-        .into_owned()
+fn owner() -> Owner {
+    Owner::from_principal_str("macro|owner@example.com").unwrap()
 }
 
 fn timestamp(micros: u32) -> chrono::DateTime<Utc> {
@@ -374,7 +372,7 @@ fn complete_v3_projection_contains_viewer_importance_and_status_facts() {
             record_key: document_key(id),
             kind: SoupFlatEntityKind::Document,
             id: document.id,
-            owner: document.owner_id.to_string(),
+            owner: document.owner_id.principal_id(),
             project_id: document.project_id,
             file_type: document.file_type,
             created_at: document.created_at,

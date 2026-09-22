@@ -29,8 +29,9 @@ use super::*;
 use crate::domain::{
     models::{
         AssignTaskStatus, AssignTasksResponse, AssignTasksResult, CreateInitiativeRequest,
-        InitiativeBasic, InitiativeDetail, InitiativeError, InitiativeId, InitiativeList,
-        InitiativeSummary, MAX_INITIATIVE_NAME_GRAPHEMES, TaskAssignment, UpdateInitiativeRequest,
+        DescriptionDocumentId, InitiativeBasic, InitiativeDetail, InitiativeError, InitiativeId,
+        InitiativeList, InitiativeSummary, MAX_INITIATIVE_NAME_GRAPHEMES, TaskAssignment,
+        UpdateInitiativeRequest,
     },
     ports::InitiativeService,
 };
@@ -47,6 +48,10 @@ fn existing_id() -> InitiativeId {
 
 fn unknown_id() -> InitiativeId {
     InitiativeId::from_uuid(Uuid::from_u128(99))
+}
+
+fn description_document_id() -> DescriptionDocumentId {
+    DescriptionDocumentId::from_uuid(Uuid::from_u128(2))
 }
 
 fn now() -> DateTime<Utc> {
@@ -86,7 +91,7 @@ fn sample_detail() -> InitiativeDetail {
     InitiativeDetail {
         id: existing_id(),
         name: "Launch".to_string(),
-        description: None,
+        description_document_id: description_document_id(),
         owner_id: user(),
         member_ids: Vec::new(),
         task_ids: Vec::new(),
@@ -102,7 +107,7 @@ fn sample_list() -> InitiativeList {
         initiatives: vec![InitiativeSummary {
             id: existing_id(),
             name: "Launch".to_string(),
-            description: None,
+            description_document_id: description_document_id(),
             updated_at: now(),
         }],
     }
@@ -549,6 +554,32 @@ async fn create_returns_200() {
             name: "Launch".to_string()
         }]
     );
+}
+
+#[tokio::test]
+async fn create_response_points_at_the_description_document_instead_of_inlining_text() {
+    let response = send(
+        build_router(
+            FakeInitiativeService::default(),
+            FakeEntityAccessService::default(),
+        ),
+        authed(axum::http::Request::post("/"))
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(json_body(serde_json::json!({
+                "name": "Launch",
+                "description": "## Goals"
+            })))
+            .expect("request should build"),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = read_json(response).await;
+    assert_eq!(
+        body["descriptionDocumentId"],
+        serde_json::json!(description_document_id().to_string())
+    );
+    assert!(body.get("description").is_none());
 }
 
 #[tokio::test]

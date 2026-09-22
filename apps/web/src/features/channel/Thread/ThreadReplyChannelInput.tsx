@@ -1,6 +1,7 @@
 import { useUserId } from '@core/context/user';
-import { useSendMessageMutation } from '@queries/channel/message';
-import { usePostTypingUpdateMutation } from '@queries/channel/typing';
+import { useSendMessageMutation } from '@queries/messages/mutations';
+import { usePostTypingUpdateMutation } from '@queries/messages/typing';
+import type { MessageParent } from '@service-storage/messages';
 import {
   type Accessor,
   createEffect,
@@ -16,12 +17,11 @@ import {
   makeInputValuePersistenceKey,
 } from '../Input/utils/persistence';
 import { hasSendableInputContent } from '../Input/utils/sendable-content';
-import { useChannelBotMentionUsers } from '../use-channel-bot-mention-users';
-import { useChannelParticipants } from '../use-channel-participants';
+import { useMessageBotMentionUsers } from '../use-channel-bot-mention-users';
 import type { FocusRequest } from './focus-request';
 
 type ThreadReplyChannelInputProps = {
-  channelId: string;
+  parent: MessageParent;
   threadId: string;
   replyInputState: Accessor<InputSnapshot | undefined>;
   setReplyInputState: Setter<InputSnapshot | undefined>;
@@ -55,14 +55,11 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
   const userId = useUserId();
   const sendMessageMutation = useSendMessageMutation();
   const typingMutation = usePostTypingUpdateMutation();
-  const participants = useChannelParticipants(() => props.channelId);
-  const channelBotMentionUsers = useChannelBotMentionUsers(
-    () => props.channelId
-  );
+  const channelBotMentionUsers = useMessageBotMentionUsers(() => props.parent);
 
   const tracker = createInputAttachmentTracker({
     persistenceKey: makeAttachmentTrackerPersistenceKey({
-      channelId: props.channelId,
+      channelId: `${props.parent.type}:${props.parent.id}`,
       threadId: props.threadId,
     }),
     initialAttachments: props.replyInputState()?.attachments,
@@ -98,6 +95,7 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
 
   return (
     <ChannelInput
+      parent={props.parent}
       input={{
         id: `thread-reply-input-${props.threadId}`,
         placeholder: 'Send a reply',
@@ -108,11 +106,10 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
       }}
       collapsible={props.collapsible}
       autofocus={false}
-      participants={participants.users}
       bots={channelBotMentionUsers}
       attachmentTracker={tracker}
       persistenceKey={makeInputValuePersistenceKey({
-        channelId: props.channelId,
+        channelId: `${props.parent.type}:${props.parent.id}`,
         threadId: props.threadId,
       })}
       markdownNamespace={`thread-reply-input-${props.threadId}-markdown`}
@@ -120,14 +117,14 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
       onChange={(snapshot) => void props.setReplyInputState(snapshot)}
       onStartTyping={() =>
         typingMutation.mutate({
-          channelId: props.channelId,
+          parent: props.parent,
           action: 'start',
           threadId: props.threadId,
         })
       }
       onStopTyping={() =>
         typingMutation.mutate({
-          channelId: props.channelId,
+          parent: props.parent,
           action: 'stop',
           threadId: props.threadId,
         })
@@ -142,12 +139,11 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
         const payload = buildPostMessageSendPayload({
           snapshot,
           threadId: props.threadId,
-          participantIds: participants.ids(),
         });
 
         sendMessageMutation.mutate(
           {
-            channelID: props.channelId,
+            parent: props.parent,
             senderId,
             optimisticId: crypto.randomUUID(),
             ...payload,

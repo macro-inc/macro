@@ -1,8 +1,4 @@
-import {
-  ENABLE_DOCUMENT_MENTION_NOTIFICATIONS,
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
+import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFlags';
 import type { Entity } from '@core/types';
 import { muteItemForRef } from '@entity/utils/notification';
 import { createSocketEffect } from '@macro-inc/collaboration/websocket';
@@ -94,6 +90,11 @@ export type NotificationSource = {
   /** subscribe to entity notifications */
   unmuteEntity: (entity: Entity) => Promise<void>;
 
+  /** Apply local seen/done intent to a GraphQL edge without replacing its data. */
+  withLocalOverrides?: (
+    notification: UnifiedNotification
+  ) => UnifiedNotification;
+
   /** subscribe to new notifications */
   subscribe: (subscribe: SubscribeFn) => UnsubscribeFn;
 };
@@ -154,8 +155,9 @@ export function setDoneOverride(
 // snapshot may present the notification as unread: a full refetch reads its
 // pages over several seconds and a page read before the mark's POST commits
 // resurrects pre-write state when it lands. Entries are removed on mutation
-// failure (that rollback is deliberate) and pruned once the cache confirms
-// the seen state at a quiet moment.
+// failure (that rollback is deliberate). REST-only overrides can be pruned
+// once the feed confirms the seen state at a quiet moment; GraphQL Soup edges
+// can still hold older snapshots independently of that feed.
 type SeenOverride = { viewedAt: string; token: symbol };
 const [seenOverrides, setSeenOverrides] = createRoot(() =>
   createStore<Record<string, SeenOverride | undefined>>({})
@@ -189,6 +191,35 @@ function setSeenOverride(ids: readonly string[], viewedAt: string | undefined) {
     });
 }
 
+function withNotificationOverrides(
+  notification: UnifiedNotification
+): UnifiedNotification {
+  const doneOverride = doneOverrides().get(notification.id);
+  if (notification.state !== 'unseen' && doneOverride === undefined) {
+    return notification;
+  }
+  return {
+    ...notification,
+    get state() {
+      const state = doneOverride?.done
+        ? 'done'
+        : doneOverride?.reopened
+          ? 'seen'
+          : doneOverride
+            ? nextNotificationState(notification.state, 'MARK_UNDONE')
+            : notification.state;
+      return state === 'unseen' && seenOverrides[notification.id]
+        ? 'seen'
+        : state;
+    },
+    // Only the affected id's seen state is a dependency of this row.
+    get viewed_at() {
+      if (notification.viewed_at) return notification.viewed_at;
+      return seenOverrides[notification.id]?.viewedAt ?? notification.viewed_at;
+    },
+  };
+}
+
 export function createNotificationSource(
   ws: ConnectionGatewayWebsocket,
   onNotification?: (notification: UnifiedNotification) => void
@@ -203,6 +234,7 @@ export function createNotificationSource(
   const notificationsQuery = useUserNotificationsQuery(() => ({
     limit: QUERY_LIMIT,
   }));
+  const usesGraphql = () => notificationsQuery.transport === 'graphql';
   const mutedEntitiesQuery = createMutedEntitiesQuery({ limit: QUERY_LIMIT });
   const muteItem = useMuteItemMutation();
   const unmuteItem = useUnmuteItemMutation();
@@ -217,52 +249,20 @@ export function createNotificationSource(
   const notifications = createMemo(() => {
     const raw = notificationsQuery.data;
     if (!raw) return [];
-    const done = doneOverrides();
-    return raw.map((notification) => {
-      const doneOverride = done.get(notification.id);
-      if (notification.state !== 'unseen' && doneOverride === undefined) {
-        return notification;
-      }
-
-      return {
-        ...notification,
-        get state() {
-          const state = doneOverride?.done
-            ? 'done'
-            : doneOverride?.reopened
-              ? 'seen'
-              : doneOverride
-                ? nextNotificationState(notification.state, 'MARK_UNDONE')
-                : notification.state;
-          return state === 'unseen' && seenOverrides[notification.id]
-            ? 'seen'
-            : state;
-        },
-        // Keep seen overrides granular. Reading one notification's state/viewed_at
-        // subscribes only to that id instead of invalidating the complete
-        // notifications array and every channel/favorite consumer.
-        get viewed_at() {
-          if (notification.viewed_at) return notification.viewed_at;
-          return (
-            seenOverrides[notification.id]?.viewedAt ?? notification.viewed_at
-          );
-        },
-      };
-    });
+    return raw.map(withNotificationOverrides);
   });
 
-  // Prune overrides for notifications that are no longer in the query cache
-  // (aged out of QUERY_LIMIT, deleted server-side) so the map doesn't grow
-  // unbounded. Overrides whose value happens to match the cache are NOT
-  // pruned — during an in-flight mutation the cache may still hold the
-  // pre-mutation value and a stale fetch could flip it back before the
-  // API lands.
+  // Only the REST feed owns all notification readers. In GraphQL mode an id
+  // leaving (or being confirmed by) this feed says nothing about still-mounted
+  // Soup edges. Keep their intent until explicitly cleared, replaced, or rolled
+  // back rather than letting pagination resurrect stale edge state.
   createEffect(() => {
+    if (usesGraphql()) return;
     const raw = notificationsQuery.data;
     if (!raw) return;
+    const presentIds = new Set(raw.map((n) => n.id));
     const overrides = doneOverrides();
     if (overrides.size === 0) return;
-    const presentIds = new Set(raw.map((n) => n.id));
     const toPrune: string[] = [];
     for (const id of overrides.keys()) {
       if (!presentIds.has(id)) toPrune.push(id);
@@ -276,6 +276,7 @@ export function createNotificationSource(
   // a fetch that is still running may hold a pre-write snapshot that will
   // land later; in both cases the override must survive.
   createEffect(() => {
+    if (usesGraphql()) return;
     const raw = notificationsQuery.data;
     if (!raw) return;
     const seenIds = Object.keys(seenOverrides);
@@ -287,8 +288,7 @@ export function createNotificationSource(
     const toPrune: string[] = [];
     for (const id of seenIds) {
       const row = byId.get(id);
-      if (!row) toPrune.push(id);
-      else if (row.state !== 'unseen' && quiet) toPrune.push(id);
+      if (!row || (row.state !== 'unseen' && quiet)) toPrune.push(id);
     }
     if (toPrune.length > 0) setSeenOverride(toPrune, undefined);
   });
@@ -310,7 +310,7 @@ export function createNotificationSource(
     // TODO(dev-rb/notifications): Remove this legacy eager pagination when the
     // REST notification source is retired. GraphQL consumers should use Soup
     // notification edges or dedicated notification queries instead.
-    if (isFeatureEnabled(enableGraphqlSoup)) return;
+    if (usesGraphql()) return;
     if (!notificationsQuery.data) return;
     if (notificationsQuery.hasNextPage && !notificationsQuery.isFetching) {
       notificationsQuery.fetchNextPage();
@@ -386,7 +386,7 @@ export function createNotificationSource(
 
   const unsubscribeFromGraphql = subscribeToGraphqlNotificationPatches(
     (patch) => {
-      if (!isFeatureEnabled(enableGraphqlSoup)) return;
+      if (!usesGraphql()) return;
       scheduleGraphqlNotificationRefetch();
       if (patch.__typename !== 'GraphqlNewNotification') return;
       dispatchIncomingNotification(mapGraphqlNotification(patch.notification));
@@ -408,10 +408,7 @@ export function createNotificationSource(
   };
 
   createSocketEffect(ws, (wsData) => {
-    if (
-      wsData.type !== NOTIFICATION_EVENT_TYPE ||
-      isFeatureEnabled(enableGraphqlSoup)
-    ) {
+    if (wsData.type !== NOTIFICATION_EVENT_TYPE || usesGraphql()) {
       return;
     }
     let parsedNotification: UnifiedNotification;
@@ -517,5 +514,8 @@ export function createNotificationSource(
     muteEntity,
     unmuteEntity,
     subscribe,
+    get withLocalOverrides() {
+      return usesGraphql() ? withNotificationOverrides : undefined;
+    },
   };
 }

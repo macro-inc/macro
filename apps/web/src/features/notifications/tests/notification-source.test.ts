@@ -1,3 +1,5 @@
+import { getEntityNotifications } from '@app/features/soup/entity-notifications';
+import type { EntityData } from '@entity/types/entity';
 import type { ConnectionGatewayWebsocket } from '@service-connection/websocket';
 import type { UserUnsubscribe } from '@service-notification/generated/schemas/userUnsubscribe';
 import { createEffect, createMemo, createRoot, createSignal } from 'solid-js';
@@ -113,6 +115,264 @@ describe('createNotificationSource', () => {
       refetch: vi.fn(),
     };
   });
+
+  it.each(['array', 'accessor'] as const)(
+    'applies done and undo to GraphQL-attached notifications (%s) before server snapshots change',
+    (attachment) => {
+      mocks.graphqlEnabled = true;
+      mocks.graphqlCacheEnabled = true;
+      const row = notification(
+        `soup-attached-${attachment}`,
+        'document',
+        'task'
+      );
+      mocks.notificationsQuery = {
+        data: [row],
+        transport: 'graphql',
+        isFetching: false,
+      };
+      const { source, dispose } = createRoot((dispose) => ({
+        source: createNotificationSource({} as ConnectionGatewayWebsocket),
+        dispose,
+      }));
+      const entity = {
+        id: 'task',
+        type: 'document',
+        name: 'Task',
+        notifications: attachment === 'array' ? [row] : () => [row],
+      } as EntityData & {
+        notifications: UnifiedNotification[] | (() => UnifiedNotification[]);
+      };
+      const displayedState = () =>
+        getEntityNotifications(entity, source)[0].state;
+      try {
+        expect(displayedState()).toBe('unseen');
+        setDoneOverride([row.id], true);
+        expect(source.notifications()[0].state).toBe('done'); // control: the override is installed
+        expect(
+          displayedState(),
+          'GraphQL Soup must honor the same in-flight done override'
+        ).toBe('done');
+        setDoneOverride([row.id], false);
+        expect(source.notifications()[0].state).toBe('seen');
+        expect(
+          displayedState(),
+          'Undo must reopen the row without waiting for server data'
+        ).toBe('seen');
+        expect(row.state).toBe('unseen'); // never mutate the server snapshot
+      } finally {
+        setDoneOverride([row.id], undefined);
+        dispose();
+      }
+    }
+  );
+
+  it('undo reopens a GraphQL-attached notification whose cached server state is already done', () => {
+    mocks.graphqlEnabled = true;
+    mocks.graphqlCacheEnabled = true;
+    const row = {
+      ...notification('soup-undo-committed', 'document', 'task'),
+      state: 'done' as const,
+    };
+    mocks.notificationsQuery = {
+      data: [row],
+      transport: 'graphql',
+      isFetching: false,
+    };
+    const { source, dispose } = createRoot((dispose) => ({
+      source: createNotificationSource({} as ConnectionGatewayWebsocket),
+      dispose,
+    }));
+    const entity = {
+      id: 'task',
+      type: 'document',
+      name: 'Task',
+      notifications: [row],
+    } as EntityData & { notifications: UnifiedNotification[] };
+    try {
+      expect(getEntityNotifications(entity, source)[0].state).toBe('done');
+      setDoneOverride([row.id], false);
+      expect(source.notifications()[0].state).toBe('seen');
+      expect(getEntityNotifications(entity, source)[0].state).toBe('seen');
+      expect(row.state).toBe('done');
+    } finally {
+      setDoneOverride([row.id], undefined);
+      dispose();
+    }
+  });
+
+  it.each([true, false])(
+    'only overlays attached Soup edges when GraphQL is enabled (%s)',
+    (graphql) => {
+      mocks.graphqlEnabled = graphql;
+      const row = notification('edge-outside-feed', 'document', 'task');
+      const attached = [row];
+      mocks.notificationsQuery = {
+        data: [],
+        transport: graphql ? 'graphql' : 'rest',
+        isFetching: false,
+      };
+      const { source, dispose } = createRoot((dispose) => ({
+        source: createNotificationSource({} as ConnectionGatewayWebsocket),
+        dispose,
+      }));
+      const entity = {
+        id: 'task',
+        type: 'document',
+        name: 'Task',
+        notifications: attached,
+      } as EntityData & { notifications: UnifiedNotification[] };
+      try {
+        setDoneOverride([row.id], true);
+        expect(getEntityNotifications(entity, source)[0].state).toBe(
+          graphql ? 'done' : 'unseen'
+        );
+        if (!graphql)
+          expect(getEntityNotifications(entity, source)).toBe(attached);
+        expect(row.state).toBe('unseen');
+      } finally {
+        setDoneOverride([row.id], undefined);
+        dispose();
+      }
+    }
+  );
+
+  it.each(['seen', 'done'] as const)(
+    'retains %s intent on a stale Soup edge when its feed row disappears or confirms the write',
+    async (state) => {
+      mocks.graphqlEnabled = true;
+      const row = notification(`edge-leaves-feed-${state}`, 'document', 'task');
+      const [raw, setRaw] = createSignal<UnifiedNotification[]>([row]);
+      const [pending, setPending] = createSignal(true);
+      let finish!: () => void;
+      const mutation =
+        state === 'seen' ? mocks.seenMutation : mocks.doneMutation;
+      mutation.mutateAsync.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finish = resolve;
+          })
+      );
+      mocks.notificationsQuery = {
+        get data() {
+          return raw();
+        },
+        get isFetching() {
+          return pending();
+        },
+        transport: 'graphql',
+      };
+      const { source, dispose } = createRoot((dispose) => ({
+        source: createNotificationSource({} as ConnectionGatewayWebsocket),
+        dispose,
+      }));
+      const edge = () => source.withLocalOverrides!(row);
+      const result =
+        state === 'seen' ? source.markAsRead(row) : source.markAsDone(row);
+      try {
+        expect(edge().state).toBe(state);
+        setRaw([]);
+        await Promise.resolve();
+        expect(edge().state).toBe(state);
+        finish();
+        await result;
+        setPending(false);
+        setRaw([{ ...row, state }]);
+        await Promise.resolve();
+        // A quiet, acknowledged feed is not proof that every Soup edge caught up.
+        expect(edge().state).toBe(state);
+        setRaw([]);
+        await Promise.resolve();
+        expect(edge().state).toBe(state);
+        expect(row.state).toBe('unseen');
+      } finally {
+        finish();
+        await result;
+        setDoneOverride([row.id], undefined);
+        dispose();
+      }
+    }
+  );
+
+  it.each(['seen', 'done'] as const)(
+    'rolls back a failed %s action after its notification leaves the feed',
+    async (state) => {
+      mocks.graphqlEnabled = true;
+      const row = notification(
+        `edge-leaves-feed-rollback-${state}`,
+        'document',
+        'task'
+      );
+      const [raw, setRaw] = createSignal<UnifiedNotification[]>([row]);
+      let fail!: (error: Error) => void;
+      const mutation =
+        state === 'seen' ? mocks.seenMutation : mocks.doneMutation;
+      mutation.mutateAsync.mockImplementationOnce(
+        () =>
+          new Promise<void>((_resolve, reject) => {
+            fail = reject;
+          })
+      );
+      mocks.notificationsQuery = {
+        get data() {
+          return raw();
+        },
+        isFetching: false,
+        transport: 'graphql',
+      };
+      const { source, dispose } = createRoot((dispose) => ({
+        source: createNotificationSource({} as ConnectionGatewayWebsocket),
+        dispose,
+      }));
+      const result =
+        state === 'seen' ? source.markAsRead(row) : source.markAsDone(row);
+      const rejected = expect(result).rejects.toThrow('failed');
+      try {
+        setRaw([]);
+        await Promise.resolve();
+        expect(source.withLocalOverrides!(row).state).toBe(state);
+        fail(new Error('failed'));
+        await rejected;
+        expect(source.withLocalOverrides!(row).state).toBe('unseen');
+      } finally {
+        fail(new Error('failed'));
+        await rejected;
+        dispose();
+      }
+    }
+  );
+
+  it.each(['seen', 'done'] as const)(
+    'still prunes absent %s overrides for REST-only readers',
+    async (state) => {
+      const row = notification(`rest-leaves-feed-${state}`, 'document', 'task');
+      const [raw, setRaw] = createSignal<UnifiedNotification[]>([row]);
+      mocks.notificationsQuery = {
+        get data() {
+          return raw();
+        },
+        isFetching: false,
+        transport: 'rest',
+      };
+      const { source, dispose } = createRoot((dispose) => ({
+        source: createNotificationSource({} as ConnectionGatewayWebsocket),
+        dispose,
+      }));
+      try {
+        await (state === 'seen'
+          ? source.markAsRead(row)
+          : source.markAsDone(row));
+        expect(source.notifications()[0].state).toBe(state);
+        setRaw([]);
+        await Promise.resolve();
+        setRaw([row]);
+        expect(source.notifications()[0].state).toBe('unseen');
+      } finally {
+        setDoneOverride([row.id], undefined);
+        dispose();
+      }
+    }
+  );
 
   it('keeps done through a late seen action, and reopens as seen across stale snapshots', async () => {
     const row = notification('lifecycle-stale', 'document', 'doc');
@@ -261,6 +521,81 @@ describe('createNotificationSource', () => {
       expect(mutedEntitiesValue()).toHaveLength(1);
       expect(mutedEntitiesValue()).not.toBe(initialMutedEntities);
       expect(memoRuns).toBeGreaterThan(runsBeforeUpdate);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('follows the query transport for pagination, realtime delivery and edge overrides', async () => {
+    // An imperative flag snapshot can disagree with the mounted query during
+    // startup. Only the facade's reactive transport owns source behavior.
+    mocks.graphqlEnabled = true;
+    const [transport, setTransport] = createSignal<'rest' | 'graphql'>('rest');
+    const fetchNextPage = vi.fn(async () => undefined);
+    const refetch = vi.fn(async () => undefined);
+    mocks.notificationsQuery = {
+      data: [],
+      get transport() {
+        return transport();
+      },
+      hasNextPage: true,
+      isFetching: false,
+      fetchNextPage,
+      refetch,
+    };
+    const incoming: UnifiedNotification = {
+      ...notification(
+        '00000000-0000-4000-8000-000000000011',
+        'reminder',
+        'reminder-transport'
+      ),
+      notification_event_type: 'reminder',
+      notification_metadata: {
+        tag: 'reminder',
+        content: {
+          description: 'Transport transition',
+          reminderId: '00000000-0000-4000-8000-000000000012',
+        },
+      },
+    };
+    const restEvent = {
+      type: 'notification',
+      data: JSON.stringify({ ...incoming, notification_id: incoming.id }),
+    };
+    const graphqlEvent = {
+      __typename: 'GraphqlNewNotification',
+      notification: incoming,
+    };
+    const receive = vi.fn();
+    const { source, dispose } = createRoot((dispose) => ({
+      source: createNotificationSource(
+        {} as ConnectionGatewayWebsocket,
+        receive
+      ),
+      dispose,
+    }));
+    try {
+      expect(fetchNextPage).toHaveBeenCalledOnce();
+      expect(source.withLocalOverrides).toBeUndefined();
+      mocks.graphqlPatchCallback?.(graphqlEvent);
+      expect(receive).not.toHaveBeenCalled();
+      mocks.socketCallback?.(restEvent);
+      expect(receive).toHaveBeenCalledOnce();
+      expect(mocks.optimisticInsertNotification).toHaveBeenCalledOnce();
+
+      setTransport('graphql');
+      expect(source.withLocalOverrides).toBeTypeOf('function');
+      expect(fetchNextPage).toHaveBeenCalledOnce();
+      mocks.socketCallback?.(restEvent);
+      expect(receive).toHaveBeenCalledOnce();
+      mocks.graphqlPatchCallback?.(graphqlEvent);
+      expect(receive).toHaveBeenCalledTimes(2);
+      await Promise.resolve();
+      expect(refetch).toHaveBeenCalledOnce();
+
+      setTransport('rest');
+      expect(source.withLocalOverrides).toBeUndefined();
+      expect(fetchNextPage).toHaveBeenCalledTimes(2);
     } finally {
       dispose();
     }

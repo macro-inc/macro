@@ -115,7 +115,6 @@ export function TaskList(props: TaskListProps) {
     entity: EntityData,
     options: {
       openInNewSplit?: boolean;
-      replacePreview?: boolean;
       mergeHistory?: boolean;
     } = {}
   ) {
@@ -162,16 +161,16 @@ export function TaskList(props: TaskListProps) {
     const newSplit =
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
 
-    if (newSplit) {
-      openEntity(sourceRow.entity, { openInNewSplit: true });
-
+    if (
+      !newSplit &&
+      openTask(
+        { id: sourceRow.entity.id, fallbackName: sourceRow.entity.name },
+        { event: metadata?.event }
+      )
+    )
       return;
-    }
 
-    openTask({
-      id: sourceRow.entity.id,
-      fallbackName: sourceRow.entity.name,
-    });
+    openEntity(sourceRow.entity, { openInNewSplit: newSplit });
   }
 
   registerListActivationHandler(onActivate);
@@ -543,8 +542,6 @@ export function TaskList(props: TaskListProps) {
 
                                       openEntity(project, {
                                         openInNewSplit,
-                                        replacePreview:
-                                          event.altKey && !openInNewSplit,
                                       });
                                     }}
                                     onChecked={(selected, shiftKey) =>

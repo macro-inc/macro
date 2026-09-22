@@ -106,9 +106,7 @@ function TasksViewRoot() {
 /** Production Tasks view. */
 export function TasksView(props: TasksViewProps) {
   return (
-    <EntityDetailNavigationStack.Root
-      shouldNavigate={(_, options) => options?.event?.shiftKey !== true}
-    >
+    <EntityDetailNavigationStack.Root>
       <ListEntityMetadataQueryProvider>
         <TasksViewProvider initialState={props.initialState}>
           <TasksViewBreadcrumbs>

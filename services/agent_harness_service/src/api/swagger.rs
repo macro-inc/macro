@@ -1,10 +1,18 @@
 //! OpenAPI document for the agent harness service's session routes.
 
+use agent_changes::inbound::axum_router::{
+    self as changes_router, AgentSessionChangesPatchResponse, AgentSessionChangesResponse,
+    CaptureAttemptDto, CaptureOutcomeDto, ChangedFileDto, ChangesetDto, ChangesetSourceDto,
+    FileChangeKindDto, GitRefDto,
+};
 use agent_harness::inbound::model_load::{
     self, AgentModelDto, AgentModelsStatusDto, LoadAgentModelsRequest, LoadAgentModelsResponse,
     ModelHarnessDto,
 };
-use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
+use agent_harness::inbound::repositories::{
+    self, AgentRepositoriesResponse, AgentRepositoryBranchesResponse, AgentRepositoryDto,
+};
+use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
 use agent_session::domain::model::{SandboxSize, SessionBot};
 use agent_session::inbound::axum_router::{
     self, AgentSessionLogEntryDto, AgentSessionLogResponse, AgentSessionPreviewData,
@@ -46,6 +54,8 @@ impl Modify for SecurityAddon {
         axum_router::get_agent_session_handler,
         axum_router::preview_agent_sessions_handler,
         axum_router::rename_agent_session_handler,
+        axum_router::sharing::get_agent_session_permissions,
+        axum_router::sharing::update_agent_session_permissions,
         axum_router::get_agent_session_log_handler,
         axum_router::control_agent_session_handler,
         axum_router::get_agent_session_queue_handler,
@@ -56,6 +66,11 @@ impl Modify for SecurityAddon {
         axum_router::get_agent_sandbox_size_handler,
         axum_router::put_agent_sandbox_size_handler,
         model_load::load_agent_models_handler,
+        repositories::list_agent_repositories_handler,
+        repositories::list_agent_repository_branches_handler,
+        changes_router::get_agent_session_changes_handler,
+        changes_router::get_agent_session_changes_patch_handler,
+        changes_router::refresh_agent_session_changes_handler,
     ),
     components(schemas(
         claude_auth::StatusResponse,
@@ -73,6 +88,7 @@ impl Modify for SecurityAddon {
         EditQueuedActionRequest,
         AgentAction,
         AgentActionId,
+        PromptAttachment,
         AgentSessionResponse,
         PreviewAgentSessionsRequest,
         PreviewAgentSessionsResponse,
@@ -93,10 +109,23 @@ impl Modify for SecurityAddon {
         AgentModelDto,
         AgentModelsStatusDto,
         ModelHarnessDto,
+        AgentRepositoriesResponse,
+        AgentRepositoryBranchesResponse,
+        AgentRepositoryDto,
+        AgentSessionChangesResponse,
+        AgentSessionChangesPatchResponse,
+        ChangesetDto,
+        ChangedFileDto,
+        GitRefDto,
+        CaptureAttemptDto,
+        CaptureOutcomeDto,
+        ChangesetSourceDto,
+        FileChangeKindDto,
     )),
     tags(
         (name = "agent-sessions", description = "Agent sessions"),
-        (name = "agent-models", description = "Fresh provider model discovery")
+        (name = "agent-models", description = "Fresh provider model discovery"),
+        (name = "agent-repositories", description = "Repositories a coding session can work on")
     )
 )]
 pub struct ApiDoc;

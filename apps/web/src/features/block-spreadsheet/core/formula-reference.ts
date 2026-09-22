@@ -22,10 +22,11 @@ export function formulaReferenceSlot(
       else quote = undefined;
     } else if (!quote && (char === '"' || char === "'")) quote = char;
   }
-  if (quote) return;
+  if (quote === '"') return;
 
   // A caret in/on a reference replaces the entire reference, including its range.
-  const references = /\$?[A-Z]{1,3}\$?[1-9]\d*(?::\$?[A-Z]{1,3}\$?[1-9]\d*)?/gi;
+  const references =
+    /(?:(?:'(?:[^']|'')+'|[A-Z_][\w.]*)!)?\$?[A-Z]{1,3}\$?[1-9]\d*(?::\$?[A-Z]{1,3}\$?[1-9]\d*)?/gi;
   for (const match of text.matchAll(references)) {
     const from = match.index;
     const to = from + match[0].length;
@@ -35,6 +36,8 @@ export function formulaReferenceSlot(
     return { start: from, end: to };
   }
 
+  if (quote) return;
+
   // Point mode begins after an operator or argument separator. A completed
   // expression still commits normally when the user clicks elsewhere.
   if (!/[=+\-*/^&<>,;({:]\s*$/.test(text.slice(0, start))) return;
@@ -42,9 +45,16 @@ export function formulaReferenceSlot(
   return { start, end };
 }
 
-export function formulaRangeReference(selection: CellSelection) {
+export function formulaRangeReference(
+  selection: CellSelection,
+  sheetName?: string
+) {
   const { top, bottom, left, right } = selectionBounds(selection);
   const first = cellAddress({ row: top, column: left });
   const last = cellAddress({ row: bottom, column: right });
-  return first === last ? first : `${first}:${last}`;
+  const range = first === last ? first : `${first}:${last}`;
+  if (!sheetName) return range;
+  // Always quote sheet names: names like A1 and names containing apostrophes
+  // are valid tabs but ambiguous or invalid when inserted without escaping.
+  return `'${sheetName.replaceAll("'", "''")}'!${range}`;
 }

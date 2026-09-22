@@ -355,6 +355,11 @@
           binaries = [ "authentication_service" ];
         }
         {
+          serviceName = "calendar-service";
+          packageName = "calendar_service";
+          binaries = [ "calendar_service" ];
+        }
+        {
           serviceName = "connection-gateway";
           packageName = "connection_gateway";
           binaries = [ "connection_gateway_service" ];
@@ -518,6 +523,7 @@
       localStackDeployServiceNames = [
         "agent-harness-service"
         "agent-schedule-service"
+        "calendar-service"
         "connection-gateway"
         "contacts-service"
         "document-cognition-service"

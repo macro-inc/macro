@@ -33,7 +33,7 @@ pub struct Daemon {
 }
 
 impl Daemon {
-    /// Start listening for agent triggers in a background task.
+    /// Connect the runtime and listen for agent triggers in background tasks.
     ///
     /// Returns once the client is built; the serving itself runs until
     /// [`Daemon::stop`] or the task fails.
@@ -53,7 +53,7 @@ impl Daemon {
         let cancel = CancellationToken::new();
         let client = EventStreamClient::new(&config.macro_api, &credentials);
         let api = HarnessApi::new(&config.macro_api, &credentials);
-        let runtime = Runtime::new(
+        let runtime = Runtime::start(
             &config.macro_api,
             &credentials,
             config.harness.clone(),
@@ -105,9 +105,8 @@ impl Daemon {
 
     /// Stop serving without waiting for an in-flight network request or trigger.
     ///
-    /// A live harness bridge (the WebSocket + spawned harness process) is not
-    /// torn down here; it dies with the process, and a restarted daemon's
-    /// fresh dial displaces it at the gateway.
+    /// Dropping the dispatcher also stops its runtime supervisor, WebSocket,
+    /// and harness process, including when the daemon is restarted to re-pair.
     pub async fn stop(self) {
         self.cancel.cancel();
         self.task.abort();

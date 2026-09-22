@@ -510,6 +510,10 @@ fn exported_service_urls_match_local_values() {
         "http://localhost:8087"
     );
     assert_eq!(
+        service_urls.calendar_service_url.as_ref(),
+        "http://localhost:8088"
+    );
+    assert_eq!(
         service_urls.image_proxy_service_url.as_ref(),
         "http://localhost:8097",
     );
@@ -592,6 +596,10 @@ fn exported_service_urls_match_dev_values() {
         "https://dev-gateway.macro.com/email",
     );
     assert_eq!(
+        service_urls.calendar_service_url.as_ref(),
+        "https://dev-gateway.macro.com/calendar",
+    );
+    assert_eq!(
         service_urls.image_proxy_service_url.as_ref(),
         "https://dev-gateway.macro.com/image-proxy",
     );
@@ -669,6 +677,10 @@ fn exported_service_urls_match_prod_values() {
     assert_eq!(
         service_urls.email_service_url.as_ref(),
         "https://gateway.macro.com/email",
+    );
+    assert_eq!(
+        service_urls.calendar_service_url.as_ref(),
+        "https://gateway.macro.com/calendar",
     );
     assert_eq!(
         service_urls.image_proxy_service_url.as_ref(),

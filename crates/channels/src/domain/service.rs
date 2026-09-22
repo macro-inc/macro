@@ -23,7 +23,9 @@ use crate::domain::{
 use bot_id::BotIdStr;
 use bot_id::cowlike::CowLike;
 use channel_sender::ChannelSender;
-use entity_access::domain::models::{EntityAccessReceipt, EntityType, MemberParticipantRole};
+use entity_access::domain::models::{
+    AdminParticipantRole, EntityAccessReceipt, EntityType, MemberParticipantRole,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::models::{PatchMessageNotificationPolicy, SimpleMention};
 use models_pagination::{CreatedAt, PaginateOn, Query};
@@ -531,11 +533,10 @@ where
         .await
     }
 
-    #[tracing::instrument(err, skip(self, req))]
+    #[tracing::instrument(err, skip(self, access, req))]
     async fn patch_channel(
         &self,
-        actor: Sender,
-        channel_id: Uuid,
+        access: EntityAccessReceipt<MemberParticipantRole>,
         mut req: PatchChannelRequest,
     ) -> Result<(), ChannelMutationErr> {
         if req.channel_name.is_none()
@@ -545,7 +546,28 @@ where
             return Ok(());
         }
 
-        let actor = require_user_actor(&actor)?;
+        if (req.convert_to_team_channel.is_some() || req.auto_join_team.is_some())
+            && !access
+                .entity_permission()
+                .satisfies::<AdminParticipantRole>()
+        {
+            return Err(ChannelMutationErr::Forbidden(
+                "converting a channel or changing auto-join requires channel admin access"
+                    .to_string(),
+            ));
+        }
+
+        if access.entity().entity_type != EntityType::Channel {
+            return Err(ChannelMutationErr::BadRequest(
+                "channel access receipt required".into(),
+            ));
+        }
+        let actor = access
+            .get_authenticated_user()
+            .cloned()
+            .map_err(|_| ChannelMutationErr::Unauthorized("authenticated user required".into()))?;
+        let channel_id = Uuid::parse_str(&access.entity().entity_id)
+            .map_err(|error| ChannelMutationErr::BadRequest(error.to_string()))?;
         let info = self
             .repo
             .get_channel_info(channel_id)
@@ -2057,11 +2079,10 @@ where
 
     async fn patch_channel(
         &self,
-        actor: Sender,
-        channel_id: Uuid,
+        access: EntityAccessReceipt<MemberParticipantRole>,
         req: PatchChannelRequest,
     ) -> Result<(), ChannelMutationErr> {
-        ChannelServiceImpl::patch_channel(self, actor, channel_id, req).await
+        ChannelServiceImpl::patch_channel(self, access, req).await
     }
 
     async fn delete_channel(

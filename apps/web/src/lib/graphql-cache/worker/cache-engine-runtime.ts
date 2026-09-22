@@ -57,6 +57,7 @@ export interface CacheEngineRuntimeHooks {
 }
 
 interface CacheWorkerCoreLike {
+  prepare?(): Promise<void>;
   addPort(port: { postMessage(message: unknown): void }): void;
   handleRequest(
     port: { postMessage(message: unknown): void },
@@ -83,7 +84,7 @@ export interface CacheEngineRuntimeOptions {
   memoryTelemetryIntervalMs?: number;
 }
 
-const withVersion = <T extends { coordinatorVersion: 2 }>(
+const withVersion = <T extends { coordinatorVersion: 3 }>(
   value: T extends unknown ? Omit<T, 'coordinatorVersion'> : never
 ): T =>
   ({
@@ -180,6 +181,12 @@ async function activate(
   };
   emitEvent({ kind: 'activation-started', activation });
   let failed = false;
+  let assetsReady = false;
+  let openGranted = false;
+  let resolveOpen!: () => void;
+  const openPermission = new Promise<void>((resolve) => {
+    resolveOpen = resolve;
+  });
   let initializationOpenOutcome: EngineOpenOutcome =
     activation.databaseAction === 'wipe-before-open'
       ? 'reset-storage-uncertain'
@@ -220,6 +227,7 @@ async function activate(
   ): void => {
     if (failed) return;
     failed = true;
+    resolveOpen();
     emitEvent({ kind: 'fatal', activation, reason, fatalCode });
     if (runnerFailed) return;
     post(
@@ -313,6 +321,14 @@ async function activate(
         return;
       }
       match(message)
+        .with({ kind: 'open-engine' }, () => {
+          if (!assetsReady || openGranted) {
+            fatal('unexpected database-open grant');
+            return;
+          }
+          openGranted = true;
+          resolveOpen();
+        })
         .with({ kind: 'engine-request' }, ({ request }) => {
           if (draining) {
             fatal('coordinator routed a request after drain began');
@@ -379,6 +395,20 @@ async function activate(
   );
 
   try {
+    await core.prepare?.();
+    if (failed) return;
+    assetsReady = true;
+    post(
+      withVersion<EngineToCoordinatorEnvelope>({
+        kind: 'engine-assets-ready',
+        tabId: activation.tabId,
+        ownerEpoch: activation.ownerEpoch,
+      })
+    );
+    // Sending readiness is not permission: the coordinator must first record
+    // that this epoch may touch storage before the first OPFS operation.
+    await openPermission;
+    if (failed) return;
     await initializeCore(core, activation);
     if (failed) return;
     const ownerLockIsHeld = options.ownerLockIsHeld ?? defaultOwnerLockIsHeld;

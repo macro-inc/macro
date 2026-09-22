@@ -11,6 +11,26 @@ wasm_bindgen_test_configure!(run_in_dedicated_worker);
 
 mod mail_projection;
 
+#[wasm_bindgen_test]
+fn build_info_reports_compiled_versions_without_opening_storage() {
+    let info: serde_json::Value =
+        serde_wasm_bindgen::from_value(cache_build_info().unwrap()).unwrap();
+    assert_eq!(info["packageVersion"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(info["schemaHash"], schema_hash());
+    assert_eq!(
+        info["schemaCompatibilityEpoch"],
+        cache_core::codec::CACHE_SCHEMA_COMPATIBILITY_EPOCH
+    );
+    assert_eq!(
+        info["formatVersion"],
+        cache_core::codec::CACHE_FORMAT_VERSION
+    );
+    assert_eq!(
+        info["storageSchemaVersion"],
+        cache_turso::STORAGE_SCHEMA_VERSION
+    );
+}
+
 const QUERY: &str = r#"query Soup($input: SoupInput!) {
     user {
         id

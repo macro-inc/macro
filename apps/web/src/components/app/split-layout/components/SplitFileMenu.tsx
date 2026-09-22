@@ -722,7 +722,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
 export type BlockSplitFileMenuProps = Omit<
   SplitFileMenuProps,
   'entityKind' | 'permissions'
->;
+> & { permissions?: Permissions };
 
 /** Supplies legacy Block identity, permissions, and registered hotkeys. */
 export function BlockSplitFileMenu(props: BlockSplitFileMenuProps) {
@@ -733,7 +733,7 @@ export function BlockSplitFileMenu(props: BlockSplitFileMenuProps) {
     <SplitFileMenu
       {...props}
       entityKind={entityKind}
-      permissions={permissions()}
+      permissions={props.permissions ?? permissions()}
     />
   );
 }

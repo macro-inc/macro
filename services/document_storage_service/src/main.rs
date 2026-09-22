@@ -656,8 +656,7 @@ async fn run() -> anyhow::Result<()> {
                     .document_storage_service_cloudfront_signer_private_key
                     .as_ref()
                     .to_string(),
-                presigned_url_expiry_seconds: config
-                    .document_storage_service_presigned_url_expiry_seconds,
+                presigned_url_expiry_seconds: config::CALL_RECORDING_PRESIGNED_URL_EXPIRY_SECONDS,
             };
             Some(S3RecordingStorage::new(egress_config.bucket.clone(), cloudfront_config).await)
         }
@@ -876,12 +875,23 @@ async fn run() -> anyhow::Result<()> {
     consumer_tracker.spawn({
         let cancellation_token = consumer_cancellation_token.clone();
         let activity_repo = activity::outbound::pg_activity_repo::PgActivityRepo::new(db.clone());
+        let activity_realtime = activity::domain::announcements::ActivityAnnouncements::new(
+            activity::KafkaActivityRealtimePublisher::new(macro_event_broker.clone()),
+            crate::service::activity::EntityAccessActivityAudience::new(
+                entity_access_service.clone(),
+            ),
+        );
         async move {
             let consumer = activity::inbound::kafka_consumer::ActivityConsumer::<
                 _,
                 crate::service::activity::ActivitySourceEvent,
                 _,
-            >::new(activity_repo, crate::service::activity::ingest);
+                _,
+            >::new(
+                activity_repo,
+                crate::service::activity::ingest,
+                activity_realtime,
+            );
             loop {
                 if cancellation_token.is_cancelled() {
                     break;
@@ -1154,9 +1164,25 @@ async fn run() -> anyhow::Result<()> {
     // Held by value here and behind an `Arc` in the router state: the impl is a
     // pool handle, so cloning is cheap and `SoupImpl` needs an owned service.
     let reminders_service = RemindersServiceImpl::new(PgRemindersRepo::new(db.clone()));
-    let initiative_service = Arc::new(InitiativeServiceImpl::new(PgInitiativeRepo::new(
-        db.clone(),
-    )));
+
+    let document_creator = documents_hex::domain::create::DocumentCreator::new(
+        document_service.clone(),
+        markdown_initializer,
+        documents_hex::outbound::document_bytes_upload::ReqwestDocumentBytesUploader::default(),
+        documents_hex::outbound::mention_tracker::LexicalCommsMentionTracker::new(
+            db.clone(),
+            lexical_client.clone(),
+        ),
+    );
+    let initiative_service = Arc::new(InitiativeServiceImpl::new(
+        PgInitiativeRepo::new(db.clone()),
+        outbound::initiative_description_documents::InitiativeDescriptionDocumentsAdapter::new(
+            document_creator.clone(),
+            db.clone(),
+            sqs_client.clone(),
+            macro_event_broker.clone(),
+        ),
+    ));
 
     let collab_surface_service = CollabSurfaceServiceImpl::new(
         Arc::new(PgCollabSurfaceRepo::new(db.clone())),
@@ -1167,16 +1193,21 @@ async fn run() -> anyhow::Result<()> {
         config.document_permission_jwt.as_ref().to_string(),
     );
 
-    let soup_service = Arc::new(SoupImpl::new(
-        PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
-        frecency_service,
-        readonly_email_service,
-        channel_service_for_soup,
-        call_record_query_service,
-        crm_service.clone(),
-        foreign_entity_service_for_soup,
-        reminders_service.clone(),
-    ));
+    let soup_service = Arc::new(
+        SoupImpl::new(
+            PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
+            frecency_service,
+            readonly_email_service,
+            channel_service_for_soup,
+            call_record_query_service,
+            crm_service.clone(),
+            foreign_entity_service_for_soup,
+            reminders_service.clone(),
+        )
+        .with_agent_branches(agent_changes::outbound::postgres::PgChangesetRepo::new(
+            readonly_db.clone(),
+        )),
+    );
 
     let websocket_notification_consumer_service =
         Arc::new(WebSocketNotificationConsumerService::new(
@@ -1206,6 +1237,42 @@ async fn run() -> anyhow::Result<()> {
                     tracing::error!(
                         error = ?error,
                         "WebSocket notification consumer stopped"
+                    );
+                });
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(1)) => {}
+                }
+            }
+        }
+    });
+
+    let activity_realtime_service = Arc::new(activity::ActivityRealtimeConsumerService::new(
+        activity::ActivityTopicConsumer::from_env(config.kafka_brokers.as_ref()).map_err(
+            |error| anyhow::anyhow!("failed to create realtime activity topic consumer: {error:?}"),
+        )?,
+    ));
+    consumer_tracker.spawn({
+        let service = Arc::clone(&activity_realtime_service);
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            loop {
+                let result = tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    result = service.run() => result,
+                };
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                let _ = result.inspect_err(|error| {
+                    tracing::error!(
+                        error = ?error,
+                        "realtime activity subscription consumer stopped"
                     );
                 });
 
@@ -1451,6 +1518,7 @@ async fn run() -> anyhow::Result<()> {
             soup_service,
             soup_realtime_service,
             websocket_notification_consumer_service,
+            activity_realtime_service,
         ),
         graphql_notification_reader,
         // GraphQL reads the activity log through the readonly pool; the
@@ -1489,21 +1557,13 @@ async fn run() -> anyhow::Result<()> {
             authorization_state: authorization_state.clone(),
         },
         documents_state: DocumentRouterState {
-            service: document_service.clone(),
+            service: document_service,
             access_service: entity_access_service.clone(),
             authorization_state: authorization_state.clone(),
             pool: db.clone(),
             task_dedup_service,
             lexical_client: lexical_client.clone(),
-            creator: documents_hex::domain::create::DocumentCreator::new(
-                document_service,
-                markdown_initializer,
-                documents_hex::outbound::document_bytes_upload::ReqwestDocumentBytesUploader::default(),
-                documents_hex::outbound::mention_tracker::LexicalCommsMentionTracker::new(
-                    db.clone(),
-                    lexical_client.clone(),
-                ),
-            ),
+            creator: document_creator,
             document_permission_jwt_secret: config.document_permission_jwt.as_ref().to_string(),
         },
         config: Arc::new(config),

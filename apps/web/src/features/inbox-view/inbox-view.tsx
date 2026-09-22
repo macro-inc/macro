@@ -3,6 +3,7 @@ import {
   ViewBreadcrumbs,
   ViewShell,
 } from '@app/components/view-shell';
+import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -79,7 +80,12 @@ function InboxViewRoot() {
   const panel = useSplitPanelOrThrow();
   const orchestrator = useGlobalBlockOrchestrator();
   const { state, setTab } = useInboxView();
-  const [previewEntity, setPreviewEntity] = createSignal<EntityData>();
+  const [previewEntity, setPreviewEntityState] = createSignal<EntityData>();
+  const selectPreview = createPreviewSelectionGuard();
+  const setPreviewEntity = (entity: EntityData | undefined) => {
+    if (!selectPreview(entity)) return;
+    setPreviewEntityState(entity);
+  };
 
   let activeTab = state.tab;
   createEffect(() => {

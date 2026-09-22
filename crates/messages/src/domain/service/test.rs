@@ -10,28 +10,9 @@ struct Repo {
     deletes: Arc<Mutex<Vec<Uuid>>>,
     creates: Arc<Mutex<Vec<CreateMessage>>>,
     edits: Arc<Mutex<Vec<EditMessage>>>,
-    references: Vec<ReferencedThreadCandidate>,
 }
 
 impl MessageRepository for Repo {
-    async fn referenced_threads(
-        &self,
-        _: &str,
-        cursor: Option<MessageCursor>,
-        limit: u16,
-    ) -> Result<Vec<ReferencedThreadCandidate>, MessageError> {
-        Ok(self
-            .references
-            .iter()
-            .filter(|r| {
-                cursor
-                    .as_ref()
-                    .is_none_or(|c| (r.created_at, r.root_id) > (c.created_at, c.id))
-            })
-            .take(usize::from(limit))
-            .cloned()
-            .collect())
-    }
     async fn preceding(
         &self,
         _: &MessageParent,
@@ -198,7 +179,6 @@ fn fixture() -> Repo {
         deletes: Arc::default(),
         creates: Arc::default(),
         edits: Arc::default(),
-        references: vec![],
     }
 }
 
@@ -498,113 +478,6 @@ async fn user_mentions_do_not_require_or_grant_parent_sharing() {
             .await,
         Err(MessageError::Invalid(_))
     ));
-}
-
-#[derive(Clone)]
-struct SourceAccess(Arc<Mutex<std::collections::HashSet<String>>>);
-impl MessageReferenceAccess for SourceAccess {
-    fn can_view<'a>(
-        &'a self,
-        _: &'a EntityAccessAuth,
-        kind: EntityType,
-        id: &'a str,
-    ) -> std::pin::Pin<Box<dyn Future<Output = Result<bool, MessageError>> + Send + 'a>> {
-        assert_eq!(kind, EntityType::Channel);
-        Box::pin(async move { Ok(self.0.lock().unwrap().contains(id)) })
-    }
-}
-
-#[tokio::test]
-async fn source_mentions_never_grant_channel_access_and_revocation_removes_the_thread() {
-    let mut repo = fixture();
-    let channel = Uuid::from_u128(20);
-    let private = Uuid::from_u128(21);
-    repo.message.parent = MessageParent::Channel(channel);
-    repo.state.anchor = None;
-    repo.references = vec![
-        ReferencedThreadCandidate {
-            channel_id: private,
-            root_id: Uuid::from_u128(0),
-            channel_name: Some("private name".into()),
-            created_at: repo.message.created_at,
-        },
-        ReferencedThreadCandidate {
-            channel_id: channel,
-            root_id: repo.message.id,
-            channel_name: Some("visible".into()),
-            created_at: repo.message.created_at,
-        },
-    ];
-    let grants = SourceAccess(Arc::new(Mutex::new(
-        [channel.to_string()].into_iter().collect(),
-    )));
-    let service = MessageService::new(repo, Events::default()).with_references(grants.clone());
-    let doc_access = || {
-        access("macro|author@example.com", "doc", AccessLevel::Comment)
-            .try_into_requirement()
-            .unwrap()
-    };
-    let page = service
-        .referenced_threads(doc_access(), None, 1)
-        .await
-        .unwrap();
-    assert_eq!(page.threads.len(), 1);
-    assert_eq!(page.threads[0].channel_name.as_deref(), Some("visible"));
-    assert_eq!(page.threads[0].parent, MessageParent::Channel(channel));
-    assert_eq!(page.threads[0].root_id, Uuid::from_u128(1));
-    assert!(!page.threads[0].can_reply);
-    assert!(page.next_cursor.is_none());
-    grants.0.lock().unwrap().clear();
-    assert!(
-        service
-            .referenced_threads(doc_access(), None, 1)
-            .await
-            .unwrap()
-            .threads
-            .is_empty()
-    );
-}
-
-#[tokio::test]
-async fn reference_discovery_pages_authorized_identities_without_reading_message_content() {
-    let mut repo = fixture();
-    let visible = Uuid::from_u128(20);
-    let private = Uuid::from_u128(21);
-    // The message reader fixture contains only an unrelated document root.
-    // Discovery must use the source facts, leaving hydration to the common reader.
-    repo.references = (1..=205)
-        .map(|id| ReferencedThreadCandidate {
-            channel_id: if id % 100 == 0 { visible } else { private },
-            root_id: Uuid::from_u128(id),
-            channel_name: Some(if id % 100 == 0 { "visible" } else { "private" }.into()),
-            created_at: repo.message.created_at,
-        })
-        .collect();
-    let grants = SourceAccess(Arc::new(Mutex::new(
-        [visible.to_string()].into_iter().collect(),
-    )));
-    let service = MessageService::new(repo, Events::default()).with_references(grants);
-    let receipt = || {
-        access("macro|author@example.com", "doc", AccessLevel::Comment)
-            .try_into_requirement()
-            .unwrap()
-    };
-    let first = service
-        .referenced_threads(receipt(), None, 1)
-        .await
-        .unwrap();
-    assert_eq!(first.threads.len(), 1);
-    assert_eq!(first.threads[0].root_id, Uuid::from_u128(100));
-    assert_eq!(first.threads[0].parent, MessageParent::Channel(visible));
-    assert_eq!(first.next_cursor.as_ref().unwrap().id, Uuid::from_u128(100));
-
-    let second = service
-        .referenced_threads(receipt(), first.next_cursor, 1)
-        .await
-        .unwrap();
-    assert_eq!(second.threads.len(), 1);
-    assert_eq!(second.threads[0].root_id, Uuid::from_u128(200));
-    assert!(second.next_cursor.is_none());
 }
 
 fn post_input() -> PostMessage {
@@ -1033,14 +906,6 @@ struct StrictRepo {
 }
 
 impl MessageRepository for StrictRepo {
-    async fn referenced_threads(
-        &self,
-        document: &str,
-        cursor: Option<MessageCursor>,
-        limit: u16,
-    ) -> Result<Vec<ReferencedThreadCandidate>, MessageError> {
-        self.inner.referenced_threads(document, cursor, limit).await
-    }
     async fn preceding(
         &self,
         parent: &MessageParent,

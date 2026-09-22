@@ -81,49 +81,71 @@ fn stand_in_server_capturing(
     status_line: &str,
     body: &'static str,
 ) -> (String, std::sync::mpsc::Receiver<String>) {
+    stand_in_server_sequence(vec![(status_line.to_owned(), body)])
+}
+
+/// A stand-in that answers one request per scripted response, in order, then
+/// stops listening. Each connection is closed after its answer, so a client
+/// that retries has to reconnect — the same as it would against Cursor.
+fn stand_in_server_sequence(
+    responses: Vec<(String, &'static str)>,
+) -> (String, std::sync::mpsc::Receiver<String>) {
     let (sender, receiver) = std::sync::mpsc::channel();
     let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("a loopback port");
     let base_url = format!("http://{}", listener.local_addr().expect("a bound address"));
-    let response = format!(
-        "HTTP/1.1 {status_line}\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
-        body.len()
-    );
     std::thread::spawn(move || {
         use std::io::{Read as _, Write as _};
-        let (mut socket, _) = listener.accept().expect("the client connects");
-        // Drain the request before answering: a peer that never reads the
-        // body can leave the client seeing a reset instead of the response.
-        let mut request = Vec::new();
-        let mut chunk = [0_u8; 4096];
-        while !request.windows(4).any(|window| window == b"\r\n\r\n") {
-            match socket.read(&mut chunk) {
-                Ok(0) | Err(_) => break,
-                Ok(read) => request.extend_from_slice(&chunk[..read]),
+        for (status_line, body) in responses {
+            let response = format!(
+                "HTTP/1.1 {status_line}\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            let (mut socket, _) = listener.accept().expect("the client connects");
+            // Drain the request before answering: a peer that never reads the
+            // body can leave the client seeing a reset instead of the response.
+            let mut request = Vec::new();
+            let mut chunk = [0_u8; 4096];
+            while !request.windows(4).any(|window| window == b"\r\n\r\n") {
+                match socket.read(&mut chunk) {
+                    Ok(0) | Err(_) => break,
+                    Ok(read) => request.extend_from_slice(&chunk[..read]),
+                }
             }
-        }
-        let headers = String::from_utf8_lossy(&request).to_lowercase();
-        let content_length = headers
-            .split("content-length:")
-            .nth(1)
-            .and_then(|rest| rest.split("\r\n").next())
-            .and_then(|value| value.trim().parse::<usize>().ok())
-            .unwrap_or(0);
-        let already_read = request
-            .windows(4)
-            .position(|window| window == b"\r\n\r\n")
-            .map_or(0, |end| request.len() - (end + 4));
-        let mut remaining = content_length.saturating_sub(already_read);
-        while remaining > 0 {
-            match socket.read(&mut chunk) {
-                Ok(0) | Err(_) => break,
-                Ok(read) => remaining = remaining.saturating_sub(read),
+            let headers = String::from_utf8_lossy(&request).to_lowercase();
+            let content_length = headers
+                .split("content-length:")
+                .nth(1)
+                .and_then(|rest| rest.split("\r\n").next())
+                .and_then(|value| value.trim().parse::<usize>().ok())
+                .unwrap_or(0);
+            let already_read = request
+                .windows(4)
+                .position(|window| window == b"\r\n\r\n")
+                .map_or(0, |end| request.len() - (end + 4));
+            let mut remaining = content_length.saturating_sub(already_read);
+            while remaining > 0 {
+                match socket.read(&mut chunk) {
+                    Ok(0) | Err(_) => break,
+                    Ok(read) => remaining = remaining.saturating_sub(read),
+                }
             }
+            let _ = sender.send(String::from_utf8_lossy(&request).into_owned());
+            let _ = socket.write_all(response.as_bytes());
+            let _ = socket.flush();
         }
-        let _ = sender.send(String::from_utf8_lossy(&request).into_owned());
-        let _ = socket.write_all(response.as_bytes());
-        let _ = socket.flush();
     });
     (base_url, receiver)
+}
+
+/// The body Cursor answered a real create with, for a `main` that existed.
+const BRANCH_UNVERIFIABLE_BODY: &str = r#"{"error":{"code":"validation_error","message":"Failed to verify existence of branch 'main' in repository macro-inc/macro. Please ensure the branch name is correct."}}"#;
+
+const CREATED_BODY: &str = r#"{"agent":{"id":"bc-00000000-0000-0000-0000-000000000001","url":"https://cursor.com/agents/bc-00000000-0000-0000-0000-000000000001"},"run":{"id":"run-00000000-0000-0000-0000-000000000001"}}"#;
+
+/// A client whose retry schedule does not sleep, so the retry path runs in
+/// test time rather than the production seven seconds.
+fn client_with_instant_retries(base_url: String, retries: usize) -> CursorClient {
+    client_against(base_url).with_branch_retry_backoff(vec![std::time::Duration::ZERO; retries])
 }
 
 fn client_against(base_url: String) -> CursorClient {
@@ -154,11 +176,236 @@ async fn a_repository_rejection_is_typed_with_the_repository() {
         .downcast_current_context::<crate::domain::error::RepositoryUnavailable>()
         .expect("a repository rejection is typed as one");
     assert_eq!(unavailable.repo, repo());
+    assert_eq!(
+        unavailable.reason,
+        crate::domain::error::RepositoryRejection::Inaccessible
+    );
     assert!(
         unavailable.detail.contains("repository_access"),
         "cursor's own body is kept for the logs: {}",
         unavailable.detail
     );
+    assert!(
+        unavailable
+            .user_message()
+            .contains("Connect the repository"),
+        "got {}",
+        unavailable.user_message()
+    );
+}
+
+/// Cursor's branch check flakes for refs that exist, and a 400 proves no
+/// agent was minted, so the create is simply asked again — and the caller
+/// sees only the eventual success.
+#[tokio::test]
+async fn a_branch_cursor_could_not_verify_is_retried() {
+    let (base_url, requests) = stand_in_server_sequence(vec![
+        ("400 Bad Request".to_owned(), BRANCH_UNVERIFIABLE_BODY),
+        ("400 Bad Request".to_owned(), BRANCH_UNVERIFIABLE_BODY),
+        ("200 OK".to_owned(), CREATED_BODY),
+    ]);
+    let (agent, run) = client_with_instant_retries(base_url, 2)
+        .create_agent("prompt", Some(&repo()), true, &[], None)
+        .await
+        .expect("the third answer is a created agent");
+    assert_eq!(agent.as_str(), "bc-00000000-0000-0000-0000-000000000001");
+    assert_eq!(run.as_str(), "run-00000000-0000-0000-0000-000000000001");
+
+    let sent: Vec<String> = requests.try_iter().collect();
+    assert_eq!(sent.len(), 3, "one request per scripted answer");
+    for request in &sent {
+        assert!(
+            request.contains(r#""startingRef":"main""#),
+            "every attempt asks for the same ref: {request}"
+        );
+    }
+}
+
+/// Once the budget is spent the rejection is still typed as a repository
+/// problem — and names the branch, so the message does not read like a
+/// generic internal error — rather than the raw report.
+#[tokio::test]
+async fn a_branch_still_unverifiable_after_retrying_is_typed_with_the_branch() {
+    let (base_url, requests) = stand_in_server_sequence(vec![
+        ("400 Bad Request".to_owned(), BRANCH_UNVERIFIABLE_BODY),
+        ("400 Bad Request".to_owned(), BRANCH_UNVERIFIABLE_BODY),
+    ]);
+    let error = client_with_instant_retries(base_url, 1)
+        .create_agent("prompt", Some(&repo()), true, &[], None)
+        .await
+        .expect_err("the stand-in never relents");
+    let unavailable = error
+        .downcast_current_context::<crate::domain::error::RepositoryUnavailable>()
+        .expect("an exhausted branch retry is a repository rejection");
+    assert_eq!(unavailable.repo, repo());
+    assert_eq!(
+        unavailable.reason,
+        crate::domain::error::RepositoryRejection::BranchUnverifiable {
+            starting_ref: "main".to_owned(),
+        }
+    );
+    let message = unavailable.user_message();
+    assert!(message.contains("'main'"), "names the ref: {message}");
+    assert!(
+        message.contains("macro-inc/macro"),
+        "names the repo: {message}"
+    );
+    assert!(
+        !message.contains("Bad Request") && !message.contains("api.rs"),
+        "no transport or source decorations reach the user: {message}"
+    );
+    assert_eq!(requests.try_iter().count(), 2, "one retry, then give up");
+}
+
+/// The 429 Cursor answered a real create with while GitHub was throttling its
+/// token mint (prod, 2026-09-22), trimmed of its base64 twin. Read by these
+/// tests as a status and nothing else — which is the point.
+const RATE_LIMITED_BODY: &str = r#"{"code":"resource_exhausted","message":"[resource_exhausted] Error","details":[{"debug":{"error":"ERROR_RATE_LIMITED","details":{"title":"GitHub rate limited","isRetryable":true,"additionalInfo":{"operation":"getScopedInstallationAccessKey","retryAfter":"60"}}}}]}"#;
+
+/// A client whose turn-start schedule does not sleep, so the retry path runs
+/// in test time rather than the production forty-two seconds.
+fn client_with_instant_turn_retries(base_url: String, retries: usize) -> CursorClient {
+    client_against(base_url).with_turn_start_retry_backoff(vec![std::time::Duration::ZERO; retries])
+}
+
+/// The statuses that mean "not now" are the whole classifier: no body is
+/// read, so a provider that rephrases its errors cannot break this.
+#[test]
+fn only_statuses_that_mean_not_now_are_retried() {
+    for status in [
+        reqwest::StatusCode::TOO_MANY_REQUESTS,
+        reqwest::StatusCode::REQUEST_TIMEOUT,
+        reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+        reqwest::StatusCode::BAD_GATEWAY,
+        reqwest::StatusCode::SERVICE_UNAVAILABLE,
+    ] {
+        assert!(is_transient(status), "{status} is worth asking again");
+    }
+    for status in [
+        reqwest::StatusCode::BAD_REQUEST,
+        reqwest::StatusCode::UNAUTHORIZED,
+        reqwest::StatusCode::FORBIDDEN,
+        reqwest::StatusCode::NOT_FOUND,
+        reqwest::StatusCode::UNPROCESSABLE_ENTITY,
+    ] {
+        assert!(
+            !is_transient(status),
+            "{status} is a fact about the request, not the moment"
+        );
+    }
+}
+
+/// The limit that killed a turn in production: upstream of Cursor, clearing
+/// on its own, and now waited out without the person who prompted ever
+/// learning it happened.
+#[tokio::test]
+async fn a_rate_limited_create_is_asked_again() {
+    let (base_url, requests) = stand_in_server_sequence(vec![
+        ("429 Too Many Requests".to_owned(), RATE_LIMITED_BODY),
+        ("200 OK".to_owned(), CREATED_BODY),
+    ]);
+    let (agent, _) = client_with_instant_turn_retries(base_url, 3)
+        .create_agent("prompt", Some(&repo()), true, &[], None)
+        .await
+        .expect("the second answer is a created agent");
+    assert_eq!(agent.as_str(), "bc-00000000-0000-0000-0000-000000000001");
+    assert_eq!(requests.try_iter().count(), 2, "one retry, then created");
+}
+
+/// Nothing about the retry is rate-limit shaped: a gateway that fell over
+/// between two prompts is the same kind of "not now".
+#[tokio::test]
+async fn a_failing_gateway_is_asked_again() {
+    let (base_url, requests) = stand_in_server_sequence(vec![
+        ("502 Bad Gateway".to_owned(), "<html>bad gateway</html>"),
+        ("200 OK".to_owned(), CREATED_BODY),
+    ]);
+    let (agent, _) = client_with_instant_turn_retries(base_url, 3)
+        .create_agent("prompt", Some(&repo()), true, &[], None)
+        .await
+        .expect("the second answer is a created agent");
+    assert_eq!(agent.as_str(), "bc-00000000-0000-0000-0000-000000000001");
+    assert_eq!(requests.try_iter().count(), 2, "one retry, then created");
+}
+
+/// A follow-up prompt mints a token the same way a create does, so it rides
+/// out the same transients.
+#[tokio::test]
+async fn a_rate_limited_follow_up_run_is_asked_again() {
+    let (base_url, requests) = stand_in_server_sequence(vec![
+        ("429 Too Many Requests".to_owned(), RATE_LIMITED_BODY),
+        (
+            "200 OK".to_owned(),
+            r#"{"id":"run-00000000-0000-0000-0000-000000000002"}"#,
+        ),
+    ]);
+    let run = client_with_instant_turn_retries(base_url, 3)
+        .create_run(
+            &CursorAgentId::new("bc-00000000-0000-0000-0000-000000000001".to_owned()),
+            "prompt",
+            None,
+        )
+        .await
+        .expect("the second answer is a run");
+    assert_eq!(run.as_str(), "run-00000000-0000-0000-0000-000000000002");
+    assert_eq!(requests.try_iter().count(), 2, "one retry, then a run");
+}
+
+/// A transient that outlasts the budget is reported as the same failure it
+/// was before any of this: the retry adds attempts, never a new error.
+#[tokio::test]
+async fn a_transient_that_outlasts_the_budget_fails_as_it_always_did() {
+    let (base_url, requests) = stand_in_server_sequence(vec![
+        ("429 Too Many Requests".to_owned(), RATE_LIMITED_BODY),
+        ("429 Too Many Requests".to_owned(), RATE_LIMITED_BODY),
+    ]);
+    let error = client_with_instant_turn_retries(base_url, 1)
+        .create_agent("prompt", Some(&repo()), true, &[], None)
+        .await
+        .expect_err("the stand-in never relents");
+    assert!(
+        error
+            .downcast_current_context::<crate::domain::error::PromptRejected>()
+            .is_some(),
+        "still the rejection a 4xx has always been"
+    );
+    assert_eq!(requests.try_iter().count(), 2, "one retry, then give up");
+}
+
+/// A rejection the request itself earned must still cost exactly one POST —
+/// retrying a malformed model id only makes the user wait for the same no.
+#[tokio::test]
+async fn a_rejection_is_never_asked_again() {
+    let (base_url, requests) = stand_in_server_sequence(vec![(
+        "400 Bad Request".to_owned(),
+        r#"{"error":{"code":"validation_error","message":"Model 'nope' does not match a known variant"}}"#,
+    )]);
+    client_with_instant_turn_retries(base_url, 3)
+        .create_agent("prompt", Some(&repo()), true, &[], None)
+        .await
+        .expect_err("the stand-in rejects the create");
+    assert_eq!(requests.try_iter().count(), 1, "asked exactly once");
+}
+
+/// The retry exists for one wording only. A `validation_error` about anything
+/// else is not asked again — a malformed model id will not fix itself.
+#[tokio::test]
+async fn other_validation_errors_are_not_retried() {
+    let (base_url, requests) = stand_in_server_sequence(vec![(
+        "400 Bad Request".to_owned(),
+        r#"{"error":{"code":"validation_error","message":"Model 'nope' does not match a known variant"}}"#,
+    )]);
+    let error = client_with_instant_retries(base_url, 2)
+        .create_agent("prompt", Some(&repo()), true, &[], None)
+        .await
+        .expect_err("the stand-in rejects the create");
+    assert!(
+        error
+            .downcast_current_context::<crate::domain::error::PromptRejected>()
+            .is_some(),
+        "still a plain rejection"
+    );
+    assert_eq!(requests.try_iter().count(), 1, "asked exactly once");
 }
 
 /// Every other 4xx must keep behaving exactly as it did — a generic

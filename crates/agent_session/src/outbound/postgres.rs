@@ -10,13 +10,16 @@ use sqlx::types::Json;
 mod test;
 
 mod pull_request;
+mod sharing;
+mod turn_state;
+mod working_branch;
 
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{
     AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreviewData,
     ClaimOutcome, CreateAgentSessionParams, ExternalSession, ManagerFence, Message, ReplicaAddress,
     ReplicaId, SandboxSize, SessionBot, SessionClaim, SessionManager, SessionPreviewCandidate,
-    SessionStatus, StoredAgentSessionLog, ThreadSession,
+    SessionStatus, StoredAgentSessionLog, ThreadSession, cursor_run_checkpoint,
 };
 use crate::domain::ports::{
     AgentSessionLogRepo, AgentSessionRepo, ExternalSessionRepo, REPLICA_STALE_AFTER,
@@ -110,31 +113,6 @@ fn parse_message(direction: &str, content: serde_json::Value) -> anyhow::Result<
     }
 }
 
-fn cursor_run_checkpoint(message: &Message) -> Option<String> {
-    let Message::ToServer(ToServerMessage::Acp(
-        agent_runtime_protocol::domain::schema::v0::AcpMessage(frame),
-    )) = message
-    else {
-        return None;
-    };
-    let value = serde_json::to_value(frame).ok()?;
-    if value.get("method")?.as_str()? != "session/update" {
-        return None;
-    }
-    let params = value.get("params")?;
-    let update = params.get("update")?;
-    if update.get("sessionUpdate")?.as_str()? != "agent_message_chunk"
-        || !update.get("content")?.get("text")?.as_str()?.is_empty()
-    {
-        return None;
-    }
-    params
-        .get("_meta")?
-        .get("macroCursorRunCheckpoint")?
-        .as_str()
-        .map(str::to_owned)
-}
-
 /// Record that `user_id` accessed the session in their history.
 ///
 /// The `itemType` is the [`EntityType::AgentSession`] wire name, which is
@@ -223,7 +201,7 @@ impl TryFrom<AgentSessionRow> for AgentSession {
         Ok(Self {
             id: AgentSessionId::new_from_uuid(row.id),
             name: row.name,
-            owner_id: MacroUserIdStr::try_from(row.owner_id)
+            owner_id: Owner::from_principal_str(&row.owner_id)
                 .context("agent session has an unparseable owner")?,
             thread_id: row.thread_id,
             thread_parent: row.thread_parent.map(|parent| parent.0),
@@ -284,6 +262,13 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         } = params;
         let mcp_servers_json = serde_json::to_value(mcp_servers.servers())
             .context("serialize agent session mcp servers")?;
+        // The row's `owner_id` references `"User"`, the owner's grant is a
+        // user access row, and the session lands in the owner's history:
+        // this store holds user-owned sessions, and says so before writing
+        // anything rather than letting the foreign key say it for a bot.
+        let owner_user = owner_id
+            .as_user()
+            .ok_or_else(|| AgentSessionError::OwnerNotUser(owner_id.owner_type()))?;
 
         // The session row and its access grants land together: a crash between
         // the two would leave a session nobody - not even its owner -
@@ -319,7 +304,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
                 NULL::TEXT AS "external_last_run_id?"
             "#,
             id.as_uuid(),
-            owner_id.as_ref(),
+            owner_user.as_ref(),
             thread_id,
             originating_message_id,
             bot_id.as_uuid(),
@@ -353,7 +338,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             &mut transaction,
             &id.as_uuid(),
             EntityType::AgentSession,
-            owner_id.as_ref(),
+            owner_user.as_ref(),
             EntityAccessSourceType::User,
             AccessLevel::Owner,
         )
@@ -365,7 +350,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             NewEntityRecord::new(
                 id.as_uuid(),
                 RegisteredEntityType::AgentSession,
-                Owner::User(owner_id.clone()),
+                owner_id.clone(),
             ),
         )
         .await
@@ -404,7 +389,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         // row is what Soup's `viewed_at` and the frecency ranking read, so
         // without it a brand-new session would rank below everything the
         // owner has ever opened.
-        upsert_user_history(&mut transaction, owner_id.as_ref(), &id.as_uuid())
+        upsert_user_history(&mut transaction, owner_user.as_ref(), &id.as_uuid())
             .await
             .context("failed to record the agent session in the owner's history")?;
 
@@ -503,7 +488,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
                         bot: None,
                         id,
                         name: row.name,
-                        owner_id: MacroUserIdStr::try_from(row.owner_id)
+                        owner_id: Owner::from_principal_str(&row.owner_id)
                             .context("agent session has an unparseable owner")?,
                         bot_id: BotId::new_from_uuid(row.bot_id),
                         status: parse_status(&row.status, row.status_event_name)?,
@@ -741,6 +726,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             UPDATE agent_session
             SET repo_url = $2,
+                working_branch = NULL,
                 modified_at = NOW()
             WHERE id = $1
               AND repo_url IS DISTINCT FROM $2
@@ -954,16 +940,27 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         // A session old enough to have owned a dedicated channel leaves it
         // behind: it holds the history that channel renders, and is not this
         // operation's to destroy.
-        sqlx::query!(
+        let permission = sqlx::query!(
             r#"
             DELETE FROM agent_session
             WHERE id = $1
+            RETURNING share_permission_id
             "#,
             id.as_uuid(),
         )
-        .execute(&mut *transaction)
+        .fetch_optional(&mut *transaction)
         .await
         .context("failed to delete agent session")?;
+
+        if let Some(permission_id) = permission.and_then(|row| row.share_permission_id) {
+            sqlx::query!(
+                r#"DELETE FROM "SharePermission" WHERE id = $1"#,
+                permission_id
+            )
+            .execute(&mut *transaction)
+            .await
+            .context("failed to delete agent session sharing settings")?;
+        }
 
         transaction
             .commit()
@@ -1064,64 +1061,7 @@ impl ExternalSessionRepo for PgAgentSessionRepo {
 
 impl AgentSessionLogRepo for PgAgentSessionRepo {
     async fn create(&self, log: AgentSessionLog) -> Result<StoredAgentSessionLog> {
-        let event_status = match &log.content {
-            Message::ToServer(ToServerMessage::Event { event }) => {
-                Some(SessionStatus::Event(event.clone()))
-            }
-            _ => None,
-        };
-        let (direction, content) = message_columns(&log.content)?;
-        let mut transaction = self
-            .pool
-            .begin()
-            .await
-            .context("begin agent session log create")?;
-        let id = macro_uuid::generate_uuid_v7();
-        let created_at = sqlx::query_scalar!(
-            r#"
-            INSERT INTO agent_session_log (id, agent_session_id, user_id, direction, content)
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING created_at
-            "#,
-            id,
-            log.agent_session_id.as_uuid(),
-            log.user_id.as_ref().map(|user_id| user_id.as_ref()),
-            direction,
-            content,
-        )
-        .fetch_one(&mut *transaction)
-        .await
-        .context("failed to create agent session log entry")?;
-
-        if let Some(status) = event_status {
-            let (status, status_event_name) = status_columns(&status);
-            sqlx::query!(
-                r#"
-                UPDATE agent_session
-                SET status = $2,
-                    status_event_name = $3,
-                    modified_at = now()
-                WHERE id = $1
-                "#,
-                log.agent_session_id.as_uuid(),
-                status,
-                status_event_name,
-            )
-            .execute(&mut *transaction)
-            .await
-            .context("failed to update agent session status from log entry")?;
-        }
-
-        transaction
-            .commit()
-            .await
-            .context("commit agent session log create")?;
-
-        Ok(StoredAgentSessionLog {
-            id,
-            created_at,
-            entry: log,
-        })
+        self.create_projected(log, None, None, None).await
     }
 
     async fn create_fenced(
@@ -1132,13 +1072,132 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
         self.create_fenced_with_boundary(log, claim, None).await
     }
 
+    async fn create_batch_fenced(
+        &self,
+        entries: Vec<StoredAgentSessionLog>,
+        claim: &SessionClaim,
+    ) -> Result<Vec<StoredAgentSessionLog>> {
+        if entries.is_empty() {
+            return Ok(entries);
+        }
+        if entries
+            .iter()
+            .any(|stored| stored.entry.agent_session_id != claim.session)
+        {
+            return Err(AgentSessionError::FencedOut(claim.session));
+        }
+        let session = claim.session;
+
+        let mut ids = Vec::with_capacity(entries.len());
+        let mut user_ids: Vec<Option<String>> = Vec::with_capacity(entries.len());
+        let mut directions: Vec<String> = Vec::with_capacity(entries.len());
+        let mut contents = Vec::with_capacity(entries.len());
+        for stored in &entries {
+            let (direction, content) = message_columns(&stored.entry.content)?;
+            ids.push(stored.id);
+            user_ids.push(
+                stored
+                    .entry
+                    .user_id
+                    .as_ref()
+                    .map(|user_id| user_id.as_ref().to_owned()),
+            );
+            directions.push(direction.to_owned());
+            contents.push(content);
+        }
+
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .context("begin fenced agent session log batch create")?;
+
+        // Hold the session row through commit, as the single-frame write
+        // does: a takeover updates this same row, so it cannot supersede the
+        // claim between our check and the insert.
+        let locked_session = sqlx::query_scalar!(
+            r#"
+            SELECT id
+            FROM agent_session
+            WHERE id = $1 AND manager_replica_id = $2 AND manager_fence = $3
+            FOR UPDATE
+            "#,
+            session.as_uuid(),
+            claim.replica.as_uuid(),
+            claim.fence.0,
+        )
+        .fetch_optional(&mut *transaction)
+        .await
+        .context("lock fenced agent session for batch")?;
+        if locked_session.is_none() {
+            return Err(AgentSessionError::FencedOut(session));
+        }
+
+        // One transaction means one `now()`, so the batch is spread over
+        // consecutive microseconds in append order: readers order by
+        // `(created_at, id)`, and the ids are v7 without a monotonic
+        // counter, so same-instant rows would otherwise interleave.
+        let stamped = sqlx::query!(
+            r#"
+            INSERT INTO agent_session_log (id, agent_session_id, user_id, direction, content, created_at)
+            SELECT frame.id, $1, frame.user_id, frame.direction, frame.content,
+                   now() + (frame.ordinality - 1) * interval '1 microsecond'
+            FROM UNNEST($2::uuid[], $3::text[], $4::text[], $5::jsonb[])
+                WITH ORDINALITY AS frame(id, user_id, direction, content, ordinality)
+            RETURNING id, created_at
+            "#,
+            session.as_uuid(),
+            &ids,
+            &user_ids as &[Option<String>],
+            &directions,
+            &contents,
+        )
+        .fetch_all(&mut *transaction)
+        .await
+        .context("failed to create fenced agent session log batch")?;
+        transaction
+            .commit()
+            .await
+            .context("commit fenced agent session log batch create")?;
+
+        let stamps: std::collections::HashMap<Uuid, chrono::DateTime<chrono::Utc>> = stamped
+            .into_iter()
+            .map(|row| (row.id, row.created_at))
+            .collect();
+        entries
+            .into_iter()
+            .map(|stored| {
+                let created_at = stamps.get(&stored.id).copied().ok_or_else(|| {
+                    anyhow::anyhow!("batch insert returned no row for log entry {}", stored.id)
+                })?;
+                Ok(StoredAgentSessionLog {
+                    created_at,
+                    ..stored
+                })
+            })
+            .collect()
+    }
+
     async fn create_fenced_with_boundary(
         &self,
         log: AgentSessionLog,
         claim: &SessionClaim,
         boundary: Option<crate::domain::model::HistoryBoundary>,
     ) -> Result<StoredAgentSessionLog> {
-        if claim.session != log.agent_session_id {
+        self.create_projected(log, Some(claim), boundary, None)
+            .await
+    }
+
+    async fn create_projected(
+        &self,
+        log: AgentSessionLog,
+        claim: Option<&SessionClaim>,
+        boundary: Option<crate::domain::model::HistoryBoundary>,
+        turn_state: Option<agent_fold::domain::model::TurnState>,
+    ) -> Result<StoredAgentSessionLog> {
+        if claim.is_some_and(|claim| claim.session != log.agent_session_id)
+            || (boundary.is_some() && claim.is_none())
+        {
             return Err(AgentSessionError::FencedOut(log.agent_session_id));
         }
         let event_status = match &log.content {
@@ -1155,24 +1214,26 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
             .await
             .context("begin fenced agent session log create")?;
 
-        // Hold the session row through commit. A takeover updates this same
-        // row, so it cannot supersede the claim between our check and append.
-        let locked_session = sqlx::query_scalar!(
-            r#"
+        if let Some(claim) = claim {
+            // Hold the session row through commit. A takeover updates this same
+            // row, so it cannot supersede the claim between our check and append.
+            let locked_session = sqlx::query_scalar!(
+                r#"
             SELECT id
             FROM agent_session
             WHERE id = $1 AND manager_replica_id = $2 AND manager_fence = $3
             FOR UPDATE
             "#,
-            log.agent_session_id.as_uuid(),
-            claim.replica.as_uuid(),
-            claim.fence.0,
-        )
-        .fetch_optional(&mut *transaction)
-        .await
-        .context("lock fenced agent session")?;
-        if locked_session.is_none() {
-            return Err(AgentSessionError::FencedOut(log.agent_session_id));
+                log.agent_session_id.as_uuid(),
+                claim.replica.as_uuid(),
+                claim.fence.0,
+            )
+            .fetch_optional(&mut *transaction)
+            .await
+            .context("lock fenced agent session")?;
+            if locked_session.is_none() {
+                return Err(AgentSessionError::FencedOut(log.agent_session_id));
+            }
         }
 
         let id = macro_uuid::generate_uuid_v7();
@@ -1192,7 +1253,7 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
         .await
         .context("failed to create fenced agent session log entry")?;
 
-        if let Some(boundary) = boundary {
+        if let (Some(boundary), Some(claim)) = (boundary, claim) {
             let updated = sqlx::query!(
                 r#"
                 UPDATE agent_session AS session
@@ -1220,7 +1281,7 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
             }
         }
 
-        if let Some(run_id) = checkpoint {
+        if let (Some(run_id), Some(claim)) = (checkpoint, claim) {
             let updated = sqlx::query!(
                 r#"
                 UPDATE external_agent_session AS external
@@ -1263,6 +1324,21 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
             .execute(&mut *transaction)
             .await
             .context("failed to update agent session status from fenced log entry")?;
+        }
+
+        if let Some(turn_state) = turn_state {
+            sqlx::query!(
+                r#"
+                UPDATE agent_session
+                SET turn_state = $2
+                WHERE id = $1 AND turn_state IS DISTINCT FROM $2
+                "#,
+                log.agent_session_id.as_uuid(),
+                turn_state.as_ref(),
+            )
+            .execute(&mut *transaction)
+            .await
+            .context("project agent session turn state with log entry")?;
         }
 
         transaction

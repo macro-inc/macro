@@ -5,7 +5,6 @@ use entity_registry_db_utils::{
     InsertOutcome, NewEntityRecord, RegisteredEntityType, WriteOutcome, delete_entity,
     insert_entity,
 };
-use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model_owner::Owner;
@@ -50,7 +49,7 @@ fn kind_to_str(kind: &ActionKind) -> &'static str {
 
 impl ScheduledActionRepo for PgScheduledActionRepo {
     async fn create_action(&self, action: ScheduledAction) -> Result<ScheduledAction> {
-        let owner = action.owner.to_string();
+        let owner = action.owner.principal_id();
         let timezone = action.timezone.to_string();
         let kind = kind_to_str(&action.kind);
 
@@ -75,7 +74,7 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
 
         let created = ScheduledAction {
             id: Some(row.id),
-            owner: MacroUserIdStr::parse_from_str(&row.owner)?.into_owned(),
+            owner: Owner::from_principal_str(&row.owner)?,
             name: row.name,
             schedule: Schedule::from_cron(row.schedule)?,
             kind: parse_kind(&row.kind)?,
@@ -92,7 +91,7 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
             NewEntityRecord::new(
                 row.id,
                 RegisteredEntityType::ScheduledAction,
-                Owner::User(created.owner.clone()),
+                created.owner.clone(),
             ),
         )
         .await?
@@ -121,7 +120,7 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
             .map(|row| {
                 Ok(ScheduledAction {
                     id: Some(row.id),
-                    owner: MacroUserIdStr::parse_from_str(&row.owner)?.into_owned(),
+                    owner: Owner::from_principal_str(&row.owner)?,
                     name: row.name,
                     schedule: Schedule::from_cron(row.schedule)?,
                     kind: parse_kind(&row.kind)?,
@@ -159,7 +158,7 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
             .map(|row| {
                 Ok(ScheduledAction {
                     id: Some(row.id),
-                    owner: MacroUserIdStr::parse_from_str(&row.owner)?.into_owned(),
+                    owner: Owner::from_principal_str(&row.owner)?,
                     name: row.name,
                     schedule: Schedule::from_cron(row.schedule)?,
                     kind: parse_kind(&row.kind)?,
@@ -210,7 +209,7 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
 
         Ok(ScheduledAction {
             id: Some(row.id),
-            owner: MacroUserIdStr::parse_from_str(&row.owner)?.into_owned(),
+            owner: Owner::from_principal_str(&row.owner)?,
             name: row.name,
             schedule: Schedule::from_cron(row.schedule)?,
             kind: parse_kind(&row.kind)?,

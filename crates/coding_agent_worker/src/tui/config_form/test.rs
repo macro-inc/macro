@@ -200,3 +200,37 @@ fn assert_private_mode(path: &Path) {
 
 #[cfg(not(unix))]
 fn assert_private_mode(_path: &Path) {}
+
+#[test]
+fn permission_bypass_edits_preserve_credentials_and_comments() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("macrod.toml");
+    let agent = discover(&HermesOnly).remove(0);
+    ConfigForm::create_for_deployment(&path, &agent, directory.path(), Deployment::Production)
+        .unwrap();
+    let credentials = HarnessCredentials {
+        harness_id: HarnessId::TEST_A,
+        token: "mhns_secret".to_owned(),
+        scope: HarnessScope::User,
+    };
+    let mut form = ConfigForm::load(&path).unwrap();
+    form.persist_credentials(&credentials).unwrap();
+    assert!(
+        !Config::load(&path)
+            .unwrap()
+            .identity
+            .allow_permission_bypass
+    );
+    for allowed in [true, false] {
+        form.set_permission_bypass(allowed);
+        form.save().unwrap();
+        let config = Config::load(&path).unwrap();
+        assert_eq!(config.identity.allow_permission_bypass, allowed);
+        assert_eq!(config.credentials.as_ref(), Some(&credentials));
+        assert!(
+            fs::read_to_string(&path)
+                .unwrap()
+                .contains("# macrod configuration")
+        );
+    }
+}

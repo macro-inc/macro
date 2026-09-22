@@ -1,3 +1,4 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   enableGraphqlSoup,
   isFeatureEnabled,
@@ -230,10 +231,12 @@ export function useUserNotificationsQuery(
   args: Accessor<UserNotificationsQueryArgs>,
   options?: Accessor<UserNotificationsQueryOptions>
 ): UserNotificationsQuery {
+  const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
   const queryEnabled = () => options?.().enabled !== false;
 
-  const usesGraphql = () =>
-    isFeatureEnabled(enableGraphqlSoup) && args().done !== true;
+  // Cold-start flags can arrive after the observers mount. Enabling and
+  // reading a transport must react to the same flag, not an imperative snapshot.
+  const usesGraphql = () => graphqlSoupFlag().enabled && args().done !== true;
 
   const graphqlQuery = createGraphqlNotificationsQuery(args, () => ({
     enabled: queryEnabled() && usesGraphql(),
@@ -925,6 +928,7 @@ function notificationEntityTypeToSoupTag(
     .with('foreign_entity', () => 'foreignEntity' as const)
     .with('reminder', () => 'reminder' as const)
     .with('calendar_event', () => 'calendarEvent' as const)
+    .with('agent_session', () => 'agentSession' as const)
     .with(
       P.union(
         'user',
@@ -935,7 +939,6 @@ function notificationEntityTypeToSoupTag(
         'crm_company',
         'crm_contact',
         'skill',
-        'agent_session',
         'scheduled_action',
         'initiative'
       ),

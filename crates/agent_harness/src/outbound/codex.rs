@@ -1,9 +1,9 @@
 //! Hosts per-owner Codex ACP conversations with PostgreSQL ownership fencing.
 use super::acp_pipe::PipeTransport;
 use crate::domain::{
-    codex::{CODEX_PROVIDER, CodexRuntime},
+    codex::{CODEX_PROVIDER, CodexRuntime, connection_preflight},
     error::{HarnessError, Result},
-    model::SpawnContainer,
+    model::{AgentKind, SessionBlocker, SpawnContainer},
     ports::ContainerManager,
     sandbox::SandboxResizeEffect,
 };
@@ -19,6 +19,7 @@ use codex_cloud_agents::domain::{
     runtime::RuntimeIdentity,
 };
 use codex_connection::domain::ConnectionService;
+use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
 
 /// Provisions an ACP attachment; cloud execution begins only with a prompt.
@@ -76,15 +77,18 @@ impl<
                 "Codex connection encryption is not configured on this deployment".into(),
             )
         })?;
+        // Codex work is paid for by the owner's connection, which only a
+        // person has.
+        let owner = row.owner_user()?.clone();
         let resolved = connections
-            .resolve(row.owner_id.as_ref())
+            .resolve(owner.as_ref())
             .await
             .map_err(|e| HarnessError::Container(e.to_string()))?;
         let claim = Arc::new(std::sync::OnceLock::new());
         let runtime = Arc::new(CodexRuntime {
             provider: self.provider.clone(),
             connections,
-            owner: row.owner_id.clone(),
+            owner,
             binding: RuntimeIdentity {
                 connection_id: resolved.connection_id.to_string(),
                 account_id: resolved.credentials.account_id.clone(),
@@ -139,6 +143,19 @@ impl<
 > ContainerManager for CodexContainerManager<P, S, J>
 {
     type Transport = PipeTransport;
+    async fn preflight(
+        &self,
+        _kind: AgentKind,
+        owner: &MacroUserIdStr<'_>,
+    ) -> Result<Option<SessionBlocker>> {
+        let connections = self.connections.as_ref().ok_or_else(|| {
+            HarnessError::Container(
+                "Codex connection encryption is not configured on this deployment".into(),
+            )
+        })?;
+        connection_preflight(connections.as_ref(), owner).await
+    }
+
     async fn spawn(&self, command: SpawnContainer) -> Result<RuntimeAttachment<PipeTransport>> {
         self.attach(command.session_id).await
     }

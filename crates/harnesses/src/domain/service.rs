@@ -126,6 +126,7 @@ where
                     requested_name: name.to_owned(),
                     host: host.clone(),
                     requested_scope: req.scope,
+                    requested_allow_permission_bypass: req.allow_permission_bypass,
                     expires_at,
                 })
                 .await
@@ -182,6 +183,11 @@ where
         // Reuses the pending/expired policy so approval failures report the
         // same way the lookup does.
         let details = self.get_pairing(code).await?;
+        if req.allow_permission_bypass && details.requested_allow_permission_bypass == Some(false) {
+            return Err(HarnessError::BadRequest(
+                "this daemon requires permission prompts".to_owned(),
+            ));
+        }
         let code = tokens::normalize_pairing_code(code).expect("get_pairing validated the code");
 
         let name = match &req.name {
@@ -220,6 +226,7 @@ where
             .approve_pairing(
                 &code,
                 NewHarness {
+                    allow_permission_bypass: req.allow_permission_bypass,
                     id: HarnessId::new_from_uuid(Uuid::new_v4()),
                     name,
                     owner,

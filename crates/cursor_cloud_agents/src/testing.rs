@@ -473,6 +473,7 @@ impl CursorAgents for FakeCursor {
             return Err(rootcause::report!(
                 crate::domain::error::RepositoryUnavailable {
                     repo: repo.clone(),
+                    reason: crate::domain::error::RepositoryRejection::Inaccessible,
                     detail: r#"{"error":{"code":"repository_access","message":"Repository not accessible"}}"#
                         .into(),
                 }
@@ -767,6 +768,7 @@ pub struct RecordingNotifier {
     updates: Arc<Mutex<RecordedUpdates>>,
     reloads: Arc<Mutex<Vec<SessionId>>>,
     pull_requests: Arc<Mutex<Vec<String>>>,
+    working_branches: Arc<Mutex<Vec<(String, String)>>>,
     delivered: Arc<tokio::sync::Notify>,
 }
 
@@ -781,6 +783,14 @@ impl RecordingNotifier {
     #[must_use]
     pub fn updates(&self) -> Vec<(SessionId, SessionUpdate)> {
         self.updates.lock().expect("notifier poisoned").clone()
+    }
+
+    /// Repository branch facts handed to the host operation.
+    pub fn working_branches(&self) -> Vec<(String, String)> {
+        self.working_branches
+            .lock()
+            .expect("notifier poisoned")
+            .clone()
     }
 
     /// PRs handed to the host operation.
@@ -816,6 +826,19 @@ impl RecordingNotifier {
 }
 
 impl SessionNotifier for RecordingNotifier {
+    async fn set_working_branch(
+        &self,
+        _session: &SessionId,
+        repository_url: &str,
+        branch: &str,
+    ) -> Result<(), rootcause::Report> {
+        self.working_branches
+            .lock()
+            .expect("notifier poisoned")
+            .push((repository_url.to_owned(), branch.to_owned()));
+        Ok(())
+    }
+
     async fn set_pull_request(
         &self,
         _session: &SessionId,

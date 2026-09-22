@@ -234,6 +234,7 @@ type ToolParserMap = {
     call: types.UpdateThreadLabels;
     response: types.UpdateThreadLabelsResponse;
   };
+  UploadFile: { call: types.UploadFile; response: types.UploadFileResponse };
   WebFetch: { call: types.WebFetch; response: types.WebFetchResponse };
   WebSearch: { call: types.WebSearch; response: types.WebSearchResponse };
 };
@@ -495,6 +496,10 @@ const toolParserMap = {
     call: schemas.UpdateThreadLabels,
     response: schemas.UpdateThreadLabelsResponse,
   },
+  UploadFile: {
+    call: schemas.UploadFile,
+    response: schemas.UploadFileResponse,
+  },
   WebFetch: { call: schemas.WebFetch, response: schemas.WebFetchResponse },
   WebSearch: { call: schemas.WebSearch, response: schemas.WebSearchResponse },
 };
@@ -734,6 +739,7 @@ type ToolDataMap = {
     call: types.UpdateThreadLabels;
     response: types.UpdateThreadLabelsResponse;
   };
+  UploadFile: { call: types.UploadFile; response: types.UploadFileResponse };
   WebFetch: { call: types.WebFetch; response: types.WebFetchResponse };
   WebSearch: { call: types.WebSearch; response: types.WebSearchResponse };
 };

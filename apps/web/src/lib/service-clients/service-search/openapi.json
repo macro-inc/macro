@@ -198,7 +198,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Filter by session owner. Examples: ['macro|user1@user.com']. Empty to\ninclude every owner."
+            "description": "Filter by session owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
           }
         }
       },
@@ -1191,7 +1191,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Filter by chat owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+            "description": "Filter by chat owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
           },
           "project_ids": {
             "type": "array",
@@ -1540,7 +1540,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Filter by document owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+            "description": "Filter by document owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
           },
           "project_ids": {
             "type": "array",
@@ -1759,8 +1759,8 @@
       },
       "DocumentSubType": {
         "type": "string",
-        "description": "The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.",
-        "enum": ["task", "snippet", "skill"]
+        "description": "The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.\n\nWire, database, and `Display` spellings are all `snake_case` so a\nmulti-word variant serializes identically in every system.",
+        "enum": ["task", "snippet", "skill", "initiative_description"]
       },
       "EmailFilters": {
         "type": "object",
@@ -2766,7 +2766,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Filter by project owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+            "description": "Filter by project owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
           },
           "project_ids": {
             "type": "array",

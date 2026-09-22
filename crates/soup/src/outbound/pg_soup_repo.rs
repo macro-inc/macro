@@ -420,9 +420,8 @@ macro_rules! map_soup_type {
                         .document_version_id
                         .ok_or_else(|| type_err("document version id must exist"))
                         .and_then(|s| FromStr::from_str(&s).map_err(type_err))?,
-                    owner_id: MacroUserIdStr::parse_from_str(&r.user_id)
-                        .map_err(type_err)?
-                        .into_owned(),
+                    owner_id: ::model_owner::Owner::from_principal_str(&r.user_id)
+                        .map_err(type_err)?,
                     name: r.name,
                     file_type: r.file_type,
                     sha: r.sha,
@@ -456,9 +455,8 @@ macro_rules! map_soup_type {
                     id: Uuid::parse_str(&r.id).map_err(type_err)?,
                     name: r.name,
                     model: r.model,
-                    owner_id: MacroUserIdStr::parse_from_str(&r.user_id)
-                        .map_err(type_err)?
-                        .into_owned(),
+                    owner_id: ::model_owner::Owner::from_principal_str(&r.user_id)
+                        .map_err(type_err)?,
                     project_id: r
                         .project_id
                         .as_deref()
@@ -477,9 +475,8 @@ macro_rules! map_soup_type {
                 ::models_soup::project::SoupProject {
                     id: Uuid::parse_str(&r.id).map_err(type_err)?,
                     name: r.name,
-                    owner_id: MacroUserIdStr::parse_from_str(&r.user_id)
-                        .map_err(type_err)?
-                        .into_owned(),
+                    owner_id: ::model_owner::Owner::from_principal_str(&r.user_id)
+                        .map_err(type_err)?,
                     parent_id: r
                         .project_id
                         .as_deref()

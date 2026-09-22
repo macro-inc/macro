@@ -124,7 +124,7 @@ impl EmailServiceTokenSource {
 
         match freshness {
             TokenFreshness::Cached => {
-                email::outbound::fetch_gmail_access_token(
+                google_token::fetch_gmail_access_token(
                     &key,
                     &self.redis_conn,
                     &self.auth_service_client,
@@ -132,7 +132,7 @@ impl EmailServiceTokenSource {
                 .await
             }
             TokenFreshness::Fresh => {
-                email::outbound::fetch_gmail_access_token_no_cache(
+                google_token::fetch_gmail_access_token_no_cache(
                     &key,
                     &self.redis_conn,
                     &self.auth_service_client,

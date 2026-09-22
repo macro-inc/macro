@@ -1,3 +1,5 @@
+import type { FacetSelection } from '@app/features/soup/filters/facets/types';
+
 export type DriveTab = 'owned' | 'recent' | 'shared';
 export type DriveScope = 'default' | 'all' | 'attachments';
 export type DriveSort = 'updated_at' | 'created_at' | 'viewed_at';
@@ -18,9 +20,12 @@ export type DriveState = {
   location: DriveLocation;
   scope: DriveScope;
   sort: DriveSort;
+  search: string;
+  facets: FacetSelection;
   expandedFolderIds: string[];
   favoritesOpen: boolean;
   rootOpen: boolean;
+  tagsOpen: boolean;
 };
 
 export const DRIVE_TABS = [

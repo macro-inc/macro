@@ -16,14 +16,14 @@ pub struct SessionStorage {
     oplog: DurableKVStorage,
 }
 
-/// Outbound adapter for atomic spreadsheet updates, sharing the websocket log.
-pub struct SpreadsheetUpdateStorage<'a> {
+/// Outbound adapter for atomic document updates, sharing the websocket log.
+pub struct DocumentUpdateStorage<'a> {
     pub document_state: &'a DocumentState,
     pub storage: &'a SessionStorage,
-    pub attribution: Option<&'a crate::spreadsheet::SpreadsheetAttribution>,
+    pub attribution: Option<&'a crate::domain::document::DocumentAttribution>,
 }
 
-impl crate::spreadsheet::SpreadsheetUpdatePort for SpreadsheetUpdateStorage<'_> {
+impl crate::domain::document::DocumentUpdatePort for DocumentUpdateStorage<'_> {
     fn document(&self) -> &loro::LoroDoc {
         &self.document_state.loro_doc
     }
@@ -31,15 +31,15 @@ impl crate::spreadsheet::SpreadsheetUpdatePort for SpreadsheetUpdateStorage<'_> 
     async fn apply_and_persist(
         &self,
         update: &[u8],
-    ) -> std::result::Result<(), crate::spreadsheet::SpreadsheetError> {
+    ) -> std::result::Result<(), crate::domain::document::DocumentError> {
         self.storage
             .oplog
             .apply_op_with_attribution(self.document_state, update, self.attribution)
             .await
             .map(|_| ())
             .map_err(|error| {
-                tracing::error!(error = ?error, "failed to persist spreadsheet update");
-                crate::spreadsheet::SpreadsheetError::Persistence
+                tracing::error!(error = ?error, "failed to persist document update");
+                crate::domain::document::DocumentError::Persistence
             })
     }
 }

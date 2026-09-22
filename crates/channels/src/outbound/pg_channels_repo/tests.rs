@@ -558,6 +558,60 @@ async fn patch_channel_rename_advances_updated_at(pool: Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("channels_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
+async fn patch_channel_rename_allows_a_member(pool: Pool<Postgres>) {
+    let repo = repo(pool.clone());
+
+    repo.patch_channel(
+        CH1,
+        USER_C.to_string(),
+        None,
+        PatchChannelRequest {
+            channel_name: Some("member-renamed".to_string()),
+            convert_to_team_channel: None,
+            auto_join_team: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let after = sqlx::query!("SELECT name FROM comms_channels WHERE id = $1", CH1)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(after.name.as_deref(), Some("member-renamed"));
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn patch_channel_settings_reject_a_member(pool: Pool<Postgres>) {
+    let repo = repo(pool);
+
+    let err = repo
+        .patch_channel(
+            CH1,
+            USER_C.to_string(),
+            None,
+            PatchChannelRequest {
+                channel_name: None,
+                convert_to_team_channel: None,
+                auto_join_team: Some(false),
+            },
+        )
+        .await
+        .expect_err("member cannot change auto-join");
+
+    assert!(
+        err.to_string()
+            .contains("to patch channel settings you must be an admin or owner")
+    );
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
 async fn patch_channel_converts_to_team_and_updates_auto_join_members(pool: Pool<Postgres>) {
     let repo = repo(pool.clone());
     let user_id = macro_user_id(TEAM_OWNER_A);
@@ -2291,6 +2345,37 @@ async fn thread_participants_exclude_departed_senders(pool: Pool<Postgres>) -> a
     assert!(
         ids.contains(&USER_A),
         "active thread participant should be included"
+    );
+    assert!(
+        !ids.contains(&LEFT_USER),
+        "departed sender must not be treated as a thread participant"
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn thread_participants_exclude_deleted_messages(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    // t41: user-b rooted the thread and user-c replied. user-e only appears in
+    // soft-deleted replies: one they authored, and one from user-b that
+    // @-mentioned them (whose mention row still exists).
+    let participants = repo.get_thread_participants(T41).await?;
+
+    let ids: Vec<&str> = participants.iter().map(|p| p.as_ref()).collect();
+    assert!(
+        ids.contains(&USER_B),
+        "thread root sender should be included"
+    );
+    assert!(
+        ids.contains(&USER_C),
+        "active reply sender should be included"
+    );
+    assert!(
+        !ids.contains(&USER_E),
+        "a user who only sent, or was only mentioned in, deleted replies must not be a thread participant"
     );
     assert!(
         !ids.contains(&LEFT_USER),
