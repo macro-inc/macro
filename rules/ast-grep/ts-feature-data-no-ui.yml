@@ -11,6 +11,8 @@ note: |-
   with fake clients and controllers with fake capabilities; neither imports
   rendering code, including block-agent’s `ui/` and `component/` layers.
 files:
+  - apps/web/src/features/agent-voice/queries/**
+  - apps/web/src/features/agent-voice/primitives/**
   - apps/web/src/features/block-agent/queries/**
   - apps/web/src/features/block-agent/primitives/**
   - apps/web/src/features/block-spreadsheet/queries/**

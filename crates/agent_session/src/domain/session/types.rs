@@ -191,6 +191,17 @@ impl std::fmt::Display for CloseReason {
 /// One thing that happened to this connection.
 #[derive(Debug)]
 pub enum Input<Token> {
+    /// Interrupt only if the named action still owns the active turn.
+    CancelTurn {
+        /// The user responsible for this request.
+        from: Option<MacroUserIdStr<'static>>,
+        /// The action whose turn may be stopped.
+        expected_action_id: AgentActionId,
+        /// Identity of the cancellation command.
+        action_id: AgentActionId,
+        /// Completion sent after validation and transport delivery.
+        token: Token,
+    },
     /// A caller wants this action delivered.
     Command {
         /// The user whose request this is, when it came from one.

@@ -8,8 +8,10 @@ import {
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { uploadFile } from '@core/util/upload';
+import Waveform from '@phosphor-icons/core/regular/waveform.svg?component-solid';
 import type { PromptAttachment } from '@service-agent-harness/generated/schemas';
-import { createMemo, createSignal } from 'solid-js';
+import { Button } from '@ui';
+import { createMemo, createSignal, Show } from 'solid-js';
 import { ChatComposer } from '../components/ChatComposer';
 import type { AgentKind } from '../core/agent-kind';
 import { defaultBranchFor } from '../core/repository';
@@ -28,6 +30,8 @@ export type StartConversation = {
   repoUrl?: string;
   repoBranch?: string;
   modelOverride?: string;
+  /** Open voice setup once the normal session creation completes. */
+  voice?: boolean;
 };
 
 /** One agent choice determines the session kind, default model, and repository context. */
@@ -39,6 +43,7 @@ export function NewChatPage(props: {
   roster: RosterAgent[];
   rosterLoading: boolean;
   onStart: (start: StartConversation) => void;
+  canStartVoice?: boolean;
   /** Opens the roster page on the given kind's tab. */
   onOpenRoster: (kind: AgentKind) => void;
 }) {
@@ -125,6 +130,26 @@ export function NewChatPage(props: {
     setModelOverride(undefined);
   };
 
+  const startVoice = () => {
+    const persona = selected();
+    if (
+      !props.canStartVoice ||
+      !persona ||
+      blocked() ||
+      draft().trim() ||
+      attachmentTracker.attachments().length ||
+      (persona.harness !== 'in-memory' && persona.harness !== 'macro-inmem')
+    )
+      return;
+    recentAgents.remember(persona.id);
+    props.onStart({
+      prompt: '',
+      botId: persona.botId,
+      ...(modelOverride() ? { modelOverride: modelOverride() } : {}),
+      voice: true,
+    });
+  };
+
   const agentSelector = () => (
     <AgentPicker
       agents={options()}
@@ -155,6 +180,27 @@ export function NewChatPage(props: {
           onDraftChange={setDraft}
           blockedReason={blocked()}
           selector={agentSelector()}
+          voiceControl={
+            <Show
+              when={
+                props.canStartVoice &&
+                !draft().trim() &&
+                attachmentTracker.attachments().length === 0 &&
+                (selected()?.harness === 'in-memory' ||
+                  selected()?.harness === 'macro-inmem')
+              }
+            >
+              <Button
+                variant="ghost"
+                size="icon-composer"
+                label="Talk to Macro"
+                disabled={!!blocked()}
+                onClick={startVoice}
+              >
+                <Waveform />
+              </Button>
+            </Show>
+          }
           drawer={
             <RepositoryPicker
               repoUrl={repoUrl()}

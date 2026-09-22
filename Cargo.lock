@@ -358,10 +358,12 @@ dependencies = [
  "agent_runtime_protocol",
  "agent_session",
  "agent_trigger",
+ "agent_voice",
  "ai_tools",
  "ai_toolset",
  "ai_usage",
  "anyhow",
+ "async-trait",
  "aws-sdk-kms",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
@@ -612,6 +614,32 @@ dependencies = [
  "sqlx",
  "tokio",
  "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "agent_voice"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "chrono",
+ "entity_access",
+ "livekit-api",
+ "livekit-protocol",
+ "macro_authorization",
+ "macro_env_var",
+ "macro_user_id",
+ "macro_uuid",
+ "redis",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "url",
+ "utoipa",
  "workspace-hack",
 ]
 

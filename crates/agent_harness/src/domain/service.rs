@@ -16,6 +16,7 @@
 #[cfg(test)]
 mod test;
 
+mod cancel;
 mod deliver;
 mod lifecycle;
 mod lifecycle_events;
@@ -117,6 +118,8 @@ struct AgentHarnessInner<
     /// Turn-occupying actions waiting for their session's running turn to
     /// end. In-memory beside the live actors this replica manages.
     queues: SessionQueues,
+    /// Bounded retry receipts for conditional cancellation, per live session.
+    cancellations: DashMap<AgentSessionId, std::collections::VecDeque<cancel::CancellationReceipt>>,
     /// The sessions with a command admitted and not yet resolved, and which
     /// turn it opened once dispatch names one. Marked the moment a
     /// turn-occupying action is admitted (queue.rs's `enqueue_then_dispatch`),
@@ -303,6 +306,7 @@ where
                 permission_policies: Box::new(permission_policies),
                 defaults: defaults.into(),
                 queues: SessionQueues::new(),
+                cancellations: DashMap::new(),
                 busy: pending,
                 lifecycle_publisher,
                 mentions,

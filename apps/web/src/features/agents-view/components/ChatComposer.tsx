@@ -29,6 +29,7 @@ export function ChatComposer(props: {
   onDraftChange: (draft: string) => void;
   blockedReason?: string;
   selector: JSX.Element;
+  voiceControl?: JSX.Element;
   onSend: (prompt: string, attachments: InputAttachmentData[]) => void;
   session?: AgentInputProps;
   attachments?: InputAttachmentData[];
@@ -236,6 +237,7 @@ export function ChatComposer(props: {
                       />
                     </Show>
                     {props.selector}
+                    {props.session?.voiceControl ?? props.voiceControl}
                     <Show
                       when={
                         (props.session?.busy || canSendNext()) &&

@@ -1,5 +1,6 @@
 /// Current authorization for agent session streams.
 pub mod audience;
+pub mod cancel;
 pub mod connection;
 /// Authorization of user and runtime session controls.
 pub mod control;

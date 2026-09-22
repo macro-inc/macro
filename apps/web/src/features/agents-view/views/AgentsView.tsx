@@ -1,4 +1,5 @@
 import { ViewShell } from '@app/components/view-shell';
+import { useAgentVoice } from '@app/features/agent-voice/context/voice-context';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
@@ -10,6 +11,8 @@ import { ChatEmptyStateContext } from '@core/component/AI/component/message/Empt
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
+import { isPlatform } from '@core/util/platform';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import {
@@ -86,6 +89,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
   const layout = useSplitLayout();
   const orchestrator = useGlobalBlockOrchestrator();
   const userId = useUserId();
+  const voice = useAgentVoice();
   const mode = (): AgentsMode => props.initialRoute?.mode ?? 'chat';
   const dataMode = () => dataModeFor(mode());
   const [page, setPage] = createSignal<AgentsPage>('new');
@@ -210,6 +214,12 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
       modelOverride: start.modelOverride,
       repoUrl: start.repoUrl,
       repoBranch: start.repoBranch,
+      ...(start.voice
+        ? {
+            onReady: (sessionId: string) =>
+              void voice.open({ sessionId, title: 'Your Macro agent' }),
+          }
+        : {}),
     });
     openConversation(
       { id, type: 'agent_session' },
@@ -380,6 +390,11 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                                   roster={rosterSource.roster()}
                                   rosterLoading={rosterSource.loading()}
                                   onStart={startConversation}
+                                  canStartVoice={
+                                    isPlatform('web') &&
+                                    !isMobile() &&
+                                    !voice.active()
+                                  }
                                   onOpenRoster={openRoster}
                                 />
                               </Match>

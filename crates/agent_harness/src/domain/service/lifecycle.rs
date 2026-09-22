@@ -72,8 +72,28 @@ where
             disposition: match outcome {
                 CommandOutcome::Completed => ControlDisposition::Sent,
                 CommandOutcome::Queued => ControlDisposition::Queued,
+                CommandOutcome::TurnCancelled(_) => {
+                    unreachable!("a deliver returns a delivery outcome")
+                }
             },
         })
+    }
+
+    async fn cancel_turn(
+        &self,
+        id: AgentSessionId,
+        request: agent_session::domain::cancel::CancelTurn,
+        actor: Option<MacroUserIdStr<'static>>,
+    ) -> agent_session::domain::error::Result<agent_session::domain::cancel::CancelTurnOutcome>
+    {
+        match self
+            .execute(id, HarnessCommand::CancelTurn { request, actor })
+            .await
+            .map_err(into_session_error)?
+        {
+            CommandOutcome::TurnCancelled(outcome) => Ok(outcome),
+            _ => unreachable!("a cancellation returns a cancellation outcome"),
+        }
     }
 
     /// A local read on purpose: the queue lives beside the session's live

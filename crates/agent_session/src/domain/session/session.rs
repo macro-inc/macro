@@ -182,6 +182,25 @@ impl<Token> SessionMachine<Token> {
     /// Advance the machine by one input, returning the effects it implies.
     pub fn handle(&mut self, input: Input<Token>) -> Vec<Effect<Token>> {
         match input {
+            Input::CancelTurn {
+                from,
+                expected_action_id,
+                action_id,
+                token,
+            } => {
+                if self
+                    .in_flight_turn
+                    .as_ref()
+                    .is_some_and(|(_, id)| *id == expected_action_id)
+                {
+                    self.on_command(from, AgentAction::Stop, action_id, token)
+                } else {
+                    vec![Effect::Complete {
+                        token,
+                        result: Err(AgentSessionError::TurnConflict),
+                    }]
+                }
+            }
             Input::Command {
                 from,
                 action,

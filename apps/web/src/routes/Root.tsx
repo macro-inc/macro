@@ -1,5 +1,6 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ROUTER_BASE } from '@app/constants/routerBase';
+import { AgentVoiceProvider } from '@app/features/agent-voice/agent-voice';
 import { makeEmailAuthComponents } from '@app/features/auth/EmailAuth';
 import { Login } from '@app/features/auth/Login';
 import { MobileAuthWelcome } from '@app/features/auth/mobile-onboarding/MobileAuthWelcome';
@@ -606,32 +607,36 @@ export function Root() {
                       <MutationUndoProvider>
                         <ChannelsContextProvider>
                           <CallProvider>
-                            <CallKitSync />
-                            <CallStartedNotifier />
-                            <IncomingCallEvents />
-                            <QuickAccessProvider>
-                              <SearchProvider>
-                                <ChatAttachmentsInit />
-                                <ReactiveFavicon />
-                                <Title>{tabTitle()}</Title>
-                                <Suspense>
-                                  <IsomorphicRouter
-                                    transformUrl={transformShortIdInUrlPathname}
-                                    root={Layout}
-                                    rootPreload={rootPreload}
-                                    base={ROUTER_BASE}
-                                  >
-                                    {{
-                                      path: '/',
-                                      component: TauriRouteListener,
-                                      children: ROUTES,
-                                    }}
-                                  </IsomorphicRouter>
-                                </Suspense>
-                                <InitialInteractiveOnboardingModal />
-                                <ToastRegion />
-                              </SearchProvider>
-                            </QuickAccessProvider>
+                            <AgentVoiceProvider>
+                              <CallKitSync />
+                              <CallStartedNotifier />
+                              <IncomingCallEvents />
+                              <QuickAccessProvider>
+                                <SearchProvider>
+                                  <ChatAttachmentsInit />
+                                  <ReactiveFavicon />
+                                  <Title>{tabTitle()}</Title>
+                                  <Suspense>
+                                    <IsomorphicRouter
+                                      transformUrl={
+                                        transformShortIdInUrlPathname
+                                      }
+                                      root={Layout}
+                                      rootPreload={rootPreload}
+                                      base={ROUTER_BASE}
+                                    >
+                                      {{
+                                        path: '/',
+                                        component: TauriRouteListener,
+                                        children: ROUTES,
+                                      }}
+                                    </IsomorphicRouter>
+                                  </Suspense>
+                                  <InitialInteractiveOnboardingModal />
+                                  <ToastRegion />
+                                </SearchProvider>
+                              </QuickAccessProvider>
+                            </AgentVoiceProvider>
                           </CallProvider>
                         </ChannelsContextProvider>
                       </MutationUndoProvider>

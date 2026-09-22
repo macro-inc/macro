@@ -54,6 +54,7 @@ pub(crate) struct SessionCommand {
     pub(crate) user_id: Option<MacroUserIdStr<'static>>,
     pub(crate) action: AgentAction,
     pub(crate) action_id: AgentActionId,
+    pub(crate) expected_action_id: Option<AgentActionId>,
     pub(crate) completed: oneshot::Sender<Result<()>>,
     pub(crate) span: tracing::Span,
     pub(crate) enqueued_at: Instant,
@@ -235,7 +236,7 @@ where
                 }
             },
             command = self.commands.recv() => match command {
-                Some(SessionCommand { user_id, action, action_id, completed, span, enqueued_at }) => {
+                Some(SessionCommand { user_id, action, action_id, expected_action_id, completed, span, enqueued_at }) => {
                     span.record(
                         "agent.command.queue_wait_ms",
                         enqueued_at.elapsed().as_millis() as u64,
@@ -244,11 +245,20 @@ where
                         "agent.session.runtime_phase_at_dequeue",
                         self.machine.status().as_ref(),
                     );
-                    Input::Command {
-                        from: user_id,
-                        action,
-                        action_id,
-                        token: SessionCompletion { completed, span },
+                    if let Some(expected_action_id) = expected_action_id {
+                        Input::CancelTurn {
+                            from: user_id,
+                            expected_action_id,
+                            action_id,
+                            token: SessionCompletion { completed, span },
+                        }
+                    } else {
+                        Input::Command {
+                            from: user_id,
+                            action,
+                            action_id,
+                            token: SessionCompletion { completed, span },
+                        }
                     }
                 },
                 // The service dropped every handle; nobody can reach us.

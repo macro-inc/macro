@@ -11,6 +11,7 @@ use agent_harness::inbound::model_load::{
 };
 use agent_harness::inbound::repositories::{self, AgentRepositoriesResponse, AgentRepositoryDto};
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
+use agent_session::domain::cancel::{CancelTurn, CancelTurnOutcome};
 use agent_session::domain::model::{SandboxSize, SessionBot};
 use agent_session::inbound::axum_router::{
     self, AgentSessionLogEntryDto, AgentSessionLogResponse, AgentSessionPreviewData,
@@ -19,6 +20,10 @@ use agent_session::inbound::axum_router::{
     CreateSessionThread, EditQueuedActionRequest, LogDirectionDto, LogFrameDto,
     PreviewAgentSessionsRequest, PreviewAgentSessionsResponse, QueuedActionDto,
     RenameAgentSessionRequest, SandboxSizeBody, SessionStatusDto, WithAgentSessionId,
+};
+use agent_voice::{
+    domain::model::{StartVoice, VoiceConnection, VoiceOptions},
+    inbound::axum_router as voice_router,
 };
 use claude_cloud_agents::inbound::auth as claude_auth;
 use utoipa::{
@@ -54,6 +59,10 @@ impl Modify for SecurityAddon {
         axum_router::rename_agent_session_handler,
         axum_router::get_agent_session_log_handler,
         axum_router::control_agent_session_handler,
+        axum_router::cancel::cancel_agent_session_turn_handler,
+        voice_router::options,
+        voice_router::start,
+        voice_router::end,
         axum_router::get_agent_session_queue_handler,
         axum_router::edit_queued_action_handler,
         axum_router::remove_queued_action_handler,
@@ -78,6 +87,11 @@ impl Modify for SecurityAddon {
         ControlRequest,
         ControlResponse,
         ControlStatusDto,
+        CancelTurn,
+        CancelTurnOutcome,
+        StartVoice,
+        VoiceConnection,
+        VoiceOptions,
         AgentSessionQueueResponse,
         QueuedActionDto,
         EditQueuedActionRequest,
@@ -118,6 +132,7 @@ impl Modify for SecurityAddon {
     )),
     tags(
         (name = "agent-sessions", description = "Agent sessions"),
+        (name = "agent-voice", description = "Private conversations with Macro agents"),
         (name = "agent-models", description = "Fresh provider model discovery"),
         (name = "agent-repositories", description = "Repositories a coding session can work on")
     )

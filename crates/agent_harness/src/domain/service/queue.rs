@@ -299,6 +299,7 @@ where
                 }
             }
             HarnessCommand::Deliver(DeliverAction { actor, .. })
+            | HarnessCommand::CancelTurn { actor, .. }
             | HarnessCommand::EditQueued { actor, .. }
             | HarnessCommand::RemoveQueued { actor, .. } => {
                 let session = self.sessions.get_session(session_id).await?;
@@ -324,6 +325,10 @@ where
         }
 
         match command {
+            HarnessCommand::CancelTurn { request, actor } => self
+                .cancel_turn(session_id, request, actor)
+                .await
+                .map(CommandOutcome::TurnCancelled),
             HarnessCommand::Open(command) => {
                 self.open(session_id, command).await?;
                 Ok(CommandOutcome::Completed)
@@ -479,6 +484,7 @@ where
                 // empty snapshot is the viewers' goodbye.
                 self.busy.clear(session_id);
                 self.queues.drop_session(session_id);
+                self.cancellations.remove(&session_id);
                 self.publish_queue(session_id).await;
                 match identity {
                     Ok(identity) => {

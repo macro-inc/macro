@@ -1,5 +1,52 @@
 # AI Chat (Agents)
 
+## Voice conversations with Macro
+
+On desktop web, choose a Macro agent in **New conversation** and use **Talk to
+Macro** with an empty composer. This creates its normal session with the selected
+persona/model, then opens voice setup without sending a text prompt. In an
+existing Macro conversation, choose **Talk to Macro** (the waveform button in the
+composer). The button is
+available to editors of that session. It does not appear for external coding
+harnesses, legacy chat, or native/mobile clients.
+
+The voice panel offers **Marin**, **Cedar**, **Alloy**, **Coral**, **Sage** and
+**Verse** before **Start conversation**. Starting requests microphone access.
+Connecting remains visible until the worker is ready; listening, thinking and
+speaking are separate from the agent's background work. The waveform responds to
+microphone and playback levels. Recent live captions identify **You** and **Macro**.
+If voice is not enabled for the deployment, the panel explains this and disables
+Start while the written conversation remains available.
+
+- Speak naturally and interrupt Macro's speech to take a turn. Interrupting audio
+  does not cancel a task. Ask explicitly to stop or correct a task when needed.
+- **Mute microphone** stops capture; **Unmute microphone** resumes. If the browser
+  blocks playback, use **Enable audio playback**.
+- **Minimize voice** leaves the conversation running. **Voice is on** reopens it,
+  including after navigating elsewhere. **End conversation** releases media and
+  leaves already accepted agent work running.
+- A human call and agent voice cannot share the microphone, including across tabs.
+  End the other conversation before starting voice. Starting a call in the same
+  tab releases voice.
+- Questions and permission requests still use the conversation's visual review
+  controls. A spoken “yes” does not grant permission.
+- Reconnecting media does not replay task submissions. If delivery is uncertain,
+  inspect the written transcript before asking again. Reopen voice after a failed
+  connection; existing agent work remains available.
+
+Voice closes after 30 minutes, five minutes without speech, or a prolonged
+disconnect. Audio is not recorded. Live voice captions and conversational filler
+are ephemeral; delegated requests and agent responses remain in the normal agent
+transcript. Closing/reloading the tab ends voice rather than resuming microphone
+capture automatically.
+
+Browser regression checks: open the panel, choose another voice, dismiss/reopen,
+start with microphone allowed and denied, mute/unmute, minimize/navigate/reopen,
+and end while connecting. Verify a second tab and a human call cannot acquire the
+microphone simultaneously. Real-microphone checks additionally need a configured
+worker/provider and must cover interruption during speech, correction during a
+running task, pending review and network loss.
+
 ## Where chats live
 
 - If session creation fails, the session view shows **Unable to start this agent**

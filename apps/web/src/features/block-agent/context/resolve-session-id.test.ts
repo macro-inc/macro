@@ -61,6 +61,29 @@ describe('a block id that is already a session', () => {
 });
 
 describe('a placeholder', () => {
+  it('opens the host presentation only after the chosen model is applied', async () => {
+    let applied!: (value: unknown) => void;
+    create.control.mockReturnValueOnce(
+      new Promise((resolve) => {
+        applied = resolve;
+      })
+    );
+    const onReady = vi.fn();
+    startPendingSession({ modelOverride: 'chosen-model', onReady });
+    create.resolve?.('voice-session');
+    await flush();
+    expect(onReady).not.toHaveBeenCalled();
+    applied({
+      isErr: () => false,
+      value: { actionId: 'action', status: 'accepted' },
+    });
+    await flush();
+    expect(onReady).toHaveBeenCalledExactlyOnceWith('voice-session');
+    expect(create.control).toHaveBeenCalledExactlyOnceWith('voice-session', {
+      type: 'setModel',
+      model: 'chosen-model',
+    });
+  });
   it('has no session until the create lands, then has that one', async () => {
     const placeholder = startPendingSession();
     await createRoot(async (dispose) => {

@@ -38,6 +38,15 @@ pub enum AgentSessionError {
     TooManyPreviewIds(usize),
     #[error("the caller may not control this agent session")]
     Forbidden,
+    /// A conditional cancellation never applies to a different or ended turn.
+    #[error("the requested action is no longer the running turn")]
+    TurnConflict,
+    /// A retry reused an operation or replacement identity for different work.
+    #[error("the cancellation or replacement identity conflicts with another action")]
+    CancellationConflict,
+    /// The replacement must be a new nonempty prompt.
+    #[error("a replacement needs a new action id and a nonempty prompt")]
+    InvalidTurnReplacement,
     #[error("no queued action with this id; it may already have been dispatched")]
     QueuedControlNotFound,
     #[error("only queued prompts can be edited")]

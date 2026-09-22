@@ -217,6 +217,15 @@ pub trait AgentSessionService: Send + Sync + 'static {
         action_id: AgentActionId,
     ) -> impl Future<Output = Result<()>> + Send;
 
+    /// Guard cancellation in the live actor before changing any pending interaction.
+    fn cancel_turn_action(
+        &self,
+        id: AgentSessionId,
+        user_id: Option<MacroUserIdStr<'static>>,
+        expected_action_id: AgentActionId,
+        action_id: AgentActionId,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// The session an incoming channel context routes to, if any.
     fn find_for_thread(
         &self,
@@ -511,6 +520,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
         user_id: Option<MacroUserIdStr<'static>>,
         action: AgentAction,
         action_id: AgentActionId,
+        expected_action_id: Option<AgentActionId>,
     ) -> Result<()> {
         let (commands, transport_closed) = self
             .active
@@ -533,6 +543,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
                 user_id,
                 action,
                 action_id,
+                expected_action_id,
                 completed,
                 span,
                 enqueued_at: tokio::time::Instant::now(),
@@ -865,7 +876,8 @@ where
     ) -> Result<()> {
         let initial_prompt = initial_prompt_for_rename(&self.folds, id, &action).await;
 
-        self.deliver_action(id, user_id, action, action_id).await?;
+        self.deliver_action(id, user_id, action, action_id, None)
+            .await?;
         if let Some(initial_prompt) = initial_prompt {
             spawn_initial_agent_session_rename(
                 self.repo.clone(),
@@ -877,6 +889,23 @@ where
             );
         }
         Ok(())
+    }
+
+    async fn cancel_turn_action(
+        &self,
+        id: AgentSessionId,
+        user_id: Option<MacroUserIdStr<'static>>,
+        expected_action_id: AgentActionId,
+        action_id: AgentActionId,
+    ) -> Result<()> {
+        self.deliver_action(
+            id,
+            user_id,
+            AgentAction::Stop,
+            action_id,
+            Some(expected_action_id),
+        )
+        .await
     }
 
     async fn session_bot(&self, id: BotId) -> Result<SessionBot> {

@@ -87,6 +87,7 @@ vi.mock('@queries/agents/models', () => ({
 // Keep the real picker and send wiring; substitute only the Lexical editor.
 type ComposerProps = {
   selector: JSX.Element;
+  voiceControl?: JSX.Element;
   drawer: JSX.Element;
   drawerOpen: boolean;
   draft: string;
@@ -97,6 +98,7 @@ vi.mock('../components/ChatComposer', () => ({
   ChatComposer: (props: ComposerProps) => (
     <>
       {props.selector}
+      {props.voiceControl}
       <div data-testid="drawer" hidden={!props.drawerOpen}>
         {props.drawer}
       </div>
@@ -132,12 +134,31 @@ function page(connected = true, agents: PersistedAgentLike[] = []) {
         cursorDefaultModel: 'cursor-default',
       })}
       rosterLoading={false}
+      canStartVoice
       onStart={onStart}
       onOpenRoster={vi.fn()}
     />
   ));
   return onStart;
 }
+
+it('starts an idle Macro session from voice without inventing a prompt', () => {
+  const onStart = page();
+  fireEvent.click(screen.getByRole('button', { name: 'Talk to Macro' }));
+  expect(onStart).toHaveBeenCalledExactlyOnceWith({
+    prompt: '',
+    botId: undefined,
+    voice: true,
+  });
+});
+
+it('keeps voice creation out of a written draft', () => {
+  page();
+  fireEvent.input(screen.getByRole('textbox', { name: 'Draft' }), {
+    target: { value: 'Unsent draft' },
+  });
+  expect(screen.queryByRole('button', { name: 'Talk to Macro' })).toBeNull();
+});
 function openAgents() {
   const trigger = screen.getByRole('button', { name: 'Agent' });
   fireEvent.keyDown(trigger, { key: 'Enter' });

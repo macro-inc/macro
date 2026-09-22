@@ -181,9 +181,9 @@ export class AgentSession {
    */
   async issue(
     action: AgentAction,
-    options: { userId?: string } = {}
+    options: { userId?: string; actionId?: string } = {}
   ): Promise<IssueResult> {
-    const actionId = uuidv7();
+    const actionId = options.actionId ?? uuidv7();
     const speculated = this.reaches(action);
     if (speculated) {
       // A prompt we just folded opens a turn, so the next one belongs in the

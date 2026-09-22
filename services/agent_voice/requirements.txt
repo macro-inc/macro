@@ -1,0 +1,5 @@
+livekit-agents[openai,silero]==1.5.7
+# LiveKit 1.5 uses the OpenAI 2.x client and httpx interfaces.
+openai==2.54.0
+httpx==0.28.1
+python-dotenv==1.2.3

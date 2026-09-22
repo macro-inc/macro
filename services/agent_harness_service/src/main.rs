@@ -18,6 +18,7 @@ mod model_providers;
 mod permission_policy;
 mod runtime_commands;
 mod trigger;
+mod voice;
 
 #[cfg(test)]
 mod test;
@@ -753,6 +754,7 @@ async fn run() -> anyhow::Result<()> {
     let runtimes = RuntimeRegistry::with_presence(Arc::new(PgHarnessPresence::new(pool.clone())));
     let redis = redis::Client::open(config.redis_uri.as_ref())
         .context("failed to create the runtime command Redis client")?;
+    let voice_service = voice::service(sessions.clone(), redis.clone(), &config)?;
     // Read once, here, rather than at every session this deployment opens: a
     // URL that names no repository is a misconfiguration of the deployment,
     // and refusing it at startup is the difference between one loud failure
@@ -964,7 +966,7 @@ async fn run() -> anyhow::Result<()> {
     );
     let control_state = AgentSessionControlState::new(
         harness.clone(),
-        entity_access,
+        entity_access.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     let bots_directory = Arc::new(PgBotDirectory::new(PgBotsRepo::new(pool.clone())));
@@ -994,6 +996,13 @@ async fn run() -> anyhow::Result<()> {
         ),
     );
     let http_port = config.port;
+    let voice_router = agent_voice::inbound::axum_router::voice_router(
+        agent_voice::inbound::axum_router::VoiceRouterState::new(
+            voice_service,
+            entity_access,
+            MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        ),
+    );
     let http = tokio::spawn(async move {
         if let Err(error) = api::setup_and_serve(
             api::ApiStates::new(
@@ -1005,7 +1014,8 @@ async fn run() -> anyhow::Result<()> {
                 repositories_state,
                 changes_state,
             )
-            .with_claude_auth(claude_auth),
+            .with_claude_auth(claude_auth)
+            .with_voice(voice_router),
             http_runtime_commands_readiness,
             http_port,
             shutdown_signal(),
@@ -1149,6 +1159,7 @@ async fn run() -> anyhow::Result<()> {
                                 // HTTP, and the turn signals are the harness's own.
                                 HarnessCommand::EditQueued { .. }
                                 | HarnessCommand::RemoveQueued { .. }
+                                | HarnessCommand::CancelTurn { .. }
                                 | HarnessCommand::Turn(_)
                                 | HarnessCommand::SessionStopped { .. } => "agent_trigger.unexpected",
                             };

@@ -5,6 +5,7 @@
  * marks — so the composer keeps no state of its own.
  */
 
+import { AgentVoiceButton } from '@app/features/agent-voice/agent-voice';
 import {
   createInputAttachmentTracker,
   type InputAttachmentData,
@@ -41,6 +42,8 @@ export function AgentComposer(props: {
   const ModelSelector = props.modelSelector ?? AgentModelSelector;
   const {
     displayName,
+    session,
+    sessionId,
     userId,
     interactions,
     issue,
@@ -164,6 +167,15 @@ export function AgentComposer(props: {
         )}
       </For>
       <Input
+        voiceControl={
+          <AgentVoiceButton
+            sessionId={sessionId()}
+            title={session()?.name}
+            harness={session()?.harness}
+            canEdit={session()?.canEdit}
+            disabled={loadFailed() || pending()}
+          />
+        }
         placeholder="Message the agent, @mention anything"
         autofocus={props.autofocus}
         busy={busy()}

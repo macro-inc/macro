@@ -80,6 +80,8 @@ export interface AgentInputProps {
   onRemoveAttachment?: (attachment: InputAttachmentData) => void;
   /** Model control: a pill above the box on desktop, footer-left on touch. */
   modelControl?: JSX.Element;
+  /** Session actions shared by standalone and agents-view composers. */
+  voiceControl?: JSX.Element;
   /**
    * Ref-style: receives the quote-insert function once the editor mounts
    * (and `undefined` again on unmount), so the transcript's "Reply to this"
@@ -332,6 +334,7 @@ export function AgentInput(props: AgentInputProps) {
 
                 {/* In-flow — never absolute over the text. */}
                 <div class="flex shrink-0 items-center gap-[3.75px] touch:h-8 touch:gap-2 touch:p-2 touch:mb-2">
+                  {props.voiceControl}
                   <Show when={isTouchDevice() && props.modelControl}>
                     <div class="min-w-0">{props.modelControl}</div>
                   </Show>

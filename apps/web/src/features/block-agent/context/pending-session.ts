@@ -58,6 +58,8 @@ export type StartPendingSessionOptions = {
   attachments?: PromptAttachment[];
   /** Optional model switch applied before the first prompt. */
   modelOverride?: string;
+  /** A host presentation action, after creation and the model override succeed. */
+  onReady?: (sessionId: string) => void;
   /**
    * Explicit GitHub repository for the managed Cursor session.
    */
@@ -130,6 +132,12 @@ export function startPendingSession(
         markMessageSent(`agent:${id}:${delivered.value.actionId}`);
       }
       setSessionId(id);
+      try {
+        options.onReady?.(id);
+      } catch {
+        // A host UI failure must not report a successful creation as failed.
+        console.error('Could not open the new agent session presentation.');
+      }
     })
     .catch(() =>
       setError(

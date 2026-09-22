@@ -18,6 +18,9 @@
 
 use std::sync::Arc;
 
+pub mod cancel;
+pub use cancel::cancel_agent_session_turn_handler;
+
 use agent_runtime_protocol::domain::{
     action::{AgentAction, AgentActionId},
     schema::v0::SystemEvent,
@@ -216,6 +219,10 @@ where
             post(control_agent_session_handler::<R, Access, Auth>),
         )
         .route(
+            "/{session_id}/turn/cancel",
+            post(cancel_agent_session_turn_handler::<R, Access, Auth>),
+        )
+        .route(
             "/{session_id}/queue",
             get(get_agent_session_queue_handler::<R, Access, Auth>),
         )
@@ -294,6 +301,12 @@ impl IntoResponse for AgentSessionApiError {
             }
             Self::Domain(AgentSessionError::Forbidden) => {
                 (StatusCode::FORBIDDEN, "forbidden").into_response()
+            }
+            Self::Domain(
+                error @ (AgentSessionError::TurnConflict | AgentSessionError::CancellationConflict),
+            ) => (StatusCode::CONFLICT, error.to_string()).into_response(),
+            Self::Domain(error @ AgentSessionError::InvalidTurnReplacement) => {
+                (StatusCode::UNPROCESSABLE_ENTITY, error.to_string()).into_response()
             }
             // Already dispatched, removed, or never queued: the caller's
             // entry is not waiting anymore, and there is no un-sending it.

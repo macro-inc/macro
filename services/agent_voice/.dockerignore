@@ -1,0 +1,5 @@
+.env*
+local.env
+.venv
+__pycache__
+tests

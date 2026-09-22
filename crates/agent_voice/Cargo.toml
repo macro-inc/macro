@@ -1,0 +1,35 @@
+[package]
+edition = "2024"
+name = "agent_voice"
+publish = false
+version = "0.1.0"
+
+[features]
+default = ["inbound", "outbound"]
+inbound = ["dep:axum", "dep:macro_authorization", "entity_access/inbound", "macro_authorization/axum"]
+outbound = ["dep:livekit-api", "dep:livekit-protocol", "dep:redis", "dep:url"]
+
+[dependencies]
+async-trait = { workspace = true }
+axum = { workspace = true, optional = true }
+chrono = { workspace = true }
+entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
+livekit-api = { workspace = true, optional = true }
+livekit-protocol = { workspace = true, optional = true }
+macro_authorization = { path = "../macro_authorization", default-features = false, optional = true }
+macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
+redis = { workspace = true, features = ["aio", "tokio-comp"], optional = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt", "sync", "time"] }
+tracing = { workspace = true }
+utoipa = { workspace = true }
+url = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+macro_env_var = { path = "../macro_env_var" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

@@ -1005,6 +1005,14 @@ pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
         event: ControlEvent,
     ) -> impl Future<Output = Result<AcceptedControl>> + Send;
 
+    /// Conditionally interrupt one identified turn in the session's command order.
+    fn cancel_turn(
+        &self,
+        id: AgentSessionId,
+        request: super::cancel::CancelTurn,
+        actor: Option<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<super::cancel::CancelTurnOutcome>> + Send;
+
     /// The actions waiting in this session's queue, oldest first.
     fn queued_controls(
         &self,

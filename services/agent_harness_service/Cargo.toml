@@ -24,6 +24,8 @@ agent_egress = { path = "../../crates/agent_egress" }
 agent_fold = { path = "../../crates/agent_fold" }
 agent_harness = { path = "../../crates/agent_harness" }
 agent_inmem = { path = "../../crates/agent_inmem" }
+agent_voice = { path = "../../crates/agent_voice" }
+async-trait = { workspace = true }
 ai_tools = { path = "../../crates/ai_tools" }
 agent_runtime_protocol = { path = "../../crates/agent_runtime_protocol", features = ["utoipa"] }
 agent_session = { path = "../../crates/agent_session", features = ["ai_tools"] }

@@ -1103,6 +1103,74 @@ fn machine_with_turn_in_flight(action_id: AgentActionId) -> SessionMachine<u32> 
     machine
 }
 
+#[test]
+fn conditional_cancel_never_stops_a_later_turn_or_its_permission() {
+    let first = AgentActionId::mint();
+    let second = AgentActionId::mint();
+    let mut machine = live_machine_under(PermissionPolicy::Prompt);
+    machine.handle(command_with_id("first", first, 1));
+    machine.handle(turn_answered(first.to_request_id()));
+    machine.handle(command_with_id("second", second, 2));
+    machine.handle(permission_request(permission_id(0), allow_or_reject()));
+
+    let effects = machine.handle(Input::CancelTurn {
+        from: None,
+        expected_action_id: first,
+        action_id: AgentActionId::mint(),
+        token: 3,
+    });
+    assert!(matches!(
+        effects[..],
+        [Effect::Complete {
+            token: 3,
+            result: Err(AgentSessionError::TurnConflict)
+        }]
+    ));
+
+    let effects = machine.handle(Input::CancelTurn {
+        from: None,
+        expected_action_id: second,
+        action_id: AgentActionId::mint(),
+        token: 4,
+    });
+    assert_eq!(sent_methods(&effects), ["session/cancel"]);
+    let [
+        Effect::Send { .. },
+        permission @ Effect::Send { .. },
+        Effect::Complete {
+            token: 4,
+            result: Ok(()),
+        },
+    ] = &effects[..]
+    else {
+        panic!("expected matched cancel and the still-pending permission: {effects:?}");
+    };
+    assert_eq!(
+        permission_outcome(permission, &permission_id(0)),
+        RequestPermissionOutcome::Cancelled
+    );
+}
+
+#[test]
+fn conditional_cancel_rejects_an_already_completed_turn() {
+    let action = AgentActionId::mint();
+    let mut machine = machine_with_turn_in_flight(action);
+    machine.handle(turn_answered(action.to_request_id()));
+    let effects = machine.handle(Input::CancelTurn {
+        from: None,
+        expected_action_id: action,
+        action_id: AgentActionId::mint(),
+        token: 2,
+    });
+    assert!(matches!(
+        effects[..],
+        [Effect::Complete {
+            result: Err(AgentSessionError::TurnConflict),
+            ..
+        }]
+    ));
+}
+
 /// The machine lets go of the turn on the prompt's answer, whatever shape
 /// the answer takes. What the turn *meant* - its stop reason, its last words
 /// - is the fold's to say, from the same logged frame.

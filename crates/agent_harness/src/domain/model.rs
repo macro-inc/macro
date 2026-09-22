@@ -336,6 +336,13 @@ pub enum HarnessCommand {
     Open(OpenSession),
     /// Act on a session that already exists.
     Deliver(DeliverAction),
+    /// Interrupt only the matching turn and reserve an optional correction.
+    CancelTurn {
+        /// The target, idempotency identity, and optional replacement.
+        request: agent_session::domain::cancel::CancelTurn,
+        /// The user responsible, under the same gates as ordinary controls.
+        actor: Option<MacroUserIdStr<'static>>,
+    },
     /// Replace a queued prompt's text before it dispatches.
     EditQueued {
         /// The queue entry to edit.
@@ -381,6 +388,8 @@ pub enum CommandOutcome {
     Completed,
     /// The action waits in the session's queue for the running turn to end.
     Queued,
+    /// A targeted cancellation, possibly with a correction reserved next.
+    TurnCancelled(agent_session::domain::cancel::CancelTurnOutcome),
 }
 
 impl DeliverAction {

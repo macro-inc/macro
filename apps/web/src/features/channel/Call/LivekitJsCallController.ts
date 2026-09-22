@@ -1,3 +1,4 @@
+import { acquireAudioInputLease } from '@core/util/audio-input-lease';
 import type { CallTokenResponse } from '@service-call/client';
 import {
   type AudioCaptureOptions,
@@ -45,6 +46,12 @@ export function createLivekitJsCallController(
   let stopReceiverStatsSampling: (() => void) | null = null;
   let disposed = false;
   let connectGeneration = 0;
+  const audioLeases = new WeakMap<Room, () => void>();
+
+  function releaseAudio(room: Room) {
+    audioLeases.get(room)?.();
+    audioLeases.delete(room);
+  }
 
   function isCurrentRoom(room: Room) {
     return !disposed && options.room() === room;
@@ -117,11 +124,14 @@ export function createLivekitJsCallController(
         room: call.channelId,
         call: call.callId,
       });
-      options.resetState();
+      // Terminal disconnect ends microphone ownership as well. A fresh join
+      // must reacquire it before this tab can publish local audio again.
+      destroyRoom(room);
     });
   }
 
   function destroyRoom(room: Room) {
+    releaseAudio(room);
     room.removeAllListeners();
     if (!isCurrentRoom(room)) return;
 
@@ -170,6 +180,16 @@ export function createLivekitJsCallController(
       destroyRoom(existingRoom);
     }
 
+    // Give a same-tab voice shutdown time to finish; another tab retains its
+    // lease and makes this join fail before any second microphone is opened.
+    const release = await acquireAudioInputLease({
+      required: false,
+      waitMs: 3000,
+    });
+    if (disposed || generation !== connectGeneration) {
+      release();
+      return;
+    }
     const targetRoom = new Room({
       audioCaptureDefaults: options.currentMicrophoneCaptureOptions(),
       publishDefaults: {
@@ -179,6 +199,7 @@ export function createLivekitJsCallController(
         dtx: false,
       },
     });
+    audioLeases.set(targetRoom, release);
     attachRoomListeners(targetRoom, {
       channelId: tokenResponse.channelId,
       callId: tokenResponse.callId,
@@ -247,6 +268,7 @@ export function createLivekitJsCallController(
 
     options.cancelPendingMediaSetup();
     stopReceiverStats();
+    releaseAudio(room);
     room.disconnect();
   }
 
@@ -257,6 +279,7 @@ export function createLivekitJsCallController(
     const room = options.room();
     if (!room) return;
 
+    releaseAudio(room);
     room.disconnect();
     room.removeAllListeners();
   }
