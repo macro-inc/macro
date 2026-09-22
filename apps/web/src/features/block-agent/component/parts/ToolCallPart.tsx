@@ -11,6 +11,7 @@
 
 import { hasToolRenderer } from '@core/component/AI/component/tool/handler';
 import { type JSX, Match, Show, Switch } from 'solid-js';
+import { rendersOwnView } from '../../state/tool-groups';
 import { settledToolStatus } from '../../ui';
 import { DisplayResultsToolCall } from './DisplayResultsToolCall';
 import { EditToolCall } from './EditToolCall';
@@ -61,10 +62,13 @@ export function ToolCallPart(props: {
   // its detail object; each child receives the current detail through an accessor.
   return (
     <Switch>
-      <Match when={toolLabel(props.part.name) === 'DisplayResults'}>
+      <Match when={rendersOwnView(props.part)}>
         <DisplayResultsToolCall
           input={
             'input' in props.part.detail ? props.part.detail.input : undefined
+          }
+          error={
+            'error' in props.part.detail ? props.part.detail.error : undefined
           }
           common={common()}
         />

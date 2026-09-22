@@ -42,7 +42,13 @@ const SELF_RENDERING_TOOLS: ReadonlySet<string> = new Set(['DisplayResults']);
  * them, and the chat component library is what renders them.
  */
 export function rendersOwnView(part: MessagePart | undefined): boolean {
-  if (part?.kind !== 'tool_use' || part.detail.kind !== 'macro') return false;
+  if (part?.kind !== 'tool_use') return false;
+  const macroTool =
+    part.detail.kind === 'macro' ||
+    (part.detail.kind === 'other' &&
+      part.name.kind === 'mcp' &&
+      part.name.server === 'macro');
+  if (!macroTool) return false;
   // The tool's own name, without the MCP server namespace the fold already
   // separated out (mirrors `toolLabel` in `component/parts/shared.ts`).
   const name = part.name.kind === 'mcp' ? part.name.tool : part.name.name;

@@ -1,24 +1,26 @@
 /** DisplayResults is message content, rendered directly from the call's view. */
 
 import { DashboardToolView } from '@app/features/dynamic-ui/DashboardToolView.lazy';
-import { deserializeToolCall } from '@service-cognition/generated/tools/tool';
-import { createMemo, ErrorBoundary, Show, Suspense } from 'solid-js';
-import { isToolActive, TextShimmer } from '../../ui';
+import { ErrorBoundary, Show, Suspense } from 'solid-js';
+import { isToolActive, ToolCard } from '../../ui';
 import type { ToolCallCommon } from './shared';
 
 export function DisplayResultsToolCall(props: {
   input: unknown;
+  error?: string | null;
   common: ToolCallCommon;
 }) {
-  const view = createMemo(() => {
-    const call = deserializeToolCall({
-      id: props.common.id,
-      name: 'DisplayResults',
-      json: props.input,
-    });
-    if (call.isErr() || !('view' in call.value.data)) return undefined;
-    return { value: call.value.data.view };
-  });
+  const pending = () => isToolActive(props.common.status);
+  const failed = () => props.common.status === 'failed' || props.error != null;
+  // The dashboard validates partial streamed input with the same schema used
+  // for the tool. Pass missing views through so it can distinguish an open
+  // call from malformed completed input.
+  const view = () =>
+    typeof props.input === 'object' &&
+    props.input !== null &&
+    'view' in props.input
+      ? props.input.view
+      : undefined;
   const unavailable = () => (
     <p class="text-xs text-ink-extra-muted" role="status">
       Unable to display these results.
@@ -26,24 +28,29 @@ export function DisplayResultsToolCall(props: {
   );
 
   return (
-    <ErrorBoundary fallback={unavailable()}>
-      <Suspense
-        fallback={<p class="text-xs text-ink-extra-muted">Loading results…</p>}
-      >
-        <Show
-          when={view()}
+    <Show
+      when={!failed()}
+      fallback={
+        <ToolCard
+          title={props.common.label}
+          subtitle={props.common.server}
+          status="failed"
+          muted
+          trailing="Failed"
+        />
+      }
+    >
+      <ErrorBoundary fallback={unavailable()}>
+        <Suspense
           fallback={
-            <Show
-              when={isToolActive(props.common.status)}
-              fallback={unavailable()}
-            >
-              <TextShimmer text="Preparing results…" active={true} />
+            <Show when={!pending()}>
+              <p class="text-xs text-ink-extra-muted">Loading results…</p>
             </Show>
           }
         >
-          {(current) => <DashboardToolView view={current().value} />}
-        </Show>
-      </Suspense>
-    </ErrorBoundary>
+          <DashboardToolView view={view()} pending={pending()} />
+        </Suspense>
+      </ErrorBoundary>
+    </Show>
   );
 }

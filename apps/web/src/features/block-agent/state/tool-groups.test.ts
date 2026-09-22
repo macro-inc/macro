@@ -106,6 +106,7 @@ describe('segmentParts', () => {
           },
         ];
         for (const detail of details) {
+          if (name.kind === 'native' && detail.kind === 'other') continue;
           const display = tool({ name, status, detail });
           expect(
             segmentParts([tool(), tool(), display, tool(), tool()])
@@ -121,13 +122,7 @@ describe('segmentParts', () => {
 
   it('keeps adjacent thoughts in their own runs around inline results', () => {
     expect(
-      segmentParts([
-        tool(),
-        thought(),
-        tool({ name: { kind: 'native', name: 'DisplayResults' } }),
-        thought(),
-        tool(),
-      ])
+      segmentParts([tool(), thought(), displayResults(), thought(), tool()])
     ).toEqual([
       { kind: 'tools', start: 0, end: 2 },
       { kind: 'part', start: 2, end: 3 },
@@ -235,18 +230,35 @@ describe('segmentParts', () => {
     ]);
   });
 
-  it('keeps the last thought and the dashboard visible after grouped tools', () => {
+  it('keeps a thought before the dashboard in the preceding tool group', () => {
     expect(
       segmentParts([thought(), tool(), thought(), displayResults()])
     ).toEqual([
-      { kind: 'tools', start: 0, end: 2 },
-      { kind: 'part', start: 2, end: 3 },
+      { kind: 'tools', start: 0, end: 3 },
       { kind: 'part', start: 3, end: 4 },
     ]);
   });
 });
 
 describe('rendersOwnView', () => {
+  it('does not treat a same-named external MCP tool as a dashboard', () => {
+    const part = tool({
+      name: { kind: 'mcp', server: 'external', tool: 'DisplayResults' },
+      detail: {
+        kind: 'other',
+        acpKind: 'other',
+        input: { view: { widgets: [] } },
+        output: null,
+        result: null,
+        error: null,
+      },
+    });
+    expect(rendersOwnView(part)).toBe(false);
+    expect(segmentParts([tool(), part, tool()])).toEqual([
+      { kind: 'tools', start: 0, end: 3 },
+    ]);
+  });
+
   it('is true for a Macro displayResults call', () => {
     expect(rendersOwnView(displayResults())).toBe(true);
   });

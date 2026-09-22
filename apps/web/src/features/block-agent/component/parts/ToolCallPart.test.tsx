@@ -34,8 +34,10 @@ vi.mock('@core/component/AI/component/tool/handler', () => ({
 }));
 
 vi.mock('@app/features/dynamic-ui/DashboardToolView.lazy', () => ({
-  DashboardToolView: (props: { view: unknown }) => (
-    <div data-testid="dashboard-view">{JSON.stringify(props.view)}</div>
+  DashboardToolView: (props: { view: unknown; pending?: boolean }) => (
+    <div data-testid="dashboard-view" data-pending={props.pending}>
+      {JSON.stringify(props.view)}
+    </div>
   ),
 }));
 
@@ -686,6 +688,29 @@ describe('ToolCallPart user tools', () => {
 });
 
 describe('ToolCallPart inline results', () => {
+  it.each(['native', 'mcp'] as const)(
+    'does not route an unrelated %s tool named DisplayResults to the dashboard',
+    (kind) => {
+      const part = toolUse({
+        kind: 'other',
+        input: { view: { widgets: [] } },
+        result: null,
+        output: null,
+        error: null,
+        acpKind: 'other',
+      });
+      part.name =
+        kind === 'mcp'
+          ? { kind, server: 'external', tool: 'DisplayResults' }
+          : { kind, name: 'DisplayResults' };
+      const rendered = render(() => <ToolCallPart part={part} />);
+      expect(rendered.queryByTestId('dashboard-view')).toBeNull();
+      expect(rendered.getByTestId('tool-card').dataset.expandable).toBe(
+        'false'
+      );
+    }
+  );
+
   it.each(['macro', 'other'] as const)(
     'renders %s DisplayResults from call arguments before any response',
     (kind) => {
@@ -747,7 +772,7 @@ describe('ToolCallPart inline results', () => {
     expect(dashboard.textContent).toBe('{"text":"Updated"}');
   });
 
-  it('shows malformed settled DisplayResults visibly without a tool disclosure', () => {
+  it('passes settled missing input to dashboard validation without a tool disclosure', () => {
     const rendered = render(() => (
       <ToolCallPart
         part={toolUse(
@@ -756,8 +781,8 @@ describe('ToolCallPart inline results', () => {
         )}
       />
     ));
-    expect(rendered.getByRole('status').textContent).toBe(
-      'Unable to display these results.'
+    expect(rendered.getByTestId('dashboard-view').dataset.pending).toBe(
+      'false'
     );
     expect(rendered.queryByTestId('tool-card')).toBeNull();
   });
