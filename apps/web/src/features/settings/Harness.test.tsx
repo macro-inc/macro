@@ -233,7 +233,7 @@ describe('Harness', () => {
     ).toBeTruthy();
   });
 
-  it('places bring-your-own above navigation and the runtime lists', () => {
+  it('places bring-your-own below navigation and above the runtime lists', () => {
     render(() => (
       <Harness navigation={<nav aria-label="Agent management" />} />
     ));
@@ -241,9 +241,9 @@ describe('Harness', () => {
       name: 'Bring your agent to Macro',
     });
     expect(
-      invitation.compareDocumentPosition(
-        screen.getByRole('navigation', { name: 'Agent management' })
-      ) & Node.DOCUMENT_POSITION_FOLLOWING
+      screen
+        .getByRole('navigation', { name: 'Agent management' })
+        .compareDocumentPosition(invitation) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
     for (const name of ['Built-in runtimes', 'Paired runtimes']) {
       expect(
@@ -359,7 +359,7 @@ describe('Harness', () => {
       screen.getByRole('heading', { name: 'Bring your agent to Macro' })
     ).toBeTruthy();
     expect(
-      screen.getByText(/Use it for chat and workspace tasks/)
+      screen.getByText(/Uses official Macro tools and MCPs to get the job done/)
     ).toBeTruthy();
   });
 
@@ -446,6 +446,16 @@ describe('Harness', () => {
     expect(screen.getAllByRole('button', { name: 'New runtime' })).toHaveLength(
       2
     );
+    const card = screen
+      .getByRole('heading', { name: 'Bring your agent to Macro' })
+      .closest('section')!;
+    fireEvent.click(within(card).getByRole('button', { name: 'New runtime' }));
+    expect(screen.getByRole('region', { name: 'New runtime' })).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(
+      screen.getByRole('heading', { name: 'Bring your agent to Macro' })
+    ).toBeTruthy();
   });
 
   it('renders a registered harness row', () => {

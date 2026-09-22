@@ -101,9 +101,7 @@ const MACRO_AGENT: AgentSummary = {
 };
 
 /** Settings page for viewing and creating persistent agents. */
-export function Agents(
-  props: { navigation?: JSX.Element; invitation?: JSX.Element } = {}
-) {
+export function Agents(props: { navigation?: JSX.Element } = {}) {
   const claudeCloudFlag = useFeatureFlag(claudeCloud);
   const [creating, setCreating] = createSignal(false);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -260,7 +258,6 @@ export function Agents(
             </Button>
           }
         >
-          {props.invitation}
           {props.navigation}
           <SettingsSection
             title="Team agents"

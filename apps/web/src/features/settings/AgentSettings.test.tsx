@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentSettings } from './AgentSettings';
+import { BringYourOwnAgent } from './components/bring-your-own-agent';
 
 const params = vi.hoisted(() => ({ pair: undefined as string | undefined }));
 vi.mock('@solidjs/router', () => ({ useSearchParams: () => [params] }));
@@ -10,24 +11,19 @@ vi.mock('@solidjs/router', () => ({ useSearchParams: () => [params] }));
 // Exercise host navigation with lightweight slots. The real forms have their
 // own API, permission, pending-state and mutation integration tests.
 vi.mock('./Agents', () => ({
-  Agents: (props: { navigation: JSX.Element; invitation: JSX.Element }) => (
+  Agents: (props: { navigation: JSX.Element }) => (
     <div>
       {props.navigation}
       <p>Agent roster</p>
-      {props.invitation}
     </div>
   ),
 }));
 vi.mock('./Harness', () => ({
-  Harness: (props: {
-    navigation: JSX.Element;
-    initialPairing: boolean;
-    onPairingClose: () => void;
-  }) => (
+  Harness: (props: { navigation: JSX.Element }) => (
     <div>
       {props.navigation}
-      <p>{props.initialPairing ? 'Pairing page' : 'Runtime list'}</p>
-      <button onClick={props.onPairingClose}>Finish pairing</button>
+      <BringYourOwnAgent onAddRuntime={() => {}} />
+      <p>Runtime list</p>
     </div>
   ),
 }));
@@ -47,18 +43,19 @@ describe('unified agent management', () => {
     expect(screen.getByText('Agent roster')).toBeTruthy();
   });
 
-  it('takes the bring-your-own action straight to pairing, without a dialog', () => {
+  it('shows bring-your-own only on the Runtimes tab', () => {
     render(() => <AgentSettings />);
+    expect(
+      screen.queryByRole('heading', { name: 'Bring your agent to Macro' })
+    ).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Runtimes' }));
     expect(
       screen.getByRole('heading', { name: 'Bring your agent to Macro' })
     ).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'New runtime' }));
-    expect(screen.getByText('Pairing page')).toBeTruthy();
-    expect(screen.queryByRole('dialog')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Finish pairing' }));
     fireEvent.click(screen.getByRole('button', { name: 'Agents' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Runtimes' }));
-    expect(screen.getByText('Runtime list')).toBeTruthy();
+    expect(
+      screen.queryByRole('heading', { name: 'Bring your agent to Macro' })
+    ).toBeNull();
   });
 
   it('opens runtime settings from existing connection links', () => {

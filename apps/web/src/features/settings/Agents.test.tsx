@@ -329,22 +329,15 @@ describe('Agents', () => {
     ).toBeTruthy();
   });
 
-  it('places the bring-your-own invitation above navigation and both agent lists', () => {
-    render(() => (
-      <Agents
-        invitation={<p>Bring your own agent</p>}
-        navigation={<nav aria-label="Agent management" />}
-      />
-    ));
-    const invitation = screen.getByText('Bring your own agent');
-    expect(
-      invitation.compareDocumentPosition(
-        screen.getByRole('navigation', { name: 'Agent management' })
-      ) & Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+  it('places navigation above both agent lists without a bring-your-own card', () => {
+    render(() => <Agents navigation={<nav aria-label="Agent management" />} />);
+    expect(screen.queryByText('Bring your own agent')).toBeNull();
+    const navigation = screen.getByRole('navigation', {
+      name: 'Agent management',
+    });
     for (const name of ['Team agents', 'Private agents']) {
       expect(
-        invitation.compareDocumentPosition(
+        navigation.compareDocumentPosition(
           screen.getByRole('heading', { name })
         ) & Node.DOCUMENT_POSITION_FOLLOWING
       ).toBeTruthy();

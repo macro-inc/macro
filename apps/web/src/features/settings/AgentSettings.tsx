@@ -5,7 +5,6 @@ import {
   AgentManagementNavigation,
   type AgentManagementSection,
 } from './components/agent-management-navigation';
-import { BringYourOwnAgent } from './components/bring-your-own-agent';
 import { Harness } from './Harness';
 
 /** One management surface, mounted by both Settings and the Agents workspace. */
@@ -16,7 +15,6 @@ export function AgentSettings(props: {
   const [section, setSection] = createSignal<AgentManagementSection>(
     searchParams.pair ? 'runtimes' : (props.initialSection ?? 'agents')
   );
-  const [newRuntime, setNewRuntime] = createSignal(false);
   const navigation = () => (
     <AgentManagementNavigation section={section()} onChange={setSection} />
   );
@@ -24,25 +22,9 @@ export function AgentSettings(props: {
   return (
     <Show
       when={section() === 'agents'}
-      fallback={
-        <Harness
-          navigation={navigation()}
-          initialPairing={newRuntime()}
-          onPairingClose={() => setNewRuntime(false)}
-        />
-      }
+      fallback={<Harness navigation={navigation()} />}
     >
-      <Agents
-        navigation={navigation()}
-        invitation={
-          <BringYourOwnAgent
-            onAddRuntime={() => {
-              setNewRuntime(true);
-              setSection('runtimes');
-            }}
-          />
-        }
-      />
+      <Agents navigation={navigation()} />
     </Show>
   );
 }

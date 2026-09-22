@@ -43,13 +43,7 @@ function lastConnectedText(harness: RegisteredHarness): string {
 }
 
 /** Settings UI for choosing and configuring the available agent harnesses. */
-export function Harness(
-  props: {
-    navigation?: JSX.Element;
-    initialPairing?: boolean;
-    onPairingClose?: () => void;
-  } = {}
-) {
+export function Harness(props: { navigation?: JSX.Element } = {}) {
   const [cursorApiKey, setCursorApiKey] = createSignal('');
   const cursorStatus = useCursorApiKeyStatusQuery();
   const saveCursorApiKey = useSaveCursorApiKey();
@@ -63,10 +57,9 @@ export function Harness(
         initialCode?: string;
       }
     | undefined
-  >(props.initialPairing ? {} : undefined);
+  >();
   const closePairing = () => {
     setPairingDialog(undefined);
-    props.onPairingClose?.();
   };
   const [removingHarness, setRemovingHarness] =
     createSignal<RegisteredHarness>();
@@ -184,8 +177,8 @@ export function Harness(
             </Button>
           }
         >
-          <BringYourOwnAgent onAddRuntime={() => setPairingDialog({})} />
           {props.navigation}
+          <BringYourOwnAgent onAddRuntime={() => setPairingDialog({})} />
           <div>
             <h2 class="mb-3 px-6 text-sm font-semibold text-ink">
               Built-in runtimes
@@ -205,9 +198,8 @@ export function Harness(
                     </span>
                   </div>
                   <p class="mt-1 text-sm text-ink-muted">
-                    Macro Agent runs directly in your workspace. It is ready to
-                    use and does not require any configuration. Use it for chat
-                    and workspace tasks.
+                    Macro in house fast and powerful agent. Uses official Macro
+                    tools and MCPs to get the job done.
                   </p>
                 </div>
               </section>
@@ -228,7 +220,8 @@ export function Harness(
                     </Show>
                   </div>
                   <p class="mt-1 text-sm text-ink-muted">
-                    Use your Cursor account to run agent sessions in Macro.
+                    Bring your own Cursor subscription to Macro. Manage Cursor
+                    Cloud sessions directly in the app.
                   </p>
 
                   <Show
