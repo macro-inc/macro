@@ -187,6 +187,9 @@ pub async fn ingest_with_editing_sessions(
     let Ingest::Insert(rows) = ingest else {
         return ingest;
     };
+    // Redis may apply a refresh before its response times out. Losing that
+    // session's Activity is acceptable here: delivery is best effort, and
+    // emitting on uncertainty would turn cache failures into noisy edit feeds.
     let admitted = match tokio::time::timeout(
         STORE_TIMEOUT,
         store.refresh_editing_sessions(&rows, event_id, EDITING_IDLE),

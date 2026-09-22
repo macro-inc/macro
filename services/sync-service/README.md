@@ -165,7 +165,10 @@ DSS's independent Activity consumer records one event at the start of editing
 and refreshes a shared five-minute inactivity window on each subsequent batch.
 An edit after five quiet minutes starts another session. Timing follows the
 existing snapshot notification cadence. Redis or notification failures may drop
-Activity hints; they never block document saving or search extraction.
+Activity hints; they never block document saving or search extraction. If Redis
+applies a session refresh before timing out, that session can remain suppressed
+without an Activity row until five minutes of inactivity. This is an accepted
+best-effort delivery limit, rather than a reason to retry or emit on every batch.
 
 Deploy DSS before Sync to enable Activity hints immediately. If an older DSS
 rejects the optional `editors` field, Sync retries once without it so search

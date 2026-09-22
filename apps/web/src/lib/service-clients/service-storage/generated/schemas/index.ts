@@ -618,6 +618,8 @@ export * from './documentSyncContentUpdatedMetadata';
 export * from './documentSyncContentUpdatedMetadataActor';
 export * from './documentSyncContentUpdatedMetadataDocumentVersionId';
 export * from './documentSyncContentUpdatedMetadataOnBehalfOf';
+export * from './documentSyncEditor';
+export * from './documentSyncEditorOnBehalfOf';
 export * from './documentTeamShareResponse';
 export * from './documentTeamShareResponseTeamId';
 export * from './editAnchorRequest';
