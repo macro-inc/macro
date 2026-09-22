@@ -46,11 +46,11 @@ export function ToolGroup(props: ToolGroupProps) {
       class="min-w-0 text-sm leading-6 text-ink-extra-muted"
     >
       <Collapsible.Trigger class="group flex min-h-8 items-center gap-2 py-1 text-left text-ink-extra-muted hover:text-ink-muted">
+        <TextShimmer text={title()} active={props.active} />
         <CaretRight
           aria-hidden="true"
-          class="size-4 shrink-0 group-data-expanded:rotate-90"
+          class="size-4 shrink-0 opacity-0 group-data-expanded:rotate-90 group-hover:opacity-100 group-focus-visible:opacity-100"
         />
-        <TextShimmer text={title()} active={props.active} />
       </Collapsible.Trigger>
       <Collapsible.Content class="data-closed:hidden">
         <Show when={expanded()}>

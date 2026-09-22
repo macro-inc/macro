@@ -409,7 +409,8 @@ Consecutive calls collect under an expanded **Calling N tools** group while
 running. Rows appear as calls arrive; after the calls finish, the group briefly
 settles and collapses to **Called N tools**. Group growth and collapse happen
 immediately, without animation, including fast batches. Completed groups in
-history start collapsed and can be reopened. Expand an edit row to view its
+history start collapsed and can be reopened. The group caret sits immediately
+after its label and appears on hover or keyboard focus. Expand an edit row to view its
 diffs. Result bodies load only when their row opens; syntax highlighting may
 appear after the diff text. Opening a session or expanding a group should leave
 the app responsive, even when the session contains many file edits.
