@@ -240,6 +240,7 @@ use utoipa::OpenApi;
         messages::inbound::axum_router::delete_thread,
         messages::inbound::axum_router::typing,
         messages::inbound::axum_router::legacy,
+        messages::inbound::axum_router::referenced_threads,
 
         // channels
         channels::inbound::axum_router::create_channel_handler,
@@ -593,6 +594,8 @@ use utoipa::OpenApi;
             messages::domain::ports::AttachmentChange,
             messages::domain::ports::MessageEvent,
             messages::domain::ports::MessageChange,
+            messages::domain::ports::ReferencedThread,
+            messages::domain::ports::ReferencedThreadPage,
             messages::inbound::axum_router::ReactionInput,
             messages::inbound::axum_router::TypingInput,
 
