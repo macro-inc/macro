@@ -25,10 +25,10 @@ use models_permissions::share_permission::team_share::TeamShareFacts;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::domain::meetings::{Meeting, MeetingToken, UpdateMeetingRequest};
+use crate::domain::meetings::{GuestId, Meeting, MeetingToken, UpdateMeetingRequest};
 use crate::domain::models::{
     ActiveCallSummary, AddParticipantError, ArchivedCall, Call, CallError, CallParticipant,
-    CallRecord, CallRecordParticipant, CallRecordPreview, CallRecordPreviewData,
+    CallRecord, CallRecordGuest, CallRecordParticipant, CallRecordPreview, CallRecordPreviewData,
     CallRecordTranscriptSegment, CustomSpeakerAssignment, DeletedCallRecordStorageKeys,
     EditCallRecordRepoArgs, EnrichedCallTranscript, TranscriptSegmentRequest, WithCallId,
 };
@@ -307,8 +307,12 @@ impl CallRepository for PgCallRepo {
     async fn create_meeting(&self, meeting: Meeting) -> Result<Meeting, CallError> {
         self.persist_meeting(meeting).await
     }
-    async fn get_meeting_for_call(&self, call_id: &Uuid) -> Result<Option<Meeting>, CallError> {
-        self.fetch_meeting_for_call(call_id).await
+    async fn get_meeting_for_call(
+        &self,
+        call_id: &Uuid,
+        include_cancelled: bool,
+    ) -> Result<Option<Meeting>, CallError> {
+        self.fetch_meeting_for_call(call_id, include_cancelled).await
     }
     async fn get_meeting(&self, token: &MeetingToken) -> Result<Option<Meeting>, CallError> {
         self.fetch_meeting(token).await
@@ -336,16 +340,21 @@ impl CallRepository for PgCallRepo {
         self.allocate_meeting_call(meeting_id, candidate_call_id)
             .await
     }
-    async fn add_guest(&self, call_id: &Uuid, identity: &str, name: &str) -> Result<(), CallError> {
-        self.persist_guest(call_id, identity, name).await
+    async fn add_guest(
+        &self,
+        call_id: &Uuid,
+        guest_id: GuestId,
+        name: &str,
+    ) -> Result<(), CallError> {
+        self.persist_guest(call_id, guest_id, name).await
     }
     async fn reconcile_guest(
         &self,
         call_id: &Uuid,
-        identity: &str,
+        guest_id: GuestId,
         joined: bool,
     ) -> Result<(), CallError> {
-        self.update_guest(call_id, identity, joined).await
+        self.update_guest(call_id, guest_id, joined).await
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -723,9 +732,9 @@ impl CallRepository for PgCallRepo {
     async fn get_participant_count(&self, call_id: &Uuid) -> Result<i64, Self::Err> {
         sqlx::query_scalar!(
             r#"
-            SELECT COUNT(*) as "count!"
-            FROM call_participants
-            WHERE call_id = $1 AND left_at IS NULL
+            SELECT (SELECT COUNT(*) FROM call_participants WHERE call_id = $1 AND left_at IS NULL)
+                 + (SELECT COUNT(*) FROM call_guests WHERE call_id = $1 AND left_at IS NULL)
+                 AS "count!"
             "#,
             call_id,
         )
@@ -1104,7 +1113,7 @@ impl CallRepository for PgCallRepo {
         {
             let participants = sqlx::query!(
                 r#"
-                SELECT user_id, joined_at, left_at, display_name
+                SELECT user_id, joined_at, left_at
                 FROM call_participants
                 WHERE call_id = $1
                 ORDER BY joined_at ASC
@@ -1115,8 +1124,27 @@ impl CallRepository for PgCallRepo {
             .await?
             .into_iter()
             .map(|row| CallRecordParticipant {
-                display_name: row.display_name,
                 user_id: row.user_id,
+                joined_at: row.joined_at,
+                left_at: row.left_at,
+            })
+            .collect();
+
+            let guests = sqlx::query!(
+                r#"
+                SELECT id, display_name, joined_at, left_at
+                FROM call_guests
+                WHERE call_id = $1
+                ORDER BY joined_at ASC
+                "#,
+                call_id,
+            )
+            .fetch_all(&mut *tx)
+            .await?
+            .into_iter()
+            .map(|row| CallRecordGuest {
+                id: GuestId::from_uuid(row.id),
+                display_name: row.display_name,
                 joined_at: row.joined_at,
                 left_at: row.left_at,
             })
@@ -1172,6 +1200,7 @@ impl CallRepository for PgCallRepo {
                 is_active: true,
                 status: None,
                 participants,
+                guests,
                 transcript,
             }));
         }
@@ -1196,7 +1225,7 @@ impl CallRepository for PgCallRepo {
 
         let participants = sqlx::query!(
             r#"
-            SELECT user_id, joined_at, left_at, display_name
+            SELECT user_id, joined_at, left_at
             FROM call_record_participants
             WHERE call_record_id = $1
             ORDER BY joined_at ASC
@@ -1207,8 +1236,27 @@ impl CallRepository for PgCallRepo {
         .await?
         .into_iter()
         .map(|row| CallRecordParticipant {
-            display_name: row.display_name,
             user_id: row.user_id,
+            joined_at: row.joined_at,
+            left_at: row.left_at,
+        })
+        .collect();
+
+        let guests = sqlx::query!(
+            r#"
+            SELECT id, display_name, joined_at, left_at
+            FROM call_record_guests
+            WHERE call_record_id = $1
+            ORDER BY joined_at ASC
+            "#,
+            call_id,
+        )
+        .fetch_all(&mut *tx)
+        .await?
+        .into_iter()
+        .map(|row| CallRecordGuest {
+            id: GuestId::from_uuid(row.id),
+            display_name: row.display_name,
             joined_at: row.joined_at,
             left_at: row.left_at,
         })
@@ -1262,6 +1310,7 @@ impl CallRepository for PgCallRepo {
             is_active: false,
             status: None,
             participants,
+            guests,
             transcript,
         }))
     }
@@ -1589,11 +1638,11 @@ impl CallRepository for PgCallRepo {
 
         for p in sqlx::query!(
             r#"
-            SELECT call_id AS "id!", user_id AS "user_id!", joined_at AS "joined_at!", left_at, display_name
+            SELECT call_id AS "id!", user_id AS "user_id!", joined_at AS "joined_at!", left_at
             FROM call_participants
             WHERE call_id = ANY($1)
             UNION ALL
-            SELECT call_record_id AS "id!", user_id AS "user_id!", joined_at AS "joined_at!", left_at, display_name
+            SELECT call_record_id AS "id!", user_id AS "user_id!", joined_at AS "joined_at!", left_at
             FROM call_record_participants
             WHERE call_record_id = ANY($2)
             ORDER BY 3 ASC
@@ -1608,10 +1657,39 @@ impl CallRepository for PgCallRepo {
                 .entry(p.id)
                 .or_default()
                 .push(CallRecordParticipant {
-                    display_name: p.display_name,
                     user_id: p.user_id,
                     joined_at: p.joined_at,
                     left_at: p.left_at,
+                });
+        }
+
+        let mut guests_by_call: HashMap<Uuid, Vec<CallRecordGuest>> = HashMap::new();
+
+        for g in sqlx::query!(
+            r#"
+            SELECT call_id AS "call_id!", id AS "guest_id!", display_name AS "display_name!", joined_at AS "joined_at!", left_at
+            FROM call_guests
+            WHERE call_id = ANY($1)
+            UNION ALL
+            SELECT call_record_id AS "call_id!", id AS "guest_id!", display_name AS "display_name!", joined_at AS "joined_at!", left_at
+            FROM call_record_guests
+            WHERE call_record_id = ANY($2)
+            ORDER BY 4 ASC
+            "#,
+            &active_ids,
+            &archived_ids,
+        )
+        .fetch_all(&self.pool)
+        .await?
+        {
+            guests_by_call
+                .entry(g.call_id)
+                .or_default()
+                .push(CallRecordGuest {
+                    id: GuestId::from_uuid(g.guest_id),
+                    display_name: g.display_name,
+                    joined_at: g.joined_at,
+                    left_at: g.left_at,
                 });
         }
 
@@ -1620,6 +1698,7 @@ impl CallRepository for PgCallRepo {
             let participants = participants_by_call
                 .remove(&row.call_id)
                 .unwrap_or_default();
+            let guests = guests_by_call.remove(&row.call_id).unwrap_or_default();
 
             records.push(CallRecord {
                 call_id: row.call_id,
@@ -1644,6 +1723,7 @@ impl CallRepository for PgCallRepo {
                 is_active: row.is_active,
                 status: Some(call_status_from_sql(&row.status)),
                 participants,
+                guests,
                 transcript: Vec::new(),
             });
         }

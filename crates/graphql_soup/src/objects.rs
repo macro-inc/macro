@@ -13,7 +13,7 @@ use models_pagination::PaginatedOpaqueCursor;
 use models_soup::{
     agent_session::{AgentPullRequestState, SoupAgentSession},
     calendar_event::SoupCalendarEvent,
-    call_record::{SoupCallRecord, SoupCallRecordParticipant},
+    call_record::{SoupCallRecord, SoupCallRecordGuest, SoupCallRecordParticipant},
     chat::SoupChat,
     comms::{ChannelMessage, ChannelParticipant, ChannelType, SoupChannel, SoupChannelThread},
     crm_company::SoupCrmCompany,
@@ -1898,8 +1898,6 @@ where
 pub struct GraphqlSoupCallParticipant {
     /// The identifier of the user.
     user_id: String,
-    /// Guest display name when no Macro profile exists.
-    display_name: Option<String>,
     /// The joined timestamp in RFC 3339 format.
     joined_at: String,
     /// The left timestamp in RFC 3339 format.
@@ -1911,6 +1909,30 @@ impl GraphqlSoupCallParticipant {
     pub fn new(value: &SoupCallRecordParticipant) -> Self {
         Self {
             user_id: value.user_id.clone(),
+            joined_at: value.joined_at.to_rfc3339(),
+            left_at: value.left_at.map(|ts| ts.to_rfc3339()),
+        }
+    }
+}
+
+/// GraphQL representation of a non-account call guest.
+#[derive(SimpleObject)]
+pub struct GraphqlSoupCallGuest {
+    /// Opaque guest identity; matches the guest's transcript speaker id.
+    id: ID,
+    /// Guest-provided display name.
+    display_name: String,
+    /// The joined timestamp in RFC 3339 format.
+    joined_at: String,
+    /// The left timestamp in RFC 3339 format.
+    left_at: Option<String>,
+}
+
+impl GraphqlSoupCallGuest {
+    /// Construct a GraphQL call guest from the Soup model.
+    pub fn new(value: &SoupCallRecordGuest) -> Self {
+        Self {
+            id: ID(value.id.to_string()),
             display_name: value.display_name.clone(),
             joined_at: value.joined_at.to_rfc3339(),
             left_at: value.left_at.map(|ts| ts.to_rfc3339()),
@@ -2054,6 +2076,11 @@ where
             .iter()
             .map(GraphqlSoupCallParticipant::new)
             .collect()
+    }
+
+    /// Non-account guests who attended the call.
+    async fn guests(&self) -> Vec<GraphqlSoupCallGuest> {
+        self.0.guests.iter().map(GraphqlSoupCallGuest::new).collect()
     }
 
     #[graphql(flatten)]

@@ -33,11 +33,11 @@ fn record_with_participants(user_ids: &[&str]) -> CallRecord {
             .iter()
             .map(|u| CallRecordParticipant {
                 user_id: u.to_string(),
-                display_name: None,
                 joined_at: now,
                 left_at: None,
             })
             .collect(),
+        guests: Vec::new(),
         transcript: Vec::new(),
         user_access_level: None,
     }
@@ -176,11 +176,19 @@ fn from_record_for_user_summary_none_when_record_has_none() {
 
 #[test]
 fn standalone_call_retains_guest_name_and_has_no_channel() {
-    let mut record = record_with_participants(&["guest:01900000-0000-7000-8000-000000000001"]);
+    let mut record = record_with_participants(&[]);
     record.channel_id = None;
-    record.participants[0].display_name = Some("Alex".to_string());
+    let guest_id = call::domain::meetings::GuestId::generate();
+    record.guests = vec![call::domain::models::CallRecordGuest {
+        id: guest_id,
+        display_name: "Alex".to_string(),
+        joined_at: Utc::now(),
+        left_at: None,
+    }];
     let soup = SoupCallRecord::from_record_for_user(record, "macro|owner@example.com");
     assert_eq!(soup.channel_id, None);
-    assert_eq!(soup.participants[0].display_name.as_deref(), Some("Alex"));
+    assert!(soup.participants.is_empty());
+    assert_eq!(soup.guests[0].id, guest_id.as_uuid());
+    assert_eq!(soup.guests[0].display_name, "Alex");
     assert_eq!(soup.status, CallStatus::Unattended);
 }

@@ -21,7 +21,7 @@ use crate::domain::models::{
 };
 
 use super::meetings::{
-    CreateMeetingRequest, GuestJoinRequest, Meeting, MeetingToken, UpdateMeetingRequest,
+    CreateMeetingRequest, GuestId, GuestJoinRequest, Meeting, MeetingToken, UpdateMeetingRequest,
 };
 
 use super::models::{
@@ -44,10 +44,13 @@ pub trait CallRepository: Send + Sync + 'static {
         &self,
         meeting: Meeting,
     ) -> impl Future<Output = Result<Meeting, CallError>> + Send;
-    /// Find an invitation for a currently active call, including cancelled invitations for leaving.
+    /// Find the invitation for a call. `include_cancelled` exists for the
+    /// leave path, where connected participants of a revoked invitation must
+    /// still be able to hang up; every other caller wants live links only.
     fn get_meeting_for_call(
         &self,
         call_id: &Uuid,
+        include_cancelled: bool,
     ) -> impl Future<Output = Result<Option<Meeting>, CallError>> + Send;
     /// Resolve a live invitation capability.
     fn get_meeting(
@@ -80,17 +83,21 @@ pub trait CallRepository: Send + Sync + 'static {
         candidate_call_id: &Uuid,
     ) -> impl Future<Output = Result<(Call, bool), CallError>> + Send;
     /// Persist a validated guest's participation and name.
+    ///
+    /// Must fail (not silently insert) when the call is no longer active, so
+    /// a join racing archival surfaces instead of stranding a guest.
     fn add_guest(
         &self,
         call_id: &Uuid,
-        identity: &str,
+        guest_id: GuestId,
         name: &str,
     ) -> impl Future<Output = Result<(), CallError>> + Send;
     /// Reconcile a known guest join or leave without trusting webhook names.
+    /// Unknown guest ids are a no-op.
     fn reconcile_guest(
         &self,
         call_id: &Uuid,
-        identity: &str,
+        guest_id: GuestId,
         joined: bool,
     ) -> impl Future<Output = Result<(), CallError>> + Send;
 
@@ -178,7 +185,8 @@ pub trait CallRepository: Send + Sync + 'static {
         call_id: &Uuid,
     ) -> impl Future<Output = Result<Vec<CallParticipant>, Self::Err>> + Send;
 
-    /// Get the count of active participants in a call.
+    /// Get the count of active attendees in a call: Macro participants plus
+    /// non-account guests. Archival on room-empty keys off this reaching 0.
     fn get_participant_count(
         &self,
         call_id: &Uuid,
@@ -611,14 +619,14 @@ pub trait CallRtcClient: Send + Sync + 'static {
     fn generate_guest_token(
         &self,
         room_name: &str,
-        identity: &str,
+        guest_id: GuestId,
         display_name: &str,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
     /// Remove a validated non-account guest from a room.
     fn remove_guest(
         &self,
         room_name: &str,
-        identity: &str,
+        guest_id: GuestId,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Build VoIP payloads for native incoming-call delivery.

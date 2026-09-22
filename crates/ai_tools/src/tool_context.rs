@@ -625,13 +625,17 @@ impl CallRtcClient for NoOpCallRtcClient {
     async fn generate_guest_token(
         &self,
         _room_name: &str,
-        _identity: &str,
+        _guest_id: call::domain::meetings::GuestId,
         _display_name: &str,
     ) -> anyhow::Result<String> {
         anyhow::bail!("call RTC client not configured")
     }
 
-    async fn remove_guest(&self, _room_name: &str, _identity: &str) -> anyhow::Result<()> {
+    async fn remove_guest(
+        &self,
+        _room_name: &str,
+        _guest_id: call::domain::meetings::GuestId,
+    ) -> anyhow::Result<()> {
         anyhow::bail!("call RTC client not configured")
     }
 

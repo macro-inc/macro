@@ -4,6 +4,7 @@ use crate::domain::models::{
     AddParticipantError, CallRecord, CallRecordPreview, CustomSpeakerAssignment,
     EditCallRecordRepoArgs, TranscriptSegmentRequest,
 };
+use crate::domain::meetings::GuestId;
 use crate::domain::ports::CallRepository;
 use crate::outbound::pg_call_repo::PgCallRepo;
 use chrono::{Duration, SubsecRound, Utc};
@@ -2951,21 +2952,22 @@ async fn standalone_meeting_archives_guest_names_and_preserves_invitation(
         .await?;
     assert!(created);
     assert_eq!(call.channel_id, None);
-    let identity = format!("guest:{}", Uuid::now_v7());
-    repo.add_guest(&call.id, &identity, "Ada Guest").await?;
+    let guest_id = GuestId::generate();
+    repo.add_guest(&call.id, guest_id, "Ada Guest").await?;
     assert_eq!(repo.get_participant_count(&call.id).await?, 1);
     assert!(repo.archive_call_if_empty(&call.id).await?.is_none());
-    repo.reconcile_guest(&call.id, &identity, false).await?;
+    repo.reconcile_guest(&call.id, guest_id, false).await?;
     assert_eq!(repo.get_participant_count(&call.id).await?, 0);
     repo.archive_call(&call.id).await?;
     let record = repo.get_call_record_by_call_id(&call.id).await?.unwrap();
     assert_eq!(record.channel_id, None);
     assert_eq!(record.custom_name.as_deref(), Some("Design review"));
-    assert_eq!(
-        record.participants[0].display_name.as_deref(),
-        Some("Ada Guest")
-    );
-    assert_eq!(record.participants[0].user_id, identity);
+    // Guests archive as their own rows; participant tables stay Macro-only.
+    assert!(record.participants.is_empty());
+    assert_eq!(record.guests.len(), 1);
+    assert_eq!(record.guests[0].id, guest_id);
+    assert_eq!(record.guests[0].display_name, "Ada Guest");
+    assert!(record.guests[0].left_at.is_some());
     assert!(
         repo.get_call_participants_with_team_members(&call.id)
             .await?
@@ -2979,7 +2981,7 @@ async fn standalone_meeting_archives_guest_names_and_preserves_invitation(
         None
     );
     assert_eq!(
-        repo.get_meeting_for_call(&call.id).await?.unwrap().id,
+        repo.get_meeting_for_call(&call.id, false).await?.unwrap().id,
         meeting.id
     );
     let (next, created) = repo

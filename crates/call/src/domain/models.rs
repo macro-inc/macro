@@ -225,8 +225,8 @@ pub struct CallWebhookEvent {
     pub room_name: Option<String>,
     /// Participant identity associated with the event, if any.
     pub participant_identity: Option<MacroUserIdStr<'static>>,
-    /// Non-account guest identity, validated separately from Macro users.
-    pub guest_identity: Option<String>,
+    /// Non-account guest identity, classified separately from Macro users.
+    pub guest_identity: Option<super::meetings::GuestId>,
     /// Egress ID associated with the event, if any.
     pub egress_id: Option<String>,
     /// File download URL from a completed egress, if any.
@@ -425,13 +425,26 @@ pub struct CallRecordTranscriptSegment {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct CallRecordParticipant {
-    /// Guest-provided display name, retained after archival.
-    pub display_name: Option<String>,
-    /// The user id.
+    /// The Macro user id.
     pub user_id: String,
     /// When the user joined the call.
     pub joined_at: DateTime<Utc>,
     /// When the user left (None if still in an active call).
+    pub left_at: Option<DateTime<Utc>>,
+}
+
+/// A non-account guest as returned in a [`CallRecord`].
+#[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CallRecordGuest {
+    /// Opaque guest identity; matches the guest's transcript `speaker_id`.
+    pub id: super::meetings::GuestId,
+    /// Guest-provided display name.
+    pub display_name: String,
+    /// When the guest joined the call.
+    pub joined_at: DateTime<Utc>,
+    /// When the guest left (None if still in an active call).
     pub left_at: Option<DateTime<Utc>>,
 }
 
@@ -498,8 +511,11 @@ pub struct CallRecord {
     /// single-record read; `None` in list contexts.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user_access_level: Option<AccessLevel>,
-    /// Participants (both active and historic).
+    /// Macro-account participants (both active and historic).
     pub participants: Vec<CallRecordParticipant>,
+    /// Non-account guests (both active and historic). Guests only ever exist
+    /// on standalone meeting calls, never on channel calls.
+    pub guests: Vec<CallRecordGuest>,
     /// Transcript segments ordered by `sequence_num`.
     pub transcript: Vec<CallRecordTranscriptSegment>,
 }

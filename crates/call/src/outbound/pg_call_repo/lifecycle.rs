@@ -29,10 +29,19 @@ impl PgCallRepo {
         .await?
         .ok_or_else(|| CallError::NotFound(call_id.to_string()))?;
 
-        if require_empty && sqlx::query_scalar!(
-            "SELECT EXISTS(SELECT 1 FROM call_participants WHERE call_id = $1 AND left_at IS NULL) AS \"exists!\"",
-            call_id,
-        ).fetch_one(tx.as_mut()).await? { return Ok(None); }
+        if require_empty
+            && sqlx::query_scalar!(
+                r#"SELECT (
+                    EXISTS(SELECT 1 FROM call_participants WHERE call_id = $1 AND left_at IS NULL)
+                    OR EXISTS(SELECT 1 FROM call_guests WHERE call_id = $1 AND left_at IS NULL)
+                ) AS "exists!""#,
+                call_id,
+            )
+            .fetch_one(tx.as_mut())
+            .await?
+        {
+            return Ok(None);
+        }
 
         let ended_at = Utc::now().trunc_subsecs(6);
         let duration_ms = ended_at
@@ -80,8 +89,8 @@ impl PgCallRepo {
         // call_record_participants. Each inserted row represents one participant.
         let participant_count = sqlx::query!(
             r#"
-            INSERT INTO call_record_participants (call_record_id, user_id, joined_at, left_at, display_name)
-            SELECT $1, user_id, joined_at, left_at, display_name
+            INSERT INTO call_record_participants (call_record_id, user_id, joined_at, left_at)
+            SELECT $1, user_id, joined_at, left_at
             FROM call_participants
             WHERE call_id = $2
             "#,
@@ -91,6 +100,21 @@ impl PgCallRepo {
         .execute(tx.as_mut())
         .await?
         .rows_affected() as usize;
+
+        // Copy guests the same way; the archived rows keep the guest ids so
+        // transcript speaker ids remain resolvable to display names.
+        sqlx::query!(
+            r#"
+            INSERT INTO call_record_guests (call_record_id, id, display_name, joined_at, left_at)
+            SELECT $1, id, display_name, joined_at, left_at
+            FROM call_guests
+            WHERE call_id = $2
+            "#,
+            call_id,
+            call_id,
+        )
+        .execute(tx.as_mut())
+        .await?;
 
         // Copy transcripts to call_record_transcripts, rolling up consecutive
         // segments that share both speaker_id and diarized_speaker_id when the

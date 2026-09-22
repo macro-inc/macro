@@ -1,7 +1,7 @@
 //! Persistence for durable invitations and standalone RTC sessions.
 
 use super::*;
-use crate::domain::meetings::{Meeting, MeetingToken};
+use crate::domain::meetings::{GuestId, Meeting, MeetingToken};
 
 impl PgCallRepo {
     pub(super) async fn persist_meeting(&self, meeting: Meeting) -> Result<Meeting, CallError> {
@@ -53,13 +53,21 @@ impl PgCallRepo {
         .transpose()
     }
 
+    #[tracing::instrument(err, skip(self))]
     pub(super) async fn fetch_meeting_for_call(
         &self,
         call_id: &Uuid,
+        include_cancelled: bool,
     ) -> Result<Option<Meeting>, CallError> {
         let row = sqlx::query!(
-            "SELECT id, share_token, user_id, title, scheduled_start, scheduled_end, channel_id, channel_call_id, active_call_id FROM call_meetings WHERE active_call_id = $1 OR id = (SELECT meeting_id FROM call_records WHERE id = $1)",
+            r#"SELECT id, share_token, user_id, title, scheduled_start, scheduled_end, channel_id, channel_call_id, active_call_id
+               FROM call_meetings
+               WHERE (active_call_id = $1 OR id = (SELECT meeting_id FROM call_records WHERE id = $1))
+                 AND ($2 OR cancelled_at IS NULL)
+               ORDER BY created_at DESC
+               LIMIT 1"#,
             call_id,
+            include_cancelled,
         ).fetch_optional(&self.pool).await?;
         row.map(|row| {
             Ok(Meeting {
@@ -202,36 +210,48 @@ impl PgCallRepo {
         ))
     }
 
+    #[tracing::instrument(err, skip(self))]
     pub(super) async fn persist_guest(
         &self,
         call_id: &Uuid,
-        identity: &str,
+        guest_id: GuestId,
         name: &str,
     ) -> Result<(), CallError> {
+        let mut tx = self.pool.begin().await?;
+        // Serialize against archival: `archive_session` locks the calls row,
+        // so a guest join racing the last leave either lands before the
+        // emptiness check or fails here with NotFound instead of inserting a
+        // row for a call that no longer exists.
+        lifecycle::lock_active_call(&mut tx, call_id).await?;
         sqlx::query!(
-            r#"INSERT INTO call_participants (call_id, user_id, display_name)
-               VALUES ($1, $2, $3) ON CONFLICT (call_id, user_id) DO UPDATE SET left_at = NULL"#,
+            "INSERT INTO call_guests (id, call_id, display_name) VALUES ($1, $2, $3)",
+            guest_id.as_uuid(),
             call_id,
-            identity,
             name,
         )
-        .execute(&self.pool)
+        .execute(tx.as_mut())
         .await?;
+        tx.commit().await?;
         Ok(())
     }
 
+    #[tracing::instrument(err, skip(self))]
     pub(super) async fn update_guest(
         &self,
         call_id: &Uuid,
-        identity: &str,
+        guest_id: GuestId,
         joined: bool,
     ) -> Result<(), CallError> {
         let mut tx = self.pool.begin().await?;
         lifecycle::lock_active_call(&mut tx, call_id).await?;
         sqlx::query!(
-            "UPDATE call_participants SET left_at = CASE WHEN $3 THEN NULL ELSE now() END WHERE call_id = $1 AND user_id = $2",
-            call_id, identity, joined,
-        ).execute(tx.as_mut()).await?;
+            "UPDATE call_guests SET left_at = CASE WHEN $3 THEN NULL ELSE now() END WHERE call_id = $1 AND id = $2",
+            call_id,
+            guest_id.as_uuid(),
+            joined,
+        )
+        .execute(tx.as_mut())
+        .await?;
         tx.commit().await?;
         Ok(())
     }

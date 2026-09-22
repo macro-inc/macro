@@ -1,8 +1,28 @@
 -- Calls can exist independently of a channel. Existing channel calls retain their FK.
 ALTER TABLE calls ALTER COLUMN channel_id DROP NOT NULL;
 ALTER TABLE call_records ALTER COLUMN channel_id DROP NOT NULL;
-ALTER TABLE call_participants ADD COLUMN display_name TEXT;
-ALTER TABLE call_record_participants ADD COLUMN display_name TEXT;
+
+-- Non-account guests are their own rows, never entries in the participant
+-- tables: call_participants.user_id stays a Macro user id everywhere. A
+-- guest's id doubles as its LiveKit participant identity.
+CREATE TABLE call_guests (
+    id UUID PRIMARY KEY,
+    call_id UUID NOT NULL REFERENCES calls(id) ON DELETE CASCADE,
+    display_name TEXT NOT NULL,
+    joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    left_at TIMESTAMPTZ
+);
+CREATE INDEX call_guests_call_id ON call_guests(call_id);
+
+-- Archived copy, written once when the call archives.
+CREATE TABLE call_record_guests (
+    call_record_id UUID NOT NULL REFERENCES call_records(id) ON DELETE CASCADE,
+    id UUID NOT NULL,
+    display_name TEXT NOT NULL,
+    joined_at TIMESTAMPTZ NOT NULL,
+    left_at TIMESTAMPTZ,
+    PRIMARY KEY (call_record_id, id)
+);
 
 -- Meeting links survive standalone call sessions. Channel links are pinned to one
 -- call id and never grant access to channel content or archived call records.

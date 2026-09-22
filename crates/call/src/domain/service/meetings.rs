@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::domain::meetings::{
-    CreateMeetingRequest, GuestJoinRequest, Meeting, MeetingToken, is_guest_identity,
+    CreateMeetingRequest, GuestId, GuestJoinRequest, Meeting, MeetingToken,
 };
 use rootcause::compat::boxed_error::IntoBoxedError;
 
@@ -29,6 +29,13 @@ impl<
         if meeting.user_id != actor.as_ref() {
             return Err(CallError::Forbidden(
                 "Only the meeting owner can send invitations".to_string(),
+            ));
+        }
+        // The invitation email promises "no Macro account needed", which is
+        // only true of standalone meetings — channel calls never admit guests.
+        if meeting.channel_id.is_some() {
+            return Err(CallError::Forbidden(
+                "Channel calls cannot be shared with people outside Macro".to_string(),
             ));
         }
         let email = email.trim().to_lowercase();
@@ -93,7 +100,7 @@ impl<
             .await
             .map_err(|e| CallError::Internal(e.into()))?
             .ok_or_else(|| CallError::NotFound(call_id.to_string()))?;
-        if let Some(meeting) = self.repo.get_meeting_for_call(&call_id).await? {
+        if let Some(meeting) = self.repo.get_meeting_for_call(&call_id, false).await? {
             // Channel links only describe the pinned active session.
             if meeting.channel_id.is_none() || record.is_active {
                 return self.resolve_invitation(&meeting.share_token).await;
@@ -248,21 +255,47 @@ impl<
     ) -> Result<CallTokenResponse, CallError> {
         let name = request.validate()?;
         let meeting = self.resolve_invitation(&token).await?;
+        // Guests are only ever admitted to standalone meetings. A channel
+        // call's link is a member convenience; letting it admit outsiders
+        // would turn every View-level share into an invite-externals grant.
+        if meeting.channel_id.is_some() {
+            return Err(CallError::Forbidden(
+                "Sign in to join this call".to_string(),
+            ));
+        }
         let call = self.prepare_meeting_call(&meeting).await?;
-        let identity = format!("guest:{}", Uuid::now_v7());
-        let rtc_token = self
+        let guest_id = GuestId::generate();
+        // Persist before minting: a join racing archival fails here (the
+        // guest row takes the active-call lock) instead of handing out a
+        // token for a room that is about to be deleted.
+        self.repo.add_guest(&call.id, guest_id, &name).await?;
+        let rtc_token = match self
             .rtc_client
-            .generate_guest_token(&call.room_name, &identity, &name)
+            .generate_guest_token(&call.room_name, guest_id, &name)
             .await
-            .map_err(CallError::Internal)?;
-        self.repo.add_guest(&call.id, &identity, &name).await?;
+        {
+            Ok(token) => token,
+            Err(error) => {
+                // Mark the never-connected guest as left so the row cannot
+                // hold the call open; best-effort, the webhook can't help
+                // because this guest never reaches LiveKit.
+                self.repo
+                    .reconcile_guest(&call.id, guest_id, false)
+                    .await
+                    .inspect_err(
+                        |e| tracing::error!(error=?e, "failed to release unminted guest"),
+                    )
+                    .ok();
+                return Err(CallError::Internal(error));
+            }
+        };
         Ok(CallTokenResponse {
             call_id: call.id,
             channel_id: call.channel_id,
             token: rtc_token,
             room_name: call.room_name,
             server_url: self.server_url.clone(),
-            participant_id: identity,
+            participant_id: guest_id.to_string(),
             share_token: Some(token.into()),
         })
     }
@@ -328,7 +361,7 @@ impl<
             .ok_or_else(|| CallError::NotFound("call".to_string()))?;
         let meeting = self
             .repo
-            .get_meeting_for_call(&call.id)
+            .get_meeting_for_call(&call.id, true)
             .await?
             .ok_or(CallError::Auth)?;
         if !bool::from(
@@ -340,14 +373,12 @@ impl<
         ) {
             return Err(CallError::Auth);
         }
-        if is_guest_identity(&verified.identity) {
+        if let Some(guest_id) = GuestId::parse_rtc_identity(&verified.identity) {
             self.rtc_client
-                .remove_guest(&room, &verified.identity)
+                .remove_guest(&room, guest_id)
                 .await
                 .map_err(CallError::Internal)?;
-            self.repo
-                .reconcile_guest(&call.id, &verified.identity, false)
-                .await?;
+            self.repo.reconcile_guest(&call.id, guest_id, false).await?;
         } else {
             let identity =
                 MacroUserIdStr::parse_from_str(&verified.identity).map_err(|_| CallError::Auth)?;

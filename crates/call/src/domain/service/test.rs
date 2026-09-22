@@ -22,6 +22,7 @@ use notification::domain::service::NotificationIngress;
 use serde_json::json;
 use uuid::Uuid;
 
+use crate::domain::meetings::GuestId;
 use crate::domain::models::{
     ActiveCallSummary, AddParticipantError, ArchivedCall, Call, CallError, CallParticipant,
     CallRecord, CallRecordTranscriptSegment, CallWebhookEvent, DeletedCallRecordStorageKeys,
@@ -73,14 +74,14 @@ impl MockRtcClient {
 impl CallRtcClient for MockRtcClient {
     async fn generate_guest_token(
         &self,
-        _room: &str,
-        _identity: &str,
+        room: &str,
+        guest_id: GuestId,
         _name: &str,
     ) -> anyhow::Result<String> {
-        unreachable!("guest token not exercised")
+        Ok(format!("guest-token:{room}:{guest_id}"))
     }
-    async fn remove_guest(&self, _room: &str, _identity: &str) -> anyhow::Result<()> {
-        unreachable!("guest removal not exercised")
+    async fn remove_guest(&self, _room: &str, _guest_id: GuestId) -> anyhow::Result<()> {
+        Ok(())
     }
 
     async fn create_room(&self, _room_name: &str) -> anyhow::Result<()> {
@@ -1264,6 +1265,7 @@ fn call_record_for_mutation() -> CallRecord {
         status: None,
         user_access_level: None,
         participants: Vec::new(),
+        guests: Vec::new(),
         transcript: Vec::new(),
     }
 }
@@ -2401,6 +2403,7 @@ fn summarized_call_record(custom_name: Option<&str>) -> CallRecord {
         status: None,
         user_access_level: None,
         participants: Vec::new(),
+        guests: Vec::new(),
         transcript: vec![CallRecordTranscriptSegment {
             transcript_id: Uuid::from_u128(0x0198a1b2_c3d4_7e5f_8061_728394a5b701),
             segment_id: Some("segment-1".to_string()),
@@ -3317,11 +3320,11 @@ async fn meeting_leave_rejects_a_token_for_another_invitation() {
         .return_once(move |_| Box::pin(async move { Ok(Some(active)) }));
     repo.expect_get_meeting_for_call()
         .times(1)
-        .return_once(move |_| Box::pin(async move { Ok(Some(meeting)) }));
+        .return_once(move |_, _| Box::pin(async move { Ok(Some(meeting)) }));
     let mut rtc = MockCallRtcClient::new();
     rtc.expect_verify_access_token().times(1).return_once(|_| {
         Ok(crate::domain::models::VerifiedRingToken {
-            identity: format!("guest:{}", Uuid::now_v7()),
+            identity: GuestId::generate().to_string(),
             room: Some(ARCHIVED_EVENT_ROOM_NAME.to_string()),
         })
     });
@@ -3340,20 +3343,24 @@ async fn last_guest_leaving_archives_call_and_stops_recording() {
     active.channel_id = None;
     let mut archived = archived_call_for_event(ARCHIVED_EVENT_CREATOR, 1, true);
     archived.channel_id = None;
-    let identity = format!("guest:{}", Uuid::now_v7());
+    let guest_id = GuestId::generate();
+    let identity = guest_id.to_string();
     let mut repo = MockCallRepository::new();
     repo.expect_get_call_by_room_name()
         .times(1)
         .return_once(move |_| Box::pin(async move { Ok(Some(active)) }));
     repo.expect_get_meeting_for_call()
         .times(1)
-        .return_once(move |_| Box::pin(async move { Ok(Some(meeting)) }));
-    let expected_identity = identity.clone();
+        .return_once(move |_, include_cancelled| {
+            // Connected participants of a revoked invitation must still leave.
+            assert!(include_cancelled);
+            Box::pin(async move { Ok(Some(meeting)) })
+        });
     repo.expect_reconcile_guest()
         .times(1)
         .returning(move |call, guest, joined| {
             assert_eq!(*call, ARCHIVED_EVENT_CALL_ID);
-            assert_eq!(guest, expected_identity);
+            assert_eq!(guest, guest_id);
             assert!(!joined);
             Box::pin(async { Ok(()) })
         });
@@ -3436,17 +3443,17 @@ async fn meeting_edits_propagate_owner_authorization_and_validated_metadata() {
 #[test]
 fn summary_uses_guest_name_without_rewriting_account_identity() {
     let mut record = summarized_call_record(None);
-    let identity = format!("guest:{}", Uuid::now_v7());
-    record.transcript[0].speaker_id = identity.clone();
-    let participants = vec![crate::domain::models::CallRecordParticipant {
-        user_id: identity.clone(),
-        display_name: Some("Ada".to_string()),
+    let guest_id = GuestId::generate();
+    record.transcript[0].speaker_id = guest_id.to_string();
+    let guests = vec![crate::domain::models::CallRecordGuest {
+        id: guest_id,
+        display_name: "Ada".to_string(),
         joined_at: Utc::now(),
         left_at: None,
     }];
-    let transcript = super::summary_transcript(record.transcript.clone(), &participants);
+    let transcript = super::summary_transcript(record.transcript.clone(), &guests);
     assert_eq!(transcript[0].speaker_id, "Ada (guest)");
-    assert_eq!(record.transcript[0].speaker_id, identity);
+    assert_eq!(record.transcript[0].speaker_id, guest_id.to_string());
 }
 
 #[tokio::test]

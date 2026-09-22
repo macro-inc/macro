@@ -21,6 +21,7 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use notification::domain::models::apple::VoipPushPayload;
 
+use crate::domain::meetings::GuestId;
 use crate::domain::models::{
     CallError, CallWebhookEvent, EgressS3Config, VerifiedRingToken, VoipPushPayloadRequest,
 };
@@ -166,14 +167,15 @@ impl CallRtcClient for LivekitRtcClient {
         Ok(token)
     }
 
+    #[tracing::instrument(skip(self))]
     async fn generate_guest_token(
         &self,
         room_name: &str,
-        identity: &str,
+        guest_id: GuestId,
         display_name: &str,
     ) -> anyhow::Result<String> {
         Ok(AccessToken::with_api_key(&self.api_key, &self.api_secret)
-            .with_identity(identity)
+            .with_identity(&guest_id.to_string())
             .with_name(display_name)
             .with_ttl(std::time::Duration::from_secs(6 * 3600))
             .with_grants(VideoGrants {
@@ -187,10 +189,11 @@ impl CallRtcClient for LivekitRtcClient {
             .to_jwt()?)
     }
 
-    async fn remove_guest(&self, room_name: &str, identity: &str) -> anyhow::Result<()> {
+    #[tracing::instrument(skip(self))]
+    async fn remove_guest(&self, room_name: &str, guest_id: GuestId) -> anyhow::Result<()> {
         interpret_remove_participant_result(
             self.room_client
-                .remove_participant(room_name, identity)
+                .remove_participant(room_name, &guest_id.to_string())
                 .await,
         )
     }
@@ -340,11 +343,14 @@ impl CallRtcClient for LivekitRtcClient {
             None => (None, None),
         };
 
+        // Identities are classified by namespace: Macro users are `macro|…`,
+        // guests are the opaque UUIDs this server minted for them. Anything
+        // else (e.g. the transcription agent) matches neither and is dropped.
         let guest_identity = event
             .participant
             .as_ref()
-            .filter(|p| crate::domain::meetings::is_guest_identity(&p.identity))
-            .map(|p| p.identity.clone());
+            .filter(|p| MacroUserIdStr::parse_from_str(&p.identity).is_err())
+            .and_then(|p| GuestId::parse_rtc_identity(&p.identity));
 
         Ok(CallWebhookEvent {
             guest_identity,

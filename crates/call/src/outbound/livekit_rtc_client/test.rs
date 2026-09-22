@@ -176,13 +176,13 @@ fn receive_webhook_skips_configured_transcription_agent_name() {
 #[tokio::test]
 async fn guest_tokens_preserve_names_and_only_grant_the_room() {
     let client = client();
-    let identity = format!("guest:{}", uuid::Uuid::now_v7());
+    let guest_id = crate::domain::meetings::GuestId::generate();
     let token = client
-        .generate_guest_token("meeting-room", &identity, "Ada")
+        .generate_guest_token("meeting-room", guest_id, "Ada")
         .await
         .unwrap();
     let verified = client.verify_access_token(&token).unwrap();
-    assert_eq!(verified.identity, identity);
+    assert_eq!(verified.identity, guest_id.to_string());
     assert_eq!(verified.room.as_deref(), Some("meeting-room"));
     let payload = token.split('.').nth(1).unwrap();
     let claims: serde_json::Value = serde_json::from_slice(
@@ -194,7 +194,7 @@ async fn guest_tokens_preserve_names_and_only_grant_the_room() {
     assert_eq!(claims["name"], "Ada");
     assert_eq!(claims["video"]["roomJoin"], true);
     assert_ne!(claims["video"]["roomAdmin"], true);
-    let event = receive_participant_joined(&client, &identity).unwrap();
-    assert_eq!(event.guest_identity.as_deref(), Some(identity.as_str()));
+    let event = receive_participant_joined(&client, &guest_id.to_string()).unwrap();
+    assert_eq!(event.guest_identity, Some(guest_id));
     assert_eq!(event.participant_identity, None);
 }

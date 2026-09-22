@@ -1148,7 +1148,7 @@ impl<
                         .await
                         .map_err(|e| CallError::Internal(e.into()))?
                     {
-                        self.repo.reconcile_guest(&call.id, identity, true).await?;
+                        self.repo.reconcile_guest(&call.id, *identity, true).await?;
                     }
                     return Ok(());
                 }
@@ -1233,7 +1233,9 @@ impl<
                         .await
                         .map_err(|e| CallError::Internal(e.into()))?;
                 } else if let Some(identity) = &event.guest_identity {
-                    self.repo.reconcile_guest(&call.id, identity, false).await?;
+                    self.repo
+                        .reconcile_guest(&call.id, *identity, false)
+                        .await?;
                 }
 
                 self.finish_empty_call(&call).await?;
@@ -1778,7 +1780,7 @@ impl<
         let Some(summary) = summarizer
             .summarize_call(
                 call_id,
-                summary_transcript(record.transcript, &record.participants),
+                summary_transcript(record.transcript, &record.guests),
             )
             .await
             .inspect_err(|e| tracing::error!(error=?e, %call_id, "call summarizer failed"))
@@ -1899,7 +1901,7 @@ impl<
             let summary = match summarizer
                 .summarize_call(
                     &call_id,
-                    summary_transcript(record.transcript, &record.participants),
+                    summary_transcript(record.transcript, &record.guests),
                 )
                 .await
             {
@@ -1969,19 +1971,15 @@ fn publish_call_event<B: MacroEventBroker>(event_broker: &B, event: &CallMacroEv
     }));
 }
 
+/// Replace guest speaker ids with their display names for the summarizer's
+/// input only; the stored transcript keeps the opaque ids.
 fn summary_transcript(
     mut transcript: Vec<CallRecordTranscriptSegment>,
-    participants: &[super::models::CallRecordParticipant],
+    guests: &[super::models::CallRecordGuest],
 ) -> Vec<CallRecordTranscriptSegment> {
-    let names: HashMap<&str, &str> = participants
+    let names: HashMap<String, &str> = guests
         .iter()
-        .filter(|participant| super::meetings::is_guest_identity(&participant.user_id))
-        .filter_map(|participant| {
-            participant
-                .display_name
-                .as_deref()
-                .map(|name| (participant.user_id.as_str(), name))
-        })
+        .map(|guest| (guest.id.to_string(), guest.display_name.as_str()))
         .collect();
     for segment in &mut transcript {
         if let Some(name) = names.get(segment.speaker_id.as_str()) {
@@ -2048,7 +2046,11 @@ where
         .await
         .map_err(Into::into)?;
     // External speakers are never relabeled as account holders by inference.
-    transcripts.retain(|segment| !super::meetings::is_guest_identity(&segment.speaker_id));
+    // Guest speaker ids are the opaque UUIDs minted at join; Macro speaker
+    // ids are `macro|…`, so the namespaces cannot collide.
+    transcripts.retain(|segment| {
+        super::meetings::GuestId::parse_rtc_identity(&segment.speaker_id).is_none()
+    });
     if transcripts.is_empty() {
         tracing::info!(%call_record_id, "call has empty archived transcript; skipping custom speaker generation");
         return Ok(());

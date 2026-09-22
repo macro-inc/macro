@@ -30,9 +30,14 @@ fn guest_names_are_bounded_normalized_and_not_identities() {
     ] {
         assert!(GuestJoinRequest { display_name: name }.validate().is_err());
     }
-    assert!(is_guest_identity(&format!("guest:{}", Uuid::now_v7())));
-    assert!(!is_guest_identity("guest:admin"));
-    assert!(!is_guest_identity("agent-transcriber"));
+    let guest = GuestId::generate();
+    assert_eq!(
+        GuestId::parse_rtc_identity(&guest.to_string()),
+        Some(guest)
+    );
+    assert!(GuestId::parse_rtc_identity("macro|a@b.com").is_none());
+    assert!(GuestId::parse_rtc_identity("agent-transcriber").is_none());
+    assert!(GuestId::parse_rtc_identity("guest:admin").is_none());
 }
 
 #[test]

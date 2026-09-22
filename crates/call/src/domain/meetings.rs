@@ -140,11 +140,44 @@ impl GuestJoinRequest {
     }
 }
 
-/// Whether an RTC identity represents a server-created guest.
-pub fn is_guest_identity(identity: &str) -> bool {
-    identity
-        .strip_prefix("guest:")
-        .is_some_and(|id| Uuid::parse_str(id).is_ok())
+/// A non-account guest of a single call session.
+///
+/// The id doubles as the guest's RTC participant identity, so identities are
+/// opaque UUIDs and never share a namespace (or a column) with Macro user
+/// ids. Only the server mints them; Macro users keep `macro|…` identities,
+/// so an RTC identity classifies as exactly one of the two.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(transparent)]
+pub struct GuestId(Uuid);
+
+impl GuestId {
+    /// Mint a fresh guest identity for one join.
+    pub fn generate() -> Self {
+        Self(Uuid::now_v7())
+    }
+
+    /// Classify an RTC participant identity that is not a Macro user id.
+    /// Returns `None` for agents and any identity this server never minted.
+    pub fn parse_rtc_identity(identity: &str) -> Option<Self> {
+        Uuid::parse_str(identity).ok().map(Self)
+    }
+
+    /// Rehydrate a persisted guest id.
+    pub fn from_uuid(id: Uuid) -> Self {
+        Self(id)
+    }
+
+    /// The underlying uuid, for persistence.
+    pub fn as_uuid(&self) -> Uuid {
+        self.0
+    }
+}
+
+impl std::fmt::Display for GuestId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
 }
 
 #[cfg(test)]
