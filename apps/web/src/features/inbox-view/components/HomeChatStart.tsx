@@ -10,6 +10,7 @@ import { enableChatV3Agents } from '@core/constant/featureFlags';
 import { Show } from 'solid-js';
 import { HomeRecommendedActions } from '../../home/components/home-recommended-actions';
 import { HomeChatInput } from '../../home/home-chat-input';
+import { HomeGettingStartedLink } from '../../home/home-getting-started-link';
 
 /** Desktop Home's idle pane uses the single-line chat composer and send flow. */
 export function HomeChatStart() {
@@ -65,6 +66,7 @@ export function HomeChatStart() {
               autoFocusOnMount={false}
             />
             <div class="min-h-0 min-w-0 pb-8">
+              <HomeGettingStartedLink />
               <HomeRecommendedActions />
             </div>
           </div>

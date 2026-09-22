@@ -3,10 +3,14 @@ import { createUserScopedStorage } from '@core/util/userScopedStorage';
 import { createEffect, createSignal, on } from 'solid-js';
 
 /** Dismissible home surfaces. Dismissals persist in localStorage. */
-export type HomeCard = 'examples' | 'setup';
+export type HomeCard = 'examples' | 'setup' | 'getting-started-link';
 
 const storage = createUserScopedStorage('macro:home:dismissed');
-const HOME_CARDS: readonly HomeCard[] = ['examples', 'setup'];
+const HOME_CARDS: readonly HomeCard[] = [
+  'examples',
+  'setup',
+  'getting-started-link',
+];
 
 export function parseDismissedCards(raw: string | null): HomeCard[] {
   if (raw === null) return [];

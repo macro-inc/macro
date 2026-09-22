@@ -150,7 +150,12 @@ are restored, including before a chat-limit paywall opens. With agents disabled,
 the input stays 32px above the vertical center as suggestions load. With agents
 enabled, the composer uses the same topbar offset and 24/64 padding as the
 Agents new-conversation page so the two inputs share a baseline; suggestions
-still load below it without moving the input. Up to three cached AI
+still load below it without moving the input. Eligible newer accounts (all
+accounts in development) see “New to Macro? See the **Getting Started** page.” directly
+below the composer, above suggestions. The link opens
+`/app/component/getting-started`; **Dismiss Getting Started link** hides it and
+remembers the dismissal per user in this browser across reloads. This dismissal
+is independent of the Getting Started sidebar link. Up to three cached AI
 suggestions appear below the
 composer, using the existing fast/smart recommendation projections. Compact rows
 use one line: reason — Phosphor icon and item name, followed by Open, all at the same font size. Clicking a
@@ -778,6 +783,9 @@ below the floating page title and above the bottom toolbar.
 
 Greeting, getting-started checklist, example prompt buttons (`Draft a document`,
 `Draft an email`, `Search & research`), and the ubiquitous `Ask AI` composer.
+Eligible newer accounts (all accounts in development) also see the same
+dismissible **Getting Started** link below
+the composer, with its dismissal shared with the desktop Home starting pane.
 
 On phones, shared confirmations (including Remove Member and Cancel Invitation)
 use a glass sheet with a title, description, Close confirmation button, and

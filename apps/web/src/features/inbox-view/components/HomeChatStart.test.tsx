@@ -44,6 +44,9 @@ vi.mock('@core/component/AI/context', () => ({
 vi.mock('../../home/home-chat-input', () => ({
   HomeChatInput: () => <div data-testid="home-chat-input" />,
 }));
+vi.mock('../../home/home-getting-started-link', () => ({
+  HomeGettingStartedLink: () => <div data-testid="getting-started-link" />,
+}));
 vi.mock('../../home/components/home-recommended-actions', () => ({
   HomeRecommendedActions: () => <div data-testid="home-suggestions" />,
 }));
