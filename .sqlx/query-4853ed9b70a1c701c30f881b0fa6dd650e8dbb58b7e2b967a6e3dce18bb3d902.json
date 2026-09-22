@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_link_google_scopes (link_id, granted_scopes, grant_version)\n        VALUES ($1, $2, 1)\n        ON CONFLICT (link_id) DO UPDATE\n        SET granted_scopes = EXCLUDED.granted_scopes,\n            grant_version = EXCLUDED.grant_version,\n            updated_at = now()\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4853ed9b70a1c701c30f881b0fa6dd650e8dbb58b7e2b967a6e3dce18bb3d902"
+}

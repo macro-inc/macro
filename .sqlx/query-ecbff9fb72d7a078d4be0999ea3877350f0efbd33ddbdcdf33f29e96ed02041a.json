@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT email FROM \"OrganizationInvitation\" WHERE email=$1 AND organization_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "ecbff9fb72d7a078d4be0999ea3877350f0efbd33ddbdcdf33f29e96ed02041a"
+}

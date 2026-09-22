@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT count(*) AS \"count!\"\n            FROM email_backfill_completion_outbox\n            WHERE backfill_job_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "245ec8ca629582234bffa34861378edfb72078c66acc62af4e4b9871ef7878a5"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH new_macro_user AS (\n            INSERT INTO macro_user (id, username, email, stripe_customer_id)\n            VALUES ('99999999-9999-9999-9999-999999999999'::uuid, 'owner3', 'owner3@test.com', 'cus_test3')\n        ), new_user AS (\n            INSERT INTO \"User\" (id, email, macro_user_id)\n            VALUES ('macro|owner3@user.com', 'owner3@test.com', '99999999-9999-9999-9999-999999999999'::uuid)\n            RETURNING id\n        ), new_team AS (\n            INSERT INTO team (id, name, owner_id, slug)\n            SELECT 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid, 'Other Eng', new_user.id, 'ENG' FROM new_user\n            RETURNING id\n        ), new_doc AS (\n            INSERT INTO \"Document\" (id, name, \"fileType\", owner)\n            VALUES ('22222222-2222-2222-2222-222222222222', 'Other Task', 'md', 'macro|owner2@user.com')\n            RETURNING id\n        ), new_task AS (\n            INSERT INTO team_task (team_id, document_id, task_num)\n            SELECT new_team.id, new_doc.id, 123 FROM new_team, new_doc\n        )\n        INSERT INTO github_app_installation (id, source_id, source_type)\n        SELECT '12345', new_team.id::text, 'team'::github_app_installation_source_type FROM new_team\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "407470ea8544194c20a9b5f29b31be9f9711a5e9d5fe4004d75ec4e99274c1b8"
+}

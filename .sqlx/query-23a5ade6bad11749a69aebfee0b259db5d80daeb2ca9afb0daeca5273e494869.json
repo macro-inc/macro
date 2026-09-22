@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT sync_status, last_sync_error FROM calendar_accounts WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sync_status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "last_sync_error",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "23a5ade6bad11749a69aebfee0b259db5d80daeb2ca9afb0daeca5273e494869"
+}

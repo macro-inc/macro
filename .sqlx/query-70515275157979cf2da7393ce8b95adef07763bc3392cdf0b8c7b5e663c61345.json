@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO document_sub_type (document_id, sub_type)\n        VALUES ('11111111-0000-0000-0000-000000000000', 'task')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "70515275157979cf2da7393ce8b95adef07763bc3392cdf0b8c7b5e663c61345"
+}

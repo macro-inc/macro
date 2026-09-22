@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO agent_session_log (id, agent_session_id, direction, content, created_at) SELECT lpad(to_hex(n), 32, '0')::uuid, $1, 'to_server', $2, '2026-01-01'::timestamptz FROM generate_series(1, 10000) n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "32278171a6038382e62fe5ce0d80e331de6d4135c00f024c36aa690e34bd67b3"
+}
