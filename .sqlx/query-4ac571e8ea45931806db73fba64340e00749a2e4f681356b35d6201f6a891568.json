@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH due AS (\n                SELECT message_id FROM email_message_calendar_extraction\n                WHERE parser_version <= $1\n                  AND (status IN ('unprocessed', 'pending') OR notification_pending)\n                  AND retry_after <= now()\n                ORDER BY retry_after LIMIT 16 FOR UPDATE SKIP LOCKED\n            ), claimed AS (\n                UPDATE email_message_calendar_extraction e SET retry_after = now() + interval '5 minutes', attempts = LEAST(e.attempts + 1, 30000), generation = e.generation + 1\n                FROM due WHERE e.message_id = due.message_id RETURNING e.message_id, e.pending_parts, e.generation, e.status, e.parser_version\n            ) SELECT c.message_id, c.generation, c.status, c.parser_version, m.link_id, m.provider_id AS \"provider_id!\", c.pending_parts AS \"parts!: Json<Vec<PendingInvitationPart>>\"\n            FROM claimed c JOIN email_messages m ON m.id = c.message_id WHERE m.provider_id IS NOT NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "parser_version",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 4,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "provider_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "parts!: Json<Vec<PendingInvitationPart>>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int2"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "4ac571e8ea45931806db73fba64340e00749a2e4f681356b35d6201f6a891568"
+}

@@ -50,7 +50,7 @@ impl crate::domain::invitation_extraction::InvitationExtractionRepository
     for InvitationPgRepository
 {
     async fn is_processed(&self, message_id: Uuid) -> Result<bool, Report> {
-        Ok(sqlx::query_scalar!("SELECT EXISTS(SELECT 1 FROM email_message_calendar_extraction WHERE message_id = $1 AND parser_version = $2) AS \"exists!\"", message_id, crate::domain::models::calendar_invitation::INVITATION_PARSER_VERSION as i16).fetch_one(&self.0).await?)
+        Ok(sqlx::query_scalar!("SELECT EXISTS(SELECT 1 FROM email_message_calendar_extraction WHERE message_id = $1 AND parser_version >= $2) AS \"exists!\"", message_id, crate::domain::models::calendar_invitation::INVITATION_PARSER_VERSION as i16).fetch_one(&self.0).await?)
     }
     async fn save(
         &self,
@@ -68,14 +68,28 @@ impl crate::domain::invitation_extraction::InvitationExtractionRepository
         .fetch_optional(&mut *tx)
         .await?;
         let current = sqlx::query!("SELECT generation, parser_version FROM email_message_calendar_extraction WHERE message_id = $1 FOR UPDATE", message_id).fetch_optional(&mut *tx).await?;
-        if current.as_ref().is_some_and(|row| match generation {
-            Some(expected) => row.generation != expected,
-            None => {
-                row.parser_version
-                    >= crate::domain::models::calendar_invitation::INVITATION_PARSER_VERSION as i16
-            }
+        let parser_version =
+            crate::domain::models::calendar_invitation::INVITATION_PARSER_VERSION as i16;
+        if current.as_ref().is_some_and(|row| {
+            row.parser_version > parser_version
+                || match generation {
+                    Some(expected) => row.generation != expected,
+                    None => row.parser_version >= parser_version,
+                }
         }) {
             return Ok(false);
+        }
+        if current
+            .as_ref()
+            .is_some_and(|row| row.parser_version < parser_version)
+        {
+            // Reinspection starts a new component set; retries within it still append.
+            sqlx::query!(
+                "DELETE FROM email_message_calendar_invites WHERE message_id = $1",
+                message_id
+            )
+            .execute(&mut *tx)
+            .await?;
         }
         for snapshot in &parsed.invitations {
             let json = serde_json::to_value(snapshot)?;
@@ -129,24 +143,32 @@ impl crate::domain::invitation_extraction::InvitationExtractionRepository
         let rows = sqlx::query!(r#"
             WITH due AS (
                 SELECT message_id FROM email_message_calendar_extraction
-                WHERE (status IN ('unprocessed', 'pending') OR notification_pending) AND retry_after <= now()
+                WHERE parser_version <= $1
+                  AND (status IN ('unprocessed', 'pending') OR notification_pending)
+                  AND retry_after <= now()
                 ORDER BY retry_after LIMIT 16 FOR UPDATE SKIP LOCKED
             ), claimed AS (
                 UPDATE email_message_calendar_extraction e SET retry_after = now() + interval '5 minutes', attempts = LEAST(e.attempts + 1, 30000), generation = e.generation + 1
-                FROM due WHERE e.message_id = due.message_id RETURNING e.message_id, e.pending_parts, e.generation, e.status
-            ) SELECT c.message_id, c.generation, c.status, m.link_id, m.provider_id AS "provider_id!", c.pending_parts AS "parts!: Json<Vec<PendingInvitationPart>>"
+                FROM due WHERE e.message_id = due.message_id RETURNING e.message_id, e.pending_parts, e.generation, e.status, e.parser_version
+            ) SELECT c.message_id, c.generation, c.status, c.parser_version, m.link_id, m.provider_id AS "provider_id!", c.pending_parts AS "parts!: Json<Vec<PendingInvitationPart>>"
             FROM claimed c JOIN email_messages m ON m.id = c.message_id WHERE m.provider_id IS NOT NULL
-        "#).fetch_all(&self.0).await?;
+        "#, crate::domain::models::calendar_invitation::INVITATION_PARSER_VERSION as i16).fetch_all(&self.0).await?;
         Ok(rows
             .into_iter()
-            .map(|r| InvitationExtractionJob {
-                message_id: r.message_id,
-                link_id: r.link_id,
-                provider_id: r.provider_id,
-                parts: r.parts.0,
-                notification_only: !matches!(r.status.as_str(), "unprocessed" | "pending"),
-                discover: r.status == "unprocessed",
-                generation: r.generation,
+            .map(|r| {
+                let discover = r.status == "unprocessed"
+                    || r.parser_version
+                        < crate::domain::models::calendar_invitation::INVITATION_PARSER_VERSION
+                            as i16;
+                InvitationExtractionJob {
+                    message_id: r.message_id,
+                    link_id: r.link_id,
+                    provider_id: r.provider_id,
+                    parts: if discover { Vec::new() } else { r.parts.0 },
+                    notification_only: !discover && r.status != "pending",
+                    discover,
+                    generation: r.generation,
+                }
             })
             .collect())
     }

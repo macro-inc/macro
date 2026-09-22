@@ -43,6 +43,18 @@ pub struct InvitationRevision {
     /// Cancellation of this scheduling target.
     pub cancelled: bool,
 }
+impl InvitationRevision {
+    /// An undated cancellation cannot safely lose to a request at the same sequence.
+    /// Otherwise use scheduler timestamps, with cancellation winning exact ties.
+    pub fn ordering_key(&self) -> (u32, bool, Option<chrono::DateTime<chrono::Utc>>, bool) {
+        (
+            self.sequence,
+            self.cancelled && self.last_modified.is_none(),
+            self.last_modified,
+            self.cancelled,
+        )
+    }
+}
 impl InvitationIdentity {
     fn series_revision(&self, link_id: Option<Uuid>) -> Option<&InvitationRevision> {
         self.series_revisions
@@ -52,13 +64,7 @@ impl InvitationIdentity {
                     revision.link_id == link || revision.link_id == self.preferred_link_id
                 })
             })
-            .max_by_key(|revision| {
-                (
-                    revision.sequence,
-                    revision.last_modified,
-                    revision.cancelled,
-                )
-            })
+            .max_by_key(|revision| revision.ordering_key())
     }
 
     fn is_cancelled(&self, link_id: Option<Uuid>) -> bool {
@@ -79,16 +85,11 @@ impl InvitationIdentity {
                 last_modified: self.last_modified,
                 cancelled: self.cancelled,
             }))
-            .max_by_key(|revision| {
-                (
-                    revision.sequence,
-                    revision.last_modified,
-                    revision.cancelled,
-                )
-            })
+            .max_by_key(InvitationRevision::ordering_key)
             .expect("includes snapshot revision")
     }
 }
+
 /// Facts from an independently authorized owned calendar copy.
 pub struct InvitationCandidate {
     /// Connected inbox of this copy.
@@ -316,3 +317,6 @@ impl<R: CalendarInvitationRepository + 'static> CalendarInvitationService
             .collect())
     }
 }
+
+#[cfg(test)]
+mod test;

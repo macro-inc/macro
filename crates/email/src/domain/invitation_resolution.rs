@@ -22,16 +22,13 @@ pub trait InvitationRevisionRepository: Send + Sync {
         uids: &[String],
     ) -> impl Future<Output = Result<Vec<(Uuid, CalendarInvitation)>, Report>> + Send;
 }
-fn revision(invite: &CalendarInvitation) -> (u32, &str, bool) {
-    (
-        invite.sequence,
-        invite
-            .last_modified
-            .as_deref()
-            .or(invite.dtstamp.as_deref())
-            .unwrap_or(""),
-        invite.method == InvitationMethod::Cancel,
-    )
+fn revision(link_id: Uuid, invite: &CalendarInvitation) -> InvitationRevision {
+    InvitationRevision {
+        link_id,
+        sequence: invite.sequence,
+        last_modified: stamp(invite),
+        cancelled: cancelled(invite),
+    }
 }
 fn occurrence_key(value: Option<&InvitationDateTime>) -> Option<String> {
     match value {
@@ -89,15 +86,10 @@ fn invitation_identity(
         .filter(|(link, candidate)| *link == link_id && applicable_revision(candidate, invite))
         .map(|(_, candidate)| candidate)
         .chain(std::iter::once(invite))
-        .max_by_key(|candidate| revision(candidate))
+        .max_by_key(|candidate| revision(link_id, candidate).ordering_key())
         .unwrap_or(invite);
     let key = occurrence_key(invite.recurrence_id.as_ref());
-    let to_revision = |(link, candidate): &(Uuid, CalendarInvitation)| InvitationRevision {
-        link_id: *link,
-        sequence: candidate.sequence,
-        last_modified: stamp(candidate),
-        cancelled: cancelled(candidate),
-    };
+    let to_revision = |(link, candidate): &(Uuid, CalendarInvitation)| revision(*link, candidate);
     InvitationIdentity {
         id: format!("{message_id}:{}", invite.id),
         uid: invite.uid.clone(),

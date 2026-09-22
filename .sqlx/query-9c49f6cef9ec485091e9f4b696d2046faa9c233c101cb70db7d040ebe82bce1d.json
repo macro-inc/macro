@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_message_calendar_extraction SET parser_version = 0, notification_pending = false, retry_after = now() WHERE message_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9c49f6cef9ec485091e9f4b696d2046faa9c233c101cb70db7d040ebe82bce1d"
+}

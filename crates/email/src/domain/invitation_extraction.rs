@@ -46,7 +46,7 @@ pub struct InvitationExtractionJob {
 pub trait InvitationExtractionRepository: Send + Sync {
     /// Whether this immutable message already has work for this parser version.
     fn is_processed(&self, message_id: Uuid) -> impl Future<Output = Result<bool, Report>> + Send;
-    /// Append snapshots and pending work only if the lease remains current.
+    /// Replace snapshots on parser upgrades, append retries, and fence expired leases.
     fn save(
         &self,
         message_id: Uuid,
