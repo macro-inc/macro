@@ -218,17 +218,30 @@ beforeEach(() => {
 });
 
 describe('Harness', () => {
-  it('places bring-your-own below the built-in and paired runtime lists', () => {
+  it('keeps the same agent and runtime explanation on the runtimes section', () => {
+    render(() => <Harness />);
+    expect(
+      screen.getByText(
+        'Agents let you customize your Macro AI experience by combining a unique name, specific instructions, default model, and harness.'
+      )
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Runtimes are the harnesses that power agents in macro, whether our native, fast, Macro AI harness, or coding harnesses like Cursor or your own Claude Code.'
+      )
+    ).toBeTruthy();
+  });
+
+  it('places bring-your-own above the built-in and paired runtime lists', () => {
     render(() => <Harness />);
     const invitation = screen.getByRole('heading', {
       name: 'Bring your agent to Macro',
     });
     for (const name of ['Built-in runtimes', 'Paired runtimes']) {
       expect(
-        screen
-          .getByRole('heading', { name })
-          .compareDocumentPosition(invitation) &
-          Node.DOCUMENT_POSITION_FOLLOWING
+        invitation.compareDocumentPosition(
+          screen.getByRole('heading', { name })
+        ) & Node.DOCUMENT_POSITION_FOLLOWING
       ).toBeTruthy();
     }
   });

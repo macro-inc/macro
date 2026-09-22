@@ -43,6 +43,7 @@ import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
 import { botAssignableChannelOptions } from '../channel/Bots/botChannelOptions';
 import { canDeleteBot, canManageAgent } from '../channel/Bots/botPermissions';
 import { ChannelMultiSelect } from '../channel/Bots/ChannelMultiSelect';
+import { AgentSettingsDescription } from './components/agent-settings-description';
 import { PipedreamAppPicker } from './PipedreamAppPicker';
 import {
   ChoiceRow,
@@ -250,7 +251,7 @@ export function Agents(
       <Show when={!creating() && !creatingFromLink() && !editingAgent()}>
         <SettingsPage
           title="Agents"
-          description="Agents define identity and instructions. Runtimes are where they run."
+          description={<AgentSettingsDescription />}
           actions={
             <Button variant="cta" size="sm" onClick={() => setCreating(true)}>
               <PlusIcon />
@@ -259,6 +260,7 @@ export function Agents(
           }
         >
           {props.navigation}
+          {props.invitation}
           <SettingsSection
             title="Team agents"
             description="Agents shared with your team, including Macro."
@@ -328,7 +330,6 @@ export function Agents(
               </Show>
             </SettingsCard>
           </SettingsSection>
-          {props.invitation}
         </SettingsPage>
       </Show>
 

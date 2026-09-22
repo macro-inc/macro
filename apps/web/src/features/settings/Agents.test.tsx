@@ -314,15 +314,28 @@ const MACROD_HARNESS = {
 } satisfies Harness;
 
 describe('Agents', () => {
-  it('places the bring-your-own invitation after both agent lists', () => {
+  it('explains agent customization and the runtimes that power agents', () => {
+    render(() => <Agents />);
+    expect(
+      screen.getByText(
+        'Agents let you customize your Macro AI experience by combining a unique name, specific instructions, default model, and harness.'
+      )
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Runtimes are the harnesses that power agents in macro, whether our native, fast, Macro AI harness, or coding harnesses like Cursor or your own Claude Code.'
+      )
+    ).toBeTruthy();
+  });
+
+  it('places the bring-your-own invitation above both agent lists', () => {
     render(() => <Agents invitation={<p>Bring your own agent</p>} />);
     const invitation = screen.getByText('Bring your own agent');
     for (const name of ['Team agents', 'Private agents']) {
       expect(
-        screen
-          .getByRole('heading', { name })
-          .compareDocumentPosition(invitation) &
-          Node.DOCUMENT_POSITION_FOLLOWING
+        invitation.compareDocumentPosition(
+          screen.getByRole('heading', { name })
+        ) & Node.DOCUMENT_POSITION_FOLLOWING
       ).toBeTruthy();
     }
   });
