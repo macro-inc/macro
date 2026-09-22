@@ -834,7 +834,12 @@ async fn run_turn(
     let span = tracing::Span::current();
     span.record("agent.turn.stop_reason", tracing::field::debug(&stop));
     if let Some(lag) = cancel.since_requested() {
-        span.record("agent.turn.cancel_lag_ms", lag.as_millis() as u64);
+        // `i64`, not `u64`: a `u64` reaches OpenTelemetry as a string
+        // attribute, and every numeric query on this would silently miss it.
+        span.record(
+            "agent.turn.cancel_lag_ms",
+            i64::try_from(lag.as_millis()).unwrap_or(i64::MAX),
+        );
     }
     stop
 }
