@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import { render, screen } from '@solidjs/testing-library';
+import { render, screen, waitFor } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { type ComponentProps, type JSX, Show } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   popoverSplit: vi.fn(),
   getOrCreateDm: vi.fn(),
   toastSuccess: vi.fn(),
+  toastFailure: vi.fn(),
 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -31,7 +32,7 @@ vi.mock('@components/app/split-layout/layout', () => ({
 }));
 
 vi.mock('@core/component/Toast/Toast', () => ({
-  toast: { failure: vi.fn(), success: mocks.toastSuccess },
+  toast: { failure: mocks.toastFailure, success: mocks.toastSuccess },
 }));
 
 vi.mock('@core/context/user', () => ({
@@ -86,6 +87,7 @@ beforeEach(() => {
   mocks.popoverSplit.mockReset();
   mocks.getOrCreateDm.mockReset().mockResolvedValue({ channel_id: 'chan-1' });
   mocks.toastSuccess.mockReset();
+  mocks.toastFailure.mockReset();
 });
 
 function openJane() {
@@ -152,6 +154,46 @@ describe('UserCardDrawer', () => {
       id: 'task-compose',
       params: { initialAssigneeIds: ['macro|jane.doe@example.com'] },
     });
+  });
+
+  it('waits for the clipboard before confirming and closing', async () => {
+    const user = userEvent.setup({ skipHover: true });
+    let finishCopy!: () => void;
+    vi.spyOn(navigator.clipboard, 'writeText').mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishCopy = resolve;
+        })
+    );
+    render(() => <UserCardDrawer />);
+    openJane();
+
+    await user.click(screen.getByRole('button', { name: 'Copy email' }));
+    expect(mocks.toastSuccess).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Copy email' })).toBeTruthy();
+
+    finishCopy();
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Copy email' })).toBeNull();
+      expect(mocks.toastSuccess).toHaveBeenCalledWith('Email copied');
+    });
+  });
+
+  it('keeps the sheet open and reports a failed clipboard write', async () => {
+    const user = userEvent.setup({ skipHover: true });
+    vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValueOnce(
+      new Error('Clipboard denied')
+    );
+    render(() => <UserCardDrawer />);
+    openJane();
+
+    await user.click(screen.getByRole('button', { name: 'Copy email' }));
+
+    expect(mocks.toastFailure).toHaveBeenCalledWith(
+      'Failed to copy to clipboard'
+    );
+    expect(mocks.toastSuccess).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Copy email' })).toBeTruthy();
   });
 
   it('offers no DM for an agent, which is mentioned rather than messaged', () => {

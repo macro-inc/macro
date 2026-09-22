@@ -1,4 +1,5 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { cn } from '@ui/utils/classname';
 import { createSignal, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { HoverCard, type HoverCardComponentProps } from './HoverCard';
@@ -31,11 +32,22 @@ export function UserCardTrigger(props: UserCardTriggerProps) {
       fallback={
         <Dynamic
           component={props.triggerAs ?? 'span'}
-          class={props.triggerClass}
+          role="button"
+          tabIndex={props.triggerTabIndex ?? 0}
+          class={cn(
+            'focus-visible:outline-2 focus-visible:outline-accent',
+            props.triggerClass
+          )}
           // A tap on a mention inside an editor would otherwise move the
           // caret and raise the keyboard behind the sheet.
           onMouseDown={(event: MouseEvent) => event.preventDefault()}
           onClick={(event: MouseEvent) => {
+            event.preventDefault();
+            event.stopPropagation();
+            openUserCard(props.user);
+          }}
+          onKeyDown={(event: KeyboardEvent) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
             event.preventDefault();
             event.stopPropagation();
             openUserCard(props.user);

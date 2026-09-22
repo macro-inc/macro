@@ -557,7 +557,9 @@ function LayoutInner(props: RouteSectionProps) {
         }
       >
         <FloatRegionHost />
-        <UserCardDrawer />
+        <Suspense>
+          <UserCardDrawer />
+        </Suspense>
         <Show when={isMobile()}>
           <MobileSettings />
         </Show>

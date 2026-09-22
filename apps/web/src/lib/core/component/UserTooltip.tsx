@@ -73,8 +73,13 @@ function ActionItem(props: { action: UserCardAction; onClose?: () => void }) {
   const [copied, setCopied] = createSignal(false);
   const resetCopied = debounce(() => setCopied(false), 800);
 
-  const handleClick = (event: MouseEvent) => {
-    props.action.onSelect(event);
+  const handleClick = async (event: MouseEvent) => {
+    try {
+      await props.action.onSelect(event);
+    } catch {
+      // The action reports the failure; leave the card ready to retry.
+      return;
+    }
     // A copy keeps the card open long enough to show that it landed; anything
     // that navigates has already taken the user elsewhere.
     if (props.action.copies) {

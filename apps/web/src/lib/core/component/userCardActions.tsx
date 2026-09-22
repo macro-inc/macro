@@ -41,7 +41,7 @@ export type UserCardAction = {
   icon: Component<ComponentProps<'svg'>>;
   /** Writes to the clipboard: confirm in place instead of dismissing the card. */
   copies?: boolean;
-  onSelect: (event: MouseEvent) => void;
+  onSelect: (event: MouseEvent) => void | Promise<void>;
 };
 
 function copyableName(
@@ -64,7 +64,7 @@ function copyableName(
  * hover card on pointer devices and the bottom sheet on touch ones.
  *
  * Dismissal is left to the caller — a hover card stays open to show that a
- * copy landed, a sheet closes on every tap.
+ * copy landed, a sheet closes after a successful action.
  */
 export function useUserCardActions(
   target: Accessor<UserCardTarget>
@@ -113,9 +113,14 @@ export function useUserCardActions(
     label,
     icon: CopyIcon,
     copies: true,
-    onSelect: (event) => {
+    onSelect: async (event) => {
       event.stopPropagation();
-      navigator.clipboard.writeText(value);
+      try {
+        await navigator.clipboard.writeText(value);
+      } catch (error) {
+        toast.failure('Failed to copy to clipboard');
+        throw error;
+      }
       toast.success(toastMessage);
     },
   });
@@ -135,17 +140,14 @@ export function useUserCardActions(
     const recipientId = userId();
     if (!recipientId) return;
     const preferNewSplit = event.shiftKey;
-    try {
-      const { channel_id } = await getOrCreateDmMutation.mutateAsync({
-        recipient_id: recipientId,
-      });
-      openWithSplit(
-        { type: 'channel', id: channel_id },
-        { preferNewSplit, reopen: 'latest' }
-      );
-    } catch {
-      // The mutation's onError callback handles the toast.
-    }
+    // The mutation's onError callback handles failure feedback.
+    const { channel_id } = await getOrCreateDmMutation.mutateAsync({
+      recipient_id: recipientId,
+    });
+    openWithSplit(
+      { type: 'channel', id: channel_id },
+      { preferNewSplit, reopen: 'latest' }
+    );
   };
 
   const openTaskComposer = (event: MouseEvent) => {

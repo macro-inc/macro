@@ -31,7 +31,7 @@ export function UserCardDrawer() {
       closeOnOutsidePointerStrategy="pointerdown"
       preventScroll={false}
       preventScrollbarShift={false}
-      restoreFocus={false}
+      restoreFocus
       noOutsidePointerEvents={false}
     >
       <MobileDrawer.Portal>
@@ -96,8 +96,13 @@ function UserCardBody(props: { user: UserCardTarget; onAction: () => void }) {
               {(action) => (
                 <MobileDrawer.Item
                   data-user-card-action={action.id}
-                  onClick={(event) => {
-                    action.onSelect(event);
+                  onClick={async (event) => {
+                    try {
+                      await action.onSelect(event);
+                    } catch {
+                      // The action reports the failure; keep the sheet open.
+                      return;
+                    }
                     props.onAction();
                   }}
                 >

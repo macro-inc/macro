@@ -231,7 +231,6 @@ export function UserIcon(props: UserIconProps) {
             placement="left"
             triggerAs="div"
             triggerClass={triggerClass()}
-            triggerTabIndex={-1}
             user={{
               displayName: displayName() || email() || '',
               email: email(),
@@ -262,7 +261,6 @@ export function UserIcon(props: UserIconProps) {
           placement="left"
           triggerAs="div"
           triggerClass={triggerClass()}
-          triggerTabIndex={-1}
           user={{
             displayName: email() || '',
             email: email(),

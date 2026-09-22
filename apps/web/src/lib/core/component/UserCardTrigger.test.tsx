@@ -87,4 +87,29 @@ describe('UserCardTrigger', () => {
       id: jane.id,
     });
   });
+
+  it.each(['{Enter}', ' '])('opens the touch card with %s', async (key) => {
+    mocks.isTouchDevice = true;
+    const user = userEvent.setup();
+    render(() => <UserCardTrigger user={jane} trigger={<span>@Jane</span>} />);
+
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole('button'));
+    await user.keyboard(key);
+
+    expect(mocks.openUserCard).toHaveBeenCalledExactlyOnceWith(jane);
+  });
+
+  it('preserves an explicit touch trigger tab index', () => {
+    mocks.isTouchDevice = true;
+    render(() => (
+      <UserCardTrigger
+        user={jane}
+        trigger={<span>@Jane</span>}
+        triggerTabIndex={-1}
+      />
+    ));
+
+    expect(screen.getByRole('button').tabIndex).toBe(-1);
+  });
 });
