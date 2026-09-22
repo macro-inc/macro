@@ -133,8 +133,15 @@ function ChannelDetailContent(props: ChannelDetailProps) {
     }
   );
 
-  const [activeTab, setActiveTabInternal] =
-    createSignal<ChannelTabId>(DEFAULT_CHANNEL_TAB);
+  const callCtx = useCallContextOptional();
+  // A channel that owns this client's active call opens on the Call tab, so
+  // selecting it never hides the live call — the block adapter's rule.
+  const hasActiveCallHere = !!(
+    callCtx?.isInCall() && callCtx.activeChannelId() === channelId
+  );
+  const [activeTab, setActiveTabInternal] = createSignal<ChannelTabId>(
+    normalizeChannelTab(hasActiveCallHere ? 'call' : DEFAULT_CHANNEL_TAB)
+  );
   const setActiveTab = (tab: ChannelTabId) => {
     setActiveTabInternal(normalizeChannelTab(tab));
   };
@@ -152,7 +159,6 @@ function ChannelDetailContent(props: ChannelDetailProps) {
   );
 
   // CallContext: which channel has the Call tab selected (for isCallPage(), etc.).
-  const callCtx = useCallContextOptional();
   createComputed(() =>
     callCtx?.syncCallPageTab(channelId, activeTab() === 'call')
   );

@@ -16,7 +16,7 @@ import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
-import { type JSX, Match, Switch } from 'solid-js';
+import { createMemo, type JSX, Match, Switch, untrack } from 'solid-js';
 import type { EntityDetailTarget } from './EntityDetailNavigationStack';
 
 export type EntityDetailContext = {
@@ -116,6 +116,13 @@ export function EntityDetail(props: EntityDetailProps) {
   const documentTarget = () =>
     props.target.type === 'document' ? props.target : undefined;
   const blockType = () => entityDetailBlockType(props.target);
+  // Resolved once per entry (untracked): a channel row's aim must not shift
+  // and re-scroll when its notifications reconcile to read — PreviewPanel
+  // applied the same rule by keying navigation on the explicit target only.
+  const channelTarget = createMemo(() => {
+    const target = props.target;
+    return untrack(() => channelDetailTarget(target));
+  });
   const renderChildren = (
     documentMetadata: DocumentMetadata,
     userAccessLevel: AccessLevel
@@ -239,7 +246,7 @@ export function EntityDetail(props: EntityDetailProps) {
           }
         </UnknownDetail>
       </Match>
-      <Match when={channelDetailTarget(props.target)}>
+      <Match when={channelTarget()}>
         {(channel) => (
           <ChannelDetail
             channelId={channel().channelId}

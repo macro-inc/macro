@@ -63,6 +63,8 @@ type ChannelSurfaceContextValue = {
 type ChannelSurfaceInternal = ChannelSurfaceContextValue & {
   initialMessagesState: Accessor<MessageTimelineStateSnapshot | undefined>;
   bindMessagesHandle: (handle: ChannelHandle | undefined) => void;
+  isTargetConsumed: (target: ChannelResolvedTarget) => boolean;
+  markTargetConsumed: (target: ChannelResolvedTarget) => void;
 };
 
 const ChannelSurfaceContext = createContext<ChannelSurfaceInternal>();
@@ -89,11 +91,12 @@ function resolveSync(
   request: ChannelTargetRequest
 ): ChannelResolvedTarget | undefined {
   if (request.kind === 'latest') return { kind: 'latest', request };
-  const { messageId } = request;
-  // A thread root references itself as its thread; collapse to a top-level
-  // target (same rule as convertTargetMessage).
-  const threadId =
-    request.threadId === messageId ? undefined : request.threadId;
+  const { messageId, threadId } = request;
+  // A thread root references itself as its thread: an unambiguous top-level
+  // target, resolved without any lookup (same rule as convertTargetMessage).
+  if (threadId === messageId) {
+    return { kind: 'message', request, targetMessageId: messageId };
+  }
   if (threadId) {
     return {
       kind: 'message',
@@ -185,6 +188,12 @@ export function ChannelSurface(props: ParentProps<ChannelSurfaceProps>) {
     setMessagesHandle(() => handle);
   };
 
+  // A resolved target is consumed exactly once — by riding into the messages
+  // mount as initial props or by a live handle navigation. Tracked here, not
+  // in the part, so a messages remount (tab away and back) restores its state
+  // instead of replaying an already-shown target.
+  let consumedTarget: ChannelResolvedTarget | undefined;
+
   props.ref?.({
     getMessagesStateSnapshot: () =>
       messagesHandle()?.getMessagesStateSnapshot() ?? lastMessagesSnapshot,
@@ -195,8 +204,16 @@ export function ChannelSurface(props: ParentProps<ChannelSurfaceProps>) {
       value={{
         channelId: () => props.channelId,
         resolvedTarget,
-        initialMessagesState: () => props.initialMessagesState,
+        // The messages part restores from here on every mount: the host's
+        // initial state until the first cleanup stashes something fresher, so
+        // leaving the messages pane and returning keeps scroll/thread/reply
+        // state rather than resetting to the host's snapshot.
+        initialMessagesState: () => lastMessagesSnapshot,
         bindMessagesHandle,
+        isTargetConsumed: (target) => target === consumedTarget,
+        markTargetConsumed: (target) => {
+          consumedTarget = target;
+        },
       }}
     >
       {props.children}
@@ -210,22 +227,30 @@ export type ChannelMessagesProps = {
 };
 
 /**
- * The messages timeline part. Mounts `Channel` against the surface: the
- * target resolved at mount time arrives as initial props (load-around from
- * the first frame); targets that resolve later — or arrive while mounted —
- * navigate through the live handle.
+ * The messages timeline part. Mounts `Channel` against the surface: an
+ * unconsumed message target at mount rides in as initial props (load-around
+ * from the first frame); everything else — a pending `latest` target, targets
+ * that resolve later, targets that arrive while mounted — navigates through
+ * the live handle. An already-consumed target is not replayed, so remounting
+ * restores the stashed timeline state instead.
  */
 export function ChannelMessages(props: ChannelMessagesProps) {
   const surface = useChannelSurfaceInternal();
   const [handle, setHandle] = createSignal<ChannelHandle>();
   const mountTarget = untrack(surface.resolvedTarget);
-  let displayedTarget = mountTarget;
+  // A pending `latest` cannot ride into the mount — Channel would restore the
+  // snapshot and stay there — so it is left unconsumed for the effect below.
+  const initialTarget =
+    mountTarget?.kind === 'message' && !surface.isTargetConsumed(mountTarget)
+      ? mountTarget
+      : undefined;
+  if (initialTarget) surface.markTargetConsumed(initialTarget);
 
   createEffect(() => {
     const target = surface.resolvedTarget();
     const channelHandle = handle();
-    if (!channelHandle || !target || target === displayedTarget) return;
-    displayedTarget = target;
+    if (!channelHandle || !target || surface.isTargetConsumed(target)) return;
+    surface.markTargetConsumed(target);
     if (target.kind === 'latest') {
       channelHandle.goToLatest();
     } else {
@@ -246,17 +271,13 @@ export function ChannelMessages(props: ChannelMessagesProps) {
         surface.bindMessagesHandle(channelHandle);
       }}
       autofocus={props.autofocus}
-      initialMessagesStateSnapshot={surface.initialMessagesState()}
-      targetMessageId={
-        mountTarget?.kind === 'message'
-          ? mountTarget.targetMessageId
-          : undefined
+      // A mount that load-arounds a target must not also restore old timeline
+      // state — the same rule as the block host's hydration gate.
+      initialMessagesStateSnapshot={
+        initialTarget ? undefined : surface.initialMessagesState()
       }
-      targetMessageReplyId={
-        mountTarget?.kind === 'message'
-          ? mountTarget.targetMessageReplyId
-          : undefined
-      }
+      targetMessageId={initialTarget?.targetMessageId}
+      targetMessageReplyId={initialTarget?.targetMessageReplyId}
     />
   );
 }

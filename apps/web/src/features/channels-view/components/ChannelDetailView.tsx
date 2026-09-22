@@ -34,6 +34,7 @@ export function ChannelDetailView(props: { channel: ChannelEntity }) {
     <ChannelDetail
       channelId={props.channel.id}
       target={target()}
+      fallbackName={props.channel.name}
       autofocus={false}
     />
   );
