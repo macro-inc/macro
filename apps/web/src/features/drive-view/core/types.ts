@@ -33,3 +33,9 @@ export const DRIVE_TABS = [
   { id: 'recent', label: 'Recent' },
   { id: 'shared', label: 'Shared with me' },
 ] satisfies { id: DriveTab; label: string }[];
+
+export const DRIVE_SORT_OPTIONS = [
+  { id: 'updated_at', label: 'Last modified' },
+  { id: 'created_at', label: 'Created' },
+  { id: 'viewed_at', label: 'Last viewed' },
+] satisfies { id: DriveSort; label: string }[];
