@@ -57,6 +57,8 @@ import type { SoupPage } from './generated/schemas/soupPage';
 import type { SoupProperty } from './generated/schemas/soupProperty';
 import type { SoupReminderSchedule } from './generated/schemas/soupReminderSchedule';
 import {
+  type ChannelListNotificationFieldsFragment,
+  type ChannelListSoupQuery,
   type GraphqlEntityType,
   type GraphqlReminderScheduleType,
   type GroupedSoupInput,
@@ -67,6 +69,7 @@ import {
   type SoupInitialInput,
   type SoupInput,
   type SoupNotificationFieldsFragment,
+  type SoupNotificationNavigationMetadataFieldsFragment,
   type SoupPropertyFieldsFragment,
   type SoupQuery,
 } from './graphql/generated/graphql';
@@ -546,7 +549,9 @@ export type GraphqlGroupedSoupPage = {
   }>;
 };
 
-export type GraphqlSoupItem = SoupQuery['user']['soup']['items'][number];
+export type GraphqlSoupItem =
+  | SoupQuery['user']['soup']['items'][number]
+  | ChannelListSoupQuery['user']['soup']['items'][number];
 type GraphqlSoupEntity = GraphqlSoupItem;
 type GraphqlProperty = Extract<
   GraphqlSoupEntity,
@@ -708,8 +713,24 @@ type NotifEventMember<Tag extends NotifEvent['tag']> = Extract<
   content: { hasAttachments?: boolean };
 };
 
+// The channel-list projection omits only optional presentation fields. Keep
+// required per-event data typed, while allowing the full query to enrich it.
+type GraphqlNotificationMetadata = {
+  [Name in SoupNotificationNavigationMetadataFieldsFragment['__typename']]: Extract<
+    SoupNotificationNavigationMetadataFieldsFragment,
+    { __typename: Name }
+  > &
+    Partial<
+      Extract<SoupNotificationFieldsFragment['metadata'], { __typename: Name }>
+    >;
+}[SoupNotificationNavigationMetadataFieldsFragment['__typename']];
+
+type GraphqlNotification =
+  | SoupNotificationFieldsFragment
+  | ChannelListNotificationFieldsFragment;
+
 function mapGraphqlNotificationMetadata(
-  metadata: SoupNotificationFieldsFragment['metadata']
+  metadata: GraphqlNotificationMetadata
 ): NotifEvent {
   return match(metadata)
     .with(
@@ -1208,7 +1229,7 @@ function mapGraphqlNotificationMetadata(
  * notification must go through this mapper.
  */
 export function mapGraphqlNotification(
-  record: SoupNotificationFieldsFragment
+  record: GraphqlNotification
 ): Omit<ApiUserNotification, 'owner_id'> {
   return {
     id: record.id,
@@ -1226,9 +1247,7 @@ export function mapGraphqlNotification(
   };
 }
 
-function mapGraphqlNotifications(
-  notifications: SoupNotificationFieldsFragment[]
-) {
+function mapGraphqlNotifications(notifications: GraphqlNotification[]) {
   return notifications.map(mapGraphqlNotification);
 }
 

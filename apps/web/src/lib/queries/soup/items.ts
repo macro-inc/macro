@@ -68,6 +68,8 @@ export type SoupApiItemFilter = (item: SoupApiItem) => boolean;
 interface SoupItemsQueryOptions {
   enabled?: boolean;
   staleTime?: StaleTime;
+  /** Channels use latest-message previews, not historical notification content. */
+  graphqlProjection?: 'channel-list';
   meta?: {
     groupBy?: GroupByField;
     groupKey?: string;
@@ -380,6 +382,7 @@ export function useSoupAstItemsQuery(
     () => ({
       enabled:
         graphqlRequested() && queryEnabled() && args().groupBy === undefined,
+      projection: options?.().graphqlProjection,
       showSupportedForeignEntities: options?.().showSupportedForeignEntities,
     })
   );
