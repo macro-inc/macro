@@ -21,7 +21,9 @@ impl InvitationAttachmentProvider for InvitationProvider {
             .await
             .map_err(Report::new)?;
         let Some(fetched) = fetched else {
-            return Ok(Vec::new());
+            return Err(rootcause::report!(
+                "invitation source message is unavailable"
+            ));
         };
         Ok(fetched
             .calendar_parts

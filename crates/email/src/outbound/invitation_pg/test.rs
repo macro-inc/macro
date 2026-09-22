@@ -126,12 +126,49 @@ async fn parser_upgrade_replaces_components_then_appends_retries(
             .await?
     );
     let loaded = load(&pool, &[message]).await?;
+    assert_eq!(loaded[&message].invitations.len(), 2);
+    assert!(
+        loaded[&message]
+            .invitations
+            .iter()
+            .all(|invite| invite.title.as_deref() == Some("Old parser output"))
+    );
+    assert_eq!(loaded[&message].status, InvitationExtractionStatus::Pending);
+    assert!(!repo.is_processed(message).await?);
+    let absent = parse_invitation_parts(&[]);
+    assert!(
+        repo.save(message, &absent, &[], Some(job.generation))
+            .await?
+    );
+    assert_eq!(
+        load(&pool, &[message]).await?[&message].invitations.len(),
+        2
+    );
+    assert!(!repo.is_processed(message).await?);
+    sqlx::query!(
+        "UPDATE email_message_calendar_extraction SET retry_after = now() WHERE message_id = $1",
+        message
+    )
+    .execute(&pool)
+    .await?;
+    let job = repo
+        .claim()
+        .await?
+        .into_iter()
+        .find(|j| j.message_id == message)
+        .unwrap();
+    assert!(job.discover);
+    assert!(
+        repo.save(message, &parsed, &[], Some(job.generation))
+            .await?
+    );
+    let loaded = load(&pool, &[message]).await?;
     assert_eq!(loaded[&message].invitations.len(), 1);
     assert_eq!(
         loaded[&message].invitations[0].title.as_deref(),
         Some("Correct title")
     );
-    assert_eq!(loaded[&message].status, InvitationExtractionStatus::Pending);
+    assert_eq!(loaded[&message].status, InvitationExtractionStatus::Ready);
 
     parsed.invitations[0].id = "attachment-component".into();
     assert!(
@@ -157,6 +194,43 @@ async fn parser_upgrade_replaces_components_then_appends_retries(
             .await?
             .iter()
             .all(|job| job.message_id != message)
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("email_thread"))
+)]
+async fn older_parser_notification_retries_do_not_reinspect_saved_content(
+    pool: PgPool,
+) -> Result<(), Report> {
+    let repo = InvitationPgRepository(pool.clone());
+    let message = uuid::uuid!("11111111-aaaa-0001-aaaa-111111111111");
+    let parsed = parse_invitation_parts(&[InvitationPart {
+        part_id: "inline",
+        attachment_id: None,
+        bytes: include_bytes!("../../../fixtures/calendar/google.ics"),
+    }]);
+    assert!(repo.save(message, &parsed, &[], None).await?);
+    sqlx::query!(
+        "UPDATE email_message_calendar_extraction SET parser_version = 0, retry_after = now() WHERE message_id = $1",
+        message
+    )
+    .execute(&pool)
+    .await?;
+    let job = repo
+        .claim()
+        .await?
+        .into_iter()
+        .find(|j| j.message_id == message)
+        .unwrap();
+    assert!(job.notification_only);
+    assert!(!job.discover);
+    repo.notified(message, job.generation).await?;
+    assert_eq!(
+        load(&pool, &[message]).await?[&message].invitations,
+        parsed.invitations
     );
     Ok(())
 }

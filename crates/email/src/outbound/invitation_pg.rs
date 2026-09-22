@@ -67,7 +67,9 @@ impl crate::domain::invitation_extraction::InvitationExtractionRepository
         )
         .fetch_optional(&mut *tx)
         .await?;
-        let current = sqlx::query!("SELECT generation, parser_version FROM email_message_calendar_extraction WHERE message_id = $1 FOR UPDATE", message_id).fetch_optional(&mut *tx).await?;
+        let current = sqlx::query!(r#"SELECT generation, parser_version,
+            EXISTS(SELECT 1 FROM email_message_calendar_invites WHERE message_id = $1) AS "has_snapshots!"
+            FROM email_message_calendar_extraction WHERE message_id = $1 FOR UPDATE"#, message_id).fetch_optional(&mut *tx).await?;
         let parser_version =
             crate::domain::models::calendar_invitation::INVITATION_PARSER_VERSION as i16;
         if current.as_ref().is_some_and(|row| {
@@ -79,9 +81,20 @@ impl crate::domain::invitation_extraction::InvitationExtractionRepository
         }) {
             return Ok(false);
         }
-        if current
+        // Keep the last usable snapshot until reinspection can replace the whole set.
+        // Keeping its version makes the durable retry rediscover every MIME part.
+        let deferred_version = current
             .as_ref()
-            .is_some_and(|row| row.parser_version < parser_version)
+            .filter(|row| {
+                row.parser_version < parser_version
+                    && row.has_snapshots
+                    && (!pending.is_empty() || parsed.status == InvitationExtractionStatus::Absent)
+            })
+            .map(|row| row.parser_version);
+        if deferred_version.is_none()
+            && current
+                .as_ref()
+                .is_some_and(|row| row.parser_version < parser_version)
         {
             // Reinspection starts a new component set; retries within it still append.
             sqlx::query!(
@@ -91,19 +104,22 @@ impl crate::domain::invitation_extraction::InvitationExtractionRepository
             .execute(&mut *tx)
             .await?;
         }
-        for snapshot in &parsed.invitations {
-            let json = serde_json::to_value(snapshot)?;
-            sqlx::query!(
-                r#"INSERT INTO email_message_calendar_invites(message_id, component_id, snapshot)
-                VALUES ($1, $2, $3) ON CONFLICT (message_id, component_id) DO NOTHING"#,
-                message_id,
-                snapshot.id,
-                json
-            )
-            .execute(&mut *tx)
-            .await?;
+        if deferred_version.is_none() {
+            for snapshot in &parsed.invitations {
+                let json = serde_json::to_value(snapshot)?;
+                sqlx::query!(
+                    r#"INSERT INTO email_message_calendar_invites(message_id, component_id, snapshot)
+                    VALUES ($1, $2, $3) ON CONFLICT (message_id, component_id) DO NOTHING"#,
+                    message_id,
+                    snapshot.id,
+                    json
+                )
+                .execute(&mut *tx)
+                .await?;
+            }
         }
-        let has_pending = !pending.is_empty();
+        let has_pending = deferred_version.is_some() || !pending.is_empty();
+        let stored_version = deferred_version.unwrap_or(parser_version);
         let unsupported = parsed.status == InvitationExtractionStatus::Unsupported;
         let pending_json = serde_json::to_value(pending)?;
         sqlx::query!(r#"
@@ -113,7 +129,7 @@ impl crate::domain::invitation_extraction::InvitationExtractionRepository
                 parser_version = EXCLUDED.parser_version, pending_parts = EXCLUDED.pending_parts, notification_pending = true,
                 generation = email_message_calendar_extraction.generation + CASE WHEN $6::bigint IS NULL THEN 1 ELSE 0 END,
                 retry_after = now() + interval '1 minute' * LEAST(60, 1 + email_message_calendar_extraction.attempts), updated_at = now()
-        "#, message_id, has_pending, unsupported, crate::domain::models::calendar_invitation::INVITATION_PARSER_VERSION as i16, pending_json, generation).execute(&mut *tx).await?;
+        "#, message_id, has_pending, unsupported, stored_version, pending_json, generation).execute(&mut *tx).await?;
         sqlx::query!(
             r#"UPDATE email_threads SET has_calendar_attachment = true
             WHERE id = (SELECT thread_id FROM email_messages WHERE id = $1)
@@ -156,16 +172,18 @@ impl crate::domain::invitation_extraction::InvitationExtractionRepository
         Ok(rows
             .into_iter()
             .map(|r| {
-                let discover = r.status == "unprocessed"
-                    || r.parser_version
-                        < crate::domain::models::calendar_invitation::INVITATION_PARSER_VERSION
-                            as i16;
+                let notification_only = !matches!(r.status.as_str(), "unprocessed" | "pending");
+                let discover = !notification_only
+                    && (r.status == "unprocessed"
+                        || r.parser_version
+                            < crate::domain::models::calendar_invitation::INVITATION_PARSER_VERSION
+                                as i16);
                 InvitationExtractionJob {
                     message_id: r.message_id,
                     link_id: r.link_id,
                     provider_id: r.provider_id,
                     parts: if discover { Vec::new() } else { r.parts.0 },
-                    notification_only: !discover && r.status != "pending",
+                    notification_only,
                     discover,
                     generation: r.generation,
                 }

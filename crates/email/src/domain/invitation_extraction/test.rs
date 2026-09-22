@@ -105,3 +105,32 @@ async fn unavailable_attachment_keeps_durable_work_without_losing_valid_parts() 
     assert_eq!(state.saves[0].1.len(), 1);
     assert_eq!(state.saves[0].1[0].attachment_id, "unavailable");
 }
+
+struct UnavailableProvider;
+impl InvitationAttachmentProvider for UnavailableProvider {
+    async fn discover(&self, _: Uuid, _: &str) -> Result<Vec<DiscoveredInvitationPart>, Report> {
+        Err(rootcause::report!("source message unavailable"))
+    }
+    async fn download(&self, _: Uuid, _: &str, _: &str) -> Result<Vec<u8>, Report> {
+        panic!("failed discovery cannot download attachments")
+    }
+}
+
+#[tokio::test]
+async fn unavailable_discovery_never_saves_or_acknowledges_extraction() {
+    let repository = Repository::default();
+    let mut work = job(false);
+    work.discover = true;
+    repository.0.lock().unwrap().jobs.push(work);
+    InvitationExtractionService {
+        repository: repository.clone(),
+        provider: UnavailableProvider,
+        notifier: Notifier,
+    }
+    .run_once()
+    .await
+    .unwrap();
+    let state = repository.0.lock().unwrap();
+    assert!(state.saves.is_empty());
+    assert_eq!(state.notified, 0);
+}
