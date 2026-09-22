@@ -19,6 +19,7 @@ impl<
     B: MacroEventBroker + Clone,
 > CallServiceImpl<R, C, Cn, E, N, S, Sm, V, Vr, B>
 {
+    #[tracing::instrument(err, skip_all)]
     pub(super) async fn email_invitation(
         &self,
         actor: MacroUserIdStr<'_>,
@@ -67,6 +68,7 @@ impl<
         Ok(())
     }
 
+    #[tracing::instrument(err, skip_all)]
     pub(super) async fn create_invitation(
         &self,
         actor: MacroUserIdStr<'_>,
@@ -88,6 +90,7 @@ impl<
             .await
     }
 
+    #[tracing::instrument(err, skip_all)]
     pub(super) async fn share_invitation(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
@@ -127,6 +130,7 @@ impl<
             .await
     }
 
+    #[tracing::instrument(err, skip_all)]
     pub(super) async fn resolve_invitation(
         &self,
         token: &MeetingToken,
@@ -142,6 +146,7 @@ impl<
         Ok(meeting)
     }
 
+    #[tracing::instrument(err, skip_all)]
     async fn prepare_meeting_call(&self, meeting: &Meeting) -> Result<Call, CallError> {
         if let Some(call_id) = meeting.call_id
             && let Some(call) = self
@@ -203,6 +208,7 @@ impl<
         Ok(call)
     }
 
+    #[tracing::instrument(err, skip_all)]
     pub(super) async fn join_invitation(
         &self,
         token: MeetingToken,
@@ -248,6 +254,7 @@ impl<
         })
     }
 
+    #[tracing::instrument(err, skip_all)]
     pub(super) async fn join_guest_invitation(
         &self,
         token: MeetingToken,
@@ -300,6 +307,7 @@ impl<
         })
     }
 
+    #[tracing::instrument(err, skip_all)]
     pub(super) async fn finish_empty_call(&self, call: &Call) -> Result<bool, CallError> {
         let remaining = self
             .repo
@@ -342,6 +350,7 @@ impl<
         Ok(true)
     }
 
+    #[tracing::instrument(err, skip_all)]
     pub(super) async fn leave_invitation(
         &self,
         token: MeetingToken,

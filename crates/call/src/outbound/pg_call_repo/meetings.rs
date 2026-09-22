@@ -4,6 +4,7 @@ use super::*;
 use crate::domain::meetings::{GuestId, Meeting, MeetingToken};
 
 impl PgCallRepo {
+    #[tracing::instrument(err, skip(self, meeting))]
     pub(super) async fn persist_meeting(&self, meeting: Meeting) -> Result<Meeting, CallError> {
         let row = sqlx::query!(
             r#"INSERT INTO call_meetings
@@ -28,6 +29,7 @@ impl PgCallRepo {
         })
     }
 
+    #[tracing::instrument(err, skip(self))]
     pub(super) async fn fetch_meeting(
         &self,
         token: &MeetingToken,
@@ -85,6 +87,7 @@ impl PgCallRepo {
         .transpose()
     }
 
+    #[tracing::instrument(err, skip(self))]
     pub(super) async fn fetch_meetings(&self, user_id: &str) -> Result<Vec<Meeting>, CallError> {
         let rows = sqlx::query!(
             r#"SELECT id, share_token, user_id, title, scheduled_start, scheduled_end, channel_id, channel_call_id, active_call_id
@@ -109,6 +112,7 @@ impl PgCallRepo {
             .collect()
     }
 
+    #[tracing::instrument(err, skip(self, request))]
     pub(super) async fn update_owned_meeting(
         &self,
         meeting_id: &Uuid,
@@ -135,6 +139,7 @@ impl PgCallRepo {
         .transpose()
     }
 
+    #[tracing::instrument(err, skip(self))]
     pub(super) async fn cancel_owned_meeting(
         &self,
         meeting_id: &Uuid,
@@ -146,6 +151,7 @@ impl PgCallRepo {
         ).execute(&self.pool).await?.rows_affected() > 0)
     }
 
+    #[tracing::instrument(err, skip(self))]
     pub(super) async fn allocate_meeting_call(
         &self,
         meeting_id: &Uuid,

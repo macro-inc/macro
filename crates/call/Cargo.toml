@@ -9,8 +9,10 @@ ai_tools = ["dep:ai_toolset", "dep:async-trait", "dep:schemars", "ports"]
 default = ["ai_tools", "inbound", "outbound", "ports"]
 inbound = [
   "dep:axum",
+  "dep:ip_extractor",
   "dep:macro_authorization",
   "dep:model-error-response",
+  "dep:rate_limit",
   "dep:utoipa",
   "entity_access/inbound",
   "item_filters/schema",
@@ -46,6 +48,8 @@ aws-sdk-s3 = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
 cloudfront_sign = { workspace = true, optional = true }
+ip_extractor = { path = "../ip_extractor", optional = true }
+rate_limit = { path = "../rate_limit", features = ["axum"], optional = true }
 channels = { path = "../channels", default-features = false, optional = true }
 connection = { path = "../connection", default-features = false, features = [
   "ports",

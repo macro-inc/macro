@@ -730,6 +730,11 @@ async fn run() -> anyhow::Result<()> {
         authorization_state.clone(),
     );
     let call_webhook_state = WebhookRouterState::new(call_service.clone());
+    let call_public_rate_limiter = RateLimitServiceImpl {
+        repo: RedisRateLimitAdapter {
+            redis: redis_client.clone(),
+        },
+    };
 
     let webhook_repository = webhook::outbound::PgRepository::new(db.clone());
     let webhook_endpoint_scheme_policy = if matches!(env, Environment::Local) {
@@ -1622,6 +1627,7 @@ async fn run() -> anyhow::Result<()> {
         channel_bot_webhook_state,
         call_state,
         call_webhook_state,
+        call_public_rate_limiter,
         webhook_state,
         sse_stream_state,
         call_internal_state,

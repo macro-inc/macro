@@ -1,11 +1,71 @@
 //! Thin HTTP adapters for authenticated management and public meeting capabilities.
 
+use std::time::Duration;
+
 use super::*;
 use crate::domain::meetings::{
     CreateMeetingRequest, GuestJoinRequest, Meeting, MeetingToken, MeetingsResponse,
     UpdateMeetingRequest,
 };
-use axum::extract::Path;
+use axum::RequestPartsExt;
+use axum::extract::{FromRequestParts, Path};
+use ip_extractor::ClientIp;
+use rate_limit::{
+    RateLimitConfig, RateLimitKey, RateLimitService,
+    inbound::{RateLimitExtractable, RateLimitExtractor},
+};
+
+/// Per-IP budget for the unauthenticated meeting endpoints. Generous enough
+/// for a guest reloading a join page; tight enough that scanning the 244-bit
+/// token space is pointless.
+pub struct PerIpPublicMeetingAccess(ClientIp);
+
+impl<S> RateLimitExtractable<S> for PerIpPublicMeetingAccess
+where
+    S: Send + Sync,
+{
+    fn config() -> RateLimitConfig {
+        RateLimitConfig {
+            max_count: 120,
+            window: Duration::from_mins(60),
+        }
+    }
+
+    fn key(&self) -> RateLimitKey {
+        RateLimitKey::builder(&"per-ip-call-meeting-public")
+            .append(&self.0.origin_ip())
+            .finish()
+    }
+}
+
+impl<S> FromRequestParts<S> for PerIpPublicMeetingAccess
+where
+    S: Send + Sync,
+{
+    type Rejection = <ClientIp as FromRequestParts<S>>::Rejection;
+
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        let ip: ClientIp = parts.extract_with_state(state).await?;
+        Ok(Self(ip))
+    }
+}
+
+/// Enforce the per-IP budget before the handler runs. Unlike the shared
+/// `rate_limit_middleware`, this never rolls back on failure responses:
+/// probing unknown tokens must consume budget or scanning is unthrottled.
+pub async fn enforce_public_rate_limit<R>(
+    _permit: RateLimitExtractor<PerIpPublicMeetingAccess, R>,
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response
+where
+    R: RateLimitService + Clone + Send + Sync + 'static,
+{
+    next.run(req).await
+}
 
 /// A single email recipient for a call invitation.
 #[derive(serde::Deserialize, utoipa::ToSchema)]
@@ -18,6 +78,7 @@ pub struct InviteMeetingRequest {
 #[utoipa::path(post, operation_id = "meeting_invite", path = "/call/meetings/invite/{token}",
     params(("token" = String, Path)), request_body = InviteMeetingRequest,
     responses((status = 204), (status = 400, body = ErrorResponse), (status = 403, body = ErrorResponse))) ]
+#[tracing::instrument(err, skip_all)]
 pub async fn invite<S: CallService, Svc: EntityAccessService, Auth: MacroAuthorizationService>(
     State(state): State<CallRouterState<S, Svc, Auth>>,
     Path(token): Path<String>,
@@ -39,6 +100,7 @@ pub async fn invite<S: CallService, Svc: EntityAccessService, Auth: MacroAuthori
 #[utoipa::path(post, operation_id = "meeting_create", path = "/call/meetings",
     request_body = CreateMeetingRequest,
     responses((status = 200, body = Meeting), (status = 400, body = ErrorResponse), (status = 401, body = ErrorResponse), (status = 403, body = ErrorResponse), (status = 404, body = ErrorResponse))) ]
+#[tracing::instrument(err, skip_all)]
 pub async fn create<S: CallService, Svc: EntityAccessService, Auth: MacroAuthorizationService>(
     State(state): State<CallRouterState<S, Svc, Auth>>,
     actor: MacroAuthorizationExtractor<Auth, UserOrInternal>,
@@ -55,6 +117,7 @@ pub async fn create<S: CallService, Svc: EntityAccessService, Auth: MacroAuthori
 /// Handle `GET /call/meetings` through the call domain service.
 #[utoipa::path(get, operation_id = "meeting_list", path = "/call/meetings",
     responses((status = 200, body = MeetingsResponse), (status = 400, body = ErrorResponse), (status = 401, body = ErrorResponse), (status = 403, body = ErrorResponse), (status = 404, body = ErrorResponse))) ]
+#[tracing::instrument(err, skip_all)]
 pub async fn list<S: CallService, Svc: EntityAccessService, Auth: MacroAuthorizationService>(
     State(state): State<CallRouterState<S, Svc, Auth>>,
     actor: MacroAuthorizationExtractor<Auth, UserOrInternal>,
@@ -70,6 +133,7 @@ pub async fn list<S: CallService, Svc: EntityAccessService, Auth: MacroAuthoriza
 #[utoipa::path(delete, operation_id = "meeting_cancel", path = "/call/meetings/{meeting_id}",
     params(("meeting_id" = Uuid, Path)),
     responses((status = 204), (status = 400, body = ErrorResponse), (status = 401, body = ErrorResponse), (status = 403, body = ErrorResponse), (status = 404, body = ErrorResponse))) ]
+#[tracing::instrument(err, skip_all)]
 pub async fn cancel<S: CallService, Svc: EntityAccessService, Auth: MacroAuthorizationService>(
     State(state): State<CallRouterState<S, Svc, Auth>>,
     Path(meeting_id): Path<Uuid>,
@@ -86,6 +150,7 @@ pub async fn cancel<S: CallService, Svc: EntityAccessService, Auth: MacroAuthori
 #[utoipa::path(post, operation_id = "meeting_share", path = "/call/record/{call_id}/link",
     params(("call_id" = Uuid, Path)),
     responses((status = 200, body = Meeting), (status = 400, body = ErrorResponse), (status = 401, body = ErrorResponse), (status = 403, body = ErrorResponse), (status = 404, body = ErrorResponse))) ]
+#[tracing::instrument(err, skip_all)]
 pub async fn share<S: CallService, Svc: EntityAccessService, Auth: MacroAuthorizationService>(
     State(state): State<CallRouterState<S, Svc, Auth>>,
     access: CallAccessLevelExtractor<ViewAccessLevel, Svc, Auth>,
@@ -102,6 +167,7 @@ pub async fn share<S: CallService, Svc: EntityAccessService, Auth: MacroAuthoriz
 #[utoipa::path(post, operation_id = "meeting_join", path = "/call/meetings/join/{token}",
     params(("token" = String, Path)),
     responses((status = 200, body = CallTokenResponse), (status = 400, body = ErrorResponse), (status = 401, body = ErrorResponse), (status = 403, body = ErrorResponse), (status = 404, body = ErrorResponse))) ]
+#[tracing::instrument(err, skip_all)]
 pub async fn join<S: CallService, Svc: EntityAccessService, Auth: MacroAuthorizationService>(
     State(state): State<CallRouterState<S, Svc, Auth>>,
     Path(token): Path<String>,
@@ -122,6 +188,7 @@ pub async fn join<S: CallService, Svc: EntityAccessService, Auth: MacroAuthoriza
 #[utoipa::path(get, operation_id = "meeting_lookup", path = "/call/join/{token}",
     params(("token" = String, Path)),
     responses((status = 200, body = Meeting), (status = 400, body = ErrorResponse), (status = 401, body = ErrorResponse), (status = 403, body = ErrorResponse), (status = 404, body = ErrorResponse))) ]
+#[tracing::instrument(err, skip_all)]
 pub async fn lookup<S: CallService>(
     State(state): State<WebhookRouterState<S>>,
     Path(token): Path<String>,
@@ -139,6 +206,7 @@ pub async fn lookup<S: CallService>(
     request_body = GuestJoinRequest,
     params(("token" = String, Path)),
     responses((status = 200, body = CallTokenResponse), (status = 400, body = ErrorResponse), (status = 401, body = ErrorResponse), (status = 403, body = ErrorResponse), (status = 404, body = ErrorResponse))) ]
+#[tracing::instrument(err, skip_all)]
 pub async fn guest_join<S: CallService>(
     State(state): State<WebhookRouterState<S>>,
     Path(token): Path<String>,
@@ -156,6 +224,7 @@ pub async fn guest_join<S: CallService>(
 #[utoipa::path(post, operation_id = "meeting_leave", path = "/call/join/{token}/leave",
     params(("token" = String, Path)),
     responses((status = 200, body = LeaveCallResponse), (status = 400, body = ErrorResponse), (status = 401, body = ErrorResponse), (status = 403, body = ErrorResponse), (status = 404, body = ErrorResponse))) ]
+#[tracing::instrument(err, skip_all)]
 pub async fn leave<S: CallService>(
     State(state): State<WebhookRouterState<S>>,
     Path(token): Path<String>,
@@ -178,6 +247,7 @@ pub async fn leave<S: CallService>(
 #[utoipa::path(patch, operation_id = "meeting_update", path = "/call/meetings/{meeting_id}",
     params(("meeting_id" = Uuid, Path)), request_body = UpdateMeetingRequest,
     responses((status = 200, body = Meeting), (status = 400, body = ErrorResponse), (status = 403, body = ErrorResponse))) ]
+#[tracing::instrument(err, skip_all)]
 pub async fn update<S: CallService, Svc: EntityAccessService, Auth: MacroAuthorizationService>(
     State(state): State<CallRouterState<S, Svc, Auth>>,
     Path(meeting_id): Path<Uuid>,
