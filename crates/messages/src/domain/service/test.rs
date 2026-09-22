@@ -360,13 +360,14 @@ async fn deleting_a_document_root_deletes_the_whole_discussion() {
     assert_eq!(*repo.thread_deletes.lock().unwrap(), vec![repo.message.id]);
     // The teardown covers the root, so no second single-message delete runs.
     assert!(repo.deletes.lock().unwrap().is_empty());
-    let published = events.0.lock().unwrap();
-    assert_eq!(published.len(), 1);
-    assert_eq!(published[0].nonce.as_deref(), Some("nonce"));
-    assert!(
-        matches!(&published[0].change, MessageChange::ThreadUpdated { state } if state.deleted_at.is_some())
-    );
-    drop(published);
+    {
+        let published = events.0.lock().unwrap();
+        assert_eq!(published.len(), 1);
+        assert_eq!(published[0].nonce.as_deref(), Some("nonce"));
+        assert!(
+            matches!(&published[0].change, MessageChange::ThreadUpdated { state } if state.deleted_at.is_some())
+        );
+    }
     // Another author's replies go with the discussion instead of outliving it.
     let view = access("macro|other@example.com", "doc", AccessLevel::Comment)
         .try_into_requirement()
@@ -462,13 +463,14 @@ async fn a_channel_root_keeps_its_thread_and_its_tombstone() {
     assert!(message.deleted_at.is_some());
     assert_eq!(*repo.deletes.lock().unwrap(), vec![repo.message.id]);
     assert!(repo.thread_deletes.lock().unwrap().is_empty());
-    let published = events.0.lock().unwrap();
-    assert_eq!(published.len(), 1);
-    assert!(matches!(
-        published[0].change,
-        MessageChange::MessageDeleted { .. }
-    ));
-    drop(published);
+    {
+        let published = events.0.lock().unwrap();
+        assert_eq!(published.len(), 1);
+        assert!(matches!(
+            published[0].change,
+            MessageChange::MessageDeleted { .. }
+        ));
+    }
     // The conversation under it continues: the replies stay live and repliable.
     let mut input = post_input();
     input.thread_id = Some(repo.message.id);
