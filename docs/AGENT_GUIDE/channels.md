@@ -225,6 +225,24 @@ The Magic Chip that streams the agent's reply stays inside the message column: l
 thoughts, file paths, and unbreakable tokens wrap or truncate instead of expanding the
 thread past the chat's right edge.
 
+## Link previews
+
+Preview cards and the Appearance setting require the PostHog flag
+`enable-rich-link-previews`. They stay hidden when the flag is off or unknown.
+For local verification, use `VITE_ENABLE_RICH_LINK_PREVIEWS=true`.
+Messages keep their initial rollout decision until remount so a late flag response
+cannot add or remove cards while reading. Reopen the channel after changing the flag.
+
+External links reserve fixed-height preview cards below a message as soon as its
+content renders. Titles, descriptions, and thumbnails fill that space without
+resizing the message. Missing or failed metadata keeps a URL card. With delayed
+metadata and images, verify that nearby messages stay in place both at the bottom
+and while reading older history, and that the channel and draft remain mounted. The sender can hover a
+card and click `Remove link preview` to hide that URL's preview for everyone.
+Removing a preview preserves the message's code examples and surrounding
+punctuation. If a removal request fails, its card returns, including when several
+cards were removed before the requests settled.
+
 ## Message scrolling and navigation
 
 Channels open at the latest message, with short conversations aligned above the

@@ -24,3 +24,6 @@ pub mod ports;
 /// Message authorization and use-case orchestration.
 #[cfg(feature = "ports")]
 pub mod service;
+
+/// Pure content rewriting for link preview suppression.
+pub mod link_preview;

@@ -107,6 +107,17 @@ impl MessageRepository for Repo {
         self.edits.lock().unwrap().push(command);
         Ok(message)
     }
+    async fn remove_link_preview(
+        &self,
+        _: &MessageParent,
+        _: Uuid,
+        url: &str,
+    ) -> Result<Message, MessageError> {
+        let mut message = self.message.clone();
+        message.content =
+            crate::domain::link_preview::remove_link_preview_from_content(&message.content, url);
+        Ok(message)
+    }
     async fn delete(&self, _: &MessageParent, id: Uuid) -> Result<Message, MessageError> {
         self.deletes.lock().unwrap().push(id);
         let mut message = self.message.clone();
@@ -1087,6 +1098,14 @@ impl MessageRepository for StrictRepo {
     ) -> Result<Message, MessageError> {
         self.inner.edit(parent, id, command).await
     }
+    async fn remove_link_preview(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+        url: &str,
+    ) -> Result<Message, MessageError> {
+        self.inner.remove_link_preview(parent, id, url).await
+    }
     async fn delete(&self, parent: &MessageParent, id: Uuid) -> Result<Message, MessageError> {
         self.inner.delete(parent, id).await
     }
@@ -1320,4 +1339,76 @@ async fn display_only_mention_kinds_are_stored_without_authorization() {
         *checks.checked.lock().unwrap(),
         vec![(EntityType::AgentSession, Uuid::from_u128(10).to_string())]
     );
+}
+
+#[tokio::test]
+async fn channel_preview_removal_preserves_edit_marker_and_publishes_committed_content() {
+    let mut repo = fixture();
+    repo.message.parent = MessageParent::Channel(Uuid::from_u128(20));
+    repo.message.content =
+        "Read https://example.com/a.\n```\ncurl https://example.com/a\n```".into();
+    let events = Events::default();
+    let service = MessageService::new(repo.clone(), events.clone());
+    let message = service
+        .patch(
+            channel_access(),
+            repo.message.id,
+            MessagePatch {
+                remove_preview_url: Some("https://example.com/a".into()),
+                nonce: Some("remove-preview".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert!(message.content.contains("\"preview\":false"));
+    assert!(
+        message
+            .content
+            .contains("```\ncurl https://example.com/a\n```")
+    );
+    assert_eq!(message.edited_at, repo.message.edited_at);
+    assert!(repo.edits.lock().unwrap().is_empty());
+    let events = events.0.lock().unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].nonce.as_deref(), Some("remove-preview"));
+    let MessageChange::Edited {
+        message: committed, ..
+    } = &events[0].change
+    else {
+        panic!("expected message update")
+    };
+    assert_eq!(committed.content, message.content);
+}
+
+#[tokio::test]
+async fn channel_preview_removal_rejects_empty_urls_and_other_authors() {
+    let mut repo = fixture();
+    repo.message.parent = MessageParent::Channel(Uuid::from_u128(20));
+    repo.message.sender_id = "macro|other@example.com".try_into().unwrap();
+    let service = MessageService::new(repo.clone(), Events::default());
+    for url in ["", " \t"] {
+        let result = service
+            .patch(
+                channel_access(),
+                repo.message.id,
+                MessagePatch {
+                    remove_preview_url: Some(url.into()),
+                    ..Default::default()
+                },
+            )
+            .await;
+        assert!(matches!(result, Err(MessageError::Invalid(_))));
+    }
+    let result = service
+        .patch(
+            channel_access(),
+            repo.message.id,
+            MessagePatch {
+                remove_preview_url: Some("https://example.com/a".into()),
+                ..Default::default()
+            },
+        )
+        .await;
+    assert!(matches!(result, Err(MessageError::Forbidden)));
 }

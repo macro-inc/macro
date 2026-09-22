@@ -817,6 +817,20 @@ impl ChannelRepo for FakeMutationRepo {
         Ok(state.message.clone())
     }
 
+    async fn remove_link_preview(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+        url: String,
+    ) -> Result<MutatedMessage, Self::Err> {
+        let mut state = self.state.lock().unwrap();
+        state.message.content = crate::domain::link_preview::remove_link_preview_from_content(
+            &state.message.content,
+            &url,
+        );
+        Ok(state.message.clone())
+    }
+
     async fn delete_message(
         &self,
         _channel_id: Uuid,
@@ -1362,6 +1376,7 @@ async fn bot_patch_message_derives_replacement_mentions_from_content() {
         channel_id,
         message_id,
         PatchMessageRequest {
+            remove_preview_url: None,
             content: Some("final answer".to_string()),
             mentions: None,
             attachment_ids_to_delete: None,
@@ -1400,6 +1415,7 @@ async fn patch_message_content_emits_message_changed_event_to_channel_participan
         channel_id,
         message_id,
         PatchMessageRequest {
+            remove_preview_url: None,
             content: Some("edited".to_string()),
             mentions: None,
             attachment_ids_to_delete: None,
@@ -1440,6 +1456,136 @@ async fn patch_message_content_emits_message_changed_event_to_channel_participan
     );
 }
 
+const PREVIEW_TEST_URL: &str = "https://example.com/article";
+
+fn m_link_message_content() -> String {
+    format!(
+        r#"look at <m-link>{{"url":"{PREVIEW_TEST_URL}","text":"{PREVIEW_TEST_URL}","title":""}}</m-link>"#
+    )
+}
+
+#[tokio::test]
+async fn patch_message_rejects_empty_preview_url_before_repository_work() {
+    for url in ["", " \t\n"] {
+        // No repository calls are expected, including ownership lookup or writes.
+        let svc = ChannelServiceImpl::new(MockChannelRepo::new());
+        let err = svc
+            .patch_message(
+                sender("macro|sender@test.com"),
+                ParticipantRole::Member,
+                Uuid::nil(),
+                Uuid::nil(),
+                PatchMessageRequest {
+                    remove_preview_url: Some(url.to_string()),
+                    content: None,
+                    mentions: None,
+                    attachment_ids_to_delete: None,
+                    attachments_to_add: None,
+                    nonce: None,
+                    notification_policy: Default::default(),
+                },
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ChannelMutationErr::BadRequest(_)));
+    }
+}
+
+#[tokio::test]
+async fn patch_message_remove_preview_url_emits_message_changed_without_edit() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let message_id = repo.state.lock().unwrap().message.id;
+    repo.state.lock().unwrap().message.content = m_link_message_content();
+    let events = FakeEvents::default();
+    let svc = mutation_service(
+        repo.clone(),
+        events.clone(),
+        FakeReferenceSharing::default(),
+    );
+
+    svc.patch_message(
+        sender("macro|sender@test.com"),
+        ParticipantRole::Member,
+        channel_id,
+        message_id,
+        PatchMessageRequest {
+            remove_preview_url: Some(PREVIEW_TEST_URL.to_string()),
+            content: None,
+            mentions: None,
+            attachment_ids_to_delete: None,
+            attachments_to_add: None,
+            nonce: Some("suppress-nonce".to_string()),
+            notification_policy: Default::default(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let emitted = events.events.lock().unwrap();
+    assert_eq!(emitted.len(), 1);
+    let ChannelEvent::MessageChanged {
+        message,
+        nonce,
+        posted_notification,
+        ..
+    } = &emitted[0]
+    else {
+        panic!("expected MessageChanged event, got {:?}", emitted[0]);
+    };
+    assert!(message.content.contains("\"preview\":false"));
+    assert_eq!(nonce.as_deref(), Some("suppress-nonce"));
+    assert!(posted_notification.is_none());
+
+    let state = repo.state.lock().unwrap();
+    // Not a content EDIT: the ordinary patch path never ran, no channel bump.
+    assert_eq!(state.patched_content, None);
+    assert!(state.touched_channel_ids.is_empty());
+}
+
+#[tokio::test]
+async fn patch_message_remove_preview_url_rejected_for_non_sender_member() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let message_id = repo.state.lock().unwrap().message.id;
+    repo.state.lock().unwrap().message.content = m_link_message_content();
+    let svc = mutation_service(
+        repo.clone(),
+        FakeEvents::default(),
+        FakeReferenceSharing::default(),
+    );
+
+    let err = svc
+        .patch_message(
+            sender("macro|recipient@test.com"),
+            ParticipantRole::Member,
+            channel_id,
+            message_id,
+            PatchMessageRequest {
+                remove_preview_url: Some(PREVIEW_TEST_URL.to_string()),
+                content: None,
+                mentions: None,
+                attachment_ids_to_delete: None,
+                attachments_to_add: None,
+                nonce: None,
+                notification_policy: Default::default(),
+            },
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(err, ChannelMutationErr::Unauthorized(_)));
+    assert!(
+        !repo
+            .state
+            .lock()
+            .unwrap()
+            .message
+            .content
+            .contains("\"preview\":false")
+    );
+}
+
 #[tokio::test]
 async fn patch_message_attachment_only_touches_channel_once() {
     let channel_id = Uuid::new_v4();
@@ -1457,6 +1603,7 @@ async fn patch_message_attachment_only_touches_channel_once() {
         channel_id,
         message_id,
         PatchMessageRequest {
+            remove_preview_url: None,
             content: None,
             mentions: None,
             attachment_ids_to_delete: None,
@@ -1495,6 +1642,7 @@ async fn patch_message_content_and_attachments_touch_channel_once() {
         channel_id,
         message_id,
         PatchMessageRequest {
+            remove_preview_url: None,
             content: Some("edited".to_string()),
             mentions: None,
             attachment_ids_to_delete: None,
@@ -1534,6 +1682,7 @@ async fn patch_message_without_content_or_attachment_changes_does_not_touch_chan
         channel_id,
         message_id,
         PatchMessageRequest {
+            remove_preview_url: None,
             content: None,
             mentions: None,
             attachment_ids_to_delete: None,
@@ -1567,6 +1716,7 @@ async fn patch_message_propagates_channel_touch_errors() {
             channel_id,
             message_id,
             PatchMessageRequest {
+                remove_preview_url: None,
                 content: Some("edited".to_string()),
                 mentions: None,
                 attachment_ids_to_delete: None,
@@ -1622,6 +1772,7 @@ async fn patch_message_notify_as_posted_adds_notification_context_for_channel_pa
         channel_id,
         message_id,
         PatchMessageRequest {
+            remove_preview_url: None,
             content: Some("final answer".to_string()),
             mentions: None,
             attachment_ids_to_delete: None,
@@ -1686,6 +1837,7 @@ async fn patch_of_deleted_message_is_not_found() {
             channel_id,
             message_id,
             PatchMessageRequest {
+                remove_preview_url: None,
                 content: Some("late reply".to_string()),
                 mentions: None,
                 attachment_ids_to_delete: None,

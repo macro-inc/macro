@@ -126,6 +126,13 @@ export const PROD_MODE_ENV = import.meta.env.MODE === 'production';
 
 const onInDev = DEV_MODE_ENV || undefined;
 
+// Message preview cards and their Appearance setting. Off until PostHog
+// enables the rollout; override locally with VITE_ENABLE_RICH_LINK_PREVIEWS.
+export const enableRichLinkPreviews = defineFlag({
+  key: 'enable-rich-link-previews',
+  env: 'ENABLE_RICH_LINK_PREVIEWS',
+});
+
 // Claude Cloud demo onboarding and harness/model discovery. Off until PostHog
 // enables it, including in dev; override locally with VITE_CLAUDE_CLOUD.
 export const claudeCloud = defineFlag({

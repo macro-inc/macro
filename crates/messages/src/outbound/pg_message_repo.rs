@@ -674,6 +674,51 @@ impl MessageRepository for PgMessageRepository {
         Ok(message)
     }
 
+    async fn remove_link_preview(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+        url: &str,
+    ) -> Result<Message, MessageError> {
+        let MessageParent::Channel(channel_id) = parent else {
+            return Err(MessageError::Invalid("link previews require a channel"));
+        };
+        let mut tx = self.pool.begin().await.map_err(database_error)?;
+        Self::lock_message(&mut tx, parent, id).await?;
+        let current = Self::require_message_in(&mut tx, parent, id).await?;
+        let rewritten =
+            crate::domain::link_preview::remove_link_preview_from_content(&current.content, url);
+        if rewritten != current.content {
+            sqlx::query!(
+                r#"
+            UPDATE comms_messages
+            SET content = $1, updated_at = NOW()
+            WHERE id = $2 AND channel_id = $3
+            RETURNING
+                id,
+                channel_id,
+                sender_id,
+                triggered_by_user_id,
+                content,
+                created_at,
+                updated_at,
+                thread_id,
+                edited_at::timestamptz AS "edited_at?",
+                deleted_at::timestamptz AS "deleted_at?"
+            "#,
+                rewritten,
+                id,
+                channel_id,
+            )
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(database_error)?;
+        }
+        let message = Self::require_message_in(&mut tx, parent, id).await?;
+        tx.commit().await.map_err(database_error)?;
+        Ok(message)
+    }
+
     async fn delete(&self, parent: &MessageParent, id: Uuid) -> Result<Message, MessageError> {
         let mut tx = self.pool.begin().await.map_err(database_error)?;
         Self::lock_message(&mut tx, parent, id).await?;

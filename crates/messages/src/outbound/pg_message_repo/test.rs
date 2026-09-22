@@ -1148,3 +1148,37 @@ async fn legacy_ids_resolve_through_the_import_mapping_tables(pool: PgPool) {
         Some("23503")
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn concurrent_preview_removals_preserve_content_and_edit_marker(pool: PgPool) {
+    setup(&pool).await;
+    let channel = macro_uuid::generate_uuid_v7();
+    sqlx::query!(
+        "INSERT INTO comms_channels(id, channel_type, owner_id) VALUES ($1, 'private', $2)",
+        channel,
+        USER
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repo = PgMessageRepository::new(pool);
+    let parent = MessageParent::Channel(channel);
+    let mut input = command(
+        "message-doc-a",
+        None,
+        "https://example.com/a https://example.com/b",
+    );
+    input.parent = parent.clone();
+    let original = repo.create(input).await.unwrap();
+    let (first, second) = tokio::join!(
+        repo.remove_link_preview(&parent, original.id, "https://example.com/a"),
+        repo.remove_link_preview(&parent, original.id, "https://example.com/b"),
+    );
+    first.unwrap();
+    second.unwrap();
+    let message = repo.get(&parent, original.id).await.unwrap().unwrap();
+    assert_eq!(message.content.matches("\"preview\":false").count(), 2);
+    assert_eq!(message.edited_at, original.edited_at);
+    assert_eq!(message.mentions, original.mentions);
+    assert_eq!(message.attachments.len(), original.attachments.len());
+}

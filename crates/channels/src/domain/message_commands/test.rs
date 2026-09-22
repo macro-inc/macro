@@ -120,6 +120,10 @@ async fn channel_attachment_delta_preserves_unreplaced_content_mentions_and_atta
     messages.expect_patch().once().returning(|_, id, input| {
         assert_eq!(id, Uuid::from_u128(501));
         assert!(input.content.is_none());
+        assert_eq!(
+            input.remove_preview_url.as_deref(),
+            Some("https://example.com/a")
+        );
         assert!(input.mentions.is_none());
         let AttachmentChange::Delta { remove, add } = input.attachments else {
             panic!("expected typed delta")
@@ -134,6 +138,7 @@ async fn channel_attachment_delta_preserves_unreplaced_content_mentions_and_atta
             message_capability(),
             Uuid::from_u128(501),
             PatchMessageRequest {
+                remove_preview_url: Some("https://example.com/a".into()),
                 content: None,
                 mentions: None,
                 attachment_ids_to_delete: Some(vec![Uuid::from_u128(601).to_string()]),

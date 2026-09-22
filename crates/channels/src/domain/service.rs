@@ -822,9 +822,19 @@ where
             mentions: replacement_mentions,
             attachment_ids_to_delete,
             attachments_to_add,
+            remove_preview_url,
             nonce,
             notification_policy,
         } = req;
+
+        if remove_preview_url
+            .as_ref()
+            .is_some_and(|url| url.trim().is_empty())
+        {
+            return Err(ChannelMutationErr::BadRequest(
+                "remove_preview_url must not be empty".to_string(),
+            ));
+        }
 
         // As in post_message: bots don't track a mention list, so when a bot
         // replaces message content (e.g. Macro AI swapping its "thinking"
@@ -863,6 +873,32 @@ where
                 nonce.clone(),
             )
             .await?;
+        }
+
+        // Applied before any content patch: a replacement body would clobber
+        // the rewrite anyway, and its own MessageChanged carries the result.
+        if let Some(url) = remove_preview_url {
+            let message = self
+                .repo
+                .remove_link_preview(channel_id, message_id, url)
+                .await
+                .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+
+            if content.is_none() {
+                let channel_participants = self
+                    .repo
+                    .get_participants(channel_id)
+                    .await
+                    .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+                self.events.dispatch(ChannelEvent::MessageChanged {
+                    channel_id,
+                    actor: actor.clone(),
+                    message,
+                    recipients: participant_ids(&channel_participants),
+                    nonce: nonce.clone(),
+                    posted_notification: None,
+                });
+            }
         }
 
         if let Some(content) = content.as_ref() {

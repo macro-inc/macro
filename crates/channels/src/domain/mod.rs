@@ -12,6 +12,8 @@ pub mod events;
 /// Channel audience policy for authored group mentions.
 #[cfg(feature = "ports")]
 pub mod group_mentions;
+/// Server-side "remove link preview" content transform.
+pub mod link_preview;
 /// Legacy channel list service implementation.
 #[cfg(feature = "list")]
 pub mod list_service;

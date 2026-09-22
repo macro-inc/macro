@@ -176,6 +176,10 @@ pub enum AttachmentChange {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct MessagePatch {
+    /// Channel compatibility command to suppress one URL without marking an edit.
+    #[serde(skip)]
+    #[cfg_attr(feature = "schema", schema(ignore))]
+    pub remove_preview_url: Option<String>,
     /// Replacement body; absent preserves current content.
     pub content: Option<String>,
     /// Replacement authored mentions; absent preserves current mentions.
@@ -311,6 +315,13 @@ pub trait MessageRepository: Send + Sync + 'static {
         parent: &MessageParent,
         id: Uuid,
         command: EditMessage,
+    ) -> impl Future<Output = Result<Message, MessageError>> + Send;
+    /// Suppress one channel preview under a row lock, preserving edited_at and references.
+    fn remove_link_preview(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+        url: &str,
     ) -> impl Future<Output = Result<Message, MessageError>> + Send;
     /// Tombstone a single message, preserving its replies and anchor.
     fn delete(

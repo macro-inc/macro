@@ -9,6 +9,7 @@ import type { PatchMessageRequestAttachmentsToAdd } from './patchMessageRequestA
 import type { PatchMessageRequestContent } from './patchMessageRequestContent';
 import type { PatchMessageRequestMentions } from './patchMessageRequestMentions';
 import type { PatchMessageRequestNonce } from './patchMessageRequestNonce';
+import type { PatchMessageRequestRemovePreviewUrl } from './patchMessageRequestRemovePreviewUrl';
 
 /**
  * Request to patch a channel message.
@@ -24,4 +25,8 @@ export interface PatchMessageRequest {
   mentions?: PatchMessageRequestMentions;
   /** Optional optimistic-update nonce. */
   nonce?: PatchMessageRequestNonce;
+  /** Optionally removes the rich preview of one link for every participant
+by setting `preview: false` on the matching link node(s) in the
+content, server-side. Not a content edit: `edited_at` is untouched. */
+  remove_preview_url?: PatchMessageRequestRemovePreviewUrl;
 }

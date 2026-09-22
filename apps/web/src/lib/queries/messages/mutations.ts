@@ -3,6 +3,7 @@ import type { OptimisticPostMessageAttachment } from '@channel/Input/message-pay
 import { toast } from '@core/component/Toast/Toast';
 import type { DateValue } from '@core/util/date';
 import { markMessageSent } from '@core/util/message-send-motion';
+import { throwOnErr } from '@core/util/result';
 import {
   bumpSoupEntityTouchedAt,
   invalidateSoupEntity,
@@ -11,6 +12,10 @@ import {
   type SoupTransaction,
 } from '@queries/soup/normalized-cache';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
+import {
+  type MessageResponse,
+  storageServiceClient,
+} from '@service-storage/client';
 import type { MessageAttachment } from '@service-storage/generated/schemas/messageAttachment';
 import type { NewAttachment } from '@service-storage/generated/schemas/newAttachment';
 import type { SimpleMention } from '@service-storage/generated/schemas/simpleMention';
@@ -390,6 +395,60 @@ export function rollbackUpdateMessage(
     updated_at: normalizeDateValue(context.previousUpdatedAt) ?? '',
     attachments: context.previousAttachments,
   });
+}
+
+type RemoveLinkPreviewParams = {
+  channelID: string;
+  messageID: string;
+  /** The link whose preview is being removed. */
+  url: string;
+};
+
+/**
+ * Mutation to remove one link's rich preview for every participant
+ * (sender-only). The server rewrites the matching link node in the content
+ * to carry `preview: false`; the caller is expected to hide the card locally
+ * for instant feedback and undo on error.
+ */
+export function useRemoveLinkPreviewMutation(
+  callbacks?: MutationCallbacks<
+    MessageResponse,
+    Error,
+    RemoveLinkPreviewParams,
+    void
+  >
+) {
+  return useMutation(() => ({
+    gcTime: 0,
+    mutationFn: async (vars: RemoveLinkPreviewParams) => {
+      return await throwOnErr(
+        async () =>
+          await storageServiceClient.patchMessage({
+            channel_id: vars.channelID,
+            message_id: vars.messageID,
+            remove_preview_url: vars.url,
+          })
+      );
+    },
+    ...withCallbacks<MessageResponse, Error, RemoveLinkPreviewParams, void>(
+      {
+        onError(error) {
+          console.error('failed to remove link preview', error);
+          toast.failure('Failed to remove link preview');
+        },
+        onSettled: (_data, _error, vars) => {
+          softInvalidateTargetCaches(
+            { type: 'channel', id: vars.channelID },
+            resolveMessageTarget({
+              parent: { type: 'channel', id: vars.channelID },
+              messageId: vars.messageID,
+            })
+          );
+        },
+      },
+      callbacks
+    ),
+  }));
 }
 
 type SendMessageParams = {

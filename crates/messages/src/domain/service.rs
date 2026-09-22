@@ -301,15 +301,51 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         id: Uuid,
         patch: MessagePatch,
     ) -> Result<Message, MessageError> {
+        if patch
+            .remove_preview_url
+            .as_ref()
+            .is_some_and(|url| url.trim().is_empty())
+        {
+            return Err(MessageError::Invalid(
+                "remove_preview_url must not be empty",
+            ));
+        }
         let parent = parent_from_receipt(&access)?;
         let actor = actor_from_receipt(&access, &parent)?;
         self.ensure_parent(&parent).await?;
-        let current = self.active_message(&parent, id, false).await?;
+        let mut current = self.active_message(&parent, id, false).await?;
         if current.sender_id != actor
             && !(matches!(parent, MessageParent::Channel(_))
                 && can_moderate(access.entity_permission()))
         {
             return Err(MessageError::Forbidden);
+        }
+        if let Some(url) = patch.remove_preview_url.as_deref() {
+            if !matches!(parent, MessageParent::Channel(_)) {
+                return Err(MessageError::Invalid("link previews require a channel"));
+            }
+            let message = self.repo.remove_link_preview(&parent, id, url).await?;
+            if patch.content.is_none()
+                && patch.mentions.is_none()
+                && matches!(patch.attachments, AttachmentChange::Preserve)
+            {
+                self.publish(MessageEvent {
+                    parent,
+                    actor: actor.as_ref().to_owned(),
+                    nonce: patch.nonce,
+                    change: MessageChange::Edited {
+                        notification_policy: PatchMessageNotificationPolicy::default(),
+                        mentions: self
+                            .resolve_mentions(&message.parent, &message.mentions)
+                            .await?,
+                        previous_attachments: message.attachments.clone(),
+                        message: message.clone(),
+                    },
+                })
+                .await;
+                return Ok(message);
+            }
+            current = message;
         }
         let attachments = match patch.attachments {
             AttachmentChange::Preserve => None,

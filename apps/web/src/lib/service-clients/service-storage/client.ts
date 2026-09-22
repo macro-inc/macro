@@ -128,6 +128,7 @@ import type { ListTeamOutOfOfficeParams } from './generated/schemas/listTeamOutO
 import type { LocationResponseV3 } from './generated/schemas/locationResponseV3';
 import type { PairingDetails } from './generated/schemas/pairingDetails';
 import type { PatchChannelRequest } from './generated/schemas/patchChannelRequest';
+import type { PatchMessageRequest } from './generated/schemas/patchMessageRequest';
 import type { PinRequest } from './generated/schemas/pinRequest';
 import type { PostActivityRequest } from './generated/schemas/postActivityRequest';
 import type { PostGroupedSoupAstGroupPageRequest } from './generated/schemas/postGroupedSoupAstGroupPageRequest';
@@ -821,6 +822,38 @@ export const storageServiceClient = {
       await dssFetch<MessageResponse>(`/channels/${channel_id}`, {
         method: 'DELETE',
       })
+    ).map((result) => result);
+  },
+
+  async patchMessage(
+    args: PatchMessageRequest &
+      WithChannelId & { message_id: string; nonce?: string }
+  ) {
+    const {
+      channel_id,
+      content,
+      message_id,
+      mentions,
+      attachment_ids_to_delete,
+      attachments_to_add,
+      remove_preview_url,
+      nonce,
+    } = args;
+    return (
+      await dssFetch<MessageResponse>(
+        `/channels/${channel_id}/message/${message_id}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            content,
+            mentions,
+            attachment_ids_to_delete,
+            attachments_to_add,
+            remove_preview_url,
+            nonce,
+          }),
+        }
+      )
     ).map((result) => result);
   },
 

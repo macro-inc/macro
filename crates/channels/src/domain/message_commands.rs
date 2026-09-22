@@ -107,6 +107,7 @@ impl ChannelMessageCommands for ChannelMessageAdapter {
                 access,
                 message_id,
                 MessagePatch {
+                    remove_preview_url: req.remove_preview_url,
                     content: req.content,
                     mentions: req.mentions,
                     attachments,

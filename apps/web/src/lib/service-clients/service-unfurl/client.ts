@@ -7,7 +7,9 @@ import type { GetUnfurlParams } from './generated/schemas/getUnfurlParams';
 import type { GetUnfurlResponse } from './generated/schemas/getUnfurlResponse';
 
 export function proxyResource(url: string) {
-  return `${SERVER_HOSTS['unfurl-service']}/proxy?url=${url}`;
+  // Encode so query strings in the proxied URL don't leak into /proxy's own
+  // params (og:image URLs frequently carry `&`-separated params).
+  return `${SERVER_HOSTS['unfurl-service']}/proxy?url=${encodeURIComponent(url)}`;
 }
 
 export const UnfurlServiceClient = {
