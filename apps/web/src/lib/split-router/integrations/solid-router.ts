@@ -26,6 +26,7 @@ export function createSolidRouterLocation(
   });
 
   return {
+    origin: globalThis.location?.origin,
     read,
 
     subscribe(listener) {

@@ -1,14 +1,17 @@
 import deepEqual from 'fast-deep-equal';
+import { runSplitRouterBeforeLeave } from './before-leave';
 import { createClaimReservations } from './claims';
 import { createSplitRouterHistories } from './history';
 import { createLayoutAdapter } from './layout';
 import { createLocationSync } from './location-sync';
 import { prepareEntries, prepareEntry } from './middleware';
 import { resolveNavigation } from './navigation';
+import { buildSplitRouterEvent, withSplitRouterEventTarget } from './request';
 import {
   assertRouteEntry,
   assertSearchNamespacesAllowed,
   createRoutesManifest,
+  encodeRoute,
   getRouteClaim,
 } from './routes';
 import { assertSafeSearchName, updateSearchState } from './search';
@@ -19,11 +22,17 @@ import type {
   SplitNavigateTo,
   SplitRouteClaim,
   SplitRouter,
+  SplitRouterBeforeLeaveHandler,
   SplitRouterEntry,
+  SplitRouterEvent,
   SplitRouterExternalLocationValue,
   SplitRouterOptions,
 } from './types';
-import { decodeSplitRouterLocation, serializeSplitRouterLocation } from './url';
+import {
+  decodeSplitRouterLocation,
+  formatRoutePathname,
+  serializeSplitRouterLocation,
+} from './url';
 import { isPromise, throwIfAborted } from './utils';
 
 type CommitOptions = {
@@ -35,7 +44,8 @@ type CommitOptions = {
 type LayoutTransition = {
   entries: SplitRouterEntry[];
   cause: 'initial' | 'external' | 'layout';
-  externalSearch?: string;
+  direction: 'replace';
+  rawLocation: SplitRouterExternalLocationValue;
   apply: (entries: SplitRouterEntry[]) => void;
 };
 
@@ -51,10 +61,7 @@ type ApplyOptions<TSplitId> = {
 
 type EntryTransition<TSplitId> = {
   key: unknown;
-  splitId?: TSplitId;
-  entry: SplitRouterEntry;
-  from: SplitRouterEntry | undefined;
-  cause: 'navigate' | 'history' | 'search';
+  event: SplitRouterEvent<TSplitId>;
   allowDuplicate?: boolean;
   apply: (entry: SplitRouterEntry) => boolean;
 };
@@ -72,6 +79,10 @@ export function createSplitRouter<TSplitId>(
   const middleware = options.middleware ?? [];
   const claims = createClaimReservations();
   const entryControllers = new Map<unknown, AbortController>();
+  const beforeLeaveHandlers = new Map<
+    TSplitId,
+    Set<SplitRouterBeforeLeaveHandler<TSplitId>>
+  >();
   const subscribers = new Set<(splitId: TSplitId | undefined) => void>();
   let accepted: SplitRouterEntry[] = [];
   let expectedLayout: SplitRouterEntry[] | undefined;
@@ -122,6 +133,64 @@ export function createSplitRouter<TSplitId>(
   const findEntry = (splitId: TSplitId) =>
     transitions.pending(splitId) ?? layout.find(splitId);
 
+  const createEvent = <TId>(options_: {
+    splitId: TId | undefined;
+    from: SplitRouterEntry | undefined;
+    to: SplitRouterEntry;
+    cause: SplitRouterEvent<TId>['cause'];
+    direction: SplitRouterEvent<TId>['direction'];
+    signal: AbortSignal;
+    rawLocation?: SplitRouterExternalLocationValue;
+  }): SplitRouterEvent<TId> =>
+    buildSplitRouterEvent({
+      routes,
+      location:
+        options_.rawLocation ??
+        serializeSplitRouterLocation({
+          routes,
+          entries: [options_.to],
+          previous: options.location.read(),
+          preserveHash: true,
+          preserveExternalSearch: false,
+        }),
+      origin: options.location.origin,
+      signal: options_.signal,
+      splitId: options_.splitId,
+      from: options_.from,
+      to: options_.to,
+      cause: options_.cause,
+      direction: options_.direction,
+    });
+
+  const waitForBeforeLeave = (
+    config: EntryTransition<TSplitId>,
+    entry: SplitRouterEntry,
+    signal: AbortSignal
+  ): SplitRouterEntry | undefined | Promise<SplitRouterEntry | undefined> => {
+    const event = {
+      ...withSplitRouterEventTarget(routes, config.event, entry),
+      request: new Request(config.event.request, { signal }),
+    };
+    if (
+      event.splitId === undefined ||
+      event.from === undefined ||
+      layout.entryEquals(event.from, entry)
+    ) {
+      return entry;
+    }
+
+    const handlers = beforeLeaveHandlers.get(event.splitId);
+    if (!handlers?.size) return entry;
+
+    const accepted = runSplitRouterBeforeLeave(handlers, event);
+
+    return isPromise(accepted)
+      ? accepted.then((shouldCommit) => (shouldCommit ? entry : undefined))
+      : accepted
+        ? entry
+        : undefined;
+  };
+
   const findClaimedSplit = (
     claim: SplitRouteClaim,
     targetId: TSplitId | undefined
@@ -141,7 +210,9 @@ export function createSplitRouter<TSplitId>(
     if (config.allowDuplicate) return;
     const claim = getRouteClaim(routes, entry.location.route);
     const current =
-      config.splitId === undefined ? undefined : layout.find(config.splitId);
+      config.event.splitId === undefined
+        ? undefined
+        : layout.find(config.event.splitId);
     // Updating an existing owner is not a new acquisition. In particular,
     // search/parameter updates must not collapse restored duplicate panes.
     if (
@@ -205,22 +276,75 @@ export function createSplitRouter<TSplitId>(
 
   const transitionLayout = (transition: LayoutTransition) => {
     abortAllTransitions();
-    if (middleware.length === 0) {
-      transition.apply(transition.entries);
-      return;
-    }
-
     const controller = new AbortController();
-    const prepared = prepareEntries(middlewareConfig, {
-      from: transition.cause === 'initial' ? undefined : accepted,
-      to: transition.entries,
-      cause: transition.cause,
-      externalSearch: transition.externalSearch,
-      signal: controller.signal,
-    });
+    const visible = layout.snapshot().entries;
+    const events = transition.entries.map((entry, index) =>
+      createEvent({
+        splitId: visible[index]?.splitId,
+        from: transition.cause === 'initial' ? undefined : accepted[index],
+        to: entry,
+        cause: transition.cause,
+        direction: transition.direction,
+        rawLocation: transition.rawLocation,
+        signal: controller.signal,
+      })
+    );
+    const prepared =
+      middleware.length === 0
+        ? transition.entries
+        : prepareEntries(middlewareConfig, events);
+
+    const beforeLeave = (entries: SplitRouterEntry[]) => {
+      if (transition.cause === 'initial') return true;
+
+      const results = entries.map((entry, index) => {
+        const event = events[index];
+        if (!event) return true;
+        const handlers =
+          event.splitId === undefined
+            ? undefined
+            : beforeLeaveHandlers.get(event.splitId);
+        if (
+          !handlers?.size ||
+          !event.from ||
+          layout.entryEquals(event.from, entry)
+        ) {
+          return true;
+        }
+        return runSplitRouterBeforeLeave(handlers, {
+          ...event,
+          to: entry,
+          path: formatRoutePathname(routes, encodeRoute(routes, entry)),
+        });
+      });
+
+      return results.some(isPromise)
+        ? Promise.all(results).then((accepted) => accepted.every(Boolean))
+        : results.every(Boolean);
+    };
+
+    const commit = (entries: SplitRouterEntry[]): void | Promise<void> => {
+      const allowed = beforeLeave(entries);
+      if (!isPromise(allowed)) {
+        if (allowed) transition.apply(entries);
+        return;
+      }
+      return allowed.then((accepted) => {
+        if (accepted) {
+          throwIfAborted(controller.signal);
+          transition.apply(entries);
+        }
+      });
+    };
 
     if (!isPromise(prepared)) {
-      transition.apply(prepared);
+      const committed = commit(prepared);
+      if (isPromise(committed)) {
+        void transitions.start(GLOBAL_TRANSITION, {
+          controller,
+          run: async () => committed,
+        });
+      }
       return;
     }
 
@@ -229,7 +353,7 @@ export function createSplitRouter<TSplitId>(
       async run() {
         const result = await prepared;
         throwIfAborted(controller.signal);
-        transition.apply(result);
+        await commit(result);
       },
     });
   };
@@ -248,7 +372,8 @@ export function createSplitRouter<TSplitId>(
     transitionLayout({
       entries: decoded.entries,
       cause,
-      externalSearch: decoded.externalLocation.search,
+      direction: 'replace',
+      rawLocation: external,
       apply: applyDecoded,
     });
   };
@@ -287,6 +412,8 @@ export function createSplitRouter<TSplitId>(
     transitionLayout({
       entries,
       cause: 'layout',
+      direction: 'replace',
+      rawLocation: options.location.read(),
       apply: (prepared) => applyPrepared(entries, prepared, history),
     });
   };
@@ -318,7 +445,7 @@ export function createSplitRouter<TSplitId>(
     entry: SplitRouterEntry
   ) => {
     const changed = transition.apply(entry);
-    if (changed) notify(transition.splitId);
+    if (changed) notify(transition.event.splitId);
     return changed;
   };
 
@@ -326,15 +453,16 @@ export function createSplitRouter<TSplitId>(
     config: EntryTransition<TSplitId>,
     controller: AbortController,
     prepared: Promise<SplitRouterEntry | undefined>,
+    pending: SplitRouterEntry,
     finish: () => void,
     checkClaim: (entry: SplitRouterEntry) => SplitRouterEntry | undefined
   ) => {
-    const { splitId } = config;
+    const { splitId } = config.event;
 
     void transitions.start(config.key, {
       controller,
       target: splitId,
-      pending: splitId === undefined ? undefined : config.entry,
+      pending: splitId === undefined ? undefined : pending,
       async run(transition) {
         try {
           const entry = await prepared;
@@ -391,7 +519,7 @@ export function createSplitRouter<TSplitId>(
       claim: SplitRouteClaim | undefined
     ) => {
       throwIfAborted(controller.signal);
-      const owner = claim && findClaimedSplit(claim, config.splitId);
+      const owner = claim && findClaimedSplit(claim, config.event.splitId);
       if (!owner) return entry;
       // Keep the accepted owner on the requested resource rather than allowing
       // an in-flight departure to replace it immediately after activation.
@@ -414,46 +542,69 @@ export function createSplitRouter<TSplitId>(
       assertRouteEntry(routes, entry);
       const claim = claimToAcquire(entry, config);
       reservation.move(claim);
-      if (claim && findClaimedSplit(claim, config.splitId)) {
+      if (claim && findClaimedSplit(claim, config.event.splitId)) {
         return reuseOrAccept(entry, claim);
       }
       const turn = reservation.wait(controller.signal);
       if (!isPromise(turn)) return reuseOrAccept(entry, claim);
       return waitForClaim(turn, entry, claim);
     };
+    let pendingEntry = config.event.to;
+    const acceptAndWaitForBeforeLeave = (
+      entry: SplitRouterEntry
+    ): SplitRouterEntry | undefined | Promise<SplitRouterEntry | undefined> => {
+      const accepted = accept(entry);
+      if (isPromise(accepted)) {
+        return accepted.then((settled) => {
+          if (!settled) return;
+          pendingEntry = settled;
+          return waitForBeforeLeave(config, settled, controller.signal);
+        });
+      }
+      if (!accepted) return;
+
+      pendingEntry = accepted;
+      return waitForBeforeLeave(config, accepted, controller.signal);
+    };
     const acceptPrepared = async (prepared: Promise<SplitRouterEntry>) =>
-      accept(await prepared);
+      acceptAndWaitForBeforeLeave(await prepared);
 
     try {
-      reservation.move(claimToAcquire(config.entry, config));
+      reservation.move(claimToAcquire(config.event.to, config));
+      const event = {
+        ...config.event,
+        request: new Request(config.event.request, {
+          signal: controller.signal,
+        }),
+      };
       const prepared =
         middleware.length === 0
-          ? config.entry
-          : prepareEntry(middlewareConfig, {
-              from: config.from,
-              to: config.entry,
-              cause: config.cause,
-              signal: controller.signal,
-            });
+          ? event.to
+          : prepareEntry(middlewareConfig, event);
       const resolved = isPromise(prepared)
         ? acceptPrepared(prepared)
-        : accept(prepared);
+        : acceptAndWaitForBeforeLeave(prepared);
       if (isPromise(resolved)) {
-        assertRouteEntry(routes, config.entry);
-        startAsyncEntry(config, controller, resolved, finish, (entry) =>
-          reuseOrAccept(entry, claimToAcquire(entry, config))
+        assertRouteEntry(routes, config.event.to);
+        startAsyncEntry(
+          config,
+          controller,
+          resolved,
+          pendingEntry,
+          finish,
+          (entry) => reuseOrAccept(entry, claimToAcquire(entry, config))
         );
       } else {
         try {
           const changed = resolved ? publishEntry(config, resolved) : false;
-          if (!changed && hadPending) notify(config.splitId);
+          if (!changed && hadPending) notify(config.event.splitId);
         } finally {
           finish();
         }
       }
     } catch (error) {
       finish();
-      if (hadPending) notify(config.splitId);
+      if (hadPending) notify(config.event.splitId);
       throw error;
     }
   };
@@ -478,10 +629,14 @@ export function createSplitRouter<TSplitId>(
 
     transitionEntry({
       key: splitId,
-      splitId,
-      entry: historical,
-      from: current,
-      cause: 'history',
+      event: createEvent({
+        splitId,
+        from: current,
+        to: historical,
+        cause: 'history',
+        direction: delta < 0 ? 'back' : 'forward',
+        signal: new AbortController().signal,
+      }),
       allowDuplicate: navigateOptions.allowDuplicate,
       apply: (entry) => {
         if (!layout.find(splitId)) return false;
@@ -589,10 +744,14 @@ export function createSplitRouter<TSplitId>(
         target === 'new-split' ? undefined : (target as TSplitId);
       transitionEntry({
         key: targetId ?? Symbol('new-split-transition'),
-        splitId: targetId,
-        entry: next,
-        from: targetEntry,
-        cause: 'navigate',
+        event: createEvent({
+          splitId: targetId,
+          from: targetEntry,
+          to: next,
+          cause: 'navigate',
+          direction: navigateOptions.replace ? 'replace' : 'push',
+          signal: new AbortController().signal,
+        }),
         allowDuplicate: navigateOptions.allowDuplicate,
         apply: (entry) =>
           applyEntry({
@@ -621,10 +780,14 @@ export function createSplitRouter<TSplitId>(
 
       transitionEntry({
         key: splitId,
-        splitId,
-        entry: next,
-        from: entry,
-        cause: 'search',
+        event: createEvent({
+          splitId,
+          from: entry,
+          to: next,
+          cause: 'search',
+          direction: history,
+          signal: new AbortController().signal,
+        }),
         apply: (prepared) =>
           applyEntry({
             entry: prepared,
@@ -650,6 +813,20 @@ export function createSplitRouter<TSplitId>(
       });
     },
 
+    beforeLeave(splitId, handler) {
+      let handlers = beforeLeaveHandlers.get(splitId);
+      if (!handlers) {
+        handlers = new Set();
+        beforeLeaveHandlers.set(splitId, handlers);
+      }
+      handlers.add(handler);
+
+      return () => {
+        handlers.delete(handler);
+        if (handlers.size === 0) beforeLeaveHandlers.delete(splitId);
+      };
+    },
+
     isReady: () => ready,
 
     async settled() {
@@ -670,6 +847,7 @@ export function createSplitRouter<TSplitId>(
 
       disposed = true;
       subscribers.clear();
+      beforeLeaveHandlers.clear();
       abortAllTransitions(false);
       unsubscribeLayout();
       unsubscribeLocation();

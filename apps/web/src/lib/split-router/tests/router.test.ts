@@ -132,8 +132,11 @@ describe('split router', () => {
       routes,
       location,
       middleware: [
-        ({ to, cause, externalSearch, redirect }) => {
-          requests.push({ cause, externalSearch });
+        ({ to, cause, request, redirect }) => {
+          requests.push({
+            cause,
+            externalSearch: new URL(request.url).search || undefined,
+          });
           if (rootRouteMatch(to.location.route)?.id === 'legacy') {
             return redirect(
               `/drive/folder/${routeParams(to.location.route).id}`
@@ -154,13 +157,97 @@ describe('split router', () => {
     await router.settled();
     expect(requests.at(-1)).toEqual({
       cause: 'navigate',
-      externalSearch: undefined,
+      externalSearch: '?referral_code=code',
     });
     expect(location.history()).toHaveLength(2);
     expect(location.back()).toBe(true);
     await router.settled();
     expect(routeParams(router.route(splitId)!)).toEqual({ folderId: 'one' });
     expect(location.read().pathname).toBe('/drive/folder/one');
+    router.dispose();
+  });
+
+  it('runs before-leave against the raw Request and resumes after retry', async () => {
+    const layout = createLayout();
+    const location = createMemorySplitRouterLocation('/drive');
+    const router = createSplitRouter({ layout, routes, location });
+    await router.settled();
+
+    const splitId = layout.snapshot().entries[0]!.splitId;
+    let retry!: () => void;
+    let seenUrl = '';
+    const remove = router.beforeLeave(splitId, (event) => {
+      seenUrl = event.request.url;
+      event.preventDefault();
+      retry = event.retry;
+    });
+
+    router.navigate(splitId, '/drive/folder/one');
+    await settle();
+    expect(routeParams(layout.snapshot().entries[0]!.location.route)).toEqual(
+      {}
+    );
+    expect(new URL(seenUrl).pathname).toBe('/drive/folder/one');
+
+    retry();
+    await router.settled();
+    expect(routeParams(router.route(splitId)!)).toEqual({ folderId: 'one' });
+
+    remove();
+    router.dispose();
+  });
+
+  it('runs before-leave for external history changes with the raw URL', async () => {
+    const layout = createLayout();
+    const location = createMemorySplitRouterLocation('/drive');
+    const router = createSplitRouter({ layout, routes, location });
+    await router.settled();
+    const splitId = layout.snapshot().entries[0]!.splitId;
+
+    router.navigate(splitId, '/drive/folder/one');
+    await router.settled();
+
+    let eventCause = '';
+    let eventUrl = '';
+    let retry!: () => void;
+    router.beforeLeave(splitId, (event) => {
+      eventCause = event.cause;
+      eventUrl = event.request.url;
+      event.preventDefault();
+      retry = event.retry;
+    });
+
+    expect(location.back()).toBe(true);
+    await settle();
+    expect(eventCause).toBe('external');
+    expect(new URL(eventUrl).pathname).toBe('/drive');
+
+    retry();
+    await router.settled();
+    expect(routeParams(router.route(splitId)!)).toEqual({});
+    router.dispose();
+  });
+
+  it('cancels a deferred before-leave request when superseded', async () => {
+    const layout = createLayout();
+    const location = createMemorySplitRouterLocation('/drive');
+    const router = createSplitRouter({ layout, routes, location });
+    await router.settled();
+
+    const splitId = layout.snapshot().entries[0]!.splitId;
+    const signals: AbortSignal[] = [];
+    router.beforeLeave(splitId, (event) => {
+      signals.push(event.request.signal);
+      if (signals.length === 1) event.preventDefault();
+    });
+
+    router.navigate(splitId, '/drive/folder/one');
+    await settle();
+    router.navigate(splitId, '/drive/folder/two');
+    await router.settled();
+
+    expect(signals[0]?.aborted).toBe(true);
+    expect(routeParams(router.route(splitId)!)).toEqual({ folderId: 'two' });
     router.dispose();
   });
 
@@ -1181,9 +1268,9 @@ describe('split router', () => {
     });
     let firstSignal: AbortSignal | undefined;
     const middleware: SplitRouterMiddleware[] = [
-      ({ cause, path, signal }) => {
+      ({ cause, path, request }) => {
         if (cause === 'navigate' && path.endsWith('/one')) {
-          firstSignal = signal;
+          firstSignal = request.signal;
           return firstPreload;
         }
       },
@@ -1218,12 +1305,14 @@ describe('split router', () => {
   it('cancels stale middleware when a newer navigation starts', async () => {
     let firstSignal: AbortSignal | undefined;
     const middleware: SplitRouterMiddleware[] = [
-      ({ cause, path, signal }) => {
+      ({ cause, path, request }) => {
         if (cause !== 'navigate' || !path.endsWith('/one')) return;
 
-        firstSignal = signal;
+        firstSignal = request.signal;
         return new Promise<void>((_resolve, reject) => {
-          signal.addEventListener('abort', () => reject(signal.reason));
+          request.signal.addEventListener('abort', () =>
+            reject(request.signal.reason)
+          );
         });
       },
     ];

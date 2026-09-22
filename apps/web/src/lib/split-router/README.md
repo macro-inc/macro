@@ -137,10 +137,14 @@ ignored.
 Middleware runs for proposed entries and may redirect synchronously or
 asynchronously. Synchronous navigation stays synchronous when no reservation wait
 is necessary. Signals cancel superseded work; middleware should honor them when
-possible. For initial and external navigation, `externalSearch` contains the raw
-incoming URL query snapshot, unchanged across redirects. Use it for application
-compatibility normalization; `to.location.search` remains the proposed pane's
-namespaced search. Local navigation does not inherit stale external query data.
+possible. Callbacks receive a `SplitRouterEvent`: `event.request` is the platform
+`Request` for the raw navigation URL, while `event.to` is the decoded route
+proposal. Redirects update `event.to` while preserving the original request URL,
+so compatibility middleware can inspect the raw incoming pathname and search via
+`new URL(event.request.url)`. Local navigation creates a Request from the real
+external-location origin; no synthetic router origin is exposed. `beforeLeave`
+handlers receive the same event and may defer the commit with
+`preventDefault()`/`retry()`.
 
 Ordinary middleware errors are logged and fall back to the original valid
 proposal, which still passes claim arbitration. Abort errors do not fall back.

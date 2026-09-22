@@ -7,7 +7,28 @@ import {
   rootRouteMatch,
   routeParams,
 } from '../routes';
-import type { SplitRouterMiddleware } from '../types';
+import type { SplitRouterEvent, SplitRouterMiddleware } from '../types';
+
+function event(
+  to: SplitRouterEvent['to'],
+  options: {
+    cause?: SplitRouterEvent['cause'];
+    direction?: SplitRouterEvent['direction'];
+    signal?: AbortSignal;
+    url?: string;
+  } = {}
+): SplitRouterEvent {
+  const signal = options.signal ?? new AbortController().signal;
+  return {
+    request: new Request(options.url ?? 'https://macro.test/', { signal }),
+    splitId: undefined,
+    from: undefined,
+    to,
+    path: '',
+    cause: options.cause ?? 'navigate',
+    direction: options.direction ?? 'push',
+  };
+}
 
 const routes = createRoutesManifest({
   definitions: [
@@ -51,11 +72,7 @@ describe('split router middleware', () => {
               : undefined,
         ],
       },
-      {
-        to: legacyEntry,
-        cause: 'navigate',
-        signal: new AbortController().signal,
-      }
+      event(legacyEntry)
     );
 
     expect(result).not.toBeInstanceOf(Promise);
@@ -78,10 +95,10 @@ describe('split router middleware', () => {
     const visits: string[] = [];
     const searches: (string | undefined)[] = [];
     const middleware: SplitRouterMiddleware[] = [
-      async ({ path, externalSearch }) => {
+      async ({ path, request }) => {
         await Promise.resolve();
         visits.push(`preload:${path}`);
-        searches.push(externalSearch);
+        searches.push(new URL(request.url).search || undefined);
       },
       ({ to, redirect }) => {
         const routeId = rootRouteMatch(to.location.route)?.id;
@@ -94,12 +111,11 @@ describe('split router middleware', () => {
 
     const result = await runSplitRouterMiddleware(
       { routes, handlers: middleware },
-      {
-        to: legacyEntry,
-        externalSearch: '?legacy=first&legacy=last',
+      event(legacyEntry, {
         cause: 'external',
-        signal: new AbortController().signal,
-      }
+        direction: 'replace',
+        url: 'https://macro.test/legacy/document-1?legacy=first&legacy=last',
+      })
     );
 
     expect(visits).toEqual([
@@ -135,20 +151,20 @@ describe('split router middleware', () => {
       {
         routes,
         handlers: [
-          ({ signal }) =>
+          ({ request }) =>
             new Promise<void>((_resolve, reject) => {
-              signal.addEventListener('abort', () => {
+              request.signal.addEventListener('abort', () => {
                 observed();
-                reject(signal.reason);
+                reject(request.signal.reason);
               });
             }),
         ],
       },
-      {
-        to: legacyEntry,
+      event(legacyEntry, {
         cause: 'external',
+        direction: 'replace',
         signal: controller.signal,
-      }
+      })
     );
 
     controller.abort(new DOMException('Superseded', 'AbortError'));
@@ -168,11 +184,7 @@ describe('split router middleware', () => {
           },
         ],
       },
-      {
-        to: { location: { route: { matches: [{ id: 'drive', params: {} }] } } },
-        cause: 'navigate',
-        signal: new AbortController().signal,
-      }
+      event({ location: { route: { matches: [{ id: 'drive', params: {} }] } } })
     );
     await expect(pending).rejects.toThrow('invalid match branch');
   });
@@ -184,11 +196,7 @@ describe('split router middleware', () => {
           routes,
           handlers: [({ path, redirect }) => redirect(path)],
         },
-        {
-          to: legacyEntry,
-          cause: 'navigate',
-          signal: new AbortController().signal,
-        }
+        event(legacyEntry)
       )
     ).toThrow('redirect loop');
   });

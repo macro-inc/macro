@@ -63,8 +63,9 @@ export function createAppSplitRouterMiddleware(options: {
       if (!document) return;
       return redirect(drivePath({ kind: 'tab', tab: 'owned' }, document));
     },
-    ({ to, path, cause, externalSearch, redirect }) => {
+    ({ to, path, cause, request, redirect }) => {
       if (cause !== 'initial' && cause !== 'external') return;
+      const externalSearch = new URL(request.url).search;
       if (!externalSearch) return;
 
       const leafId = to.location.route.matches.at(-1)?.id;

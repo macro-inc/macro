@@ -47,6 +47,7 @@ export function createMemorySplitRouterLocation(
   };
 
   return {
+    origin: globalThis.location?.origin,
     read: () => entries[currentIndex]!,
 
     subscribe(listener) {

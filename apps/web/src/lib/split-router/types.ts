@@ -30,17 +30,27 @@ export type SplitRouterMiddlewareRedirect = {
   to: string;
 };
 
-export type SplitRouterMiddlewareContext = {
+export type SplitRouterNavigationDirection =
+  | 'push'
+  | 'replace'
+  | 'back'
+  | 'forward';
+
+export type SplitRouterEvent<TSplitId = unknown> = {
+  /** The raw navigation URL and cancellation signal. */
+  request: Request;
+  splitId: TSplitId | undefined;
   /** The currently accepted entry at this visible split position, if any. */
   from: Readonly<SplitRouterEntry> | undefined;
-  /** The proposed entry. It has not been applied to the layout yet. */
+  /** The decoded proposed entry. It has not been applied to the layout yet. */
   to: Readonly<SplitRouterEntry>;
   /** Canonical single-split pathname for `to`. */
   path: string;
-  /** Raw incoming URL search on initial/external navigation, retained across redirects. */
-  externalSearch?: string;
   cause: SplitRouterNavigationCause;
-  signal: AbortSignal;
+  direction: SplitRouterNavigationDirection;
+};
+
+export type SplitRouterMiddlewareContext = Readonly<SplitRouterEvent> & {
   redirect: (to: string) => SplitRouterMiddlewareRedirect;
 };
 
@@ -56,14 +66,6 @@ export type SplitRouterMiddleware = (
 export type SplitRouterMiddlewareConfig = {
   routes: SplitRoutesManifest;
   handlers: readonly SplitRouterMiddleware[];
-};
-
-export type SplitRouterMiddlewareRequest = {
-  from?: SplitRouterEntry;
-  to: SplitRouterEntry;
-  externalSearch?: string;
-  cause: SplitRouterNavigationCause;
-  signal: AbortSignal;
 };
 
 export type SplitRouterMiddlewareRun =
@@ -364,6 +366,19 @@ export type SplitRouterSettledChange = {
   history: BrowserHistoryIntent;
 };
 
+export type SplitRouterBeforeLeaveContext<TSplitId> = Readonly<
+  SplitRouterEvent<TSplitId>
+> & {
+  readonly defaultPrevented: boolean;
+  preventDefault(): void;
+  /** Resumes this prepared transition without rerunning middleware. */
+  retry(): void;
+};
+
+export type SplitRouterBeforeLeaveHandler<TSplitId> = (
+  context: SplitRouterBeforeLeaveContext<TSplitId>
+) => void;
+
 export type SplitRouterHistorySnapshot = {
   entries: readonly SplitLocation[];
   index: number;
@@ -393,6 +408,8 @@ export type SplitRouterExternalLocationValue = {
 };
 
 export interface SplitRouterExternalLocation {
+  /** Origin used when constructing the callback Request URL. */
+  readonly origin?: string;
   read(): SplitRouterExternalLocationValue;
   subscribe(
     listener: (location: SplitRouterExternalLocationValue) => void
@@ -445,6 +462,10 @@ export interface SplitRouter<TSplitId> {
     options?: SplitSearchUpdateOptions
   ): void;
   href(splitId: TSplitId): string;
+  beforeLeave(
+    splitId: TSplitId,
+    handler: SplitRouterBeforeLeaveHandler<TSplitId>
+  ): () => void;
   isReady(): boolean;
   settled(): Promise<void>;
   subscribe(listener: (splitId: TSplitId | undefined) => void): () => void;

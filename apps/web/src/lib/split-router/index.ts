@@ -21,6 +21,7 @@ export {
 } from './integrations/solid-router';
 export { runSplitRouterMiddleware } from './middleware';
 export type { RoutePattern } from './path';
+export { buildSplitRouterEvent } from './request';
 export { createSplitRouter } from './router';
 export {
   createRoutesManifest,
@@ -56,6 +57,7 @@ export {
   type SplitRouterOutletProps,
   type SplitRouterRootProps,
   type SplitRouterScopeProps,
+  useBeforeLeave,
   useCanGo,
   useNavigate,
   useParams,
@@ -83,7 +85,10 @@ export type {
   SplitRouteNavigationTarget,
   SplitRouteParams,
   SplitRouteRawParams,
+  SplitRouterBeforeLeaveContext,
+  SplitRouterBeforeLeaveHandler,
   SplitRouterEntry,
+  SplitRouterEvent,
   SplitRouterExternalLocation,
   SplitRouterExternalLocationValue,
   SplitRouterHistorySnapshot,
@@ -94,10 +99,10 @@ export type {
   SplitRouterMiddlewareConfig,
   SplitRouterMiddlewareContext,
   SplitRouterMiddlewareRedirect,
-  SplitRouterMiddlewareRequest,
   SplitRouterMiddlewareResult,
   SplitRouterMiddlewareRun,
   SplitRouterNavigationCause,
+  SplitRouterNavigationDirection,
   SplitRouterOptions,
   SplitRouterSettledChange,
   SplitRouteState,

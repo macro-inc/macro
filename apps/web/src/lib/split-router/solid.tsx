@@ -2,6 +2,7 @@ import {
   type Accessor,
   type Component,
   createContext,
+  createEffect,
   createMemo,
   createSignal,
   type JSX,
@@ -24,6 +25,7 @@ import type {
   SplitNavigateOptions,
   SplitNavigateTo,
   SplitRouteParams,
+  SplitRouterBeforeLeaveHandler,
   SplitRouter as SplitRouterController,
   SplitRouterExternalLocation,
   SplitRouterLayout,
@@ -125,6 +127,18 @@ export function useNavigate<TSplitId = unknown>(): SplitNavigate<TSplitId> {
 
   return ((to: SplitNavigateTo, options: SplitNavigateOptions<TSplitId> = {}) =>
     navigate(splitId(), to, options)) as SplitNavigate<TSplitId>;
+}
+
+export function useBeforeLeave<TSplitId = unknown>(
+  handler: SplitRouterBeforeLeaveHandler<TSplitId>
+): void {
+  const router = useSplitRouter<TSplitId>();
+  const splitId = useSplitRouterScope<TSplitId>();
+
+  createEffect(() => {
+    const unregister = router.beforeLeave(splitId(), handler);
+    onCleanup(unregister);
+  });
 }
 
 export function useCanGo(delta: number): Accessor<boolean> {
