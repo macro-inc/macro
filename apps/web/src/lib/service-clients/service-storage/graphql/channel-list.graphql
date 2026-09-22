@@ -1,0 +1,22 @@
+# Channels render their latest-message preview, not every historical send's
+# content/avatar/name. Keep all notifications for unread state and thread scoping.
+query ChannelListSoup($input: SoupInput!) {
+	user {
+		id
+		emailLinks @cacheOnly { id emailAddress photoUrl }
+		soup(input: $input) {
+			items { ...ChannelListItemFields }
+			nextCursor
+		}
+	}
+}
+
+fragment ChannelListItemFields on GraphqlSoupEntity {
+	...SoupItemPreviewFields
+	notifications { ...ChannelListNotificationFields }
+}
+
+fragment ChannelListNotificationFields on GraphqlNotification {
+	...SoupNotificationStateFields
+	metadata { ...SoupNotificationNavigationMetadataFields }
+}

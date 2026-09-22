@@ -151,7 +151,11 @@ function useChannelsDataSource(
 ): ChannelsDataSource {
   const query = useSoupAstItemsQuery(
     () => channelsQueryArgs(scope, sortMethod()),
-    () => ({ enabled: enabled(), staleTime: 30_000 })
+    () => ({
+      enabled: enabled(),
+      staleTime: 30_000,
+      graphqlProjection: 'channel-list',
+    })
   );
   const items = createMemo<ChannelEntity[]>((previous) => {
     if (!query.isEnabled || query.isLoading) return previous;
@@ -232,6 +236,10 @@ export function useChannelByIdQuery(
 ) {
   return useSoupAstItemsQuery(
     () => channelByIdQueryArgs(channelId() ?? ''),
-    () => ({ enabled: enabled(), staleTime: 30_000 })
+    () => ({
+      enabled: enabled(),
+      staleTime: 30_000,
+      graphqlProjection: 'channel-list',
+    })
   );
 }

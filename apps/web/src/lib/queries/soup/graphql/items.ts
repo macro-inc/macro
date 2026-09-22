@@ -18,6 +18,9 @@ import {
 import { Telemetry } from '@macro-inc/observability';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import {
+  ChannelListItemFieldsFragmentDoc,
+  ChannelListSoupDocument,
+  type ChannelListSoupQuery,
   type MailItemFieldsFragment,
   MailItemFieldsFragmentDoc,
   SoupDocument,
@@ -75,6 +78,7 @@ export type GraphqlSoupAstItemsQueryArgs = {
 
 export type GraphqlSoupAstItemsQueryOptions = {
   enabled: boolean;
+  projection?: 'channel-list';
   showSupportedForeignEntities?: boolean;
 };
 
@@ -159,7 +163,14 @@ export function createGraphqlSoupAstItemsQuery(
     LocalProjection | undefined
   >();
   const [localEvaluationTrigger, setLocalEvaluationTrigger] = createSignal(0);
+  const queryDocument = () =>
+    options().projection === 'channel-list'
+      ? ChannelListSoupDocument
+      : SoupDocument;
   const soupItemSelection = selectRecords(SoupItemFieldsFragmentDoc);
+  const channelListItemSelection = selectRecords(
+    ChannelListItemFieldsFragmentDoc
+  );
   const mailItemSelection = selectRecords(MailItemFieldsFragmentDoc);
   let localRequest = 0;
   let localEvaluationRunning = false;
@@ -347,7 +358,9 @@ export function createGraphqlSoupAstItemsQuery(
                 host,
                 result.kind === 'mail-page'
                   ? mailItemSelection
-                  : soupItemSelection,
+                  : queryOptions.projection === 'channel-list'
+                    ? channelListItemSelection
+                    : soupItemSelection,
                 result.keys.slice(offset, offset + 500)
               )
             );
@@ -468,7 +481,10 @@ export function createGraphqlSoupAstItemsQuery(
     return ({
       pages,
       pageParams,
-    }: UrqlInfiniteData<SoupQuery, string | null>): ServerProjection => {
+    }: UrqlInfiniteData<
+      SoupQuery | ChannelListSoupQuery,
+      string | null
+    >): ServerProjection => {
       const mappedPages = pages.map(mapGraphqlSoupPage);
       const oldestFetchedTimestamp = soupPageTimestamp(
         mappedPages.flatMap((page) => page.items.map(mapApiSoupItemToEntity)),
@@ -493,7 +509,7 @@ export function createGraphqlSoupAstItemsQuery(
   });
 
   const query = createUrqlInfiniteQuery<
-    SoupQuery,
+    SoupQuery | ChannelListSoupQuery,
     SoupQueryVariables,
     string | null,
     ServerProjection
@@ -502,7 +518,7 @@ export function createGraphqlSoupAstItemsQuery(
     const queryOptions = options();
 
     return {
-      query: SoupDocument,
+      query: queryDocument(),
       client: getGraphqlSoupClient(),
       initialPageParam: null,
       variables: (cursor) => {
@@ -541,7 +557,9 @@ export function createGraphqlSoupAstItemsQuery(
       const cursors = new Set([null, ...(query.data?.pageParams ?? [])]);
       return [...cursors].flatMap((cursor) => {
         const input = inputForCursor(cursor);
-        return input ? [{ document: SoupDocument, variables: { input } }] : [];
+        return input
+          ? [{ document: queryDocument(), variables: { input } }]
+          : [];
       });
     })
   );
